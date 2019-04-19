@@ -48,6 +48,8 @@ public:
     __device__ const T& operator[](size_t idx) const { return data_[idx]; }
 
     __device__ T* Data() { return data_; }
+    // TODO I don't like this, remove!
+    __host__ T* Data(detail::DataManagerKey) { return data_; }
     __device__ size_t Size() const { return len_; }
 };
 
