@@ -91,14 +91,14 @@ public:
     {
         if (!gpuData_) return;
 
-        if (auto pool = pool_.lock()) pool->PushAlloc(std::move(gpuData_));
-
         if (!activeOnHost_)
         {
             GetHostView();
         }
         CudaSynchronizeDefaultStream();
         activeOnHost_ = true;
+
+        if (auto pool = pool_.lock()) pool->PushAlloc(std::move(gpuData_));
     }
 
     // Calling these functions may cause
