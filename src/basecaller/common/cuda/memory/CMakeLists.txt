@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
     AllocationViews.h
@@ -20,7 +20,7 @@ set(CUDA_LIST
     DeviceOnlyArray.cuh
 )
 
-add_library(libMongoCommonCudaMemory
+add_library(libMongoCommonCudaMemory STATIC
     ${CPP_LIST}
-    ${CUDA_LIST}
+    # ${CUDA_LIST}
 )

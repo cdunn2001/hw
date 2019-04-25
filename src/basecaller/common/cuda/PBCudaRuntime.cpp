@@ -1,4 +1,5 @@
-#include <pacbio/cuda/PBCudaRuntime.h>
+
+#include "PBCudaRuntime.h"
 #include <pacbio/PBException.h>
 
 #include <cuda_runtime.h>

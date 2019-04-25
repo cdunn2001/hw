@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 
 add_subdirectory(memory)
 
@@ -12,6 +12,11 @@ set(SRC_LIST
 
 add_library(libMongoCommonCuda STATIC
    ${SRC_LIST}
+)
+
+target_link_libraries(libMongoCommonCuda
+    PRIVATE
+        libPacbioCplusplusApi
 )
 
 # target_link_libraries(libMongoCommonCuda 
