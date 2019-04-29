@@ -24,3 +24,14 @@ add_library(libMongoCommonCudaMemory STATIC
     ${CPP_LIST}
     # ${CUDA_LIST}
 )
+
+target_link_libraries(libMongoCommonCudaMemory
+    PUBLIC
+        libMongoCommonCuda
+        libPacbioCplusplusApi
+)
+
+target_include_directories(libMongoCommonCudaMemory
+    PUBLIC
+        "${CMAKE_CURRENT_LIST_DIR}"
+)

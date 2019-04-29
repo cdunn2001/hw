@@ -27,7 +27,7 @@
 #ifndef PACBIO_CUDA_MEMORY_DATA_MANAGER_KEY_H
 #define PACBIO_CUDA_MEMORY_DATA_MANAGER_KEY_H
 
-#include <pacbio/cuda/CudaFunctionDecorators.h>
+#include <CudaFunctionDecorators.h>
 
 namespace PacBio {
 namespace Cuda {

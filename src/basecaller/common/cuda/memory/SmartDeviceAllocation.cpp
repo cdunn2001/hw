@@ -1,1 +1,2 @@
-#include <pacbio/cuda/memory/SmartDeviceAllocation.h>
+
+#include "SmartDeviceAllocation.h"

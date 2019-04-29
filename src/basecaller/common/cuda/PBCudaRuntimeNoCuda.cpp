@@ -1,3 +1,4 @@
+
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -23,5 +24,77 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+//  Alternative definitions of the basic functions declared in PBCudaRuntime.h
+//  that have no CUDA dependency.
 
-#include "TraceBatch.h"
+#include "PBCudaRuntime.h"
+
+#include <cstdlib>
+#include <pacbio/PBException.h>
+
+//#include <thread>
+
+using std::malloc;
+
+namespace PacBio {
+namespace Cuda {
+
+namespace {
+
+template <typename T>
+void cudaCheckErrors(T&& result)
+{
+//    if (result != cudaSuccess)
+//    {
+//        std::stringstream ss;
+//        ss << "Cuda failure, error code: " << cudaGetErrorName(result);
+//        throw PBException(ss.str());
+//    }
+}
+
+}   // anonymous namespace
+
+void* CudaRawMalloc(size_t size)
+{ return malloc(size); }
+
+void* CudaRawMallocHost(size_t size)
+{ return malloc(size); }
+
+void* CudaRawMallocManaged(size_t size)
+{ return malloc(size); }
+
+void* CudaRawMallocHostZero(size_t size)
+{ return malloc(size); }
+
+
+void* CudaRawHostGetDevicePtr(void* p)
+{
+    // FIXME: What should this do?
+    return nullptr;
+}
+
+
+void CudaFree(void* t)
+{ free(t); }
+
+void CudaFreeHost(void* t)
+{ free(t); }
+
+
+void CudaSynchronizeDefaultStream()
+{
+    // FIXME: What should this do?
+}
+
+void CudaRawCopyHost(void* dest, void* src, size_t size)
+{
+    // FIXME: What should this do?
+}
+
+void CudaRawCopyDevice(void* dest, void* src, size_t size)
+{
+    // FIXME: What should this do?
+}
+
+}}  // namespace PacBio::Cuda

@@ -29,11 +29,11 @@
 #include <cassert>
 #include <memory>
 
-#include <pacbio/cuda/memory/AllocationViews.h>
-#include <pacbio/cuda/memory/DataManagerKey.h>
-#include <pacbio/cuda/memory/PinnedHostArray.h>
-#include <pacbio/cuda/memory/GpuAllocationPool.h>
-#include <pacbio/cuda/memory/SmartDeviceAllocation.h>
+#include "AllocationViews.h"
+#include "DataManagerKey.h"
+#include "PinnedHostArray.h"
+#include "GpuAllocationPool.h"
+#include "SmartDeviceAllocation.h"
 
 namespace PacBio {
 namespace Cuda {

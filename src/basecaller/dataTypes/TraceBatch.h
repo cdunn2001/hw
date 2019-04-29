@@ -29,8 +29,8 @@
 
 #include <cstdint>
 
-#include <pacbio/cuda/memory/UnifiedCudaArray.h>
-#include <pacbio/cuda/memory/DataManagerKey.h>
+#include <UnifiedCudaArray.h>
+#include <DataManagerKey.h>
 
 namespace PacBio {
 namespace Mongo {

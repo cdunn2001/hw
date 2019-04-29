@@ -1,1 +1,2 @@
-#include <pacbio/cuda/memory/PinnedHostArray.h>
+
+#include "PinnedHostArray.h"

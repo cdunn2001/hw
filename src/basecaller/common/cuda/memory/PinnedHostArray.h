@@ -28,7 +28,7 @@
 
 #include <memory>
 
-#include <pacbio/cuda/PBCudaRuntime.h>
+#include <PBCudaRuntime.h>
 
 namespace PacBio {
 namespace Cuda {

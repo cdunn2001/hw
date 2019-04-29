@@ -28,9 +28,9 @@
 
 #include <memory>
 
-#include <pacbio/cuda/PBCudaRuntime.h>
+#include <PBCudaRuntime.h>
 
-#include <pacbio/cuda/memory/DataManagerKey.h>
+#include "DataManagerKey.h"
 
 namespace PacBio {
 namespace Cuda {

@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
     TraceBatch.h
@@ -11,16 +11,16 @@ set(CUDA_LIST
     TraceBatch.cu
 )
 
-add_library(libMongoDataTypes
+add_library(libMongoDataTypes STATIC
     ${CPP_LIST}
-    ${CUDA_LIST}
+    # ${CUDA_LIST}
 )
 
-# target_link_libraries(libCudaCommon 
-#     PUBLIC 
-#         libPacbioCplusplusApi
-#         ${CMAKE_CUDA_LIBRARIES}
-# )
+target_link_libraries(libMongoDataTypes
+    PUBLIC
+        libMongoCommonCudaMemory
+        # libPacbioCplusplusApi
+)
 
 # set_target_properties(libCudaCommon PROPERTIES
 #     CUDA_SEPARABLE_COMPILATION ON

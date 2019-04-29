@@ -32,7 +32,7 @@
 #include <pacbio/ipc/ThreadSafeQueue.h>
 #include <pacbio/PBException.h>
 
-#include <pacbio/cuda/memory/SmartDeviceAllocation.h>
+#include "SmartDeviceAllocation.h"
 
 namespace PacBio {
 namespace Cuda {

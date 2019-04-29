@@ -26,7 +26,7 @@
 #ifndef PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_H
 #define PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_H
 
-#include <pacbio/cuda/memory/DataManagerKey.h>
+#include "DataManagerKey.h"
 
 namespace PacBio {
 namespace Cuda {
