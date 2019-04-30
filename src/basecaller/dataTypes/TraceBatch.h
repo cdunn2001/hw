@@ -29,42 +29,14 @@
 
 #include <cstdint>
 
-#include <UnifiedCudaArray.h>
 #include <DataManagerKey.h>
+#include <UnifiedCudaArray.h>
+
+#include "BatchMetadata.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
-
-// Class that identifies the "location" of a batch of data
-// within an acuiqisition
-class BatchMetadata
-{
-public:
-    BatchMetadata(uint32_t batchId, uint32_t firstFrame, uint32_t lastFrame)
-        : batchId_(batchId)
-        , firstFrame_(firstFrame)
-        , lastFrame_(lastFrame)
-    {}
-
-    uint32_t BatchId() const { return batchId_; }
-    uint32_t FirstFrame() const { return firstFrame_; }
-    uint32_t LastFrame() const { return lastFrame_; }
-
-private:
-    // Not set in stone, just examples
-    uint32_t batchId_;
-    uint32_t firstFrame_;
-    uint32_t lastFrame_;
-};
-
-class BatchDimensions
-{
-public:
-    uint32_t laneWidth;
-    uint32_t blockLen;
-    uint32_t lanesPerBatch;
-};
 
 // Non-owning host-side representation of a gpu batch.  Does not
 // grant access to the data and is meant primarily as a shim class

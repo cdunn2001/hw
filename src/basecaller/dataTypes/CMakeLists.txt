@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
+    BasecallBatch.h
+    BasecallBatch.cpp
+    BatchMetadata.h
     TraceBatch.h
     TraceBatch.cpp
 )
