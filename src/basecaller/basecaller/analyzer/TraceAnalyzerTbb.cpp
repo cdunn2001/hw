@@ -29,13 +29,25 @@
 
 #include "TraceAnalyzerTbb.h"
 
+using std::vector;
+using PacBio::Mongo::Data::BasecallBatch;
+using PacBio::Mongo::Data::TraceBatch;
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceAnalyzerTbb::TraceAnalyzerTbb()
+TraceAnalyzerTbb::TraceAnalyzerTbb(const Data::BasecallerAlgorithmConfig& config,
+                                   const Acquisition::Setup& setup,
+                                   unsigned int numLaneBatches)
 {
+}
 
+vector<BasecallBatch>
+TraceAnalyzerTbb::analyze(vector<TraceBatch<int16_t>> input)
+{
+    // TODO
+    return vector<BasecallBatch>();
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

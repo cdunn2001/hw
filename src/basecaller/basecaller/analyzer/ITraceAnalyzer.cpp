@@ -1,5 +1,3 @@
-#ifndef mongo_basecaller_analyzer_TraceAnalyzerTbb_H_
-#define mongo_basecaller_analyzer_TraceAnalyzerTbb_H_
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -27,29 +25,35 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class TraceAnalyzerTbb, which implements the interface
-//  ITraceAnalyzer.
+//  Defines some members of class ITraceAnalyzer.
 
 #include "ITraceAnalyzer.h"
+
+#include <TraceAnalyzerTbb.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class TraceAnalyzerTbb : public ITraceAnalyzer
+// static
+bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig& startupConfig)
 {
-public:     // Structors and assignment operators
-    TraceAnalyzerTbb(const PacBio::Mongo::Data::BasecallerAlgorithmConfig& config,
-                     const PacBio::Mongo::Acquisition::Setup& setup,
-                     unsigned int numLaneBatches);
+    // TODO
+    return false;
+}
 
-    virtual ~TraceAnalyzerTbb() = default;
 
-private:    // Polymorphic analysis
-    std::vector<Mongo::Data::BasecallBatch>
-    analyze(std::vector<Mongo::Data::TraceBatch<int16_t>> input) override;
-};
+// static
+std::unique_ptr<ITraceAnalyzer>
+ITraceAnalyzer::Create(const PacBio::Mongo::Data::BasecallerAlgorithmConfig& config,
+                       const PacBio::Mongo::Acquisition::Setup& setup,
+                       unsigned int numLaneBatches)
+{
+    // TODO
+    // At this point, there is only one implementation, which uses TBB.
+    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{config, setup, numLaneBatches}};
+
+    return p;
+}
 
 }}}     // namespace PacBio::Mongo::Basecaller
-
-#endif  // mongo_basecaller_analyzer_TraceAnalyzerTbb_H_

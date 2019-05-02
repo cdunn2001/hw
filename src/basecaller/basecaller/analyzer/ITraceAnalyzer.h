@@ -32,6 +32,7 @@ public:     // Static functions
     /// \returns \c true on success.
     static bool Initialize(const PacBio::Mongo::Data::BasecallerInitConfig& startupConfig);
 
+    // TODO: Relocate this functionality to a "factory" class.
     /// Creates a new analyzer.
     /// The implementation is specified by the config.
     /// See each implementation for details on implementation specific
@@ -70,7 +71,7 @@ private:    // Functions
 
     /// The polymorphic implementation point.
     virtual std::vector<Mongo::Data::BasecallBatch>
-    analyze(std::vector<Mongo::Data::TraceBatch<int16_t>> input);
+    analyze(std::vector<Mongo::Data::TraceBatch<int16_t>> input) = 0;
 
 private:    // Data members
     unsigned int numWorkerThreads_;

@@ -5,6 +5,7 @@ add_library(libMongoBasecallerAnalyzer STATIC
     BatchAnalyzer.h
     BatchAnalyzer.cpp
     ITraceAnalyzer.h
+    ITraceAnalyzer.cpp
     ITraceAnalyzerAsync.h
     TraceAnalyzerTbb.h
     TraceAnalyzerTbb.cpp
@@ -13,4 +14,9 @@ add_library(libMongoBasecallerAnalyzer STATIC
 target_link_libraries(libMongoBasecallerAnalyzer
     PUBLIC
         libMongoDataTypes
+)
+
+target_include_directories(libMongoBasecallerAnalyzer
+    PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}
 )
