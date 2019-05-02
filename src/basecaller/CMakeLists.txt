@@ -15,11 +15,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # set(CMAKE_CUDA_EXTENSIONS OFF)
 
 # Find pacbio/common and primary/common cmake modules.
-set(CMAKE_MODULE_PATH
+list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_LIST_DIR}/../common/pacbio-cplusplus-api"
     # "${CMAKE_CURRENT_LIST_DIR}/../../common/cmake-modules"
     # "${CMAKE_CURRENT_LIST_DIR}/../common/"
-     ${CMAKE_MODULE_PATH}
 )
 
 include(pacbio-cplusplus-api)

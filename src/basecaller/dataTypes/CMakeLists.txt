@@ -2,9 +2,12 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
+    AnalogMode.h
     BasecallBatch.h
     BasecallBatch.cpp
+    BasecallerConfig.h
     BatchMetadata.h
+    PrimaryConfig.h
     TraceBatch.h
     TraceBatch.cpp
 )
@@ -22,7 +25,7 @@ add_library(libMongoDataTypes STATIC
 target_link_libraries(libMongoDataTypes
     PUBLIC
         libMongoCommonCudaMemory
-        # libPacbioCplusplusApi
+        libPacbioCplusplusApi
 )
 
 target_include_directories(libMongoDataTypes
