@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     groupMand.add_option("--numBlocks").type_int().set_default(10);
     groupMand.add_option("--blockLength").type_int().set_default(64);
     groupMand.add_option("--kernelLanes").type_int().set_default(2048*2);
-    groupMand.add_option("--simulKernels").type_int().set_default(2);
+    groupMand.add_option("--simulKernels").type_int().set_default(3);
     groupMand.add_option("--immediateCopy").type_bool().action_store_true().set_default(false);
     //groupMand.add_option("--filterMode").type_string().set_default(BaselineFilterMode::toString(BaselineFilterMode::MultipleFull));
     parser.add_option_group(groupMand);

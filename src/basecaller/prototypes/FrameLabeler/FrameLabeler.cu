@@ -23,6 +23,15 @@ __device__ half2 Blend(half2 cond, half2 l, half2 r)
     return __halves2half2(low, high);
 }
 
+__device__ short2 Blend(half2 cond, short2 l, short2 r)
+{
+    half zero = __float2half(0.0f);
+    short2 ret;
+    ret.x =  (__low2half(cond)  == zero) ? r.x  : l.x;
+    ret.y =  (__low2half(cond)  == zero) ? r.y  : l.y;
+    return ret;
+}
+
 __device__ half2 HalfOr(half2 first, half2 second)
 {
     half zero = __float2half(0.0f);
@@ -102,6 +111,7 @@ struct __align__(128) TransitionMatrix
     __device__ static constexpr int DownState(int i) { return i+1 + 2*numAnalogs; }
 
     __device__ T operator()(int row, int col) const { return data_[row][col]; }
+    __device__ T Entry(int row, int col) const { return data_[row][col]; }
 
     __device__ TransitionMatrix(//BasecallerPulseDetectionConfig& config,
                                 CudaArray<float, numAnalogs> pw,
@@ -459,7 +469,7 @@ struct __align__(128) SubframeScorer
 };
 
 template <size_t laneWidth>
-struct BlockStateScorer
+struct __align__(128) BlockStateScorer
 {
     static constexpr unsigned int numStates = 13;
     static constexpr unsigned int numAnalogs = 4;
@@ -573,19 +583,74 @@ struct BlockStateScorer
     SubframeScorer<laneWidth> sfScore_;
 };
 
+template <typename T, size_t laneWidth>
+struct ViterbiDataHost
+{
+    static constexpr int numStates = 13;
+    ViterbiDataHost(size_t numFrames, T val = T{})
+        : data_(numFrames*laneWidth*numStates, val)
+    {}
+
+    DeviceView<T> Data(detail::DataManagerKey)
+    {
+        return data_.GetDeviceView();
+    }
+ private:
+    DeviceOnlyArray<T> data_;
+};
+
+template <typename T, size_t laneWidth>
+struct ViterbiData : private detail::DataManager
+{
+    static constexpr int numStates = 13;
+    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData)
+        : data_(hostData.Data(DataKey()))
+    {}
+
+    __device__ T& operator()(int frame, int state)
+    {
+        return data_[frame*laneWidth*numStates +  state*laneWidth +  threadIdx.x];
+    }
+ private:
+    DeviceView<T> data_;
+};
+
 // First arg should be const?
 __global__ void FrameLabelerKernel(DevicePtr<TransitionMatrix> trans,
                                    DeviceView<BlockModelParameters<32>> models,
+                                   ViterbiData<half2, 32> recur,
+                                   ViterbiData<short2, 32> labels,
                                    GpuBatchData<short2> input,
                                    GpuBatchData<short2> output)
 {
     static constexpr unsigned laneWidth = 32;
+    static constexpr int numStates = 12;
     assert(blockDim.x == laneWidth);
     __shared__ BlockStateScorer<laneWidth> scorer;
     scorer.Setup(models[blockIdx.x]);
 
     auto inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    auto score = scorer.StateScores({__short2half_rn(inZmw[0].x), __short2half_rn(inZmw[0].y)});
+    for (int frame = 0; frame < input.Dims().framesPerBatch; ++frame)
+    {
+        auto scores = scorer.StateScores({__short2half_rn(inZmw[frame].x), __short2half_rn(inZmw[frame].y)});
+        for (int nextState = 0; nextState < numStates; ++nextState)
+        {
+            auto score = scores[nextState];
+            // Is this transposed?
+            auto maxVal = score + __half2half2(trans->Entry(0, nextState)) + recur(frame, 0);
+            auto maxIdx = make_short2(0,0);
+            for (int prevState = 1; prevState < numStates; ++prevState)
+            {
+                auto val = score + __half2half2(trans->Entry(prevState, nextState)) + recur(frame, prevState);
+
+                auto cond = __hgtu2(maxVal, val);
+                maxVal = Blend(cond, maxVal, val);
+                maxIdx = Blend(cond, maxIdx, make_short2(prevState, prevState));
+            }
+            recur(frame+1, nextState) = maxVal;
+            labels(frame, nextState) = maxIdx;
+        }
+    }
 
 }
 
@@ -605,29 +670,42 @@ void run(const Data::DataManagerParams& dataParams,
          const Data::TraceFileParams& traceParams,
          size_t simulKernels)
 {
+    static constexpr size_t gpuBlockThreads = 32;
 
     CudaArray<float, 4> pw(0.2f);
     CudaArray<float, 4> ipd(0.5f);
     CudaArray<float, 4> pwss(3.2f);
     CudaArray<float, 4> ipdss(0.0f);
+
     DeviceOnlyObj<TransitionMatrix> trans(pw, ipd, pwss, ipdss);
-    std::vector<UnifiedCudaArray<BlockModelParameters<32>>> models;
+    std::vector<UnifiedCudaArray<BlockModelParameters<gpuBlockThreads>>> models;
+    std::vector<ViterbiDataHost<half2, gpuBlockThreads>> scores;
+    std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
     for (size_t i = 0; i < numBatches; ++i)
     {
+        // ------------------------------------------------------
+        // TODO we need to set our initial conditions somehow!!!
+        // Currently hard coding to start in zero state.  Should be fine,
+        // but we need to make sure it's built properly into the API
+        // ------------------------------------------------------
+        scores.emplace_back(dataParams.blockLength+1, __float2half2_rn(0.0f));
+        labels.emplace_back(dataParams.blockLength);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
         // TODO populate models
     }
 
-    auto tmp = [&trans, &models, &dataParams](
+    auto tmp = [&trans, &models, &dataParams, &scores, &labels](
         TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
-        if (dataParams.laneWidth != 64) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        FrameLabelerKernel<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
+        if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
+        FrameLabelerKernel<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             trans.GetDevicePtr(),
             models[batchIdx].GetDeviceHandle(),
+            scores[batchIdx],
+            labels[batchIdx],
             batch,
             ret);
     };
