@@ -38,6 +38,8 @@ namespace Data {
 class BatchMetadata
 {
 public:
+    BatchMetadata() = default;
+
     BatchMetadata(uint32_t poolId, uint32_t firstFrame, uint32_t lastFrame)
         : poolId_(poolId)
         , firstFrame_(firstFrame)

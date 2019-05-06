@@ -58,6 +58,8 @@ public:     // Types
     using Basecall = PacBio::SmrtData::Basecall;
 
 public:     // Structors & assignment operators
+    BasecallBatch() = default;
+
     BasecallBatch(const size_t maxCallsPerBlock,
                   const BatchDimensions& batchDims,
                   const BatchMetadata& batchMetadata);

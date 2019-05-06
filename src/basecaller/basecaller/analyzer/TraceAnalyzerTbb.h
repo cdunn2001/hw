@@ -49,7 +49,7 @@ public:     // Structors and assignment operators
 
 private:    // Polymorphic analysis
     std::vector<Data::BasecallBatch>
-    analyze(std::vector<Data::TraceBatch<int16_t>> input) override;
+    Analyze(std::vector<Data::TraceBatch<int16_t>> input) override;
 
 private:    // Data
     // One analyzer for each pool.

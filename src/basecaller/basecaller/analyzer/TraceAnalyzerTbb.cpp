@@ -29,6 +29,8 @@
 
 #include "TraceAnalyzerTbb.h"
 
+#include <tbb/parallel_for.h>
+
 #include <BasecallerConfig.h>
 #include <MovieConfig.h>
 
@@ -42,13 +44,30 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
                                    const Data::BasecallerAlgorithmConfig& bcConfig,
                                    const Data::MovieConfig movConfig)
 {
+    bAnalyzer_.reserve(numPools);
+    // TODO: Should be able to parallelize analyzer construction.
+    for (unsigned int poolId = 0; poolId < bAnalyzer_.size(); ++poolId)
+    {
+        bAnalyzer_.emplace_back(poolId, bcConfig, movConfig);
+    }
 }
 
 vector<Data::BasecallBatch>
-TraceAnalyzerTbb::analyze(vector<Data::TraceBatch<int16_t>> input)
+TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
 {
-    // TODO
-    return vector<Data::BasecallBatch>();
+    const size_t n = input.size();
+    assert(input.size() < bAnalyzer_.size());
+
+    vector<Data::BasecallBatch> output (n);
+
+    // TODO: Customize optional parameters of parallel_for.
+    tbb::parallel_for(0ul, n, [&](size_t i)
+    {
+        const auto pid = input[i].GetMeta().PoolId();
+        output[i] = bAnalyzer_[pid](std::move(input[i]));
+    });
+
+    return output;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

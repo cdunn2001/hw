@@ -29,6 +29,7 @@
 
 #include "ITraceAnalyzer.h"
 
+#include <algorithm>
 #include <MovieConfig.h>
 #include <TraceAnalyzerTbb.h>
 
@@ -55,6 +56,30 @@ ITraceAnalyzer::Create(unsigned int numPools,
     std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{numPools, bcConfig, movConfig}};
 
     return p;
+}
+
+
+// Returns true if the input meets basic contracts.
+bool ITraceAnalyzer::IsValid(const std::vector<Data::TraceBatch<int16_t>>& input)
+{
+    if (input.size() >= NumZmwPools()) return false;
+    assert(!input.empty());
+    const auto first = input.front().GetMeta().FirstFrame();
+    const auto last = input.front().GetMeta().LastFrame();
+    std::vector<unsigned short> pidCount (NumZmwPools(), 0);
+    for (const auto& tb : input)
+    {
+        if (tb.GetMeta().FirstFrame() != first) return false;
+        if (tb.GetMeta().LastFrame() != last) return false;
+        ++pidCount[tb.GetMeta().PoolId()];
+    }
+    if (std::any_of(pidCount.begin(), pidCount.end(),
+                    [&](unsigned short n){return n > 1;}))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
