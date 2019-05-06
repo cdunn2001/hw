@@ -1,10 +1,9 @@
 #include "FrameLabeler.h"
 
-#include <cuda_fp16.h>
-#include <cuda_fp16.hpp>
-
+#include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/KernelThreadPool.h>
+
 #include <dataTypes/TraceBatch.cuh>
 
 using namespace PacBio::Cuda::Memory;
@@ -13,40 +12,6 @@ using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Cuda {
-
-//this is annoying... are there really no blend intrinsics??
-__device__ half2 Blend(half2 cond, half2 l, half2 r)
-{
-    half zero = __float2half(0.0f);
-    half low =  (__low2half(cond)  == zero) ? __low2half(r)  : __low2half(l);
-    half high = (__high2half(cond) == zero) ? __high2half(r) : __high2half(l);
-    return __halves2half2(low, high);
-}
-
-__device__ short2 Blend(half2 cond, short2 l, short2 r)
-{
-    half zero = __float2half(0.0f);
-    short2 ret;
-    ret.x =  (__low2half(cond)  == zero) ? r.x  : l.x;
-    ret.y =  (__low2half(cond)  == zero) ? r.y  : l.y;
-    return ret;
-}
-
-__device__ half2 HalfOr(half2 first, half2 second)
-{
-    half zero = __float2half(0.0f);
-    half low  = (__low2half(first)  != zero) || (__low2half(second)  != zero);
-    half high = (__high2half(first) != zero) || (__high2half(second) != zero);
-    return __halves2half2(low, high);
-}
-
-__device__ half2 h2pow2(half2 val) { return val*val; }
-
-__device__ half2 h2min(half2 l, half2 r)
-{
-    auto cond = __hltu2(l, r);
-    return Blend(cond, l, r);
-}
 
 template <typename T>
 class DevicePtr
@@ -308,46 +273,46 @@ private:
 template <size_t laneWidth>
 class __align__(128) NormalLog
 {
-    using Row = CudaArray<half2, laneWidth>;
+    using Row = CudaArray<PBHalf2, laneWidth>;
     static constexpr float log2pi_f = 1.8378770664f;
 public:     // Structors
     NormalLog() = default;
-    __device__ NormalLog(const half2& mean,
-              const half2& variance)
+    __device__ NormalLog(const PBHalf2& mean,
+                         const PBHalf2& variance)
     {
         Mean(mean);
         Variance(variance);
     }
 
 public:     // Properties
-    __device__ const half2& Mean() const
+    __device__ const PBHalf2& Mean() const
     { return mean_[threadIdx.x]; }
 
     /// Sets Mean to new value.
     /// \returns *this.
-    __device__ NormalLog& Mean(const half2& value)
+    __device__ NormalLog& Mean(const PBHalf2& value)
     {
         mean_[threadIdx.x] = value;
         return *this;
     }
 
-    __device__ half2 Variance() const
+    __device__ PBHalf2 Variance() const
     { return 0.5f / scaleFactor_[threadIdx.x]; }
 
     /// Sets Variance to new value, which must be positive.
     /// \returns *this.
-    __device__ NormalLog& Variance(const half2& value)
+    __device__ NormalLog& Variance(const PBHalf2& value)
     {
         //assert(all(value > 0.0f));
-        normTerm_[threadIdx.x] = __float2half2_rn(-0.5f) * (__float2half2_rn(log2pi_f) + h2log(value));
-        scaleFactor_[threadIdx.x] = __float2half2_rn(0.5f) / value;
+        normTerm_[threadIdx.x] = PBHalf2(-0.5f) * (PBHalf2(log2pi_f) + log(value));
+        scaleFactor_[threadIdx.x] = PBHalf2(0.5f) / value;
         return *this;
     }
 
 public:
     /// Evaluate the distribution at \a x.
-    __device__ half2 operator()(const half2& x) const
-    { return normTerm_[threadIdx.x] - h2pow2(x - mean_[threadIdx.x]) * scaleFactor_[threadIdx.x]; }
+    __device__ PBHalf2 operator()(const PBHalf2& x) const
+    { return normTerm_[threadIdx.x] - pow2(x - mean_[threadIdx.x]) * scaleFactor_[threadIdx.x]; }
 
 private:    // Data
     Row mean_;
@@ -358,7 +323,7 @@ private:    // Data
 template <size_t laneWidth>
 struct __align__(128) BlockAnalogMode
 {
-    using Row = CudaArray<half2, laneWidth>;
+    using Row = CudaArray<PBHalf2, laneWidth>;
     Row means;
     Row vars;
 };
@@ -387,34 +352,34 @@ template <size_t laneWidth>
 struct __align__(128) SubframeScorer
 {
     static constexpr unsigned int numAnalogs = 4;
-    using Row = CudaArray<half2, laneWidth>;
+    using Row = CudaArray<PBHalf2, laneWidth>;
 
     SubframeScorer() = default;
 
     __device__ void Setup(const BlockModelParameters<laneWidth>& model)
     {
         static constexpr float pi_f = 3.1415926536f;
-        const half2 sqrtHalfPi = __float2half2_rn(std::sqrt(0.5f * pi_f));
-        const half2 halfVal = __float2half2_rn(0.5f);
-        const half2 nhalfVal = __float2half2_rn(-0.5f);
-        const half2 oneSixth = __float2half2_rn(1.0f / 6.0f);
+        const PBHalf2 sqrtHalfPi = PBHalf2(std::sqrt(0.5f * pi_f));
+        const PBHalf2 halfVal = PBHalf2(0.5f);
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const PBHalf2 oneSixth = PBHalf2(1.0f / 6.0f);
 
         const auto& bMode = model.BaselineMode();
         const auto bMean = bMode.means[threadIdx.x];
         const auto bVar = bMode.vars[threadIdx.x];
-        const auto bSigma = h2sqrt(bVar);
+        const auto bSigma = sqrt(bVar);
 
         // Low joint in the score function.
         x0_[threadIdx.x] = bMean + bSigma * sqrtHalfPi;
-        bFixedTerm_[threadIdx.x] = __float2half2_rn(-0.5f) / bVar;
+        bFixedTerm_[threadIdx.x] = nhalfVal / bVar;
 
         for (unsigned int a = 0; a < numAnalogs; ++a)
         {
             const auto& dma = model.AnalogMode(a);
             const auto aMean = dma.means[threadIdx.x];
-            logPMean_[a][threadIdx.x] = h2log(aMean - bMean);
+            logPMean_[a][threadIdx.x] = log(aMean - bMean);
             const auto aVar = dma.vars[threadIdx.x];
-            const auto aSigma = h2sqrt(aVar);
+            const auto aSigma = sqrt(aVar);
             // High joint in the score function.
             x1_[a][threadIdx.x] = aMean - aSigma * sqrtHalfPi;
             pFixedTerm_[a][threadIdx.x] = nhalfVal / aVar;
@@ -436,20 +401,20 @@ struct __align__(128) SubframeScorer
         }
     }
 
-    __device__ half2 operator()(unsigned int a, half2 val) const
+    __device__ PBHalf2 operator()(unsigned int a, PBHalf2 val) const
     {
         // Score between x0 and x1.
-        const auto lowExtrema = __hltu2(val, x0_[threadIdx.x]);
+        const auto lowExtrema = val < x0_[threadIdx.x];
         const auto cap = Blend(lowExtrema, x0_[threadIdx.x], x1_[a][threadIdx.x]);
         const auto fixedTerm = Blend(lowExtrema, bFixedTerm_[threadIdx.x], pFixedTerm_[a][threadIdx.x]);
 
-        const auto extrema = HalfOr(lowExtrema, __hgtu2(val, x1_[a][threadIdx.x]));
-        half2 s = Blend(extrema, fixedTerm * h2pow2(cap - cap), __float2half2_rn(0.0f)) - logPMean_[a][threadIdx.x];
+        const auto extrema = lowExtrema || (val > x1_[a][threadIdx.x]);
+        PBHalf2 s = Blend(extrema, fixedTerm * pow2(cap - cap), PBHalf2(0.0f)) - logPMean_[a][threadIdx.x];
 
         if (a == numAnalogs-1)
         {
             // Fall back to normal approximation when x1 < x0.
-            s = Blend(__hleu2(x0_[threadIdx.x], x1_[a][threadIdx.x]), s, dimFallback_(val));
+            s = Blend(x0_[threadIdx.x] <= x1_[a][threadIdx.x], s, dimFallback_(val));
         }
         return s;
     }
@@ -473,7 +438,7 @@ struct __align__(128) BlockStateScorer
 {
     static constexpr unsigned int numStates = 13;
     static constexpr unsigned int numAnalogs = 4;
-    using Row = CudaArray<half2, laneWidth>;
+    using Row = CudaArray<PBHalf2, laneWidth>;
 
     __device__ static constexpr int FullState(int i) { return i+1; }
     __device__ static constexpr int UpState(int i) { return i+1 + numAnalogs; }
@@ -483,12 +448,12 @@ struct __align__(128) BlockStateScorer
     __device__ void Setup(const BlockModelParameters<laneWidth>& model)
     {
         static constexpr float log2pi_f = 1.8378770664f;
-        const half2 nhalfVal = __float2half2_rn(-0.5f);
-        const half2 one = __float2half2_rn(1.0f);
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const PBHalf2 one = PBHalf2(1.0f);
 
         sfScore_.Setup(model);
 
-        const half2 normConst = __float2half2_rn(log2pi_f / 2.0f);
+        const PBHalf2 normConst = PBHalf2(log2pi_f / 2.0f);
 
         // Background
         const auto& bgMode = model.BaselineMode();
@@ -497,25 +462,25 @@ struct __align__(128) BlockStateScorer
         // sym2x2MatrixInverse returns the determinant and writes the inverse
         // into the second argument.
         bgInvCov_[threadIdx.x] = one / bgMode.vars[threadIdx.x];
-        bgFixedTerm_[threadIdx.x] = nhalfVal * h2log(bgInvCov_[threadIdx.x]) - normConst;
+        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgInvCov_[threadIdx.x]) - normConst;
         bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
 
         for (unsigned int i = 0; i < numAnalogs; ++i)
         {
             // Full-frame states
             const auto& aMode = model.AnalogMode(i);
-            ffFixedTerm_[i][threadIdx.x] = nhalfVal * h2log(one / aMode.vars[threadIdx.x]) - normConst;
+            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(one / aMode.vars[threadIdx.x]) - normConst;
             ffmean_[i][threadIdx.x] = aMode.means[threadIdx.x];
         }
     }
 
-    __device__ CudaArray<half2, numStates> StateScores(half2 data) const
+    __device__ CudaArray<PBHalf2, numStates> StateScores(PBHalf2 data) const
     {
-        CudaArray<half2, numStates> score;
-        const half2 halfVal = __float2half2_rn(0.5f);
-        const half2 nhalfVal = __float2half2_rn(-0.5f);
-        const half2 one = __float2half2_rn(1.0f);
-        const half2 zero = __float2half2_rn(0.0f);
+        CudaArray<PBHalf2, numStates> score;
+        const PBHalf2 halfVal = PBHalf2(0.5f);
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const PBHalf2 one = PBHalf2(1.0f);
+        const PBHalf2 zero = PBHalf2(0.0f);
 
         {   // Compute the score for the background state.
             const auto mu = bgMean_[threadIdx.x];
@@ -553,9 +518,8 @@ struct __align__(128) BlockStateScorer
             const auto mumu = mu*mu;
             // xmu > mumu means that the Euclidean projection of x onto mu is
             // greater than the norm of mu.
-            auto cond = __hgtu2(xmu, mumu);
-            score[j] = Blend(cond,
-                             h2min(h2min(score[j], score[ff] - one), zero),
+            score[j] = Blend(xmu > mumu,
+                             min(min(score[j], score[ff] - one), zero),
                              score[j]);
 
             // Could apply a similar constraint on the other side to prevent
@@ -618,7 +582,7 @@ struct ViterbiData : private detail::DataManager
 // First arg should be const?
 __global__ void FrameLabelerKernel(DevicePtr<TransitionMatrix> trans,
                                    DeviceView<BlockModelParameters<32>> models,
-                                   ViterbiData<half2, 32> recur,
+                                   ViterbiData<PBHalf2, 32> recur,
                                    ViterbiData<short2, 32> labels,
                                    GpuBatchData<short2> input,
                                    GpuBatchData<short2> output)
@@ -629,27 +593,57 @@ __global__ void FrameLabelerKernel(DevicePtr<TransitionMatrix> trans,
     __shared__ BlockStateScorer<laneWidth> scorer;
     scorer.Setup(models[blockIdx.x]);
 
+    // Forward recursion
+    const int numFrames = input.Dims().framesPerBatch;
     auto inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    for (int frame = 0; frame < input.Dims().framesPerBatch; ++frame)
+    for (int frame = 0; frame < numFrames; ++frame)
     {
-        auto scores = scorer.StateScores({__short2half_rn(inZmw[frame].x), __short2half_rn(inZmw[frame].y)});
+        auto scores = scorer.StateScores(PBHalf2(inZmw[frame]));
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
             auto score = scores[nextState];
             // Is this transposed?
-            auto maxVal = score + __half2half2(trans->Entry(0, nextState)) + recur(frame, 0);
+            auto maxVal = score + PBHalf2(trans->Entry(0, nextState)) + recur(frame, 0);
             auto maxIdx = make_short2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
-                auto val = score + __half2half2(trans->Entry(prevState, nextState)) + recur(frame, prevState);
+                auto val = score + PBHalf2(trans->Entry(prevState, nextState)) + recur(frame, prevState);
 
-                auto cond = __hgtu2(maxVal, val);
+                auto cond = maxVal > val;
                 maxVal = Blend(cond, maxVal, val);
                 maxIdx = Blend(cond, maxIdx, make_short2(prevState, prevState));
             }
             recur(frame+1, nextState) = maxVal;
             labels(frame, nextState) = maxIdx;
         }
+    }
+
+    // Cheat for now, find it for real later
+    const int anchorIdx = numFrames-1;
+    auto maxVal = recur(anchorIdx, 0);
+    short2 traceState = make_short2(0,0);
+    for (int state = 1; state < numStates; ++state)
+    {
+        auto val = recur(anchorIdx, state);
+        auto cond = maxVal > val;
+
+        maxVal = Blend(cond, maxVal, val);
+        traceState = Blend(cond, traceState, make_short2(state, state));
+    }
+
+    // Traceback
+    auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
+    for (int frame = numFrames-1; frame >= 0; --frame)
+    {
+        outZmw[frame] = traceState;
+        traceState.x = labels(frame, traceState.x).x;
+        traceState.y = labels(frame, traceState.x).y;
+    }
+
+    // Set the new boundary conditions for next block
+    for (int state = 0; state < numStates; ++state)
+    {
+        recur(0, state) = PBHalf2(0);
     }
 
 }
@@ -679,9 +673,13 @@ void run(const Data::DataManagerParams& dataParams,
 
     DeviceOnlyObj<TransitionMatrix> trans(pw, ipd, pwss, ipdss);
     std::vector<UnifiedCudaArray<BlockModelParameters<gpuBlockThreads>>> models;
-    std::vector<ViterbiDataHost<half2, gpuBlockThreads>> scores;
+    std::vector<ViterbiDataHost<PBHalf2, gpuBlockThreads>> scores;
     std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
+
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
+    models.reserve(numBatches);
+    scores.reserve(numBatches);
+    labels.reserve(numBatches);
     for (size_t i = 0; i < numBatches; ++i)
     {
         // ------------------------------------------------------
@@ -689,7 +687,7 @@ void run(const Data::DataManagerParams& dataParams,
         // Currently hard coding to start in zero state.  Should be fine,
         // but we need to make sure it's built properly into the API
         // ------------------------------------------------------
-        scores.emplace_back(dataParams.blockLength+1, __float2half2_rn(0.0f));
+        scores.emplace_back(dataParams.blockLength+1, PBHalf2(0.0f));
         labels.emplace_back(dataParams.blockLength);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
         // TODO populate models

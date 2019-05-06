@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.13)
 set(CPP_LIST
     CudaFunctionDecorators.h
     DisableBoostOnDevice.h
+    PBCudaSimd.h
+    PBCudaSimd.cu
+    PBCudaSimd.cuh
     PBCudaRuntime.h
     PBCudaRuntime.cpp
     # PBCudaRuntimeNoCuda.cpp

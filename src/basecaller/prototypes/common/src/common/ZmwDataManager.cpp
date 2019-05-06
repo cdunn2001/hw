@@ -1,4 +1,5 @@
 #include <common/ZmwDataManager.h>
+#include <common/cuda/PBCudaSimd.h>
 
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
