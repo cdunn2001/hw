@@ -73,6 +73,9 @@ public:     // Structors & assignment operators
     ~BasecallBatch() = default;
 
 public:     // Functions
+    const BatchMetadata& GetMeta() const
+    { return metaData_; }
+
     // TODO: Create functions for accessing components as needed.
     // For example, PushBack(uint32_t z, Basecall bc).
 

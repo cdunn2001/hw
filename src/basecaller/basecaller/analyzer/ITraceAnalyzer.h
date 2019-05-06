@@ -51,10 +51,10 @@ public:
 
 public:
     /// The number of worker threads used by this analyzer.
-    virtual unsigned int NumWorkerThreads() const;
+    virtual unsigned int NumWorkerThreads() const = 0;
 
     /// The number of ZMW pools supported by this analyzer.
-    virtual unsigned int NumZmwPools() const;
+    virtual unsigned int NumZmwPools() const = 0;
 
     /// The workhorse function. Not const because ZMW-specific state is updated.
     /// GetMeta().PoolId() must be in [0, NumZmwPools) and unique for all
@@ -72,7 +72,7 @@ public:
 private:    // Functions
     /// Sets the number of worker threads requested.
     /// To choose the default value for the platform, specify 0.
-    virtual void NumWorkerThreads(unsigned int);
+    virtual void NumWorkerThreads(unsigned int) = 0;
 
     /// The polymorphic implementation point.
     virtual std::vector<Data::BasecallBatch>

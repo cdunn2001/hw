@@ -47,9 +47,20 @@ public:     // Structors and assignment operators
 
     virtual ~TraceAnalyzerTbb() = default;
 
+public:     // ITraceAnalyzer interface
+    /// The number of worker threads used by this analyzer.
+    unsigned int NumWorkerThreads() const override;
+
+    /// The number of ZMW pools supported by this analyzer.
+    unsigned int NumZmwPools() const override;
+
 private:    // Polymorphic analysis
     std::vector<Data::BasecallBatch>
     Analyze(std::vector<Data::TraceBatch<int16_t>> input) override;
+
+    // Sets the number of worker threads requested.
+    // To choose the default value for the platform, specify 0.
+    void NumWorkerThreads(unsigned int) override;
 
 private:    // Data
     // One analyzer for each pool.

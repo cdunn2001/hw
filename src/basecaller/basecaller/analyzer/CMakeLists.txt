@@ -1,5 +1,7 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
+
+include(pacbio-tbb)
 
 add_library(libMongoBasecallerAnalyzer STATIC
     BatchAnalyzer.h
@@ -14,6 +16,8 @@ add_library(libMongoBasecallerAnalyzer STATIC
 target_link_libraries(libMongoBasecallerAnalyzer
     PUBLIC
         libMongoDataTypes
+    PRIVATE
+        libTbb
 )
 
 target_include_directories(libMongoBasecallerAnalyzer

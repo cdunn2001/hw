@@ -29,6 +29,7 @@
 
 #include "TraceAnalyzerTbb.h"
 
+#include <boost/numeric/conversion/cast.hpp>
 #include <tbb/parallel_for.h>
 
 #include <BasecallerConfig.h>
@@ -45,12 +46,33 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
                                    const Data::MovieConfig movConfig)
 {
     bAnalyzer_.reserve(numPools);
-    // TODO: Should be able to parallelize analyzer construction.
-    for (unsigned int poolId = 0; poolId < bAnalyzer_.size(); ++poolId)
+    // TODO: Should be able to parallelize construction of batch analyzers.
+    for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
         bAnalyzer_.emplace_back(poolId, bcConfig, movConfig);
     }
 }
+
+// The number of worker threads used by this analyzer.
+unsigned int TraceAnalyzerTbb::NumWorkerThreads() const
+{
+    // TODO
+    return 0;
+}
+
+// Sets the number of worker threads requested.
+// To choose the default value for the platform, specify 0.
+void TraceAnalyzerTbb::NumWorkerThreads(unsigned int)
+{
+    // TODO
+}
+
+// The number of ZMW pools supported by this analyzer.
+unsigned int TraceAnalyzerTbb::NumZmwPools() const
+{
+    return boost::numeric_cast<unsigned int>(bAnalyzer_.size());
+}
+
 
 vector<Data::BasecallBatch>
 TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
@@ -61,7 +83,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     vector<Data::BasecallBatch> output (n);
 
     // TODO: Customize optional parameters of parallel_for.
-    tbb::parallel_for(0ul, n, [&](size_t i)
+    tbb::parallel_for(size_t(0), n, [&](size_t i)
     {
         const auto pid = input[i].GetMeta().PoolId();
         output[i] = bAnalyzer_[pid](std::move(input[i]));

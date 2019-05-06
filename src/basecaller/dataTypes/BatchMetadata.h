@@ -60,6 +60,15 @@ private:
 };
 
 
+inline bool operator==(const BatchMetadata& lhs, const BatchMetadata& rhs)
+{
+    if (lhs.PoolId() != rhs.PoolId()) return false;
+    if (lhs.FirstFrame() != rhs.FirstFrame()) return false;
+    if (lhs.LastFrame() != rhs.LastFrame()) return false;
+    return true;
+}
+
+
 class BatchDimensions
 {
 public:     // Functions
