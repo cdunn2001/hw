@@ -32,6 +32,8 @@
 
 #include "ITraceAnalyzer.h"
 
+#include <BatchAnalyzer.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -39,15 +41,19 @@ namespace Basecaller {
 class TraceAnalyzerTbb : public ITraceAnalyzer
 {
 public:     // Structors and assignment operators
-    TraceAnalyzerTbb(const PacBio::Mongo::Data::BasecallerAlgorithmConfig& config,
-                     const PacBio::Mongo::Acquisition::Setup& setup,
-                     unsigned int numLaneBatches);
+    TraceAnalyzerTbb(unsigned int numPools,
+                     const Data::BasecallerAlgorithmConfig& bcConfig,
+                     const Data::MovieConfig movConfig);
 
     virtual ~TraceAnalyzerTbb() = default;
 
 private:    // Polymorphic analysis
-    std::vector<Mongo::Data::BasecallBatch>
-    analyze(std::vector<Mongo::Data::TraceBatch<int16_t>> input) override;
+    std::vector<Data::BasecallBatch>
+    analyze(std::vector<Data::TraceBatch<int16_t>> input) override;
+
+private:    // Data
+    // One analyzer for each pool.
+    std::vector<BatchAnalyzer> bAnalyzer_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

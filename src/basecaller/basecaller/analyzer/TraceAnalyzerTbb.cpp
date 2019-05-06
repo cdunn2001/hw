@@ -29,25 +29,26 @@
 
 #include "TraceAnalyzerTbb.h"
 
+#include <BasecallerConfig.h>
+#include <MovieConfig.h>
+
 using std::vector;
-using PacBio::Mongo::Data::BasecallBatch;
-using PacBio::Mongo::Data::TraceBatch;
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceAnalyzerTbb::TraceAnalyzerTbb(const Data::BasecallerAlgorithmConfig& config,
-                                   const Acquisition::Setup& setup,
-                                   unsigned int numLaneBatches)
+TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
+                                   const Data::BasecallerAlgorithmConfig& bcConfig,
+                                   const Data::MovieConfig movConfig)
 {
 }
 
-vector<BasecallBatch>
-TraceAnalyzerTbb::analyze(vector<TraceBatch<int16_t>> input)
+vector<Data::BasecallBatch>
+TraceAnalyzerTbb::analyze(vector<Data::TraceBatch<int16_t>> input)
 {
     // TODO
-    return vector<BasecallBatch>();
+    return vector<Data::BasecallBatch>();
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

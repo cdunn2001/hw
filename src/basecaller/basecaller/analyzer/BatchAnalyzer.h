@@ -29,6 +29,7 @@
 
 #include <BasecallBatch.h>
 #include <TraceBatch.h>
+#include <ConfigForward.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -43,7 +44,9 @@ public:     // Types
     using OutputType = PacBio::Mongo::Data::BasecallBatch;
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t batchId);
+    BatchAnalyzer(uint32_t batchId,
+                  const Data::BasecallerAlgorithmConfig& bcConfig,
+                  const Data::MovieConfig& movConfig);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;

@@ -32,8 +32,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallBatch::BasecallBatch(const BatchDimensions& batchDims,
-                             const size_t maxCallsPerBlock,
+BasecallBatch::BasecallBatch(const size_t maxCallsPerBlock,
+                             const BatchDimensions& batchDims,
                              const BatchMetadata& batchMetadata)
     : dims_ (batchDims)
     , maxCallsPerBlock_ (maxCallsPerBlock)

@@ -7,6 +7,9 @@ set(CPP_LIST
     BasecallBatch.cpp
     BasecallerConfig.h
     BatchMetadata.h
+    ConfigForward.h
+    MovieConfig.h
+    MovieConfig.cpp
     PrimaryConfig.h
     TraceBatch.h
     TraceBatch.cpp

@@ -1,5 +1,4 @@
-#ifndef mongo_dataTypes_BatchMetadata_H_
-#define mongo_dataTypes_BatchMetadata_H_
+#include "MovieConfig.h"
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -27,54 +26,15 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines classes BatchMetadata and BatchDimensions.
+//  Defines members of class MovieConfig.
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Class that identifies the "location" of a batch of data
-// within an acuiqisition
-class BatchMetadata
+MovieConfig::MovieConfig()
 {
-public:
-    BatchMetadata(uint32_t poolId, uint32_t firstFrame, uint32_t lastFrame)
-        : poolId_(poolId)
-        , firstFrame_(firstFrame)
-        , lastFrame_(lastFrame)
-    {
-        assert(firstFrame <= lastFrame);
-    }
 
-    uint32_t PoolId() const { return poolId_; }
-    uint32_t FirstFrame() const { return firstFrame_; }
-    uint32_t LastFrame() const { return lastFrame_; }
-
-private:
-    // Not set in stone, just examples
-    uint32_t poolId_;      // Identifier of pool of ZMWs.
-    uint32_t firstFrame_;
-    uint32_t lastFrame_;
-};
-
-
-class BatchDimensions
-{
-public:     // Functions
-    uint32_t zmwsPerBatch() const
-    {
-        // TODO: Strictly speaking, there's an overflow risk here. Pretty sure,
-        // however, that we won't have more than four billion ZMWs per batch in
-        // the forseeable future.
-        return laneWidth * lanesPerBatch;
-    }
-
-public:
-    uint32_t laneWidth;
-    uint32_t framesPerBatch;
-    uint32_t lanesPerBatch;
-};
+}
 
 }}}     // namespace PacBio::Mongo::Data
-
-#endif // mongo_dataTypes_BatchMetadata_H_

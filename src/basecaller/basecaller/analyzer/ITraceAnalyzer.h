@@ -3,17 +3,12 @@
 
 #include <vector>
 
-#include <BasecallerConfig.h>
 #include <BasecallBatch.h>
 #include <TraceBatch.h>
+#include <ConfigForward.h>
 
 namespace PacBio {
 namespace Mongo {
-
-namespace Acquisition {
-    class Setup;
-}
-
 namespace Basecaller {
 
 /// The interface for a chip-block trace analyzer that calls bases.
@@ -30,24 +25,26 @@ public:     // Static functions
     // TODO: Do we really need this static function?
     /// Prepares any static objects used by all instances.
     /// \returns \c true on success.
-    static bool Initialize(const PacBio::Mongo::Data::BasecallerInitConfig& startupConfig);
+    static bool Initialize(const Data::BasecallerInitConfig& startupConfig);
 
     // TODO: Relocate this functionality to a "factory" class.
     /// Creates a new analyzer.
     /// The implementation is specified by the config.
     /// See each implementation for details on implementation specific
     /// configuration parameters.
-    /// \param config
+    /// \param numPools
+    /// The total number of pools of ZMW lanes that the constructed analyzer
+    /// will be asked to process.
+    /// \param bcConfig
     /// Configuration object.
     /// See http://smrtanalysis-docs/primary/top/doc/PacBioPrimaryConfiguration.html.
-    /// \param numLaneBatches
-    /// The total number of lane batches for which the constructed analyzer
-    /// will asked to process.
-    static std::unique_ptr<ITraceAnalyzer> Create(
-            const PacBio::Mongo::Data::BasecallerAlgorithmConfig& config,
-            const PacBio::Mongo::Acquisition::Setup& setup,
-            unsigned int numLaneBatches
-    );
+    /// \param movConfig
+    /// Describes the configuration of the instrument and chemistry for the
+    /// movie to be analyzed.
+    static std::unique_ptr<ITraceAnalyzer>
+    Create(unsigned int numPools,
+           const Data::BasecallerAlgorithmConfig& bcConfig,
+           const Data::MovieConfig& movConfig);
 
 public:
     virtual ~ITraceAnalyzer() noexcept = default;

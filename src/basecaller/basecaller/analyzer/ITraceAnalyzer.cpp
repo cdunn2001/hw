@@ -29,6 +29,7 @@
 
 #include "ITraceAnalyzer.h"
 
+#include <MovieConfig.h>
 #include <TraceAnalyzerTbb.h>
 
 namespace PacBio {
@@ -45,13 +46,13 @@ bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig&
 
 // static
 std::unique_ptr<ITraceAnalyzer>
-ITraceAnalyzer::Create(const PacBio::Mongo::Data::BasecallerAlgorithmConfig& config,
-                       const PacBio::Mongo::Acquisition::Setup& setup,
-                       unsigned int numLaneBatches)
+ITraceAnalyzer::Create(unsigned int numPools,
+                       const Data::BasecallerAlgorithmConfig& bcConfig,
+                       const Data::MovieConfig& movConfig)
 {
     // TODO
     // At this point, there is only one implementation, which uses TBB.
-    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{config, setup, numLaneBatches}};
+    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{numPools, bcConfig, movConfig}};
 
     return p;
 }

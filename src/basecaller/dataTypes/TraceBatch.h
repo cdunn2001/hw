@@ -128,7 +128,7 @@ public:
               Cuda::Memory::SyncDirection syncDirection,
               std::shared_ptr<Cuda::Memory::GpuAllocationPool<T>> pool = nullptr)
         : dims_(dims)
-        , data_(dims.laneWidth * dims.blockLen * dims.lanesPerBatch, syncDirection, pool)
+        , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch, syncDirection, pool)
     {}
 
     BatchData(const BatchData&) = delete;
@@ -139,7 +139,7 @@ public:
     ~BatchData() = default;
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
-    size_t BlockLen()      const { return dims_.blockLen; }
+    size_t BlockLen()      const { return dims_.framesPerBatch; }
     size_t LanesPerBatch() const { return dims_.lanesPerBatch; }
 
     const BatchDimensions& Dimensions() const { return dims_; }
@@ -153,9 +153,9 @@ public:
     BlockView<T> GetBlockView(size_t laneIdx)
     {
         auto view = data_.GetHostView();
-        return BlockView<T>(view.Data() + laneIdx * dims_.blockLen * dims_.laneWidth,
+        return BlockView<T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
                             dims_.laneWidth,
-                            dims_.blockLen,
+                            dims_.framesPerBatch,
                             DataKey());
     }
 private:

@@ -31,6 +31,7 @@
 
 #include <BasecallBatch.h>
 #include <TraceBatch.h>
+#include <BasecallerConfig.h>
 
 using namespace PacBio::Mongo::Data;
 
@@ -38,13 +39,15 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-BatchAnalyzer::BatchAnalyzer(uint32_t batchId)
+BatchAnalyzer::BatchAnalyzer(uint32_t batchId,
+                             const BasecallerAlgorithmConfig& bcConfig,
+                             const MovieConfig& movConfig)
     : batchId_ (batchId)
 { }
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
-    if (tbatch.Metadata().BatchId() != batchId_)
+    if (tbatch.Metadata().PoolId() != batchId_)
     {
         // TODO: Log error. Throw exception.
     }
@@ -62,7 +65,7 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return BasecallBatch(tbatch.Dimensions(), maxCallsPerBlock, tbatch.Metadata());
+    return BasecallBatch(maxCallsPerBlock, tbatch.Dimensions(), tbatch.Metadata());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
