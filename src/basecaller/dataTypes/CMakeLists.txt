@@ -27,7 +27,7 @@ add_library(libMongoDataTypes STATIC
 
 target_link_libraries(libMongoDataTypes
     PUBLIC
-        libMongoCommonCudaMemory
+        libMongoCommonCuda
         libPacbioCplusplusApi
 )
 

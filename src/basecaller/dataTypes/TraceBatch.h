@@ -29,8 +29,8 @@
 
 #include <cstdint>
 
-#include <DataManagerKey.h>
-#include <UnifiedCudaArray.h>
+#include <memory/DataManagerKey.h>
+#include <memory/UnifiedCudaArray.h>
 
 #include "BatchMetadata.h"
 
