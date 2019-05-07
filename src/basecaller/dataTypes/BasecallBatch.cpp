@@ -32,14 +32,14 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallBatch::BasecallBatch(const size_t maxCallsPerBlock,
+BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
                              const BatchDimensions& batchDims,
                              const BatchMetadata& batchMetadata)
     : dims_ (batchDims)
-    , maxCallsPerBlock_ (maxCallsPerBlock)
+    , maxCallsPerZmwChunk_ (maxCallsPerZmwChunk)
     , metaData_ (batchMetadata)
     , seqLenths_ (batchDims.zmwsPerBatch(), 0)
-    , basecalls_ (batchDims.zmwsPerBatch() * maxCallsPerBlock)
+    , basecalls_ (batchDims.zmwsPerBatch() * maxCallsPerZmwChunk)
 { }
 
 }}}     // namespace PacBio::Mongo::Data

@@ -104,7 +104,7 @@ namespace Data {
 
         ADD_PARAMETER(float, ConvergeCoeff, 3.0e-5);
 
-        // 1 will round up to a single full block
+        // 1 will round up to a single full chunk.
         ADD_PARAMETER(uint32_t, MinFramesForEstimate, 4000);
 
         // Number of frames to skip between estimation attempts.
@@ -247,7 +247,7 @@ namespace Data {
         SMART_ENUM(MethodName, Simple, Simulator, SigmaCut, ExShortPulse);
         ADD_ENUM(MethodName, Method, MethodName::Simple);
 
-        ADD_PARAMETER(uint32_t, BasesPerBlock, 50u); // used by p2bsimulator ... maybe moved up?
+        ADD_PARAMETER(uint32_t, BasesPerZmwChunk, 50u); // used by p2bsimulator ... maybe moved up?
         ADD_PARAMETER(float, SnrThresh, 100.0f);
         ADD_PARAMETER(double, XspAmpThresh, 0.70);  // Valid range is [0, 1].
         ADD_PARAMETER(float, XspWidthThresh, 3.5f); // Must be >= 0.

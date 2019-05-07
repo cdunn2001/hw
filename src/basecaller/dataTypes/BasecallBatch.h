@@ -60,7 +60,7 @@ public:     // Types
 public:     // Structors & assignment operators
     BasecallBatch() = default;
 
-    BasecallBatch(const size_t maxCallsPerBlock,
+    BasecallBatch(const size_t maxCallsPerZmwChunk,
                   const BatchDimensions& batchDims,
                   const BatchMetadata& batchMetadata);
 
@@ -90,7 +90,7 @@ private:    // Functions
     size_t zmwOffset(size_t z)
     {
         assert(z < dims_.zmwsPerBatch());
-        return z * maxCallsPerBlock_;
+        return z * maxCallsPerZmwChunk_;
     }
 
     // Offset into basecalls_ to the start of the read for the first ZMW of
@@ -98,12 +98,12 @@ private:    // Functions
     size_t laneOffset(size_t l)
     {
         assert(l < dims_.lanesPerBatch);
-        return l * dims_.laneWidth * maxCallsPerBlock_;
+        return l * dims_.laneWidth * maxCallsPerZmwChunk_;
     }
 
 private:    // Data
     BatchDimensions dims_;
-    size_t maxCallsPerBlock_;
+    size_t maxCallsPerZmwChunk_;
     BatchMetadata   metaData_;
     ArrayType<uint32_t> seqLenths_;         // Length of each zmw-read segment.
     ArrayType<Basecall> basecalls_;         // Storage for zmw-read segments.
