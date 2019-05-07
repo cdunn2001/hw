@@ -1,7 +1,7 @@
 #ifndef mongo_dataTypes_PrimaryConfig_H_
 #define mongo_dataTypes_PrimaryConfig_H_
 
-// Copyright (c) 2016, Pacific Biosciences of California, Inc.
+// Copyright (c) 2016-2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -46,8 +46,8 @@ namespace Data {
 class PrimaryConfig :  public PacBio::Process::ConfigurationObject
 {
     ADD_PARAMETER(uint32_t, zmwsPerLane, 64);
-    ADD_PARAMETER(uint32_t, lanesPerBatch, 64);
-    ADD_PARAMETER(uint32_t, framesPerBlock, 128);
+    ADD_PARAMETER(uint32_t, lanesPerPool, 64);
+    ADD_PARAMETER(uint32_t, framesPerChunk, 128);
 
     // Rate at which frames are read from the sensor.
     ADD_PARAMETER(double, sensorFrameRate, 100.0f);
@@ -59,8 +59,8 @@ public:
     void StreamOut(std::ostream& os)
     {
         os << "    zmwsPerLane = " << zmwsPerLane << '\n'
-           << "    lanesPerBatch = " << lanesPerBatch << '\n'
-           << "    framesPerBlock = " << framesPerBlock << '\n'
+           << "    lanesPerPool = " << lanesPerPool << '\n'
+           << "    framesPerChunk = " << framesPerChunk << '\n'
            << "    sensorFrameRate = " << sensorFrameRate << '\n'
            << "    maxPolRate, = " << maxPolRate << '\n'
            << std::flush;

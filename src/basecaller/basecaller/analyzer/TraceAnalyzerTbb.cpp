@@ -32,6 +32,8 @@
 #include <boost/numeric/conversion/cast.hpp>
 #include <tbb/parallel_for.h>
 
+#include <pacbio/PBException.h>
+
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 
@@ -65,6 +67,7 @@ unsigned int TraceAnalyzerTbb::NumWorkerThreads() const
 void TraceAnalyzerTbb::NumWorkerThreads(unsigned int)
 {
     // TODO
+    throw PBException("Not yet implemented.");
 }
 
 // The number of ZMW pools supported by this analyzer.

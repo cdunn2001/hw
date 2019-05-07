@@ -9,11 +9,6 @@ set(CMAKE_CXX_COMPILER c++)
 
 set(CMAKE_CXX_FLAGS "-Wall -msse4.2 -Wno-missing-field-initializers -Wno-unused-local-typedefs -Wno-conversion-null -Wenum-compare -Wno-unknown-pragmas -DEIGEN_SIMD_SIZE=16 " CACHE STRING "")
 
-option(GCC_SANITIZE_UNDEFINED "Enables gcc specific sanitization options. May require special libraries to be installed" OFF)
-if(GCC_SANITIZE_UNDEFINED)
-    set(CMAKE_CXX_FLAGS_DEBUG_1 "-fsanitize=undefined" )
-endif()
-
 set(CMAKE_CXX_FLAGS_DEBUG           "-O0 -g ${CMAKE_CXX_FLAGS_DEBUG_1}" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELEASE         "-O3 -DNDEBUG "    CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "")

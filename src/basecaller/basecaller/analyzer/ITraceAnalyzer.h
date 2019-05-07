@@ -37,7 +37,6 @@ public:     // Static functions
     /// will be asked to process.
     /// \param bcConfig
     /// Configuration object.
-    /// See http://smrtanalysis-docs/primary/top/doc/PacBioPrimaryConfiguration.html.
     /// \param movConfig
     /// Describes the configuration of the instrument and chemistry for the
     /// movie to be analyzed.
