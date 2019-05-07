@@ -22,7 +22,7 @@ set(CUDA_LIST
 
 add_library(libMongoDataTypes STATIC
     ${CPP_LIST}
-    # ${CUDA_LIST}
+    ${CUDA_LIST}
 )
 
 target_link_libraries(libMongoDataTypes
@@ -34,14 +34,9 @@ target_link_libraries(libMongoDataTypes
 target_include_directories(libMongoDataTypes
     PUBLIC
         ${MONGO_PROJECT_DIR}
+        ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
-# set_target_properties(libCudaCommon PROPERTIES
-#     CUDA_SEPARABLE_COMPILATION ON
-# )
-
-# target_include_directories(libCudaCommon
-#     PUBLIC 
-#         "${CMAKE_CURRENT_LIST_DIR}/src"
-#         ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
-# )
+ set_target_properties(libMongoDataTypes PROPERTIES
+     CUDA_SEPARABLE_COMPILATION ON
+ )
