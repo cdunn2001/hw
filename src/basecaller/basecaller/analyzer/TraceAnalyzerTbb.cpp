@@ -32,8 +32,8 @@
 #include <boost/numeric/conversion/cast.hpp>
 #include <tbb/parallel_for.h>
 
-#include <BasecallerConfig.h>
-#include <MovieConfig.h>
+#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/MovieConfig.h>
 
 using std::vector;
 

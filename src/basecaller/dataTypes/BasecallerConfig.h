@@ -6,8 +6,8 @@
 #include <pacbio/process/ConfigurationBase.h>
 #include <pacbio/utilities/SmartEnum.h>
 
-#include <AnalogMode.h>
-#include <PrimaryConfig.h>
+#include "AnalogMode.h"
+#include "PrimaryConfig.h"
 
 // TODO: After some mongo dust has settled, purge unused configuration properties.
 

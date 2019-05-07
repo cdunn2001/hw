@@ -33,7 +33,7 @@ target_link_libraries(libMongoDataTypes
 
 target_include_directories(libMongoDataTypes
     PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${MONGO_PROJECT_DIR}
 )
 
 # set_target_properties(libCudaCommon PROPERTIES

@@ -28,7 +28,7 @@
 
 #include <memory>
 
-#include <PBCudaRuntime.h>
+#include <common/cuda/PBCudaRuntime.h>
 
 #include "DataManagerKey.h"
 

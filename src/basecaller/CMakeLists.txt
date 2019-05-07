@@ -21,6 +21,9 @@ list(APPEND CMAKE_MODULE_PATH
     # "${CMAKE_CURRENT_LIST_DIR}/../common/"
 )
 
+# Used to define include directories for targets defined in subdirectories.
+set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
+
 include(pacbio-cplusplus-api)
 
 add_subdirectory(applications)

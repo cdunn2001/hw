@@ -37,7 +37,7 @@ target_link_libraries(libMongoCommonCuda
 
 target_include_directories(libMongoCommonCuda
     PUBLIC 
-        "${CMAKE_CURRENT_LIST_DIR}"
+        "${MONGO_PROJECT_DIR}"
         # ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 

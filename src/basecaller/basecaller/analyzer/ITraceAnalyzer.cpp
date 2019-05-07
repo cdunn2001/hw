@@ -30,8 +30,10 @@
 #include "ITraceAnalyzer.h"
 
 #include <algorithm>
-#include <MovieConfig.h>
-#include <TraceAnalyzerTbb.h>
+
+#include <dataTypes/MovieConfig.h>
+
+#include "TraceAnalyzerTbb.h"
 
 namespace PacBio {
 namespace Mongo {

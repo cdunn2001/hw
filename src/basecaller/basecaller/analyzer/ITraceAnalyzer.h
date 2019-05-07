@@ -3,9 +3,9 @@
 
 #include <vector>
 
-#include <BasecallBatch.h>
-#include <TraceBatch.h>
-#include <ConfigForward.h>
+#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/TraceBatch.h>
+#include <dataTypes/ConfigForward.h>
 
 namespace PacBio {
 namespace Mongo {

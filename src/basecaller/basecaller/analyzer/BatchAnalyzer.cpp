@@ -29,9 +29,9 @@
 
 #include "BatchAnalyzer.h"
 
-#include <BasecallBatch.h>
-#include <TraceBatch.h>
-#include <BasecallerConfig.h>
+#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/TraceBatch.h>
+#include <dataTypes/BasecallerConfig.h>
 
 using namespace PacBio::Mongo::Data;
 

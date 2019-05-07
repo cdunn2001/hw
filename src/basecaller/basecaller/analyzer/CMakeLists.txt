@@ -22,5 +22,5 @@ target_link_libraries(libMongoBasecallerAnalyzer
 
 target_include_directories(libMongoBasecallerAnalyzer
     PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${MONGO_PROJECT_DIR}
 )

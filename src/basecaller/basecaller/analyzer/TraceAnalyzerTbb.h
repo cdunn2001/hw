@@ -30,9 +30,8 @@
 //  Defines class TraceAnalyzerTbb, which implements the interface
 //  ITraceAnalyzer.
 
+#include "BatchAnalyzer.h"
 #include "ITraceAnalyzer.h"
-
-#include <BatchAnalyzer.h>
 
 namespace PacBio {
 namespace Mongo {
