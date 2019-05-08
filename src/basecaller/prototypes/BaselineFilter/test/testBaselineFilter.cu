@@ -63,7 +63,7 @@ TEST(BaselineFilterTest, GlobalMemory)
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {
             auto block = out.GetBlockView(i);
-            for (size_t j = 0; j < block.BlockLen(); ++j)
+            for (size_t j = 0; j < block.NumFrames(); ++j)
             {
                 // Baseline filter is still warming up before this point
                 if (firstFrame + j < 1030) continue;

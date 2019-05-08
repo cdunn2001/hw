@@ -53,11 +53,11 @@ public:
     {
         if (!generated_) GenerateData();
 
-        if ((v.BlockLen() != blockLen_)  || (v.LaneWidth() != gpuLaneWidth_))
+        if ((v.NumFrames() != blockLen_)  || (v.LaneWidth() != gpuLaneWidth_))
             throw PBException("Unexpectedly sized block received in GeneratorBase");
 
         const auto& data = generatedData_[laneIdx % numZmwLanes_][blockIdx % numBlocks_];
-        assert(v.BlockLen()*v.LaneWidth() == data.size());
+        assert(v.NumFrames()*v.LaneWidth() == data.size());
         std::copy(data.begin(), data.end(), v.Data());
     }
 

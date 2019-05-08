@@ -26,7 +26,7 @@ void ValidateData(TraceBatch<short2>& batch,
     for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
     {
         auto block = batch.GetBlockView(i);
-        for (size_t frame = 0; frame < block.BlockLen(); ++frame)
+        for (size_t frame = 0; frame < block.NumFrames(); ++frame)
         {
             if (startFrame+frame < filterWidth) continue;
 
