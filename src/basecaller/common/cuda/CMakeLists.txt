@@ -26,6 +26,10 @@ set(CUDA_LIST
     memory/AllocationViews.cu
     memory/DeviceOnlyArray.cuh
     memory/DeviceOnlyArray.cu
+    memory/DeviceOnlyObject.cuh
+    memory/DeviceOnlyObject.cu
+    utility/CudaArray.cuh
+    utility/CudaArray.cu
     utility/CudaTuple.cuh
     utility/CudaTuple.cu
 )

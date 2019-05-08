@@ -2,66 +2,19 @@
 
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/memory/DeviceOnlyObject.cuh>
+#include <common/cuda/utility/CudaArray.cuh>
 #include <common/KernelThreadPool.h>
 
 #include <dataTypes/TraceBatch.cuh>
 
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Data;
+using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Cuda {
-
-template <typename T>
-class DevicePtr
-{
-public:
-    DevicePtr(T* data, detail::DataManagerKey)
-        : data_(data)
-    {}
-
-    __device__ T* operator->() { return data_; }
-    __device__ const T* operator->() const { return data_; }
-private:
-    T* data_;
-};
-
-template <typename T>
-class DeviceOnlyObj : private detail::DataManager
-{
-public:
-    template <typename... Args>
-    DeviceOnlyObj(Args&&... args)
-        : data_(1, std::forward<Args>(args)...)
-    {}
-
-    DevicePtr<T> GetDevicePtr()
-    {
-        return DevicePtr<T>(data_.GetDeviceView().Data(DataKey()), DataKey());
-    }
-
-private:
-    Memory::DeviceOnlyArray<T> data_;
-};
-
-template <typename T, size_t len>
-struct CudaArray
-{
-    //temporary hack, please kill
-    CudaArray() = default;
-    CudaArray(T val)
-    {
-        for (size_t i = 0; i < len; ++i)
-        {
-            data_[i] = val;
-        }
-    }
-    __device__ __host__ T& operator[](unsigned idx) { return data_[idx]; }
-    __device__ __host__ const T& operator[](unsigned idx) const { return data_[idx]; }
-private:
-    T data_[len];
-};
 
 struct __align__(128) TransitionMatrix
 {
