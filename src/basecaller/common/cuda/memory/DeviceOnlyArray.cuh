@@ -26,12 +26,11 @@
 #ifndef PACBIO_CUDA_MEMORY_DEVICE_ONLY_ARRAY_CUH_
 #define PACBIO_CUDA_MEMORY_DEVICE_ONLY_ARRAY_CUH_
 
-#include <pacbio/cuda/PBCudaRuntime.h>
-
 #include <utility>
 
-#include <pacbio/cuda/memory/AllocationViews.cuh>
-#include <pacbio/cuda/memory/SmartDeviceAllocation.h>
+#include <common/cuda/PBCudaRuntime.h>
+#include <common/cuda/memory/AllocationViews.cuh>
+#include <common/cuda/memory/SmartDeviceAllocation.h>
 
 namespace PacBio {
 namespace Cuda {

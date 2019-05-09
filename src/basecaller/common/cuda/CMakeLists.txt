@@ -5,8 +5,8 @@ set(CPP_LIST
     CudaFunctionDecorators.h
     DisableBoostOnDevice.h
     PBCudaRuntime.h
-    # PBCudaRuntime.cpp
-    PBCudaRuntimeNoCuda.cpp
+    PBCudaRuntime.cpp
+    # PBCudaRuntimeNoCuda.cpp
     memory/AllocationViews.h
     memory/DataManagerKey.h
     memory/GpuAllocationPool.h
@@ -23,11 +23,13 @@ set(CUDA_LIST
     memory/AllocationViews.cu
     memory/DeviceOnlyArray.cuh
     memory/DeviceOnlyArray.cu
+    utility/CudaTuple.cuh
+    utility/CudaTuple.cu
 )
 
 add_library(libMongoCommonCuda STATIC
    ${CPP_LIST}
-    # ${CUDA_LIST}
+   ${CUDA_LIST}
 )
 
 target_link_libraries(libMongoCommonCuda
@@ -38,7 +40,7 @@ target_link_libraries(libMongoCommonCuda
 target_include_directories(libMongoCommonCuda
     PUBLIC 
         "${MONGO_PROJECT_DIR}"
-        # ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+        ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
-# set_target_properties(libMongoCommonCuda PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+set_target_properties(libMongoCommonCuda PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

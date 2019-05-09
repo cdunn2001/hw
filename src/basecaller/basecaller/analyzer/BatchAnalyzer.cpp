@@ -57,15 +57,15 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
         // TODO: Log error. Throw exception.
     }
 
-    // TODO: Define this so that it scales properly with block size, frame rate,
+    // TODO: Define this so that it scales properly with chunk size, frame rate,
     // and max polymerization rate.
-    const uint16_t maxCallsPerBlock = 96;
+    const uint16_t maxCallsPerZmwChunk = 96;
 
     // TODO: Implement the analysis logic!
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return BasecallBatch(maxCallsPerBlock, tbatch.Dimensions(), tbatch.Metadata());
+    return BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

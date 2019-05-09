@@ -11,11 +11,11 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-/// The interface for a chip-block trace analyzer that calls bases.
+/// The interface for a chip-chunk trace analyzer that calls bases.
 /// Client should create a new analyzer for each sequencing acquisition.
-/// Data are processed in _chip blocks_, which is one _block_ of frames
+/// Data are processed in _chip chunks_, which is one _chunk_ of frames
 /// (i.e., sensor readouts) for the entire sensor.
-/// Each chip block is spatially segmented into a number of _batches_, which
+/// Each chip chunk is spatially segmented into a number of _batches_, which
 /// the analyzer processes concurrently.
 /// For a description of the memory layout of trace data, see
 /// https://confluence.pacificbiosciences.com/display/PA/Memory+Layout+of+Trace+Data+in+Mongo+Basecaller.

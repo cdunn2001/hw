@@ -24,4 +24,4 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include <pacbio/mongo/data/TraceBatch.cuh>
+#include <dataTypes/TraceBatch.cuh>

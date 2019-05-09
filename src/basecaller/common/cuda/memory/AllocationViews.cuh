@@ -29,7 +29,7 @@
 #ifndef PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_CUH_
 #define PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_CUH_
 
-#include <pacbio/cuda/memory/AllocationViews.h>
+#include <common/cuda/memory/AllocationViews.h>
 
 namespace PacBio {
 namespace Cuda {

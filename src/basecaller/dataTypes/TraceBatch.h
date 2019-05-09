@@ -71,15 +71,15 @@ class BlockView
 {
     using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
 public:
-    BlockView(T* data, size_t laneWidth, size_t blockLen, DataManagerKey key)
+    BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
         : data_(data)
         , laneWidth_(laneWidth)
-        , blockLen_(blockLen)
+        , numFrames_(numFrames)
     {}
 
     size_t LaneWidth() const { return laneWidth_; }
-    size_t BlockLen() const { return blockLen_; }
-    size_t Size() const { return laneWidth_ * blockLen_; }
+    size_t NumFrames() const { return numFrames_; }
+    size_t Size() const { return laneWidth_ * numFrames_; }
 
     T* Data() { return data_; }
 
@@ -91,7 +91,7 @@ public:
 private:
     T* data_;
     size_t laneWidth_;
-    size_t blockLen_;
+    size_t numFrames_;
 };
 
 // BatchData defines a 3D layout of data designed for efficient usage on the GPU.
@@ -139,7 +139,7 @@ public:
     ~BatchData() = default;
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
-    size_t BlockLen()      const { return dims_.framesPerBatch; }
+    size_t numFrames()     const { return dims_.framesPerBatch; }
     size_t LanesPerBatch() const { return dims_.lanesPerBatch; }
 
     const BatchDimensions& Dimensions() const { return dims_; }

@@ -27,9 +27,10 @@
 #ifndef PACBIO_MONGO_DATA_TRACE_BATCH_CUH
 #define PACBIO_MONGO_DATA_TRACE_BATCH_CUH
 
-#include <pacbio/mongo/data/TraceBatch.h>
-#include <pacbio/cuda/memory/AllocationViews.cuh>
-#include <pacbio/cuda/memory/UnifiedCudaArray.h>
+#include <common/cuda/memory/AllocationViews.cuh>
+#include <common/cuda/memory/UnifiedCudaArray.h>
+
+#include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -110,8 +111,8 @@ public:
     __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
     {
         Cuda::Memory::DeviceView<T> view(data_);
-        auto startIdx = laneIdx * dims_.laneWidth * dims_.blockLen + zmwIdx;
-        auto endIdx = startIdx + dims_.blockLen * dims_.laneWidth;
+        auto startIdx = laneIdx * dims_.laneWidth * dims_.framesPerBatch + zmwIdx;
+        auto endIdx = startIdx + dims_.framesPerBatch * dims_.laneWidth;
         return StridedBlockView<T>(view.Data() + startIdx,
                                    view.Data() + endIdx,
                                    dims_.laneWidth,
