@@ -3,8 +3,14 @@ cmake_minimum_required(VERSION 3.8)
 
 add_executable(FrameLabeler
     main.cpp
+    AnalogModel.cu
+    AnalogModel.cuh
     FrameLabeler.h
     FrameLabeler.cu
+    FrameLabelerKernels.cuh
+    FrameLabelerKernels.cu
+    SubframeScorer.cu
+    SubframeScorer.cuh
 )
 
 target_include_directories(FrameLabeler
