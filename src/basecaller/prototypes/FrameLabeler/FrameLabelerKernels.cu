@@ -26,12 +26,35 @@
 
 #include "FrameLabelerKernels.cuh"
 
+using namespace PacBio::Cuda::Utility;
+using namespace PacBio::Cuda::Subframe;
+
 namespace PacBio {
 namespace Cuda {
 
+__device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArray<PBHalf2, numStates>* probOut)
+{
+    auto& prob = *probOut;
+    auto maxVal = logLike[0];
+    for (int i = 1; i < numStates; ++i)
+    {
+        maxVal = max(logLike[i], maxVal);
+    }
+    PBHalf2 sum(0.0f);
+    for (int i = 0; i < numStates; ++i)
+    {
+        prob[i] = exp(logLike[i] - maxVal);
+        sum += prob[i];
+    }
+    for (int i = 0; i < numStates; ++i)
+    {
+        prob[i] /= sum;
+    }
+}
+
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
-                                   ViterbiData<PBHalf2, 32> recur,
+                                   Memory::DevicePtr<LatentViterbi<32>> latent,
                                    ViterbiData<short2, 32> labels,
                                    Mongo::Data::GpuBatchData<short2> input,
                                    Mongo::Data::GpuBatchData<short2> output)
@@ -39,64 +62,113 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     using namespace Subframe;
 
     static constexpr unsigned laneWidth = 32;
-    static constexpr int numStates = 12;
     assert(blockDim.x == laneWidth);
     __shared__ BlockStateScorer<laneWidth> scorer;
-    scorer.Setup(models[blockIdx.x]);
 
-    // Forward recursion
-    const int numFrames = input.Dims().framesPerBatch;
-    auto inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    for (int frame = 0; frame < numFrames; ++frame)
+    // Initial setup
+    CudaArray<PBHalf2, numStates> logLike;
+    CudaArray<PBHalf2, numStates> logAccum;
+    auto bc = latent->GetBoundary();
+    const PBHalf2 zero(0.0f);
+    const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
+    for (int i = 0; i < numStates; ++i)
     {
-        auto scores = scorer.StateScores(PBHalf2(inZmw[frame]));
+        short2 cond = {bc.x == i, bc.y == i};
+        logLike[i] = Blend(cond, zero, ninf);
+    }
+
+    auto Recursion = [&labels, &trans, &logLike, &logAccum](short2 data, int idx) {
+
+        auto scores = scorer.StateScores(PBHalf2(data));
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
             auto score = scores[nextState];
             // Is this transposed?
-            auto maxVal = score + PBHalf2(trans->Entry(0, nextState)) + recur(frame, 0);
+            auto maxVal = score + PBHalf2(trans->Entry(0, nextState)) + logLike[0];
             auto maxIdx = make_short2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
-                auto val = score + PBHalf2(trans->Entry(prevState, nextState)) + recur(frame, prevState);
+                auto val = score + PBHalf2(trans->Entry(prevState, nextState)) + logLike[prevState];
 
                 auto cond = maxVal > val;
                 maxVal = Blend(cond, maxVal, val);
                 maxIdx = Blend(cond, maxIdx, make_short2(prevState, prevState));
             }
-            recur(frame+1, nextState) = maxVal;
-            labels(frame, nextState) = maxIdx;
+            logAccum[nextState] = maxVal;
+            labels(idx, nextState) = maxIdx;
         }
+        for (int i = 0; i < numStates; ++i)
+        {
+            logLike[i] += logAccum[i];
+        }
+    };
+
+    // Forward recursion on latent data
+    const int latentFrames = latent->NumFrames();
+    scorer.Setup(latent->GetModel());
+    for (int frame = 0; frame < latentFrames; ++frame)
+    {
+        Recursion(latent->FrameData(frame), frame);
     }
 
-    // Cheat for now, find it for real later
-    const int anchorIdx = numFrames-1;
-    auto maxVal = recur(anchorIdx, 0);
-    short2 traceState = make_short2(0,0);
-    for (int state = 1; state < numStates; ++state)
+    // Forward recursion on this block's data
+    scorer.Setup(models[blockIdx.x]);
+    const int numFrames = input.Dims().framesPerBatch;
+    auto inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
+    for (int frame = 0; frame < numFrames; ++frame)
     {
-        auto val = recur(anchorIdx, state);
-        auto cond = maxVal > val;
+        Recursion(inZmw[frame], frame + latentFrames);
+    }
 
-        maxVal = Blend(cond, maxVal, val);
-        traceState = Blend(cond, traceState, make_short2(state, state));
+    // Compute the probabilities of the possible end states.  Propagate
+    // them backwards a few frames, as some paths may converge and we
+    // can have a more certain estimate.
+    CudaArray<PBHalf2, numStates> prob;
+    CudaArray<PBHalf2, numStates> newProb;
+    Normalize(logLike, &prob);
+    const int lookStart = numFrames + latentFrames - 1;
+    const int lookStop = lookStart - Viterbi::lookbackDist;
+    for (int i = lookStart; i > lookStop; --i)
+    {
+        for (short state = 0; state < numStates; ++state)
+        {
+            newProb[state] = PBHalf2(0.0f);
+        }
+        for (short state = 0; state < numStates; ++state)
+        {
+            auto prev = labels(i, state);
+            newProb[prev.x] += Blend(make_short2(1,0), prob[state], zero);
+            newProb[prev.y] += Blend(make_short2(0,1), prob[state], zero);
+        }
+        for (int state = 0; state < numStates; ++state)
+        {
+            prob[state] = newProb[state];
+        }
+    }
+    PBHalf2 maxProb = prob[0];
+    short2 anchorState = {0,0};
+    for (int i = 1; i < numStates; ++i)
+    {
+        auto cond = maxProb > prob[i];
+        maxProb = Blend(cond, maxProb, prob[i]);
+        anchorState = Blend(cond, anchorState, make_short2(i, i));
     }
 
     // Traceback
+    auto traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
-    for (int frame = numFrames-1; frame >= 0; --frame)
+    const int stopFrame = latentFrames == 0 ? 0 : Viterbi::lookbackDist;
+    for (int frame = numFrames-1; frame >= stopFrame; --frame)
     {
         outZmw[frame] = traceState;
-        traceState.x = labels(frame, traceState.x).x;
-        traceState.y = labels(frame, traceState.x).y;
+        traceState.x = labels(frame+latentFrames, traceState.x).x;
+        traceState.y = labels(frame+latentFrames, traceState.x).y;
     }
 
-    // Set the new boundary conditions for next block
-    for (int state = 0; state < numStates; ++state)
-    {
-        recur(0, state) = PBHalf2(0);
-    }
-
+    // Update latent data
+    latent->SetBoundary(traceState);
+    latent->SetModel(models[blockIdx.x]);
+    latent->SetData(inZmw);
 }
 
 }}

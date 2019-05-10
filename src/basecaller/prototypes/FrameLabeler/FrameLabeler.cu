@@ -45,27 +45,23 @@ void run(const Data::DataManagerParams& dataParams,
 
     DeviceOnlyObj<TransitionMatrix> trans(pw, ipd, pwss, ipdss);
     std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
-    std::vector<ViterbiDataHost<PBHalf2, gpuBlockThreads>> scores;
+    std::vector<DeviceOnlyObj<LatentViterbi<gpuBlockThreads>>> latent;
     std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
     models.reserve(numBatches);
-    scores.reserve(numBatches);
+    latent.reserve(numBatches);
+    // TODO this only needs one per active batch, not all batches
     labels.reserve(numBatches);
     for (size_t i = 0; i < numBatches; ++i)
     {
-        // ------------------------------------------------------
-        // TODO we need to set our initial conditions somehow!!!
-        // Currently hard coding to start in zero state.  Should be fine,
-        // but we need to make sure it's built properly into the API
-        // ------------------------------------------------------
-        scores.emplace_back(dataParams.blockLength+1, PBHalf2(0.0f));
-        labels.emplace_back(dataParams.blockLength);
+        latent.emplace_back();
+        labels.emplace_back(dataParams.blockLength + Viterbi::lookbackDist);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
         // TODO populate models
     }
 
-    auto tmp = [&trans, &models, &dataParams, &scores, &labels](
+    auto tmp = [&trans, &models, &dataParams, &latent, &labels](
         TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
@@ -74,7 +70,7 @@ void run(const Data::DataManagerParams& dataParams,
         FrameLabelerKernel<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             trans.GetDevicePtr(),
             models[batchIdx].GetDeviceHandle(),
-            scores[batchIdx],
+            latent[batchIdx].GetDevicePtr(),
             labels[batchIdx],
             batch,
             ret);

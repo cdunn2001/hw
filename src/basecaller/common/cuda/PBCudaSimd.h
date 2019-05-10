@@ -47,6 +47,8 @@ public:
     explicit CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
 
     CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
+    CUDA_ENABLED void SetX(float f) {}
+    CUDA_ENABLED void SetY(float f) {}
 
     half2 CUDA_ENABLED data() const { return data_; }
 private:

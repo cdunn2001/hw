@@ -85,6 +85,7 @@ public:
 
     __device__ StrideIterator begin() { return StrideIterator(start_, laneWidth_); }
     __device__ StrideIterator end()   { return StrideIterator(end_,   laneWidth_); }
+    __device__ int size() const { return (end_ - start_) / laneWidth_; }
     __device__ T& operator[](unsigned int idx) { return start_[laneWidth_*idx]; }
     __device__ const T& operator[](unsigned int idx) const { return start_[laneWidth_*idx]; }
 private:

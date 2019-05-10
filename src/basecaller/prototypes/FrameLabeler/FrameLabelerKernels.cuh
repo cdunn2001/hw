@@ -38,12 +38,55 @@
 namespace PacBio {
 namespace Cuda {
 
+// TODO move?
+namespace Viterbi {
+static constexpr unsigned int lookbackDist = 16;
+}
+
+template <size_t laneWidth>
+struct __align__(128) LatentViterbi
+{
+ public:
+    __device__ LatentViterbi()
+        : boundary_(make_short2(0,0))
+        , numFrames_(0)
+    {}
+
+    __device__ void SetBoundary(short2 boundary) { boundary_ = boundary; }
+    __device__ short2 GetBoundary() const { return boundary_; }
+
+    __device__ const LaneModelParameters<laneWidth>& GetModel() const { return oldModel; }
+    __device__ void SetModel(const LaneModelParameters<laneWidth> model)
+    {
+        oldModel = model;
+    }
+
+    __device__ void SetData(Mongo::Data::StridedBlockView<short2>& block)
+    {
+        numFrames_ = Viterbi::lookbackDist;
+        auto start = block.size() - Viterbi::lookbackDist;
+        for (int i = 0; i < Viterbi::lookbackDist; ++i)
+        {
+            oldData_[i*laneWidth + threadIdx.x] = block[start+i];
+        }
+    }
+
+    __device__ short2& FrameData(int idx) { return oldData_[idx*laneWidth + threadIdx.x]; }
+
+    __device__ int NumFrames() const { return numFrames_; }
+
+private:
+    LaneModelParameters<laneWidth> oldModel;
+    short2 oldData_[laneWidth * Viterbi::lookbackDist];
+    short2 boundary_;
+    int numFrames_;
+};
+
 template <typename T, size_t laneWidth>
 struct ViterbiDataHost
 {
-    static constexpr int numStates = 13;
     ViterbiDataHost(size_t numFrames, T val = T{})
-        : data_(numFrames*laneWidth*numStates, val)
+        : data_(numFrames*laneWidth*Subframe::numStates, val)
     {}
 
     Memory::DeviceView<T> Data(Memory::detail::DataManagerKey)
@@ -57,14 +100,13 @@ struct ViterbiDataHost
 template <typename T, size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
-    static constexpr int numStates = 13;
     ViterbiData(ViterbiDataHost<T, laneWidth>& hostData)
         : data_(hostData.Data(DataKey()))
     {}
 
     __device__ T& operator()(int frame, int state)
     {
-        return data_[frame*laneWidth*numStates +  state*laneWidth +  threadIdx.x];
+        return data_[frame*laneWidth*Subframe::numStates +  state*laneWidth +  threadIdx.x];
     }
  private:
     Memory::DeviceView<T> data_;
@@ -73,7 +115,7 @@ struct ViterbiData : private Memory::detail::DataManager
 // First arg should be const?
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
-                                   ViterbiData<PBHalf2, 32> recur,
+                                   Memory::DevicePtr<LatentViterbi<32>> latent,
                                    ViterbiData<short2, 32> labels,
                                    Mongo::Data::GpuBatchData<short2> input,
                                    Mongo::Data::GpuBatchData<short2> output);

@@ -37,6 +37,12 @@ namespace Cuda {
 template <size_t laneWidth>
 struct __align__(128) LaneAnalogMode
 {
+    __device__ LaneAnalogMode& operator=(const LaneAnalogMode other)
+    {
+        means[threadIdx.x] = other.means[threadIdx.x];
+        vars[threadIdx.x] = other.vars[threadIdx.x];
+        return  *this;
+    }
     using Row = Utility::CudaArray<PBHalf2, laneWidth>;
     Row means;
     Row vars;
@@ -47,6 +53,16 @@ template <size_t laneWidth>
 struct __align__(128) LaneModelParameters
 {
     static constexpr unsigned int numAnalogs = 4;
+
+    __device__ LaneModelParameters& operator=(const LaneModelParameters other)
+    {
+        baseline_ = other.baseline_;
+        for (int i = 0; i < numAnalogs; ++i)
+        {
+            analogs_[i] = other.analogs_[i];
+        }
+        return *this;
+    }
 
     __device__ const LaneAnalogMode<laneWidth>& BaselineMode() const
     {

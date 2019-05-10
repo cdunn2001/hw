@@ -40,6 +40,13 @@ inline __device__ PBHalf2 Blend(PBHalf2 cond, PBHalf2 l, PBHalf2 r)
     return PBHalf2(__halves2half2(low, high));
 }
 
+inline __device__ PBHalf2 Blend(short2 cond, PBHalf2 l, PBHalf2 r)
+{
+    half low =  cond.x == 0 ? __low2half(r.data())  : __low2half(l.data());
+    half high = cond.y == 0 ? __high2half(r.data()) : __high2half(l.data());
+    return PBHalf2(__halves2half2(low, high));
+}
+
 inline __device__ PBHalf2 operator ||(PBHalf2 first, PBHalf2 second)
 {
     half zero = __float2half(0.0f);
@@ -67,6 +74,7 @@ inline __device__ PBHalf2 operator ==(PBHalf2 l, PBHalf2 r) { return PBHalf2(l.d
 inline __device__ PBHalf2 pow2(PBHalf2 h) { return PBHalf2(h.data() * h.data()); }
 inline __device__ PBHalf2 log(PBHalf2 h) { return PBHalf2(h2log(h.data())); }
 inline __device__ PBHalf2 sqrt(PBHalf2 h) { return PBHalf2(h2sqrt(h.data())); }
+inline __device__ PBHalf2 exp(PBHalf2 h) { return PBHalf2(h2exp(h.data())); }
 
 inline __device__ PBHalf2 min(PBHalf2 l, PBHalf2 r)
 {
