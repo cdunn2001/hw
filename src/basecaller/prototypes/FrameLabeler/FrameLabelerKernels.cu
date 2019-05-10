@@ -52,6 +52,7 @@ __device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArra
     }
 }
 
+__launch_bounds__(32, 12)
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
                                    Memory::DevicePtr<LatentViterbi<32>> latent,
