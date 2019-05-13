@@ -56,7 +56,7 @@ struct __align__(128) LatentViterbi
     __device__ short2 GetBoundary() const { return boundary_; }
 
     __device__ const LaneModelParameters<laneWidth>& GetModel() const { return oldModel; }
-    __device__ void SetModel(const LaneModelParameters<laneWidth> model)
+    __device__ void SetModel(const LaneModelParameters<laneWidth>& model)
     {
         oldModel = model;
     }

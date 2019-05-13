@@ -73,7 +73,7 @@ struct __align__(128) LaneModelParameters
 {
     static constexpr unsigned int numAnalogs = 4;
 
-    __host__ __device__ LaneModelParameters& operator=(const LaneModelParameters other)
+    __host__ __device__ LaneModelParameters& operator=(const LaneModelParameters& other)
     {
         baseline_ = other.baseline_;
         for (int i = 0; i < numAnalogs; ++i)
