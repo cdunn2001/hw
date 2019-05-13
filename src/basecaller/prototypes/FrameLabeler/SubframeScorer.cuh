@@ -33,6 +33,7 @@
 #include <common/cuda/utility/CudaArray.cuh>
 
 #include "AnalogModel.cuh"
+#include "AnalogMeta.h"
 
 namespace PacBio {
 namespace Cuda {
@@ -52,11 +53,7 @@ struct __align__(128) TransitionMatrix
 
     // Initializes the cuda matrix on the device.  Should be invoked by only
     // a single thread.
-    __device__ TransitionMatrix(//BasecallerPulseDetectionConfig& config,
-                                Utility::CudaArray<float, numAnalogs> pw,
-                                Utility::CudaArray<float, numAnalogs> ipd,
-                                Utility::CudaArray<float, numAnalogs> pwSSRatios,
-                                Utility::CudaArray<float, numAnalogs> ipdSSRatios);
+    __device__ TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
 
     __device__ T operator()(int row, int col) const { return data_[row][col]; }
     __device__ T Entry(int row, int col)      const { return data_[row][col]; }

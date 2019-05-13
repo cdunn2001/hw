@@ -34,19 +34,23 @@ std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(const Data::DataManage
 void run(const Data::DataManagerParams& dataParams,
          const Data::PicketFenceParams& picketParams,
          const Data::TraceFileParams& traceParams,
+         const std::array<Subframe::AnalogMeta, 4>& meta,
+         const Subframe::AnalogMeta& baselineMeta,
          size_t simulKernels)
 {
     static constexpr size_t gpuBlockThreads = 32;
 
-    CudaArray<float, 4> pw(0.2f);
-    CudaArray<float, 4> ipd(0.5f);
-    CudaArray<float, 4> pwss(3.2f);
-    CudaArray<float, 4> ipdss(0.0f);
-
-    DeviceOnlyObj<TransitionMatrix> trans(pw, ipd, pwss, ipdss);
+    DeviceOnlyObj<TransitionMatrix> trans(Utility::CudaArray<AnalogMeta, 4>{meta});
     std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
-    std::vector<DeviceOnlyObj<LatentViterbi<gpuBlockThreads>>> latent;
+    std::vector<DeviceOnlyObj<LatentViterbi<32>>> latent;
     std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
+
+    LaneModelParameters<gpuBlockThreads> referenceModel;
+    referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
+    for (int i = 0; i < 4; ++i)
+    {
+        referenceModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
+    }
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
     models.reserve(numBatches);
@@ -58,7 +62,11 @@ void run(const Data::DataManagerParams& dataParams,
         latent.emplace_back();
         labels.emplace_back(dataParams.blockLength + Viterbi::lookbackDist);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
-        // TODO populate models
+        auto modelView = models.back().GetHostView();
+        for (size_t j = 0; j < dataParams.kernelLanes; ++j)
+        {
+            modelView[j] = referenceModel;
+        }
     }
 
     auto tmp = [&trans, &models, &dataParams, &latent, &labels](

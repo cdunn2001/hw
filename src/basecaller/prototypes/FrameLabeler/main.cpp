@@ -46,6 +46,17 @@ int main(int argc, char* argv[])
     trOpts.add_option("--inputTraceFile").set_default("");
     parser.add_option_group(trOpts);
 
+    auto groupMeta = PacBio::Process::OptionGroup(parser, "Analog metadata parameters");
+    groupMeta.add_option("--analogMeans").type_float().action_append();
+    groupMeta.add_option("--analogVars").type_float().action_append();
+    groupMeta.add_option("--analogIpds").type_float().action_append();
+    groupMeta.add_option("--analogPws").type_float().action_append();
+    groupMeta.add_option("--analogSSPws").type_float().action_append();
+    groupMeta.add_option("--analogSSIpds").type_float().action_append();
+    groupMeta.add_option("--BaselineMean").type_float().set_default(0);
+    groupMeta.add_option("--BaselineVar").type_float().set_default(33);
+    parser.add_option_group(groupMeta);
+
     PacBio::Process::Values options = parser.parse_args(argc, argv);
 
     const float frameRate = options.get("frameRate");
@@ -103,5 +114,64 @@ int main(int argc, char* argv[])
     auto trParams = TraceFileParams()
             .TraceFileName(traceFileName);
 
-    run(params, dataParams, trParams, simulKernels);
+    // Defaults that match current mongo simulated trace file
+    std::array<Subframe::AnalogMeta, 4> meta;
+    meta[0].ipdSSRatio = 0;
+    meta[1].ipdSSRatio = 0;
+    meta[2].ipdSSRatio = 0;
+    meta[3].ipdSSRatio = 0;
+
+    meta[0].ipd = .308;
+    meta[1].ipd = .234;
+    meta[2].ipd = .234;
+    meta[3].ipd = .188;
+
+    meta[0].pw = .232;
+    meta[1].pw = .185;
+    meta[2].pw = .181;
+    meta[3].pw = .214;
+
+    meta[0].pwSSRatio = 3.2;
+    meta[1].pwSSRatio = 3.2;
+    meta[2].pwSSRatio = 3.2;
+    meta[3].pwSSRatio = 3.2;
+
+    meta[0].mean = 227.13;
+    meta[1].mean = 154.45;
+    meta[2].mean = 97.67;
+    meta[3].mean = 61.32;
+
+    meta[0].var = 776;
+    meta[1].var = 426;
+    meta[2].var = 226;
+    meta[3].var = 132;
+
+    auto MetaSetter = [&](std::string option, auto&& setFunc) {
+        const int numAnalogs = 4;
+        if (options.is_set_by_user(option))
+        {
+            auto opts = options.all(option);
+            if (opts.size() != numAnalogs) throw PBException("--" + option + "required 0 or 4 arguments");
+            int idx = 0;
+            for (auto val : opts)
+            {
+                setFunc(idx, PacBio::Process::Value(val));
+                idx++;
+            }
+        }
+    };
+
+    MetaSetter("analogMeans", [&](int idx, float val) {meta[idx].mean = val; });
+    MetaSetter("analogVars", [&](int idx, float val) {meta[idx].var = val; });
+    MetaSetter("analogIpds", [&](int idx, float val) {meta[idx].ipd = val; });
+    MetaSetter("analogPws", [&](int idx, float val) {meta[idx].pw = val; });
+    MetaSetter("analogSSPws", [&](int idx, float val) {meta[idx].pwSSRatio = val; });
+    MetaSetter("analogSSIpds", [&](int idx, float val) {meta[idx].ipdSSRatio = val; });
+
+    // This is ugly since we only use two values.  Re-org?
+    Subframe::AnalogMeta baselineMeta;
+    baselineMeta.mean = options.get("BaselineMean");
+    baselineMeta.mean = options.get("BaselineVar");
+
+    run(params, dataParams, trParams, meta, baselineMeta, simulKernels);
 }

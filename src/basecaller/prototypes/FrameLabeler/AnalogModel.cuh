@@ -37,11 +37,30 @@ namespace Cuda {
 template <size_t laneWidth>
 struct __align__(128) LaneAnalogMode
 {
-    __device__ LaneAnalogMode& operator=(const LaneAnalogMode other)
+    __host__ __device__ LaneAnalogMode& operator=(const LaneAnalogMode other)
     {
+#ifdef __CUDA_ARCH__
         means[threadIdx.x] = other.means[threadIdx.x];
         vars[threadIdx.x] = other.vars[threadIdx.x];
         return  *this;
+#else
+        for (int i = 0; i < laneWidth; ++i)
+        {
+            means[i] = other.means[i];
+            vars[i] = other.vars[i];
+        }
+#endif
+    }
+
+    __host__ LaneAnalogMode& SetAllMeans(float val)
+    {
+        std::fill(means.data(), means.data() + laneWidth, PBHalf2(val));
+        return *this;
+    }
+    __host__ LaneAnalogMode& SetAllVars(float val)
+    {
+        std::fill(vars.data(), vars.data() + laneWidth, PBHalf2(val));
+        return *this;
     }
     using Row = Utility::CudaArray<PBHalf2, laneWidth>;
     Row means;
@@ -54,7 +73,7 @@ struct __align__(128) LaneModelParameters
 {
     static constexpr unsigned int numAnalogs = 4;
 
-    __device__ LaneModelParameters& operator=(const LaneModelParameters other)
+    __host__ __device__ LaneModelParameters& operator=(const LaneModelParameters other)
     {
         baseline_ = other.baseline_;
         for (int i = 0; i < numAnalogs; ++i)
@@ -64,12 +83,20 @@ struct __align__(128) LaneModelParameters
         return *this;
     }
 
-    __device__ const LaneAnalogMode<laneWidth>& BaselineMode() const
+    __host__ __device__ const LaneAnalogMode<laneWidth>& BaselineMode() const
+    {
+        return baseline_;
+    }
+    __host__ __device__ LaneAnalogMode<laneWidth>& BaselineMode()
     {
         return baseline_;
     }
 
-    __device__ const LaneAnalogMode<laneWidth>& AnalogMode(unsigned i) const
+    __host__ __device__ const LaneAnalogMode<laneWidth>& AnalogMode(unsigned i) const
+    {
+        return analogs_[i];
+    }
+    __host__ __device__ LaneAnalogMode<laneWidth>& AnalogMode(unsigned i)
     {
         return analogs_[i];
     }

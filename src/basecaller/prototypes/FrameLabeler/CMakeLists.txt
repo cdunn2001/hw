@@ -5,6 +5,8 @@ add_executable(FrameLabeler
     main.cpp
     AnalogModel.cu
     AnalogModel.cuh
+    AnalogMeta.h
+    AnalogMeta.cpp
     FrameLabeler.h
     FrameLabeler.cu
     FrameLabelerKernels.cuh

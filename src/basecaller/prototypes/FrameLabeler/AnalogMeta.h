@@ -24,38 +24,24 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_CUDA_CUDA_ARRAY_H_
-#define PACBIO_CUDA_CUDA_ARRAY_H_
-
-#include <array>
+#ifndef PACBIO_CUDA_SUBFRAME_ANALOG_META_H
+#define PACBIO_CUDA_SUBFRAME_ANALOG_META_H
 
 namespace PacBio {
 namespace Cuda {
-namespace Utility {
+namespace Subframe {
 
-template <typename T, size_t len>
-struct CudaArray
+struct AnalogMeta
 {
-    //temporary hack, please kill
-    CudaArray() = default;
-    explicit CudaArray(T val)
-    {
-        for (size_t i = 0; i < len; ++i)
-        {
-            data_[i] = val;
-        }
-    }
-    CudaArray(const std::array<T, len> &data)
-    {
-        memcpy(data_, data.data(), sizeof(T)*len);
-    }
-    __device__ __host__ T& operator[](unsigned idx) { return data_[idx]; }
-    __device__ __host__ const T& operator[](unsigned idx) const { return data_[idx]; }
-    __device__ __host__ T* data() { return data_; }
-private:
-    T data_[len];
+    float mean;
+    float var;
+    float pw;
+    float ipd;
+    float pwSSRatio;
+    float ipdSSRatio;
 };
+
 
 }}}
 
-#endif // PACBIO_CUDA_CUDA_ARRAY_H_
+#endif //PACBIO_CUDA_SUBFRAME_ANALOG_META_H

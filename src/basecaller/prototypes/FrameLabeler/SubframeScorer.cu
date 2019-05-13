@@ -32,11 +32,8 @@ namespace PacBio {
 namespace Cuda {
 namespace Subframe {
 
-__device__ TransitionMatrix::TransitionMatrix(//BasecallerPulseDetectionConfig& config,
-        CudaArray<float, numAnalogs> pw,
-        CudaArray<float, numAnalogs> ipd,
-        CudaArray<float, numAnalogs> pwSSRatios,
-        CudaArray<float, numAnalogs> ipdSSRatios)
+
+__device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
 {
     half zero = __float2half(0.0f);
     for (int i = 0; i < numStates; ++i)
@@ -51,25 +48,23 @@ __device__ TransitionMatrix::TransitionMatrix(//BasecallerPulseDetectionConfig& 
     // Avoid singularities in the computations to follow.  Could probably
     // find a new analytic form without singularities, but just avoid
     // ratios of 1.0 for now.
-    auto pwsRatios = pwSSRatios;
-    auto ipdRatios = ipdSSRatios;
     for (size_t i = 0; i < numAnalogs; ++i)
     {
         static constexpr float delta = 0.01f;
-        if (std::abs(pwsRatios[i] - 1.0f) < delta)
+        if (std::abs(meta[i].ipdSSRatio - 1.0f) < delta)
         {
-            pwsRatios[i] = (pwsRatios[i] < 1.0f) ? 1.0f - delta : 1.0f + delta;
+            meta[i].pwSSRatio = (meta[i].pwSSRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
         }
-        if (std::abs(ipdRatios[i] - 1.0f) < delta)
+        if (std::abs(meta[i].ipdSSRatio - 1.0f) < delta)
         {
-            ipdRatios[i] = (ipdRatios[i] < 1.0f) ? 1.0f - delta : 1.0f + delta;
+            meta[i].ipdSSRatio = (meta[i].ipdSSRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
         }
     }
 
     // Mean IPD for the input analog set.
-    const float meanIpd = [&ipd](){
+    const float meanIpd = [&meta](){
         float sum = 0.0f;
-        for (int i = 0; i < numAnalogs; ++i) sum+=ipd[i];
+        for (int i = 0; i < numAnalogs; ++i) sum+=meta[i].ipd;
         return sum/numAnalogs;
     }();
 
@@ -104,10 +99,10 @@ __device__ TransitionMatrix::TransitionMatrix(//BasecallerPulseDetectionConfig& 
 
     // Precompute the probabilities of 1, 2 and 3 frame ipds after each analog
     CudaArray<CudaArray<float, 3>, numAnalogs> ipdLenProbs;
-    ipdLenProbs[0] = computeLenProbs(ipd[0], ipdRatios[0]);
-    ipdLenProbs[1] = computeLenProbs(ipd[1], ipdRatios[1]);
-    ipdLenProbs[2] = computeLenProbs(ipd[2], ipdRatios[2]);
-    ipdLenProbs[3] = computeLenProbs(ipd[3], ipdRatios[3]);
+    ipdLenProbs[0] = computeLenProbs(meta[0].ipd, meta[0].ipdSSRatio);
+    ipdLenProbs[1] = computeLenProbs(meta[1].ipd, meta[1].ipdSSRatio);
+    ipdLenProbs[2] = computeLenProbs(meta[2].ipd, meta[2].ipdSSRatio);
+    ipdLenProbs[3] = computeLenProbs(meta[3].ipd, meta[3].ipdSSRatio);
 
     // alpha[i] is probability of going from the i down to another up state.
     // The direct down-to-full is currently disallowed, so we roll both
@@ -152,7 +147,7 @@ __device__ TransitionMatrix::TransitionMatrix(//BasecallerPulseDetectionConfig& 
         const auto down = DownState(i);
 
         // probabilities of 1,2 and 3 frame pulses for this analog
-        const auto& analogLenProbs = computeLenProbs(pw[i], pwsRatios[i]);
+        const auto& analogLenProbs = computeLenProbs(meta[i].pw, meta[i].pwSSRatio);
 
         // Probability of a 1 frame pulse is the sum of P(u->0) and all of P(u->u')
         // The former is gamma and the later is alpha. So summing over alpha
