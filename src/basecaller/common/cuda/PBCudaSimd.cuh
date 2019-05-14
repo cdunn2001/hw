@@ -92,7 +92,7 @@ inline __device__ short2 Blend(PBHalf2 cond, short2 l, short2 r)
     half zero = __float2half(0.0f);
     short2 ret;
     ret.x =  (__low2half(cond.data())  == zero) ? r.x  : l.x;
-    ret.y =  (__low2half(cond.data())  == zero) ? r.y  : l.y;
+    ret.y =  (__high2half(cond.data())  == zero) ? r.y  : l.y;
     return ret;
 }
 

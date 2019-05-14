@@ -121,15 +121,15 @@ int main(int argc, char* argv[])
     meta[2].ipdSSRatio = 0;
     meta[3].ipdSSRatio = 0;
 
-    meta[0].ipd = .308;
-    meta[1].ipd = .234;
-    meta[2].ipd = .234;
-    meta[3].ipd = .188;
+    meta[0].ipd = frameRate * .308;
+    meta[1].ipd = frameRate * .234;
+    meta[2].ipd = frameRate * .234;
+    meta[3].ipd = frameRate * .188;
 
-    meta[0].pw = .232;
-    meta[1].pw = .185;
-    meta[2].pw = .181;
-    meta[3].pw = .214;
+    meta[0].pw = frameRate * .232;
+    meta[1].pw = frameRate * .185;
+    meta[2].pw = frameRate * .181;
+    meta[3].pw = frameRate * .214;
 
     meta[0].pwSSRatio = 3.2;
     meta[1].pwSSRatio = 3.2;
@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
     // This is ugly since we only use two values.  Re-org?
     Subframe::AnalogMeta baselineMeta;
     baselineMeta.mean = options.get("BaselineMean");
-    baselineMeta.mean = options.get("BaselineVar");
+    baselineMeta.var = options.get("BaselineVar");
 
     run(params, dataParams, trParams, meta, baselineMeta, simulKernels);
 }

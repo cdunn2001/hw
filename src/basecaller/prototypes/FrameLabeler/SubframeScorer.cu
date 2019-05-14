@@ -210,7 +210,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
     {
         for (int j = 0; j < numStates; ++j)
         {
-            if (data_[i][j] != zero) data_[i][j] = hlog(data_[i][j]);
+            data_[i][j] = hlog(data_[i][j]);
         }
     }
 }

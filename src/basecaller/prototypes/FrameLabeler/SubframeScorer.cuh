@@ -179,7 +179,7 @@ struct __align__(128) GauseCapsScorer
         const auto fixedTerm = Blend(lowExtrema, bFixedTerm_[threadIdx.x], pFixedTerm_[a][threadIdx.x]);
 
         const auto extrema = lowExtrema || (val > x1_[a][threadIdx.x]);
-        PBHalf2 s = Blend(extrema, fixedTerm * pow2(cap - cap), PBHalf2(0.0f)) - logPMean_[a][threadIdx.x];
+        PBHalf2 s = Blend(extrema, fixedTerm * pow2(val - cap), PBHalf2(0.0f)) - logPMean_[a][threadIdx.x];
 
         if (a == numAnalogs-1)
         {
@@ -233,15 +233,16 @@ struct __align__(128) BlockStateScorer
         // sym2x2MatrixInverse returns the determinant and writes the inverse
         // into the second argument.
         bgInvCov_[threadIdx.x] = one / bgMode.vars[threadIdx.x];
-        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgInvCov_[threadIdx.x]) - normConst;
+        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgMode.vars[threadIdx.x]) - normConst;
         bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
 
         for (unsigned int i = 0; i < numAnalogs; ++i)
         {
             // Full-frame states
             const auto& aMode = model.AnalogMode(i);
-            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(one / aMode.vars[threadIdx.x]) - normConst;
+            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(aMode.vars[threadIdx.x]) - normConst;
             ffmean_[i][threadIdx.x] = aMode.means[threadIdx.x];
+            ffInvCov_[i][threadIdx.x] = one / aMode.vars[threadIdx.x];
         }
     }
 

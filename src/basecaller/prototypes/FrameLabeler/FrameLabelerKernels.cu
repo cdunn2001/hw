@@ -84,12 +84,11 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
             auto score = scores[nextState];
-            // Is this transposed?
-            auto maxVal = score + PBHalf2(trans->Entry(0, nextState)) + logLike[0];
+            auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
             auto maxIdx = make_short2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
-                auto val = score + PBHalf2(trans->Entry(prevState, nextState)) + logLike[prevState];
+                auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
 
                 auto cond = maxVal > val;
                 maxVal = Blend(cond, maxVal, val);
@@ -100,7 +99,7 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
         }
         for (int i = 0; i < numStates; ++i)
         {
-            logLike[i] += logAccum[i];
+            logLike[i] = logAccum[i];
         }
     };
 
@@ -158,16 +157,18 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     // Traceback
     auto traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
-    const int stopFrame = latentFrames == 0 ? 0 : Viterbi::lookbackDist;
-    for (int frame = numFrames-1; frame >= stopFrame; --frame)
+    const int stopFrame = latentFrames == 0 ? Viterbi::lookbackDist : 0;
+    const int startFrame = numFrames - 1;
+    for (int frame = startFrame; frame >= stopFrame; --frame)
     {
         outZmw[frame] = traceState;
-        traceState.x = labels(frame+latentFrames, traceState.x).x;
-        traceState.y = labels(frame+latentFrames, traceState.x).y;
+        const auto lookbackIdx = frame + latentFrames - Viterbi::lookbackDist;
+        traceState.x = labels(lookbackIdx, traceState.x).x;
+        traceState.y = labels(lookbackIdx, traceState.y).y;
     }
 
     // Update latent data
-    latent->SetBoundary(traceState);
+    latent->SetBoundary(anchorState);
     latent->SetModel(models[blockIdx.x]);
     latent->SetData(inZmw);
 }
