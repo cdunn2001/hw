@@ -18,6 +18,7 @@ class MongoBasecallerConsole : public PacBio::Process::ThreadedProcessBase
 {
 public:
     MongoBasecallerConsole()
+    : numChunksWritten_(0)
     {}
 
     ~MongoBasecallerConsole()
@@ -44,15 +45,15 @@ public:
         // TODO: Determine data selection.
 
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
-        PBLOG_INFO << "Number of chunks to preload: " << numChunksPreloadInputQueue_;
+        PBLOG_INFO << "Number of chunks to preload = " << numChunksPreloadInputQueue_;
 
         uint32_t tileBatches = options.get("tileBatches");
         uint32_t tileChunks = options.get("tileChunks");
 
         if (options.is_set_by_user("tileBatches"))
-            PBLOG_INFO << "Requested batches to tile: " << tileBatches;
+            PBLOG_INFO << "Requested batches to tile = " << tileBatches;
         if (options.is_set_by_user("tileChunks"))
-            PBLOG_INFO << "Requested chunks to tile: " << tileChunks;
+            PBLOG_INFO << "Requested chunks to tile = " << tileChunks;
 
         inputTraceFile_.reset(new TraceFileGenerator(inputTargetFile_,
                                                      primaryConfig.zmwsPerLane,
@@ -84,7 +85,11 @@ public:
             }
             else
             {
-                break;
+                if (numChunksWritten_ >= inputTraceFile_->GetNumChunks())
+                {
+                    PBLOG_INFO << "All chunks analyzed.";
+                    break;
+                }
             }
         }
     }
@@ -113,18 +118,17 @@ private:
 
     void RunWriter()
     {
-        size_t numChunksWritten = 0;
         while (!ExitRequested())
         {
             const std::vector<BasecallBatch>* baseCalls;
             if (outputDataQueue_.TryPop(baseCalls))
             {
                 // Write out data here.
-                numChunksWritten++;
+                numChunksWritten_++;
             }
             else
             {
-                if (numChunksWritten >= inputTraceFile_->GetNumChunks())
+                if (numChunksWritten_ >= inputTraceFile_->GetNumChunks())
                 {
                     PBLOG_INFO << "All chunks written out.";
                     break;
@@ -138,11 +142,12 @@ private:
         size_t numPreload = std::min(numChunksPreloadInputQueue_, inputTraceFile_->GetNumChunks());
 
         PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
-        while (inputDataQueue_.Size() < numPreload)
+        for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
         {
             std::vector<TraceBatch<int16_t>> chunk;
             if (inputTraceFile_->PopulateChunk(chunk))
             {
+                PBLOG_INFO << "Preloaded chunk = " << numChunk;
                 inputDataQueue_.Push(std::move(chunk));
             }
         }
@@ -171,13 +176,13 @@ private:
 
 private:
     BasecallerAlgorithmConfig basecallerConfig_;
-
     std::unique_ptr<ITraceAnalyzer> analyzer_;
     std::unique_ptr<TraceFileGenerator> inputTraceFile_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
     PacBio::ThreadSafeQueue<const std::vector<BasecallBatch>*> outputDataQueue_;
     std::string inputTargetFile_;
     size_t numChunksPreloadInputQueue_;
+    size_t numChunksWritten_;
 };
 
 int main(int argc, char* argv[])

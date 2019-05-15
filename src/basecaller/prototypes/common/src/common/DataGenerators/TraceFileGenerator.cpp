@@ -81,7 +81,7 @@ public:
 
         if (cached_)
         {
-
+            CacheTraceFile();
         }
     }
 
@@ -145,26 +145,48 @@ public:
     ~TraceFileGeneratorImpl() = default;
 
 private:
+    void CacheTraceFile()
+    {
+        PBLOG_INFO << "Caching trace file...";
+        pixelCache_.resize(boost::extents[numTraceBlocks_][numTraceZmwLanes_][dataParams_.blockLength][dataParams_.gpuLaneWidth]);
+        ReadEntireTraceFile();
+    }
+
     size_t PopulateTraceBatch(uint32_t batchNum, TraceBatch<int16_t>& traceBatch) const
     {
-        std::vector<int16_t> data(dataParams_.blockLength * dataParams_.zmwLaneWidth * dataParams_.kernelLanes);
-
         uint32_t wrappedBatchNum = batchNum % (dataParams_.numZmwLanes / dataParams_.kernelLanes);
         uint32_t wrappedChunkIndex = chunkIndex_ % numTraceBlocks_;
 
-        size_t nFramesRead =  ReadZmwLaneBlock(wrappedBatchNum * (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
-                                               (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
-                                               wrappedChunkIndex * dataParams_.blockLength,
-                                               dataParams_.blockLength,
-                                               data.data());
-
-        for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
+        if (cached_)
         {
-            auto block = traceBatch.GetBlockView(lane);
-            std::memcpy(block.Data(), data.data() + (lane * block.LaneWidth()), block.LaneWidth());
+            size_t startLane = wrappedBatchNum * dataParams_.kernelLanes;
+            for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
+            {
+                auto block = traceBatch.GetBlockView(lane);
+                std::memcpy(block.Data(), pixelCache_[wrappedChunkIndex][startLane + lane].origin(),
+                            dataParams_.blockLength * dataParams_.zmwLaneWidth * sizeof(int16_t));
+            }
+            return dataParams_.blockLength;
         }
+        else
+        {
+            std::vector<int16_t> data(dataParams_.blockLength * dataParams_.zmwLaneWidth * dataParams_.kernelLanes);
 
-        return nFramesRead;
+            size_t nFramesRead = ReadZmwLaneBlock(
+                    wrappedBatchNum * (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
+                    (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
+                    wrappedChunkIndex * dataParams_.blockLength,
+                    dataParams_.blockLength,
+                    data.data());
+
+            for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
+            {
+                auto block = traceBatch.GetBlockView(lane);
+                std::memcpy(block.Data(), data.data() + (lane * block.LaneWidth()), block.LaneWidth());
+            }
+
+            return nFramesRead;
+        }
     }
 
 
