@@ -4,12 +4,15 @@
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/GeneratorBase.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <dataTypes/TraceBatch.h>
 
 #include <vector_types.h>
 
 namespace PacBio {
 namespace Cuda {
 namespace Data {
+
+using namespace PacBio::Mongo::Data;
 
 struct TraceFileParams
 {
@@ -32,7 +35,19 @@ class TraceFileGenerator : public GeneratorBase<short2>
 public:
     TraceFileGenerator(const DataManagerParams& params, const TraceFileParams& traceParams);
 
+    TraceFileGenerator(const std::string& fileName,
+                       uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
+                       uint32_t tileBatches, uint32_t tileChunks, bool cache);
+
     ~TraceFileGenerator();
+
+    size_t PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk) const;
+
+    unsigned int GetNumBatches() const;
+
+    size_t GetNumChunks() const;
+
+    bool Finished() const;
 
 private:
     void PopulateBlock(size_t laneIdx,

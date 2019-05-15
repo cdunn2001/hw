@@ -64,7 +64,7 @@ ITraceAnalyzer::Create(unsigned int numPools,
 // Returns true if the input meets basic contracts.
 bool ITraceAnalyzer::IsValid(const std::vector<Data::TraceBatch<int16_t>>& input)
 {
-    if (input.size() >= NumZmwPools()) return false;
+    if (input.size() > NumZmwPools()) return false;
     assert(!input.empty());
     const auto first = input.front().GetMeta().FirstFrame();
     const auto last = input.front().GetMeta().LastFrame();
