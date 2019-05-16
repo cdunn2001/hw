@@ -101,9 +101,13 @@ public:
 private:
     void Setup()
     {
-        MovieConfig movConfig;
+        if (batchGenerator_->NumBatches() == 0)
+            throw PBException("Number of batches cannot be 0");
+
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating analyzer with num pools = "
                    << batchGenerator_->NumBatches();
+
+        MovieConfig movConfig;
         analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movConfig);
 
         PreloadInputQueue();

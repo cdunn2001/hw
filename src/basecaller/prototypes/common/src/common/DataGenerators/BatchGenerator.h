@@ -21,17 +21,20 @@ public:
                         numZmwLanes)
         , zmwLaneWidth_(zmwLaneWidth)
         , kernelLanes_(kernelLanes)
+        , numZmwLanes_(numZmwLanes)
+        , numChunks_(NumBlocks())
+        , numTraceChunks_(0)
         , chunkIndex_(0)
     {
-        numZmwLanes_ = (numZmwLanes == 0) ? traceFileReader_->NumZmwLanes() : numZmwLanes;
-        numChunks_ = (frames == 0) ? traceFileReader_->NumChunks() : NumBlocks();
-        const size_t count = zmwLaneWidth_ * BlockLen() * kernelLanes_;
-        tracePool_ = std::make_shared<Memory::GpuAllocationPool<int16_t>>(count);
+        tracePool_ = std::make_shared<Memory::GpuAllocationPool<int16_t>>(zmwLaneWidth * blockLen * kernelLanes);
     }
 
     void SetTraceFileSource(const std::string& traceFileName, bool cache)
     {
         traceFileReader_.reset(new TraceFileReader(traceFileName, zmwLaneWidth_, BlockLen(), cache));
+        if (numZmwLanes_ == 0) numZmwLanes_ = traceFileReader_->NumZmwLanes();
+        if (numChunks_ == 0) numChunks_ = traceFileReader_->NumChunks();
+        numTraceChunks_ = traceFileReader_->NumChunks();
     }
 
     std::vector<Mongo::Data::TraceBatch<int16_t>> PopulateChunk()
@@ -57,7 +60,7 @@ public:
         return chunk;
     }
 
-    size_t NumBatches() const { return numZmwLanes_ /kernelLanes_; }
+    size_t NumBatches() const { return numZmwLanes_ / kernelLanes_; }
 
     bool Finished() const { return chunkIndex_ >= numChunks_; }
 
@@ -65,7 +68,7 @@ public:
 
     size_t NumZmwLanes() const { return numZmwLanes_; }
 
-    size_t NumTraceChunks() const { return traceFileReader_->NumChunks(); }
+    size_t NumTraceChunks() const { return numTraceChunks_ ; }
 
 private:
     void PopulateBatch(uint32_t batchNum, Mongo::Data::TraceBatch<int16_t>& traceBatch)
@@ -98,11 +101,12 @@ private:
 private:
     uint32_t zmwLaneWidth_;
     uint32_t kernelLanes_;
-    size_t chunkIndex_;
     size_t numZmwLanes_;
     size_t numChunks_;
-    std::unique_ptr<TraceFileReader> traceFileReader_;
+    size_t numTraceChunks_;
+    size_t chunkIndex_;
     std::shared_ptr<Memory::GpuAllocationPool<int16_t>> tracePool_;
+    std::unique_ptr<TraceFileReader> traceFileReader_;
 };
 
 }}}

@@ -22,7 +22,6 @@ public:
         , traceFile_(traceFileName)
         , numZmwLanes_(traceFile_.NUM_HOLES / zmwsPerLane)
         , numChunks_((traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
-        , pixelCache_(boost::extents[numChunks_][numZmwLanes_][framesPerChunk_][zmwsPerLane/2])
         , cached_(cache)
     {
         if (cached_)
@@ -80,6 +79,7 @@ private:
     void ReadEntireTraceFile()
     {
         PBLOG_INFO << "Reading trace file into memory...";
+        pixelCache_.resize(boost::extents[numChunks_][numZmwLanes_][framesPerChunk_][zmwsPerLane_/2]);
         std::vector<int16_t> data(framesPerChunk_ * zmwsPerLane_);
         size_t lane;
         for (lane = 0; lane < numZmwLanes_; lane++)
