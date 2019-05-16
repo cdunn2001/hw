@@ -4,7 +4,7 @@
 #include <thread>
 
 #include <common/ZmwDataManager.h>
-#include <common/DataGenerators/TraceFileGenerator.h>
+#include <common/DataGenerators/SignalGenerator.h>
 #include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/primary/SequelDefinitions.h>
 #include <pacbio/primary/Tile.h>
@@ -13,7 +13,7 @@ using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
 
-TEST(TraceFileGeneratorTest, Construct)
+TEST(SignalGeneratorTest, Construct)
 {
     static constexpr size_t zmwLaneWidth = 64;
     const std::string traceFileName = "/pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5";
@@ -24,10 +24,10 @@ TEST(TraceFileGeneratorTest, Construct)
     auto traceParams = TraceFileParams()
             .TraceFileName(traceFileName);
 
-    TraceFileGenerator tfg(dataParams, traceParams);
+    SignalGenerator sg(dataParams, traceParams);
 }
 
-TEST(TraceFileGeneratorTest, CompareData)
+TEST(SignalGeneratorTest, CompareData)
 {
     using PacBio::Primary::SequelTraceFileHDF5;
     using PacBio::Primary::Tile;
@@ -67,7 +67,7 @@ TEST(TraceFileGeneratorTest, CompareData)
     std::this_thread::sleep_for(std::chrono::seconds(10));
 
     ZmwDataManager<short2> manager(dataParams,
-                                   std::make_unique<TraceFileGenerator>(dataParams, traceParams),
+                                   std::make_unique<SignalGenerator>(dataParams, traceParams),
                                    true);
 
     static constexpr size_t numLanesToCheck = 16;

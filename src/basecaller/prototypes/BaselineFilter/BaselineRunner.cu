@@ -31,7 +31,7 @@ std::unique_ptr<GeneratorBase<short2>> MakeDataGenerator(const Data::DataManager
 {
     return traceParams.traceFileName.empty()
         ? std::unique_ptr<GeneratorBase<short2>>(new PicketFenceGenerator(dataParams, picketParams))
-        : std::unique_ptr<GeneratorBase<short2>>(new TraceFileGenerator(dataParams, traceParams));
+        : std::unique_ptr<GeneratorBase<short2>>(new SignalGenerator(dataParams, traceParams));
 
 }
 

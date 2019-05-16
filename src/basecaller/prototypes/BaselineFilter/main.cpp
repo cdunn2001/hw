@@ -1,6 +1,6 @@
 #include <pacbio/process/OptionParser.h>
 #include <common/DataGenerators/PicketFenceGenerator.h>
-#include <common/DataGenerators/TraceFileGenerator.h>
+#include <common/DataGenerators/SignalGenerator.h>
 #include <common/ZmwDataManager.h>
 
 #include "BaselineRunner.h"

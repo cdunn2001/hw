@@ -3,7 +3,7 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
-#include <common/DataGenerators/TraceFileGenerator.h>
+#include <common/DataGenerators/TraceFileReader.h>
 
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
@@ -19,7 +19,6 @@ class MongoBasecallerConsole : public PacBio::Process::ThreadedProcessBase
 {
 public:
     MongoBasecallerConsole()
-    : numChunksWritten_(0)
     {}
 
     ~MongoBasecallerConsole()
@@ -38,39 +37,37 @@ public:
 
         PacBio::Process::ThreadedProcessBase::HandleProcessOptions(options);
 
+        numChunksWritten_ = 0;
+
         if (inputTargetFile_.size() == 0)
             inputTargetFile_ = options["inputfile"];
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
-        lanesPerPool_ = primaryConfig.lanesPerPool;
-        zmwsPerLane_ = primaryConfig.zmwsPerLane;
-        framesPerChunk_ = primaryConfig.framesPerChunk;
+        batchDims_.lanesPerBatch = primaryConfig.lanesPerPool;
+        batchDims_.laneWidth = primaryConfig.zmwsPerLane;
+        batchDims_.framesPerBatch = primaryConfig.framesPerChunk;
 
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
 
-        inputTraceFile_.reset(new TraceFileGenerator(inputTargetFile_,
-                                                     lanesPerPool_,
-                                                     zmwsPerLane_,
-                                                     framesPerChunk_,
-                                                     options.get("cache")));
+        inputTraceFile_.reset(new TraceFileReader(inputTargetFile_,
+                                                  batchDims_.lanesPerBatch, batchDims_.laneWidth, batchDims_.framesPerBatch,
+                                                  options.get("cache")));
 
         if (options.is_set_by_user("numZmwLanes"))
-            inputTraceFile_->NumReqZmwLanes(options.get("numZmwLanes"));
+            inputTraceFile_->NumZmwLanes(options.get("numZmwLanes"));
 
         if (options.is_set_by_user("frames"))
             inputTraceFile_->NumFrames(options.get("frames"));
 
         PBLOG_INFO << "Number of trace file zmwLanes = " << inputTraceFile_->NumTraceZmwLanes();
         PBLOG_INFO << "Number of trace file chunks = " << inputTraceFile_->NumTraceChunks();
-        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumReqZmwLanes();
+        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumZmwLanes();
         PBLOG_INFO << "Requested number of analysis chunks = " << inputTraceFile_->NumChunks();
 
-        const size_t count = primaryConfig.lanesPerPool * primaryConfig.zmwsPerLane * primaryConfig.framesPerChunk;
+        const size_t count = batchDims_.zmwsPerBatch() * batchDims_.framesPerBatch;
         tracePool_ = std::make_shared<GpuAllocationPool<int16_t>>(count);
 
-        batchDims_.lanesPerBatch = lanesPerPool_;
-        batchDims_.laneWidth = primaryConfig.zmwsPerLane;
-        batchDims_.framesPerBatch = primaryConfig.framesPerChunk;
+      ;
     }
 
     void Run()
@@ -159,8 +156,8 @@ private:
         size_t chunkIndex = inputTraceFile_->ChunkIndex();
         for (size_t b = 0; b < inputTraceFile_->NumBatches(); b++)
         {
-            chunk.emplace_back(BatchMetadata(b, chunkIndex * framesPerChunk_,
-                               (chunkIndex * framesPerChunk_) + framesPerChunk_),
+            chunk.emplace_back(BatchMetadata(b, chunkIndex * batchDims_.framesPerBatch,
+                               (chunkIndex * batchDims_.framesPerBatch) + batchDims_.framesPerBatch),
                                batchDims_,
                                SyncDirection::HostWriteDeviceRead,
                                tracePool_);
@@ -214,15 +211,12 @@ private:
     std::shared_ptr<GpuAllocationPool<int16_t>> tracePool_;
     BasecallerAlgorithmConfig basecallerConfig_;
     std::unique_ptr<ITraceAnalyzer> analyzer_;
-    std::unique_ptr<TraceFileGenerator> inputTraceFile_;
+    std::unique_ptr<TraceFileReader> inputTraceFile_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
     PacBio::ThreadSafeQueue<const std::vector<BasecallBatch>*> outputDataQueue_;
     std::string inputTargetFile_;
     size_t numChunksPreloadInputQueue_;
     size_t numChunksWritten_;
-    uint32_t lanesPerPool_;
-    uint32_t zmwsPerLane_;
-    uint32_t framesPerChunk_;
     BatchDimensions batchDims_;
 };
 
@@ -242,7 +236,7 @@ int main(int argc, char* argv[])
 
         parser.add_option("--inputfile").set_default("").help("input file (must be *.trc.h5)");
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
-        parser.add_option("--numChunksPreload").type_int().set_default(3).help("Number of chunks to preload (Default: %default)");
+        parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");
         parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
         
         auto group1 = PacBio::Process::OptionGroup(parser, "Data Selection/Tiling Options",
