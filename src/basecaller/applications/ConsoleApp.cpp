@@ -11,6 +11,7 @@
 #include <pacbio/process/ProcessBase.h>
 
 using namespace PacBio::Cuda::Data;
+using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Mongo::Basecaller;
 
@@ -41,22 +42,35 @@ public:
             inputTargetFile_ = options["inputfile"];
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
+        lanesPerPool_ = primaryConfig.lanesPerPool;
+        zmwsPerLane_ = primaryConfig.zmwsPerLane;
+        framesPerChunk_ = primaryConfig.framesPerChunk;
 
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
 
-        uint32_t numZmwLanes = options.get("numZmwLanes");
-        uint32_t frames = options.get("frames");
-
         inputTraceFile_.reset(new TraceFileGenerator(inputTargetFile_,
-                                                     primaryConfig.zmwsPerLane,
-                                                     primaryConfig.lanesPerPool,
-                                                     primaryConfig.framesPerChunk,
-                                                     numZmwLanes, frames, options.get("cache")));
+                                                     lanesPerPool_,
+                                                     zmwsPerLane_,
+                                                     framesPerChunk_,
+                                                     options.get("cache")));
+
+        if (options.is_set_by_user("numZmwLanes"))
+            inputTraceFile_->NumReqZmwLanes(options.get("numZmwLanes"));
+
+        if (options.is_set_by_user("frames"))
+            inputTraceFile_->NumFrames(options.get("frames"));
 
         PBLOG_INFO << "Number of trace file zmwLanes = " << inputTraceFile_->NumTraceZmwLanes();
         PBLOG_INFO << "Number of trace file chunks = " << inputTraceFile_->NumTraceChunks();
-        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumZmwLanes();
+        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumReqZmwLanes();
         PBLOG_INFO << "Requested number of analysis chunks = " << inputTraceFile_->NumChunks();
+
+        const size_t count = primaryConfig.lanesPerPool * primaryConfig.zmwsPerLane * primaryConfig.framesPerChunk;
+        tracePool_ = std::make_shared<GpuAllocationPool<int16_t>>(count);
+
+        batchDims_.lanesPerBatch = lanesPerPool_;
+        batchDims_.laneWidth = primaryConfig.zmwsPerLane;
+        batchDims_.framesPerBatch = primaryConfig.framesPerChunk;
     }
 
     void Run()
@@ -79,6 +93,7 @@ public:
                     + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
                 const auto baseCalls = (*analyzer_)(std::move(chunk));
                 outputDataQueue_.Push(&baseCalls);
+                DeallocateTraceChunk(chunk);
             }
             else
             {
@@ -137,6 +152,29 @@ private:
         }
     }
 
+    std::vector<TraceBatch<int16_t>> AllocateTraceChunk()
+    {
+        std::vector<TraceBatch<int16_t>> chunk;
+
+        size_t chunkIndex = inputTraceFile_->ChunkIndex();
+        for (size_t b = 0; b < inputTraceFile_->NumBatches(); b++)
+        {
+            chunk.emplace_back(BatchMetadata(b, chunkIndex * framesPerChunk_,
+                               (chunkIndex * framesPerChunk_) + framesPerChunk_),
+                               batchDims_,
+                               SyncDirection::HostWriteDeviceRead,
+                               tracePool_);
+        }
+
+        return chunk;
+    }
+
+    void DeallocateTraceChunk(std::vector<TraceBatch<int16_t>>& chunk)
+    {
+       for (auto& batch : chunk)
+           batch.DeactivateGpuMem();
+    }
+
     void PreloadInputQueue()
     {
         size_t numPreload = std::min(numChunksPreloadInputQueue_, inputTraceFile_->NumTraceChunks());
@@ -144,7 +182,7 @@ private:
         PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
         for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
         {
-            std::vector<TraceBatch<int16_t>> chunk;
+            std::vector<TraceBatch<int16_t>> chunk = AllocateTraceChunk();
             if (inputTraceFile_->PopulateChunk(chunk))
             {
                 PBLOG_INFO << "Preloaded chunk = " << numChunk;
@@ -158,23 +196,22 @@ private:
     {
         while (!ExitRequested())
         {
-            std::vector<TraceBatch<int16_t>> chunk;
-            if (inputTraceFile_->PopulateChunk(chunk))
+            if (!inputTraceFile_->Finished())
             {
-                inputDataQueue_.Push(std::move(chunk));
+                std::vector<TraceBatch<int16_t>> chunk = AllocateTraceChunk();
+                if (inputTraceFile_->PopulateChunk(chunk))
+                    inputDataQueue_.Push(std::move(chunk));
             }
             else
             {
-                if (inputTraceFile_->Finished())
-                {
-                    PBLOG_INFO << "All chunks read in.";
-                    break;
-                }
+                PBLOG_INFO << "All chunks read in.";
+                break;
             }
         }
     }
 
 private:
+    std::shared_ptr<GpuAllocationPool<int16_t>> tracePool_;
     BasecallerAlgorithmConfig basecallerConfig_;
     std::unique_ptr<ITraceAnalyzer> analyzer_;
     std::unique_ptr<TraceFileGenerator> inputTraceFile_;
@@ -183,6 +220,10 @@ private:
     std::string inputTargetFile_;
     size_t numChunksPreloadInputQueue_;
     size_t numChunksWritten_;
+    uint32_t lanesPerPool_;
+    uint32_t zmwsPerLane_;
+    uint32_t framesPerChunk_;
+    BatchDimensions batchDims_;
 };
 
 int main(int argc, char* argv[])

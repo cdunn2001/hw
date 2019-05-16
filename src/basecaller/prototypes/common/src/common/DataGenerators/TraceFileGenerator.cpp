@@ -32,24 +32,20 @@ public:
     }
 
     TraceFileGeneratorImpl(const std::string& fileName,
-                           uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                           uint32_t numZmwLanes, uint32_t frames, bool cache)
+                           uint32_t lanesPerPool, uint32_t zmwsPerLane, uint32_t framesPerChunk,
+                           bool cache)
         : traceFile_(fileName)
         , numTraceZmwLanes_(traceFile_.NUM_HOLES / zmwsPerLane) // This discards the last runt zmwLane.
         , numTraceChunks_((traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
         , pixelCache_(boost::extents[numTraceChunks_][numTraceZmwLanes_][framesPerChunk][zmwsPerLane/2])
         , chunkIndex_(0)
-        , numRequestedTraceChunks_((frames != 0)
-                                        ? (frames + framesPerChunk - 1) / framesPerChunk
-                                        : (traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
-        , numRequestedBatches_((numZmwLanes != 0)
-                                        ? (numZmwLanes + lanesPerPool - 1) / lanesPerPool
-                                        : (numTraceZmwLanes_ + lanesPerPool - 1) / lanesPerPool)
+        , numRequestedTraceChunks_((traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
+        , numRequestedBatches_((numTraceZmwLanes_ + lanesPerPool - 1) / lanesPerPool)
         , cached_(cache)
     {
         dataParams_ = DataManagerParams()
                 .ZmwLaneWidth(zmwsPerLane)
-                .NumZmwLanes(numZmwLanes == 0 ? numTraceZmwLanes_ : numZmwLanes)
+                .NumZmwLanes(numTraceZmwLanes_)
                 .KernelLanes(lanesPerPool)
                 .BlockLength(framesPerChunk);
 
@@ -121,6 +117,27 @@ public:
         return dataParams_.numZmwLanes;
     }
 
+    void NumZmwLanes(size_t numZmwLanes)
+    {
+        dataParams_.numZmwLanes = numZmwLanes;
+        numRequestedBatches_ = (numZmwLanes + dataParams_.kernelLanes - 1) / dataParams_.kernelLanes;
+    }
+
+    size_t Frames() const
+    {
+        return numRequestedTraceChunks_ * dataParams_.blockLength;
+    }
+
+    void Frames(uint32_t frames)
+    {
+        numRequestedTraceChunks_ = (frames + dataParams_.blockLength - 1) / dataParams_.blockLength;
+    }
+
+    size_t ChunkIndex() const
+    {
+        return chunkIndex_;
+    }
+
     bool Finished() const
     {
         return chunkIndex_ >= numRequestedTraceChunks_;
@@ -189,10 +206,8 @@ private:
                 std::memcpy(pixelCache_[block][lane].origin(), data.data(),
                             dataParams_.blockLength * dataParams_.zmwLaneWidth * sizeof(int16_t));
             }
-
-            if (lane % 10000 == 0) PBLOG_INFO << "Read " << lane << "/" << numTraceZmwLanes_;
         }
-        PBLOG_INFO << "Read " << lane << "/" << numTraceZmwLanes_ << "...Done reading trace file into memory";
+        PBLOG_INFO << "Done reading trace file into memory";
     }
 
     uint32_t ReadZmwLaneBlock(uint32_t zmwIndex, uint32_t numZmws, uint64_t frameOffset, uint32_t numFrames, int16_t* data) const
@@ -234,15 +249,16 @@ TraceFileGenerator::TraceFileGenerator(const DataManagerParams& params, const Tr
     {}
 
 TraceFileGenerator::TraceFileGenerator(const std::string& fileName,
-                                       uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                                       uint32_t numZmwLanes, uint32_t frames, bool cache)
+                                       uint32_t lanesPerPool, uint32_t zmwsPerLane, uint32_t framesPerChunk,
+                                       bool cache)
     : GeneratorBase(framesPerChunk,
                     zmwsPerLane/2,
-                    (frames + framesPerChunk + 1)/framesPerChunk,
-                    numZmwLanes)
+                    0,
+                    0)
     , traceParams_(TraceFileParams().TraceFileName(fileName))
-    , pImpl_(std::make_unique<TraceFileGeneratorImpl>(fileName, zmwsPerLane, lanesPerPool, framesPerChunk,
-                                                      numZmwLanes, frames, cache))
+    , pImpl_(std::make_unique<TraceFileGeneratorImpl>(fileName,
+                                                      lanesPerPool, zmwsPerLane, framesPerChunk,
+                                                      cache))
     {}
 
 size_t TraceFileGenerator::PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk) const
@@ -270,9 +286,31 @@ size_t TraceFileGenerator::NumTraceZmwLanes() const
     return pImpl_->NumTraceZmwLanes();
 }
 
-size_t TraceFileGenerator::NumZmwLanes() const
+size_t TraceFileGenerator::NumReqZmwLanes() const
 {
     return pImpl_->NumZmwLanes();
+}
+
+TraceFileGenerator& TraceFileGenerator::NumReqZmwLanes(uint32_t numZmwLanes)
+{
+    pImpl_->NumZmwLanes(numZmwLanes);
+    return *this;
+}
+
+size_t TraceFileGenerator::NumFrames() const
+{
+    return pImpl_->Frames();
+}
+
+TraceFileGenerator& TraceFileGenerator::NumFrames(uint32_t frames)
+{
+    pImpl_->Frames(frames);
+    return *this;
+}
+
+size_t TraceFileGenerator::ChunkIndex() const
+{
+    return pImpl_->ChunkIndex();
 }
 
 bool TraceFileGenerator::Finished() const

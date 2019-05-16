@@ -36,8 +36,8 @@ public:
     TraceFileGenerator(const DataManagerParams& params, const TraceFileParams& traceParams);
 
     TraceFileGenerator(const std::string& fileName,
-                       uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                       uint32_t numZmwLanes, uint32_t frames, bool cache);
+                       uint32_t lanesPerPool, uint32_t zmwsPerLane, uint32_t framesPerChunk,
+                       bool cache);
 
     ~TraceFileGenerator();
 
@@ -51,7 +51,15 @@ public:
 
     size_t NumTraceZmwLanes() const;
 
-    size_t NumZmwLanes() const;
+    size_t NumReqZmwLanes() const;
+
+    TraceFileGenerator& NumReqZmwLanes(uint32_t numZmwLanes);
+
+    size_t NumFrames() const;
+
+    TraceFileGenerator& NumFrames(uint32_t frames);
+
+    size_t ChunkIndex() const;
 
     bool Finished() const;
 
