@@ -55,7 +55,7 @@ __device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArra
 __launch_bounds__(32, 12)
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
-                                   Memory::DevicePtr<LatentViterbi<32>> latent,
+                                   Memory::DeviceView<LatentViterbi<32>> latentData,
                                    ViterbiData<short2, 32> labels,
                                    Mongo::Data::GpuBatchData<short2> input,
                                    Mongo::Data::GpuBatchData<short2> output)
@@ -69,7 +69,8 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     // Initial setup
     CudaArray<PBHalf2, numStates> logLike;
     CudaArray<PBHalf2, numStates> logAccum;
-    auto bc = latent->GetBoundary();
+    auto& latent = latentData[blockIdx.x];
+    auto bc = latent.GetBoundary();
     const PBHalf2 zero(0.0f);
     const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
     for (int i = 0; i < numStates; ++i)
@@ -104,11 +105,11 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     };
 
     // Forward recursion on latent data
-    const int latentFrames = latent->NumFrames();
-    scorer.Setup(latent->GetModel());
+    const int latentFrames = latent.NumFrames();
+    scorer.Setup(latent.GetModel());
     for (int frame = 0; frame < latentFrames; ++frame)
     {
-        Recursion(latent->FrameData(frame), frame);
+        Recursion(latent.FrameData(frame), frame);
     }
 
     // Forward recursion on this block's data
@@ -168,9 +169,9 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     }
 
     // Update latent data
-    latent->SetBoundary(anchorState);
-    latent->SetModel(models[blockIdx.x]);
-    latent->SetData(inZmw);
+    latent.SetBoundary(anchorState);
+    latent.SetModel(models[blockIdx.x]);
+    latent.SetData(inZmw);
 }
 
 }}

@@ -82,40 +82,50 @@ private:
     int numFrames_;
 };
 
+// TODO this needs cleanup.  If numLanes doesn't match what is actually used on the gpu, we're dead
 template <typename T, size_t laneWidth>
 struct ViterbiDataHost
 {
-    ViterbiDataHost(size_t numFrames, T val = T{})
-        : data_(numFrames*laneWidth*Subframe::numStates, val)
+    ViterbiDataHost(size_t numFrames, size_t numLanes, T val = T{})
+        : data_(numFrames*numLanes*laneWidth*Subframe::numStates, val)
+        , numFrames_(numFrames)
     {}
 
     Memory::DeviceView<T> Data(Memory::detail::DataManagerKey)
     {
         return data_.GetDeviceView();
     }
+    int NumFrames() const { return numFrames_; }
  private:
     Memory::DeviceOnlyArray<T> data_;
+    int numFrames_;
 };
 
+// TODO I don't like this API...  Should have a separate ViterbiData object, either
+// per thread or per block.
 template <typename T, size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
     ViterbiData(ViterbiDataHost<T, laneWidth>& hostData)
         : data_(hostData.Data(DataKey()))
+        , numFrames_(hostData.NumFrames())
     {}
 
     __device__ T& operator()(int frame, int state)
     {
-        return data_[frame*laneWidth*Subframe::numStates +  state*laneWidth +  threadIdx.x];
+        return data_[numFrames_*laneWidth*Subframe::numStates*blockIdx.x
+                     + frame*laneWidth*Subframe::numStates
+                     + state*laneWidth +  threadIdx.x];
     }
  private:
     Memory::DeviceView<T> data_;
+    int numFrames_;
 };
 
 // First arg should be const?
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
-                                   Memory::DevicePtr<LatentViterbi<32>> latent,
+                                   Memory::DeviceView<LatentViterbi<32>> latent,
                                    ViterbiData<short2, 32> labels,
                                    Mongo::Data::GpuBatchData<short2> input,
                                    Mongo::Data::GpuBatchData<short2> output);

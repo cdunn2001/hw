@@ -42,7 +42,7 @@ void run(const Data::DataManagerParams& dataParams,
 
     DeviceOnlyObj<TransitionMatrix> trans(Utility::CudaArray<AnalogMeta, 4>{meta});
     std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
-    std::vector<DeviceOnlyObj<LatentViterbi<32>>> latent;
+    std::vector<DeviceOnlyArray<LatentViterbi<gpuBlockThreads>>> latent;
     std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
 
     LaneModelParameters<gpuBlockThreads> referenceModel;
@@ -59,8 +59,8 @@ void run(const Data::DataManagerParams& dataParams,
     labels.reserve(numBatches);
     for (size_t i = 0; i < numBatches; ++i)
     {
-        latent.emplace_back();
-        labels.emplace_back(dataParams.blockLength + Viterbi::lookbackDist);
+        latent.emplace_back(dataParams.kernelLanes);
+        labels.emplace_back(dataParams.blockLength + Viterbi::lookbackDist, dataParams.kernelLanes);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)
@@ -78,7 +78,7 @@ void run(const Data::DataManagerParams& dataParams,
         FrameLabelerKernel<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             trans.GetDevicePtr(),
             models[batchIdx].GetDeviceHandle(),
-            latent[batchIdx].GetDevicePtr(),
+            latent[batchIdx].GetDeviceView(),
             labels[batchIdx],
             batch,
             ret);
