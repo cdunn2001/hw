@@ -3,7 +3,7 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
-#include <common/DataGenerators/TraceFileReader.h>
+#include <common/DataGenerators/BatchGenerator.h>
 
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
@@ -37,37 +37,23 @@ public:
 
         PacBio::Process::ThreadedProcessBase::HandleProcessOptions(options);
 
-        numChunksWritten_ = 0;
-
         if (inputTargetFile_.size() == 0)
             inputTargetFile_ = options["inputfile"];
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
-        batchDims_.lanesPerBatch = primaryConfig.lanesPerPool;
-        batchDims_.laneWidth = primaryConfig.zmwsPerLane;
-        batchDims_.framesPerBatch = primaryConfig.framesPerChunk;
 
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
 
-        inputTraceFile_.reset(new TraceFileReader(inputTargetFile_,
-                                                  batchDims_.lanesPerBatch, batchDims_.laneWidth, batchDims_.framesPerBatch,
-                                                  options.get("cache")));
+        batchGenerator_.reset(new BatchGenerator(primaryConfig.framesPerChunk,
+                                                 primaryConfig.zmwsPerLane,
+                                                 primaryConfig.lanesPerPool,
+                                                 options.get("frames"),
+                                                 options.get("numZmwLanes")));
 
-        if (options.is_set_by_user("numZmwLanes"))
-            inputTraceFile_->NumZmwLanes(options.get("numZmwLanes"));
+        batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
 
-        if (options.is_set_by_user("frames"))
-            inputTraceFile_->NumFrames(options.get("frames"));
-
-        PBLOG_INFO << "Number of trace file zmwLanes = " << inputTraceFile_->NumTraceZmwLanes();
-        PBLOG_INFO << "Number of trace file chunks = " << inputTraceFile_->NumTraceChunks();
-        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumZmwLanes();
-        PBLOG_INFO << "Requested number of analysis chunks = " << inputTraceFile_->NumChunks();
-
-        const size_t count = batchDims_.zmwsPerBatch() * batchDims_.framesPerBatch;
-        tracePool_ = std::make_shared<GpuAllocationPool<int16_t>>(count);
-
-      ;
+        PBLOG_INFO << "Number of analysis zmwLanes = " << batchGenerator_->NumZmwLanes();
+        PBLOG_INFO << "Number of analysis chunks = " << batchGenerator_->NumChunks();
     }
 
     void Run()
@@ -90,14 +76,14 @@ public:
                     + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
                 const auto baseCalls = (*analyzer_)(std::move(chunk));
                 outputDataQueue_.Push(&baseCalls);
-                DeallocateTraceChunk(chunk);
             }
             else
             {
-                if (numChunksWritten_ >= inputTraceFile_->NumChunks())
+                if (numChunksWritten_ >= batchGenerator_->NumChunks())
                 {
                     PBLOG_INFO << "All chunks analyzed.";
-                    PBLOG_INFO << "Total frames analyzed = " << inputTraceFile_->NumChunks() * primaryConfig.framesPerChunk;
+                    PBLOG_INFO << "Total frames analyzed = "
+                               << batchGenerator_->NumChunks() * primaryConfig.framesPerChunk;
                     break;
                 }
             }
@@ -117,15 +103,15 @@ private:
     {
         MovieConfig movConfig;
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating analyzer with num pools = "
-                   << inputTraceFile_->NumBatches();
-        analyzer_ = ITraceAnalyzer::Create(inputTraceFile_->NumBatches(), basecallerConfig_, movConfig);
+                   << batchGenerator_->NumBatches();
+        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movConfig);
 
         PreloadInputQueue();
 
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating reader thread";
         CreateThread("reader", [this]() { this->RunReader(); });
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating writer thread";
-        CreateThread("writer", [this]() { this->RunWriter(); });
+        CreateThread("writer", [this]() { this->numChunksWritten_ = 0; this->RunWriter(); });
     }
 
     void RunWriter()
@@ -140,7 +126,7 @@ private:
             }
             else
             {
-                if (numChunksWritten_ >= inputTraceFile_->NumChunks())
+                if (numChunksWritten_ >= batchGenerator_->NumChunks())
                 {
                     PBLOG_INFO << "All chunks written out.";
                     break;
@@ -149,55 +135,29 @@ private:
         }
     }
 
-    std::vector<TraceBatch<int16_t>> AllocateTraceChunk()
-    {
-        std::vector<TraceBatch<int16_t>> chunk;
-
-        size_t chunkIndex = inputTraceFile_->ChunkIndex();
-        for (size_t b = 0; b < inputTraceFile_->NumBatches(); b++)
-        {
-            chunk.emplace_back(BatchMetadata(b, chunkIndex * batchDims_.framesPerBatch,
-                               (chunkIndex * batchDims_.framesPerBatch) + batchDims_.framesPerBatch),
-                               batchDims_,
-                               SyncDirection::HostWriteDeviceRead,
-                               tracePool_);
-        }
-
-        return chunk;
-    }
-
-    void DeallocateTraceChunk(std::vector<TraceBatch<int16_t>>& chunk)
-    {
-       for (auto& batch : chunk)
-           batch.DeactivateGpuMem();
-    }
-
     void PreloadInputQueue()
     {
-        size_t numPreload = std::min(numChunksPreloadInputQueue_, inputTraceFile_->NumTraceChunks());
+        size_t numPreload = std::min(numChunksPreloadInputQueue_, batchGenerator_->NumTraceChunks());
 
-        PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
-        for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
+        if (numPreload > 0)
         {
-            std::vector<TraceBatch<int16_t>> chunk = AllocateTraceChunk();
-            if (inputTraceFile_->PopulateChunk(chunk))
+            PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
+            for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
                 PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(std::move(chunk));
+                inputDataQueue_.Push(std::move(batchGenerator_->PopulateChunk()));
             }
+            PBLOG_INFO << "Done preloading input queue.";
         }
-        PBLOG_INFO << "Done preloading input queue.";
     }
 
     void RunReader()
     {
         while (!ExitRequested())
         {
-            if (!inputTraceFile_->Finished())
+            if (!batchGenerator_->Finished())
             {
-                std::vector<TraceBatch<int16_t>> chunk = AllocateTraceChunk();
-                if (inputTraceFile_->PopulateChunk(chunk))
-                    inputDataQueue_.Push(std::move(chunk));
+                inputDataQueue_.Push(std::move(batchGenerator_->PopulateChunk()));
             }
             else
             {
@@ -208,16 +168,14 @@ private:
     }
 
 private:
-    std::shared_ptr<GpuAllocationPool<int16_t>> tracePool_;
     BasecallerAlgorithmConfig basecallerConfig_;
     std::unique_ptr<ITraceAnalyzer> analyzer_;
-    std::unique_ptr<TraceFileReader> inputTraceFile_;
+    std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
     PacBio::ThreadSafeQueue<const std::vector<BasecallBatch>*> outputDataQueue_;
     std::string inputTargetFile_;
     size_t numChunksPreloadInputQueue_;
     size_t numChunksWritten_;
-    BatchDimensions batchDims_;
 };
 
 int main(int argc, char* argv[])

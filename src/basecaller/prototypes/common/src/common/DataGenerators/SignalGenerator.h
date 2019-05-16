@@ -4,8 +4,6 @@
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/GeneratorBase.h>
 #include <common/DataGenerators/TraceFileReader.h>
-#include <common/cuda/memory/UnifiedCudaArray.h>
-#include <dataTypes/TraceBatch.h>
 
 #include <vector_types.h>
 
@@ -18,10 +16,8 @@ using namespace PacBio::Mongo::Data;
 struct TraceFileParams
 {
     std::string traceFileName;
-    size_t numTraceLanes = 0;
 
     TraceFileParams& TraceFileName(const std::string& v)    { traceFileName = v; return *this; }
-    TraceFileParams& NumTraceLanes(size_t v)                { numTraceLanes = v; return *this; }
 };
 
 class SignalGenerator : public GeneratorBase<short2>
@@ -33,7 +29,7 @@ public:
                         params.numBlocks,
                         params.numZmwLanes)
         , traceParams_(traceParams)
-        , inputTraceFile_(std::make_unique<TraceFileReader>(traceParams_.traceFileName, params.zmwLaneWidth, params.blockLength))
+        , traceFileReader_(std::make_unique<TraceFileReader>(traceParams_.traceFileName, params.zmwLaneWidth, params.blockLength))
     {}
 
 private:
@@ -41,12 +37,12 @@ private:
                        size_t blockIdx,
                        std::vector<short2>& v) override
     {
-        inputTraceFile_->PopulateBlock(laneIdx, blockIdx, v);
+        traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
     }
 
 private:
     TraceFileParams traceParams_;
-    std::unique_ptr<TraceFileReader> inputTraceFile_;
+    std::unique_ptr<TraceFileReader> traceFileReader_;
 };
 
 }}}

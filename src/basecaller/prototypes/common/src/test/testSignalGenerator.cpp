@@ -44,7 +44,6 @@ TEST(SignalGeneratorTest, CompareData)
             .ZmwLaneWidth(zmwLaneWidth);
 
     auto traceParams = TraceFileParams()
-            .NumTraceLanes(1)
             .TraceFileName("/pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5");
 
     std::vector<int16_t> zmwsByFrame(zmwLaneWidth * numFrames);

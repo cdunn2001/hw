@@ -5,6 +5,7 @@ set(SRC_LIST
     src/common/ZmwDataManager.cpp
     src/common/memory/UnifiedCudaArray.h
     src/common/memory/UnifiedCudaArray.cuh
+    src/common/DataGenerators/BatchGenerator.h
     src/common/DataGenerators/GeneratorBase.h
     src/common/DataGenerators/GeneratorBase.cpp
     src/common/DataGenerators/TemplateGenerator.h
