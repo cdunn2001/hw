@@ -37,15 +37,21 @@ public:
 
     TraceFileGenerator(const std::string& fileName,
                        uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                       uint32_t tileBatches, uint32_t tileChunks, bool cache);
+                       uint32_t numZmwLanes, uint32_t frames, bool cache);
 
     ~TraceFileGenerator();
 
     size_t PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk) const;
 
-    unsigned int GetNumBatches() const;
+    unsigned int NumBatches() const;
 
-    size_t GetNumChunks() const;
+    size_t NumChunks() const;
+
+    size_t NumTraceChunks() const;
+
+    size_t NumTraceZmwLanes() const;
+
+    size_t NumZmwLanes() const;
 
     bool Finished() const;
 

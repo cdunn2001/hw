@@ -42,24 +42,21 @@ public:
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
 
-        // TODO: Determine data selection.
-
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
-        PBLOG_INFO << "Number of chunks to preload = " << numChunksPreloadInputQueue_;
 
-        uint32_t tileBatches = options.get("tileBatches");
-        uint32_t tileChunks = options.get("tileChunks");
-
-        if (options.is_set_by_user("tileBatches"))
-            PBLOG_INFO << "Requested batches to tile = " << tileBatches;
-        if (options.is_set_by_user("tileChunks"))
-            PBLOG_INFO << "Requested chunks to tile = " << tileChunks;
+        uint32_t numZmwLanes = options.get("numZmwLanes");
+        uint32_t frames = options.get("frames");
 
         inputTraceFile_.reset(new TraceFileGenerator(inputTargetFile_,
                                                      primaryConfig.zmwsPerLane,
                                                      primaryConfig.lanesPerPool,
                                                      primaryConfig.framesPerChunk,
-                                                     tileBatches, tileChunks, options.get("cache")));
+                                                     numZmwLanes, frames, options.get("cache")));
+
+        PBLOG_INFO << "Number of trace file zmwLanes = " << inputTraceFile_->NumTraceZmwLanes();
+        PBLOG_INFO << "Number of trace file chunks = " << inputTraceFile_->NumTraceChunks();
+        PBLOG_INFO << "Requested number of zmwLanes = " << inputTraceFile_->NumZmwLanes();
+        PBLOG_INFO << "Requested number of analysis chunks = " << inputTraceFile_->NumChunks();
     }
 
     void Run()
@@ -85,9 +82,10 @@ public:
             }
             else
             {
-                if (numChunksWritten_ >= inputTraceFile_->GetNumChunks())
+                if (numChunksWritten_ >= inputTraceFile_->NumChunks())
                 {
                     PBLOG_INFO << "All chunks analyzed.";
+                    PBLOG_INFO << "Total frames analyzed = " << inputTraceFile_->NumChunks() * primaryConfig.framesPerChunk;
                     break;
                 }
             }
@@ -106,7 +104,9 @@ private:
     void Setup()
     {
         MovieConfig movConfig;
-        analyzer_ = ITraceAnalyzer::Create(inputTraceFile_->GetNumBatches(), basecallerConfig_, movConfig);
+        PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating analyzer with num pools = "
+                   << inputTraceFile_->NumBatches();
+        analyzer_ = ITraceAnalyzer::Create(inputTraceFile_->NumBatches(), basecallerConfig_, movConfig);
 
         PreloadInputQueue();
 
@@ -128,7 +128,7 @@ private:
             }
             else
             {
-                if (numChunksWritten_ >= inputTraceFile_->GetNumChunks())
+                if (numChunksWritten_ >= inputTraceFile_->NumChunks())
                 {
                     PBLOG_INFO << "All chunks written out.";
                     break;
@@ -139,7 +139,7 @@ private:
 
     void PreloadInputQueue()
     {
-        size_t numPreload = std::min(numChunksPreloadInputQueue_, inputTraceFile_->GetNumChunks());
+        size_t numPreload = std::min(numChunksPreloadInputQueue_, inputTraceFile_->NumTraceChunks());
 
         PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
         for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
@@ -203,20 +203,12 @@ int main(int argc, char* argv[])
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--numChunksPreload").type_int().set_default(3).help("Number of chunks to preload (Default: %default)");
         parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
-
-        auto group1 = PacBio::Process::OptionGroup(parser, "Data Selection Options",
-                                                   "Controls data selection from input data");
-        group1.add_option("--zmwHoleNumbers").type_string().help("");
-        group1.add_option("--startFrame").type_int().help("Starting frame to begin analysis");
-        group1.add_option("--numFrames").type_int().help(
-                "Number of frames, defaults to number of frames in input file");
+        
+        auto group1 = PacBio::Process::OptionGroup(parser, "Data Selection/Tiling Options",
+                                                   "Controls data selection/tiling options for simulation and testing");
+        group1.add_option("--numZmwLanes").type_int().set_default(0).help("Specifies number of zmw lanes to analyze");
+        group1.add_option("--frames").type_int().set_default(0).help("Specifies number of frames to run");
         parser.add_option_group(group1);
-
-        auto group2 = PacBio::Process::OptionGroup(parser, "Data Tiling Options",
-                                                   "Controls data tiling options for simulation and testing");
-        group2.add_option("--tileBatches").type_int().set_default(0).help("Specifies number of batches to tile out");
-        group2.add_option("--tileChunks").type_int().set_default(0).help("Specifies number of chunks to tile out");
-        parser.add_option_group(group2);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
         PacBio::Process::ThreadedProcessBase::HandleGlobalOptions(options);

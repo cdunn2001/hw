@@ -22,72 +22,50 @@ public:
         , traceParams_(traceParams)
         , traceFile_(traceParams_.traceFileName)
         , numTraceZmwLanes_(traceParams_.numTraceLanes == 0 ? traceFile_.NUM_HOLES / (dataParams_.zmwLaneWidth) : traceParams_.numTraceLanes)
-        , numTraceBlocks_((traceFile_.NFRAMES + dataParams_.blockLength - 1) / dataParams_.blockLength)
-        , pixelCache_(boost::extents[numTraceBlocks_][numTraceZmwLanes_][dataParams_.blockLength][dataParams_.gpuLaneWidth])
+        , numTraceChunks_((traceFile_.NFRAMES + dataParams_.blockLength - 1) / dataParams_.blockLength)
+        , pixelCache_(boost::extents[numTraceChunks_][numTraceZmwLanes_][dataParams_.blockLength][dataParams_.gpuLaneWidth])
     {
         PBLOG_INFO << "Total number of trace file lanes = " << numTraceZmwLanes_;
-        PBLOG_INFO << "Total number of trace file blocks = " << numTraceBlocks_;
+        PBLOG_INFO << "Total number of trace file blocks = " << numTraceChunks_;
 
         ReadEntireTraceFile();
     }
 
     TraceFileGeneratorImpl(const std::string& fileName,
                            uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                           uint32_t tileBatches, uint32_t tileChunks, bool cache)
+                           uint32_t numZmwLanes, uint32_t frames, bool cache)
         : traceFile_(fileName)
-        , numTraceZmwLanes_(traceFile_.NUM_HOLES / zmwsPerLane)
-        , numTraceBlocks_((traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
+        , numTraceZmwLanes_(traceFile_.NUM_HOLES / zmwsPerLane) // This discards the last runt zmwLane.
+        , numTraceChunks_((traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
+        , pixelCache_(boost::extents[numTraceChunks_][numTraceZmwLanes_][framesPerChunk][zmwsPerLane/2])
         , chunkIndex_(0)
+        , numRequestedTraceChunks_((frames != 0)
+                                        ? (frames + framesPerChunk - 1) / framesPerChunk
+                                        : (traceFile_.NFRAMES + framesPerChunk - 1) / framesPerChunk)
+        , numRequestedBatches_((numZmwLanes != 0)
+                                        ? (numZmwLanes + lanesPerPool - 1) / lanesPerPool
+                                        : (numTraceZmwLanes_ + lanesPerPool - 1) / lanesPerPool)
         , cached_(cache)
     {
         dataParams_ = DataManagerParams()
                 .ZmwLaneWidth(zmwsPerLane)
-                .NumZmwLanes(traceFile_.NUM_HOLES / zmwsPerLane)
+                .NumZmwLanes(numZmwLanes == 0 ? numTraceZmwLanes_ : numZmwLanes)
                 .KernelLanes(lanesPerPool)
                 .BlockLength(framesPerChunk);
 
         traceParams_ = TraceFileParams()
                 .TraceFileName(fileName);
 
-        if (dataParams_.numZmwLanes % dataParams_.kernelLanes != 0)
-            throw PBException("Number of zmws = " + std::to_string(traceFile_.NUM_HOLES) +
-                              " in trace file must be multiple of zmwsPerLane x lanesPerPool = "
-                              + std::to_string(zmwsPerLane * lanesPerPool));
-
-        if (traceFile_.NFRAMES % dataParams_.blockLength != 0)
-            throw PBException("Number of frames = " + std::to_string(traceFile_.NFRAMES) +
-                              " in trace file must be multiple of framesPerChunk = " + std::to_string(framesPerChunk));
-        if (tileChunks != 0)
-        {
-            if (tileChunks < numTraceBlocks_)
-                throw PBException("Requested chunks to tile = " + std::to_string(tileChunks) +
-                                  " must be greater than number of chunks in trace file = " +
-                                  std::to_string(numTraceBlocks_));
-            numRequestedTraceBlocks_ = tileChunks;
-        }
-        else
-            numRequestedTraceBlocks_ = numTraceBlocks_;
-
-        if (tileBatches != 0)
-        {
-            if (tileBatches < (dataParams_.numZmwLanes / dataParams_.kernelLanes))
-                throw PBException("Requested batches to tile = " + std::to_string(tileBatches) +
-                                  " must be greater than number of batches in trace file = " +
-                                  std::to_string(dataParams_.numZmwLanes / dataParams_.kernelLanes));
-            numRequestedBatches_ = tileBatches;
-        }
-        else
-            numRequestedBatches_ = dataParams_.numZmwLanes / dataParams_.kernelLanes;
-
         if (cached_)
         {
-            CacheTraceFile();
+            PBLOG_INFO << "Caching trace file...";
+            ReadEntireTraceFile();
         }
     }
 
     size_t PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk)
     {
-        if (chunkIndex_ >= numRequestedTraceBlocks_) return 0;
+        if (chunkIndex_ >= numRequestedTraceChunks_) return 0;
 
         BatchDimensions batchDims;
         batchDims.laneWidth = dataParams_.zmwLaneWidth;
@@ -95,8 +73,8 @@ public:
         batchDims.lanesPerBatch = dataParams_.kernelLanes;
 
         std::vector<size_t> nFramesRead;
-        nFramesRead.resize(GetNumBatches());
-        for (size_t batchNum = 0; batchNum < GetNumBatches(); batchNum++)
+        nFramesRead.resize(NumBatches());
+        for (size_t batchNum = 0; batchNum < NumBatches(); batchNum++)
         {
             BatchMetadata batchMetadata(batchNum,
                                         chunkIndex_ * dataParams_.blockLength,
@@ -112,22 +90,40 @@ public:
             return dataParams_.blockLength;
         }
         else
+        {
+            PBLOG_ERROR << "Not all trace batches contain same number of frames = " << dataParams_.blockLength;
             return 0;
+        }
     }
 
-    unsigned int GetNumBatches() const
+    unsigned int NumBatches() const
     {
         return numRequestedBatches_;
     }
 
-    size_t GetNumChunks() const
+    size_t NumChunks() const
     {
-        return numRequestedTraceBlocks_;
+        return numRequestedTraceChunks_;
+    }
+    
+    size_t NumTraceChunks() const
+    {
+        return numTraceChunks_;
+    }
+    
+    size_t NumTraceZmwLanes() const
+    {
+        return numTraceZmwLanes_;
+    }
+    
+    size_t NumZmwLanes() const
+    {
+        return dataParams_.numZmwLanes;
     }
 
     bool Finished() const
     {
-        return chunkIndex_ >= numRequestedTraceBlocks_;
+        return chunkIndex_ >= numRequestedTraceChunks_;
     }
 
     void PopulateBlock(size_t laneIdx,
@@ -135,7 +131,7 @@ public:
                        std::vector<short2>& v) const
     {
         size_t wrappedLane = laneIdx % numTraceZmwLanes_;
-        size_t wrappedBlock = blockIdx % numTraceBlocks_;
+        size_t wrappedBlock = blockIdx % numTraceChunks_;
 
         std::copy(pixelCache_[wrappedBlock][wrappedLane].origin(),
                   pixelCache_[wrappedBlock][wrappedLane].origin() + (dataParams_.blockLength * dataParams_.gpuLaneWidth),
@@ -145,48 +141,32 @@ public:
     ~TraceFileGeneratorImpl() = default;
 
 private:
-    void CacheTraceFile()
-    {
-        PBLOG_INFO << "Caching trace file...";
-        pixelCache_.resize(boost::extents[numTraceBlocks_][numTraceZmwLanes_][dataParams_.blockLength][dataParams_.gpuLaneWidth]);
-        ReadEntireTraceFile();
-    }
-
     size_t PopulateTraceBatch(uint32_t batchNum, TraceBatch<int16_t>& traceBatch) const
     {
-        uint32_t wrappedBatchNum = batchNum % (dataParams_.numZmwLanes / dataParams_.kernelLanes);
-        uint32_t wrappedChunkIndex = chunkIndex_ % numTraceBlocks_;
+        uint32_t traceStartZmwLane = (batchNum * dataParams_.kernelLanes) % numTraceZmwLanes_;
+        uint32_t wrappedChunkIndex = chunkIndex_ % numTraceChunks_;
 
-        if (cached_)
+        for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
         {
-            size_t startLane = wrappedBatchNum * dataParams_.kernelLanes;
-            for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
+            auto block = traceBatch.GetBlockView(lane);
+            uint32_t wrappedLane = (traceStartZmwLane + lane) % numTraceZmwLanes_;
+
+            if (cached_)
             {
-                auto block = traceBatch.GetBlockView(lane);
-                std::memcpy(block.Data(), pixelCache_[wrappedChunkIndex][startLane + lane].origin(),
+                std::memcpy(block.Data(), pixelCache_[wrappedChunkIndex][wrappedLane].origin(),
                             dataParams_.blockLength * dataParams_.zmwLaneWidth * sizeof(int16_t));
             }
-            return dataParams_.blockLength;
-        }
-        else
-        {
-            std::vector<int16_t> data(dataParams_.blockLength * dataParams_.zmwLaneWidth * dataParams_.kernelLanes);
-
-            size_t nFramesRead = ReadZmwLaneBlock(
-                    wrappedBatchNum * (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
-                    (dataParams_.zmwLaneWidth * dataParams_.kernelLanes),
-                    wrappedChunkIndex * dataParams_.blockLength,
-                    dataParams_.blockLength,
-                    data.data());
-
-            for (size_t lane = 0; lane < traceBatch.LanesPerBatch(); lane++)
+            else
             {
-                auto block = traceBatch.GetBlockView(lane);
-                std::memcpy(block.Data(), data.data() + (lane * block.LaneWidth()), block.LaneWidth());
+                ReadZmwLaneBlock(wrappedLane * dataParams_.zmwLaneWidth,
+                                 dataParams_.zmwLaneWidth,
+                                 wrappedChunkIndex * dataParams_.blockLength,
+                                 dataParams_.blockLength,
+                                 block.Data());
             }
-
-            return nFramesRead;
         }
+
+        return dataParams_.blockLength;
     }
 
 
@@ -198,7 +178,7 @@ private:
         size_t lane;
         for (lane = 0; lane < numTraceZmwLanes_; lane++)
         {
-            for (size_t block = 0; block < numTraceBlocks_; block++)
+            for (size_t block = 0; block < numTraceChunks_; block++)
             {
                 ReadZmwLaneBlock(lane * dataParams_.zmwLaneWidth,
                                  dataParams_.zmwLaneWidth,
@@ -224,7 +204,7 @@ private:
             std::memset(data + (nFramesRead * dataParams_.zmwLaneWidth),
                         0, (dataParams_.blockLength - nFramesRead) * dataParams_.zmwLaneWidth);
         }
-        return nFramesRead;
+        return dataParams_.blockLength;
     }
 
 private:
@@ -232,13 +212,15 @@ private:
     TraceFileParams traceParams_;
     SequelTraceFileHDF5 traceFile_;
     size_t numTraceZmwLanes_;
-    size_t numTraceBlocks_;
+    size_t numTraceChunks_;
     boost::multi_array<short2, 4> pixelCache_;
     size_t chunkIndex_;
-    size_t numRequestedTraceBlocks_;
+    size_t numRequestedTraceChunks_;
     size_t numRequestedBatches_;
     bool cached_;
 };
+
+///////////////////////////////////////////////////////////////////////////////
 
 TraceFileGenerator::~TraceFileGenerator() = default;
 
@@ -253,12 +235,14 @@ TraceFileGenerator::TraceFileGenerator(const DataManagerParams& params, const Tr
 
 TraceFileGenerator::TraceFileGenerator(const std::string& fileName,
                                        uint32_t zmwsPerLane, uint32_t lanesPerPool, uint32_t framesPerChunk,
-                                       uint32_t tileBatches, uint32_t tileChunks, bool cache)
+                                       uint32_t numZmwLanes, uint32_t frames, bool cache)
     : GeneratorBase(framesPerChunk,
                     zmwsPerLane/2,
-                    0, 0)
+                    (frames + framesPerChunk + 1)/framesPerChunk,
+                    numZmwLanes)
+    , traceParams_(TraceFileParams().TraceFileName(fileName))
     , pImpl_(std::make_unique<TraceFileGeneratorImpl>(fileName, zmwsPerLane, lanesPerPool, framesPerChunk,
-                                                      tileBatches, tileChunks, cache))
+                                                      numZmwLanes, frames, cache))
     {}
 
 size_t TraceFileGenerator::PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk) const
@@ -266,14 +250,29 @@ size_t TraceFileGenerator::PopulateChunk(std::vector<TraceBatch<int16_t>>& chunk
     return pImpl_->PopulateChunk(chunk);
 }
 
-unsigned int TraceFileGenerator::GetNumBatches() const
+unsigned int TraceFileGenerator::NumBatches() const
 {
-    return pImpl_->GetNumBatches();
+    return pImpl_->NumBatches();
 }
 
-size_t TraceFileGenerator::GetNumChunks() const
+size_t TraceFileGenerator::NumChunks() const
 {
-    return pImpl_->GetNumChunks();
+    return pImpl_->NumChunks();
+}
+
+size_t TraceFileGenerator::NumTraceChunks() const
+{
+    return pImpl_->NumTraceChunks();
+}
+
+size_t TraceFileGenerator::NumTraceZmwLanes() const
+{
+    return pImpl_->NumTraceZmwLanes();
+}
+
+size_t TraceFileGenerator::NumZmwLanes() const
+{
+    return pImpl_->NumZmwLanes();
 }
 
 bool TraceFileGenerator::Finished() const
