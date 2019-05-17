@@ -157,11 +157,16 @@ private:
 
     void RunReader()
     {
+        size_t numChunksRead = 0;
+        PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
             if (!batchGenerator_->Finished())
             {
-                inputDataQueue_.Push(std::move(batchGenerator_->PopulateChunk()));
+
+                auto chunk = batchGenerator_->PopulateChunk();
+                numChunksRead++;
+                inputDataQueue_.Push(std::move(chunk));
             }
             else
             {
@@ -169,6 +174,10 @@ private:
                 break;
             }
         }
+        timer.SetCount(numChunksRead);
+        double chunkReadRate = timer.GetRate();
+        PBLOG_INFO << "Read " << numChunksRead
+                   << " at " << chunkReadRate << " chunks/sec";
     }
 
 private:
