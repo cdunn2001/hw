@@ -81,7 +81,7 @@ vector<Data::BasecallBatch>
 TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
 {
     const size_t n = input.size();
-    assert(input.size() < bAnalyzer_.size());
+    assert(input.size() <= bAnalyzer_.size());
 
     vector<Data::BasecallBatch> output (n);
 
