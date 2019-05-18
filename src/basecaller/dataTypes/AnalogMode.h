@@ -110,7 +110,6 @@ public: // Structors
     /// In general, I am not a fan of these long anonymous argument lists for constructors because
     /// they are fragile if you accidentally slip one argument. While it is verbose, I recommend constructing
     /// the object with some default values, then overwriting each member by name.
-    template<size_t NCam>
     AnalogMode(char label,
                float amplitude, float xsNoiseCV = 0.0f,
                float ipdSeconds = 0.0f, float pwSeconds = 0.0f)

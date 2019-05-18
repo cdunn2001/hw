@@ -44,7 +44,7 @@ public:     // Types
     using OutputType = PacBio::Mongo::Data::BasecallBatch;
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t batchId,
+    BatchAnalyzer(uint32_t poolId,
                   const Data::BasecallerAlgorithmConfig& bcConfig,
                   const Data::MovieConfig& movConfig);
 
@@ -63,8 +63,8 @@ public:
     operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
 private:
-    uint32_t batchId_;
-    uint32_t nextFrameId_ = 0;
+    uint32_t poolId_;   // ZMW pool being processed by this analyzer.
+    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

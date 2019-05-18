@@ -29,6 +29,8 @@
 
 #include "BatchAnalyzer.h"
 
+#include <pacbio/PBAssert.h>
+
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
@@ -39,23 +41,17 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-BatchAnalyzer::BatchAnalyzer(uint32_t batchId,
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
                              const BasecallerAlgorithmConfig& bcConfig,
                              const MovieConfig& movConfig)
-    : batchId_ (batchId)
+    : poolId_ (poolId)
 { }
+
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
-    if (tbatch.Metadata().PoolId() != batchId_)
-    {
-        // TODO: Log error. Throw exception.
-    }
-
-    if (tbatch.Metadata().FirstFrame() != nextFrameId_)
-    {
-        // TODO: Log error. Throw exception.
-    }
+    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
+    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
     // TODO: Define this so that it scales properly with chunk size, frame rate,
     // and max polymerization rate.
