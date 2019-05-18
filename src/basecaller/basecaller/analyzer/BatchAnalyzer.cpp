@@ -31,7 +31,11 @@
 
 #include <pacbio/PBAssert.h>
 
+#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+
 #include <dataTypes/BasecallBatch.h>
+#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
 
@@ -57,7 +61,22 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     // and max polymerization rate.
     const uint16_t maxCallsPerZmwChunk = 96;
 
-    // TODO: Implement the analysis logic!
+    // TODO: Develop error handling logic.
+
+    // Baseline estimation and subtraction.
+    // Includes computing baseline moments.
+    CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
+
+    // Accumulate histogram of baseline-subtracted trace data.
+    traceHistAccum_->AddBatch(ctb);
+
+    // TODO: When sufficient trace data have been histogrammed, estimate detection model.
+
+    // TODO: When detection model is available, classify frames.
+
+    // TODO: When frames are classified, generate pulses with metrics.
+
+    // TODO: When pulses are generated, call bases.
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

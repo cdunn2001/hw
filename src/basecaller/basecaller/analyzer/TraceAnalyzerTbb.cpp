@@ -37,6 +37,9 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 
+#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+
 using std::vector;
 
 namespace PacBio {

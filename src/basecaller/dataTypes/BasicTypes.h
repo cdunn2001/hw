@@ -1,0 +1,12 @@
+#ifndef mongo_dataTypes_BasicTypes_H_
+#define mongo_dataTypes_BasicTypes_H_
+
+namespace PacBio {
+namespace Mongo {
+namespace Data {
+
+using RawTraceElement =  int16_t;
+
+}}}     // namespace PacBio::Mongo::Data
+
+#endif // mongo_dataTypes_BasicTypes_H_

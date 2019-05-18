@@ -6,6 +6,7 @@ namespace Mongo {
 namespace Data {
 
 class BasecallerAlgorithmConfig;
+class BasecallerBaselinerConfig;
 class BasecallerInitConfig;
 class PrimaryConfig;
 class MovieConfig;

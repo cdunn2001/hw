@@ -6,7 +6,10 @@ set(CPP_LIST
     BasecallBatch.h
     BasecallBatch.cpp
     BasecallerConfig.h
+    BasicTypes.h
     BatchMetadata.h
+    CameraTraceBatch.h
+    CameraTraceBatch.cpp
     ConfigForward.h
     MovieConfig.h
     MovieConfig.cpp
@@ -27,6 +30,8 @@ add_library(libMongoDataTypes STATIC
 
 target_link_libraries(libMongoDataTypes
     PUBLIC
+libBazio
+        libMongoCommon
         libMongoCommonCuda
         libPacbioCplusplusApi
 )

@@ -27,6 +27,9 @@
 //  Description:
 //  Defines class BatchAnalyzer.
 
+#include <memory>
+
+#include <basecaller/traceAnalysis/TraceAnalysisForward.h>
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
@@ -65,6 +68,8 @@ public:
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+    std::unique_ptr<Baseliner> baseliner_;
+    std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
