@@ -51,32 +51,35 @@ enum class SyncDirection
 template <typename T>
 class UnifiedCudaArray : private detail::DataManager {
 public:
-    UnifiedCudaArray(size_t count, SyncDirection dir, std::shared_ptr<DualAllocationPools> pools = nullptr)
+    UnifiedCudaArray(size_t count,
+                     SyncDirection dir,
+                     bool pinnedHost = true,
+                     std::shared_ptr<DualAllocationPools> pools = nullptr)
         : activeOnHost_(true)
-        , hostData_(0)
-        , gpuData_(0)
+        , hostData_{}
+        , gpuData_{}
         , syncDir_(dir)
         , pools_(pools)
     {
-        // default construct all elements on host.  Gpu memory is initialized via memcpy only
-        auto* ptr = hostData_.get<T>(DataKey());
-        for (size_t i = 0; i < count; ++i)
-        {
-            new(ptr+i) T();
-        }
-
-        // get host allocation from pool.  gpu allocation is deffered until necessary
+        // get host allocation from pool if we can. Gpu allocations are always deffered
+        // until necessary
         if (pools)
         {
             hostData_ = pools->hostPool.PopAlloc(count*sizeof(T));
         } else {
-            hostData_ = SmartHostAllocation(count*sizeof(T));
-            gpuData_ = SmartDeviceAllocation(count*sizeof(T));
+            hostData_ = SmartHostAllocation(count*sizeof(T), pinnedHost);
         }
 
         if (pools && pools->gpuPool.AllocSize() != count * sizeof(T))
         {
             throw PBException("Inconsistent gpu allocation pool and allocation size");
+        }
+
+        // default construct all elements on host.  Gpu memory is initialized via memcpy only
+        auto* ptr = hostData_.get<T>(DataKey());
+        for (size_t i = 0; i < count; ++i)
+        {
+            new(ptr+i) T();
         }
     }
 
@@ -197,14 +200,14 @@ private:
                 //      This should not be necessary on normal (non-integrated) nvidia
                 //      systems, but I still need to do a quick experiment to prove that
                 CudaSynchronizeDefaultStream();
-                CudaCopyHost(hostData_.get<T>(DataKey()), gpuData_.get<T>(DataKey()), hostData_.size());
+                CudaCopyHost(hostData_.get<T>(DataKey()), gpuData_.get<T>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
             }
         } else {
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
-                CudaCopyDevice(gpuData_.get<T>(DataKey()), hostData_.get<T>(DataKey()), hostData_.size());
+                CudaCopyDevice(gpuData_.get<T>(DataKey()), hostData_.get<T>(DataKey()), Size());
         }
     }
 

@@ -126,9 +126,11 @@ class BatchData : private Cuda::Memory::detail::DataManager
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool = nullptr)
+              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
+              bool pinnedHost = true)
         : dims_(dims)
-        , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch, syncDirection, pool)
+        , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
+                syncDirection, pinnedHost, pool)
     {}
 
     BatchData(const BatchData&) = delete;
@@ -163,6 +165,11 @@ private:
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
+enum class BatchMemoryModel
+{
+
+};
+
 // A TraceBatch is just a wrapper around a BatchData, with some associated metadata
 // that identifies the batch within the larger acquisition.
 template <typename T>
@@ -172,8 +179,9 @@ public:
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,
-               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool = nullptr)
-        : BatchData<T>(dims, syncDirection, pool)
+               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
+               bool pinnedHost = true)
+        : BatchData<T>(dims, syncDirection, pool, pinnedHost)
         , meta_(meta)
     {}
 

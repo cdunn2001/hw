@@ -124,7 +124,7 @@ TEST(BaselineFilterTest, SharedMemory)
     dims.laneWidth = dataParams.gpuLaneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite);
+    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
 
     while (manager.MoreData())
     {
@@ -197,9 +197,9 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     dims.laneWidth = dataParams.gpuLaneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite);
-    BatchData<short2> work1(dims, SyncDirection::HostReadDeviceWrite);
-    BatchData<short2> work2(dims, SyncDirection::HostReadDeviceWrite);
+    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<short2> work1(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<short2> work2(dims, SyncDirection::HostReadDeviceWrite, nullptr);
 
     while (manager.MoreData())
     {

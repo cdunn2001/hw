@@ -105,8 +105,8 @@ void RunCompressedBaselineFilter(
     std::vector<BatchData<short2>> work2;
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite);
-        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite);
+        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
     }
 
     auto tmp = [dataParams, &upper1, &upper2, &lower1, &lower2, &work1, &work2]
@@ -150,8 +150,8 @@ void RunMultipleBaselineFilter(
     filters.reserve(dataParams.numZmwLanes / dataParams.kernelLanes);
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite);
-        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite);
+        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
         filters.emplace_back(dataParams.kernelLanes, 0);
     }
 
