@@ -51,12 +51,12 @@ enum class SyncDirection
 template <typename T>
 class UnifiedCudaArray : private detail::DataManager {
 public:
-    UnifiedCudaArray(size_t count, SyncDirection dir, std::shared_ptr<GpuAllocationPool> pool = nullptr)
+    UnifiedCudaArray(size_t count, SyncDirection dir, std::shared_ptr<DualAllocationPools> pools = nullptr)
         : activeOnHost_(true)
-        , hostData_(count*sizeof(T), true)
-        , gpuData_(pool ? 0 : count*sizeof(T)) // Only allocate now if we're not pooling gpu allocations
+        , hostData_(0)
+        , gpuData_(0)
         , syncDir_(dir)
-        , pool_(pool)
+        , pools_(pools)
     {
         // default construct all elements on host.  Gpu memory is initialized via memcpy only
         auto* ptr = hostData_.get<T>(DataKey());
@@ -65,7 +65,16 @@ public:
             new(ptr+i) T();
         }
 
-        if (pool && pool->AllocSize() != count)
+        // get host allocation from pool.  gpu allocation is deffered until necessary
+        if (pools)
+        {
+            hostData_ = pools->hostPool.PopAlloc(count*sizeof(T));
+        } else {
+            hostData_ = SmartHostAllocation(count*sizeof(T));
+            gpuData_ = SmartDeviceAllocation(count*sizeof(T));
+        }
+
+        if (pools && pools->gpuPool.AllocSize() != count * sizeof(T))
         {
             throw PBException("Inconsistent gpu allocation pool and allocation size");
         }
@@ -91,6 +100,9 @@ public:
         {
             ptr[i].~T();
         }
+
+        // If there is a pool for host data, recycle our allocation
+        if (auto pools = pools_.lock()) pools->hostPool.PushAlloc(std::move(hostData_));
     }
 
     size_t Size() const { return hostData_.size() / sizeof(T); }
@@ -115,7 +127,7 @@ public:
         CudaSynchronizeDefaultStream();
         activeOnHost_ = true;
 
-        if (auto pool = pool_.lock()) pool->PushAlloc(std::move(gpuData_));
+        if (auto pools = pools_.lock()) pools->gpuPool.PushAlloc(std::move(gpuData_));
     }
 
     // Calling these functions may cause
@@ -159,9 +171,9 @@ private:
     {
         if (gpuData_) return;
 
-        if (auto pool = pool_.lock())
+        if (auto pools = pools_.lock())
         {
-            gpuData_ = pool->PopAlloc(hostData_.size());
+            gpuData_ = pools->gpuPool.PopAlloc(hostData_.size());
         }
         if (!gpuData_)
             gpuData_ = SmartDeviceAllocation(hostData_.size());
@@ -200,7 +212,7 @@ private:
     SmartHostAllocation hostData_;
     SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
-    std::weak_ptr<GpuAllocationPool> pool_;
+    std::weak_ptr<DualAllocationPools> pools_;
 };
 
 }}} //::Pacbio::Cuda::Memory

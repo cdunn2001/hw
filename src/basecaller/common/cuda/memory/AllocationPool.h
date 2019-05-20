@@ -85,9 +85,15 @@ private:
 using GpuAllocationPool = AllocationPool<SmartDeviceAllocation>;
 using HostAllocationPool = AllocationPool<SmartHostAllocation>;
 
-template <typename T>
 struct DualAllocationPools
 {
+    DualAllocationPools(size_t allocationSize,
+                        size_t numInitialHostAllocs = 0,
+                        size_t numInitialDeviceAllocs = 0)
+        : gpuPool(allocationSize, numInitialDeviceAllocs)
+        , hostPool(allocationSize, numInitialHostAllocs)
+    {}
+
     GpuAllocationPool gpuPool;
     HostAllocationPool hostPool;
 };

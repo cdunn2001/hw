@@ -68,7 +68,7 @@ private:
         }
     }
 public:
-    SmartHostAllocation(size_t size, bool pinned = true)
+    SmartHostAllocation(size_t size = 0, bool pinned = true)
         : data_(AllocateHelper(size, pinned))
         , size_(size)
 

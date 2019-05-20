@@ -126,7 +126,7 @@ class BatchData : private Cuda::Memory::detail::DataManager
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              std::shared_ptr<Cuda::Memory::GpuAllocationPool> pool = nullptr)
+              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool = nullptr)
         : dims_(dims)
         , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch, syncDirection, pool)
     {}
@@ -172,7 +172,7 @@ public:
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,
-               std::shared_ptr<Cuda::Memory::GpuAllocationPool> pool = nullptr)
+               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool = nullptr)
         : BatchData<T>(dims, syncDirection, pool)
         , meta_(meta)
     {}
