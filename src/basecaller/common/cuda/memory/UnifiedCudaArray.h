@@ -31,7 +31,7 @@
 
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
-#include "GpuAllocationPool.h"
+#include "AllocationPool.h"
 #include "SmartDeviceAllocation.h"
 #include "SmartHostAllocation.h"
 
