@@ -26,7 +26,7 @@ public:
         , numTraceChunks_(0)
         , chunkIndex_(0)
     {
-        tracePool_ = std::make_shared<Memory::GpuAllocationPool<int16_t>>(zmwLaneWidth * blockLen * kernelLanes);
+        tracePool_ = std::make_shared<Memory::GpuAllocationPool>(zmwLaneWidth * blockLen * kernelLanes * sizeof(int16_t));
     }
 
     void SetTraceFileSource(const std::string& traceFileName, bool cache)
@@ -105,7 +105,7 @@ private:
     size_t numChunks_;
     size_t numTraceChunks_;
     size_t chunkIndex_;
-    std::shared_ptr<Memory::GpuAllocationPool<int16_t>> tracePool_;
+    std::shared_ptr<Memory::GpuAllocationPool> tracePool_;
     std::unique_ptr<TraceFileReader> traceFileReader_;
 };
 

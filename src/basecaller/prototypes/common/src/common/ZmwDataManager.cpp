@@ -39,8 +39,8 @@ ZmwDataManager<TIn, TOut>::ZmwDataManager(
     batchDims.framesPerBatch = params_.blockLength;
     batchDims.lanesPerBatch = params_.kernelLanes;
 
-    poolIn_ = std::make_shared<Memory::GpuAllocationPool<TIn>>(count);
-    poolOut_ = std::make_shared<Memory::GpuAllocationPool<TOut>>(count);
+    poolIn_ = std::make_shared<Memory::GpuAllocationPool>(count*sizeof(TIn));
+    poolOut_ = std::make_shared<Memory::GpuAllocationPool>(count*sizeof(TOut));
     for (size_t i = 0; i < numBatches_; ++i)
     {
         using Mongo::Data::BatchMetadata;

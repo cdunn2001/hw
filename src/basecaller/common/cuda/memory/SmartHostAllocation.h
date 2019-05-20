@@ -39,7 +39,6 @@ namespace Memory {
 
 // RAII managed host allocation that is compatible with
 // efficient gpu data transfers.
-template <typename T>
 class SmartHostAllocation
 {
 private:
@@ -50,7 +49,7 @@ private:
         Deleter(bool pinned = true)
             : pinned_(pinned)
         {}
-        void operator()(T* ptr)
+        void operator()(void* ptr)
         {
             if (pinned_) CudaFreeHost(ptr);
             else free(ptr);
@@ -58,49 +57,52 @@ private:
     private:
         bool pinned_;
     };
-    using Storage = std::unique_ptr<T[], Deleter>;
-    static Storage AllocateHelper(size_t count, bool pinned)
+    using Storage = std::unique_ptr<void, Deleter>;
+    static Storage AllocateHelper(size_t size, bool pinned)
     {
-        if (count == 0) return Storage(nullptr);
+        if (size == 0) return Storage(nullptr, Deleter(pinned));
         else
         {
-            return Storage(pinned ? CudaMallocHost<T>(count) : static_cast<T*>(malloc(count*sizeof(T))),
+            return Storage(pinned ? CudaRawMallocHost(size) : malloc(size),
                            Deleter(pinned));
         }
     }
 public:
-    SmartHostAllocation(size_t count, bool pinned = true)
-        : data_(AllocateHelper(count, pinned))
-        , count_(count)
+    SmartHostAllocation(size_t size, bool pinned = true)
+        : data_(AllocateHelper(size, pinned))
+        , size_(size)
+
     {}
 
     SmartHostAllocation(const SmartHostAllocation&) = delete;
     SmartHostAllocation(SmartHostAllocation&& other)
         : data_(std::move(other.data_))
-        , count_(other.count_)
+        , size_(other.size_)
     {
-        other.count_ = 0;
+        other.size_ = 0;
     }
 
     SmartHostAllocation& operator=(const SmartHostAllocation&) = delete;
     SmartHostAllocation& operator=(SmartHostAllocation&& other)
     {
         data_ = std::move(other.data_);
-        count_ = other.count_;
-        other.count_ = 0;
+        size_ = other.size_;
+        other.size_ = 0;
         return *this;
     }
 
     ~SmartHostAllocation(){}
 
-    T* get(detail::DataManagerKey) { return data_.get(); }
-    const T* get(detail::DataManagerKey) const { return data_.get(); }
-    size_t size() const { return count_; }
+    template <typename T>
+    T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
+    template <typename T>
+    const T* get(detail::DataManagerKey) const { return static_cast<const T*>(data_.get()); }
+    size_t size() const { return size_; }
     operator bool() const { return static_cast<bool>(data_); }
 
 private:
-    std::unique_ptr<T[], Deleter> data_;
-    size_t count_;
+    Storage data_;
+    size_t size_;
 };
 
 

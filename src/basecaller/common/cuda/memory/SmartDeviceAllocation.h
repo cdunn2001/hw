@@ -45,46 +45,47 @@ namespace Memory {
 // allows a unified representation of gpu memory, while letting
 // individual implementations choose their own initialization
 // scheme.
-template <typename T>
 class SmartDeviceAllocation
 {
 public:
-    SmartDeviceAllocation(size_t count = 0)
-        : data_(count ? CudaMalloc<T>(count) : nullptr)
-        , count_(count)
+    SmartDeviceAllocation(size_t size = 0)
+        : data_(size ? CudaRawMalloc(size) : nullptr)
+        , size_(size)
     {}
 
     SmartDeviceAllocation(const SmartDeviceAllocation&) = delete;
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
         : data_(std::move(other.data_))
-        , count_(other.count_)
+        , size_(other.size_)
     {
-        other.count_ = 0;
+        other.size_ = 0;
     }
 
     SmartDeviceAllocation& operator=(const SmartDeviceAllocation&) = delete;
     SmartDeviceAllocation& operator=(SmartDeviceAllocation&& other)
     {
         data_ = std::move(other.data_);
-        count_ = other.count_;
-        other.count_ = 0;
+        size_ = other.size_;
+        other.size_ = 0;
         return *this;
     }
 
     ~SmartDeviceAllocation() = default;
 
-    T* get(detail::DataManagerKey) { return data_.get(); }
-    const T* get(detail::DataManagerKey) const { return data_.get(); }
-    size_t size() const { return count_; }
+    template <typename T>
+    T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
+    template <typename T>
+    const T* get(detail::DataManagerKey) const { return static_cast<const T*>(data_.get()); }
+    size_t size() const { return size_; }
     operator bool() const { return static_cast<bool>(data_); }
 
 private:
     struct Deleter
     {
-        void operator()(T* ptr) { CudaFree(ptr); }
+        void operator()(void* ptr) { CudaFree(ptr); }
     };
-    std::unique_ptr<T[], Deleter> data_;
-    size_t count_;
+    std::unique_ptr<void, Deleter> data_;
+    size_t size_;
 };
 
 

@@ -139,8 +139,8 @@ private:
     std::atomic<size_t> computeBlock_;
     std::thread thread_;
 
-    std::shared_ptr<Memory::GpuAllocationPool<TIn>> poolIn_;
-    std::shared_ptr<Memory::GpuAllocationPool<TOut>> poolOut_;
+    std::shared_ptr<Memory::GpuAllocationPool> poolIn_;
+    std::shared_ptr<Memory::GpuAllocationPool> poolOut_;
 
     std::vector<Mongo::Data::TraceBatch<TIn>> bank0;
     std::vector<Mongo::Data::TraceBatch<TIn>> bank1;

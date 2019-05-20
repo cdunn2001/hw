@@ -26,6 +26,7 @@
 #ifndef PACBIO_CUDA_MEMORY_DEVICE_ONLY_ARRAY_CUH_
 #define PACBIO_CUDA_MEMORY_DEVICE_ONLY_ARRAY_CUH_
 
+#include <cassert>
 #include <utility>
 
 #include <common/cuda/PBCudaRuntime.h>
@@ -83,11 +84,12 @@ class DeviceOnlyArray : private detail::DataManager
 public:
     template <typename... Args>
     DeviceOnlyArray(size_t count, Args&&... args)
-        : data_(count)
+        : data_(count*sizeof(T))
+        , count_(count)
     {
         detail::InitFilters<<<cudaBlocks, cudaThreadsPerBlock>>>(
-                data_.get(DataKey()),
-                data_.size(),
+                data_.get<T>(DataKey()),
+                count_,
                 std::forward<Args>(args)...);
     }
 
@@ -99,23 +101,28 @@ public:
 
     DeviceView<T> GetDeviceView(size_t idx, size_t len)
     {
-        return DeviceHandle<T>(data_.get(DataKey()), idx, len, DataKey());
+        assert(idx + len <= count_);
+        return DeviceHandle<T>(data_.get<T>(DataKey()), idx, len, DataKey());
     }
     DeviceView<T> GetDeviceView()
     {
-        return GetDeviceView(0, data_.size());
+        return GetDeviceView(0, count_);
     }
 
     ~DeviceOnlyArray()
     {
-        detail::DestroyFilters<<<cudaBlocks, cudaThreadsPerBlock>>>(
-                data_.get(DataKey()),
-                data_.size());
+        if (data_)
+        {
+            detail::DestroyFilters<<<cudaBlocks, cudaThreadsPerBlock>>>(
+                    data_.get<T>(DataKey()),
+                    count_);
+        }
     }
 
 private:
 
-    SmartDeviceAllocation<T> data_;
+    SmartDeviceAllocation data_;
+    size_t count_;
 };
 
 }}}
