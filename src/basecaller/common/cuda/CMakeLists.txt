@@ -11,8 +11,8 @@ set(CPP_LIST
     memory/DataManagerKey.h
     memory/GpuAllocationPool.h
     memory/GpuAllocationPool.cpp
-    memory/PinnedHostArray.h
-    memory/PinnedHostArray.cpp
+    memory/SmartHostAllocation.h
+    memory/SmartHostAllocation.cpp
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
     memory/UnifiedCudaArray.h

@@ -23,46 +23,67 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_CUDA_MEMORY_PINNED_HOST_ARRAY_H
-#define PACBIO_CUDA_MEMORY_PINNED_HOST_ARRAY_H
+#ifndef PACBIO_CUDA_MEMORY_SMART_HOST_ALLOCATION_H
+#define PACBIO_CUDA_MEMORY_SMART_HOST_ALLOCATION_H
 
 #include <memory>
 
 #include <common/cuda/PBCudaRuntime.h>
 
+#include "DataManagerKey.h"
+
 namespace PacBio {
 namespace Cuda {
 namespace Memory {
 
-// RAII managed host array of data that is compatible with
-// efficient gpu data transfers.  This class will explicitly
-// ensure all constructors and destructors are correctly
-// called.
+
+// RAII managed host allocation that is compatible with
+// efficient gpu data transfers.
 template <typename T>
-class PinnedHostArray
+class SmartHostAllocation
 {
-public:
-    template <typename... Args>
-    PinnedHostArray(size_t count = 0, Args&&... args)
-        : data_(count ? CudaMallocHost<T>(count) : nullptr)
-        , count_(count)
+private:
+    // Stateful deleter, to keep track of if we have to talk to
+    // cuda runtime or not for deallocating memory
+    struct Deleter
     {
-        for (size_t i = 0; i < count_; ++i)
+        Deleter(bool pinned = true)
+            : pinned_(pinned)
+        {}
+        void operator()(T* ptr)
         {
-            new (data_.get()+i) T(args...);
+            if (pinned_) CudaFreeHost(ptr);
+            else free(ptr);
+        }
+    private:
+        bool pinned_;
+    };
+    using Storage = std::unique_ptr<T[], Deleter>;
+    static Storage AllocateHelper(size_t count, bool pinned)
+    {
+        if (count == 0) return Storage(nullptr);
+        else
+        {
+            return Storage(pinned ? CudaMallocHost<T>(count) : static_cast<T*>(malloc(count*sizeof(T))),
+                           Deleter(pinned));
         }
     }
+public:
+    SmartHostAllocation(size_t count, bool pinned = true)
+        : data_(AllocateHelper(count, pinned))
+        , count_(count)
+    {}
 
-    PinnedHostArray(const PinnedHostArray&) = delete;
-    PinnedHostArray(PinnedHostArray&& other)
+    SmartHostAllocation(const SmartHostAllocation&) = delete;
+    SmartHostAllocation(SmartHostAllocation&& other)
         : data_(std::move(other.data_))
         , count_(other.count_)
     {
         other.count_ = 0;
     }
 
-    PinnedHostArray& operator=(const PinnedHostArray&) = delete;
-    PinnedHostArray& operator=(PinnedHostArray&& other)
+    SmartHostAllocation& operator=(const SmartHostAllocation&) = delete;
+    SmartHostAllocation& operator=(SmartHostAllocation&& other)
     {
         data_ = std::move(other.data_);
         count_ = other.count_;
@@ -70,23 +91,14 @@ public:
         return *this;
     }
 
-    ~PinnedHostArray()
-    {
-        for (size_t i = 0; i < count_; ++i)
-        {
-            data_[i].~T();
-        }
-    }
+    ~SmartHostAllocation(){}
 
-    T* get() { return data_.get(); }
+    T* get(detail::DataManagerKey) { return data_.get(); }
+    const T* get(detail::DataManagerKey) const { return data_.get(); }
     size_t size() const { return count_; }
     operator bool() const { return static_cast<bool>(data_); }
 
 private:
-    struct Deleter
-    {
-        void operator()(T* ptr) { CudaFreeHost(ptr); }
-    };
     std::unique_ptr<T[], Deleter> data_;
     size_t count_;
 };
@@ -94,4 +106,4 @@ private:
 
 }}}
 
-#endif // PACBIO_CUDA_MEMORY_PINNED_HOST_ARRAY_H
+#endif // PACBIO_CUDA_MEMORY_SMART_HOST_ALLOCATION_H
