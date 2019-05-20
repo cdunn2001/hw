@@ -146,8 +146,7 @@ public:
 
     const BatchDimensions& Dimensions() const { return dims_; }
 
-    GpuBatchDataHandle<T> GetGpuHandle() { return GpuBatchDataHandle<T>(dims_, data_, DataKey()); }
-    operator GpuBatchDataHandle<T>() { return GetGpuHandle(); }
+    Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
@@ -163,11 +162,6 @@ public:
 private:
     BatchDimensions dims_;
     Cuda::Memory::UnifiedCudaArray<T> data_;
-};
-
-enum class BatchMemoryModel
-{
-
 };
 
 // A TraceBatch is just a wrapper around a BatchData, with some associated metadata
