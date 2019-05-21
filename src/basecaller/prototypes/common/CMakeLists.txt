@@ -5,14 +5,17 @@ set(SRC_LIST
     src/common/ZmwDataManager.cpp
     src/common/memory/UnifiedCudaArray.h
     src/common/memory/UnifiedCudaArray.cuh
+    src/common/DataGenerators/BatchGenerator.h
     src/common/DataGenerators/GeneratorBase.h
     src/common/DataGenerators/GeneratorBase.cpp
     src/common/DataGenerators/TemplateGenerator.h
     src/common/DataGenerators/SawtoothGenerator.h
     src/common/DataGenerators/PicketFenceGenerator.h
     src/common/DataGenerators/PicketFenceGenerator.cpp
-    src/common/DataGenerators/TraceFileGenerator.h
-    src/common/DataGenerators/TraceFileGenerator.cpp
+    src/common/DataGenerators/SignalGenerator.h
+    src/common/DataGenerators/SignalGenerator.cpp
+    src/common/DataGenerators/TraceFileReader.h
+    src/common/DataGenerators/TraceFileReader.cpp
 )
 
 add_library(libProtoCommon STATIC
@@ -34,7 +37,7 @@ target_include_directories(libProtoCommon
 include(pacbio-cplusplus-gtest)
 
 add_executable(CommonTests
-    src/test/testTraceFileGenerator.cpp
+        src/test/testSignalGenerator.cpp
 )
 
 target_link_libraries(CommonTests

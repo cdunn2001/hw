@@ -2,7 +2,7 @@
 #define BASELINE_FILTER_BASELINE_H
 
 #include <common/DataGenerators/PicketFenceGenerator.h>
-#include <common/DataGenerators/TraceFileGenerator.h>
+#include <common/DataGenerators/SignalGenerator.h>
 #include <common/ZmwDataManager.h>
 #include <pacbio/utilities/SmartEnum.h>
 
