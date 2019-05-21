@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.13)
 add_library(libMongoBasecallerTraceAnalysis STATIC
     Baseliner.h
     Baseliner.cpp
+    DetectionModelEstimator.h
+    DetectionModelEstimator.cpp
     TraceAnalysisForward.h
     TraceHistogramAccumulator.h
     TraceHistogramAccumulator.cpp

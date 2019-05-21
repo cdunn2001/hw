@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <dataTypes/CameraTraceBatch.h>
+#include <dataTypes/PoolHistogram.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -25,6 +26,12 @@ public:     // Const functions
     {
         // TODO
         return std::vector<CountType>();
+    }
+
+    Data::PoolHistogram Histogram() const
+    {
+        // TODO
+        return Data::PoolHistogram();
     }
 
 public:     // Non-const functions

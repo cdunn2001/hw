@@ -38,6 +38,7 @@
 #include <dataTypes/MovieConfig.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 
 using std::vector;

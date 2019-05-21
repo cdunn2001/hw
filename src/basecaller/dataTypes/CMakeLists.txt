@@ -11,8 +11,12 @@ set(CPP_LIST
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
+    DetectionModel.h
+    DetectionModel.cpp
     MovieConfig.h
     MovieConfig.cpp
+    PoolHistogram.h
+    PoolHistogram.cpp
     PrimaryConfig.h
     TraceBatch.h
     TraceBatch.cpp

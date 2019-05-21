@@ -29,13 +29,18 @@
 
 #include "BatchAnalyzer.h"
 
+#include <algorithm>
+
 #include <pacbio/PBAssert.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
+#include <dataTypes/DetectionModel.h>
+#include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
 
@@ -71,6 +76,13 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     traceHistAccum_->AddBatch(ctb);
 
     // TODO: When sufficient trace data have been histogrammed, estimate detection model.
+    // TODO: Make this configurable.
+    const unsigned int minFramesForDme = 4000u;
+    const auto histTotals = traceHistAccum_->FrameCount();
+    if (*std::min_element(histTotals.cbegin(), histTotals.cend()) >= minFramesForDme)
+    {
+        Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
+    }
 
     // TODO: When detection model is available, classify frames.
 

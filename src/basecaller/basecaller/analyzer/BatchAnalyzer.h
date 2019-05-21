@@ -70,6 +70,7 @@ private:
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
+    std::unique_ptr<DetectionModelEstimator> dme_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -7,6 +7,7 @@ namespace Basecaller {
 
 class Baseliner;
 class TraceHistogramAccumulator;
+class DetectionModelEstimator;
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
