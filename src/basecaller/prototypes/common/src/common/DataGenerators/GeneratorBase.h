@@ -24,9 +24,9 @@ template <typename T>
 class GeneratorBase
 {
 public:
-    GeneratorBase(size_t blockLen, size_t gpuLaneWidth, size_t numBlocks, size_t numZmwLanes)
+    GeneratorBase(size_t blockLen, size_t laneWidth, size_t numBlocks, size_t numZmwLanes)
         : blockLen_(blockLen)
-        , gpuLaneWidth_(gpuLaneWidth)
+        , laneWidth_(laneWidth)
         , numBlocks_(numBlocks)
         , numZmwLanes_(numZmwLanes)
     {}
@@ -40,7 +40,7 @@ public:
             generatedData_[i].resize(numBlocks_);
             for (size_t j = 0; j < numBlocks_; j++)
             {
-                generatedData_[i][j].resize(blockLen_ * gpuLaneWidth_);
+                generatedData_[i][j].resize(blockLen_ * laneWidth_);
                 PopulateBlock(i, j, generatedData_[i][j]);
             }
         }
@@ -53,7 +53,7 @@ public:
     {
         if (!generated_) GenerateData();
 
-        if ((v.NumFrames() != blockLen_)  || (v.LaneWidth() != gpuLaneWidth_))
+        if ((v.NumFrames() != blockLen_)  || (v.LaneWidth() != laneWidth_))
             throw PBException("Unexpectedly sized block received in GeneratorBase");
 
         const auto& data = generatedData_[laneIdx % numZmwLanes_][blockIdx % numBlocks_];
@@ -63,7 +63,7 @@ public:
 
 protected:
     size_t BlockLen() const { return blockLen_; }
-    size_t GpuLaneWidth() const { return gpuLaneWidth_; }
+    size_t LaneWidth() const { return laneWidth_; }
     size_t NumZmwLanes() const { return numZmwLanes_; }
     size_t NumBlocks() const { return numBlocks_; }
 
@@ -72,7 +72,7 @@ private:
     virtual void PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<T>& data) = 0;
 
     size_t blockLen_;
-    size_t gpuLaneWidth_;
+    size_t laneWidth_;
     size_t numBlocks_;
     size_t numZmwLanes_;
     bool generated_ = false;

@@ -17,7 +17,7 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
-void ValidateData(TraceBatch<short2>& batch,
+void ValidateData(TraceBatch<int16_t>& batch,
                   size_t filterWidth,
                   size_t sawtoothHeight,
                   size_t startFrame,
@@ -36,8 +36,7 @@ void ValidateData(TraceBatch<short2>& batch,
 
             for (size_t zmw = 0; zmw < block.LaneWidth(); ++zmw)
             {
-                EXPECT_EQ(block(frame, zmw).x, expectedVal);
-                EXPECT_EQ(block(frame, zmw).y, expectedVal);
+                EXPECT_EQ(block(frame, zmw), expectedVal);
             }
         }
     }
@@ -48,13 +47,13 @@ void ValidateData(TraceBatch<short2>& batch,
 
 TEST(MaxFilterTest, GlobalMemoryMax)
 {
-    static constexpr int zmwLaneWidth = 64;
-    static constexpr int gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr int laneWidth = 64;
+    static constexpr int gpuBlockThreads = laneWidth/2;
     static constexpr int FilterWidth = 7;
     static constexpr int SawtoothHeight = 25;
 
     auto params = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(16)
@@ -62,10 +61,10 @@ TEST(MaxFilterTest, GlobalMemoryMax)
             .NumBlocks(4)
             .BlockLength(64);
 
-    using Filter = ExtremaFilter<gpuLaneWidth, FilterWidth>;
+    using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     DeviceOnlyArray<Filter> filterData(params.numZmwLanes, 0);
 
-    ZmwDataManager<short2> manager(params, std::make_unique<SawtoothGenerator>(params), true);
+    ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
     while (manager.MoreData())
     {
         auto data = manager.NextBatch();
@@ -74,7 +73,7 @@ TEST(MaxFilterTest, GlobalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxGlobalFilter<gpuLaneWidth, FilterWidth><<<params.kernelLanes, gpuLaneWidth>>>(
+        MaxGlobalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
             in,
             filterData.GetDeviceView(batchIdx * params.kernelLanes, params.kernelLanes),
             out);
@@ -87,13 +86,13 @@ TEST(MaxFilterTest, GlobalMemoryMax)
 
 TEST(MaxFilterTest, SharedMemoryMax)
 {
-    static constexpr int zmwLaneWidth = 64;
-    static constexpr int gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr int laneWidth = 64;
+    static constexpr int gpuBlockThreads = laneWidth/2;
     static constexpr int FilterWidth = 7;
     static constexpr int SawtoothHeight = 25;
 
     auto params = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(16)
@@ -101,10 +100,10 @@ TEST(MaxFilterTest, SharedMemoryMax)
             .NumBlocks(4)
             .BlockLength(64);
 
-    using Filter = ExtremaFilter<gpuLaneWidth, FilterWidth>;
+    using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     DeviceOnlyArray<Filter> filterData(params.numZmwLanes, 0);
 
-    ZmwDataManager<short2> manager(params, std::make_unique<SawtoothGenerator>(params), true);
+    ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
     while (manager.MoreData())
     {
         auto data = manager.NextBatch();
@@ -113,7 +112,7 @@ TEST(MaxFilterTest, SharedMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxSharedFilter<gpuLaneWidth, FilterWidth><<<params.kernelLanes, gpuLaneWidth>>>(
+        MaxSharedFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
             in,
             filterData.GetDeviceView(batchIdx * params.kernelLanes, params.kernelLanes),
             out);
@@ -126,13 +125,13 @@ TEST(MaxFilterTest, SharedMemoryMax)
 
 TEST(MaxFilterTest, LocalMemoryMax)
 {
-    static constexpr int zmwLaneWidth = 64;
-    static constexpr int gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr int laneWidth = 64;
+    static constexpr int gpuBlockThreads = laneWidth/2;
     static constexpr int FilterWidth = 7;
     static constexpr int SawtoothHeight = 25;
 
     auto params = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(16)
@@ -140,10 +139,10 @@ TEST(MaxFilterTest, LocalMemoryMax)
             .NumBlocks(4)
             .BlockLength(64);
 
-    using Filter = ExtremaFilter<gpuLaneWidth, FilterWidth>;
+    using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     DeviceOnlyArray<Filter> filterData(params.numZmwLanes, 0);
 
-    ZmwDataManager<short2> manager(params, std::make_unique<SawtoothGenerator>(params), true);
+    ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
     while (manager.MoreData())
     {
         auto data = manager.NextBatch();
@@ -152,7 +151,7 @@ TEST(MaxFilterTest, LocalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxLocalFilter<gpuLaneWidth, FilterWidth><<<params.kernelLanes, gpuLaneWidth>>>(
+        MaxLocalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
             in,
             filterData.GetDeviceView(batchIdx * params.kernelLanes, params.kernelLanes),
             out);

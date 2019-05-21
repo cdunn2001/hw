@@ -13,25 +13,25 @@ namespace Data {
 class BatchGenerator : public GeneratorBase<int16_t>
 {
 public:
-    BatchGenerator(uint32_t blockLen, uint32_t zmwLaneWidth, uint32_t kernelLanes,
+    BatchGenerator(uint32_t blockLen, uint32_t laneWidth, uint32_t kernelLanes,
                    uint32_t frames, uint32_t numZmwLanes)
         : GeneratorBase(blockLen,
-                        zmwLaneWidth/2,
+                        laneWidth,
                         (frames + blockLen - 1)/blockLen,
                         numZmwLanes)
-        , zmwLaneWidth_(zmwLaneWidth)
+        , laneWidth_(laneWidth)
         , kernelLanes_(kernelLanes)
         , numZmwLanes_(numZmwLanes)
         , numChunks_(NumBlocks())
         , numTraceChunks_(0)
         , chunkIndex_(0)
     {
-        tracePool_ = std::make_shared<Memory::DualAllocationPools>(zmwLaneWidth * blockLen * kernelLanes * sizeof(int16_t));
+        tracePool_ = std::make_shared<Memory::DualAllocationPools>(laneWidth * blockLen * kernelLanes*sizeof(int16_t));
     }
 
     void SetTraceFileSource(const std::string& traceFileName, bool cache)
     {
-        traceFileReader_.reset(new TraceFileReader(traceFileName, zmwLaneWidth_, BlockLen(), cache));
+        traceFileReader_.reset(new TraceFileReader(traceFileName, laneWidth_, BlockLen(), cache));
         if (numZmwLanes_ == 0) numZmwLanes_ = traceFileReader_->NumZmwLanes();
         if (numChunks_ == 0) numChunks_ = traceFileReader_->NumChunks();
         numTraceChunks_ = traceFileReader_->NumChunks();
@@ -41,7 +41,7 @@ public:
     {
         std::vector<Mongo::Data::TraceBatch<int16_t>> chunk;
         Mongo::Data::BatchDimensions batchDims;
-        batchDims.laneWidth = zmwLaneWidth_;
+        batchDims.laneWidth = laneWidth_;
         batchDims.framesPerBatch = BlockLen();
         batchDims.lanesPerBatch = kernelLanes_;
         for (size_t b = 0; b < NumBatches(); b++)
@@ -99,7 +99,7 @@ private:
     }
 
 private:
-    uint32_t zmwLaneWidth_;
+    uint32_t laneWidth_;
     uint32_t kernelLanes_;
     size_t numZmwLanes_;
     size_t numChunks_;

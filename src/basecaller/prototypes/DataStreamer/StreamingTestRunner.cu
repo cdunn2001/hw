@@ -76,7 +76,7 @@ void RunTest(const Data::DataManagerParams& params, size_t simulKernels)
         {
             try {
                 auto batch = manager.NextBatch();
-                BasicSanity<<<params.kernelLanes, params.gpuLaneWidth/2>>>(batch.KernelInput(), tid, ret.GetDeviceHandle());
+                BasicSanity<<<params.kernelLanes, params.laneWidth/2>>>(batch.KernelInput(), tid, ret.GetDeviceHandle());
                 auto view = ret.GetHostView();
                 bool valid = true;
                 for (size_t i = 0; i < params.kernelLanes; ++i)

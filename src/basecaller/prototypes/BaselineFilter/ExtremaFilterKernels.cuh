@@ -9,12 +9,12 @@ namespace PacBio {
 namespace Cuda {
 
 // Simply runs the filter in-place in global memory
-template <size_t laneWidth, size_t filterWidth>
+template <size_t blockThreads, size_t filterWidth>
 __global__ void MaxGlobalFilter(Mongo::Data::GpuBatchData<short2> in,
-                                Memory::DeviceView<ExtremaFilter<laneWidth, filterWidth>> filters,
+                                Memory::DeviceView<ExtremaFilter<blockThreads, filterWidth>> filters,
                                 Mongo::Data::GpuBatchData<short2> out)
 {
-    assert(laneWidth == blockDim.x);
+    assert(blockThreads == blockDim.x);
 
     const size_t numFrames = in.Dims().framesPerBatch;
 
@@ -29,16 +29,16 @@ __global__ void MaxGlobalFilter(Mongo::Data::GpuBatchData<short2> in,
 }
 
 // First coppies the filter to shared memory before processing data.
-template <size_t laneWidth, size_t filterWidth>
+template <size_t blockThreads, size_t filterWidth>
 __global__ void MaxSharedFilter(Mongo::Data::GpuBatchData<short2> in,
-                                Memory::DeviceView<ExtremaFilter<laneWidth, filterWidth>> filters,
+                                Memory::DeviceView<ExtremaFilter<blockThreads, filterWidth>> filters,
                                 Mongo::Data::GpuBatchData<short2> out)
 {
-    assert(laneWidth == blockDim.x);
+    assert(blockThreads == blockDim.x);
 
     const size_t numFrames = in.Dims().framesPerBatch;
 
-    __shared__ ExtremaFilter<laneWidth, filterWidth> myFilter;
+    __shared__ ExtremaFilter<blockThreads, filterWidth> myFilter;
     myFilter = filters[blockIdx.x];
     auto inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
@@ -52,14 +52,14 @@ __global__ void MaxSharedFilter(Mongo::Data::GpuBatchData<short2> in,
 }
 
 // Moves filter data to registers for processing
-template <size_t laneWidth, size_t filterWidth>
+template <size_t blockThreads, size_t filterWidth>
 __global__ void MaxLocalFilter(Mongo::Data::GpuBatchData<short2> in,
-                               Memory::DeviceView<ExtremaFilter<laneWidth, filterWidth>> filters,
+                               Memory::DeviceView<ExtremaFilter<blockThreads, filterWidth>> filters,
                                Mongo::Data::GpuBatchData<short2> out)
 {
 
     const size_t numFrames = in.Dims().framesPerBatch;
-    LocalExtremaFilter<laneWidth, filterWidth> myFilter(filters[blockIdx.x]);
+    LocalExtremaFilter<blockThreads, filterWidth> myFilter(filters[blockIdx.x]);
     auto inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 

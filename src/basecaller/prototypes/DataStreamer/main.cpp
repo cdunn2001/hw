@@ -19,7 +19,7 @@ int main(int argc, char* argv[])
     auto groupMand = PacBio::Process::OptionGroup(parser, "Mandatory parameters");
     groupMand.add_option("--frameRate").type_float().set_default(defaultFillerParams.frameRate);
     groupMand.add_option("--numZmwLanes").type_int().set_default(defaultFillerParams.numZmwLanes);
-    groupMand.add_option("--zmwLaneWidth").type_int().set_default(defaultFillerParams.zmwLaneWidth);
+    groupMand.add_option("--laneWidth").type_int().set_default(defaultFillerParams.laneWidth);
     groupMand.add_option("--numBlocks").type_int().set_default(defaultFillerParams.numBlocks);
     groupMand.add_option("--blockLength").type_int().set_default(defaultFillerParams.blockLength);
     groupMand.add_option("--kernelLanes").type_int().set_default(defaultFillerParams.kernelLanes);
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 
     const float frameRate = options.get("frameRate");
     const size_t numZmwLanes = options.get("numZmwLanes");
-    const size_t zmwLaneWidth = options.get("zmwLaneWidth");
+    const size_t laneWidth = options.get("laneWidth");
     const size_t numBlocks = options.get("numBlocks");
     const size_t blockLength = options.get("blockLength");
     const size_t kernelLanes = options.get("kernelLanes");
@@ -42,11 +42,10 @@ int main(int argc, char* argv[])
             .ImmediateCopy(immediateCopy)
             .FrameRate(frameRate)
             .NumZmwLanes(numZmwLanes)
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .KernelLanes(kernelLanes)
             .NumBlocks(numBlocks)
             .BlockLength(blockLength);
-    params.gpuLaneWidth = params.zmwLaneWidth;
 
     RunTest(params, simulKernels);
 }

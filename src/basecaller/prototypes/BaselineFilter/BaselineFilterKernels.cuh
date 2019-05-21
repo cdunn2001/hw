@@ -57,12 +57,12 @@ __device__ int constexpr constexprMax(int a, int b)
 // kernels for each filter stage actually performs better.  We still have multiple passes over the
 // data, but now the kernels with smaller filters can use a lot less shared memory and get a lot
 // more increased occupancy, making them run significantly faster.
-template <size_t laneWidth, size_t width1, size_t width2, size_t stride1, size_t stride2>
+template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
 __global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
-                                         Memory::DeviceView<ErodeDilate<laneWidth, width1>> lower1,
-                                         Memory::DeviceView<ErodeDilate<laneWidth, width2>> lower2,
-                                         Memory::DeviceView<DilateErode<laneWidth, width1>> upper1,
-                                         Memory::DeviceView<ErodeDilate<laneWidth, width2>> upper2,
+                                         Memory::DeviceView<ErodeDilate<blockThreads, width1>> lower1,
+                                         Memory::DeviceView<ErodeDilate<blockThreads, width2>> lower2,
+                                         Memory::DeviceView<DilateErode<blockThreads, width1>> upper1,
+                                         Memory::DeviceView<ErodeDilate<blockThreads, width2>> upper2,
                                          Mongo::Data::GpuBatchData<short2> workspace1,
                                          Mongo::Data::GpuBatchData<short2> workspace2,
                                          Mongo::Data::GpuBatchData<short2> out)
@@ -70,7 +70,7 @@ __global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
     const size_t numFrames = in.Dims().framesPerBatch;
 
     // Grab a swath of memory that can fit our largest filter
-    constexpr size_t maxSize = constexprMax(sizeof(ErodeDilate<laneWidth, width1>), sizeof(ErodeDilate<laneWidth, width2>));
+    constexpr size_t maxSize = constexprMax(sizeof(ErodeDilate<blockThreads, width1>), sizeof(ErodeDilate<blockThreads, width2>));
     __shared__  char mempool[maxSize];
 
     assert(numFrames % stride1*stride2 == 0);
@@ -82,50 +82,50 @@ __global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
     auto workb2 = workspace2.ZmwData(blockIdx.x, threadIdx.x);
 
     // --------------Lower filter-------------------
-    ErodeDilate<laneWidth, width1>* low1 = new (&mempool[0])ErodeDilate<laneWidth, width1>(lower1[blockIdx.x]);
+    ErodeDilate<blockThreads, width1>* low1 = new (&mempool[0])ErodeDilate<blockThreads, width1>(lower1[blockIdx.x]);
     for (int i = 0; i < numFrames; i += stride1)
     {
         workb1[i/stride1] = (*low1)(inb[i]);
     }
     lower1[blockIdx.x] = *low1;
-    low1->~ErodeDilate<laneWidth, width1>();
+    low1->~ErodeDilate<blockThreads, width1>();
     low1 = nullptr;
 
-    ErodeDilate<laneWidth, width2>* low2 = new (&mempool[0])ErodeDilate<laneWidth, width2>(lower2[blockIdx.x]);
+    ErodeDilate<blockThreads, width2>* low2 = new (&mempool[0])ErodeDilate<blockThreads, width2>(lower2[blockIdx.x]);
     int limit = numFrames / stride1;
     for (int i = 0; i < limit; i += stride2)
     {
         workb1[i/stride2] = (*low2)(workb1[i]);
     }
     lower2[blockIdx.x] = *low2;
-    low2->~ErodeDilate<laneWidth, width2>();
+    low2->~ErodeDilate<blockThreads, width2>();
     low2 = nullptr;
 
     // --------------Upper filter-------------------
-    DilateErode<laneWidth, width1>* up1 = new (&mempool[0])DilateErode<laneWidth, width1>(upper1[blockIdx.x]);
+    DilateErode<blockThreads, width1>* up1 = new (&mempool[0])DilateErode<blockThreads, width1>(upper1[blockIdx.x]);
     for (int i = 0; i < numFrames; i += stride1)
     {
         workb2[i/stride1] = (*up1)(inb[i]);
 
     }
     upper1[blockIdx.x] = *up1;
-    up1->~DilateErode<laneWidth, width1>();
+    up1->~DilateErode<blockThreads, width1>();
     up1 = nullptr;
 
-    ErodeDilate<laneWidth, width2>* up2 = new (&mempool[0])ErodeDilate<laneWidth, width2>(upper2[blockIdx.x]);
+    ErodeDilate<blockThreads, width2>* up2 = new (&mempool[0])ErodeDilate<blockThreads, width2>(upper2[blockIdx.x]);
     limit = numFrames / stride1;
     for (int i = 0; i < limit; i += stride2)
     {
         workb2[i/stride2] = (*up2)(workb2[i]);
     }
     upper2[blockIdx.x] = *up2;
-    up2->~ErodeDilate<laneWidth, width2>();
+    up2->~ErodeDilate<blockThreads, width2>();
     up2 = nullptr;
 }
 
 // Runs a filter over the input data, but only outputs 1/stride of the
 // results.
-template <size_t laneWidth, size_t stride, typename Filter>
+template <size_t blockThreads, size_t stride, typename Filter>
 __global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
                               Memory::DeviceView<Filter> filters,
                               int numFrames,
@@ -133,7 +133,7 @@ __global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
 {
     const size_t maxFrames = in.Dims().framesPerBatch;
 
-    assert(laneWidth == blockDim.x);
+    assert(blockThreads == blockDim.x);
     assert(numFrames <= out.Dims().framesPerBatch);
     assert(numFrames <= maxFrames);
     assert(numFrames % 4 == 0);
@@ -163,7 +163,7 @@ __global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
 
 // Averages the output of the lower and upper filters, and expands the data
 // to back to the original (unstrided) size
-template <size_t laneWidth, size_t stride>
+template <size_t blockThreads, size_t stride>
 __global__ void AverageAndExpand(Mongo::Data::GpuBatchData<short2> in1,
                                  Mongo::Data::GpuBatchData<short2> in2,
                                  Mongo::Data::GpuBatchData<short2> out)
@@ -190,13 +190,13 @@ __global__ void AverageAndExpand(Mongo::Data::GpuBatchData<short2> in1,
     }
 }
 
-template <size_t laneWidth, size_t width1, size_t width2, size_t stride1, size_t stride2>
+template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
 class ComposedFilter
 {
-    using Lower1 = ErodeDilate<laneWidth, width1>;
-    using Lower2 = ErodeDilate<laneWidth, width2>;
-    using Upper1 = DilateErode<laneWidth, width1>;
-    using Upper2 = ErodeDilate<laneWidth, width2>;
+    using Lower1 = ErodeDilate<blockThreads, width1>;
+    using Lower2 = ErodeDilate<blockThreads, width2>;
+    using Upper1 = DilateErode<blockThreads, width1>;
+    using Upper2 = ErodeDilate<blockThreads, width2>;
 
     Memory::DeviceOnlyArray<Lower1> lower1;
     Memory::DeviceOnlyArray<Lower2> lower2;
@@ -213,39 +213,39 @@ public:
         , numLanes_(numLanes)
     {}
 
-    __host__ void RunComposedFilter(Mongo::Data::TraceBatch<short2>& input,
-                                    Mongo::Data::TraceBatch<short2>& output,
-                                    Mongo::Data::BatchData<short2>& workspace1,
-                                    Mongo::Data::BatchData<short2>& workspace2)
+    __host__ void RunComposedFilter(Mongo::Data::TraceBatch<int16_t>& input,
+                                    Mongo::Data::TraceBatch<int16_t>& output,
+                                    Mongo::Data::BatchData<int16_t>& workspace1,
+                                    Mongo::Data::BatchData<int16_t>& workspace2)
     {
         const uint64_t numFrames = input.Dimensions().framesPerBatch;
 
-        assert(input.Dimensions().laneWidth == laneWidth);
+        assert(input.Dimensions().laneWidth == 2*blockThreads);
         assert(input.Dimensions().lanesPerBatch == numLanes_);
 
-        StridedFilter<laneWidth, 2, Lower1><<<numLanes_, laneWidth>>>(
+        StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
             input,
             lower1.GetDeviceView(),
             numFrames,
             workspace1);
-        StridedFilter<laneWidth, 8, Lower2><<<numLanes_, laneWidth>>>(
+        StridedFilter<blockThreads, 8, Lower2><<<numLanes_, blockThreads>>>(
             workspace1,
             lower2.GetDeviceView(),
             numFrames/2,
             workspace1);
 
-        StridedFilter<laneWidth, 2, Upper1><<<numLanes_, laneWidth>>>(
+        StridedFilter<blockThreads, 2, Upper1><<<numLanes_, blockThreads>>>(
             input,
             upper1.GetDeviceView(),
             numFrames,
             workspace2);
-        StridedFilter<laneWidth, 8, Upper2><<<numLanes_, laneWidth>>>(
+        StridedFilter<blockThreads, 8, Upper2><<<numLanes_, blockThreads>>>(
             workspace2,
             upper2.GetDeviceView(),
             numFrames/2,
             workspace2);
 
-        AverageAndExpand<laneWidth, 16><<<numLanes_, laneWidth>>>(workspace1, workspace2, output);
+        AverageAndExpand<blockThreads, 16><<<numLanes_, blockThreads>>>(workspace1, workspace2, output);
     }
 
 };

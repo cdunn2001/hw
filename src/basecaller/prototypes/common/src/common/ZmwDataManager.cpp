@@ -32,10 +32,10 @@ ZmwDataManager<TIn, TOut>::ZmwDataManager(
         throw PBException("Select numZmw that is even multiple of kernelLanes");
     // A batch is a group of lanes that will be sent to the GPU together
     numBatches_ = params_.numZmwLanes / params_.kernelLanes;
-    const size_t count = params_.kernelLanes * params_.gpuLaneWidth * params_.blockLength;
+    const size_t count = params_.kernelLanes * params_.laneWidth * params_.blockLength;
 
     Mongo::Data::BatchDimensions batchDims;
-    batchDims.laneWidth = params_.gpuLaneWidth;
+    batchDims.laneWidth = params_.laneWidth;
     batchDims.framesPerBatch = params_.blockLength;
     batchDims.lanesPerBatch = params_.kernelLanes;
 
