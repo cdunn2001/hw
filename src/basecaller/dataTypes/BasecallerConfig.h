@@ -64,7 +64,7 @@ namespace Data {
     };
 
 
-    class BasecallerDMEConfig : public PacBio::Process::ConfigurationObject
+    class BasecallerDmeConfig : public PacBio::Process::ConfigurationObject
     {
     public:
         SMART_ENUM(MethodName, SpiderFixed, Monochrome);
@@ -264,18 +264,18 @@ namespace Data {
     {
         CONF_OBJ_SUPPORT_COPY(BasecallerAlgorithmConfig)
     public:
-        ADD_OBJECT(BasecallerDMEConfig, dme);
+        ADD_OBJECT(BasecallerDmeConfig, dmeConfig);
         ADD_OBJECT(BasecallerPulseDetectionConfig, PulseDetection);
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
-        ADD_OBJECT(BasecallerBaselinerConfig, BaselineFilter);
+        ADD_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
     public:
         std::string CombinedMethodName() const
         {
-            return BaselineFilter.Method().toString() + "_"
-                 + dme.Method().toString() + "_"
+            return baselinerConfig.Method().toString() + "_"
+                 + dmeConfig.Method().toString() + "_"
                  + PulseDetection.Method().toString() + "_"
                  + PulseToBase.Method().toString() + "_"
                  + Metrics.Method().toString();

@@ -46,10 +46,18 @@ public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
     using OutputType = PacBio::Mongo::Data::BasecallBatch;
 
+public:     // Static functions
+    /// Sets algorithm configuration and system calibration properties.
+    /// Static because the config types keep a JSON representation and
+    /// deserialize on each reference, but the values will be the same for
+    /// each BatchAnalyzer instance for a given movie.
+    /// \note Not thread safe. Do not call this function while threads are
+    /// running analysis.
+    static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
+                          const Data::MovieConfig& movConfig);
+
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId,
-                  const Data::BasecallerAlgorithmConfig& bcConfig,
-                  const Data::MovieConfig& movConfig);
+    BatchAnalyzer(uint32_t poolId);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;

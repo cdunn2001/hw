@@ -7,9 +7,14 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-Baseliner::Baseliner(uint32_t poolId,
-                     const Data::BasecallerBaselinerConfig& baselinerConfig,
-                     const Data::MovieConfig& movConfig)
+// static
+void Baseliner::Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
+                          const Data::MovieConfig& movConfig)
+{
+    // TODO
+}
+
+Baseliner::Baseliner(uint32_t poolId)
     : poolId_ (poolId)
 {
 

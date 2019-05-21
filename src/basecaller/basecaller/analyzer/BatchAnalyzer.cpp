@@ -50,9 +50,14 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
-                             const BasecallerAlgorithmConfig& bcConfig,
-                             const MovieConfig& movConfig)
+// static
+void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
+                              const Data::MovieConfig& movConfig)
+{
+    Baseliner::Configure(bcConfig.baselinerConfig, movConfig);
+}
+
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId)
     : poolId_ (poolId)
 { }
 

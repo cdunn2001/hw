@@ -17,10 +17,18 @@ class Baseliner
 public:     // Types
     using ElementTypeIn = Data::RawTraceElement;
 
+public:     // Static functions
+    /// Sets algorithm configuration and system calibration properties.
+    /// Static because the config types keep a JSON representation and
+    /// deserialize on each reference, but the values will be the same for
+    /// each Baseliner instance for a given movie.
+    /// \note Not thread safe. Do not call this function while threads are
+    /// running analysis.
+    static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
+                          const Data::MovieConfig& movConfig);
+
 public:
-    Baseliner(uint32_t poolId,
-              const Data::BasecallerBaselinerConfig& baselinerConfig,
-              const Data::MovieConfig& movConfig);
+    Baseliner(uint32_t poolId);
 
 public:
     Data::CameraTraceBatch operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
