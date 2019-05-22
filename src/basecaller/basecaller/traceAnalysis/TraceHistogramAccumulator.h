@@ -4,6 +4,7 @@
 #include <vector>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/PoolHistogram.h>
+#include <dataTypes/ConfigForward.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -14,6 +15,10 @@ class TraceHistogramAccumulator
 public:     // Types
     using DataType = Data::CameraTraceBatch::ElementType;
     using CountType = unsigned int;
+
+public:     // Static functions
+    static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
+                          const Data::MovieConfig& movConfig);
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId);

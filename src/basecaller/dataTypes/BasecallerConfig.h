@@ -63,6 +63,11 @@ namespace Data {
         ADD_PARAMETER(float, shotCoeff, 1.37);
     };
 
+    class BasecallerTraceHistogramConfig : public PacBio::Process::ConfigurationObject
+    {
+        // TODO
+    };
+
 
     class BasecallerDmeConfig : public PacBio::Process::ConfigurationObject
     {
@@ -262,12 +267,13 @@ namespace Data {
 
     class BasecallerAlgorithmConfig :  public PacBio::Process::ConfigurationObject
     {
-        CONF_OBJ_SUPPORT_COPY(BasecallerAlgorithmConfig)
+        CONF_OBJ_SUPPORT_COPY(BasecallerAlgorithmConfig);
     public:
+        ADD_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
+        ADD_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
         ADD_OBJECT(BasecallerDmeConfig, dmeConfig);
         ADD_OBJECT(BasecallerPulseDetectionConfig, PulseDetection);
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
-        ADD_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 

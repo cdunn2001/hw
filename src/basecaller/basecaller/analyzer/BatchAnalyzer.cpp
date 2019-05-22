@@ -55,6 +55,8 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
 {
     Baseliner::Configure(bcConfig.baselinerConfig, movConfig);
+    TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
+    DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
 }
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId)
