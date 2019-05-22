@@ -138,20 +138,18 @@ private:
         {
             std::vector<uint32_t> zmwNumbers = batchGenerator_->UnitCellIds();
             std::vector<uint32_t> zmwFeatures = batchGenerator_->UnitCellFeatures();
-            
-            std::vector<uint32_t> writtenZmwNumbers;
-            std::vector<uint32_t> writtenZmwFeatures;
 
-            for (size_t i = 0; i < zmwNumbers.size(); i++)
+            size_t numWritten = zmwNumbers.size() / zmwOutputStrideFactor_;
+            std::vector<uint32_t> writtenZmwNumbers(zmwNumbers.begin(), zmwNumbers.begin() + numWritten);
+            std::vector<uint32_t> writtenZmwFeatures(zmwFeatures.begin(), zmwFeatures.begin() + numWritten);
+
+            for (size_t i = 0; i < zmwNumbers.size()/zmwOutputStrideFactor_; i++)
             {
-                if (i % zmwOutputStrideFactor_ == 0)
-                {
-                    writtenZmwNumbers.push_back(zmwNumbers[i]);
-                    writtenZmwFeatures.push_back(zmwFeatures[i]);
-                }
+                writtenZmwNumbers.push_back(zmwNumbers[i]);
+                writtenZmwFeatures.push_back(zmwFeatures[i]);
             }
 
-            PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << zmwNumbers.size();
+            PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << writtenZmwNumbers.size();
 
             uint64_t movieLengthInFrames = batchGenerator_->NumFrames();
             PacBio::Primary::FileHeaderBuilder fh(outputBazFile_,
@@ -207,7 +205,7 @@ private:
         {
             for (uint32_t z = 0; z < basecallBatch.Dims().zmwsPerBatch(); z++)
             {
-                if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
+                if (currentZmwWritten_++ % zmwOutputStrideFactor_ == 0)
                 {
                     if (!bazWriter_->AddZmwSlice(basecallBatch.Basecalls().data() + basecallBatch.zmwOffset(z),
                                                  basecallBatch.SeqLengths()[z],
@@ -240,6 +238,7 @@ private:
             if (outputDataQueue_.TryPop(basecallChunk))
             {
                 currentZmwIndex_ = 0;
+                currentZmwWritten_ = 0;
                 WriteBaseCallsChunk(basecallChunk);
                 bazWriter_->Flush();
                 numChunksWritten_++;
@@ -326,6 +325,7 @@ private:
     uint64_t numZmwsSoFar_ = 0;
     size_t zmwOutputStrideFactor_ = 1;
     uint32_t currentZmwIndex_ = 0;
+    uint32_t currentZmwWritten_ = 0;
     bool simulateBasecalls_ = false;
 };
 
