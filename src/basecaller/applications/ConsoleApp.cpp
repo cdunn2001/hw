@@ -143,12 +143,6 @@ private:
             std::vector<uint32_t> writtenZmwNumbers(zmwNumbers.begin(), zmwNumbers.begin() + numWritten);
             std::vector<uint32_t> writtenZmwFeatures(zmwFeatures.begin(), zmwFeatures.begin() + numWritten);
 
-            for (size_t i = 0; i < zmwNumbers.size()/zmwOutputStrideFactor_; i++)
-            {
-                writtenZmwNumbers.push_back(zmwNumbers[i]);
-                writtenZmwFeatures.push_back(zmwFeatures[i]);
-            }
-
             PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << writtenZmwNumbers.size();
 
             uint64_t movieLengthInFrames = batchGenerator_->NumFrames();
@@ -259,7 +253,7 @@ private:
         double chunkWriteRate = timer.GetRate();
         PBLOG_INFO << "Wrote " << numChunksWritten
                    << " at " << chunkWriteRate << " chunks/sec"
-                   << " (" << batchGenerator_->NumZmwLanes() * primaryConfig.zmwsPerLane << " zmws/sec)";
+                   << " (" << (batchGenerator_->NumZmwLanes() * primaryConfig.zmwsPerLane) / zmwOutputStrideFactor_ << " zmws/sec)";
     }
 
     void PreloadInputQueue()
