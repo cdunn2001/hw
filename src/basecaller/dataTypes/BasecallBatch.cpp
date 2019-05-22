@@ -32,14 +32,44 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+BasecallingMetrics::BasecallingMetrics()
+    : numBasesByAnalog_{ 0, 0, 0, 0}
+    , numPulsesByAnalog_{0, 0, 0, 0}
+{ }
+
+BasecallingMetrics& BasecallingMetrics::PushBack(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
+{
+    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
+    numPulsesByAnalog_[pulseLabel]++;
+
+    if (!base.IsNoCall())
+    {
+        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
+        numBasesByAnalog_[baseLabel]++;
+    }
+
+    return *this;
+}
+
 BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
                              const BatchDimensions& batchDims,
                              const BatchMetadata& batchMetadata)
     : dims_ (batchDims)
     , maxCallsPerZmwChunk_ (maxCallsPerZmwChunk)
     , metaData_ (batchMetadata)
-    , seqLenths_ (batchDims.zmwsPerBatch(), 0)
+    , seqLengths_ (batchDims.zmwsPerBatch(), 0)
     , basecalls_ (batchDims.zmwsPerBatch() * maxCallsPerZmwChunk)
+    , metrics_ (batchDims.zmwsPerBatch())
 { }
+
+void BasecallBatch::PushBack(uint32_t z, Basecall bc)
+{
+    if (seqLengths_[z] < maxCallsPerZmwChunk_)
+    {
+        basecalls_[zmwOffset(z) + seqLengths_[z]] = bc;
+        metrics_[z].PushBack(bc);
+        seqLengths_[z]++;
+    }
+}
 
 }}}     // namespace PacBio::Mongo::Data

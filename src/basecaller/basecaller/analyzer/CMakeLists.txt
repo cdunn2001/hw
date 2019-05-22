@@ -18,6 +18,7 @@ target_link_libraries(libMongoBasecallerAnalyzer
         libMongoDataTypes
     PRIVATE
         libTbb
+        libPacbioSmrtdata
 )
 
 target_include_directories(libMongoBasecallerAnalyzer

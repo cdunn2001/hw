@@ -5,6 +5,10 @@
 #include <dataTypes/MovieConfig.h>
 #include <common/DataGenerators/BatchGenerator.h>
 
+#include <pacbio/primary/BazWriter.h>
+#include <pacbio/primary/FileHeaderBuilder.h>
+#include <pacbio/primary/ZmwResultBuffer.h>
+
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
@@ -37,12 +41,21 @@ public:
 
         PacBio::Process::ThreadedProcessBase::HandleProcessOptions(options);
 
+        numChunksPreloadInputQueue_ = options.get("numChunksPreload");
+        zmwOutputStrideFactor_ = options.get("zmwOutputStrideFactor");
+        simulateBasecalls_ = options.get("simulateBasecalls");
+
         if (inputTargetFile_.size() == 0)
             inputTargetFile_ = options["inputfile"];
 
-        numChunksPreloadInputQueue_ = options.get("numChunksPreload");
+        if (options.is_set_by_user("outputbazfile"))
+        {
+            hasBazFile_ = true;
+            outputBazFile_ = options["outputbazfile"];
+        }
 
         PBLOG_INFO << "Input Target: " << inputTargetFile_;
+        PBLOG_INFO << "Output Target: " << outputBazFile_;
 
         batchGenerator_.reset(new BatchGenerator(primaryConfig.framesPerChunk,
                                                  primaryConfig.zmwsPerLane,
@@ -74,8 +87,8 @@ public:
                 PBLOG_INFO << "Analyzing chunk frames = ["
                     + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
                     + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
-                const auto baseCalls = (*analyzer_)(std::move(chunk));
-                outputDataQueue_.Push(&baseCalls);
+                auto baseCalls = (*analyzer_)(std::move(chunk));
+                outputDataQueue_.Push(std::move(baseCalls));
             }
             else
             {
@@ -108,24 +121,127 @@ private:
                    << batchGenerator_->NumBatches();
 
         MovieConfig movConfig;
-        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movConfig);
+        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_,
+                                           movConfig, simulateBasecalls_);
 
         PreloadInputQueue();
 
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating reader thread";
         CreateThread("reader", [this]() { this->RunReader(); });
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating writer thread";
-        CreateThread("writer", [this]() { this->numChunksWritten_ = 0; this->RunWriter(); });
+        CreateThread("writer", [this]() { this->RunWriter(); });
+    }
+
+    void OpenBazFile()
+    {
+        if (hasBazFile_)
+        {
+            std::vector<uint32_t> zmwNumbers = batchGenerator_->UnitCellIds();
+            std::vector<uint32_t> zmwFeatures = batchGenerator_->UnitCellFeatures();
+            
+            std::vector<uint32_t> writtenZmwNumbers;
+            std::vector<uint32_t> writtenZmwFeatures;
+
+            for (size_t i = 0; i < zmwNumbers.size(); i++)
+            {
+                if (i % zmwOutputStrideFactor_ == 0)
+                {
+                    writtenZmwNumbers.push_back(zmwNumbers[i]);
+                    writtenZmwFeatures.push_back(zmwFeatures[i]);
+                }
+            }
+
+            PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << zmwNumbers.size();
+
+            uint64_t movieLengthInFrames = batchGenerator_->NumFrames();
+            PacBio::Primary::FileHeaderBuilder fh(outputBazFile_,
+                                                  100.0f,
+                                                  movieLengthInFrames,
+                                                  Readout::PULSES,
+                                                  MetricsVerbosity::HIGH,
+                                                  "",
+                                                  basecallerConfig_.RenderJSON(),
+                                                  writtenZmwNumbers,
+                                                  writtenZmwFeatures,
+                                                  primaryConfig.framesPerChunk,
+                                                  primaryConfig.framesPerChunk,
+                                                  primaryConfig.framesPerChunk,
+                                                  PacBio::Primary::ChipClass::Spider,
+                                                  false,
+                                                  true);
+            fh.BaseCallerVersion("0.1");
+
+            bazWriter_.reset(new PacBio::Primary::BazWriter<PacBio::Primary::SpiderMetricBlock>
+                                     (outputBazFile_, fh, PacBio::Primary::BazIOConfig{},
+                                             PacBio::Primary::ReadBuffer::MaxNumSamplesPerBuffer()));
+        }
+    }
+
+    void CloseBazFile()
+    {
+        if (hasBazFile_)
+        {
+            if (numZmwsSoFar_)
+                bazWriter_->Flush();
+            PBLOG_INFO << "Closing BAZ file: " << outputBazFile_;
+            bazWriter_->WaitForTermination();
+            bazWriter_.reset();
+        }
+    }
+
+    void ConvertMetric(const BasecallingMetrics& bm, PacBio::Primary::SpiderMetricBlock& sm)
+    {
+        sm.numBasesA_ = bm.NumBasesByAnalog()[0];
+        sm.numBasesC_ = bm.NumBasesByAnalog()[1];
+        sm.numBasesG_ = bm.NumBasesByAnalog()[2];
+        sm.numBasesT_ = bm.NumBasesByAnalog()[3];
+
+        sm.numPulses_ = bm.NumPulses();
+    }
+
+    void WriteBaseCallsChunk(const std::vector<BasecallBatch>& basecallChunk)
+    {
+        static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
+
+        for (const auto& basecallBatch : basecallChunk)
+        {
+            for (uint32_t z = 0; z < basecallBatch.Dims().zmwsPerBatch(); z++)
+            {
+                if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
+                {
+                    if (!bazWriter_->AddZmwSlice(basecallBatch.Basecalls().data() + basecallBatch.zmwOffset(z),
+                                                 basecallBatch.SeqLengths()[z],
+                                                 [&](PacBio::Primary::MemoryBufferView<PacBio::Primary::SpiderMetricBlock>& dest)
+                                                 {
+                                                    for (size_t i = 0; i < dest.size(); i++)
+                                                    {
+                                                        ConvertMetric(basecallBatch.Metrics()[z], dest[i]);
+                                                    }
+                                                 },
+                                                 1,
+                                                 currentZmwIndex_++))
+                    {
+                        throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                    }
+                }
+            }
+        }
     }
 
     void RunWriter()
     {
+        OpenBazFile();
+
+        size_t numChunksWritten = 0;
+        PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            const std::vector<BasecallBatch>* baseCalls;
-            if (outputDataQueue_.TryPop(baseCalls))
+            std::vector<BasecallBatch> basecallChunk;
+            if (outputDataQueue_.TryPop(basecallChunk))
             {
-                // Write out data here.
+                currentZmwIndex_ = 0;
+                WriteBaseCallsChunk(basecallChunk);
+                bazWriter_->Flush();
                 numChunksWritten_++;
             }
             else
@@ -137,6 +253,14 @@ private:
                 }
             }
         }
+
+        CloseBazFile();
+
+        timer.SetCount(numChunksWritten);
+        double chunkWriteRate = timer.GetRate();
+        PBLOG_INFO << "Wrote " << numChunksWritten
+                   << " at " << chunkWriteRate << " chunks/sec"
+                   << " (" << batchGenerator_->NumZmwLanes() * primaryConfig.zmwsPerLane << " zmws/sec)";
     }
 
     void PreloadInputQueue()
@@ -177,18 +301,32 @@ private:
         timer.SetCount(numChunksRead);
         double chunkReadRate = timer.GetRate();
         PBLOG_INFO << "Read " << numChunksRead
-                   << " at " << chunkReadRate << " chunks/sec";
+                   << " at " << chunkReadRate << " chunks/sec"
+                   << " (" << batchGenerator_->NumZmwLanes() * primaryConfig.zmwsPerLane << " zmws/sec)";
     }
 
 private:
+    // Configuration objects
     BasecallerAlgorithmConfig basecallerConfig_;
+
+    // Main analyzer
     std::unique_ptr<ITraceAnalyzer> analyzer_;
+    std::unique_ptr<PacBio::Primary::BazWriter<PacBio::Primary::SpiderMetricBlock>> bazWriter_;
+
+    // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<const std::vector<BasecallBatch>*> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<BasecallBatch>> outputDataQueue_;
+
     std::string inputTargetFile_;
-    size_t numChunksPreloadInputQueue_;
-    size_t numChunksWritten_;
+    std::string outputBazFile_;
+    size_t numChunksPreloadInputQueue_ = 0;
+    size_t numChunksWritten_ = 0;
+    bool hasBazFile_ = false;
+    uint64_t numZmwsSoFar_ = 0;
+    size_t zmwOutputStrideFactor_ = 1;
+    uint32_t currentZmwIndex_ = 0;
+    bool simulateBasecalls_ = false;
 };
 
 int main(int argc, char* argv[])
@@ -209,12 +347,18 @@ int main(int argc, char* argv[])
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");
         parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
+        parser.add_option("--simulateBasecalls").action_store_true().help("Simulate basecalls for testing");
         
         auto group1 = PacBio::Process::OptionGroup(parser, "Data Selection/Tiling Options",
                                                    "Controls data selection/tiling options for simulation and testing");
         group1.add_option("--numZmwLanes").type_int().set_default(0).help("Specifies number of zmw lanes to analyze");
         group1.add_option("--frames").type_int().set_default(0).help("Specifies number of frames to run");
         parser.add_option_group(group1);
+
+        auto group2 = PacBio::Process::OptionGroup(parser, "Data Output Throttling Options",
+                                                   "Controls data throttling for BAZ file writing");
+        group2.add_option("--zmwOutputStrideFactor").type_int().set_default(1).help("Throttle zmw writing data output");
+        parser.add_option_group(group2);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
         PacBio::Process::ThreadedProcessBase::HandleGlobalOptions(options);

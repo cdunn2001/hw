@@ -43,7 +43,8 @@ public:     // Static functions
     static std::unique_ptr<ITraceAnalyzer>
     Create(unsigned int numPools,
            const Data::BasecallerAlgorithmConfig& bcConfig,
-           const Data::MovieConfig& movConfig);
+           const Data::MovieConfig& movConfig,
+           bool simulateBasecalls=false);
 
 public:
     virtual ~ITraceAnalyzer() noexcept = default;

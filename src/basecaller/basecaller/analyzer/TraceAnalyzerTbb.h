@@ -42,7 +42,8 @@ class TraceAnalyzerTbb : public ITraceAnalyzer
 public:     // Structors and assignment operators
     TraceAnalyzerTbb(unsigned int numPools,
                      const Data::BasecallerAlgorithmConfig& bcConfig,
-                     const Data::MovieConfig movConfig);
+                     const Data::MovieConfig movConfig,
+                     bool simulateBasecalls);
 
     virtual ~TraceAnalyzerTbb() noexcept = default;
 

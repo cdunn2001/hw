@@ -45,13 +45,14 @@ namespace Basecaller {
 
 TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
                                    const Data::BasecallerAlgorithmConfig& bcConfig,
-                                   const Data::MovieConfig movConfig)
+                                   const Data::MovieConfig movConfig,
+                                   bool simulateBasecalls)
 {
     bAnalyzer_.reserve(numPools);
     // TODO: Should be able to parallelize construction of batch analyzers.
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, bcConfig, movConfig);
+        bAnalyzer_.emplace_back(poolId, bcConfig, movConfig, simulateBasecalls);
     }
 }
 
