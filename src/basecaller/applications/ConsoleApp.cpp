@@ -139,11 +139,7 @@ private:
             std::vector<uint32_t> zmwNumbers = batchGenerator_->UnitCellIds();
             std::vector<uint32_t> zmwFeatures = batchGenerator_->UnitCellFeatures();
 
-            size_t numWritten = zmwNumbers.size() / zmwOutputStrideFactor_;
-            std::vector<uint32_t> writtenZmwNumbers(zmwNumbers.begin(), zmwNumbers.begin() + numWritten);
-            std::vector<uint32_t> writtenZmwFeatures(zmwFeatures.begin(), zmwFeatures.begin() + numWritten);
-
-            PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << writtenZmwNumbers.size();
+            PBLOG_INFO << "Opening BAZ file for writing: " << outputBazFile_ << " zmws: " << zmwNumbers.size();
 
             uint64_t movieLengthInFrames = batchGenerator_->NumFrames();
             PacBio::Primary::FileHeaderBuilder fh(outputBazFile_,
@@ -153,8 +149,8 @@ private:
                                                   MetricsVerbosity::HIGH,
                                                   "",
                                                   basecallerConfig_.RenderJSON(),
-                                                  writtenZmwNumbers,
-                                                  writtenZmwFeatures,
+                                                  zmwNumbers,
+                                                  zmwFeatures,
                                                   primaryConfig.framesPerChunk,
                                                   primaryConfig.framesPerChunk,
                                                   primaryConfig.framesPerChunk,
@@ -199,7 +195,7 @@ private:
         {
             for (uint32_t z = 0; z < basecallBatch.Dims().zmwsPerBatch(); z++)
             {
-                if (currentZmwWritten_++ % zmwOutputStrideFactor_ == 0)
+                if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                 {
                     if (!bazWriter_->AddZmwSlice(basecallBatch.Basecalls().data() + basecallBatch.zmwOffset(z),
                                                  basecallBatch.SeqLengths()[z],
@@ -211,11 +207,23 @@ private:
                                                     }
                                                  },
                                                  1,
-                                                 currentZmwIndex_++))
+                                                 currentZmwIndex_))
                     {
                         throw PBException(bazWriterError + bazWriter_->ErrorMessage());
                     }
                 }
+                else
+                {
+                    if (!bazWriter_->AddZmwSlice(NULL,
+                                                 0,
+                                                 [&](PacBio::Primary::MemoryBufferView<PacBio::Primary::SpiderMetricBlock>& dest) {},
+                                                 0,
+                                                 currentZmwIndex_))
+                    {
+                        throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                    }
+                }
+                currentZmwIndex_++;
             }
         }
     }
@@ -232,7 +240,6 @@ private:
             if (outputDataQueue_.TryPop(basecallChunk))
             {
                 currentZmwIndex_ = 0;
-                currentZmwWritten_ = 0;
                 WriteBaseCallsChunk(basecallChunk);
                 bazWriter_->Flush();
                 numChunksWritten_++;
@@ -319,7 +326,6 @@ private:
     uint64_t numZmwsSoFar_ = 0;
     size_t zmwOutputStrideFactor_ = 1;
     uint32_t currentZmwIndex_ = 0;
-    uint32_t currentZmwWritten_ = 0;
     bool simulateBasecalls_ = false;
 };
 
