@@ -40,10 +40,7 @@ void run(const Data::DataManagerParams& dataParams,
 {
     static constexpr size_t gpuBlockThreads = 32;
 
-    DeviceOnlyObj<TransitionMatrix> trans(Utility::CudaArray<AnalogMeta, 4>{meta});
     std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
-    std::vector<DeviceOnlyArray<LatentViterbi<gpuBlockThreads>>> latent;
-    std::vector<ViterbiDataHost<short2, gpuBlockThreads>> labels;
 
     LaneModelParameters<gpuBlockThreads> referenceModel;
     referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
@@ -53,14 +50,13 @@ void run(const Data::DataManagerParams& dataParams,
     }
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
+
+    FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
+    std::vector<FrameLabeler> frameLabelers(numBatches);
     models.reserve(numBatches);
-    latent.reserve(numBatches);
-    // TODO this only needs one per active batch, not all batches
-    labels.reserve(numBatches);
     for (size_t i = 0; i < numBatches; ++i)
     {
-        latent.emplace_back(dataParams.kernelLanes);
-        labels.emplace_back(dataParams.blockLength + Viterbi::lookbackDist, dataParams.kernelLanes);
+
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)
@@ -69,23 +65,19 @@ void run(const Data::DataManagerParams& dataParams,
         }
     }
 
-    auto tmp = [&trans, &models, &dataParams, &latent, &labels](
+    auto tmp = [&models, &dataParams, &frameLabelers](
         TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
         if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        FrameLabelerKernel<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            trans.GetDevicePtr(),
-            models[batchIdx].GetDeviceHandle(),
-            latent[batchIdx].GetDeviceView(),
-            labels[batchIdx],
-            batch,
-            ret);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, ret);
     };
 
     ZmwDataManager<int16_t, int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
     RunThreads(simulKernels, manager, tmp);
+
+    FrameLabeler::Finalize();
 }
 
 }}

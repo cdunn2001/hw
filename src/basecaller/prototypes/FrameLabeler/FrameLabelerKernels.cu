@@ -52,6 +52,58 @@ __device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArra
     }
 }
 
+int32_t FrameLabeler::framesPerChunk_ = 0;
+int32_t FrameLabeler::lanesPerPool_ = 0;
+ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
+std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> FrameLabeler::trans_;
+
+
+void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
+                             int32_t lanesPerPool, int32_t framesPerChunk)
+{
+    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
+    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
+
+    trans_ = std::make_unique<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>>(
+            CudaArray<Subframe::AnalogMeta, 4>{meta});
+
+    framesPerChunk_ = framesPerChunk;
+    lanesPerPool_ = lanesPerPool;
+}
+
+void FrameLabeler::Finalize()
+{
+    scratchData_.Clear();
+    trans_.release();
+}
+
+std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
+{
+    std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> ret;
+    bool success = scratchData_.TryPop(ret);
+    if (! success)
+    {
+        ret = std::make_unique<ViterbiDataHost<short2, BlockThreads>>(framesPerChunk_ + Viterbi::lookbackDist, lanesPerPool_);
+    }
+    assert(ret);
+    return ret;
+}
+
+void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>> data)
+{
+    scratchData_.Push(std::move(data));
+}
+
+FrameLabeler::FrameLabeler()
+    : latent_(lanesPerPool_)
+{
+    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
+    {
+        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
+    }
+}
+
+
 __launch_bounds__(32, 12)
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
@@ -172,6 +224,21 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     latent.SetBoundary(anchorState);
     latent.SetModel(models[blockIdx.x]);
     latent.SetData(inZmw);
+}
+
+void FrameLabeler::ProcessBatch(Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
+                                Mongo::Data::TraceBatch<int16_t>& input,
+                                Mongo::Data::TraceBatch<int16_t>& output)
+{
+    auto labels = BorrowScratch();
+
+    FrameLabelerKernel<<<lanesPerPool_, BlockThreads>>>(trans_->GetDevicePtr(),
+                                                        models.GetDeviceHandle(),
+                                                        latent_.GetDeviceView(),
+                                                        *labels,
+                                                        input,
+                                                        output);
+    ReturnScratch(std::move(labels));
 }
 
 }}

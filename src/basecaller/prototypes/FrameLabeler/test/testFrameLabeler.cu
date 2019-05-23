@@ -1,3 +1,4 @@
+#include <array>
 #include <cassert>
 
 #include <gtest/gtest.h>
@@ -50,7 +51,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
                                     std::make_unique<SignalGenerator>(dataParams, traceParams),
                                     true);
 
-    CudaArray<Subframe::AnalogMeta, 4> meta{};
+    std::array<Subframe::AnalogMeta, 4> meta{};
     Subframe::AnalogMeta baselineMeta{};
 
     // Hard code our models to match this specific trace file
@@ -90,7 +91,6 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         baselineMeta.var = 33;
     }
 
-    DeviceOnlyObj<Subframe::TransitionMatrix> trans(meta);
     LaneModelParameters<gpuBlockThreads> refModel;
     refModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
@@ -98,18 +98,14 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         refModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
     }
 
-    std::vector<ViterbiDataHost<short2, 32>> labels;
     std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
-    std::vector<DeviceOnlyArray<LatentViterbi<gpuBlockThreads>>> latent;
+    FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
+    std::vector<FrameLabeler> frameLabelers(poolsPerChip);
 
-    labels.reserve(poolsPerChip);
     models.reserve(poolsPerChip);
-    latent.reserve(poolsPerChip);
     for (int i = 0; i < poolsPerChip; ++i)
     {
-        labels.emplace_back(dataParams.blockLength, dataParams.kernelLanes);
         models.emplace_back(lanesPerPool,SyncDirection::Symmetric);
-        latent.emplace_back(lanesPerPool);
         auto hostModels = models.back().GetHostView();
         for (int j = 0; j < lanesPerPool; ++j)
         {
@@ -133,14 +129,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         auto batchIdx = data.Batch();
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
-        FrameLabelerKernel<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-                trans.GetDevicePtr(),
-                models[batchIdx].GetDeviceHandle(),
-                latent[batchIdx].GetDeviceView(),
-                labels[batchIdx],
-                in,
-                out);
-
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, out);
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {
@@ -166,4 +155,6 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     EXPECT_LT(subframeMiss / total, .025);
     EXPECT_LT(mismatches / total, .035);
     //std::cerr << "Matches/SubframeConfusion/Mismatches: " << matches << "/" << subframeMiss << "/" << mismatches << std::endl;
+
+    FrameLabeler::Finalize();
 }

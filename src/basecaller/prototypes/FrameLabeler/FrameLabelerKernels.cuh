@@ -122,13 +122,45 @@ struct ViterbiData : private Memory::detail::DataManager
     int numFrames_;
 };
 
-// First arg should be const?
-__global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
-                                   Memory::DeviceView<LaneModelParameters<32>> models,
-                                   Memory::DeviceView<LatentViterbi<32>> latent,
-                                   ViterbiData<short2, 32> labels,
-                                   Mongo::Data::GpuBatchData<short2> input,
-                                   Mongo::Data::GpuBatchData<short2> output);
+class FrameLabeler
+{
+    static constexpr size_t BlockThreads = 32;
+public:
+
+    // Helpers to provide scratch space data.  Used to pool allocations so we
+    // only need enough to satisfy the current active batches, not one for
+    // each possible pool.
+    static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
+                          int32_t lanesPerPool, int32_t framesPerChunk);
+private:
+    static std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> BorrowScratch();
+    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> data);
+
+public:
+    // This is necessary to call, if we wait until the C++ runtime is tearing down, the static scratch data
+    // may be freed after the cuda runtime is torn down, which causes problems
+    static void Finalize();
+
+public:
+    FrameLabeler();
+
+    FrameLabeler(const FrameLabeler&) = delete;
+    FrameLabeler(FrameLabeler&&) = default;
+    FrameLabeler& operator=(const FrameLabeler&) = delete;
+    FrameLabeler& operator=(FrameLabeler&&) = default;
+
+
+void ProcessBatch(Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
+                  Mongo::Data::TraceBatch<int16_t>& input,
+                  Mongo::Data::TraceBatch<int16_t>& output);
+private:
+    Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
+
+    static int32_t lanesPerPool_;
+    static int32_t framesPerChunk_;
+    static std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> trans_;
+    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<short2, BlockThreads>>> scratchData_;
+};
 
 }}
 
