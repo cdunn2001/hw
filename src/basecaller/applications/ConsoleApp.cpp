@@ -38,24 +38,11 @@ public:
 
     void HandleProcessOptions(const PacBio::Process::Values& options)
     {
-
         PacBio::Process::ThreadedProcessBase::HandleProcessOptions(options);
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
         zmwOutputStrideFactor_ = options.get("zmwOutputStrideFactor");
         simulateBasecalls_ = options.get("simulateBasecalls");
-
-        if (inputTargetFile_.size() == 0)
-            inputTargetFile_ = options["inputfile"];
-
-        if (options.is_set_by_user("outputbazfile"))
-        {
-            hasBazFile_ = true;
-            outputBazFile_ = options["outputbazfile"];
-        }
-
-        PBLOG_INFO << "Input Target: " << inputTargetFile_;
-        PBLOG_INFO << "Output Target: " << outputBazFile_;
 
         batchGenerator_.reset(new BatchGenerator(primaryConfig.framesPerChunk,
                                                  primaryConfig.zmwsPerLane,
@@ -63,7 +50,21 @@ public:
                                                  options.get("frames"),
                                                  options.get("numZmwLanes")));
 
-        batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
+        if (inputTargetFile_.size() == 0)
+            inputTargetFile_ = options["inputfile"];
+
+        if (!inputTargetFile_.empty())
+        {
+            PBLOG_INFO << "Input Target: " << inputTargetFile_;
+            batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
+        }
+
+        if (options.is_set_by_user("outputbazfile"))
+        {
+            hasBazFile_ = true;
+            outputBazFile_ = options["outputbazfile"];
+            PBLOG_INFO << "Output Target: " << outputBazFile_;
+        }
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << batchGenerator_->NumZmwLanes();
         PBLOG_INFO << "Number of analysis chunks = " << batchGenerator_->NumChunks();

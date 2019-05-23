@@ -88,6 +88,8 @@ public:
 private:
     void PopulateBatch(uint32_t batchNum, Mongo::Data::TraceBatch<int16_t>& traceBatch)
     {
+        if (!traceFileReader_) return;
+
         uint32_t traceStartZmwLane = (batchNum * kernelLanes_) % traceFileReader_->NumZmwLanes();
         uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
 
@@ -110,7 +112,8 @@ private:
                                           size_t blockIdx,
                                           int16_t* v)
     {
-        traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
+        if (traceFileReader_)
+            traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
     }
 
 private:

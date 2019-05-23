@@ -1,4 +1,4 @@
-  $ mongo-basecaller --simulateBasecalls --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz /pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5 > /dev/null
+  $ mongo-basecaller --simulateBasecalls --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65
@@ -13,7 +13,7 @@
   $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz | grep 'NUM_BASES_[ACGT]' | cut -d':' -f 2 | sed 's/,//' | sed 's/ //g' | paste -s -d+ - | bc
   768
 
-  $ mongo-basecaller --zmwOutputStrideFactor 4 --simulateBasecalls --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz /pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5 > /dev/null
+  $ mongo-basecaller --zmwOutputStrideFactor 4 --simulateBasecalls --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65
@@ -21,7 +21,18 @@
   $ bazviewer --silent -d -n 4 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/",//' | xargs | sed 's/ //g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
-  $ bazviewer --silent -d -n 2 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/",//' | xargs | sed 's/ //g'
+  $ bazviewer --silent -d -n 2 ${CRAMTMP}/test.baz  | tail -n +2
+  {
+  \t"STITCHED" :  (esc)
+  \t[ (esc)
+  \t\t{ (esc)
+  \t\t\t"INTERNAL" : false, (esc)
+  \t\t\t"ZMW_ID" : 2, (esc)
+  \t\t\t"ZMW_NUMBER" : 2 (esc)
+  \t\t} (esc)
+  \t], (esc)
+  \t"TYPE" : "BAZ_OVERVIEW" (esc)
+  }
 
   $ bazviewer --silent -d -n 8 ${CRAMTMP}/test.baz | grep NUM_PULSES | cut -d':' -f 2 | sed 's/,//' | sed 's/ //g' | paste -s -d+ - | bc
   768
