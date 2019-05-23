@@ -10,4 +10,7 @@ target_link_libraries(mongo-basecaller
     PUBLIC
         libMongoBasecallerAnalyzer
         libProtoCommon
+        libBazio
 )
+
+add_subdirectory(test)

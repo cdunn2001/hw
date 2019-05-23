@@ -5,6 +5,7 @@
 #include <common/DataGenerators/TraceFileReader.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/TraceBatch.h>
+#include <numeric>
 
 namespace PacBio {
 namespace Cuda {
@@ -27,6 +28,18 @@ public:
         , chunkIndex_(0)
     {
         tracePool_ = std::make_shared<Memory::DualAllocationPools>(laneWidth * blockLen * kernelLanes*sizeof(int16_t));
+    }
+
+    std::vector<uint32_t> UnitCellIds()
+    {
+        std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * zmwLaneWidth_);
+        std::iota(unitCellNumbers.begin(), unitCellNumbers.end(), 0);
+        return unitCellNumbers;
+    }
+
+    std::vector<uint32_t> UnitCellFeatures()
+    {
+        return std::vector<uint32_t>(numZmwLanes_ * zmwLaneWidth_, 0);
     }
 
     void SetTraceFileSource(const std::string& traceFileName, bool cache)
@@ -70,9 +83,13 @@ public:
 
     size_t NumTraceChunks() const { return numTraceChunks_ ; }
 
+    uint64_t NumFrames() const { return numChunks_ * BlockLen(); }
+
 private:
     void PopulateBatch(uint32_t batchNum, Mongo::Data::TraceBatch<int16_t>& traceBatch)
     {
+        if (!traceFileReader_) return;
+
         uint32_t traceStartZmwLane = (batchNum * kernelLanes_) % traceFileReader_->NumZmwLanes();
         uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
 
@@ -95,7 +112,8 @@ private:
                                           size_t blockIdx,
                                           int16_t* v)
     {
-        traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
+        if (traceFileReader_)
+            traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
     }
 
 private:
