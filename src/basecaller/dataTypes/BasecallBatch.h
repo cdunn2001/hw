@@ -51,31 +51,31 @@ public:
 
     BasecallingMetrics();
 
-    BasecallingMetrics& PushBack(const Basecall& base);
+    BasecallingMetrics& Count(const Basecall& base);
 
 public:
-    const std::array<uint16_t,4> NumBasesByAnalog() const
+    const std::array<uint8_t,4> NumBasesByAnalog() const
     { return numBasesByAnalog_; }
 
-    const std::array<uint16_t,4> NumPulsesByAnalog() const
+    const std::array<uint8_t,4> NumPulsesByAnalog() const
     { return numPulsesByAnalog_; }
 
-    uint32_t NumBases() const
+    uint16_t NumBases() const
     { return std::accumulate(numBasesByAnalog_.begin(), numBasesByAnalog_.end(), 0); }
 
-    uint32_t NumPulses() const
+    uint16_t NumPulses() const
     { return std::accumulate(numPulsesByAnalog_.begin(), numPulsesByAnalog_.end(), 0); }
 
 public:
-    std::array<uint16_t,4>& NumBasesByAnalog()
+    std::array<uint8_t,4>& NumBasesByAnalog()
     { return numBasesByAnalog_; }
 
-    std::array<uint16_t,4>& NumPulsesByAnalog()
+    std::array<uint8_t,4>& NumPulsesByAnalog()
     { return numPulsesByAnalog_; }
 
 private:
-    std::array<uint16_t,4> numBasesByAnalog_;
-    std::array<uint16_t,4> numPulsesByAnalog_;
+    std::array<uint8_t,4> numBasesByAnalog_;
+    std::array<uint8_t,4> numPulsesByAnalog_;
 };
 
 
@@ -122,7 +122,7 @@ public:     // Functions
     const ArrayType<uint32_t>& SeqLengths() const
     { return seqLengths_; }
 
-    const ArrayType<PacBio::Mongo::Data::BasecallingMetrics>& Metrics() const
+    const ArrayType<BasecallingMetrics>& Metrics() const
     { return metrics_; }
 
 public:    // Functions
@@ -143,7 +143,7 @@ public:    // Functions
     }
 
 public:   // Modifying methods
-    void PushBack(uint32_t z, Basecall bc);
+    bool PushBack(uint32_t z, Basecall bc);
 
 private:    // Data
     BatchDimensions dims_;

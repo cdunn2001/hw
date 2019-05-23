@@ -37,7 +37,7 @@ BasecallingMetrics::BasecallingMetrics()
     , numPulsesByAnalog_{0, 0, 0, 0}
 { }
 
-BasecallingMetrics& BasecallingMetrics::PushBack(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
+BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
 {
     uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
     numPulsesByAnalog_[pulseLabel]++;
@@ -62,14 +62,17 @@ BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
     , metrics_ (batchDims.zmwsPerBatch())
 { }
 
-void BasecallBatch::PushBack(uint32_t z, Basecall bc)
+bool BasecallBatch::PushBack(uint32_t z, Basecall bc)
 {
     if (seqLengths_[z] < maxCallsPerZmwChunk_)
     {
         basecalls_[zmwOffset(z) + seqLengths_[z]] = bc;
-        metrics_[z].PushBack(bc);
+        metrics_[z].Count(bc);
         seqLengths_[z]++;
+        return true;
     }
+
+    return false;
 }
 
 }}}     // namespace PacBio::Mongo::Data

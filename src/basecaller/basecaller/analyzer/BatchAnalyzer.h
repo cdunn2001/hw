@@ -46,8 +46,7 @@ public:     // Types
 public:     // Structors & assignment operators
     BatchAnalyzer(uint32_t batchId,
                   const Data::BasecallerAlgorithmConfig& bcConfig,
-                  const Data::MovieConfig& movConfig,
-                  bool simulateBasecalls);
+                  const Data::MovieConfig& movConfig);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;
@@ -66,7 +65,6 @@ public:
 private:
     uint32_t batchId_;
     uint32_t nextFrameId_ = 0;
-    bool simulateBasecalls_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

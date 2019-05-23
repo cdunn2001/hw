@@ -51,12 +51,11 @@ bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig&
 std::unique_ptr<ITraceAnalyzer>
 ITraceAnalyzer::Create(unsigned int numPools,
                        const Data::BasecallerAlgorithmConfig& bcConfig,
-                       const Data::MovieConfig& movConfig,
-                       bool simulateBasecalls)
+                       const Data::MovieConfig& movConfig)
 {
     // TODO
     // At this point, there is only one implementation, which uses TBB.
-    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{numPools, bcConfig, movConfig, simulateBasecalls}};
+    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{numPools, bcConfig, movConfig}};
 
     return p;
 }
