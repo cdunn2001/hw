@@ -32,14 +32,14 @@ public:
 
     std::vector<uint32_t> UnitCellIds()
     {
-        std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * zmwLaneWidth_);
+        std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * laneWidth_);
         std::iota(unitCellNumbers.begin(), unitCellNumbers.end(), 0);
         return unitCellNumbers;
     }
 
     std::vector<uint32_t> UnitCellFeatures()
     {
-        return std::vector<uint32_t>(numZmwLanes_ * zmwLaneWidth_, 0);
+        return std::vector<uint32_t>(numZmwLanes_ * laneWidth_, 0);
     }
 
     void SetTraceFileSource(const std::string& traceFileName, bool cache)
