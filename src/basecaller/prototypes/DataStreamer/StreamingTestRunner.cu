@@ -16,28 +16,21 @@ using namespace PacBio::Cuda::Data;
 // make sure it has the expected value as per TemplateGenerator.  Can be easily tweaked
 // to loop over the data multiple times, to artificially inflate compute time.
 // function implicitly assumes that the kernel blocks only contain 32 threads.
-__global__ void BasicSanity(Mongo::Data::GpuBatchData<short> in, size_t tid, Memory::DeviceView<size_t> ret)
+__global__ void BasicSanity(Mongo::Data::GpuBatchData<short2> in, size_t tid, Memory::DeviceView<size_t> ret)
 {
     assert(gridDim.x == in.Dims().lanesPerBatch);
-    assert(blockDim.x == in.Dims().laneWidth/2);
+    assert(blockDim.x == in.Dims().laneWidth);
 
     const size_t reps = 10;
-    auto zmwData1 = in.ZmwData(blockIdx.x, 2*threadIdx.x);
-    auto zmwData2 = in.ZmwData(blockIdx.x, 2*threadIdx.x+1);
+    auto zmwData = in.ZmwData(blockIdx.x, threadIdx.x);
+    assert(zmwData.size() != 0);
     for (size_t i = 0; i < reps; ++i)
     {
-        size_t val = zmwData1[0];
+        short val = zmwData[0].x;
         bool valid = true;
-        for (auto& data : zmwData1)
+        for (auto& data : zmwData)
         {
-            auto myValid = (data == val);
-            auto warpValid = __all_sync(0xFFFF, myValid);
-            if (threadIdx.x == 0)
-                valid = valid && warpValid;
-        }
-        for (auto& data : zmwData2)
-        {
-            auto myValid = (data == val);
+            auto myValid = (data.x == val) && (data.y == val);
             auto warpValid = __all_sync(0xFFFF, myValid);
             if (threadIdx.x == 0)
                 valid = valid && warpValid;
@@ -83,7 +76,7 @@ void RunTest(const Data::DataManagerParams& params, size_t simulKernels)
         {
             try {
                 auto batch = manager.NextBatch();
-                BasicSanity<<<params.kernelLanes, params.gpuLaneWidth/2>>>(batch.KernelInput(), tid, ret.GetDeviceHandle());
+                BasicSanity<<<params.kernelLanes, params.laneWidth/2>>>(batch.KernelInput(), tid, ret.GetDeviceHandle());
                 auto view = ret.GetHostView();
                 bool valid = true;
                 for (size_t i = 0; i < params.kernelLanes; ++i)

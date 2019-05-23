@@ -27,7 +27,7 @@ struct MinOp
 
 // Baseline filter for one (cuda) block of threads.  Meant to
 // be allocated in global memory.
-template <size_t laneWidth, size_t filterWidth, typename Op = MaxOp>
+template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp>
 struct __align__(128) ExtremaFilter
 {
     // default ctor leaves things unitialized!  Intended to facilitate use of this
@@ -37,14 +37,14 @@ struct __align__(128) ExtremaFilter
     // ctor intended to be called by a single cuda thread
     __device__ ExtremaFilter(short val)
     {
-        for (size_t i = 0; i < laneWidth; ++i)
+        for (size_t i = 0; i < blockThreads; ++i)
         {
             idx[i] = 0;
         }
         static_assert(sizeof(ExtremaFilter) % 128 == 0, "Alignment request not respected");
         for (size_t i = 0; i < filterWidth; ++i)
         {
-            for (size_t j = 0; j < laneWidth; ++j)
+            for (size_t j = 0; j < blockThreads; ++j)
             {
                 data[i][j] = make_short2(0,0);
             }
@@ -66,7 +66,7 @@ struct __align__(128) ExtremaFilter
 
     __device__ short2 operator()(short2 val)
     {
-        assert(blockDim.x == laneWidth);
+        assert(blockDim.x == blockThreads);
 
         auto myIdx = idx[threadIdx.x];
         if (myIdx == 0)
@@ -92,16 +92,16 @@ struct __align__(128) ExtremaFilter
         return Op::op(s[threadIdx.x], tmp);
     }
 
-    using row = short2[laneWidth];
+    using row = short2[blockThreads];
     // TODO create cuda version of std::array
     row data[filterWidth];
     row s;
-    int idx[laneWidth];
+    int idx[blockThreads];
 };
 
 // Experimental version that tries to push the extrema filter into registers.  Did not really
 // pan out, but leaving here for educational reasons
-template <size_t laneWidth, size_t filterWidth, typename Op = MaxOp>
+template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp>
 struct LocalExtremaFilter
 {
     // Compile time loop, which is necessary to keep `data` in registers
@@ -124,7 +124,7 @@ struct LocalExtremaFilter
     // Another compile time loop, to keep `data` in registers
     template <size_t id>
     __device__
-    void ExtractZmwData(const ExtremaFilter<laneWidth, filterWidth, Op>& f)
+    void ExtractZmwData(const ExtremaFilter<blockThreads, filterWidth, Op>& f)
     {
         data[id] = f.data[id][threadIdx.x];
 
@@ -132,7 +132,7 @@ struct LocalExtremaFilter
         if (id == filterWidth-1) return;
         else ExtractZmwData<next>(f);
     }
-    __device__ LocalExtremaFilter(const ExtremaFilter<laneWidth, filterWidth, Op>& f)
+    __device__ LocalExtremaFilter(const ExtremaFilter<blockThreads, filterWidth, Op>& f)
         : idx(0)
     {
         ExtractZmwData<0>(f);
@@ -144,7 +144,7 @@ struct LocalExtremaFilter
     // compile time loop, to keep `data` in registers
     template <size_t id>
     __device__
-    void ReplaceZmwData(ExtremaFilter<laneWidth, filterWidth, Op>& f)
+    void ReplaceZmwData(ExtremaFilter<blockThreads, filterWidth, Op>& f)
     {
         f.data[id][threadIdx.x] = data[id];
 
@@ -152,7 +152,7 @@ struct LocalExtremaFilter
         if (id == filterWidth-1) return;
         else ReplaceZmwData<next>(f);
     }
-    __device__ void ReplaceShared(ExtremaFilter<laneWidth, filterWidth, Op> & f)
+    __device__ void ReplaceShared(ExtremaFilter<blockThreads, filterWidth, Op> & f)
     {
         ReplaceZmwData<0>(f);
         f.s[threadIdx.x] = s;

@@ -16,7 +16,7 @@ namespace Data {
 struct TemplateGenerator : public GeneratorBase<short>
 {
     TemplateGenerator(const DataManagerParams& params)
-        : GeneratorBase(params.blockLength, params.gpuLaneWidth, params.numBlocks, params.numZmwLanes)
+        : GeneratorBase(params.blockLength, params.laneWidth, params.numBlocks, params.numZmwLanes)
     {}
 
 private:

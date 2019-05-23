@@ -126,9 +126,11 @@ class BatchData : private Cuda::Memory::detail::DataManager
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              std::shared_ptr<Cuda::Memory::GpuAllocationPool<T>> pool = nullptr)
+              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
+              bool pinnedHost = true)
         : dims_(dims)
-        , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch, syncDirection, pool)
+        , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
+                syncDirection, pinnedHost, pool)
     {}
 
     BatchData(const BatchData&) = delete;
@@ -144,8 +146,7 @@ public:
 
     const BatchDimensions& Dimensions() const { return dims_; }
 
-    GpuBatchDataHandle<T> GetGpuHandle() { return GpuBatchDataHandle<T>(dims_, data_, DataKey()); }
-    operator GpuBatchDataHandle<T>() { return GetGpuHandle(); }
+    Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
@@ -172,8 +173,9 @@ public:
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,
-               std::shared_ptr<Cuda::Memory::GpuAllocationPool<T>> pool = nullptr)
-        : BatchData<T>(dims, syncDirection, pool)
+               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
+               bool pinnedHost = true)
+        : BatchData<T>(dims, syncDirection, pool, pinnedHost)
         , meta_(meta)
     {}
 

@@ -1,6 +1,11 @@
 #ifndef TRACE_FILE_READER_H
 #define TRACE_FILE_READER_H
 
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <vector_types.h>
 
 namespace PacBio {
@@ -16,7 +21,7 @@ public:
 
 public: // non-mutating methods
     void PopulateBlock(size_t laneIdx, size_t blockIdx, int16_t* v) const;
-    void PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<short2>& v) const;
+    void PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<int16_t>& v) const;
 
     size_t NumChunks() const;
 

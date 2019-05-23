@@ -102,9 +102,21 @@ public:
     GpuBatchData(const GpuBatchDataHandle<T>& handle)
         : GpuBatchDataHandle<T>(handle)
     {}
-    GpuBatchData(BatchData<T>& data)
-        : GpuBatchDataHandle<T>(data)
-    {}
+    template <typename U>
+    GpuBatchData(BatchData<U>& data)
+        : GpuBatchDataHandle<T>(data.Dimensions(),
+                                data.GetRawData(DataKey()).GetDeviceHandle(),
+                                DataKey())
+    {
+        // We support using things like int16_t on the host but short2 on
+        // the device.  To enable that, we may need to tweak our apparent
+        // lane width
+        if (sizeof(U) != sizeof(T))
+        {
+            static_assert(sizeof(T) % sizeof(U) == 0, "Invalid types");
+            this->dims_.laneWidth /= 2;
+        }
+    }
 
     __device__ const BatchDimensions& Dims() const { return dims_; }
 

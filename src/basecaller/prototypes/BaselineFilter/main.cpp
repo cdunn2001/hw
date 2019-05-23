@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
     auto groupMand = PacBio::Process::OptionGroup(parser, "Mandatory parameters");
     groupMand.add_option("--frameRate").type_float().set_default(defaultFillerParams.frameRate);
     groupMand.add_option("--numZmw").type_int().set_default(8388608);
-    groupMand.add_option("--zmwLaneWidth").type_int().set_default(64);
+    groupMand.add_option("--laneWidth").type_int().set_default(64);
     groupMand.add_option("--numBlocks").type_int().set_default(10);
     groupMand.add_option("--blockLength").type_int().set_default(64);
     groupMand.add_option("--kernelLanes").type_int().set_default(2048*2);
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 
     const float frameRate = options.get("frameRate");
     const size_t numZmw = options.get("numZmw");
-    const size_t zmwLaneWidth = options.get("zmwLaneWidth");
+    const size_t laneWidth = options.get("laneWidth");
     const size_t numBlocks = options.get("numBlocks");
     const size_t blockLength = options.get("blockLength");
     const size_t kernelLanes = options.get("kernelLanes");
@@ -59,11 +59,11 @@ int main(int argc, char* argv[])
     const bool immediateCopy = options.get("immediateCopy");
     const BaselineFilterMode filterMode(options["filterMode"]);
 
-    if (numZmw % zmwLaneWidth != 0) throw PBException("numZmw must be evenly divisible by zmwLaneWidth");
-    const size_t numZmwLanes = numZmw / zmwLaneWidth;
+    if (numZmw % laneWidth != 0) throw PBException("numZmw must be evenly divisible by laneWidth");
+    const size_t numZmwLanes = numZmw / laneWidth;
 
     auto params = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(immediateCopy)
             .FrameRate(frameRate)
             .NumZmwLanes(numZmwLanes)

@@ -44,12 +44,12 @@ public:
 
     void PopulateBlock(size_t laneIdx,
                        size_t blockIdx,
-                       std::vector<short2>& v) const
+                       std::vector<int16_t>& v) const
     {
         size_t wrappedLane = laneIdx % numZmwLanes_;
         size_t wrappedBlock = blockIdx % numChunks_;
 
-        FetchBlock(wrappedLane, wrappedBlock, reinterpret_cast<int16_t*>(v.data()));
+        FetchBlock(wrappedLane, wrappedBlock, v.data());
     }
 
     ~TraceFileReaderImpl() = default;
@@ -79,7 +79,7 @@ private:
     void ReadEntireTraceFile()
     {
         PBLOG_INFO << "Reading trace file into memory...";
-        pixelCache_.resize(boost::extents[numChunks_][numZmwLanes_][framesPerChunk_][zmwsPerLane_/2]);
+        pixelCache_.resize(boost::extents[numChunks_][numZmwLanes_][framesPerChunk_][zmwsPerLane_]);
         std::vector<int16_t> data(framesPerChunk_ * zmwsPerLane_);
         size_t lane;
         for (lane = 0; lane < numZmwLanes_; lane++)
@@ -117,7 +117,7 @@ private:
     SequelTraceFileHDF5 traceFile_;;
     size_t numZmwLanes_;
     size_t numChunks_;
-    boost::multi_array<short2,4> pixelCache_;
+    boost::multi_array<int16_t, 4> pixelCache_;
     bool cached_;
 };
 
@@ -145,7 +145,7 @@ void TraceFileReader::PopulateBlock(size_t laneIdx, size_t blockIdx, int16_t* v)
     pImpl_->PopulateBlock(laneIdx, blockIdx, v);
 }
 
-void TraceFileReader::PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<short2>& v) const
+void TraceFileReader::PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<int16_t>& v) const
 {
     pImpl_->PopulateBlock(laneIdx, blockIdx, v);
 }

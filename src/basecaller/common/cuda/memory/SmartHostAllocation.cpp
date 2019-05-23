@@ -1,0 +1,2 @@
+
+#include "SmartHostAllocation.h"

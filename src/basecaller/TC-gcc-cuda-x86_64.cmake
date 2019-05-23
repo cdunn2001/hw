@@ -11,6 +11,7 @@ set(CMAKE_CXX_FLAGS_DEBUG           "-O0 -g ${CMAKE_CXX_FLAGS_DEBUG_1}" CACHE ST
 set(CMAKE_CXX_FLAGS_RELEASE         "-O3 -DNDEBUG "    CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "" FORCE)
 
-set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr --default-stream per-thread -lineinfo" CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr --default-stream per-thread" CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS_RELEASE        "-O3 -DNDEBUG -lineinfo" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_DEBUG          "-O0 -g -G" CACHE STRING "" FORCE)
-set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -g" CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -g -lineinfo" CACHE STRING "" FORCE)

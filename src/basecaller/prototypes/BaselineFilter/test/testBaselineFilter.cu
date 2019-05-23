@@ -20,13 +20,13 @@ using namespace PacBio::Mongo::Data;
 // hundred frames as they are not valid.
 TEST(BaselineFilterTest, GlobalMemory)
 {
-    static constexpr size_t zmwLaneWidth = 32;
-    static constexpr size_t gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr size_t laneWidth = 64;
+    static constexpr size_t gpuBlockThreads = laneWidth/2;
 
     // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
     // errors in the bookkeeping
     auto dataParams = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(16)
@@ -39,12 +39,12 @@ TEST(BaselineFilterTest, GlobalMemory)
             .BaselineSignalLevel(150);
 
 
-    using Filter = BaselineFilter<gpuLaneWidth, IntSeq<2,8>, IntSeq<9,31>>;
+    using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
 
-    ZmwDataManager<short2> manager(dataParams,
-                                   std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                   true);
+    ZmwDataManager<int16_t> manager(dataParams,
+                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
+                                  true);
 
     while (manager.MoreData())
     {
@@ -54,7 +54,7 @@ TEST(BaselineFilterTest, GlobalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuLaneWidth>>>(
+        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
             filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
             out);
@@ -78,8 +78,7 @@ TEST(BaselineFilterTest, GlobalMemory)
                     // I think things look suspicious, but things are otherwise behaving
                     // correctly and as this is testing mere prototypes, there isn't time
                     // to dig into this just yet.
-                    EXPECT_NEAR(block(j,k).x, 230, 20);
-                    EXPECT_NEAR(block(j,k).y, 230, 20);
+                    EXPECT_NEAR(block(j,k), 230, 20);
                 }
 
             }
@@ -93,13 +92,13 @@ TEST(BaselineFilterTest, GlobalMemory)
 // implementations produce identical results
 TEST(BaselineFilterTest, SharedMemory)
 {
-    static constexpr size_t zmwLaneWidth = 32;
-    static constexpr size_t gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr size_t laneWidth = 64;
+    static constexpr size_t gpuBlockThreads = laneWidth/2;
 
     // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
     // errors in the bookkeeping
     auto dataParams = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(16)
@@ -112,19 +111,19 @@ TEST(BaselineFilterTest, SharedMemory)
             .BaselineSignalLevel(150);
 
 
-    using Filter = BaselineFilter<gpuLaneWidth, IntSeq<2,8>, IntSeq<9,31>>;
+    using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
     DeviceOnlyArray<Filter> filterRefData(dataParams.numZmwLanes, 0);
 
-    ZmwDataManager<short2> manager(dataParams,
-                                   std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                   true);
+    ZmwDataManager<int16_t> manager(dataParams,
+                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
+                                  true);
 
     BatchDimensions dims;
-    dims.laneWidth = dataParams.gpuLaneWidth;
+    dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
 
     while (manager.MoreData())
     {
@@ -133,12 +132,12 @@ TEST(BaselineFilterTest, SharedMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        SharedBaselineFilter<<<dataParams.kernelLanes, gpuLaneWidth>>>(
+        SharedBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
             filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
             out);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuLaneWidth>>>(
+        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
             filterRefData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
             truth);
@@ -149,8 +148,7 @@ TEST(BaselineFilterTest, SharedMemory)
             auto view = out.GetBlockView(i);
             for (size_t j = 0; j < view.Size(); ++j)
             {
-                EXPECT_EQ(truthView[i].x, view[i].x);
-                EXPECT_EQ(truthView[i].y, view[i].y);
+                EXPECT_EQ(truthView[i], view[i]);
             }
         }
 
@@ -162,12 +160,12 @@ TEST(BaselineFilterTest, SharedMemory)
 // implementations produce identical results
 TEST(BaselineFilterTest, MultiKernelFilter)
 {
-    static constexpr size_t zmwLaneWidth = 32;
-    static constexpr size_t gpuLaneWidth = zmwLaneWidth/2;
+    static constexpr size_t laneWidth = 64;
+    static constexpr size_t gpuBlockThreads = laneWidth/2;
     // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
     // errors in the bookkeeping
     auto dataParams = DataManagerParams()
-            .ZmwLaneWidth(zmwLaneWidth)
+            .LaneWidth(laneWidth)
             .ImmediateCopy(true)
             .FrameRate(1000)
             .NumZmwLanes(4)
@@ -180,8 +178,8 @@ TEST(BaselineFilterTest, MultiKernelFilter)
             .BaselineSignalLevel(150);
 
 
-    using RefFilter = BaselineFilter<gpuLaneWidth, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter = ComposedFilter<gpuLaneWidth, 9, 31, 2, 8>;
+    using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
+    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8>;
     DeviceOnlyArray<RefFilter> filterRefData(dataParams.numZmwLanes, 0);
     std::vector<Filter> filterData;
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
@@ -189,17 +187,17 @@ TEST(BaselineFilterTest, MultiKernelFilter)
         filterData.emplace_back(dataParams.kernelLanes, 0);
     }
 
-    ZmwDataManager<short2> manager(dataParams,
-                                   std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                   true);
+    ZmwDataManager<int16_t> manager(dataParams,
+                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
+                                  true);
 
     BatchDimensions dims;
-    dims.laneWidth = dataParams.gpuLaneWidth;
+    dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<short2> truth(dims, SyncDirection::HostReadDeviceWrite);
-    BatchData<short2> work1(dims, SyncDirection::HostReadDeviceWrite);
-    BatchData<short2> work2(dims, SyncDirection::HostReadDeviceWrite);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, nullptr);
 
     while (manager.MoreData())
     {
@@ -210,7 +208,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
         filterData[batchIdx].RunComposedFilter(in, out, work1, work2);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuLaneWidth>>>(
+        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
             filterRefData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
             truth);
@@ -221,8 +219,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
             auto view = out.GetBlockView(i);
             for (size_t j = 0; j < view.Size(); ++j)
             {
-                EXPECT_EQ(truthView[i].x, view[i].x);
-                EXPECT_EQ(truthView[i].y, view[i].y);
+                EXPECT_EQ(truthView[i], view[i]);
             }
         }
 

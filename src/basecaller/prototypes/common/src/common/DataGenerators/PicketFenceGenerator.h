@@ -65,7 +65,7 @@ struct PicketFenceParams
     }
 };
 
-class PicketFenceGenerator : public GeneratorBase<short2>
+class PicketFenceGenerator : public GeneratorBase<int16_t>
 {
 public:
     static constexpr size_t MaxFrames = 16384;
@@ -76,7 +76,7 @@ public:
 
     PicketFenceGenerator(const DataManagerParams& params, const PicketFenceParams& dataParams)
             : GeneratorBase(params.blockLength,
-                            params.gpuLaneWidth,
+                            params.laneWidth,
                             MaxBlocks(params.blockLength, params.numBlocks),
                             dataParams.numSignals)
             , params_(params)
@@ -120,16 +120,15 @@ public:
 private:
     void PopulateBlock(size_t laneIdx,
                        size_t blockIdx,
-                       std::vector<short2>& v) override
+                       std::vector<int16_t>& v) override
     {
         auto signal = generatedSignals_[laneIdx % generatedSignals_.size()];
         for (size_t i = 0; i < params_.blockLength; ++i)
         {
             size_t f = i + (blockIdx * params_.numBlocks);
-            short tmp = signal[f % signal.size()];
-            short2 val = {tmp, tmp};
-            auto ptr1 = v.data() + i * params_.gpuLaneWidth;
-            auto ptr2 = ptr1 + params_.gpuLaneWidth;
+            short val = signal[f % signal.size()];
+            auto ptr1 = v.data() + i * params_.laneWidth;
+            auto ptr2 = ptr1 + params_.laneWidth;
             std::fill(ptr1, ptr2, val);
         }
     }

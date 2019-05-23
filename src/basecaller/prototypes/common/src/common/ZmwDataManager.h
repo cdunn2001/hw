@@ -24,8 +24,7 @@ struct DataManagerParams
 {
     size_t numZmwLanes = 125000;
     size_t numBlocks = 10;
-    size_t zmwLaneWidth = 64;
-    size_t gpuLaneWidth = zmwLaneWidth / 2;
+    size_t laneWidth = 64;
     size_t blockLength = 64;
     size_t kernelLanes = 5000;
     bool immediateCopy = false;
@@ -34,7 +33,7 @@ struct DataManagerParams
     // Builder pattern functions
     DataManagerParams& NumZmwLanes(size_t val) { numZmwLanes   = val; return *this; }
     DataManagerParams& NumBlocks(size_t val)   { numBlocks     = val; return *this; }
-    DataManagerParams& ZmwLaneWidth(size_t val){ zmwLaneWidth  = val; gpuLaneWidth = zmwLaneWidth/2; return *this; }
+    DataManagerParams& LaneWidth(size_t val)   { laneWidth     = val; return *this; }
     DataManagerParams& BlockLength(size_t val) { blockLength   = val; return *this; }
     DataManagerParams& KernelLanes(size_t val) { kernelLanes   = val; return *this; }
     DataManagerParams& ImmediateCopy(bool val) { immediateCopy = val; return *this; }
@@ -139,8 +138,8 @@ private:
     std::atomic<size_t> computeBlock_;
     std::thread thread_;
 
-    std::shared_ptr<Memory::GpuAllocationPool<TIn>> poolIn_;
-    std::shared_ptr<Memory::GpuAllocationPool<TOut>> poolOut_;
+    std::shared_ptr<Memory::DualAllocationPools> poolIn_;
+    std::shared_ptr<Memory::DualAllocationPools> poolOut_;
 
     std::vector<Mongo::Data::TraceBatch<TIn>> bank0;
     std::vector<Mongo::Data::TraceBatch<TIn>> bank1;

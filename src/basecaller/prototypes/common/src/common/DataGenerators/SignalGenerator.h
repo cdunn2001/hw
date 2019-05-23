@@ -20,22 +20,22 @@ struct TraceFileParams
     TraceFileParams& TraceFileName(const std::string& v)    { traceFileName = v; return *this; }
 };
 
-class SignalGenerator : public GeneratorBase<short2>
+class SignalGenerator : public GeneratorBase<int16_t>
 {
 public:
     SignalGenerator(const DataManagerParams& params, const TraceFileParams& traceParams)
         : GeneratorBase(params.blockLength,
-                        params.gpuLaneWidth,
+                        params.laneWidth,
                         params.numBlocks,
                         params.numZmwLanes)
         , traceParams_(traceParams)
-        , traceFileReader_(std::make_unique<TraceFileReader>(traceParams_.traceFileName, params.zmwLaneWidth, params.blockLength))
+        , traceFileReader_(std::make_unique<TraceFileReader>(traceParams_.traceFileName, params.laneWidth, params.blockLength))
     {}
 
 private:
     void PopulateBlock(size_t laneIdx,
                        size_t blockIdx,
-                       std::vector<short2>& v) override
+                       std::vector<int16_t>& v) override
     {
         traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
     }

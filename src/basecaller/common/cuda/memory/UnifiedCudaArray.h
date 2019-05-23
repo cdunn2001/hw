@@ -31,9 +31,11 @@
 
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
-#include "PinnedHostArray.h"
-#include "GpuAllocationPool.h"
+#include "AllocationPool.h"
 #include "SmartDeviceAllocation.h"
+#include "SmartHostAllocation.h"
+
+#include <vector_types.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -47,20 +49,54 @@ enum class SyncDirection
     Symmetric  // Read/write either direction
 };
 
+template <typename T> struct gpu_type { using type = T; };
+template <> struct gpu_type<int16_t> { using type = short2; };
+
 // TODO handle pitched allocations for multidimensional data?
 template <typename T>
-class UnifiedCudaArray : private detail::DataManager {
+class UnifiedCudaArray : private detail::DataManager
+{
+    using HostType = T;
+    using GpuType = typename gpu_type<T>::type;
+    static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
 public:
-    UnifiedCudaArray(size_t count, SyncDirection dir, std::shared_ptr<GpuAllocationPool<T>> pool = nullptr)
+    UnifiedCudaArray(size_t count,
+                     SyncDirection dir,
+                     bool pinnedHost = true,
+                     std::shared_ptr<DualAllocationPools> pools = nullptr)
         : activeOnHost_(true)
-        , hostData_(count)
-        , gpuData_(pool ? 0 : count) // Only allocate now if we're not pooling gpu allocations
+        , hostData_{}
+        , gpuData_{}
         , syncDir_(dir)
-        , pool_(pool)
+        , pools_(pools)
     {
-        if (pool && pool->AllocSize() != count)
+        static_assert(sizeof(GpuType) % sizeof(HostType) == 0, "Gpu type not even multiple of host types");
+        if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
+        {
+            // If we're doing something special like using int16_t on the host and
+            // short2 on the gpu, we need to make sure things tile evenly, else the
+            // last gpu element will walk off the array
+            throw PBException("Invalid array length.");
+        }
+        // get host allocation from pool if we can. Gpu allocations are always deferred
+        // until necessary
+        if (pools)
+        {
+            hostData_ = pools->hostPool.PopAlloc(count*sizeof(HostType));
+        } else {
+            hostData_ = SmartHostAllocation(count*sizeof(HostType), pinnedHost);
+        }
+
+        if (pools && pools->gpuPool.AllocSize() != count * sizeof(HostType))
         {
             throw PBException("Inconsistent gpu allocation pool and allocation size");
+        }
+
+        // default construct all elements on host.  Gpu memory is initialized via memcpy only
+        auto* ptr = hostData_.get<HostType>(DataKey());
+        for (size_t i = 0; i < count; ++i)
+        {
+            new(ptr+i) HostType();
         }
     }
 
@@ -72,11 +108,24 @@ public:
     ~UnifiedCudaArray()
     {
         // Potentially hand this back to the memory pool (if active)
-        // instead of actually freeing the memory
+        // instead of actually freeing the memory.  Will triger
+        // synchronization if necessary
         DeactivateGpuMem();
+
+        // Need to formally call destructors on host data.
+        // Device side memory is just a bitwise memcpy mirror,
+        // so no destructor invocations necessary on device
+        auto * ptr = hostData_.get<HostType>(DataKey());
+        for (size_t i = 0; i < hostData_.size(); ++i)
+        {
+            ptr[i].~HostType();
+        }
+
+        // If there is a pool for host data, recycle our allocation
+        if (auto pools = pools_.lock()) pools->hostPool.PushAlloc(std::move(hostData_));
     }
 
-    size_t Size() const { return hostData_.size(); }
+    size_t Size() const { return hostData_.size() / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
     // Marks the gpu memory as "inactive".  If the gpu side is using pooled allocations, this means it can
@@ -91,14 +140,14 @@ public:
     {
         if (!gpuData_) return;
 
-        if (auto pool = pool_.lock()) pool->PushAlloc(std::move(gpuData_));
-
         if (!activeOnHost_)
         {
             GetHostView();
         }
         CudaSynchronizeDefaultStream();
         activeOnHost_ = true;
+
+        if (auto pools = pools_.lock()) pools->gpuPool.PushAlloc(std::move(gpuData_));
     }
 
     // Calling these functions may cause
@@ -106,23 +155,23 @@ public:
     // (no performance penalty if it already is),
     // and will only remain valid until a view of
     // the device side is requested.
-    HostView<T> GetHostView(size_t idx, size_t len)
+    HostView<HostType> GetHostView(size_t idx, size_t len)
     {
         if (!activeOnHost_) CopyImpl(true, false);
-        assert(idx + len <= hostData_.size());
-        return HostView<T>(hostData_.get(), idx, len, DataKey());
+        assert(idx + len <= Size());
+        return HostView<HostType>(hostData_.get<HostType>(DataKey()), idx, len, DataKey());
     }
-    HostView<T> GetHostView() { return GetHostView(0, hostData_.size()); }
-    operator HostView<T>() { return GetHostView(); }
+    HostView<HostType> GetHostView() { return GetHostView(0, Size()); }
+    operator HostView<HostType>() { return GetHostView(); }
 
-    DeviceHandle<T> GetDeviceHandle(size_t idx, size_t len)
+    DeviceHandle<GpuType> GetDeviceHandle(size_t idx, size_t len)
     {
         if (activeOnHost_) CopyImpl(false, false);
-        assert(idx + len <= hostData_.size());
-        return DeviceHandle<T>(gpuData_.get(DataKey()), idx, len, DataKey());
+        assert(idx + len <= Size());
+        return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), idx, len/size_ratio, DataKey());
     }
-    DeviceHandle<T> GetDeviceHandle() { return GetDeviceHandle(0, hostData_.size()); }
-    operator DeviceHandle<T>() { return GetDeviceHandle(); }
+    DeviceHandle<GpuType> GetDeviceHandle() { return GetDeviceHandle(0, Size()); }
+    operator DeviceHandle<GpuType>() { return GetDeviceHandle(); }
 
     void CopyToDevice()
     {
@@ -142,12 +191,12 @@ private:
     {
         if (gpuData_) return;
 
-        if (auto pool = pool_.lock())
+        if (auto pools = pools_.lock())
         {
-            gpuData_ = pool->PopAlloc(hostData_.size());
+            gpuData_ = pools->gpuPool.PopAlloc(hostData_.size());
         }
         if (!gpuData_)
-            gpuData_ = SmartDeviceAllocation<T>(hostData_.size());
+            gpuData_ = SmartDeviceAllocation(hostData_.size());
     }
 
     void CopyImpl(bool toHost, bool manual)
@@ -168,22 +217,22 @@ private:
                 //      This should not be necessary on normal (non-integrated) nvidia
                 //      systems, but I still need to do a quick experiment to prove that
                 CudaSynchronizeDefaultStream();
-                CudaCopyHost(hostData_.get(), gpuData_.get(DataKey()), hostData_.size());
+                CudaCopyHost(hostData_.get<HostType>(DataKey()), gpuData_.get<HostType>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
             }
         } else {
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
-                CudaCopyDevice(gpuData_.get(DataKey()), hostData_.get(), hostData_.size());
+                CudaCopyDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(DataKey()), Size());
         }
     }
 
     bool activeOnHost_;
-    PinnedHostArray<T> hostData_;
-    SmartDeviceAllocation<T> gpuData_;
+    SmartHostAllocation hostData_;
+    SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
-    std::weak_ptr<GpuAllocationPool<T>> pool_;
+    std::weak_ptr<DualAllocationPools> pools_;
 };
 
 }}} //::Pacbio::Cuda::Memory

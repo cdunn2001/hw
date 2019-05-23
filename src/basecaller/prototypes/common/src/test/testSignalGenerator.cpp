@@ -6,8 +6,6 @@
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SignalGenerator.h>
 #include <pacbio/primary/SequelTraceFile.h>
-#include <pacbio/primary/SequelDefinitions.h>
-#include <pacbio/primary/Tile.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
@@ -19,7 +17,7 @@ TEST(SignalGeneratorTest, Construct)
     const std::string traceFileName = "/pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5";
 
     auto dataParams = DataManagerParams()
-        .ZmwLaneWidth(zmwLaneWidth);
+        .LaneWidth(zmwLaneWidth);
 
     auto traceParams = TraceFileParams()
             .TraceFileName(traceFileName);
@@ -34,45 +32,28 @@ TEST(SignalGeneratorTest, CompareData)
     using PacBio::Primary::zmwsPerTranche;
 
     static constexpr size_t zmwLaneWidth = 64;
-    static constexpr size_t numFrames = 512;
 
     auto dataParams = DataManagerParams()
             .NumBlocks(4)
             .BlockLength(64)
             .NumZmwLanes(20000)
             .KernelLanes(5000)
-            .ZmwLaneWidth(zmwLaneWidth);
+            .LaneWidth(zmwLaneWidth);
 
     auto traceParams = TraceFileParams()
             .TraceFileName("/pbi/dept/primary/sim/spider/designer_spider1p0NTO_fv2p4_SNR-50.trc.h5");
 
-    std::vector<int16_t> zmwsByFrame(zmwLaneWidth * numFrames);
-    {
-        SequelTraceFileHDF5 traceIn(traceParams.traceFileName);
-        for (size_t zmwOffset = 0; zmwOffset < zmwLaneWidth; zmwOffset += zmwsPerTranche)
-        {
-            std::vector<int16_t> data(zmwsPerTranche * Tile::NumPixels * numFrames);
-            size_t numFramesRead = traceIn.ReadLaneSegment(zmwOffset, 0, numFrames, data.data());
-            EXPECT_EQ(numFrames, numFramesRead);
-            for (size_t frame = 0; frame < numFrames; frame++)
-            {
-                for (size_t zmw = 0; zmw < zmwsPerTranche; zmw++)
-                {
-                    zmwsByFrame[((zmwOffset + zmw) * 512) + frame] = data[(frame * Tile::NumPixels) + zmw];
-                }
-            }
-        }
-    }
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-
-    ZmwDataManager<short2> manager(dataParams,
-                                   std::make_unique<SignalGenerator>(dataParams, traceParams),
-                                   true);
+    ZmwDataManager<int16_t> manager(dataParams,
+                                    std::make_unique<SignalGenerator>(dataParams, traceParams),
+                                    true);
 
     static constexpr size_t numLanesToCheck = 16;
     std::random_device rd;
     std::mt19937 eng(rd());
-    std::uniform_int_distribution<> distr(0, dataParams.gpuLaneWidth);
+    std::uniform_int_distribution<> distr(0, dataParams.kernelLanes);
+
+    SequelTraceFileHDF5 traceIn(traceParams.traceFileName);
+    std::vector<int16_t> truth(dataParams.laneWidth * dataParams.blockLength);
 
     while (manager.MoreData())
     {
@@ -87,15 +68,16 @@ TEST(SignalGeneratorTest, CompareData)
             auto blockView = in.GetBlockView(lane);
             std::vector<int16_t> expectedPixelSums(zmwLaneWidth, 0);
             std::vector<int16_t> pixelSums(zmwLaneWidth, 0);
+
+            const size_t zmwOffset = batchIdx * dataParams.laneWidth * dataParams.kernelLanes + lane * dataParams.laneWidth;
+            traceIn.Read1CZmwLaneSegment(zmwOffset, dataParams.laneWidth, frameOffset, dataParams.blockLength, truth.data());
             for (size_t frame = 0; frame < dataParams.blockLength; ++frame)
             {
-                auto rowOffset = frame * dataParams.gpuLaneWidth;
-                for (size_t k = 0; k < dataParams.gpuLaneWidth; ++k)
+                auto rowOffset = frame * dataParams.laneWidth;
+                for (size_t k = 0; k < dataParams.laneWidth; ++k)
                 {
-                    pixelSums[(k * 2)] += blockView[rowOffset + k].x;
-                    pixelSums[(k * 2) + 1] += blockView[rowOffset + k].y;
-                    expectedPixelSums[(k * 2)] += zmwsByFrame[((k * 2) * numFrames) + (frameOffset + frame)];
-                    expectedPixelSums[(k * 2) + 1] += zmwsByFrame[(((k * 2) + 1) * numFrames) + (frameOffset + frame)];
+                    pixelSums[k] += blockView(frame, k);
+                    expectedPixelSums[k] += truth[rowOffset + k];
                 }
             }
 
