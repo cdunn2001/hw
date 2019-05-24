@@ -1,5 +1,7 @@
-//
-//  Copyright (c) 2011-2015, Pacific Biosciences of California, Inc.
+#ifndef mongo_common_simd_m32f_H_
+#define mongo_common_simd_m32f_H_
+
+//  Copyright (c) 2011-2019, Pacific Biosciences of California, Inc.
 //
 //  All rights reserved.
 //
@@ -26,12 +28,11 @@
 //  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 //  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 //  POSSIBILITY OF SUCH DAMAGE.
-//
 
 /// \brief Implementations of some the fancy SIMD functions we implemented, for the
 ///        scalar case.
 
-#pragma once
+#include <cmath>
 
 // TODO: Should generalize this to support scalar integer operations also.
 
@@ -103,3 +104,5 @@ inline int floorCastInt(float x)
 }
 
 }  // PacBio
+
+#endif  // mongo_common_simd_m32f_H_

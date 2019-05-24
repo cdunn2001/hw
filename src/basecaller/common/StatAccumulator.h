@@ -161,6 +161,7 @@ public:     // Mutating methods
     /// Merge another instance with the same offset into this one.
     StatAccumulator& Merge(const StatAccumulator& other)
     {
+        using PacBio::Simd::all;
         assert(all(other.offset_ == offset_));
         m0_ += other.m0_;
         m1_ += other.m1_;

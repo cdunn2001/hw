@@ -5,6 +5,7 @@
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/NumericUtil.h>
+#include <common/AutocorrAccumulator.h>
 #include <common/StatAccumulator.h>
 
 namespace PacBio {
@@ -38,21 +39,20 @@ public:     // Structors and assignment
 
 private:    // Types
     // Statistics computed by the baseliner.
+    // TODO: Should these stats be bundled by lane?
     struct BaselinerStats
     {
-        // Autocorrelation coefficient of baseline subtracted trace.
-        // TODO: Use AutocorrAccumulator from Sequel.
-        float autocorrelation;
-
-        // Minimum and maximum of baseline-subtraced trace.
+        // Statistics of trace after baseline estimate has been subtracted.
+        AutocorrAccumulator<float> baselineSubtractedStats_;
         ElementType traceMin;
         ElementType traceMax;
 
-        // First three moments of raw trace baseline.
-        StatAccumulator<float> stats;
+        // Statistics of baseline frames after baseline estimate has
+        // been subtracted.
+        StatAccumulator<float> baselineStats_;
 
-        // Sum of baseline-subtracted baseline frames.
-        ElementType residualSum;
+        // Sum of baseline frames _prior_ to baseline subtraction.
+        ElementType rawBaselineSum_;
     };
 
 private:    // Data
