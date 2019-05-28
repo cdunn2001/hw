@@ -84,17 +84,24 @@ public:
         Teardown();
     }
 
+    BasecallerAlgorithmConfig& BasecallerConfig()
+    { return basecallerConfig_; };
+
+private:
     void RunAnalyzer()
     {
+        size_t numChunksAnalyzed = 0;
+        PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
             std::vector<TraceBatch<int16_t>> chunk;
             if (inputDataQueue_.Pop(chunk, std::chrono::milliseconds(100)))
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
-                    + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
-                    + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
                 auto baseCalls = (*analyzer_)(std::move(chunk));
+                numChunksAnalyzed++;
                 outputDataQueue_.Push(std::move(baseCalls));
             }
             else
@@ -108,6 +115,13 @@ public:
                 }
             }
         }
+
+        timer.SetCount(numChunksAnalyzed);
+        double chunkAnalyzeRate = timer.GetRate();
+        PBLOG_INFO << "Analyzed " << numChunksAnalyzed
+                   << " at " << chunkAnalyzeRate << " chunks/sec"
+                   << " (" << (batchGenerator_->NumZmwLanes() * PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane)
+                   << " zmws/sec)";
     }
 
     void Teardown()
@@ -115,10 +129,6 @@ public:
         // Perform any necessary teardown.
     }
 
-    BasecallerAlgorithmConfig& BasecallerConfig()
-    { return basecallerConfig_; };
-
-private:
     void Setup()
     {
         if (batchGenerator_->NumBatches() == 0)
@@ -303,7 +313,8 @@ private:
         double chunkReadRate = timer.GetRate();
         PBLOG_INFO << "Read " << numChunksRead
                    << " at " << chunkReadRate << " chunks/sec"
-                   << " (" << batchGenerator_->NumZmwLanes() * PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane << " zmws/sec)";
+                   << " (" << batchGenerator_->NumZmwLanes() * PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane
+                   << " zmws/sec)";
     }
 
 private:
