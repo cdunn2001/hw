@@ -24,9 +24,7 @@ Data::CameraTraceBatch
 Baseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     // TODO
-    return Data::CameraTraceBatch(rawTrace.GetMeta(),
-                                  rawTrace.Dimensions(),
-                                  Cuda::Memory::SyncDirection::Symmetric);
+    return Data::CameraTraceBatch(std::move(rawTrace));
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

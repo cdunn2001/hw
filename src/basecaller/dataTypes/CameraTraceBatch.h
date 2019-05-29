@@ -31,13 +31,17 @@ public:     // Structors and assignment
         , stats_ (dims.zmwsPerBatch(), syncDirection /* TODO: , pool for BaselineStats? */)
     { }
 
+    // Move constructor variant that accepts an rvalue reference to TraceBatch.
+    CameraTraceBatch(TraceBatch&& t)
+        : TraceBatch<ElementType>(std::move(t))
+        , stats_ (Dimensions().zmwsPerBatch(), Cuda::Memory::SyncDirection::Symmetric /* TODO: , pool for BaselineStats? */)
+    { }
+
     CameraTraceBatch(const CameraTraceBatch&) = delete;
     CameraTraceBatch(CameraTraceBatch&&) = default;
 
     CameraTraceBatch& operator=(const CameraTraceBatch&) = delete;
     CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
-
-    // TODO: Move constructor variant that accepts an rvalue reference to TraceBatch?
 
 private:    // Data
     // Statistics for each ZMW in the batch.
