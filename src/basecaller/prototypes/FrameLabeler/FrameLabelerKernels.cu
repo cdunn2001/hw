@@ -32,26 +32,25 @@ using namespace PacBio::Cuda::Subframe;
 namespace PacBio {
 namespace Cuda {
 
-__device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArray<PBHalf2, numStates>* probOut)
+__device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 {
-    auto& prob = *probOut;
-    auto maxVal = logLike[0];
+    auto maxVal = vec[0];
     #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
-        maxVal = max(logLike[i], maxVal);
+        maxVal = max(vec[i], maxVal);
     }
     PBHalf2 sum(0.0f);
     #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
-        prob[i] = exp(logLike[i] - maxVal);
-        sum += prob[i];
+        vec[i] = exp(vec[i] - maxVal);
+        sum += vec[i];
     }
     #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
-        prob[i] /= sum;
+        vec[i] /= sum;
     }
 }
 
@@ -119,11 +118,11 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
 
     static constexpr unsigned laneWidth = 32;
     assert(blockDim.x == laneWidth);
-    __shared__ BlockStateScorer<laneWidth> scorer;
+    __shared__ BlockStateSubframeScorer<laneWidth> scorer;
 
     // Initial setup
-    CudaArray<PBHalf2, numStates> logLike;
-    CudaArray<PBHalf2, numStates> logAccum;
+    CudaArray<PBHalf2, numStates> scratch;
+    auto& logLike = scratch;
     auto& latent = latentData[blockIdx.x];
     auto bc = latent.GetBoundary();
     const PBHalf2 zero(0.0f);
@@ -134,12 +133,15 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
         logLike[i] = Blend(cond, zero, ninf);
     }
 
-    auto Recursion = [&labels, &trans, &logLike, &logAccum](short2 data, int idx) {
+    auto Recursion = [&labels, &trans, &logLike](short2 data, int idx)
+    {
+        CudaArray<PBHalf2, numStates> logAccum;
 
-        auto scores = scorer.StateScores(PBHalf2(data));
+        //auto scores = scorer.StateScores(PBHalf2(data));
+        const auto dat = PBHalf2(data);
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
-            auto score = scores[nextState];
+            auto score = scorer.StateScores(dat, nextState);
             auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
             auto maxIdx = make_short2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
@@ -153,10 +155,7 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
             logAccum[nextState] = maxVal;
             labels(idx, nextState) = maxIdx;
         }
-        for (int i = 0; i < numStates; ++i)
-        {
-            logLike[i] = logAccum[i];
-        }
+        logLike = logAccum;
     };
 
     // Forward recursion on latent data
@@ -179,13 +178,13 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     // Compute the probabilities of the possible end states.  Propagate
     // them backwards a few frames, as some paths may converge and we
     // can have a more certain estimate.
-    CudaArray<PBHalf2, numStates> prob;
-    CudaArray<PBHalf2, numStates> newProb;
-    Normalize(logLike, &prob);
+    Normalize(logLike);
+    auto& prob = scratch;
     const int lookStart = numFrames + latentFrames - 1;
     const int lookStop = lookStart - Viterbi::lookbackDist;
     for (int i = lookStart; i > lookStop; --i)
     {
+        CudaArray<PBHalf2, numStates> newProb;
         for (short state = 0; state < numStates; ++state)
         {
             newProb[state] = PBHalf2(0.0f);
@@ -196,11 +195,9 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
             newProb[prev.x] += Blend(make_short2(1,0), prob[state], zero);
             newProb[prev.y] += Blend(make_short2(0,1), prob[state], zero);
         }
-        for (int state = 0; state < numStates; ++state)
-        {
-            prob[state] = newProb[state];
-        }
+        prob = newProb;
     }
+
     PBHalf2 maxProb = prob[0];
     short2 anchorState = {0,0};
     #pragma unroll 1

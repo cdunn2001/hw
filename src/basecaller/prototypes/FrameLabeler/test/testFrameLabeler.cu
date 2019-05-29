@@ -151,10 +151,10 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     }
 
     float total = matches + subframeMiss + mismatches;
-    EXPECT_GT(matches / total, 0.94);
-    EXPECT_LT(subframeMiss / total, .025);
-    EXPECT_LT(mismatches / total, .035);
-    //std::cerr << "Matches/SubframeConfusion/Mismatches: " << matches << "/" << subframeMiss << "/" << mismatches << std::endl;
+    EXPECT_GT(matches / total, 0.98);
+    EXPECT_LT(subframeMiss / total, .020);
+    EXPECT_LT(mismatches / total, .001);
+    std::cerr << "Matches/SubframeConfusion/Mismatches: " << matches << "/" << subframeMiss << "/" << mismatches << std::endl;
 
     FrameLabeler::Finalize();
 }

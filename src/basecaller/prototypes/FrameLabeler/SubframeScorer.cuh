@@ -92,47 +92,135 @@ public:     // Properties
     }
 
     __device__ PBHalf2 Variance() const
-    { return 0.5f / scaleFactor_[threadIdx.x]; }
+    { return var_[threadIdx.x]; }
 
     /// Sets Variance to new value, which must be positive.
     /// \returns *this.
     __device__ NormalLog& Variance(const PBHalf2& value)
     {
         //assert(all(value > 0.0f));
-        normTerm_[threadIdx.x] = PBHalf2(-0.5f) * (PBHalf2(log2pi_f) + log(value));
-        scaleFactor_[threadIdx.x] = PBHalf2(0.5f) / value;
+        var_[threadIdx.x] = value;
         return *this;
     }
 
 public:
     /// Evaluate the distribution at \a x.
     __device__ PBHalf2 operator()(const PBHalf2& x) const
-    { return normTerm_[threadIdx.x] - pow2(x - mean_[threadIdx.x]) * scaleFactor_[threadIdx.x]; }
+    {
+        auto normTerm = PBHalf2(-0.5f) * (PBHalf2(log2pi_f) + log(var_[threadIdx.x]));
+        auto scaleFactor = PBHalf2(0.5f) / var_[threadIdx.x];
+        return normTerm - pow2(x - mean_[threadIdx.x]) * scaleFactor;
+    }
 
 private:    // Data
     Row mean_;
-    Row normTerm_;
-    Row scaleFactor_;
+    Row var_;
 };
 
-// Gause caps edge frame scorer.  This is a near unchanged transcription
-// of what exists in Sequel.  All operations are designed to be done by cuda blocks
-// with one thread per pair of zmw.
+// Subframe scorer using gause caps. This is a near unchanged transcription
+// of what exists in Sequel, though some precomputed terms have been removed
+// as storage is more expensive than computation. All operations are designed
+// to be done by cuda blocks with one thread per pair of zmw.
 template <size_t gpuLaneWidth>
-struct __align__(128) GauseCapsScorer
+struct __align__(128) BlockStateSubframeScorer
 {
-    static constexpr unsigned int numAnalogs = 4;
     using Row = Utility::CudaArray<PBHalf2, gpuLaneWidth>;
 
-    GauseCapsScorer() = default;
+    // Default constructor only exists to facilitate a shared memory instance.
+    // The object is not in a valid state until after calling `Setup`
+    BlockStateSubframeScorer() = default;
 
     __device__ void Setup(const LaneModelParameters<gpuLaneWidth>& model)
+    {
+        static constexpr float log2pi_f = 1.8378770664f;
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const PBHalf2 one = PBHalf2(1.0f);
+
+        SubframeSetup(model);
+
+        const PBHalf2 normConst = PBHalf2(log2pi_f / 2.0f);
+
+        // Background
+        const auto& bgMode = model.BaselineMode();
+
+        // Put -0.5 * log(det(V)) into bgFixedTerm_; compute bgInvCov_.
+        // sym2x2MatrixInverse returns the determinant and writes the inverse
+        // into the second argument.
+        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgMode.vars[threadIdx.x]) - normConst;
+        bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
+
+        #pragma unroll 1
+        for (unsigned int i = 0; i < numAnalogs; ++i)
+        {
+            // Full-frame states
+            const auto& aMode = model.AnalogMode(i);
+            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(aMode.vars[threadIdx.x]) - normConst;
+            ffmean_[i][threadIdx.x] = aMode.means[threadIdx.x];
+        }
+    }
+
+    __device__ PBHalf2 StateScores(PBHalf2 data, int state) const
+    {
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const PBHalf2 one = PBHalf2(1.0f);
+        const PBHalf2 zero = PBHalf2(0.0f);
+
+        switch (state)
+        {
+        case 0:
+            {
+
+                const auto mu = bgMean_[threadIdx.x];
+                const auto y = data - mu;
+                return nhalfVal * y * bInvVar_[threadIdx.x] * y + bgFixedTerm_[threadIdx.x];
+            }
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+            {
+                const auto i = state-1;
+                const auto j = FullState(i);
+                const auto mu = ffmean_[i][threadIdx.x];
+                const auto y = data - mu;
+                return nhalfVal * y * pInvVar_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
+            }
+        default:
+            {
+                using std::min;
+                const auto i = (state-1)%4;
+                const auto j = FullState(i);
+
+                auto score = SubframeScore(i, data);
+
+                // When signal is stronger than full-frame mean, ensure that
+                // subframe density does not exceed full-frame density.
+                const auto mu = ffmean_[i][threadIdx.x];
+                const auto xmu = data * mu;
+                const auto mumu = mu*mu;
+
+                const auto y = data - mu;
+                const auto fScore =  nhalfVal * y * pInvVar_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
+
+                // xmu > mumu means that the Euclidean projection of x onto mu is
+                // greater than the norm of mu.
+                score = Blend(xmu > mumu,
+                              min(min(score, fScore - one), zero),
+                              score);
+
+                return score;
+            }
+        }
+    }
+
+ private:
+    __device__ void SubframeSetup(const LaneModelParameters<gpuLaneWidth>& model)
     {
         static constexpr float pi_f = 3.1415926536f;
         const PBHalf2 sqrtHalfPi = PBHalf2(std::sqrt(0.5f * pi_f));
         const PBHalf2 halfVal = PBHalf2(0.5f);
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
         const PBHalf2 oneSixth = PBHalf2(1.0f / 6.0f);
+        const PBHalf2 one = PBHalf2(1.0f);
 
         const auto& bMode = model.BaselineMode();
         const auto bMean = bMode.means[threadIdx.x];
@@ -141,7 +229,7 @@ struct __align__(128) GauseCapsScorer
 
         // Low joint in the score function.
         x0_[threadIdx.x] = bMean + bSigma * sqrtHalfPi;
-        bFixedTerm_[threadIdx.x] = nhalfVal / bVar;
+        bInvVar_[threadIdx.x] = one / bVar;
 
         #pragma unroll 1
         for (unsigned int a = 0; a < numAnalogs; ++a)
@@ -153,7 +241,7 @@ struct __align__(128) GauseCapsScorer
             const auto aSigma = sqrt(aVar);
             // High joint in the score function.
             x1_[a][threadIdx.x] = aMean - aSigma * sqrtHalfPi;
-            pFixedTerm_[a][threadIdx.x] = nhalfVal / aVar;
+            pInvVar_[a][threadIdx.x] = one / aVar;
         }
 
         // Assume that the dimmest analog is the only one at risk for
@@ -172,12 +260,15 @@ struct __align__(128) GauseCapsScorer
         }
     }
 
-    __device__ PBHalf2 operator()(unsigned int a, PBHalf2 val) const
+    __device__ PBHalf2 SubframeScore(unsigned int a, PBHalf2 val) const
     {
+        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+
         // Score between x0 and x1.
         const auto lowExtrema = val < x0_[threadIdx.x];
         const auto cap = Blend(lowExtrema, x0_[threadIdx.x], x1_[a][threadIdx.x]);
-        const auto fixedTerm = Blend(lowExtrema, bFixedTerm_[threadIdx.x], pFixedTerm_[a][threadIdx.x]);
+        auto fixedTerm = Blend(lowExtrema, bInvVar_[threadIdx.x], pInvVar_[a][threadIdx.x]);
+        fixedTerm = nhalfVal * fixedTerm;
 
         const auto extrema = lowExtrema || (val > x1_[a][threadIdx.x]);
         PBHalf2 s = Blend(extrema, fixedTerm * pow2(val - cap), PBHalf2(0.0f)) - logPMean_[a][threadIdx.x];
@@ -189,136 +280,26 @@ struct __align__(128) GauseCapsScorer
         }
         return s;
     }
- private:
-    // Log of displacement of pulse means from baseline mean.
-    Utility::CudaArray<Row, numAnalogs> logPMean_;
 
-    // Joints in the score function.
-    Row x0_;
-    Utility::CudaArray<Row, numAnalogs> x1_;
-
-    Row bFixedTerm_;
-    Utility::CudaArray<Row, numAnalogs> pFixedTerm_;
-
-    // Normal approximation fallback for dimmest analog when x1 < x0.
-    NormalLog<gpuLaneWidth> dimFallback_;
-};
-
-// Subframe scorer using gause caps. This is a near unchanged transcription
-// of what exists in Sequel, which is why the gause caps portion is
-// in a separate class instead of inline.  All operations are designed to be
-// done by cuda blocks with one thread per pair of zmw.
-template <size_t gpuLaneWidth>
-struct __align__(128) BlockStateScorer
-{
-    using Row = Utility::CudaArray<PBHalf2, gpuLaneWidth>;
-
-    // Default constructor only exists to facilitate a shared memory instance.
-    // The object is not in a valid state until after calling `Setup`
-    BlockStateScorer() = default;
-
-    __device__ void Setup(const LaneModelParameters<gpuLaneWidth>& model)
-    {
-        static constexpr float log2pi_f = 1.8378770664f;
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
-        const PBHalf2 one = PBHalf2(1.0f);
-
-        sfScore_.Setup(model);
-
-        const PBHalf2 normConst = PBHalf2(log2pi_f / 2.0f);
-
-        // Background
-        const auto& bgMode = model.BaselineMode();
-
-        // Put -0.5 * log(det(V)) into bgFixedTerm_; compute bgInvCov_.
-        // sym2x2MatrixInverse returns the determinant and writes the inverse
-        // into the second argument.
-        bgInvCov_[threadIdx.x] = one / bgMode.vars[threadIdx.x];
-        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgMode.vars[threadIdx.x]) - normConst;
-        bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
-
-        #pragma unroll 1
-        for (unsigned int i = 0; i < numAnalogs; ++i)
-        {
-            // Full-frame states
-            const auto& aMode = model.AnalogMode(i);
-            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(aMode.vars[threadIdx.x]) - normConst;
-            ffmean_[i][threadIdx.x] = aMode.means[threadIdx.x];
-            ffInvCov_[i][threadIdx.x] = one / aMode.vars[threadIdx.x];
-        }
-    }
-
-    __device__ Utility::CudaArray<PBHalf2, numStates> StateScores(PBHalf2 data) const
-    {
-        Utility::CudaArray<PBHalf2, numStates> score;
-        const PBHalf2 halfVal = PBHalf2(0.5f);
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
-        const PBHalf2 one = PBHalf2(1.0f);
-        const PBHalf2 zero = PBHalf2(0.0f);
-
-        {   // Compute the score for the background state.
-            const auto mu = bgMean_[threadIdx.x];
-            const auto y = data - mu;
-            score[0] = nhalfVal * y * bgInvCov_[threadIdx.x] * y + bgFixedTerm_[threadIdx.x];
-            // By definition, the ROI trace value for background is 0.
-        }
-
-        // Compute scores for full-frame pulse states.
-        for (int i = 0; i < numAnalogs; ++i)
-        {
-            const auto j = FullState(i);
-            const auto mu = ffmean_[i][threadIdx.x];
-            const auto y = data - mu;
-            score[j] = nhalfVal * y * ffInvCov_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
-            //score[j] += trc_.Roi(j, frame); // ROI exclusion
-        }
-
-        // Compute scores for subframe states.
-        for (int i = 0; i < numAnalogs; ++i)
-        {
-            using std::min;
-            const auto j = UpState(i);
-            const auto k = DownState(i);
-            const auto ff = FullState(i);
-
-            score[j] = sfScore_(i, data);
-
-            //score[j] += trc_.Roi(ff, frame);
-
-            // When signal is stronger than full-frame mean, ensure that
-            // subframe density does not exceed full-frame density.
-            const auto mu = ffmean_[i][threadIdx.x];
-            const auto xmu = data * mu;
-            const auto mumu = mu*mu;
-            // xmu > mumu means that the Euclidean projection of x onto mu is
-            // greater than the norm of mu.
-            score[j] = Blend(xmu > mumu,
-                             min(min(score[j], score[ff] - one), zero),
-                             score[j]);
-
-            // Could apply a similar constraint on the other side to prevent
-            // large negative spikes from getting labelled as subframe instead
-            // of baseline.
-
-            // "Down" states assigned same score as "up" states.
-            score[k] = score[j];
-        }
-
-        return score;
-    }
-
-    // Pre-computed inverse covariances.
-    Row bgInvCov_;    // background (a.k.a. baseline)
     Row bgMean_;
-    Utility::CudaArray<Row, numAnalogs> ffInvCov_; // full-frame states
     Utility::CudaArray<Row, numAnalogs> ffmean_; // full-frame states
 
-    // The terms in the state scores that do not depend explicitly on the trace.
+    Row bInvVar_;
+    Utility::CudaArray<Row, numAnalogs> pInvVar_;
+
     // -0.5 * log det(V) - log 2\pi.
     Row bgFixedTerm_;    // background (a.k.a. baseline)
     Utility::CudaArray<Row, numAnalogs> ffFixedTerm_;    // full-frame states
 
-    GauseCapsScorer<gpuLaneWidth> sfScore_;
+    // Log of displacement of pulse means from baseline mean.
+    Utility::CudaArray<Row, numAnalogs> logPMean_;
+
+    // Joints in the subframe score function.
+    Row x0_;
+    Utility::CudaArray<Row, numAnalogs> x1_;
+
+    // Normal approximation fallback for dimmest analog subframe when x1 < x0.
+    NormalLog<gpuLaneWidth> dimFallback_;
 };
 
 }}}
