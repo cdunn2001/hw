@@ -4,9 +4,11 @@
 #include "TraceBatch.h"
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/MongoConstants.h>
 #include <common/NumericUtil.h>
-#include <common/AutocorrAccumulator.h>
 #include <common/StatAccumulator.h>
+
+#include "BaselinerStatAccumulator.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -37,27 +39,9 @@ public:     // Structors and assignment
 
     // TODO: Move constructor variant that accepts an rvalue reference to TraceBatch?
 
-private:    // Types
-    // Statistics computed by the baseliner.
-    // TODO: Should these stats be bundled by lane?
-    struct BaselinerStats
-    {
-        // Statistics of trace after baseline estimate has been subtracted.
-        AutocorrAccumulator<float> baselineSubtractedStats_;
-        ElementType traceMin;
-        ElementType traceMax;
-
-        // Statistics of baseline frames after baseline estimate has
-        // been subtracted.
-        StatAccumulator<float> baselineStats_;
-
-        // Sum of baseline frames _prior_ to baseline subtraction.
-        ElementType rawBaselineSum_;
-    };
-
 private:    // Data
     // Statistics for each ZMW in the batch.
-    Cuda::Memory::UnifiedCudaArray<BaselinerStats> stats_;
+    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

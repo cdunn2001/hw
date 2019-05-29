@@ -145,7 +145,11 @@ public:     // Mutating methods
 
 private:    // Data
     StatAccumulator<T> stats_;
+
+    // TODO: Pretty sure that AlignedCircularBuffer uses heap allocation.
+    // Replace with something based on something like boost::static_vector.
     AlignedCircularBuffer<T> lagBuf_;
+
     T m1First_;     // First moment of the first Count() - Lag() samples.
     T m1Last_;     // First moment of the last Count() - Lag() samples.
     T m2_;      // Generalized second moment. Sum of x_i * x_i+Lag().

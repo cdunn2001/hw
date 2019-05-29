@@ -6,6 +6,8 @@ set(CPP_LIST
     BasecallBatch.h
     BasecallBatch.cpp
     BasecallerConfig.h
+    BaselinerStatAccumulator.h
+    BaselinerStatAccumulator.cpp
     BasicTypes.h
     BatchMetadata.h
     CameraTraceBatch.h

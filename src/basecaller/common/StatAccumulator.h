@@ -149,7 +149,8 @@ public:     // Mutating methods
         m2_ += x*x;
     }
 
-    /// Aggregate another data sample into the moments.
+    /// Aggregate another data sample into the moments if corresponding mask
+    /// element is true.
     void AddSample(const VF& value, const VBool& mask)
     {
         const auto x = value - offset_;

@@ -7,6 +7,7 @@
 
 #include <common/simd/SimdVectorTypes.h>
 
+#include "LaneArray.h"
 #include "NumericUtil.h"
 
 namespace PacBio {
@@ -66,6 +67,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
 
     // If insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
+    using Simd::Blend;
     return Blend((nmk < 1.0f) | mnan, nan, ac);
 }
 
@@ -124,5 +126,6 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
 // Explicit instantiation.
 template class AutocorrAccumulator<float>;
 template class AutocorrAccumulator<Simd::m512f>;
+template class AutocorrAccumulator<LaneArray<float, 64u>>;
 
 }}      // namespace PacBio::Mongo
