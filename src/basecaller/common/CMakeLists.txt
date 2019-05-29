@@ -8,6 +8,9 @@ add_library(libMongoCommon STATIC
     AlignedCircularBuffer.h
     AutocorrAccumulator.h
     AutocorrAccumulator.cpp
+    LaneArray.h
+    LaneArray.cpp
+    MongoConstants.h
     NumericUtil.h
     StatAccumulator.h
 )
