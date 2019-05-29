@@ -143,6 +143,7 @@ struct __align__(128) GauseCapsScorer
         x0_[threadIdx.x] = bMean + bSigma * sqrtHalfPi;
         bFixedTerm_[threadIdx.x] = nhalfVal / bVar;
 
+        #pragma unroll 1
         for (unsigned int a = 0; a < numAnalogs; ++a)
         {
             const auto& dma = model.AnalogMode(a);
@@ -236,6 +237,7 @@ struct __align__(128) BlockStateScorer
         bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgMode.vars[threadIdx.x]) - normConst;
         bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
 
+        #pragma unroll 1
         for (unsigned int i = 0; i < numAnalogs; ++i)
         {
             // Full-frame states

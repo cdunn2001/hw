@@ -36,16 +36,19 @@ __device__ void Normalize(const CudaArray<PBHalf2, numStates>& logLike, CudaArra
 {
     auto& prob = *probOut;
     auto maxVal = logLike[0];
+    #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
         maxVal = max(logLike[i], maxVal);
     }
     PBHalf2 sum(0.0f);
+    #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
         prob[i] = exp(logLike[i] - maxVal);
         sum += prob[i];
     }
+    #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
         prob[i] /= sum;
@@ -104,7 +107,7 @@ FrameLabeler::FrameLabeler()
 }
 
 
-__launch_bounds__(32, 12)
+__launch_bounds__(32, 32)
 __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
                                    Memory::DeviceView<LaneModelParameters<32>> models,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
@@ -200,6 +203,7 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     }
     PBHalf2 maxProb = prob[0];
     short2 anchorState = {0,0};
+    #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
         auto cond = maxProb > prob[i];
