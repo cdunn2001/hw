@@ -37,14 +37,14 @@ template <typename T>
 class DevicePtr
 {
 public:
-    DevicePtr(T* data, detail::DataManagerKey)
+    DevicePtr(DeviceView<T> data, detail::DataManagerKey)
         : data_(data)
     {}
 
-    __device__ T* operator->() { return data_; }
-    __device__ const T* operator->() const { return data_; }
+    __device__ T* operator->() { return data_.Data(); }
+    __device__ const T* operator->() const { return data_.Data(); }
 private:
-    T* data_;
+    DeviceView<T> data_;
 };
 
 // Owning host-side smart pointer for an obect residing exclusively
@@ -62,7 +62,7 @@ public:
 
     DevicePtr<T> GetDevicePtr()
     {
-        return DevicePtr<T>(data_.GetDeviceView().Data(DataKey()), DataKey());
+        return DevicePtr<T>(data_.GetDeviceView(), DataKey());
     }
 
 private:

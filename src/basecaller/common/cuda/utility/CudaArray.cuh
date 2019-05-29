@@ -36,19 +36,13 @@ namespace Utility {
 template <typename T, size_t len>
 struct CudaArray
 {
-    //temporary hack, please kill
     CudaArray() = default;
-    explicit CudaArray(T val)
-    {
-        for (size_t i = 0; i < len; ++i)
-        {
-            data_[i] = val;
-        }
-    }
+    // implicit conversion from std::array intentional
     CudaArray(const std::array<T, len> &data)
     {
         memcpy(data_, data.data(), sizeof(T)*len);
     }
+
     __device__ __host__ T& operator[](unsigned idx) { return data_[idx]; }
     __device__ __host__ const T& operator[](unsigned idx) const { return data_[idx]; }
     __device__ __host__ T* data() { return data_; }
