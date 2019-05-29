@@ -31,16 +31,20 @@ public:
     Baseliner(uint32_t poolId);
 
 public:
+    /// Estimate and subtract baseline from rawTrace.
+    /// \returns Baseline-subtracted traces with certain trace statistics.
     Data::CameraTraceBatch operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
     {
         // TODO
-        return Data::CameraTraceBatch(rawTrace.GetMeta(),
-                                      rawTrace.Dimensions(),
-                                      Cuda::Memory::SyncDirection::Symmetric);
+        assert(rawTrace.GetMeta().PoolId() == poolId_);
+        return process(std::move(rawTrace));
     }
 
-private:
+private:    // Data
     uint32_t poolId_;
+
+private:    // Customizable implementation
+    virtual Data::CameraTraceBatch process(Data::TraceBatch<ElementTypeIn> rawTrace);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

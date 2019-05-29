@@ -89,6 +89,8 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     if (*std::min_element(histTotals.cbegin(), histTotals.cend()) >= minFramesForDme)
     {
         Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
+        (void) detModel;    // Temporarily squelch unused variable warning.
+        // TODO: reset histogram
     }
 
     // TODO: When detection model is available, classify frames.

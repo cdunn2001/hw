@@ -20,4 +20,13 @@ Baseliner::Baseliner(uint32_t poolId)
 
 }
 
+Data::CameraTraceBatch
+Baseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
+{
+    // TODO
+    return Data::CameraTraceBatch(rawTrace.GetMeta(),
+                                  rawTrace.Dimensions(),
+                                  Cuda::Memory::SyncDirection::Symmetric);
+}
+
 }}}     // namespace PacBio::Mongo::Basecaller
