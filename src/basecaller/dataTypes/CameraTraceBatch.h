@@ -43,6 +43,14 @@ public:     // Structors and assignment
     CameraTraceBatch& operator=(const CameraTraceBatch&) = delete;
     CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
 
+public:     // Access to statistics
+    // TODO: How do we support const access?
+//    const BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane) const
+//    { return stats_.GetHostView()[lane]; }
+
+    BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane)
+    { return stats_.GetHostView()[lane]; }
+
 private:    // Data
     // Statistics for each ZMW in the batch.
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
