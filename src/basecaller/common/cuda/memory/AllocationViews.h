@@ -39,8 +39,8 @@ template <typename T>
 class HostView
 {
 public:
-    HostView(T* start, size_t idx, size_t len, detail::DataManagerKey)
-        : data_(start+idx)
+    HostView(T* data, size_t len, detail::DataManagerKey)
+        : data_(data)
         , len_(len)
     {}
 
@@ -69,8 +69,8 @@ template <typename T>
 class DeviceHandle
 {
 public:
-    DeviceHandle(T* start, size_t idx, size_t len, detail::DataManagerKey key)
-        : data_(start+idx)
+    DeviceHandle(T* data, size_t len, detail::DataManagerKey key)
+        : data_(data)
         , len_(len)
     {}
 

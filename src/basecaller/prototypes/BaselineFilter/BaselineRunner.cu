@@ -43,12 +43,16 @@ void RunGlobalBaselineFilter(
         size_t simulKernels)
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
-    DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Filter>> filterData;
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    {
+        filterData.emplace_back(dataParams.kernelLanes, 0);
+    }
 
     auto tmp = [dataParams,&filterData](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         GlobalBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
-                filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+                filterData[batchIdx].GetDeviceView(),
                 ret);
         auto view = ret.GetBlockView(0);
     };
@@ -65,12 +69,16 @@ void RunSharedBaselineFilter(
         size_t simulKernels)
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
-    DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Filter>> filterData;
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    {
+        filterData.emplace_back(dataParams.kernelLanes, 0);
+    }
 
     auto tmp = [dataParams,&filterData](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         SharedBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
-                filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+                filterData[batchIdx].GetDeviceView(),
                 ret);
         auto view = ret.GetBlockView(0);
     };
@@ -92,10 +100,17 @@ void RunCompressedBaselineFilter(
     using Upper1 = DilateErode<laneWidth, 9>;
     using Upper2 = ErodeDilate<laneWidth, 31>;
 
-    DeviceOnlyArray<Lower1> lower1(dataParams.numZmwLanes, 0);
-    DeviceOnlyArray<Lower2> lower2(dataParams.numZmwLanes, 0);
-    DeviceOnlyArray<Upper1> upper1(dataParams.numZmwLanes, 0);
-    DeviceOnlyArray<Upper2> upper2(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Lower1>> lower1;
+    std::vector<DeviceOnlyArray<Lower2>> lower2;
+    std::vector<DeviceOnlyArray<Upper1>> upper1;
+    std::vector<DeviceOnlyArray<Upper2>> upper2;
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    {
+        lower1.emplace_back(dataParams.kernelLanes, 0);
+        lower2.emplace_back(dataParams.kernelLanes, 0);
+        upper1.emplace_back(dataParams.kernelLanes, 0);
+        upper2.emplace_back(dataParams.kernelLanes, 0);
+    }
 
     BatchDimensions dims;
     dims.framesPerBatch = dataParams.blockLength;
@@ -113,10 +128,10 @@ void RunCompressedBaselineFilter(
         (TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
         CompressedBaselineFilter<laneWidth, 9, 31, 2, 8><<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
-                lower1.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
-                lower2.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
-                upper1.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
-                upper2.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+                lower1[batchIdx].GetDeviceView(),
+                lower2[batchIdx].GetDeviceView(),
+                upper1[batchIdx].GetDeviceView(),
+                upper2[batchIdx].GetDeviceView(),
                 work1[batchIdx],
                 work2[batchIdx],
                 ret);
@@ -172,7 +187,11 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
     static constexpr int FilterWidth = 7;
 
     using Filter = ExtremaFilter<laneWidth, FilterWidth>;
-    DeviceOnlyArray<Filter> filterData(params.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Filter>> filterData;
+    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    {
+        filterData.emplace_back(params.kernelLanes, 0);
+    }
 
     auto tmp = [params,&filterData, mode](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         switch (mode)
@@ -181,7 +200,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         {
             MaxGlobalFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
                     batch,
-                    filterData.GetDeviceView(batchIdx*params.kernelLanes, params.kernelLanes),
+                    filterData[batchIdx].GetDeviceView(),
                     ret);
             break;
         }
@@ -189,7 +208,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         {
             MaxSharedFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
                     batch,
-                    filterData.GetDeviceView(batchIdx*params.kernelLanes, params.kernelLanes),
+                    filterData[batchIdx].GetDeviceView(),
                     ret);
             break;
         }
@@ -197,7 +216,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         {
             MaxLocalFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
                     batch,
-                    filterData.GetDeviceView(batchIdx*params.kernelLanes, params.kernelLanes),
+                    filterData[batchIdx].GetDeviceView(),
                     ret);
             break;
         }

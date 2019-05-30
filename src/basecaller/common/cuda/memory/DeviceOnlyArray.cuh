@@ -99,14 +99,10 @@ public:
     DeviceOnlyArray& operator=(const DeviceOnlyArray&) = delete;
     DeviceOnlyArray& operator=(DeviceOnlyArray&& other) = default;
 
-    DeviceView<T> GetDeviceView(size_t idx, size_t len)
-    {
-        assert(idx + len <= count_);
-        return DeviceHandle<T>(data_.get<T>(DataKey()), idx, len, DataKey());
-    }
     DeviceView<T> GetDeviceView()
     {
-        return GetDeviceView(0, count_);
+        assert(idx + len <= count_);
+        return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
 
     ~DeviceOnlyArray()

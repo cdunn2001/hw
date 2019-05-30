@@ -155,23 +155,17 @@ public:
     // (no performance penalty if it already is),
     // and will only remain valid until a view of
     // the device side is requested.
-    HostView<HostType> GetHostView(size_t idx, size_t len)
+    HostView<HostType> GetHostView()
     {
         if (!activeOnHost_) CopyImpl(true, false);
-        assert(idx + len <= Size());
-        return HostView<HostType>(hostData_.get<HostType>(DataKey()), idx, len, DataKey());
+        return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
-    HostView<HostType> GetHostView() { return GetHostView(0, Size()); }
-    operator HostView<HostType>() { return GetHostView(); }
 
-    DeviceHandle<GpuType> GetDeviceHandle(size_t idx, size_t len)
+    DeviceHandle<GpuType> GetDeviceHandle()
     {
         if (activeOnHost_) CopyImpl(false, false);
-        assert(idx + len <= Size());
-        return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), idx, len/size_ratio, DataKey());
+        return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
-    DeviceHandle<GpuType> GetDeviceHandle() { return GetDeviceHandle(0, Size()); }
-    operator DeviceHandle<GpuType>() { return GetDeviceHandle(); }
 
     void CopyToDevice()
     {
@@ -229,8 +223,8 @@ private:
     }
 
     bool activeOnHost_;
-    SmartHostAllocation hostData_;
-    SmartDeviceAllocation gpuData_;
+    mutable SmartHostAllocation hostData_;
+    mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
     std::weak_ptr<DualAllocationPools> pools_;
 };
