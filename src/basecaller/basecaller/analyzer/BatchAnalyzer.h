@@ -1,3 +1,5 @@
+#ifndef mongo_basecaller_analyzer_BatchAnalyzer_H_
+#define mongo_basecaller_analyzer_BatchAnalyzer_H_
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -82,3 +84,5 @@ private:
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
+
+#endif  // mongo_basecaller_analyzer_BatchAnalyzer_H_

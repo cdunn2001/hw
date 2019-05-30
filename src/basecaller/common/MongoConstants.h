@@ -5,6 +5,7 @@ namespace PacBio {
 namespace Mongo {
 
 static constexpr unsigned int laneSize = 64u;
+static constexpr unsigned int cudaThreadsPerWarp = 32u;
 
 }}      // namespace PacBio::Mongo
 

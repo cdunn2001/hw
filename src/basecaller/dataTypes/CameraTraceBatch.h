@@ -34,6 +34,7 @@ public:     // Structors and assignment
     // Move constructor variant that accepts an rvalue reference to TraceBatch.
     CameraTraceBatch(TraceBatch&& t)
         : TraceBatch<ElementType>(std::move(t))
+        // Notice that this second initializer relies on the base object being already constructed.
         , stats_ (Dimensions().zmwsPerBatch(), Cuda::Memory::SyncDirection::Symmetric /* TODO: , pool for BaselineStats? */)
     { }
 
@@ -52,7 +53,7 @@ public:     // Access to statistics
     { return stats_.GetHostView()[lane]; }
 
 private:    // Data
-    // Statistics for each ZMW in the batch.
+    // Statistics for each ZMW in the batch, one element per lane.
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
 };
 
