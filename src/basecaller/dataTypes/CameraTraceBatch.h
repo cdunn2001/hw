@@ -54,6 +54,7 @@ public:     // Access to statistics
 
 private:    // Data
     // Statistics for each ZMW in the batch, one element per lane.
+    // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
 };
 

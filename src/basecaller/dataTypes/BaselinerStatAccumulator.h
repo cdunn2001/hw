@@ -9,6 +9,9 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+// TODO: Add declaration decorators to enable use on CUDA device.
+// TODO: Add another template parameter to control the precision used for floating-point members.
+
 // Statistics computed by the baseliner for one lane of ZMWs.
 template <typename T>
 class BaselinerStatAccumulator

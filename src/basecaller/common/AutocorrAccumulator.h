@@ -39,6 +39,8 @@
 namespace PacBio {
 namespace Mongo {
 
+// TODO: Add declaration decorators to enable use on CUDA device.
+
 /// \brief A progressive estimate of the normalized autocorrelation.
 /// \details
 /// Assumes that data samples are derived from a stationary process and added
