@@ -59,7 +59,7 @@ public:     // Static functions
                           const Data::MovieConfig& movConfig);
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;
