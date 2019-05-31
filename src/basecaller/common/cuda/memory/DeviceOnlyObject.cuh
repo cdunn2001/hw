@@ -34,15 +34,21 @@ namespace Memory {
 
 // Non-owning smart pointer for use on the GPU to access a gpu-only instance.
 template <typename T>
-class DevicePtr
+class DevicePtr : private detail::DataManager
 {
 public:
-    DevicePtr(DeviceView<T> data, detail::DataManagerKey)
+    __host__ __device__ DevicePtr(DeviceView<T> data, detail::DataManagerKey)
         : data_(data)
     {}
 
     __device__ T* operator->() { return data_.Data(); }
     __device__ const T* operator->() const { return data_.Data(); }
+
+    template <typename U = T, typename dummy = typename std::enable_if<!std::is_same<const U, U>::value, int>::type>
+    __host__ __device__ operator DevicePtr<const T>()
+    {
+        return DevicePtr<const T>(data_, DataKey());
+    }
 private:
     DeviceView<T> data_;
 };
@@ -61,6 +67,10 @@ public:
     {}
 
     DevicePtr<T> GetDevicePtr()
+    {
+        return DevicePtr<T>(data_.GetDeviceView(), DataKey());
+    }
+    DevicePtr<const T> GetDevicePtr() const
     {
         return DevicePtr<T>(data_.GetDeviceView(), DataKey());
     }

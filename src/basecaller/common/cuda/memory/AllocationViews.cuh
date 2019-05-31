@@ -29,6 +29,8 @@
 #ifndef PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_CUH_
 #define PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_CUH_
 
+#include <utility>
+
 #include <common/cuda/memory/AllocationViews.h>
 
 namespace PacBio {
@@ -42,15 +44,23 @@ class DeviceView : public DeviceHandle<T>
     using Parent::data_;
     using Parent::len_;
 public:
-    __device__ __host__ DeviceView(const DeviceHandle<T>& handle) : DeviceHandle<T>(handle) {}
+    __device__ __host__ DeviceView(const DeviceHandle<T>& handle)
+        : DeviceHandle<T>(handle)
+    {}
+
+    template <typename U = T, typename dummy = typename std::enable_if<!std::is_const<U>::value, void >::type>
+    __host__ __device__ operator DeviceView<const T>()
+    {
+        return DeviceHandle<const T>(data_, len_, Parent::DataKey());
+    }
 
     __device__ T& operator[](size_t idx) { return data_[idx]; }
     __device__ const T& operator[](size_t idx) const { return data_[idx]; }
 
     __device__ T* Data() { return data_; }
+    __device__ const T* Data() const { return data_; }
     __device__ size_t Size() const { return len_; }
 };
-
 
 }}}
 

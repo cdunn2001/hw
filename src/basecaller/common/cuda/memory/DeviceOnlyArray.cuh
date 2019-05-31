@@ -101,7 +101,10 @@ public:
 
     DeviceView<T> GetDeviceView()
     {
-        assert(idx + len <= count_);
+        return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
+    }
+    DeviceView<const T> GetDeviceView() const
+    {
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
 

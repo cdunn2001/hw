@@ -66,7 +66,7 @@ void run(const Data::DataManagerParams& dataParams,
     }
 
     auto tmp = [&models, &dataParams, &frameLabelers](
-        TraceBatch<int16_t>& batch,
+        const TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {

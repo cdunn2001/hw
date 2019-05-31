@@ -10,13 +10,13 @@ namespace PacBio {
 namespace Cuda {
 
 template <typename Filter>
-__global__ void GlobalBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
+__global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
     const size_t numFrames = in.Dims().framesPerBatch;
     auto& myFilter = filters[blockIdx.x];
-    const auto inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 
     for (int i = 0; i < numFrames; ++i)
@@ -26,14 +26,14 @@ __global__ void GlobalBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
 }
 
 template <typename Filter>
-__global__ void SharedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
+__global__ void SharedBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
     const size_t numFrames = in.Dims().framesPerBatch;
     __shared__ Filter myFilter;
     myFilter = filters[blockIdx.x];
-    const auto inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 
     for (int i = 0; i < numFrames; ++i)
@@ -58,7 +58,7 @@ __device__ int constexpr constexprMax(int a, int b)
 // data, but now the kernels with smaller filters can use a lot less shared memory and get a lot
 // more increased occupancy, making them run significantly faster.
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
-__global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
+__global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
                                          Memory::DeviceView<ErodeDilate<blockThreads, width1>> lower1,
                                          Memory::DeviceView<ErodeDilate<blockThreads, width2>> lower2,
                                          Memory::DeviceView<DilateErode<blockThreads, width1>> upper1,
@@ -76,7 +76,7 @@ __global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
     assert(numFrames % stride1*stride2 == 0);
 
     // Get block specific workspaces
-    const auto inb  = in.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inb  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outb = out.ZmwData(blockIdx.x, threadIdx.x);
     auto workb1 = workspace1.ZmwData(blockIdx.x, threadIdx.x);
     auto workb2 = workspace2.ZmwData(blockIdx.x, threadIdx.x);
@@ -126,7 +126,7 @@ __global__ void CompressedBaselineFilter(Mongo::Data::GpuBatchData<short2> in,
 // Runs a filter over the input data, but only outputs 1/stride of the
 // results.
 template <size_t blockThreads, size_t stride, typename Filter>
-__global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
+__global__ void StridedFilter(const Mongo::Data::GpuBatchData<const short2> in,
                               Memory::DeviceView<Filter> filters,
                               int numFrames,
                               Mongo::Data::GpuBatchData<short2> out)
@@ -141,7 +141,7 @@ __global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
 
     __shared__ Filter myFilter;
     myFilter = filters[blockIdx.x];
-    const auto inZmw = in.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 
     for (int i = 0; i < numFrames; i += 4*stride)
@@ -164,8 +164,8 @@ __global__ void StridedFilter(Mongo::Data::GpuBatchData<short2> in,
 // Averages the output of the lower and upper filters, and expands the data
 // to back to the original (unstrided) size
 template <size_t blockThreads, size_t stride>
-__global__ void AverageAndExpand(Mongo::Data::GpuBatchData<short2> in1,
-                                 Mongo::Data::GpuBatchData<short2> in2,
+__global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> in1,
+                                 const Mongo::Data::GpuBatchData<const short2> in2,
                                  Mongo::Data::GpuBatchData<short2> out)
 {
     const size_t numFrames = out.Dims().framesPerBatch;
@@ -173,8 +173,8 @@ __global__ void AverageAndExpand(Mongo::Data::GpuBatchData<short2> in1,
     assert(numFrames % stride == 0);
     int inputCount = numFrames / stride;
 
-    const auto inZmw1 = in1.ZmwData(blockIdx.x, threadIdx.x);
-    const auto inZmw2 = in2.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw1 = in1.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw2 = in2.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 
     for (int i = 0; i < inputCount; ++i)
@@ -213,7 +213,7 @@ public:
         , numLanes_(numLanes)
     {}
 
-    __host__ void RunComposedFilter(Mongo::Data::TraceBatch<int16_t>& input,
+    __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<int16_t>& input,
                                     Mongo::Data::TraceBatch<int16_t>& output,
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)

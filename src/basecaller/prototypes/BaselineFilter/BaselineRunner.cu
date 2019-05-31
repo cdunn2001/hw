@@ -49,7 +49,7 @@ void RunGlobalBaselineFilter(
         filterData.emplace_back(dataParams.kernelLanes, 0);
     }
 
-    auto tmp = [dataParams,&filterData](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
+    auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         GlobalBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
                 filterData[batchIdx].GetDeviceView(),
@@ -75,7 +75,7 @@ void RunSharedBaselineFilter(
         filterData.emplace_back(dataParams.kernelLanes, 0);
     }
 
-    auto tmp = [dataParams,&filterData](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
+    auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         SharedBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
                 filterData[batchIdx].GetDeviceView(),
@@ -125,7 +125,7 @@ void RunCompressedBaselineFilter(
     }
 
     auto tmp = [dataParams, &upper1, &upper2, &lower1, &lower2, &work1, &work2]
-        (TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
+        (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
         CompressedBaselineFilter<laneWidth, 9, 31, 2, 8><<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
                 batch,
                 lower1[batchIdx].GetDeviceView(),
@@ -171,7 +171,7 @@ void RunMultipleBaselineFilter(
     }
 
     auto tmp = [dataParams, &work1, &work2, &filters, &full]
-        (TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
+        (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
 
         filters[batchIdx].RunComposedFilter(batch, ret, work1[batchIdx], work2[batchIdx]);
         auto view = ret.GetBlockView(0);
@@ -193,7 +193,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         filterData.emplace_back(params.kernelLanes, 0);
     }
 
-    auto tmp = [params,&filterData, mode](TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
+    auto tmp = [params,&filterData, mode](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
         switch (mode)
         {
         case BaselineFilterMode::GlobalMax:
