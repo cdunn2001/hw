@@ -1,3 +1,5 @@
+#ifndef mongo_basecaller_analyzer_BatchAnalyzer_H_
+#define mongo_basecaller_analyzer_BatchAnalyzer_H_
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -27,6 +29,9 @@
 //  Description:
 //  Defines class BatchAnalyzer.
 
+#include <memory>
+
+#include <basecaller/traceAnalysis/TraceAnalysisForward.h>
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
@@ -43,10 +48,18 @@ public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
     using OutputType = PacBio::Mongo::Data::BasecallBatch;
 
+public:     // Static functions
+    /// Sets algorithm configuration and system calibration properties.
+    /// Static because the config types keep a JSON representation and
+    /// deserialize on each reference, but the values will be the same for
+    /// each BatchAnalyzer instance for a given movie.
+    /// \note Not thread safe. Do not call this function while threads are
+    /// running analysis.
+    static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
+                          const Data::MovieConfig& movConfig);
+
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t batchId,
-                  const Data::BasecallerAlgorithmConfig& bcConfig,
-                  const Data::MovieConfig& movConfig);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;
@@ -63,8 +76,13 @@ public:
     operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
 private:
-    uint32_t batchId_;
-    uint32_t nextFrameId_ = 0;
+    uint32_t poolId_;   // ZMW pool being processed by this analyzer.
+    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+    std::unique_ptr<Baseliner> baseliner_;
+    std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
+    std::unique_ptr<DetectionModelEstimator> dme_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
+
+#endif  // mongo_basecaller_analyzer_BatchAnalyzer_H_

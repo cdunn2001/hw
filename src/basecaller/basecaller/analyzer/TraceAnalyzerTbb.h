@@ -30,6 +30,7 @@
 //  Defines class TraceAnalyzerTbb, which implements the interface
 //  ITraceAnalyzer.
 
+#include "AlgoFactory.h"
 #include "BatchAnalyzer.h"
 #include "ITraceAnalyzer.h"
 
@@ -42,7 +43,7 @@ class TraceAnalyzerTbb : public ITraceAnalyzer
 public:     // Structors and assignment operators
     TraceAnalyzerTbb(unsigned int numPools,
                      const Data::BasecallerAlgorithmConfig& bcConfig,
-                     const Data::MovieConfig movConfig);
+                     const Data::MovieConfig& movConfig);
 
     virtual ~TraceAnalyzerTbb() noexcept = default;
 
@@ -62,6 +63,10 @@ private:    // Polymorphic analysis
     void NumWorkerThreads(unsigned int) override;
 
 private:    // Data
+    // One algorithm factory will handle configuration and construction of the
+    // component algorithms of each batch analyzer.
+    AlgoFactory algoFactory_;
+
     // One analyzer for each pool.
     std::vector<BatchAnalyzer> bAnalyzer_;
 };

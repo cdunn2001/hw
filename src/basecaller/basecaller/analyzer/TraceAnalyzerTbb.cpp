@@ -37,6 +37,10 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 
+#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+
 using std::vector;
 
 namespace PacBio {
@@ -45,13 +49,21 @@ namespace Basecaller {
 
 TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
                                    const Data::BasecallerAlgorithmConfig& bcConfig,
-                                   const Data::MovieConfig movConfig)
+                                   const Data::MovieConfig& movConfig)
+    : algoFactory_ (bcConfig)
 {
+    algoFactory_.Configure(bcConfig, movConfig);
+
+    // TODO: If algoFactory_::Configure is handling configuration of the
+    // various algorithms, is there a reason to still have a
+    // BatchAnalyzer::Configure?
+    BatchAnalyzer::Configure(bcConfig, movConfig);
+
     bAnalyzer_.reserve(numPools);
     // TODO: Should be able to parallelize construction of batch analyzers.
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, bcConfig, movConfig);
+        bAnalyzer_.emplace_back(poolId, algoFactory_);
     }
 }
 

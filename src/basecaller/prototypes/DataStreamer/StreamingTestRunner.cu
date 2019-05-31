@@ -23,7 +23,6 @@ __global__ void BasicSanity(Mongo::Data::GpuBatchData<short2> in, size_t tid, Me
 
     const size_t reps = 10;
     auto zmwData = in.ZmwData(blockIdx.x, threadIdx.x);
-    assert(zmwData.size() != 0);
     for (size_t i = 0; i < reps; ++i)
     {
         short val = zmwData[0].x;

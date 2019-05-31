@@ -29,9 +29,22 @@
 
 #include "BatchAnalyzer.h"
 
+#include <algorithm>
+
+#include <pacbio/PBAssert.h>
+
+#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+
 #include <dataTypes/BasecallBatch.h>
+#include <dataTypes/CameraTraceBatch.h>
+#include <dataTypes/DetectionModel.h>
+#include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
+
+#include "AlgoFactory.h"
 
 using namespace PacBio::Mongo::Data;
 
@@ -39,29 +52,54 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-BatchAnalyzer::BatchAnalyzer(uint32_t batchId,
-                             const BasecallerAlgorithmConfig& bcConfig,
-                             const MovieConfig& movConfig)
-    : batchId_ (batchId)
-{ }
+// static
+void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
+                              const Data::MovieConfig& movConfig)
+{
+}
+
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
+    : poolId_ (poolId)
+{
+    baseliner_ = algoFac.CreateBaseliner(poolId);
+    // TODO: Create other algorithm components.
+}
+
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
-    if (tbatch.Metadata().PoolId() != batchId_)
-    {
-        // TODO: Log error. Throw exception.
-    }
-
-    if (tbatch.Metadata().FirstFrame() != nextFrameId_)
-    {
-        // TODO: Log error. Throw exception.
-    }
+    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
+    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
     // TODO: Define this so that it scales properly with chunk size, frame rate,
     // and max polymerization rate.
     const uint16_t maxCallsPerZmwChunk = 96;
 
-    // TODO: Implement the analysis logic!
+    // TODO: Develop error handling logic.
+
+    // Baseline estimation and subtraction.
+    // Includes computing baseline moments.
+    CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
+
+    // Accumulate histogram of baseline-subtracted trace data.
+    traceHistAccum_->AddBatch(ctb);
+
+    // TODO: When sufficient trace data have been histogrammed, estimate detection model.
+    // TODO: Make this configurable.
+    const unsigned int minFramesForDme = 4000u;
+    const auto histTotals = traceHistAccum_->FrameCount();
+    if (*std::min_element(histTotals.cbegin(), histTotals.cend()) >= minFramesForDme)
+    {
+        Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
+        (void) detModel;    // Temporarily squelch unused variable warning.
+        // TODO: reset histogram
+    }
+
+    // TODO: When detection model is available, classify frames.
+
+    // TODO: When frames are classified, generate pulses with metrics.
+
+    // TODO: When pulses are generated, call bases.
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
