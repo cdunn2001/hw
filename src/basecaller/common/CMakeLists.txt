@@ -7,6 +7,7 @@ add_subdirectory(test)
 
 add_library(libMongoCommon STATIC
     AlignedCircularBuffer.h
+    AlignedVector.h
     AutocorrAccumulator.h
     AutocorrAccumulator.cpp
     LaneArray.h
