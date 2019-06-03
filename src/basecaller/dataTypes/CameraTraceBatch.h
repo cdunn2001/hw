@@ -8,13 +8,13 @@
 #include <common/NumericUtil.h>
 #include <common/StatAccumulator.h>
 
+#include "BasicTypes.h"
 #include "BaselinerStatAccumulator.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-using BaselinedTraceElement = int16_t;
 
 /// Baseline-subtracted trace data with statistics
 class CameraTraceBatch : public TraceBatch<BaselinedTraceElement>

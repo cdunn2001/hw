@@ -21,7 +21,7 @@ Baseliner::Baseliner(uint32_t poolId)
 }
 
 Data::CameraTraceBatch
-Baseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
+Baseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     // TODO
     return Data::CameraTraceBatch(std::move(rawTrace));

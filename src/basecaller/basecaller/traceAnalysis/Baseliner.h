@@ -16,6 +16,7 @@ class Baseliner
 {
 public:     // Types
     using ElementTypeIn = Data::RawTraceElement;
+    using ElementTypeOut = Data::BaselinedTraceElement;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -37,15 +38,17 @@ public:
     {
         // TODO
         assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return process(std::move(rawTrace));
+        return Process(std::move(rawTrace));
     }
 
 private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::CameraTraceBatch process(Data::TraceBatch<ElementTypeIn> rawTrace);
+    virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace);
 };
+
+
 
 }}}     // namespace PacBio::Mongo::Basecaller
 

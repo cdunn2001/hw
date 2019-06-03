@@ -137,11 +137,18 @@ public:     // Scalar access
         return data_[i];
     }
 
-    T& operator[](unsigned int i )
+    T& operator[](unsigned int i)
     {
         assert(static_cast<size_t>(i) < N);
         return data_[i];
     }
+
+public:
+    T* Data()
+    { return data_; }
+
+    const T* Data() const
+    { return data_; }
 
 public:     // Comparison operators
     friend LaneMask<N> operator==(const LaneArray& lhs, const LaneArray& rhs)
@@ -246,7 +253,7 @@ public:     // Named binary operators
 public:
     friend LaneMask<N> isnan(const LaneArray& a)
     {
-        LaneMask<N> ret(true);
+        LaneMask<N> ret(false);
         if (std::is_floating_point<T>::value)
         {
             for (unsigned int i = 0; i < N; ++i)
