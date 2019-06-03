@@ -32,6 +32,8 @@ set(CPP_LIST
     PrimaryConfig.h
     TraceBatch.h
     TraceBatch.cpp
+    UHistogramSimd.h
+    UHistogramSimd.cpp
 )
 
 set(CUDA_LIST
