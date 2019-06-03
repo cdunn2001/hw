@@ -12,7 +12,6 @@
 namespace PacBio {
 namespace Mongo {
 
-// TODO: Add to interface to model the concept prototyped by m512b.
 /// A fixed-size array of boolean values.
 template <unsigned int N>
 class LaneMask : public boost::bitwise<LaneMask<N>>
@@ -24,54 +23,112 @@ class LaneMask : public boost::bitwise<LaneMask<N>>
     static_assert(N % laneUnit == 0u, "Bad LaneArray size.");
 
 public:     // Structors and assignment
+    LaneMask() = default;
+    
+    LaneMask(const LaneMask& tf) = default;
+    
+    LaneMask& operator=(const LaneMask& tf) = default;
+
     /// Broadcasting constructor supports implicit conversion of scalar value
     /// to uniform vector.
     LaneMask(bool tf)
     {
-        // TODO
+        std::fill(data_, data_+N, tf);
+    }
+
+public:     // Scalar access
+    bool operator[](unsigned int i) const
+    {
+        assert(static_cast<size_t>(i) < N);
+        return data_[i];
+    }
+    
+    bool& operator[](unsigned int i)
+    {
+        assert(static_cast<size_t>(i) < N);
+        return data_[i];
     }
 
 public:     // Compound assignment
     // Boost provides the associated binary operators.
     LaneMask& operator|=(const LaneMask& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] |= a[i];
+        }
         return *this;
     }
 
     LaneMask& operator&=(const LaneMask& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] &= a[i];
+        }
         return *this;
     }
 
-    LaneMask& operator^(const LaneMask& a)
+    LaneMask& operator^=(const LaneMask& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] ^= a[i];
+        }
         return *this;
     }
 
 public:
     /// Returns a copy with each element negated.
-    LaneMask operator!()
+    LaneMask operator!() const
     {
-        // TODO
+        LaneMask ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = !data_[i];
+        }
         return *this;
     }
 
 public:     // Reductions
     friend bool all(const LaneMask& tf)
     {
-        // TODO
-        return false;
+        bool ret = true;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret &= tf[i];
+        }
+        return ret;
     }
+
+    friend bool any(const LaneMask& tf)
+    {
+        bool ret = false;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret |= tf[i];
+        }
+        return ret;
+    }
+
+    friend bool none(const LaneMask& tf)
+    {
+        bool ret = true;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret &= !tf[i];
+        }
+        return ret;
+    }
+
+private:
+    bool data_[N];
 };
 
 
-// TODO: Add to interface to model the concepts prototyped by m512f and m512i.
 /// A fixed-size array type that supports elementwise arithmetic operations.
 template <typename T, unsigned int N>
-class LaneArray : public boost::arithmetic<LaneArray<T, N>>
+class LaneArray : public boost::arithmetic<LaneArray<T,N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
     static_assert(std::is_same<T, short>::value
@@ -89,36 +146,68 @@ public:     // Structors and assignment
     /// Broadcasting constructor supports implicit conversion of scalar value
     /// to uniform vector.
     LaneArray(const T& val)
-    { }
+    {
+        std::fill(data_, data_+N, val);
+    }
+
+public:     // Scalar access
+    T operator[](unsigned int i) const
+    {
+        assert(static_cast<size_t>(i) < N);
+        return data_[i];
+    }
+
+    T& operator[](unsigned int i)
+    {
+        assert(static_cast<size_t>(i) < N);
+        return data_[i];
+    }
+
+public:
+    T* Data()
+    { return data_; }
+
+    const T* Data() const
+    { return data_; }
 
 public:     // Comparison operators
     friend LaneMask<N> operator==(const LaneArray& lhs, const LaneArray& rhs)
     {
-        // TODO
-        return LaneMask<N>(false);
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] == rhs[i];
+        }
+        return ret;
     }
 
     friend LaneMask<N> operator<(const LaneArray& lhs, const LaneArray& rhs)
     {
-        // TODO
-        return LaneMask<N>(false);
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] < rhs[i];
+        }
+        return ret;
     }
 
     friend LaneMask<N> operator<=(const LaneArray& lhs, const LaneArray& rhs)
     {
-        // TODO: Optimize
-        return (lhs < rhs) | (lhs == rhs);
+        return !(lhs > rhs);
     }
 
     friend LaneMask<N> operator>(const LaneArray& lhs, const LaneArray& rhs)
     {
-        // TODO: Optimize
-        return !(lhs <= rhs);
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] > rhs[i];
+        }
+        return ret;
     }
 
     friend LaneMask<N> operator>=(const LaneArray& lhs, const LaneArray& rhs)
     {
-        // TODO: Optimize
         return !(lhs < rhs);
     }
 
@@ -126,54 +215,87 @@ public:     // Compound assigment
     // Boost provides the associated binary operators.
     LaneArray& operator+=(const LaneArray& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] += a[i];
+        }
         return *this;
     }
 
     LaneArray& operator-=(const LaneArray& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] -= a[i];
+        }
         return *this;
     }
 
     LaneArray& operator*=(const LaneArray& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] *= a[i];
+        }
         return *this;
     }
 
     LaneArray& operator/=(const LaneArray& a)
     {
-        // TODO
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            this->data_[i] /= a[i];
+        }
         return *this;
     }
 
 public:     // Named binary operators
     friend LaneArray max(const LaneArray& a, const LaneArray& b)
     {
-        // TODO
-        return LaneArray();
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret.data_[i] = std::max(a[i], b[i]);
+        }
+        return ret;
     }
 
     friend LaneArray min(const LaneArray& a, const LaneArray& b)
     {
-        // TODO
-        return LaneArray();
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret.data_[i] = std::min(a[i], b[i]);
+        }
+        return ret;
     }
 
-public:     // Tests for special floating-point values
+public:
     friend LaneMask<N> isnan(const LaneArray& a)
     {
-        // TODO
-        return LaneMask<N>(false);
+        LaneMask<N> ret(false);
+        if (std::is_floating_point<T>::value)
+        {
+            for (unsigned int i = 0; i < N; ++i)
+            {
+                ret[i] = std::isnan(a[i]);
+            }
+        }
+        return ret;
     }
+
+private:
+    T data_[N];
 };
 
-
 template <typename T, unsigned int N>
-LaneArray<T, N> Blend(const LaneMask<N>& tf, const LaneArray<T, N>& success, const LaneArray<T, N>& failure)
+LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const LaneArray<T,N>& failure)
 {
-    // TODO
+    LaneArray<T,N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = tf[i] ? success[i] : failure[i];
+    }
     return failure;
 }
 
@@ -185,13 +307,13 @@ namespace PacBio {
 namespace Simd {
 
 template <typename T, unsigned int N>
-struct SimdConvTraits<Mongo::LaneArray<T, N>>
+struct SimdConvTraits<Mongo::LaneArray<T,N>>
 {
     typedef Mongo::LaneMask<N> bool_conv;
-    typedef Mongo::LaneArray<float, N> float_conv;
-    typedef Mongo::LaneArray<int, N> index_conv;
-    typedef Mongo::LaneArray<short, 2*N> pixel_conv;   // TODO: ?!
-    typedef Mongo::LaneArray<T, N> union_conv;
+    typedef Mongo::LaneArray<float,N> float_conv;
+    typedef Mongo::LaneArray<int,N> index_conv;
+    typedef Mongo::LaneArray<short,N> pixel_conv;
+    typedef Mongo::LaneArray<T,N> union_conv;
 };
 
 }}   // namespace PacBio::Simd
