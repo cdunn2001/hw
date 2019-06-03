@@ -38,6 +38,8 @@
 namespace PacBio {
 namespace Mongo {
 
+// TODO: Add declaration decorators to enable use on CUDA device.
+
 /// \brief A bundle of moment statistics.
 /// \details
 /// Provides mean and variance statistics on augmentable dataset.

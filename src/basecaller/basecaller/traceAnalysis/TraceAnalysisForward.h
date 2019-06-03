@@ -5,6 +5,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+class AlgoFactory;
 class Baseliner;
 class TraceHistogramAccumulator;
 class DetectionModelEstimator;

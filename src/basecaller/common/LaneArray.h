@@ -1,9 +1,13 @@
 #ifndef mongo_common_LaneArray_H_
 #define mongo_common_LaneArray_H_
 
+#include <algorithm>
+#include <type_traits>
 #include <boost/operators.hpp>
 
+#include <common/MongoConstants.h>
 #include <common/simd/SimdConvTraits.h>
+#include <common/simd/SimdTypeTraits.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -12,6 +16,12 @@ namespace Mongo {
 template <unsigned int N>
 class LaneMask : public boost::bitwise<LaneMask<N>>
 {
+    // Static assertions that enable efficient SIMD and CUDA implementations.
+    static constexpr auto laneUnit = std::max<unsigned int>(cudaThreadsPerWarp,
+                                                            Simd::SimdTypeTraits<Simd::m512b>::width);
+    static_assert(N != 0, "Template argument cannot be 0.");
+    static_assert(N % laneUnit == 0u, "Bad LaneArray size.");
+
 public:     // Structors and assignment
     LaneMask() = default;
     
@@ -120,6 +130,16 @@ private:
 template <typename T, unsigned int N>
 class LaneArray : public boost::arithmetic<LaneArray<T,N>>
 {
+    // Static assertions that enable efficient SIMD and CUDA implementations.
+    static_assert(std::is_same<T, short>::value
+                  || std::is_same<T, int>::value
+                  || std::is_same<T, float>::value,
+                  "First template argument must be short, int, or float.");
+    static constexpr auto laneUnit = std::max<unsigned int>(cudaThreadsPerWarp,
+                                                            Simd::SimdTypeTraits<Simd::m512i>::width) * 4u / sizeof(T);
+    static_assert(N != 0, "Second template argument cannot be 0.");
+    static_assert(N % laneUnit == 0u, "Bad LaneArray size.");
+
 public:     // Structors and assignment
     LaneArray() = default;
 

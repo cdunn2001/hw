@@ -44,6 +44,8 @@
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
 
+#include "AlgoFactory.h"
+
 using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
@@ -54,14 +56,14 @@ namespace Basecaller {
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
 {
-    Baseliner::Configure(bcConfig.baselinerConfig, movConfig);
-    TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
 }
 
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId)
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
-{ }
+{
+    baseliner_ = algoFac.CreateBaseliner(poolId);
+    // TODO: Create other algorithm components.
+}
 
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
