@@ -2,7 +2,7 @@
 
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
-#include <common/cuda/utility/CudaArray.cuh>
+#include <common/cuda/utility/CudaArray.h>
 #include <common/KernelThreadPool.h>
 
 #include <dataTypes/TraceBatch.cuh>
