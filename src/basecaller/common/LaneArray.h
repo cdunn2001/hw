@@ -39,13 +39,13 @@ public:     // Structors and assignment
 public:     // Scalar access
     bool operator[](unsigned int i) const
     {
-        assert(static_cast<size_t>(i) < N);
+        assert(i < N);
         return data_[i];
     }
     
     bool& operator[](unsigned int i)
     {
-        assert(static_cast<size_t>(i) < N);
+        assert(i < N);
         return data_[i];
     }
 
@@ -87,7 +87,7 @@ public:
         {
             ret[i] = !data_[i];
         }
-        return *this;
+        return ret;
     }
 
 public:     // Reductions
@@ -96,7 +96,7 @@ public:     // Reductions
         bool ret = true;
         for (unsigned int i = 0; i < N; ++i)
         {
-            ret &= tf[i];
+            ret = ret && tf[i];
         }
         return ret;
     }
@@ -106,7 +106,7 @@ public:     // Reductions
         bool ret = false;
         for (unsigned int i = 0; i < N; ++i)
         {
-            ret |= tf[i];
+            ret = ret || tf[i];
         }
         return ret;
     }
@@ -116,7 +116,7 @@ public:     // Reductions
         bool ret = true;
         for (unsigned int i = 0; i < N; ++i)
         {
-            ret &= !tf[i];
+            ret = ret && !tf[i];
         }
         return ret;
     }
@@ -128,7 +128,7 @@ private:
 
 /// A fixed-size array type that supports elementwise arithmetic operations.
 template <typename T, unsigned int N>
-class LaneArray : public boost::arithmetic<LaneArray<T,N>>
+class LaneArray : public boost::arithmetic<LaneArray<T, N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
     static_assert(std::is_same<T, short>::value
@@ -153,13 +153,13 @@ public:     // Structors and assignment
 public:     // Scalar access
     T operator[](unsigned int i) const
     {
-        assert(static_cast<size_t>(i) < N);
+        assert(i < N);
         return data_[i];
     }
 
     T& operator[](unsigned int i)
     {
-        assert(static_cast<size_t>(i) < N);
+        assert(i < N);
         return data_[i];
     }
 

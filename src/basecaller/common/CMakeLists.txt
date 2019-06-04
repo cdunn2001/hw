@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 
 add_subdirectory(cuda)
 add_subdirectory(simd)
+add_subdirectory(test)
 
 add_library(libMongoCommon STATIC
     AlignedCircularBuffer.h
