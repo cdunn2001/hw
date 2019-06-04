@@ -96,8 +96,14 @@ public:
         Teardown();
     }
 
-    BasecallerAlgorithmConfig& BasecallerConfig()
-    { return basecallerConfig_; };
+    MongoBasecallerConsole& BasecallerConfig(const BasecallerAlgorithmConfig& basecallerConfig)
+    {
+        basecallerConfig_.Load(basecallerConfig);
+        return *this;
+    }
+
+    const BasecallerAlgorithmConfig& BasecallerConfig() const
+    { return basecallerConfig_; }
 
 private:
     void RunAnalyzer()
@@ -407,6 +413,7 @@ int main(int argc, char* argv[])
         BasecallerAlgorithmConfig basecallerConfig;
         mux.Add("basecaller", basecallerConfig);
         mux.Add("common", PacBio::Mongo::Data::GetPrimaryConfig());
+        mux.SetStrict(options.get("strict"));
         mux.ProcessCommandLine(options.all("config"));
 
         if (options.get("showconfig"))
@@ -418,9 +425,7 @@ int main(int argc, char* argv[])
         auto bc = std::unique_ptr<MongoBasecallerConsole>(new MongoBasecallerConsole());
 
         bc->HandleProcessArguments(parser.args());
-
-        bc->BasecallerConfig().SetStrict(options.get("strict"));
-        bc->BasecallerConfig().Load(basecallerConfig);
+        bc->BasecallerConfig(basecallerConfig);
 
         {
             PacBio::Logging::LogStream ls;
