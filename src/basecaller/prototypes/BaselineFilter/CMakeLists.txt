@@ -15,15 +15,15 @@ add_executable(BaselineFilter
     ExtremaFilterKernels.cu
 )
 
-target_include_directories(libProtoCommon 
+target_include_directories(BaselineFilter
     PUBLIC 
         ${CMAKE_CURRENT_LIST_DIR})
         
 target_link_libraries(BaselineFilter
     libProtoCommon)
 
-set_target_properties(DataStreamer PROPERTIES LINKER_LANGUAGE CUDA)
-set_target_properties(DataStreamer PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+set_target_properties(BaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
+set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 
 include(pacbio-cplusplus-gtest)

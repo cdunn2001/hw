@@ -22,6 +22,54 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
-#include "CudaTuple.cuh"
+#ifndef PACBIO_CUDA_MEMORY_DEVICE_ONLY_OBJECT_CUH_
+#define PACBIO_CUDA_MEMORY_DEVICE_ONLY_OBJECT_CUH_
+
+#include <common/cuda/memory/DeviceOnlyArray.cuh>
+
+namespace PacBio {
+namespace Cuda {
+namespace Memory {
+
+// Non-owning smart pointer for use on the GPU to access a gpu-only instance.
+template <typename T>
+class DevicePtr
+{
+public:
+    DevicePtr(DeviceView<T> data, detail::DataManagerKey)
+        : data_(data)
+    {}
+
+    __device__ T* operator->() { return data_.Data(); }
+    __device__ const T* operator->() const { return data_.Data(); }
+private:
+    DeviceView<T> data_;
+};
+
+// Owning host-side smart pointer for an obect residing exclusively
+// in GPU memory.  The host will handle lifetime of the object,
+// but the object itself can only be interacted with in a cuda kernel
+// via a DevicePtr
+template <typename T>
+class DeviceOnlyObj : private detail::DataManager
+{
+public:
+    template <typename... Args>
+    DeviceOnlyObj(Args&&... args)
+        : data_(1, std::forward<Args>(args)...)
+    {}
+
+    DevicePtr<T> GetDevicePtr()
+    {
+        return DevicePtr<T>(data_.GetDeviceView(), DataKey());
+    }
+
+private:
+    Memory::DeviceOnlyArray<T> data_;
+};
+
+
+}}}
+
+#endif // PACBIO_CUDA_MEMORY_DEVICE_ONLY_OBJECT_CUH_

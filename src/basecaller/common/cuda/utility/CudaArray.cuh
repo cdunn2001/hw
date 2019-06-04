@@ -24,4 +24,32 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "CudaTuple.cuh"
+#ifndef PACBIO_CUDA_CUDA_ARRAY_H_
+#define PACBIO_CUDA_CUDA_ARRAY_H_
+
+#include <array>
+
+namespace PacBio {
+namespace Cuda {
+namespace Utility {
+
+template <typename T, size_t len>
+struct CudaArray
+{
+    CudaArray() = default;
+    // implicit conversion from std::array intentional
+    CudaArray(const std::array<T, len> &data)
+    {
+        memcpy(data_, data.data(), sizeof(T)*len);
+    }
+
+    __device__ __host__ T& operator[](unsigned idx) { return data_[idx]; }
+    __device__ __host__ const T& operator[](unsigned idx) const { return data_[idx]; }
+    __device__ __host__ T* data() { return data_; }
+private:
+    T data_[len];
+};
+
+}}}
+
+#endif // PACBIO_CUDA_CUDA_ARRAY_H_
