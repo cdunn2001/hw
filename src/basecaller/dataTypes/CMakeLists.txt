@@ -8,6 +8,8 @@ set(CPP_LIST
     BasecallerConfig.h
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
+    BaselineStats.h
+    BaselineStats.cpp
     BasicTypes.h
     BatchMetadata.h
     CameraTraceBatch.h

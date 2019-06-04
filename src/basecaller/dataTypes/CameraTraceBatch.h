@@ -5,10 +5,8 @@
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
-#include <common/NumericUtil.h>
-#include <common/StatAccumulator.h>
 
-#include "BaselinerStatAccumulator.h"
+#include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -46,16 +44,16 @@ public:     // Structors and assignment
 
 public:     // Access to statistics
     // TODO: How do we support const access?
-//    const BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane) const
-//    { return stats_.GetHostView()[lane]; }
+    const BaselineStats<laneSize>& Stats(unsigned int lane) const
+    { return stats_.GetHostView()[lane]; }
 
-    BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane)
+    BaselineStats<laneSize>& Stats(unsigned int lane)
     { return stats_.GetHostView()[lane]; }
 
 private:    // Data
     // Statistics for each ZMW in the batch, one element per lane.
     // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
+    Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>> stats_;
 };
 
 }}}     // namespace PacBio::Mongo::Data
