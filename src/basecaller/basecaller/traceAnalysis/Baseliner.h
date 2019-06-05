@@ -32,11 +32,12 @@ public:     // Static functions
 
     static void Finalize();
 
-private: // static members
+protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
 
 public:
     Baseliner(uint32_t poolId);
+    virtual ~Baseliner() = default;
 
 public:
     /// Estimate and subtract baseline from rawTrace.

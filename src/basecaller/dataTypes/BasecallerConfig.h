@@ -237,10 +237,10 @@ namespace Data {
     {
         CONF_OBJ_SUPPORT_COPY(BasecallerBaselinerConfig)
     public:
-        SMART_ENUM(MethodName, MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
-                   TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
+        SMART_ENUM(MethodName,
+                   DeviceMultiScale,
                    NoOp);
-        ADD_ENUM(MethodName, Method, MethodName::MultiScaleLarge);
+        ADD_ENUM(MethodName, Method, MethodName::DeviceMultiScale);
         ADD_PARAMETER(uint16_t, AutocorrLagFrames, 4u);
     };
 
