@@ -10,6 +10,7 @@
 #include <pacbio/primary/ZmwResultBuffer.h>
 
 #include <pacbio/PBException.h>
+#include <pacbio/dev/profile/ScopedProfilerChain.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
@@ -24,14 +25,25 @@ using namespace PacBio::Primary;
 
 class MongoBasecallerConsole : public ThreadedProcessBase
 {
-    using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
+    SMART_ENUM(
+        ProfileSpots,
+        ANALYZE_CHUNK,
+        WRITE_CHUNK
+    );
 
+    using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
+    using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileSpots>;
 public:
     MongoBasecallerConsole()
     {}
 
     ~MongoBasecallerConsole()
-    {}
+    {
+        PBLOG_INFO << readThroughputStats_.str();
+        PBLOG_INFO << analyzeThroughputStats_.str();
+        PBLOG_INFO << writeThroughputStats_.str();
+        Profiler::FinalReport();
+    }
 
     void HandleProcessArguments(const std::vector<std::string>& args)
     {
@@ -84,17 +96,35 @@ public:
         Teardown();
     }
 
+    MongoBasecallerConsole& BasecallerConfig(const BasecallerAlgorithmConfig& basecallerConfig)
+    {
+        basecallerConfig_.Load(basecallerConfig);
+        return *this;
+    }
+
+    const BasecallerAlgorithmConfig& BasecallerConfig() const
+    { return basecallerConfig_; }
+
+private:
     void RunAnalyzer()
     {
+        size_t numChunksAnalyzed = 0;
+        PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
             std::vector<TraceBatch<int16_t>> chunk;
             if (inputDataQueue_.Pop(chunk, std::chrono::milliseconds(100)))
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
-                    + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
-                    + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                Profiler::Mode mode = Profiler::Mode::REPORT;
+                if (numChunksAnalyzed < 15) mode = Profiler::Mode::OBSERVE;
+                Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
+                auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
+                (void)analyzeChunkProfile;
                 auto baseCalls = (*analyzer_)(std::move(chunk));
+                numChunksAnalyzed++;
                 outputDataQueue_.Push(std::move(baseCalls));
             }
             else
@@ -108,6 +138,15 @@ public:
                 }
             }
         }
+
+        timer.SetCount(numChunksAnalyzed);
+        double chunkAnalyzeRate = timer.GetRate();
+        analyzeThroughputStats_ << "Analyzed " << numChunksAnalyzed
+            << " chunks at " << chunkAnalyzeRate << " chunks/sec"
+            << " (" << (batchGenerator_->NumZmwLanes() *
+                        PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane *
+                        chunkAnalyzeRate)
+            << " zmws/sec)";
     }
 
     void Teardown()
@@ -115,10 +154,6 @@ public:
         // Perform any necessary teardown.
     }
 
-    BasecallerAlgorithmConfig& BasecallerConfig()
-    { return basecallerConfig_; };
-
-private:
     void Setup()
     {
         if (batchGenerator_->NumBatches() == 0)
@@ -173,8 +208,7 @@ private:
     {
         if (hasBazFile_)
         {
-            if (numZmwsSoFar_)
-                bazWriter_->Flush();
+            if (currentZmwIndex_) bazWriter_->Flush();
             PBLOG_INFO << "Closing BAZ file: " << outputBazFile_;
             bazWriter_->WaitForTermination();
             bazWriter_.reset();
@@ -232,7 +266,6 @@ private:
     {
         OpenBazFile();
 
-        size_t numChunksWritten = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
@@ -240,6 +273,11 @@ private:
             if (outputDataQueue_.TryPop(basecallChunk))
             {
                 currentZmwIndex_ = 0;
+                Profiler::Mode mode = Profiler::Mode::REPORT;
+                if (numChunksWritten_ < 15) mode = Profiler::Mode::OBSERVE;
+                Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
+                auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
+                (void)writeChunkProfile;
                 WriteBasecallsChunk(basecallChunk);
                 bazWriter_->Flush();
                 numChunksWritten_++;
@@ -256,12 +294,15 @@ private:
 
         CloseBazFile();
 
-        timer.SetCount(numChunksWritten);
+        timer.SetCount(numChunksWritten_);
         double chunkWriteRate = timer.GetRate();
-        PBLOG_INFO << "Wrote " << numChunksWritten
-                   << " at " << chunkWriteRate << " chunks/sec"
-                   << " (" << (batchGenerator_->NumZmwLanes() * PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane)
-                               / zmwOutputStrideFactor_ << " zmws/sec)";
+        writeThroughputStats_ << "Wrote " << numChunksWritten_
+            << " chunks at " << chunkWriteRate << " chunks/sec"
+            << " (" << (batchGenerator_->NumZmwLanes() *
+                        PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane *
+                        chunkWriteRate)
+                        / zmwOutputStrideFactor_
+            << " zmws/sec)";
     }
 
     void PreloadInputQueue()
@@ -301,9 +342,12 @@ private:
         }
         timer.SetCount(numChunksRead);
         double chunkReadRate = timer.GetRate();
-        PBLOG_INFO << "Read " << numChunksRead
-                   << " at " << chunkReadRate << " chunks/sec"
-                   << " (" << batchGenerator_->NumZmwLanes() * PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane << " zmws/sec)";
+        readThroughputStats_ << "Read " << numChunksRead
+            << " chunks at " << chunkReadRate << " chunks/sec"
+            << " (" << batchGenerator_->NumZmwLanes() *
+                       PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane *
+                       chunkReadRate
+            << " zmws/sec)";
     }
 
 private:
@@ -321,6 +365,9 @@ private:
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
+    std::ostringstream readThroughputStats_;
+    std::ostringstream analyzeThroughputStats_;
+    std::ostringstream writeThroughputStats_;
     size_t numChunksPreloadInputQueue_ = 0;
     size_t numChunksWritten_ = 0;
     bool hasBazFile_ = false;
@@ -366,6 +413,7 @@ int main(int argc, char* argv[])
         BasecallerAlgorithmConfig basecallerConfig;
         mux.Add("basecaller", basecallerConfig);
         mux.Add("common", PacBio::Mongo::Data::GetPrimaryConfig());
+        mux.SetStrict(options.get("strict"));
         mux.ProcessCommandLine(options.all("config"));
 
         if (options.get("showconfig"))
@@ -377,9 +425,7 @@ int main(int argc, char* argv[])
         auto bc = std::unique_ptr<MongoBasecallerConsole>(new MongoBasecallerConsole());
 
         bc->HandleProcessArguments(parser.args());
-
-        bc->BasecallerConfig().SetStrict(options.get("strict"));
-        bc->BasecallerConfig().Load(basecallerConfig);
+        bc->BasecallerConfig(basecallerConfig);
 
         {
             PacBio::Logging::LogStream ls;

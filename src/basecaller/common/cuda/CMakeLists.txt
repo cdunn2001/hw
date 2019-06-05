@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.13)
 set(CPP_LIST
     CudaFunctionDecorators.h
     DisableBoostOnDevice.h
+    PBCudaSimd.h
+    PBCudaSimd.cu
+    PBCudaSimd.cuh
     PBCudaRuntime.h
     PBCudaRuntime.cpp
     # PBCudaRuntimeNoCuda.cpp
@@ -23,6 +26,10 @@ set(CUDA_LIST
     memory/AllocationViews.cu
     memory/DeviceOnlyArray.cuh
     memory/DeviceOnlyArray.cu
+    memory/DeviceOnlyObject.cuh
+    memory/DeviceOnlyObject.cu
+    utility/CudaArray.cuh
+    utility/CudaArray.cu
     utility/CudaTuple.cuh
     utility/CudaTuple.cu
 )

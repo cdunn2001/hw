@@ -10,7 +10,7 @@
 #ifndef CUDAFUNCTIONDECORATORS_H_
 #define CUDAFUNCTIONDECORATORS_H_
 
-#ifdef __CUDA_ARCH__
+#ifdef __CUDACC__
 #define DEVICE_CODE 1
 #define CUDA_ENABLED __host__ __device__
 #else

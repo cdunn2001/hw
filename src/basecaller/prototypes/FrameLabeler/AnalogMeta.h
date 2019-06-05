@@ -24,4 +24,24 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "CudaTuple.cuh"
+#ifndef PACBIO_CUDA_SUBFRAME_ANALOG_META_H
+#define PACBIO_CUDA_SUBFRAME_ANALOG_META_H
+
+namespace PacBio {
+namespace Cuda {
+namespace Subframe {
+
+struct AnalogMeta
+{
+    float mean;
+    float var;
+    float pw;
+    float ipd;
+    float pwSSRatio;
+    float ipdSSRatio;
+};
+
+
+}}}
+
+#endif //PACBIO_CUDA_SUBFRAME_ANALOG_META_H
