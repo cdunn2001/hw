@@ -19,7 +19,7 @@ public:     // Structors and assignment
     // TODO: Should constructor handling configuration?
     AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig);
 
-    // TODO: Add a destructor that calls the static "finalize" funtions of each algorithm.
+    ~AlgoFactory();
 
 public:
     void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,

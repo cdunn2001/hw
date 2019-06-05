@@ -22,6 +22,21 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
     // TODO: Capture remaining options for algorithms.
 }
 
+AlgoFactory::~AlgoFactory()
+{
+    switch (baselinerOpt_)
+    {
+    case Data::BasecallerBaselinerConfig::MethodName::NoOp:
+        Baseliner::Finalize();
+        break;
+    default:
+        ostringstream msg;
+        PBLOG_ERROR << "Unrecognized method option for Baseliner: "
+                    << baselinerOpt_.toString()
+                    << ".  Should be impossible to see this message, constructor should have thrown";
+    }
+}
+
 
 void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                             const Data::MovieConfig& movConfig)
