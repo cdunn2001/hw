@@ -38,11 +38,32 @@
 #include <basecaller/traceAnalysis/Baseliner.h>
 
 namespace PacBio {
+namespace Cuda {
+
+// Forward declaring this for now, but really it should eventually be cleaned up and pulled
+// out of prototypes
+template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
+class ComposedFilter;
+
+}}
+
+namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
 class DeviceMultiScaleBaseliner : public Baseliner
 {
+    // Hard coding to the sequel `TwoScaleMedium` for now, but really
+    // this should be configurable
+    static constexpr size_t width1 = 9;
+    static constexpr size_t width2 = 31;
+    static constexpr size_t stride1 = 2;
+    static constexpr size_t stride2 = 8;
+
+    // Used to initialze the morpholigical filters.  Really the first bunch of frames
+    // out are garbage, but setting this value at least close to the expected baseline
+    // means it will potentially not be horribly off base.
+    static constexpr short initVal = 150;
 public:     // Types
     using ElementTypeIn = Baseliner::ElementTypeIn;
 
@@ -60,14 +81,15 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId)
-        : Baseliner(poolId)
-    {}
+    DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool);
 
-    ~DeviceMultiScaleBaseliner() override = default;
+    ~DeviceMultiScaleBaseliner() override;
 
 private:    // Customizable implementation
     Data::CameraTraceBatch process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+
+    using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2>;
+    std::unique_ptr<Filter> filter_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

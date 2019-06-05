@@ -28,9 +28,18 @@
 
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 
+#include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
+
+
+constexpr size_t DeviceMultiScaleBaseliner::width1;
+constexpr size_t DeviceMultiScaleBaseliner::width2;
+constexpr size_t DeviceMultiScaleBaseliner::stride1;
+constexpr size_t DeviceMultiScaleBaseliner::stride2;
+constexpr short  DeviceMultiScaleBaseliner::initVal;
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
                                           const Data::MovieConfig &movConfig)
@@ -46,7 +55,25 @@ void DeviceMultiScaleBaseliner::Finalize()
 
 Data::CameraTraceBatch DeviceMultiScaleBaseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
-    return batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto pools = rawTrace.GetAllocationPools();
+
+    Data::BatchData<ElementTypeIn> work1(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+    Data::BatchData<ElementTypeIn> work2(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+
+    filter_->RunComposedFilter(rawTrace, out, work1, work2);
+
+    return std::move(out);
 }
+
+DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool)
+    : Baseliner(poolId)
+{
+    filter_ = std::make_unique<Filter>(
+        lanesPerPool,
+        initVal);
+}
+
+DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
 
 }}}

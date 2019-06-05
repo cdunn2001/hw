@@ -229,6 +229,8 @@ private:
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
+        if (!bazWriter_) return; // NoOp if we're not doing output
+
         for (const auto& basecallBatch : basecallChunk)
         {
             for (uint32_t z = 0; z < basecallBatch.Dims().zmwsPerBatch(); z++)
@@ -260,6 +262,7 @@ private:
                 currentZmwIndex_++;
             }
         }
+        bazWriter_->Flush();
     }
 
     void RunWriter()
@@ -279,7 +282,6 @@ private:
                 auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
                 (void)writeChunkProfile;
                 WriteBasecallsChunk(basecallChunk);
-                bazWriter_->Flush();
                 numChunksWritten_++;
             }
             else
@@ -397,8 +399,8 @@ int main(int argc, char* argv[])
 
         auto group1 = OptionGroup(parser, "Data Selection/Tiling Options",
                                   "Controls data selection/tiling options for simulation and testing");
-        group1.add_option("--numZmwLanes").type_int().set_default(0).help("Specifies number of zmw lanes to analyze");
-        group1.add_option("--frames").type_int().set_default(0).help("Specifies number of frames to run");
+        group1.add_option("--numZmwLanes").type_int().set_default(131072).help("Specifies number of zmw lanes to analyze");
+        group1.add_option("--frames").type_int().set_default(10000).help("Specifies number of frames to run");
         parser.add_option_group(group1);
 
         auto group2 = OptionGroup(parser, "Data Output Throttling Options",

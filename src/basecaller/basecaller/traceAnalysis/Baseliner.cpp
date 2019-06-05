@@ -21,8 +21,8 @@ void Baseliner::InitAllocationPools(bool hostExecution)
 {
     using Cuda::Memory::SyncDirection;
 
-    const auto framesPerChunk = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool;
+    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
+    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
 }

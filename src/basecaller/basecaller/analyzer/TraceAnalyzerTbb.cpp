@@ -61,9 +61,10 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
 
     bAnalyzer_.reserve(numPools);
     // TODO: Should be able to parallelize construction of batch analyzers.
+    const bool staticAnalysis = bcConfig.staticAnalysis;
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, algoFactory_);
+        bAnalyzer_.emplace_back(poolId, algoFactory_, staticAnalysis);
     }
 }
 

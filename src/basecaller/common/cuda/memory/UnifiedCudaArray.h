@@ -109,8 +109,10 @@ public:
     ~UnifiedCudaArray()
     {
         // Potentially hand this back to the memory pool (if active)
-        // instead of actually freeing the memory.  Will triger
-        // synchronization if necessary
+        // instead of actually freeing the memory.  Note that since we
+        // are destructing, there is no point in downloading data from
+        // the gpu, so short-circuit that by toggling `ActiveOnHost = true`
+        activeOnHost_ = true;
         DeactivateGpuMem();
 
         // Need to formally call destructors on host data.
@@ -124,6 +126,12 @@ public:
 
         // If there is a pool for host data, recycle our allocation
         if (auto pools = pools_.lock()) pools->hostPool.PushAlloc(std::move(hostData_));
+    }
+
+    // Can be null if no pools in use
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
+    {
+        return pools_.lock();
     }
 
     size_t Size() const { return hostData_.size() / sizeof(HostType); }

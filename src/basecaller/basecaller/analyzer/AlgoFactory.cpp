@@ -73,7 +73,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
         return std::make_unique<Baseliner>(poolId);
     case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-        return std::make_unique<DeviceMultiScaleBaseliner>(poolId);
+        return std::make_unique<DeviceMultiScaleBaseliner>(poolId, Data::GetPrimaryConfig().lanesPerPool);
     default:
         ostringstream msg;
         msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';

@@ -277,6 +277,8 @@ namespace Data {
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
+        ADD_PARAMETER(bool, staticAnalysis, true);
+
     public:
         std::string CombinedMethodName() const
         {
