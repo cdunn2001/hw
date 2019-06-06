@@ -96,13 +96,13 @@ public:
         Teardown();
     }
 
-    MongoBasecallerConsole& BasecallerConfig(const BasecallerAlgorithmConfig& basecallerConfig)
+    MongoBasecallerConsole& Config(const BasecallerConfig& basecallerConfig)
     {
         basecallerConfig_.Load(basecallerConfig);
         return *this;
     }
 
-    const BasecallerAlgorithmConfig& BasecallerConfig() const
+    const BasecallerConfig& Config() const
     { return basecallerConfig_; }
 
 private:
@@ -354,7 +354,7 @@ private:
 
 private:
     // Configuration objects
-    BasecallerAlgorithmConfig basecallerConfig_;
+    BasecallerConfig basecallerConfig_;
 
     // Main analyzer
     std::unique_ptr<ITraceAnalyzer> analyzer_;
@@ -396,6 +396,7 @@ int main(int argc, char* argv[])
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");
         parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
+        parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
 
         auto group1 = OptionGroup(parser, "Data Selection/Tiling Options",
                                   "Controls data selection/tiling options for simulation and testing");
@@ -412,7 +413,7 @@ int main(int argc, char* argv[])
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         ConfigMux mux;
-        BasecallerAlgorithmConfig basecallerConfig;
+        BasecallerConfig basecallerConfig;
         mux.Add("basecaller", basecallerConfig);
         mux.Add("common", PacBio::Mongo::Data::GetPrimaryConfig());
         mux.SetStrict(options.get("strict"));
@@ -424,15 +425,20 @@ int main(int argc, char* argv[])
             return 0;
         }
 
+        if (options.get("numWorkerThreads"))
+        {
+            basecallerConfig.init.numWorkerThreads = options.is_set_by_user("numWorkerThreads");
+        }
+
         auto bc = std::unique_ptr<MongoBasecallerConsole>(new MongoBasecallerConsole());
 
         bc->HandleProcessArguments(parser.args());
-        bc->BasecallerConfig(basecallerConfig);
+        bc->Config(basecallerConfig);
 
         {
             PacBio::Logging::LogStream ls;
             ls << "\"common\" : " << PacBio::Mongo::Data::GetPrimaryConfig().RenderJSON() << "\n";
-            ls << "\"basecaller\" : " << bc->BasecallerConfig();
+            ls << "\"basecaller\" : " << bc->Config();
         }
 
         bc->HandleProcessOptions(options);

@@ -42,7 +42,7 @@ public:     // Static functions
     /// movie to be analyzed.
     static std::unique_ptr<ITraceAnalyzer>
     Create(unsigned int numPools,
-           const Data::BasecallerAlgorithmConfig& bcConfig,
+           const Data::BasecallerConfig& bcConfig,
            const Data::MovieConfig& movConfig);
 
 public:
