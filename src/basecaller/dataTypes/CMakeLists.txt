@@ -11,6 +11,8 @@ set(CPP_LIST
     BaselineStats.h
     BaselineStats.cpp
     BasicTypes.h
+    BatchData.h
+    BatchData.cpp
     BatchMetadata.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp

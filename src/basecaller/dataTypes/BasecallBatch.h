@@ -35,6 +35,7 @@
 #include <pacbio/smrtdata/Basecall.h>
 
 #include "BatchMetadata.h"
+#include "BatchData.h"
 
 namespace PacBio {
 namespace Mongo {
