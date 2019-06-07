@@ -30,6 +30,13 @@ public:     // Mutating functions
                    const LaneArray& y,
                    const Mask& isBaseline);
 
+public:
+    const AutocorrAccumulator<FloatArray> BaselineSubtractedStats() const
+    { return baselineSubtractedStats_; }
+
+    const StatAccumulator<FloatArray> BaselineStats() const
+    { return baselineStats_; }
+
 private:
     // Statistics of trace after baseline estimate has been subtracted.
     AutocorrAccumulator<FloatArray> baselineSubtractedStats_;

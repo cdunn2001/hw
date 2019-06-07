@@ -28,7 +28,8 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/BaselineEstimators.h>
+#include <common/DataGenerators/BatchGenerator.h>
 
 #include <gtest/gtest.h>
 
@@ -36,10 +37,22 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TEST(TestBaseliner, Foo)
+TEST(TestNoOpBaseliner, Run)
 {
-    Baseliner foo ();
-    FAIL() << "Need to define some unit tests.";
+    NoOpBaseliner foo{0};
+
+    Cuda::Data::BatchGenerator batchGenerator(128, laneSize, 1, 8192, 1);
+
+    while (!batchGenerator.Finished())
+    {
+        auto chunk = batchGenerator.PopulateChunk();
+        Data::CameraTraceBatch cameraBatch = foo(std::move(chunk.front()));
+        auto baselineStats = cameraBatch.Stats(0).BaselineStats();
+        EXPECT_TRUE(all(NoOpBaseliner::FloatArray{0} == baselineStats.Count()));
+        EXPECT_TRUE(all(isnan(baselineStats.Mean())));
+        EXPECT_TRUE(all(isnan(baselineStats.Variance())));
+    }
+
 }
 
-}}}
+}}} // PacBio::Mongo::Basecaller

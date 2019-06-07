@@ -11,6 +11,7 @@ add_library(libMongoBasecallerTest OBJECT
 
 target_link_libraries(libMongoBasecallerTest
     libMongoBasecallerAnalyzer
+    libProtoCommon
 )
 
 # Define the test executable specific to mongo basecaller analyzer.

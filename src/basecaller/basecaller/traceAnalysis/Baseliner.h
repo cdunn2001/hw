@@ -41,11 +41,11 @@ public:
         return Process(std::move(rawTrace));
     }
 
+private:    // Customizable implementation
+    virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
+
 private:    // Data
     uint32_t poolId_;
-
-private:    // Customizable implementation
-    virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace);
 };
 
 

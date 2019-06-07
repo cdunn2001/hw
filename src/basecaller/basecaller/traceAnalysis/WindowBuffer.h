@@ -17,7 +17,7 @@ public:
         : boost::circular_buffer<T, tbb::cache_aligned_allocator<T>>(w)
         , strideSkip_(0)
         , counter_(0)
-        , fVal_(T{1})
+        , fVal_{1}
     { }
 
 public:

@@ -3,7 +3,7 @@
 
 #include <sstream>
 #include <pacbio/PBException.h>
-#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/BaselineEstimators.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <dataTypes/MovieConfig.h>
@@ -49,7 +49,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
     switch (baselinerOpt_)
     {
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-        return std::unique_ptr<Baseliner>(new Baseliner(poolId));
+        return std::unique_ptr<Baseliner>(new NoOpBaseliner(poolId));
     default:
         ostringstream msg;
         msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';

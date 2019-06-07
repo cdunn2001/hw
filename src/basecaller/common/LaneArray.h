@@ -150,6 +150,17 @@ public:     // Structors and assignment
         std::fill(data_, data_+N, val);
     }
 
+public:     // Export
+    LaneArray<float,N> AsFloat() const
+    {
+        LaneArray<float,N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = static_cast<float>(data_[i]);
+        }
+        return ret;
+    }
+
 public:     // Scalar access
     T operator[](unsigned int i) const
     {
@@ -270,6 +281,19 @@ public:     // Named binary operators
         return ret;
     }
 
+public:     // Functor types
+    struct minOp
+    {
+        LaneArray operator()(const LaneArray& a, const LaneArray& b)
+        { return min(a, b); }
+    };
+
+    struct maxOp
+    {
+        LaneArray operator()(const LaneArray& a, const LaneArray& b)
+        { return max(a, b); }
+    };
+
 public:
     friend LaneMask<N> isnan(const LaneArray& a)
     {
@@ -288,6 +312,32 @@ private:
     T data_[N];
 };
 
+
+template <typename T, unsigned int N>
+typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
+min(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
+{
+    LaneArray<T, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<T>(std::min(a[i], static_cast<float>(b[i])));
+    }
+    return ret;
+}
+
+
+template <typename T, unsigned int N>
+typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
+max(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
+{
+    LaneArray<T, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<T>(std::max(a[i], static_cast<float>(b[i])));
+    }
+    return ret;
+}
+
 template <typename T, unsigned int N>
 LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const LaneArray<T,N>& failure)
 {
@@ -296,7 +346,7 @@ LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const
     {
         ret[i] = tf[i] ? success[i] : failure[i];
     }
-    return failure;
+    return ret;
 }
 
 }}      // namespace PacBio::Mongo
