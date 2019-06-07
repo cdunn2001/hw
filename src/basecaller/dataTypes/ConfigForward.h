@@ -8,6 +8,7 @@ namespace Data {
 class BasecallerConfig;
 class BasecallerAlgorithmConfig;
 class BasecallerBaselinerConfig;
+class BasecallerFrameLabelerConfig;
 class BasecallerTraceHistogramConfig;
 class BasecallerDmeConfig;
 class BasecallerInitConfig;
