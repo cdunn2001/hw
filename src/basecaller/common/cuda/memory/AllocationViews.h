@@ -26,7 +26,12 @@
 #ifndef PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_H
 #define PACBIO_CUDA_MEMORY_ALLOCATION_VIEW_H
 
+#include <cstddef>
+#include <type_traits>
+
 #include "DataManagerKey.h"
+
+#include <common/cuda/CudaFunctionDecorators.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -39,10 +44,12 @@ template <typename T>
 class HostView
 {
 public:
-    HostView(T* start, size_t idx, size_t len, detail::DataManagerKey)
-        : data_(start+idx)
+    HostView(T* data, size_t len, detail::DataManagerKey)
+        : data_(data)
         , len_(len)
     {}
+
+    ~HostView() = default;
 
     T& operator[](size_t idx) { return data_[idx]; }
     const T& operator[](size_t idx) const {return data_[idx]; }
@@ -66,13 +73,21 @@ private:
 // DeviceView class, which does provide array access and which can
 // be implicitly constructed from this class.
 template <typename T>
-class DeviceHandle
+class DeviceHandle : protected detail::DataManager
 {
 public:
-    DeviceHandle(T* start, size_t idx, size_t len, detail::DataManagerKey key)
-        : data_(start+idx)
+    CUDA_ENABLED DeviceHandle(T* data, size_t len, detail::DataManagerKey key)
+        : data_(data)
         , len_(len)
     {}
+
+    // Implicit conversion to DeviceHandle<const T> needs to be disabled if we're already
+    // templated on a const T
+    template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
+    CUDA_ENABLED operator DeviceHandle<const T>()
+    {
+        return DeviceHandle<const T>(data_, len_, DataKey());
+    }
 
 protected:
     T* data_;

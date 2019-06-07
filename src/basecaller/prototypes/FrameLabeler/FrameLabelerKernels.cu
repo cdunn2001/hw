@@ -107,11 +107,11 @@ FrameLabeler::FrameLabeler()
 
 
 __launch_bounds__(32, 32)
-__global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix> trans,
-                                   Memory::DeviceView<LaneModelParameters<32>> models,
+__global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
+                                   const Memory::DeviceView<const LaneModelParameters<32>> models,
+                                   const Mongo::Data::GpuBatchData<const short2> input,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
                                    ViterbiData<short2, 32> labels,
-                                   Mongo::Data::GpuBatchData<short2> input,
                                    Mongo::Data::GpuBatchData<short2> output)
 {
     using namespace Subframe;
@@ -169,7 +169,7 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
     const int numFrames = input.Dims().framesPerBatch;
-    auto inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
     for (int frame = 0; frame < numFrames; ++frame)
     {
         Recursion(inZmw[frame], frame + latentFrames);
@@ -227,17 +227,17 @@ __global__ void FrameLabelerKernel(Memory::DevicePtr<Subframe::TransitionMatrix>
     latent.SetData(inZmw);
 }
 
-void FrameLabeler::ProcessBatch(Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
-                                Mongo::Data::TraceBatch<int16_t>& input,
+void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
+                                const Mongo::Data::TraceBatch<int16_t>& input,
                                 Mongo::Data::TraceBatch<int16_t>& output)
 {
     auto labels = BorrowScratch();
 
     FrameLabelerKernel<<<lanesPerPool_, BlockThreads>>>(trans_->GetDevicePtr(),
                                                         models.GetDeviceHandle(),
+                                                        input,
                                                         latent_.GetDeviceView(),
                                                         *labels,
-                                                        input,
                                                         output);
     ReturnScratch(std::move(labels));
 }

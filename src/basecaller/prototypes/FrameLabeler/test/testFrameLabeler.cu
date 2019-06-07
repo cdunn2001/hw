@@ -127,13 +127,13 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         auto data = manager.NextBatch();
         auto firstFrame = data.FirstFrame();
         auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
+        const auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
         frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, out);
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {
-            auto block = out.GetBlockView(i);
+            const auto& block = out.GetBlockView(i);
             for (size_t j = 0; j < block.NumFrames(); ++j)
             {
                 for (size_t k = 0; k < block.LaneWidth(); ++k)

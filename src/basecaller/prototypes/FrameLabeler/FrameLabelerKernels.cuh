@@ -61,7 +61,7 @@ struct __align__(128) LatentViterbi
         oldModel = model;
     }
 
-    __device__ void SetData(Mongo::Data::StridedBlockView<short2>& block)
+    __device__ void SetData(const Mongo::Data::StridedBlockView<const short2>& block)
     {
         numFrames_ = Viterbi::lookbackDist;
         auto start = block.size() - Viterbi::lookbackDist;
@@ -150,8 +150,8 @@ public:
     FrameLabeler& operator=(FrameLabeler&&) = default;
 
 
-void ProcessBatch(Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
-                  Mongo::Data::TraceBatch<int16_t>& input,
+void ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
+                  const Mongo::Data::TraceBatch<int16_t>& input,
                   Mongo::Data::TraceBatch<int16_t>& output);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;

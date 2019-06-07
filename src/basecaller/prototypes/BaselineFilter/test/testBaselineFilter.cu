@@ -40,7 +40,11 @@ TEST(BaselineFilterTest, GlobalMemory)
 
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Filter>> filterData;
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    {
+        filterData.emplace_back(dataParams.kernelLanes, 0);
+    }
 
     ZmwDataManager<int16_t> manager(dataParams,
                                   std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
@@ -56,7 +60,7 @@ TEST(BaselineFilterTest, GlobalMemory)
 
         GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
-            filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+            filterData[batchIdx].GetDeviceView(),
             out);
 
 
@@ -112,8 +116,13 @@ TEST(BaselineFilterTest, SharedMemory)
 
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    DeviceOnlyArray<Filter> filterData(dataParams.numZmwLanes, 0);
-    DeviceOnlyArray<Filter> filterRefData(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<Filter>> filterData;
+    std::vector<DeviceOnlyArray<Filter>> filterRefData;
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    {
+        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+    }
 
     ZmwDataManager<int16_t> manager(dataParams,
                                   std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
@@ -134,12 +143,12 @@ TEST(BaselineFilterTest, SharedMemory)
 
         SharedBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
-            filterData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+            filterData[batchIdx].GetDeviceView(),
             out);
 
         GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
-            filterRefData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+            filterRefData[batchIdx].GetDeviceView(),
             truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)
@@ -180,11 +189,12 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
     using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8>;
-    DeviceOnlyArray<RefFilter> filterRefData(dataParams.numZmwLanes, 0);
+    std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
-    for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -210,7 +220,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
         GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
             in,
-            filterRefData.GetDeviceView(batchIdx * dataParams.kernelLanes, dataParams.kernelLanes),
+            filterRefData[batchIdx].GetDeviceView(),
             truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)

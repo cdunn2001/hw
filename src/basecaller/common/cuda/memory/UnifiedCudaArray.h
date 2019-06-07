@@ -56,10 +56,11 @@ template <> struct gpu_type<int16_t> { using type = short2; };
 template <typename T>
 class UnifiedCudaArray : private detail::DataManager
 {
+public:
     using HostType = T;
     using GpuType = typename gpu_type<T>::type;
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
-public:
+
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
                      bool pinnedHost = true,
@@ -155,23 +156,27 @@ public:
     // (no performance penalty if it already is),
     // and will only remain valid until a view of
     // the device side is requested.
-    HostView<HostType> GetHostView(size_t idx, size_t len)
+    HostView<HostType> GetHostView()
     {
         if (!activeOnHost_) CopyImpl(true, false);
-        assert(idx + len <= Size());
-        return HostView<HostType>(hostData_.get<HostType>(DataKey()), idx, len, DataKey());
+        return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
-    HostView<HostType> GetHostView() { return GetHostView(0, Size()); }
-    operator HostView<HostType>() { return GetHostView(); }
+    HostView<const HostType> GetHostView() const
+    {
+        if (!activeOnHost_) CopyImpl(true, false);
+        return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
+    }
 
-    DeviceHandle<GpuType> GetDeviceHandle(size_t idx, size_t len)
+    DeviceHandle<GpuType> GetDeviceHandle()
     {
         if (activeOnHost_) CopyImpl(false, false);
-        assert(idx + len <= Size());
-        return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), idx, len/size_ratio, DataKey());
+        return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
-    DeviceHandle<GpuType> GetDeviceHandle() { return GetDeviceHandle(0, Size()); }
-    operator DeviceHandle<GpuType>() { return GetDeviceHandle(); }
+    DeviceHandle<const GpuType> GetDeviceHandle() const
+    {
+        if (activeOnHost_) CopyImpl(false, false);
+        return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
+    }
 
     void CopyToDevice()
     {
@@ -183,11 +188,12 @@ public:
     }
 
 private:
+
     // Makes sure that if we are using pooled gpu allocations, we actually
     // have an active allocation to use.  If we don't, try and check one
     // out of the memory pool.  If the memory pool is empty (or we just
     // don't have one) then allocate a new swath of memory.
-    void ActivateGpuMem()
+    void ActivateGpuMem() const
     {
         if (gpuData_) return;
 
@@ -199,7 +205,7 @@ private:
             gpuData_ = SmartDeviceAllocation(hostData_.size());
     }
 
-    void CopyImpl(bool toHost, bool manual)
+    void CopyImpl(bool toHost, bool manual) const
     {
         if (toHost)
         {
@@ -228,9 +234,17 @@ private:
         }
     }
 
-    bool activeOnHost_;
-    SmartHostAllocation hostData_;
-    SmartDeviceAllocation gpuData_;
+    // NOTE: `const` in c++ normally implies bitwise const, not necessarily logical const
+    //       In this case, this class is designed to represent data that has a dual life
+    //       between host and gpu storage.  Data synchronization between the two does not
+    //       logically alter the data, but it does violate bitwise const.  This class views
+    //       logical constness as the more important semantics, thus the liberal useage of
+    //       `mutable`.  A const version of this class will still be capable of copying the
+    //       data to-from the GPU, but will only provide const accessors, so that the actual
+    //       logical payload being represented cannot be altered.
+    mutable bool activeOnHost_;
+    mutable SmartHostAllocation hostData_;
+    mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
     std::weak_ptr<DualAllocationPools> pools_;
 };
