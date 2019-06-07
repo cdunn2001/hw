@@ -30,18 +30,16 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
+#include <common/MongoConstants.h>
 
 #include <dataTypes/TraceBatch.cuh>
 
 #include "SubframeScorer.cuh"
 
+using namespace PacBio::Mongo;
+
 namespace PacBio {
 namespace Cuda {
-
-// TODO move?
-namespace Viterbi {
-static constexpr unsigned int lookbackDist = 16;
-}
 
 template <size_t laneWidth>
 struct __align__(128) LatentViterbi
@@ -63,9 +61,9 @@ struct __align__(128) LatentViterbi
 
     __device__ void SetData(const Mongo::Data::StridedBlockView<const short2>& block)
     {
-        numFrames_ = Viterbi::lookbackDist;
-        auto start = block.size() - Viterbi::lookbackDist;
-        for (int i = 0; i < Viterbi::lookbackDist; ++i)
+        numFrames_ = ViterbiStitchLookback;
+        auto start = block.size() - ViterbiStitchLookback;
+        for (int i = 0; i < ViterbiStitchLookback; ++i)
         {
             oldData_[i*laneWidth + threadIdx.x] = block[start+i];
         }
@@ -77,7 +75,7 @@ struct __align__(128) LatentViterbi
 
 private:
     Mongo::Data::LaneModelParameters<laneWidth> oldModel;
-    short2 oldData_[laneWidth * Viterbi::lookbackDist];
+    short2 oldData_[laneWidth * ViterbiStitchLookback];
     short2 boundary_;
     int numFrames_;
 };

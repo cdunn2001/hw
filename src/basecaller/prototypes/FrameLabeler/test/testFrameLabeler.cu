@@ -139,7 +139,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
                 for (size_t k = 0; k < block.LaneWidth(); ++k)
                 {
                     int zmw = batchIdx * laneWidth * lanesPerPool + i * laneWidth + k;
-                    int frame = firstFrame + j - Viterbi::lookbackDist;
+                    int frame = firstFrame + j - ViterbiStitchLookback;
                     if (frame < 0) continue;
                     LabelValidator(block(j,k), GroundTruth[zmw][frame]);
                 }

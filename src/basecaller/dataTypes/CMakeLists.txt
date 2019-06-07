@@ -19,6 +19,8 @@ set(CPP_LIST
     DetectionModel.cpp
     LaneDetectionModel.h
     LaneDetectionModel.cpp
+    LabelsBatch.h
+    LabelsBatch.cpp
     MovieConfig.h
     MovieConfig.cpp
     PoolHistogram.h
