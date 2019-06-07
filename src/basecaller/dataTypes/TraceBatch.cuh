@@ -103,7 +103,7 @@ class GpuBatchData : public GpuBatchDataHandle<T>, private Cuda::Memory::detail:
     using GpuBatchDataHandle<T>::data_;
     using GpuBatchDataHandle<T>::dims_;
 public:
-    GpuBatchData(GpuBatchDataHandle<T>& handle)
+    GpuBatchData(const GpuBatchDataHandle<T>& handle)
         : GpuBatchDataHandle<T>(handle)
     {}
     template <typename U>
@@ -121,7 +121,9 @@ public:
             this->dims_.laneWidth /= 2;
         }
     }
-    template <typename U, typename U2 = T, typename dummy = typename std::enable_if<std::is_const<U2>::value, void>::type>
+    // Need to SFINAE away this functino if we're not a GpuBatchData of const
+    // T, else we'd violate the const of the incoming `BatchData`
+    template <typename U, typename U2 = T, std::enable_if_t<std::is_const<U2>::value, int> = 0>
     GpuBatchData(const BatchData<U>& data)
         : GpuBatchDataHandle<T>(data.Dimensions(),
                                 data.GetRawData(DataKey()).GetDeviceHandle(),

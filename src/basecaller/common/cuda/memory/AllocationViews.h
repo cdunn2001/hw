@@ -81,7 +81,9 @@ public:
         , len_(len)
     {}
 
-    template <typename U = T, typename dummy = typename std::enable_if<!std::is_const<U>::value, void>::type>
+    // Implicit conversion to DeviceHandle<const T> needs to be disabled if we're already
+    // templated on a const T
+    template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
     CUDA_ENABLED operator DeviceHandle<const T>()
     {
         return DeviceHandle<const T>(data_, len_, DataKey());

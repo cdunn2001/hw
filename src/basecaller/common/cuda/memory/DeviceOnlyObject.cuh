@@ -44,7 +44,9 @@ public:
     __device__ T* operator->() { return data_.Data(); }
     __device__ const T* operator->() const { return data_.Data(); }
 
-    template <typename U = T, typename dummy = typename std::enable_if<!std::is_same<const U, U>::value, int>::type>
+    // Implicit conversion to DevicePtr<const T> needs to be disabled if we're already
+    // templated on a const T
+    template <typename U = T, std::enable_if_t<!std::is_same<const U, U>::value, int> = 0>
     __host__ __device__ operator DevicePtr<const T>()
     {
         return DevicePtr<const T>(data_, DataKey());
