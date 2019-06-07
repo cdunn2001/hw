@@ -28,6 +28,7 @@
 
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
+using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Cuda {

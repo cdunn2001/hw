@@ -24,14 +24,16 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_CUDA_MODEL_CUH_
-#define PACBIO_CUDA_MODEL_CUH_
+#ifndef PACBIO_MONGO_DATA_ANALOG_MODEL_H_
+#define PACBIO_MONGO_DATA_ANALOG_MODEL_H_
 
-#include <common/cuda/PBCudaSimd.cuh>
+
+#include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
 
 namespace PacBio {
-namespace Cuda {
+namespace Mongo {
+namespace Data {
 
 // Analog information for an entire lane of zmw.
 template <size_t laneWidth>
@@ -54,15 +56,15 @@ struct __align__(128) LaneAnalogMode
 
     __host__ LaneAnalogMode& SetAllMeans(float val)
     {
-        std::fill(means.data(), means.data() + laneWidth, PBHalf2(val));
+        std::fill(means.data(), means.data() + laneWidth, Cuda::PBHalf2(val));
         return *this;
     }
     __host__ LaneAnalogMode& SetAllVars(float val)
     {
-        std::fill(vars.data(), vars.data() + laneWidth, PBHalf2(val));
+        std::fill(vars.data(), vars.data() + laneWidth, Cuda::PBHalf2(val));
         return *this;
     }
-    using Row = Utility::CudaArray<PBHalf2, laneWidth>;
+    using Row = Cuda::Utility::CudaArray<Cuda::PBHalf2, laneWidth>;
     Row means;
     Row vars;
 };
@@ -102,10 +104,10 @@ struct __align__(128) LaneModelParameters
     }
 
  private:
-    Utility::CudaArray<LaneAnalogMode<laneWidth>, numAnalogs> analogs_;
+    Cuda::Utility::CudaArray<LaneAnalogMode<laneWidth>, numAnalogs> analogs_;
     LaneAnalogMode<laneWidth> baseline_;
 };
 
-}}
+}}} // ::PacBio::Mongo::Data
 
-#endif //PACBIO_CUDA_MODEL_CUH_
+#endif // PACBIO_MONGO_DATA_ANALOG_MODEL_H_

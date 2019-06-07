@@ -17,6 +17,8 @@ set(CPP_LIST
     ConfigForward.h
     DetectionModel.h
     DetectionModel.cpp
+    LaneDetectionModel.h
+    LaneDetectionModel.cpp
     MovieConfig.h
     MovieConfig.cpp
     PoolHistogram.h

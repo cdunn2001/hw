@@ -32,7 +32,8 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/utility/CudaArray.h>
 
-#include "AnalogModel.cuh"
+#include <dataTypes/LaneDetectionModel.h>
+
 #include "AnalogMeta.h"
 
 namespace PacBio {
@@ -130,7 +131,7 @@ struct __align__(128) BlockStateSubframeScorer
     // The object is not in a valid state until after calling `Setup`
     BlockStateSubframeScorer() = default;
 
-    __device__ void Setup(const LaneModelParameters<gpuLaneWidth>& model)
+    __device__ void Setup(const Mongo::Data::LaneModelParameters<gpuLaneWidth>& model)
     {
         static constexpr float log2pi_f = 1.8378770664f;
         const PBHalf2 nhalfVal = PBHalf2(-0.5f);
@@ -214,7 +215,7 @@ struct __align__(128) BlockStateSubframeScorer
     }
 
  private:
-    __device__ void SubframeSetup(const LaneModelParameters<gpuLaneWidth>& model)
+    __device__ void SubframeSetup(const Mongo::Data::LaneModelParameters<gpuLaneWidth>& model)
     {
         static constexpr float pi_f = 3.1415926536f;
         const PBHalf2 sqrtHalfPi = PBHalf2(std::sqrt(0.5f * pi_f));
