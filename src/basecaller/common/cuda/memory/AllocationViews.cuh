@@ -48,7 +48,9 @@ public:
         : DeviceHandle<T>(handle)
     {}
 
-    template <typename U = T, typename dummy = typename std::enable_if<!std::is_const<U>::value, void >::type>
+    // Implicit conversion to DeviceView<const T> needs to be disabled if we're already
+    // templated on a const T
+    template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
     __host__ __device__ operator DeviceView<const T>()
     {
         return DeviceHandle<const T>(data_, len_, Parent::DataKey());
