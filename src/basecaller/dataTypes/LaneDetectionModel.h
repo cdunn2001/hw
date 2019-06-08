@@ -30,18 +30,26 @@
 
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
+#include <common/cuda/CudaFunctionDecorators.h>
+
+#include <common/cuda/memory/UnifiedCudaArray.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
 // Analog information for an entire lane of zmw.
-template <size_t laneWidth>
+template <typename T, size_t laneWidth>
 struct __align__(128) LaneAnalogMode
 {
-    __host__ __device__ LaneAnalogMode& operator=(const LaneAnalogMode other)
+    static_assert(std::is_same<T, Cuda::PBHalf>::value ||
+                  std::is_same<T, Cuda::PBHalf2>::value,
+                  "Invalid type for LaneAnalogMode");
+
+    CUDA_ENABLED LaneAnalogMode& operator=(const LaneAnalogMode& other)
     {
 #ifdef __CUDA_ARCH__
+        assert(blockDim.x == laneWidth);
         means[threadIdx.x] = other.means[threadIdx.x];
         vars[threadIdx.x] = other.vars[threadIdx.x];
         return  *this;
@@ -54,23 +62,23 @@ struct __align__(128) LaneAnalogMode
 #endif
     }
 
-    __host__ LaneAnalogMode& SetAllMeans(float val)
+    LaneAnalogMode& SetAllMeans(float val)
     {
-        std::fill(means.data(), means.data() + laneWidth, Cuda::PBHalf2(val));
+        std::fill(means.data(), means.data() + laneWidth, T(val));
         return *this;
     }
-    __host__ LaneAnalogMode& SetAllVars(float val)
+    LaneAnalogMode& SetAllVars(float val)
     {
-        std::fill(vars.data(), vars.data() + laneWidth, Cuda::PBHalf2(val));
+        std::fill(vars.data(), vars.data() + laneWidth, T(val));
         return *this;
     }
-    using Row = Cuda::Utility::CudaArray<Cuda::PBHalf2, laneWidth>;
+    using Row = Cuda::Utility::CudaArray<T, laneWidth>;
     Row means;
     Row vars;
 };
 
 // Full model for baseline + analogs for a lane of zmw.
-template <size_t laneWidth>
+template <typename T, size_t laneWidth>
 struct __align__(128) LaneModelParameters
 {
     static constexpr unsigned int numAnalogs = 4;
@@ -85,29 +93,46 @@ struct __align__(128) LaneModelParameters
         return *this;
     }
 
-    __host__ __device__ const LaneAnalogMode<laneWidth>& BaselineMode() const
+    __host__ __device__ const LaneAnalogMode<T, laneWidth>& BaselineMode() const
     {
         return baseline_;
     }
-    __host__ __device__ LaneAnalogMode<laneWidth>& BaselineMode()
+    __host__ __device__ LaneAnalogMode<T, laneWidth>& BaselineMode()
     {
         return baseline_;
     }
 
-    __host__ __device__ const LaneAnalogMode<laneWidth>& AnalogMode(unsigned i) const
+    __host__ __device__ const LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i) const
     {
         return analogs_[i];
     }
-    __host__ __device__ LaneAnalogMode<laneWidth>& AnalogMode(unsigned i)
+    __host__ __device__ LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i)
     {
         return analogs_[i];
     }
 
  private:
-    Cuda::Utility::CudaArray<LaneAnalogMode<laneWidth>, numAnalogs> analogs_;
-    LaneAnalogMode<laneWidth> baseline_;
+    Cuda::Utility::CudaArray<LaneAnalogMode<T, laneWidth>, numAnalogs> analogs_;
+    LaneAnalogMode<T, laneWidth> baseline_;
 };
 
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*10, "Unexpected size");
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*10, "Unexpected size");
+
 }}} // ::PacBio::Mongo::Data
+
+namespace PacBio {
+namespace Cuda {
+namespace Memory {
+
+//  Allow conversion between PBHalf and PBHalf2
+template <size_t laneWidth>
+struct gpu_type<Mongo::Data::LaneModelParameters<PBHalf, laneWidth>>
+{
+    static_assert(laneWidth % 2 == 0, "Invalid lane width");
+    using type = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth/2>;
+};
+
+}}}
 
 #endif // PACBIO_MONGO_DATA_ANALOG_MODEL_H_

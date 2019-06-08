@@ -66,7 +66,7 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     Data::LabelsBatch operator()(Data::CameraTraceBatch trace,
-                                 const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Mongo::laneSize/2>>& models)
+                                 const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Cuda::PBHalf, laneSize>>& models)
     {
         // TODO
         assert(rawTrace.GetMeta().PoolId() == poolId_);
@@ -78,7 +78,7 @@ private:    // Data
 
 private:    // Customizable implementation
     virtual Data::LabelsBatch process(Data::CameraTraceBatch trace,
-                                      const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Mongo::laneSize/2>>& models) = 0;
+                                      const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Cuda::PBHalf, laneSize>>& models) = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

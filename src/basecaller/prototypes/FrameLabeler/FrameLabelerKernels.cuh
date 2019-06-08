@@ -44,6 +44,7 @@ namespace Cuda {
 template <size_t laneWidth>
 struct __align__(128) LatentViterbi
 {
+    using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
  public:
     __device__ LatentViterbi()
         : boundary_(make_short2(0,0))
@@ -53,8 +54,8 @@ struct __align__(128) LatentViterbi
     __device__ void SetBoundary(short2 boundary) { boundary_ = boundary; }
     __device__ short2 GetBoundary() const { return boundary_; }
 
-    __device__ const Mongo::Data::LaneModelParameters<laneWidth>& GetModel() const { return oldModel; }
-    __device__ void SetModel(const Mongo::Data::LaneModelParameters<laneWidth>& model)
+    __device__ const LaneModelParameters& GetModel() const { return oldModel; }
+    __device__ void SetModel(const LaneModelParameters& model)
     {
         oldModel = model;
     }
@@ -74,7 +75,7 @@ struct __align__(128) LatentViterbi
     __device__ int NumFrames() const { return numFrames_; }
 
 private:
-    Mongo::Data::LaneModelParameters<laneWidth> oldModel;
+    LaneModelParameters oldModel;
     short2 oldData_[laneWidth * ViterbiStitchLookback];
     short2 boundary_;
     int numFrames_;
@@ -148,9 +149,9 @@ public:
     FrameLabeler& operator=(FrameLabeler&&) = default;
 
 
-    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<32>>& models,
-                  const Mongo::Data::TraceBatch<int16_t>& input,
-                  Mongo::Data::TraceBatch<int16_t>& output);
+    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
+                      const Mongo::Data::TraceBatch<int16_t>& input,
+                      Mongo::Data::TraceBatch<int16_t>& output);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
 

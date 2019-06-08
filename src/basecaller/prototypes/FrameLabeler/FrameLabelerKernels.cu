@@ -109,7 +109,7 @@ FrameLabeler::FrameLabeler()
 
 __launch_bounds__(32, 32)
 __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<32>> models,
+                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, 32>> models,
                                    const Mongo::Data::GpuBatchData<const short2> input,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
                                    ViterbiData<short2, 32> labels,
@@ -228,7 +228,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     latent.SetData(inZmw);
 }
 
-void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
+void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
                                 const Mongo::Data::TraceBatch<int16_t>& input,
                                 Mongo::Data::TraceBatch<int16_t>& output)
 {

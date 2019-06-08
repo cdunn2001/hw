@@ -35,6 +35,11 @@
 namespace PacBio {
 namespace Cuda {
 
+// Aliasing for now, mostly so there is an easy hook if we want to either
+// have a proper wrapper type like PBHalf2, or need to stub in third
+// part half precision float for the host.
+using PBHalf = half;
+
 class PBHalf2
 {
 public:
