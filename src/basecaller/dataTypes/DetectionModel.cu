@@ -1,4 +1,5 @@
-#include "DetectionModel.h"
+
+#include "DetectionModel.cuh"
 
 namespace PacBio {
 namespace Mongo {
