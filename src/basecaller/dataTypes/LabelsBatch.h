@@ -96,11 +96,12 @@ public:
         , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(ViterbiStitchLookback * lanesPerPool * laneSize * sizeof(int16_t), pinned))
     {}
 
-    LabelsBatch NewBatch(const BatchMetadata& meta,
-                              const BatchDimensions& dims,
-                              CameraTraceBatch trace)
+    LabelsBatch NewBatch(CameraTraceBatch trace)
     {
-        return LabelsBatch(meta, dims, std::move(trace), pinned_, syncDirection_, tracePool_, latPool_);
+        auto meta = trace.Metadata();
+        auto dims = trace.Dimensions();
+        return LabelsBatch(meta, dims, std::move(trace), pinned_,
+                           syncDirection_, tracePool_, latPool_);
     }
 
 private:

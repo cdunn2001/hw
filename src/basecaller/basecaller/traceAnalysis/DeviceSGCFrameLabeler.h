@@ -24,49 +24,48 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+#ifndef PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
+#define PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
+
 #include "FrameLabeler.h"
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+namespace PacBio {
+namespace Cuda {
+// Forward declare of cuda type that cannot be directly included here
+// TODO prototype needs more cleaning, and should probably be renamed
+class FrameLabeler;
+
+}}
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
-
-// static
-void FrameLabeler::Configure(const Data::BasecallerFrameLabelerConfig& baselinerConfig,
-                             const Data::MovieConfig& movConfig)
-{
-    const auto hostExecution = true;
-    InitAllocationPools(hostExecution);
-}
-
-void FrameLabeler::InitAllocationPools(bool hostExecution)
-{
-    using Cuda::Memory::SyncDirection;
-
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
-    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
-}
-
-void FrameLabeler::DestroyAllocationPools()
-{
-    batchFactory_.release();
-}
-
-void FrameLabeler::Finalize()
-{
-    DestroyAllocationPools();
-}
-
-FrameLabeler::FrameLabeler(uint32_t poolId)
-    : poolId_ (poolId)
+class DeviceSGCFrameLabeler : public FrameLabeler
 {
 
-}
+public:     // Static functions
+    /// Sets algorithm configuration and system calibration properties.
+    /// Static because the config types keep a JSON representation and
+    /// deserialize on each reference, but the values will be the same for
+    /// each DeviceSGCFrameLabeler instance for a given movie.
+    /// \note Not thread safe. Do not call this function while threads are
+    /// running analysis.
+    static void Configure(const Data::BasecallerFrameLabelerConfig& baselinerConfig,
+                          const Data::MovieConfig& movConfig);
+    static void Finalize();
+
+public:
+    DeviceSGCFrameLabeler(uint32_t poolId);
+    ~DeviceSGCFrameLabeler() override;
+
+private:    // Customizable implementation
+    Data::LabelsBatch Process(Data::CameraTraceBatch trace,
+                              const PoolModelParameters& models) override;
+
+    std::unique_ptr<Cuda::FrameLabeler> labeler_;
+};
 
 }}}     // namespace PacBio::Mongo::Basecaller
+
+#endif //PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H

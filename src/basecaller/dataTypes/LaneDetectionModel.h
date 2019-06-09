@@ -39,7 +39,7 @@ namespace Mongo {
 namespace Data {
 
 // Analog information for an entire lane of zmw.
-template <typename T, size_t laneWidth>
+template <typename T, int laneWidth>
 struct __align__(128) LaneAnalogMode
 {
     static_assert(std::is_same<T, Cuda::PBHalf>::value ||
@@ -59,6 +59,7 @@ struct __align__(128) LaneAnalogMode
             means[i] = other.means[i];
             vars[i] = other.vars[i];
         }
+        return *this;
 #endif
     }
 
@@ -81,7 +82,7 @@ struct __align__(128) LaneAnalogMode
 template <typename T, size_t laneWidth>
 struct __align__(128) LaneModelParameters
 {
-    static constexpr unsigned int numAnalogs = 4;
+    static constexpr int numAnalogs = 4;
 
     __host__ __device__ LaneModelParameters& operator=(const LaneModelParameters& other)
     {

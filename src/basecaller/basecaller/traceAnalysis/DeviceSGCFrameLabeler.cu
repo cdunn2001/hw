@@ -24,49 +24,47 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "FrameLabeler.h"
+#include "DeviceSGCFrameLabeler.h"
 
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
+
+#include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
+
+using namespace PacBio::Cuda;
+using namespace PacBio::Cuda::Memory;
+using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
-
 // static
-void FrameLabeler::Configure(const Data::BasecallerFrameLabelerConfig& baselinerConfig,
-                             const Data::MovieConfig& movConfig)
+void DeviceSGCFrameLabeler::Configure(const BasecallerFrameLabelerConfig& baselinerConfig,
+                                      const MovieConfig& movConfig)
 {
-    const auto hostExecution = true;
+    const auto hostExecution = false;
     InitAllocationPools(hostExecution);
 }
 
-void FrameLabeler::InitAllocationPools(bool hostExecution)
-{
-    using Cuda::Memory::SyncDirection;
-
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
-    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
-}
-
-void FrameLabeler::DestroyAllocationPools()
-{
-    batchFactory_.release();
-}
-
-void FrameLabeler::Finalize()
+void DeviceSGCFrameLabeler::Finalize()
 {
     DestroyAllocationPools();
 }
 
-FrameLabeler::FrameLabeler(uint32_t poolId)
-    : poolId_ (poolId)
+DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId)
+    : FrameLabeler(poolId)
 {
 
+}
+
+DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;
+
+LabelsBatch
+DeviceSGCFrameLabeler::Process(CameraTraceBatch trace,
+                               const PoolModelParameters& models)
+{
+    return batchFactory_->NewBatch(std::move(trace));
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

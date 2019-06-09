@@ -34,6 +34,7 @@
 #include <pacbio/PBAssert.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 
@@ -52,6 +53,9 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+BatchAnalyzer::~BatchAnalyzer() = default;
+BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
+
 // static
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
@@ -60,10 +64,39 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
     : poolId_ (poolId)
+    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, true)
     , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
+    frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
+
+    // Not running DME, need to fake our model
+    if (staticAnalysis_)
+    {
+        Data::LaneModelParameters<PBHalf, laneSize> model;
+        model.AnalogMode(0).SetAllMeans(227.13);
+        model.AnalogMode(1).SetAllMeans(154.45);
+        model.AnalogMode(2).SetAllMeans(97.67);
+        model.AnalogMode(3).SetAllMeans(61.32);
+
+        model.AnalogMode(0).SetAllVars(776);
+        model.AnalogMode(1).SetAllVars(426);
+        model.AnalogMode(2).SetAllVars(226);
+        model.AnalogMode(3).SetAllVars(132);
+
+        // Need a new trace file to target, these values come from a file with
+        // zero baseline mean
+        model.BaselineMode().SetAllMeans(0);
+        model.BaselineMode().SetAllVars(33);
+
+        auto view = models_.GetHostView();
+        for (size_t i = 0; i < view.Size(); ++i)
+        {
+            view[i] = model;
+        }
+
+    }
 }
 
 
@@ -90,8 +123,9 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
-    CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
-    ctb.DeactivateGpuMem();
+    auto ctb = (*baseliner_)(std::move(tbatch));
+    auto labels = (*frameLabeler_)(std::move(ctb), models_);
+    labels.DeactivateGpuMem();
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

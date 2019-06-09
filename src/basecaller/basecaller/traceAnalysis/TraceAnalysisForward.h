@@ -7,6 +7,7 @@ namespace Basecaller {
 
 class AlgoFactory;
 class Baseliner;
+class FrameLabeler;
 class TraceHistogramAccumulator;
 class DetectionModelEstimator;
 

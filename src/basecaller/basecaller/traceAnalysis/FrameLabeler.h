@@ -39,6 +39,9 @@ namespace Basecaller {
 
 class FrameLabeler
 {
+public:  // types
+    using LaneModelParameters = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
+    using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -63,22 +66,22 @@ public:
     virtual ~FrameLabeler() = default;
 
 public:
-    /// Estimate and subtract baseline from rawTrace.
-    /// \returns Baseline-subtracted traces with certain trace statistics.
+    /// \returns LabelsBatch with estimated labels for each frame, along with the associated
+    ///          baseline subtracted trace
     Data::LabelsBatch operator()(Data::CameraTraceBatch trace,
-                                 const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Cuda::PBHalf, laneSize>>& models)
+                                 const PoolModelParameters& models)
     {
         // TODO
         assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return process(std::move(trace), models);
+        return Process(std::move(trace), models);
     }
 
 private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::LabelsBatch process(Data::CameraTraceBatch trace,
-                                      const Cuda::Memory::UnifiedCudaArray<Data::LaneAnalogMode<Cuda::PBHalf, laneSize>>& models) = 0;
+    virtual Data::LabelsBatch Process(Data::CameraTraceBatch trace,
+                                      const PoolModelParameters& models) = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
