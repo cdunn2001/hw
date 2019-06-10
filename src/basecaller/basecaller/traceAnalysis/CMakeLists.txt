@@ -10,6 +10,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     BaselineEstimators.cpp
     BlockFilterStage.h
     BlockFilterStage.cpp
+    DeviceMultiScaleBaseliner.h
+    DeviceMultiScaleBaseliner.cu
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
     TraceAnalysisForward.h

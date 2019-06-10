@@ -28,11 +28,20 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
+    static void InitAllocationPools(bool hostExecution);
+    static void DestroyAllocationPools();
+
+    static void Finalize();
+
+protected: // static members
+    static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
+
 public:
     Baseliner(uint32_t poolId, float scaler = 1.0f)
         : poolId_(poolId)
         , scaler_(scaler)
     { }
+    virtual ~Baseliner() = default;
 
 public:
     /// Estimate and subtract baseline from rawTrace.
@@ -50,8 +59,6 @@ private:    // Data
     uint32_t poolId_;
     float scaler_;
 };
-
-
 
 }}}     // namespace PacBio::Mongo::Basecaller
 

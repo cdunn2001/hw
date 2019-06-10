@@ -28,7 +28,7 @@ set(CUDA_LIST
     memory/DeviceOnlyArray.cu
     memory/DeviceOnlyObject.cuh
     memory/DeviceOnlyObject.cu
-    utility/CudaArray.cuh
+    utility/CudaArray.h
     utility/CudaArray.cu
     utility/CudaTuple.cuh
     utility/CudaTuple.cu

@@ -1,6 +1,7 @@
 
 #include "BaselineEstimators.h"
 
+#include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
 namespace PacBio {
@@ -9,12 +10,12 @@ namespace Basecaller {
 
 Data::CameraTraceBatch NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
-    Data::CameraTraceBatch ctb(std::move(rawTrace));
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
 
-    for (size_t laneIdx = 0; laneIdx < ctb.LanesPerBatch(); ++laneIdx)
+    for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
-        auto frameData = ctb.GetBlockView(laneIdx);
-        auto& baselineStats = ctb.Stats(laneIdx);
+        auto frameData = rawTrace.GetBlockView(laneIdx);
+        auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
 
         for (size_t frame = 0; frame < frameData.NumFrames(); ++frame)
         {
@@ -22,11 +23,13 @@ Data::CameraTraceBatch NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> r
             LaneArray rawData;
             std::memcpy(rawData.Data(), f, sizeof(ElementTypeIn) * frameData.LaneWidth());
             Mask isBaseline { false };
-            baselineStats.AddSample(rawData, rawData, isBaseline);
+            baselinerStats.AddSample(rawData, rawData, isBaseline);
         }
+
+        // TODO: Convert BaslinerStatAccumulator to BaselineStats.
     }
 
-    return ctb;
+    return std::move(out);
 }
 
 MultiScaleBaseliner::MultiScaleBaseliner(uint32_t poolId, float scaler,
@@ -41,16 +44,20 @@ MultiScaleBaseliner::MultiScaleBaseliner(uint32_t poolId, float scaler,
 
 Data::CameraTraceBatch MultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
-    Data::CameraTraceBatch ctb(std::move(rawTrace));
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto pools = rawTrace.GetAllocationPools();
 
-    for (size_t laneIdx = 0; laneIdx < ctb.LanesPerBatch(); ++laneIdx)
+    for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
-        auto frameData = ctb.GetBlockView(laneIdx);
-        auto& baselineStats = ctb.Stats(laneIdx);
+        auto frameData = rawTrace.GetBlockView(laneIdx);
+        auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
 
+        // TODO: Run filter and perform baseline subtraction.
+
+        // TODO: Convert BaslinerStatAccumulator to BaselineStats.
     }
 
-    return ctb;
+    return std::move(out);
 }
 
 }}}      // namespace PacBio::Mongo::Basecaller

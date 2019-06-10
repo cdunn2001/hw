@@ -46,6 +46,7 @@ class StridedBlockView
 {
 public:
     // Helper iterator to allow range-based for loops.
+    template <typename U>
     class StrideIterator
     {
     public:
@@ -69,8 +70,8 @@ public:
             return ptr_ != other.ptr_;
         }
 
-        __device__ T& operator*() { return *ptr_; }
-        __device__ const T& operator*() const { return *ptr_; }
+        __device__ U& operator*() { return *ptr_; }
+        __device__ const U& operator*() const { return *ptr_; }
 
     private:
         T* ptr_;
@@ -83,8 +84,10 @@ public:
         , laneWidth_(laneWidth)
     {}
 
-    __device__ StrideIterator begin() { return StrideIterator(start_, laneWidth_); }
-    __device__ StrideIterator end()   { return StrideIterator(end_,   laneWidth_); }
+    __device__ StrideIterator<T> begin() { return StrideIterator<T>(start_, laneWidth_); }
+    __device__ StrideIterator<T> end()   { return StrideIterator<T>(end_,   laneWidth_); }
+    __device__ StrideIterator<const T> begin() const { return StrideIterator<const T>(start_, laneWidth_); }
+    __device__ StrideIterator<const T> end()   const { return StrideIterator<const T>(end_,   laneWidth_); }
     __device__ int size() const { return (end_ - start_) / laneWidth_; }
     __device__ T& operator[](unsigned int idx) { return start_[laneWidth_*idx]; }
     __device__ const T& operator[](unsigned int idx) const { return start_[laneWidth_*idx]; }
@@ -118,15 +121,42 @@ public:
             this->dims_.laneWidth /= 2;
         }
     }
+    // Need to SFINAE away this functino if we're not a GpuBatchData of const
+    // T, else we'd violate the const of the incoming `BatchData`
+    template <typename U, typename U2 = T, std::enable_if_t<std::is_const<U2>::value, int> = 0>
+    GpuBatchData(const BatchData<U>& data)
+        : GpuBatchDataHandle<T>(data.Dimensions(),
+                                data.GetRawData(DataKey()).GetDeviceHandle(),
+                                DataKey())
+    {
+        // We support using things like int16_t on the host but short2 on
+        // the device.  To enable that, we may need to tweak our apparent
+        // lane width
+        if (sizeof(U) != sizeof(T))
+        {
+            static_assert(sizeof(T) % sizeof(U) == 0, "Invalid types");
+            this->dims_.laneWidth /= 2;
+        }
+    }
 
     __device__ const BatchDimensions& Dims() const { return dims_; }
 
     __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
     {
+        return ZmwDataImpl<T>(laneIdx, zmwIdx);
+    }
+    __device__ StridedBlockView<const T> ZmwData(size_t laneIdx, size_t zmwIdx) const
+    {
+        return ZmwDataImpl<const T>(laneIdx, zmwIdx);
+    }
+private:
+    template <typename U>
+    __device__ StridedBlockView<U> ZmwDataImpl(size_t laneIdx, size_t zmwIdx) const
+    {
         Cuda::Memory::DeviceView<T> view(data_);
         auto startIdx = laneIdx * dims_.laneWidth * dims_.framesPerBatch + zmwIdx;
         auto endIdx = startIdx + dims_.framesPerBatch * dims_.laneWidth;
-        return StridedBlockView<T>(view.Data() + startIdx,
+        return StridedBlockView<U>(view.Data() + startIdx,
                                    view.Data() + endIdx,
                                    dims_.laneWidth,
                                    DataKey());

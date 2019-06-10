@@ -7,11 +7,34 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+std::unique_ptr<Data::CameraBatchFactory> Baseliner::batchFactory_;
+
 // static
 void Baseliner::Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig)
 {
-    // TODO
+    const auto hostExecution = true;
+    InitAllocationPools(hostExecution);
+}
+
+void Baseliner::InitAllocationPools(bool hostExecution)
+{
+    using Cuda::Memory::SyncDirection;
+
+    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
+    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
+    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
+}
+
+void Baseliner::DestroyAllocationPools()
+{
+    batchFactory_.release();
+}
+
+void Baseliner::Finalize()
+{
+    DestroyAllocationPools();
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

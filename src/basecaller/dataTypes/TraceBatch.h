@@ -154,6 +154,12 @@ public:
 
     ~BatchData() = default;
 
+    // Can be null, if there are no pools in use
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
+    {
+        return data_.GetAllocationPools();
+    }
+
     size_t LaneWidth()     const { return dims_.laneWidth; }
     size_t numFrames()     const { return dims_.framesPerBatch; }
     size_t LanesPerBatch() const { return dims_.lanesPerBatch; }
@@ -161,19 +167,23 @@ public:
     const BatchDimensions& Dimensions() const { return dims_; }
 
     Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
+    const Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) const { return data_; }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
 
-    BlockView<T> GetBlockView(size_t laneIdx)
+    BlockView<T> GetBlockView(size_t laneIdx) { return GetBlockViewImpl<T>(laneIdx); }
+    BlockView<const T> GetBlockView(size_t laneIdx) const { return GetBlockViewImpl<const T>(laneIdx); }
+private:
+    template <typename U>
+    BlockView<U> GetBlockViewImpl(size_t laneIdx)
     {
         auto view = data_.GetHostView();
-        return BlockView<T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
+        return BlockView<U>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
                             dims_.laneWidth,
                             dims_.framesPerBatch,
                             DataKey());
     }
-private:
     BatchDimensions dims_;
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };

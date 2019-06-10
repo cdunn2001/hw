@@ -1,4 +1,3 @@
-
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -23,38 +22,43 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//  Description:
-//  Defines unit tests for the strategies for estimation and subtraction of
-//  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/BaselineEstimators.h>
-#include <common/DataGenerators/BatchGenerator.h>
+// Extensions to UnifiedCudaArray available only in cuda compilation units.
+// In particular provide array access to device data when in device code
 
-#include <gtest/gtest.h>
+#ifndef PACBIO_MONGO_BASELINE_STATS_H_
+#define PACBIO_MONGO_BASELINE_STATS_H_
+
+#include <common/cuda/utility/CudaArray.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-TEST(TestNoOpBaseliner, Run)
+// Baseline stats for a whole batch of data
+template <uint32_t LaneWidth>
+class BaselineStats
 {
-    NoOpBaseliner foo{0};
+public:
+    BaselineStats() = default;
 
-    Cuda::Data::BatchGenerator batchGenerator(128, laneSize, 1, 8192, 1);
+private:
 
-    while (!batchGenerator.Finished())
-    {
-        auto chunk = batchGenerator.PopulateChunk();
-        Data::CameraTraceBatch cameraBatch = foo(std::move(chunk.front()));
-        const auto& baselineStats = cameraBatch.Stats(0);
-        /*
-        EXPECT_TRUE(all(NoOpBaseliner::FloatArray{0} == baselineStats.Count()));
-        EXPECT_TRUE(all(isnan(baselineStats.Mean())));
-        EXPECT_TRUE(all(isnan(baselineStats.Variance())));
-        */
-    }
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
 
-}
+    // Raw moments
+    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
 
-}}} // PacBio::Mongo::Basecaller
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM1Last_;
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM2_;
+
+};
+
+}}} // ::PacBio::Mongo::Data
+
+#endif //PACBIO_MONGO_BASELINE_STATS_H_

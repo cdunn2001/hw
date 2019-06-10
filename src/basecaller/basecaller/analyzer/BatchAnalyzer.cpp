@@ -58,8 +58,9 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 {
 }
 
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
     : poolId_ (poolId)
+    , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     // TODO: Create other algorithm components.
@@ -67,6 +68,37 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
 
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
+{
+    if(staticAnalysis_)
+    {
+        return StaticModelPipeline(std::move(tbatch));
+    } else {
+        return StandardPipeline(std::move(tbatch));
+    }
+}
+
+BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
+{
+    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
+    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
+
+    // TODO: Define this so that it scales properly with chunk size, frame rate,
+    // and max polymerization rate.
+    const uint16_t maxCallsPerZmwChunk = 96;
+
+    // TODO: Develop error handling logic.
+
+    // Baseline estimation and subtraction.
+    // Includes computing baseline moments.
+    CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
+    ctb.DeactivateGpuMem();
+
+    nextFrameId_ = tbatch.Metadata().LastFrame();
+
+    return BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
+}
+
+BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");

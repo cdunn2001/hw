@@ -1,8 +1,7 @@
 project(CudaTemplate LANGUAGES CXX CUDA)
 cmake_minimum_required(VERSION 3.8)
 
-add_executable(BaselineFilter
-    main.cpp
+add_library(libBaselineFilter STATIC
     BaselineRunner.cu
     BaselineRunner.h
     BaselineFilter.cu
@@ -15,16 +14,25 @@ add_executable(BaselineFilter
     ExtremaFilterKernels.cu
 )
 
-target_include_directories(BaselineFilter
+target_include_directories(libBaselineFilter
     PUBLIC 
         ${CMAKE_CURRENT_LIST_DIR})
         
-target_link_libraries(BaselineFilter
+target_link_libraries(libBaselineFilter
     libProtoCommon)
+
+set_target_properties(libBaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
+set_target_properties(libBaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+add_executable(BaselineFilter
+    main.cpp
+)
+
+target_link_libraries(BaselineFilter
+    libBaselineFilter)
 
 set_target_properties(BaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-
 
 include(pacbio-cplusplus-gtest)
 
