@@ -14,17 +14,4 @@ void Baseliner::Configure(const Data::BasecallerBaselinerConfig& baselinerConfig
     // TODO
 }
 
-Baseliner::Baseliner(uint32_t poolId)
-    : poolId_ (poolId)
-{
-
-}
-
-Data::CameraTraceBatch
-Baseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
-{
-    // TODO
-    return Data::CameraTraceBatch(std::move(rawTrace));
-}
-
 }}}     // namespace PacBio::Mongo::Basecaller

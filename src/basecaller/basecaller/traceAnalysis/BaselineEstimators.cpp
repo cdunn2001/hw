@@ -7,8 +7,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-Data::CameraTraceBatch
-NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+Data::CameraTraceBatch NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     Data::CameraTraceBatch ctb(std::move(rawTrace));
 
@@ -21,7 +20,7 @@ NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
         {
             ElementTypeIn* f = frameData.Data() + (frame * frameData.LaneWidth());
             LaneArray rawData;
-            std::memcpy(rawData.Data(), f, frameData.LaneWidth());
+            std::memcpy(rawData.Data(), f, sizeof(ElementTypeIn) * frameData.LaneWidth());
             Mask isBaseline { false };
             baselineStats.AddSample(rawData, rawData, isBaseline);
         }
@@ -30,8 +29,9 @@ NoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
     return ctb;
 }
 
-MultiScaleBaseliner::MultiScaleBaseliner(uint32_t poolId, const PacBio::Mongo::Basecaller::BaselinerParams& config)
-    : Baseliner(poolId)
+MultiScaleBaseliner::MultiScaleBaseliner(uint32_t poolId, float scaler,
+                                         const PacBio::Mongo::Basecaller::BaselinerParams& config)
+    : Baseliner(poolId, scaler)
     , msLowerOpen_(config.Strides(), config.Widths())
     , msUpperOpen_(config.Strides(), config.Widths())
     , stride_(config.AggregateStride())
@@ -39,8 +39,7 @@ MultiScaleBaseliner::MultiScaleBaseliner(uint32_t poolId, const PacBio::Mongo::B
     , cMeanBias_{config.MeanBias()}
 { }
 
-Data::CameraTraceBatch
-MultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+Data::CameraTraceBatch MultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     Data::CameraTraceBatch ctb(std::move(rawTrace));
 
@@ -49,11 +48,6 @@ MultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
         auto frameData = ctb.GetBlockView(laneIdx);
         auto& baselineStats = ctb.Stats(laneIdx);
 
-        for (size_t frame = 0; frame < frameData.NumFrames(); ++frame)
-        {
-
-
-        }
     }
 
     return ctb;

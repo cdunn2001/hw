@@ -29,14 +29,16 @@ public:     // Static functions
                           const Data::MovieConfig& movConfig);
 
 public:
-    Baseliner(uint32_t poolId);
+    Baseliner(uint32_t poolId, float scaler = 1.0f)
+        : poolId_(poolId)
+        , scaler_(scaler)
+    { }
 
 public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     Data::CameraTraceBatch operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
     {
-        // TODO
         assert(rawTrace.GetMeta().PoolId() == poolId_);
         return Process(std::move(rawTrace));
     }
@@ -46,6 +48,7 @@ private:    // Customizable implementation
 
 private:    // Data
     uint32_t poolId_;
+    float scaler_;
 };
 
 

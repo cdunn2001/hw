@@ -4,6 +4,7 @@
 #include <sstream>
 #include <pacbio/PBException.h>
 #include <basecaller/traceAnalysis/BaselineEstimators.h>
+#include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <dataTypes/MovieConfig.h>
@@ -48,12 +49,21 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
 {
     switch (baselinerOpt_)
     {
-    case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-        return std::unique_ptr<Baseliner>(new NoOpBaseliner(poolId));
-    default:
-        ostringstream msg;
-        msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
-        throw PBException(msg.str());
+        case Data::BasecallerBaselinerConfig::MethodName::NoOp:
+            return std::unique_ptr<Baseliner>(new NoOpBaseliner(poolId));
+        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
+        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
+        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
+        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
+        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
+        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+            // TODO: scaler currently set to default 1.0f
+            return std::unique_ptr<Baseliner>(new MultiScaleBaseliner(poolId, 1.0f, FilterParamsLookup(baselinerOpt_)));
+        default:
+            ostringstream msg;
+            msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
+            throw PBException(msg.str());
+            break;
     }
 }
 
