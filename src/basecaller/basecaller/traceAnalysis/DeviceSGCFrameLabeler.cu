@@ -26,9 +26,6 @@
 
 #include "DeviceSGCFrameLabeler.h"
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
-
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
 
 using namespace PacBio::Cuda;
@@ -40,23 +37,48 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void DeviceSGCFrameLabeler::Configure(const BasecallerFrameLabelerConfig& baselinerConfig,
-                                      const MovieConfig& movConfig)
+void DeviceSGCFrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = false;
     InitAllocationPools(hostExecution);
+
+    // TODO need to plumb through configurations for this somehow
+    std::array<Subframe::AnalogMeta, 4> meta{};
+    {
+        int frameRate = 100;
+        meta[0].ipdSSRatio = 0;
+        meta[1].ipdSSRatio = 0;
+        meta[2].ipdSSRatio = 0;
+        meta[3].ipdSSRatio = 0;
+
+        meta[0].ipd = frameRate * .308;
+        meta[1].ipd = frameRate * .234;
+        meta[2].ipd = frameRate * .234;
+        meta[3].ipd = frameRate * .188;
+
+        meta[0].pw = frameRate * .232;
+        meta[1].pw = frameRate * .185;
+        meta[2].pw = frameRate * .181;
+        meta[3].pw = frameRate * .214;
+
+        meta[0].pwSSRatio = 3.2;
+        meta[1].pwSSRatio = 3.2;
+        meta[2].pwSSRatio = 3.2;
+        meta[3].pwSSRatio = 3.2;
+    }
+    Cuda::FrameLabeler::Configure(meta, lanesPerPool, framesPerChunk);
 }
 
 void DeviceSGCFrameLabeler::Finalize()
 {
     DestroyAllocationPools();
+    Cuda::FrameLabeler::Finalize();
 }
 
 DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId)
     : FrameLabeler(poolId)
-{
-
-}
+    , labeler_(std::make_unique<Cuda::FrameLabeler>())
+{}
 
 DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;
 
@@ -64,7 +86,11 @@ LabelsBatch
 DeviceSGCFrameLabeler::Process(CameraTraceBatch trace,
                                const PoolModelParameters& models)
 {
-    return batchFactory_->NewBatch(std::move(trace));
+    auto ret = batchFactory_->NewBatch(std::move(trace));
+
+    //labeler_->ProcessBatch(models, ret.TraceData(), ret);
+
+    return ret;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

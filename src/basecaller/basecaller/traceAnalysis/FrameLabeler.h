@@ -72,7 +72,7 @@ public:
                                  const PoolModelParameters& models)
     {
         // TODO
-        assert(rawTrace.GetMeta().PoolId() == poolId_);
+        assert(trace.GetMeta().PoolId() == poolId_);
         return Process(std::move(trace), models);
     }
 

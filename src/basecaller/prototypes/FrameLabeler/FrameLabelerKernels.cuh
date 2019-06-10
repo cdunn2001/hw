@@ -150,8 +150,8 @@ public:
 
 
     void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
-                      const Mongo::Data::TraceBatch<int16_t>& input,
-                      Mongo::Data::TraceBatch<int16_t>& output);
+                      const Mongo::Data::BatchData<int16_t>& input,
+                      Mongo::Data::BatchData<int16_t>& output);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
 

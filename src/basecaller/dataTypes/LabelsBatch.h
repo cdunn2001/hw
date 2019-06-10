@@ -44,7 +44,7 @@ class LabelsBatch : public TraceBatch<Label_t>
 {
     static BatchDimensions LatentDimensions(const BatchDimensions& traceDims)
     {
-        BatchDimensions ret(traceDims);
+        BatchDimensions ret{traceDims};
         ret.framesPerBatch = ViterbiStitchLookback;
         return ret;
     }
@@ -53,12 +53,12 @@ public:     // Types
 
 public:     // Structors and assignment
     LabelsBatch(const BatchMetadata& meta,
-                     const BatchDimensions& dims,
-                     CameraTraceBatch trace,
-                     bool pinned,
-                     Cuda::Memory::SyncDirection syncDirection,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
+                const BatchDimensions& dims,
+                CameraTraceBatch trace,
+                bool pinned,
+                Cuda::Memory::SyncDirection syncDirection,
+                std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
+                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
         : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
         , curTrace_(std::move(trace))
         , latTrace_(LatentDimensions(dims), syncDirection, tracePool, pinned)
@@ -70,10 +70,12 @@ public:     // Structors and assignment
     LabelsBatch& operator=(const LabelsBatch&) = delete;
     LabelsBatch& operator=(LabelsBatch&&) = default;
 
+    const BatchData& TraceData() const { return curTrace_; }
+
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
     // viterbi stitching, so this class will prevent access to those
-    BatchData curTrace_;
+    CameraTraceBatch curTrace_;
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;

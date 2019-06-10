@@ -77,7 +77,8 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        DeviceSGCFrameLabeler::Configure(bcConfig.frameLabelerConfig, movConfig);
+        DeviceSGCFrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
+                                         Data::GetPrimaryConfig().framesPerChunk);
         break;
     default:
         ostringstream msg;

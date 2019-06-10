@@ -229,8 +229,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 }
 
 void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
-                                const Mongo::Data::TraceBatch<int16_t>& input,
-                                Mongo::Data::TraceBatch<int16_t>& output)
+                                const Mongo::Data::BatchData<int16_t>& input,
+                                Mongo::Data::BatchData<int16_t>& output)
 {
     auto labels = BorrowScratch();
 
