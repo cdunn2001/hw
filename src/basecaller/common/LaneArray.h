@@ -8,12 +8,13 @@
 #include <common/MongoConstants.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
+#include <common/cuda/utility/CudaArray.h>
 
 namespace PacBio {
 namespace Mongo {
 
 /// A fixed-size array of boolean values.
-template <unsigned int N>
+template <unsigned int N = laneSize>
 class LaneMask : public boost::bitwise<LaneMask<N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
@@ -127,14 +128,16 @@ private:
 
 
 /// A fixed-size array type that supports elementwise arithmetic operations.
-template <typename T, unsigned int N>
+template <typename T, unsigned int N = laneSize>
 class LaneArray : public boost::arithmetic<LaneArray<T, N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
+    /*
     static_assert(std::is_same<T, short>::value
                   || std::is_same<T, int>::value
                   || std::is_same<T, float>::value,
                   "First template argument must be short, int, or float.");
+    */
     static constexpr auto laneUnit = std::max<unsigned int>(cudaThreadsPerWarp,
                                                             Simd::SimdTypeTraits<Simd::m512i>::width) * 4u / sizeof(T);
     static_assert(N != 0, "Second template argument cannot be 0.");
@@ -148,6 +151,32 @@ public:     // Structors and assignment
     LaneArray(const T& val)
     {
         std::fill(data_, data_+N, val);
+    }
+
+public:     // Export
+    LaneArray<float, N> AsFloat() const
+    {
+        LaneArray<float, N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = static_cast<float>(data_[i]);
+        }
+        return ret;
+    }
+
+    LaneArray<short, N> AsShort() const
+    {
+        LaneArray<short, N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = static_cast<short>(data_[i]);
+        }
+        return ret;
+    }
+
+    Cuda::Utility::CudaArray<T, N> AsCudaArray() const
+    {
+        return Cuda::Utility::CudaArray<T, N>(data_);
     }
 
 public:     // Scalar access
@@ -270,6 +299,19 @@ public:     // Named binary operators
         return ret;
     }
 
+public:     // Functor types
+    struct minOp
+    {
+        LaneArray operator()(const LaneArray& a, const LaneArray& b)
+        { return min(a, b); }
+    };
+
+    struct maxOp
+    {
+        LaneArray operator()(const LaneArray& a, const LaneArray& b)
+        { return max(a, b); }
+    };
+
 public:
     friend LaneMask<N> isnan(const LaneArray& a)
     {
@@ -288,6 +330,32 @@ private:
     T data_[N];
 };
 
+
+template <typename T, unsigned int N>
+typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
+min(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
+{
+    LaneArray<T, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<T>(std::min(a[i], static_cast<float>(b[i])));
+    }
+    return ret;
+}
+
+
+template <typename T, unsigned int N>
+typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
+max(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
+{
+    LaneArray<T, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<T>(std::max(a[i], static_cast<float>(b[i])));
+    }
+    return ret;
+}
+
 template <typename T, unsigned int N>
 LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const LaneArray<T,N>& failure)
 {
@@ -296,7 +364,7 @@ LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const
     {
         ret[i] = tf[i] ? success[i] : failure[i];
     }
-    return failure;
+    return ret;
 }
 
 }}      // namespace PacBio::Mongo

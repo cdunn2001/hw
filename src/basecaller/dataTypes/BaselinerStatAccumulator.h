@@ -1,6 +1,8 @@
 #ifndef mongo_dataTypes_BaselinerStatAccumulator_H_
 #define mongo_dataTypes_BaselinerStatAccumulator_H_
 
+#include "BaselineStats.h"
+
 #include <common/AutocorrAccumulator.h>
 #include <common/LaneArray.h>
 #include <common/MongoConstants.h>
@@ -17,9 +19,9 @@ template <typename T>
 class BaselinerStatAccumulator
 {
 public:     // Types
-    using LaneArray = PacBio::Mongo::LaneArray<T, laneSize>;
-    using FloatArray = PacBio::Mongo::LaneArray<float, laneSize>;
-    using Mask = PacBio::Mongo::LaneMask<laneSize>;
+    using LaneArray = PacBio::Mongo::LaneArray<T>;
+    using FloatArray = PacBio::Mongo::LaneArray<float>;
+    using Mask = PacBio::Mongo::LaneMask<>;
 
 public:     // Mutating functions
     /// Add a lane-frame to the statistics.
@@ -29,6 +31,24 @@ public:     // Mutating functions
     void AddSample(const LaneArray& x,
                    const LaneArray& y,
                    const Mask& isBaseline);
+public:
+    const BaselineStats<laneSize> ToBaselineStats() const;
+
+public:
+    const AutocorrAccumulator<FloatArray> BaselineSubtractedStats() const
+    { return baselineSubtractedStats_; }
+
+    const StatAccumulator<FloatArray> BaselineFramesStats() const
+    { return baselineStats_; }
+
+    const LaneArray TraceMin() const
+    { return traceMin; }
+
+    const LaneArray TraceMax() const
+    { return traceMax; }
+
+    const LaneArray RawBaselineSum() const
+    { return rawBaselineSum_; }
 
 private:
     // Statistics of trace after baseline estimate has been subtracted.

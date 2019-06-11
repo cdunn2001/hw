@@ -44,7 +44,7 @@ namespace Basecaller {
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
     const unsigned int numPools = 8;
-    Data::BasecallerAlgorithmConfig bcConfig;
+    Data::BasecallerConfig bcConfig;
     Data::MovieConfig movConfig;
     auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
 

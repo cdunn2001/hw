@@ -28,7 +28,8 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
+#include <common/DataGenerators/BatchGenerator.h>
 
 #include <gtest/gtest.h>
 
@@ -36,10 +37,28 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TEST(TestBaseliner, Foo)
+TEST(TestNoOpBaseliner, Run)
 {
-    Baseliner foo ();
-    FAIL() << "Need to define some unit tests.";
+    HostNoOpBaseliner baseliner{0};
+
+    Cuda::Data::BatchGenerator batchGenerator(128, laneSize, 1, 8192, 1);
+
+    while (!batchGenerator.Finished())
+    {
+        auto chunk = batchGenerator.PopulateChunk();
+        Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
+        const auto& baselineStats = cameraBatch.Stats(0);
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineCount().data(),
+                                baselineStats.BaselineCount().data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineMean().data(),
+                                baselineStats.BaselineMean().data()+laneSize,
+                                [](float v) { return std::isnan(v); }));
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineVariance().data(),
+                                baselineStats.BaselineVariance().data()+laneSize,
+                                [](float v) { return std::isnan(v); }));
+    }
+
 }
 
-}}}
+}}} // PacBio::Mongo::Basecaller

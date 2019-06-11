@@ -30,6 +30,8 @@
 //  Defines class TraceAnalyzerTbb, which implements the interface
 //  ITraceAnalyzer.
 
+#include <tbb/task_scheduler_init.h>
+
 #include "AlgoFactory.h"
 #include "BatchAnalyzer.h"
 #include "ITraceAnalyzer.h"
@@ -42,7 +44,7 @@ class TraceAnalyzerTbb : public ITraceAnalyzer
 {
 public:     // Structors and assignment operators
     TraceAnalyzerTbb(unsigned int numPools,
-                     const Data::BasecallerAlgorithmConfig& bcConfig,
+                     const Data::BasecallerConfig& bcConfig,
                      const Data::MovieConfig& movConfig);
 
     virtual ~TraceAnalyzerTbb() noexcept = default;
@@ -69,6 +71,9 @@ private:    // Data
 
     // One analyzer for each pool.
     std::vector<BatchAnalyzer> bAnalyzer_;
+
+    unsigned int numWorkerThreads;
+    tbb::task_scheduler_init init_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -24,4 +24,4 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "CudaArray.cuh"
+#include "CudaArray.h"

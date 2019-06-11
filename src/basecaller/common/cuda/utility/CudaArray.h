@@ -27,6 +27,9 @@
 #ifndef PACBIO_CUDA_CUDA_ARRAY_H_
 #define PACBIO_CUDA_CUDA_ARRAY_H_
 
+#include <common/cuda/CudaFunctionDecorators.h>
+
+#include <cstring>
 #include <array>
 
 namespace PacBio {
@@ -38,14 +41,20 @@ struct CudaArray
 {
     CudaArray() = default;
     // implicit conversion from std::array intentional
-    CudaArray(const std::array<T, len> &data)
+    CudaArray(const std::array<T, len>& data)
     {
         memcpy(data_, data.data(), sizeof(T)*len);
     }
 
-    __device__ __host__ T& operator[](unsigned idx) { return data_[idx]; }
-    __device__ __host__ const T& operator[](unsigned idx) const { return data_[idx]; }
-    __device__ __host__ T* data() { return data_; }
+    CudaArray(const T* data)
+    {
+        memcpy(data_, data, sizeof(T)*len);
+    }
+
+    CUDA_ENABLED T& operator[](unsigned idx) { return data_[idx]; }
+    CUDA_ENABLED const T& operator[](unsigned idx) const { return data_[idx]; }
+    CUDA_ENABLED T* data() { return data_; }
+    CUDA_ENABLED const T* data() const { return data_; }
 private:
     T data_[len];
 };

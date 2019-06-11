@@ -48,38 +48,45 @@ namespace Mongo {
 namespace Basecaller {
 
 TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
-                                   const Data::BasecallerAlgorithmConfig& bcConfig,
+                                   const Data::BasecallerConfig& bcConfig,
                                    const Data::MovieConfig& movConfig)
-    : algoFactory_ (bcConfig)
+    : algoFactory_ (bcConfig.algorithm)
+    , init_(bcConfig.init.numWorkerThreads)
 {
-    algoFactory_.Configure(bcConfig, movConfig);
+    // TODO: Check logic of worker threads
+    NumWorkerThreads(bcConfig.init.numWorkerThreads);
+
+    algoFactory_.Configure(bcConfig.algorithm, movConfig);
 
     // TODO: If algoFactory_::Configure is handling configuration of the
     // various algorithms, is there a reason to still have a
     // BatchAnalyzer::Configure?
-    BatchAnalyzer::Configure(bcConfig, movConfig);
+    BatchAnalyzer::Configure(bcConfig.algorithm, movConfig);
 
     bAnalyzer_.reserve(numPools);
     // TODO: Should be able to parallelize construction of batch analyzers.
+    const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, algoFactory_);
+        bAnalyzer_.emplace_back(poolId, algoFactory_, staticAnalysis);
     }
 }
 
-// The number of worker threads used by this analyzer.
 unsigned int TraceAnalyzerTbb::NumWorkerThreads() const
 {
-    // TODO
-    return 0;
+    if (numWorkerThreads == 0)
+        return tbb::task_scheduler_init::default_num_threads();
+    else
+        return numWorkerThreads;
 }
 
-// Sets the number of worker threads requested.
-// To choose the default value for the platform, specify 0.
-void TraceAnalyzerTbb::NumWorkerThreads(unsigned int)
+void TraceAnalyzerTbb::NumWorkerThreads(unsigned int n)
 {
-    // TODO
-    throw PBException("Not yet implemented.");
+    numWorkerThreads = (n == 0
+        ? tbb::task_scheduler_init::default_num_threads()
+        : n);
+
+
 }
 
 // The number of ZMW pools supported by this analyzer.
@@ -97,6 +104,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
 
     vector<Data::BasecallBatch> output (n);
 
+    tbb::task_scheduler_init init(NumWorkerThreads());
     // TODO: Customize optional parameters of parallel_for.
     tbb::parallel_for(size_t(0), n, [&](size_t i)
     {

@@ -30,7 +30,7 @@
 #include <algorithm>
 
 #include <common/cuda/PBCudaSimd.cuh>
-#include <common/cuda/utility/CudaArray.cuh>
+#include <common/cuda/utility/CudaArray.h>
 
 #include "AnalogModel.cuh"
 #include "AnalogMeta.h"

@@ -31,11 +31,16 @@
 
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/MongoConstants.h>
 
 #include "BatchMetadata.h"
 
 namespace PacBio {
 namespace Mongo {
+
+template <typename T, unsigned int N>
+class LaneArray;
+
 namespace Data {
 
 // Non-owning host-side representation of a gpu batch.  Does not
@@ -71,6 +76,9 @@ class BlockView
 {
     using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
 public:
+    using iterator = LaneArray<T, laneSize>*;
+    using const_iterator = const LaneArray<T, laneSize>*;
+public:
     BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
         : data_(data)
         , laneWidth_(laneWidth)
@@ -82,9 +90,16 @@ public:
     size_t Size() const { return laneWidth_ * numFrames_; }
 
     T* Data() { return data_; }
+    const T* Data() const { return data_; }
 
     T& operator[](size_t idx) { return data_[idx]; }
     const T& operator[](size_t idx) const { return data_[idx]; }
+
+    iterator begin() { return nullptr; }
+    iterator end()   { return nullptr; }
+
+    const_iterator cbegin() const  { return nullptr; }
+    const_iterator cend() const    { return nullptr; }
 
     T& operator()(size_t frame, size_t zmw) { return data_[frame*laneWidth_ + zmw]; }
     const T& operator()(size_t frame, size_t zmw) const { return data_[frame*laneWidth_ + zmw]; }
@@ -139,6 +154,12 @@ public:
     BatchData& operator=(BatchData&&) = default;
 
     ~BatchData() = default;
+
+    // Can be null, if there are no pools in use
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
+    {
+        return data_.GetAllocationPools();
+    }
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
     size_t numFrames()     const { return dims_.framesPerBatch; }

@@ -18,25 +18,15 @@ namespace Data {
     class BasecallerInitConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        /// numWorkerThreads is an agnostic wrapper around the underlying thread limit that
-        /// is appropriate for the compiled architecture.
-        /// This allows a common configuration to specify different values for k1om and x86_64
-        /// when both architectures are used in a single realtime configuration (i.e. 2mic1host topology)
-#if defined(PB_CORE_AVX512)
-        uint32_t numWorkerThreads() const { return numWorkerThreads_avx512(); }
-        void     numWorkerThreads(uint32_t x) { numWorkerThreads_avx512 = x; }
-#else
-        uint32_t numWorkerThreads() const { return numWorkerThreads_sse(); }
-        void     numWorkerThreads(uint32_t x) { numWorkerThreads_sse = x; }
-#endif
+        /// The number of host worker threads to use.  Most parallelism should be
+        /// handled internal to the GPU, so this does not need to be large.
+        /// A minimum of 3 will allow efficient overlap of upload/download/compute,
+        /// but beyond that it shouldn't really be any higher than what is necessary
+        /// for active host stages to keep up with the gpu
 
-        /// The number of threads to run on the x86_64_avx512 architecture
-        /// (PAC2 Sequel Host or Spider).
-        ADD_PARAMETER(uint32_t, numWorkerThreads_avx512, 88);
-
-        /// The number of threads to run on the x86_64_SSE architecture (PAC1
-        /// Sequel Host).
-        ADD_PARAMETER(uint32_t, numWorkerThreads_sse, 32);
+        // TODO add hooks so that we can switch between gpu and host centric defaults
+        // without manually specifying a million parameters
+        ADD_PARAMETER(uint32_t, numWorkerThreads, 8);
 
         /// If true, the threads are bound to a particular set of cores for the
         /// Sequel Alpha machines when running on the host.
@@ -237,10 +227,12 @@ namespace Data {
     {
         CONF_OBJ_SUPPORT_COPY(BasecallerBaselinerConfig)
     public:
-        SMART_ENUM(MethodName, MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
+        SMART_ENUM(MethodName,
+                   MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
                    TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
+                   DeviceMultiScale,
                    NoOp);
-        ADD_ENUM(MethodName, Method, MethodName::MultiScaleLarge);
+        ADD_ENUM(MethodName, Method, MethodName::DeviceMultiScale);
         ADD_PARAMETER(uint16_t, AutocorrLagFrames, 4u);
     };
 
@@ -276,6 +268,8 @@ namespace Data {
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
+
+        ADD_PARAMETER(bool, staticAnalysis, true);
 
     public:
         std::string CombinedMethodName() const
