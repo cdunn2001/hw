@@ -22,6 +22,43 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
-#include "CudaArray.h"
+// Extensions to UnifiedCudaArray available only in cuda compilation units.
+// In particular provide array access to device data when in device code
+
+#ifndef PACBIO_MONGO_BASELINE_STATS_H_
+#define PACBIO_MONGO_BASELINE_STATS_H_
+
+#include <common/cuda/utility/CudaArray.h>
+
+namespace PacBio {
+namespace Mongo {
+namespace Data {
+
+// Baseline stats for a whole batch of data
+template <uint32_t LaneWidth>
+class BaselineStats
+{
+public:
+    BaselineStats() = default;
+
+private:
+
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
+
+    // Raw moments
+    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
+
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM1Last_;
+    Cuda::Utility::CudaArray<float, LaneWidth> lagM2_;
+
+};
+
+}}} // ::PacBio::Mongo::Data
+
+#endif //PACBIO_MONGO_BASELINE_STATS_H_

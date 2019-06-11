@@ -140,6 +140,12 @@ public:
 
     ~BatchData() = default;
 
+    // Can be null, if there are no pools in use
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
+    {
+        return data_.GetAllocationPools();
+    }
+
     size_t LaneWidth()     const { return dims_.laneWidth; }
     size_t numFrames()     const { return dims_.framesPerBatch; }
     size_t LanesPerBatch() const { return dims_.lanesPerBatch; }

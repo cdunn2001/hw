@@ -59,7 +59,7 @@ public:     // Static functions
                           const Data::MovieConfig& movConfig);
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;
@@ -75,12 +75,22 @@ public:
     PacBio::Mongo::Data::BasecallBatch
     operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
+    PacBio::Mongo::Data::BasecallBatch
+    StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    PacBio::Mongo::Data::BasecallBatch
+    StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
+
+    // runs the main compute phases with a static model, bypassing things like the
+    // dme and trace binning.  This is necessary for now because they are not
+    // even implemented, but may remain desirable in the future when tweaking/profiling
+    // steady-state basecalling performance
+    bool staticAnalysis_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -3,7 +3,7 @@
 
 #include <common/cuda/utility/CudaTuple.cuh>
 
-#include <ExtremaFilter.cuh>
+#include <prototypes/BaselineFilter/ExtremaFilter.cuh>
 
 namespace PacBio {
 namespace Cuda {

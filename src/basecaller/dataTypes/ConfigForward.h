@@ -5,6 +5,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+class BasecallerConfig;
 class BasecallerAlgorithmConfig;
 class BasecallerBaselinerConfig;
 class BasecallerTraceHistogramConfig;

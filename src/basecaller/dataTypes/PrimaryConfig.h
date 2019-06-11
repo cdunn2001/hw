@@ -46,7 +46,7 @@ namespace Data {
 class PrimaryConfig :  public PacBio::Process::ConfigurationObject
 {
     ADD_PARAMETER(uint32_t, zmwsPerLane, 64);
-    ADD_PARAMETER(uint32_t, lanesPerPool, 64);
+    ADD_PARAMETER(uint32_t, lanesPerPool, 4096);
     ADD_PARAMETER(uint32_t, framesPerChunk, 128);
 
     // Rate at which frames are read from the sensor.

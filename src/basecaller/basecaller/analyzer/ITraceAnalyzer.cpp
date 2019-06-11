@@ -42,7 +42,6 @@ namespace Basecaller {
 // static
 bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig& startupConfig)
 {
-    // TODO
     return false;
 }
 
@@ -50,7 +49,7 @@ bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig&
 // static
 std::unique_ptr<ITraceAnalyzer>
 ITraceAnalyzer::Create(unsigned int numPools,
-                       const Data::BasecallerAlgorithmConfig& bcConfig,
+                       const Data::BasecallerConfig& bcConfig,
                        const Data::MovieConfig& movConfig)
 {
     // TODO

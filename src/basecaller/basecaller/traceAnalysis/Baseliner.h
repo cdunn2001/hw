@@ -27,8 +27,17 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
+    static void InitAllocationPools(bool hostExecution);
+    static void DestroyAllocationPools();
+
+    static void Finalize();
+
+protected: // static members
+    static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
+
 public:
     Baseliner(uint32_t poolId);
+    virtual ~Baseliner() = default;
 
 public:
     /// Estimate and subtract baseline from rawTrace.

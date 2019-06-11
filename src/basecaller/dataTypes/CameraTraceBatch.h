@@ -5,10 +5,8 @@
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
-#include <common/NumericUtil.h>
-#include <common/StatAccumulator.h>
 
-#include "BaselinerStatAccumulator.h"
+#include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -25,17 +23,12 @@ public:     // Types
 public:     // Structors and assignment
     CameraTraceBatch(const BatchMetadata& meta,
                      const BatchDimensions& dims,
+                     bool pinned,
                      Cuda::Memory::SyncDirection syncDirection,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> pool = nullptr)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, pool)
-        , stats_ (dims.zmwsPerBatch(), syncDirection /* TODO: , pool for BaselineStats? */)
-    { }
-
-    // Move constructor variant that accepts an rvalue reference to TraceBatch.
-    CameraTraceBatch(TraceBatch&& t)
-        : TraceBatch<ElementType>(std::move(t))
-        // Notice that this second initializer relies on the base object being already constructed.
-        , stats_ (Dimensions().zmwsPerBatch(), Cuda::Memory::SyncDirection::Symmetric /* TODO: , pool for BaselineStats? */)
+                     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
+                     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
+        , stats_ (dims.lanesPerBatch, syncDirection, pinned, statsPool)
     { }
 
     CameraTraceBatch(const CameraTraceBatch&) = delete;
@@ -46,16 +39,46 @@ public:     // Structors and assignment
 
 public:     // Access to statistics
     // TODO: How do we support const access?
-//    const BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane) const
-//    { return stats_.GetHostView()[lane]; }
+    const BaselineStats<laneSize>& Stats(unsigned int lane) const
+    { return stats_.GetHostView()[lane]; }
 
-    BaselinerStatAccumulator<ElementType>& Stats(unsigned int lane)
+    BaselineStats<laneSize>& Stats(unsigned int lane)
     { return stats_.GetHostView()[lane]; }
 
 private:    // Data
     // Statistics for each ZMW in the batch, one element per lane.
     // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumulator<ElementType>> stats_;
+    Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>> stats_;
+};
+
+// Factory class, to simplify the construction of CameraTraceBatch instances.
+// This class will handle the small collection of constructor arguments that
+// need to change depending on the pipeline configuration, but otherwise are
+// generally constant between different batches
+class CameraBatchFactory
+{
+public:
+    CameraBatchFactory(size_t framesPerChunk,
+                       size_t lanesPerPool,
+                       Cuda::Memory::SyncDirection syncDirection,
+                       bool pinned = true)
+        : syncDirection_(syncDirection)
+        , pinned_(pinned)
+        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
+        , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselineStats<laneSize>), pinned))
+    {}
+
+    CameraTraceBatch NewBatch(const BatchMetadata& meta,
+                              const BatchDimensions& dims)
+    {
+        return CameraTraceBatch(meta, dims, pinned_, syncDirection_, tracePool_, statsPool_);
+    }
+
+private:
+    Cuda::Memory::SyncDirection syncDirection_;
+    bool pinned_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

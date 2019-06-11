@@ -4,6 +4,7 @@
 #include <sstream>
 #include <pacbio/PBException.h>
 #include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <dataTypes/MovieConfig.h>
@@ -22,6 +23,24 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
     // TODO: Capture remaining options for algorithms.
 }
 
+AlgoFactory::~AlgoFactory()
+{
+    switch (baselinerOpt_)
+    {
+    case Data::BasecallerBaselinerConfig::MethodName::NoOp:
+        Baseliner::Finalize();
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        DeviceMultiScaleBaseliner::Finalize();
+        break;
+    default:
+        ostringstream msg;
+        PBLOG_ERROR << "Unrecognized method option for Baseliner: "
+                    << baselinerOpt_.toString()
+                    << ".  Should be impossible to see this message, constructor should have thrown";
+    }
+}
+
 
 void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                             const Data::MovieConfig& movConfig)
@@ -30,6 +49,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     {
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
         Baseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
         break;
     default:
         ostringstream msg;
@@ -49,7 +71,9 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
     switch (baselinerOpt_)
     {
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-        return std::unique_ptr<Baseliner>(new Baseliner(poolId));
+        return std::make_unique<Baseliner>(poolId);
+    case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        return std::make_unique<DeviceMultiScaleBaseliner>(poolId, Data::GetPrimaryConfig().lanesPerPool);
     default:
         ostringstream msg;
         msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';

@@ -28,7 +28,7 @@
 #define PACBIO_CUDA_MODEL_CUH_
 
 #include <common/cuda/PBCudaSimd.cuh>
-#include <common/cuda/utility/CudaArray.cuh>
+#include <common/cuda/utility/CudaArray.h>
 
 namespace PacBio {
 namespace Cuda {

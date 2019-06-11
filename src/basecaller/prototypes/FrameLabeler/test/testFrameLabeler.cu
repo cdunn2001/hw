@@ -7,7 +7,7 @@
 
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/ZmwDataManager.h>
-#include <common/cuda/utility/CudaArray.cuh>
+#include <common/cuda/utility/CudaArray.h>
 #include <common/DataGenerators/SignalGenerator.h>
 
 #include <SubframeScorer.cuh>
