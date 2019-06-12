@@ -40,11 +40,14 @@ public:     // Non-const functions
     /// May include filtering of edge frames.
     void AddBatch(const Data::CameraTraceBatch& ctb)
     {
-        frameCount_ += ctb.numFrames();
+        assert (ctb.GetMeta().PoolId() == poolId_);
         AddBatchImpl(ctb);
+        frameCount_ += ctb.numFrames();
     }
 
-protected:    // Data
+protected:  // Data
+
+private:    // Data
     uint32_t poolId_;
     size_t frameCount_ = 0;
     PoolHistType poolHist_;

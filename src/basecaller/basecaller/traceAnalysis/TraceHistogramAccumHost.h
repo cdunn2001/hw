@@ -26,6 +26,11 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <common/AlignedVector.h>
+#include <common/LaneArray.h>
+#include <dataTypes/BaselinerStatAccumulator.h>
+#include <dataTypes/UHistogramSimd.h>
+
 #include "TraceHistogramAccumulator.h"
 
 namespace PacBio {
@@ -34,11 +39,29 @@ namespace Basecaller {
 
 class TraceHistogramAccumHost : public TraceHistogramAccumulator
 {
+public:     // Types
+    using TraceElementType = Data::CameraTraceBatch::ElementType;
+
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId);
 
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;
+
+private:    // Data
+    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>>> hist_;
+    AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
+
+private:    // Functions.
+    // Compute histogram parameters (e.g., bin size, lower bound, etc.),
+    // construct empty histogram, and add it to hist_.
+    void InitHistogram(unsigned int lane,
+                       Data::BlockView<const TraceElementType> traceBlock,
+                       const Data::BaselineStats<laneSize>& stats);
+
+    // Allocates, if necessary, and initializes all the baseliner statistics
+    // accumulators contained in stats_.
+    void InitStats(unsigned int numLanes);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

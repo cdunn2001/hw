@@ -30,15 +30,111 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+// TODO: Can we add a `numLanes` parameter? That would enable us to allocate
+// memory for members upon construction.
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId)
     : TraceHistogramAccumulator(poolId)
 {
     // TODO
 }
 
+
 void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
 {
-    // TODO
+    const auto numLanes = ctb.Dimensions().lanesPerBatch;
+
+    const bool firstBatch = FramesAdded() == 0;
+
+    if (firstBatch)
+    {
+        // Reset all the histograms.
+        hist_.clear();
+        hist_.reserve(ctb.Dimensions().lanesPerBatch);
+
+        // Reset baseline stat accumulators.
+        InitStats(numLanes);
+    }
+
+    // For each lane/block in the batch ...
+    for (unsigned int i = 0; i < numLanes; ++i)
+    {
+        // Get views to the trace data and the statistics.
+        const auto traceBlock = ctb.GetBlockView(i);
+        const auto stats = ctb.Stats(i);
+
+        if (firstBatch)
+        {
+            // Define histogram parameters and construct empty histogram.
+            InitHistogram(i, traceBlock, stats);
+        }
+
+        // TODO: Map them to LaneArray and feed to UHistogramSimd.
+    }
+}
+
+
+void TraceHistogramAccumHost::InitHistogram(unsigned int lane,
+                                            Data::BlockView<const TraceElementType> traceBlock,
+                                            const Data::BaselineStats<laneSize>& stats)
+{
+    assert (hist_.size() == lane);
+
+    // Determine histogram parameters.
+
+// Code from Sequel DmeMonochrome.
+//    unsigned int nBins;
+//    {
+//        auto minSignal = dtbs[0]->MinSignal().first();
+//        auto maxSignal = dtbs[0]->MaxSignal().first();
+//        for (size_t i = 1; i < dtbs.size(); ++i)
+//        {
+//            minSignal = min(minSignal, dtbs[i]->MinSignal().first());
+//            maxSignal = max(maxSignal, dtbs[i]->MaxSignal().first());
+//        }
+
+//        // Nominally define the bin size as a fraction of the baseline sigma.
+//        const auto binSize = binSizeCoeff_ * bgSigma;
+
+//        // Push lower bound down by a small amount to avoid any subtle boundary
+//        // issues in histogram.
+//        lowerBound = minSignal - 0.1f * bgSigma;
+
+//        // Scale up just a bit to avoid boundary problems in histogram.
+//        // Does not assume that data > 0.
+//        const auto nudge = max(0.1f * binSize, 10.0f * abs(maxSignal) * numeric_limits<float>::epsilon());
+//        upperBound = maxSignal + nudge;
+
+//        nBins = round_cast<unsigned int>(reduceMax((upperBound - lowerBound) / binSize));
+//        nBins = std::max(nBins, 20u);
+
+//        // Cap the bins at 250 if necessary
+//        if (nBins > binCap)
+//        {
+//            const auto newBinSize = (upperBound - lowerBound) / binCap;
+//            nBins = binCap;
+
+//            binClampCount_++;
+//            if (any(newBinSize > bgSigma))
+//                majorBinClampCount_++;
+//            for (const auto& dtb : dtbs)
+//            {
+//                if (any(sqrt(dtb->BaselineCovar()[0]) < 1.0f))
+//                {
+//                    tinyBaselineSigmaCount_++;
+//                }
+//            }
+//        }
+//    }
+
+//    UHistogramSimd<FloatVec> hist(nBins, lowerBound, upperBound);
+//    ScrubEdgeFrames(dtbs, *workModel, &hist);
+}
+
+
+void TraceHistogramAccumHost::InitStats(unsigned int numLanes)
+{
+    stats_.clear();
+    stats_.resize(numLanes);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
