@@ -1,4 +1,5 @@
 #include "BlockFilterStage.h"
+#include "TraceFilters.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -45,10 +46,16 @@ Data::BlockView<V>* BlockFilterStage<V, F>::operator()(Data::BlockView<V>* pInpu
     // The filter runs in-place, and the buffer stays in use.
     using RangeType = typename F::RangeType;
     RangeType inRange(filterRangeStart, filterRangeEnd);
-    filter_(inRange, output.Begin(), winbuf_, stride_);
+    filter_(inRange, output.begin(), winbuf_, stride_);
 
     return &output;
 }
 
+///
+/// Explicit Instantiations
+///
+
+template class BlockFilterStage<short, ErodeHgw<short>>;
+template class BlockFilterStage<short, DilateHgw<short>>;
 
 }}}     // namespace PacBio::Mongo::Basecaller

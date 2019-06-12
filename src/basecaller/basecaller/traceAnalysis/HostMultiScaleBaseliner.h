@@ -1,5 +1,5 @@
-#ifndef mongo_basecaller_traceAnalysis_BaselineEstimators_H_
-#define mongo_basecaller_traceAnalysis_BaselineEstimators_H_
+#ifndef MONGO_BASECALLER_HOSTMULTISCALEBASELINER_H
+#define MONGO_BASECALLER_HOSTMULTISCALEBASELINER_H
 
 #include "Baseliner.h"
 #include "BaselinerParams.h"
@@ -12,7 +12,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class NoOpBaseliner : public Baseliner
+class HostMultiScaleBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
@@ -23,36 +23,28 @@ public:
     using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
 
 public:
-    NoOpBaseliner(uint32_t poolId)
-        : Baseliner(poolId)
+    static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
+                          const Data::MovieConfig& movConfig);
+
+
+    static void Finalize();
+
+public:
+    HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config)
+            : Baseliner(poolId, scaler)
+              , msLowerOpen_(config.Strides(), config.Widths())
+              , msUpperOpen_(config.Strides(), config.Widths())
+              , stride_(config.AggregateStride())
+              , cSigmaBias_{config.SigmaBias()}
+              , cMeanBias_{config.MeanBias()}
     { }
 
-    NoOpBaseliner(const NoOpBaseliner&) = delete;
-    NoOpBaseliner(NoOpBaseliner&&) = default;
-    ~NoOpBaseliner() noexcept= default;
+    HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
+    HostMultiScaleBaseliner(HostMultiScaleBaseliner&&) = default;
+    ~HostMultiScaleBaseliner() override;
 
 private:
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
-};
-
-class MultiScaleBaseliner : public Baseliner
-{
-    using Parent = Baseliner;
-public:
-    using ElementTypeIn = Parent::ElementTypeIn;
-    using ElementTypeOut = Parent::ElementTypeOut;
-    using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
-    using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
-    using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
-
-public:
-    MultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config);
-
-    MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
-    MultiScaleBaseliner(MultiScaleBaseliner&&) = default;
-    ~MultiScaleBaseliner() noexcept = default;
-
-private:
+    const size_t Stride() const { return stride_; }
     Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
 private:    // Multi-stage filter
@@ -133,4 +125,4 @@ private:
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif // mongo_basecaller_traceAnalysis_BaselineEstimators_H_
+#endif // MONGO_BASECALLER_HOSTMULTISCALEBASELINER_H

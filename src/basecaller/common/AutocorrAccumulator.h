@@ -66,6 +66,15 @@ public:     // Structors
     AutocorrAccumulator(const AutocorrAccumulator& that) = default;
 
 public:     // Const methods
+    const T& M1First() const
+    { return m1First_; }
+
+    const T& M1Last() const
+    { return m1Last_; }
+
+    const T& M2() const
+    { return m2_; }
+
     /// Number of samples accumulated.
     const T& Count() const
     { return stats_.Count(); }

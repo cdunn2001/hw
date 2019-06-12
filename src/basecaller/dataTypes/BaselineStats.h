@@ -35,28 +35,94 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Baseline stats for a whole batch of data
+// Baseline stats for a lane of data
 template <uint32_t LaneWidth>
 class BaselineStats
 {
 public:
     BaselineStats() = default;
 
+public:     // Accesors
+    const Cuda::Utility::CudaArray<int16_t, LaneWidth> TraceMin() const
+    { return traceMin_; }
+
+    const Cuda::Utility::CudaArray<int16_t, LaneWidth> TraceMax() const
+    { return traceMax_; }
+
+    const Cuda::Utility::CudaArray<int16_t, LaneWidth> RawBaselineSum() const
+    { return rawBaselineSum_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineCount() const
+    { return m0_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineMean() const
+    { return m1_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineVariance() const
+    { return m2_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM1First() const
+    { return lagM1First_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM1Last() const
+    { return lagM1Last_; }
+
+    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM2() const
+    { return lagM2_; }
+
+public:     // Modifiers
+    BaselineStats& TraceMin(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& traceMin)
+    {
+        traceMin_ = traceMin;
+        return *this;
+    }
+
+    BaselineStats& TraceMax(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& traceMax)
+    {
+        traceMax_ = traceMax;
+        return *this;
+    }
+
+    BaselineStats& RawBaselineSum(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& rawBaselineSum)
+    {
+        rawBaselineSum_ = rawBaselineSum;
+        return *this;
+    }
+
+    BaselineStats& BaselineMoments(const Cuda::Utility::CudaArray<float, LaneWidth>& count,
+                                   const Cuda::Utility::CudaArray<float, LaneWidth>& mean,
+                                   const Cuda::Utility::CudaArray<float, LaneWidth>& variance)
+    {
+        m0_ = count;
+        m1_ = mean;
+        m2_ = variance;
+        return *this;
+    }
+
+    BaselineStats& AutocorrMoments(const Cuda::Utility::CudaArray<float, LaneWidth>& lagM1First,
+                                   const Cuda::Utility::CudaArray<float, LaneWidth>& lagM1Last,
+                                   const Cuda::Utility::CudaArray<float, LaneWidth>& lagM2)
+    {
+        lagM1First_ = lagM1First;
+        lagM1Last_ = lagM1Last;
+        lagM2_ = lagM2;
+        return *this;
+    }
+
 private:
 
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
-
-    // Raw moments
-    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
-    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
-    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
-
+    // Represents statistics from all frames
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1Last_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM2_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
 
+    // Represents statistics from baseline frames
+    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
 };
 
 }}} // ::PacBio::Mongo::Data

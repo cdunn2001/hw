@@ -4,6 +4,8 @@
 #include "WindowBuffer.h"
 
 #include <vector>
+
+#include <common/LaneArray.h>
 #include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
@@ -41,7 +43,7 @@ private:
     F filter_;
 
     // Buffers
-    WindowBuffer<V> winbuf_;
+    WindowBuffer<LaneArray<V>> winbuf_;
     int rhsDeficit_;
 };
 

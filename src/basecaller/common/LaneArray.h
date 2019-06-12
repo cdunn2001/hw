@@ -8,12 +8,13 @@
 #include <common/MongoConstants.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
+#include <common/cuda/utility/CudaArray.h>
 
 namespace PacBio {
 namespace Mongo {
 
 /// A fixed-size array of boolean values.
-template <unsigned int N>
+template <unsigned int N = laneSize>
 class LaneMask : public boost::bitwise<LaneMask<N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
@@ -127,14 +128,16 @@ private:
 
 
 /// A fixed-size array type that supports elementwise arithmetic operations.
-template <typename T, unsigned int N>
+template <typename T, unsigned int N = laneSize>
 class LaneArray : public boost::arithmetic<LaneArray<T, N>>
 {
     // Static assertions that enable efficient SIMD and CUDA implementations.
+    /*
     static_assert(std::is_same<T, short>::value
                   || std::is_same<T, int>::value
                   || std::is_same<T, float>::value,
                   "First template argument must be short, int, or float.");
+    */
     static constexpr auto laneUnit = std::max<unsigned int>(cudaThreadsPerWarp,
                                                             Simd::SimdTypeTraits<Simd::m512i>::width) * 4u / sizeof(T);
     static_assert(N != 0, "Second template argument cannot be 0.");
@@ -151,14 +154,29 @@ public:     // Structors and assignment
     }
 
 public:     // Export
-    LaneArray<float,N> AsFloat() const
+    LaneArray<float, N> AsFloat() const
     {
-        LaneArray<float,N> ret;
+        LaneArray<float, N> ret;
         for (unsigned int i = 0; i < N; ++i)
         {
             ret[i] = static_cast<float>(data_[i]);
         }
         return ret;
+    }
+
+    LaneArray<short, N> AsShort() const
+    {
+        LaneArray<short, N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = static_cast<short>(data_[i]);
+        }
+        return ret;
+    }
+
+    Cuda::Utility::CudaArray<T, N> AsCudaArray() const
+    {
+        return Cuda::Utility::CudaArray<T, N>(data_);
     }
 
 public:     // Scalar access

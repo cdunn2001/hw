@@ -28,7 +28,7 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/BaselineEstimators.h>
+#include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <common/DataGenerators/BatchGenerator.h>
 
 #include <gtest/gtest.h>
@@ -39,20 +39,24 @@ namespace Basecaller {
 
 TEST(TestNoOpBaseliner, Run)
 {
-    NoOpBaseliner foo{0};
+    HostNoOpBaseliner baseliner{0};
 
     Cuda::Data::BatchGenerator batchGenerator(128, laneSize, 1, 8192, 1);
 
     while (!batchGenerator.Finished())
     {
         auto chunk = batchGenerator.PopulateChunk();
-        Data::CameraTraceBatch cameraBatch = foo(std::move(chunk.front()));
+        Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
         const auto& baselineStats = cameraBatch.Stats(0);
-        /*
-        EXPECT_TRUE(all(NoOpBaseliner::FloatArray{0} == baselineStats.Count()));
-        EXPECT_TRUE(all(isnan(baselineStats.Mean())));
-        EXPECT_TRUE(all(isnan(baselineStats.Variance())));
-        */
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineCount().data(),
+                                baselineStats.BaselineCount().data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineMean().data(),
+                                baselineStats.BaselineMean().data()+laneSize,
+                                [](float v) { return std::isnan(v); }));
+        EXPECT_TRUE(std::all_of(baselineStats.BaselineVariance().data(),
+                                baselineStats.BaselineVariance().data()+laneSize,
+                                [](float v) { return std::isnan(v); }));
     }
 
 }

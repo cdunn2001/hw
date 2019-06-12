@@ -97,8 +97,8 @@ public:
     iterator begin() { return nullptr; }
     iterator end()   { return nullptr; }
 
-    const const_iterator* cbegin()  { return nullptr; }
-    const const_iterator* cend()    { return nullptr; }
+    const_iterator cbegin() const  { return nullptr; }
+    const_iterator cend() const    { return nullptr; }
 
     T& operator()(size_t frame, size_t zmw) { return data_[frame*laneWidth_ + zmw]; }
     const T& operator()(size_t frame, size_t zmw) const { return data_[frame*laneWidth_ + zmw]; }
