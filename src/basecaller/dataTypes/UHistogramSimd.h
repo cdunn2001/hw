@@ -43,10 +43,11 @@ namespace Data {
 
 /// A histogram with uniform bin boundaries that supports SIMD data types.
 /// Similar to class template UHistogram.
-/// \tparam DataT A floating-point SIMD type. Currently, only supports float
-/// and PacBio::m512f.
-/// \note If constructed on the heap, the alignment requirement of
-/// UHistogramSimd<DataT> is at least as large as that of DataT.
+/// \tparam DataT A floating-point SIMD type. Currently, supports float,
+/// PacBio::Simd::m512f, and PacBio::LaneArray<float>.
+/// \note The alignment requirement of UHistogramSimd<DataT> is at least as
+/// large as that of DataT. When creating on the heap, this may require use of
+/// a special allocator.
 template <typename DataT>
 class alignas(alignof(DataT) > 8u ? alignof(DataT) : 8u) UHistogramSimd
 {

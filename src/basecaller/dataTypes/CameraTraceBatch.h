@@ -39,6 +39,7 @@ public:     // Structors and assignment
 
 public:     // Access to statistics
     // TODO: How do we support const access?
+    // TODO: Should we provide access to a view of the stats UCA instead?
     const BaselineStats<laneSize>& Stats(unsigned int lane) const
     { return stats_.GetHostView()[lane]; }
 
