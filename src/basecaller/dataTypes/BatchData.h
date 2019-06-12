@@ -50,7 +50,7 @@ namespace Data {
 class BatchDimensions
 {
 public:     // Functions
-    uint32_t zmwsPerBatch() const
+    uint32_t ZmwsPerBatch() const
     {
         // TODO: Strictly speaking, there's an overflow risk here. Pretty sure,
         // however, that we won't have more than four billion ZMWs per batch in

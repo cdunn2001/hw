@@ -57,9 +57,9 @@ BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
     : dims_ (batchDims)
     , maxCallsPerZmwChunk_ (maxCallsPerZmwChunk)
     , metaData_ (batchMetadata)
-    , seqLengths_ (batchDims.zmwsPerBatch(), 0)
-    , basecalls_ (batchDims.zmwsPerBatch() * maxCallsPerZmwChunk)
-    , metrics_ (batchDims.zmwsPerBatch())
+    , seqLengths_ (batchDims.ZmwsPerBatch(), 0)
+    , basecalls_ (batchDims.ZmwsPerBatch() * maxCallsPerZmwChunk)
+    , metrics_ (batchDims.ZmwsPerBatch())
 { }
 
 bool BasecallBatch::PushBack(uint32_t z, Basecall bc)

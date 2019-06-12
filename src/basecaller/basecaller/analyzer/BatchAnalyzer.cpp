@@ -184,7 +184,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     static constexpr int8_t qvDefault_ = 0;
 
-    for (uint32_t z = 0; z < basecalls.Dims().zmwsPerBatch(); z++)
+    for (uint32_t z = 0; z < basecalls.Dims().ZmwsPerBatch(); z++)
     {
         for (uint16_t b = 0; b < maxCallsPerZmwChunk; b++)
         {
