@@ -90,6 +90,7 @@ public:
     size_t Size() const { return laneWidth_ * numFrames_; }
 
     T* Data() { return data_; }
+    const T* Data() const { return data_; }
 
     T& operator[](size_t idx) { return data_[idx]; }
     const T& operator[](size_t idx) const { return data_[idx]; }

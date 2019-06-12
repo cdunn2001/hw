@@ -45,6 +45,13 @@ public:
 
 private:
     const size_t Stride() const { return stride_; }
+
+    template <typename T>
+    size_t EstimateBaseline(const Data::BlockView<T>& traceData,
+                            Data::BlockView<T> lowerBuffer,
+                            Data::BlockView<T> upperBuffer,
+                            Data::BlockView<T> baselineEst);
+
     Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
 private:    // Multi-stage filter
