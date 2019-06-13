@@ -68,7 +68,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     // If insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
     using Simd::Blend;
-    return Blend((nmk < 1.0f) | mnan, nan, ac);
+    return Blend((nmk < T(1.0f)) | mnan, nan, ac);
 }
 
 template <typename T>
