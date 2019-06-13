@@ -6,6 +6,7 @@
 #include "BlockFilterStage.h"
 #include "TraceFilters.h"
 
+#include <common/AlignedCircularBuffer.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
 namespace PacBio {
@@ -37,7 +38,10 @@ public:
               , stride_(config.AggregateStride())
               , cSigmaBias_{config.SigmaBias()}
               , cMeanBias_{config.MeanBias()}
-    { }
+    {
+        latHMask_.push_back(Mask{false});
+        latHMask_.push_back(Mask{false});
+    }
 
     HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
     HostMultiScaleBaseliner(HostMultiScaleBaseliner&&) = default;
@@ -46,11 +50,45 @@ public:
 private:
     const size_t Stride() const { return stride_; }
 
-    template <typename T>
-    size_t EstimateBaseline(const Data::BlockView<T>& traceData,
-                            Data::BlockView<T> lowerBuffer,
-                            Data::BlockView<T> upperBuffer,
-                            Data::BlockView<T> baselineEst);
+    Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
+                                                                    Data::BlockView<ElementTypeIn> lowerBuffer,
+                                                                    Data::BlockView<ElementTypeIn> upperBuffer,
+                                                                    Data::BlockView<ElementTypeOut> baselineEstimate);
+
+    void AddToBaselineStats(const LaneArray& traceData,
+                            const LaneArray& baselineSubtractedFrames,
+                            Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
+
+    FloatArray GetSmoothedSigma(const FloatArray& sigma)
+    {
+        // Fixed thresholds for variance computation.
+        // TODO - Make these tunable parameters.
+        const float sigmaThrL { 4.5 };
+        const float sigmaThrH { 4.5 };
+
+        if (firstFrame_)
+        {
+            // NOTE: We initialize with the first sigma value
+            // but a different strategy might be better here i.e
+            // taking the average of the first few sigmas before
+            // applying the smoothing.
+            prevSigma_ = sigma;
+        }
+
+        // TODO: Make configurable.
+        const FloatArray alphaFactor{0.7f};
+
+        FloatArray newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
+                            + (alphaFactor * sigma);
+
+        prevSigma_ = sigma;
+
+        // Update thresholds for classifying baseline frames.
+        thrLow_ = FloatArray{sigmaThrL} * sigma;
+        thrHigh_ = FloatArray{sigmaThrH} * sigma;
+
+        return newSigma;
+    }
 
     Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
@@ -128,6 +166,15 @@ private:
     const size_t stride_;
     const FloatArray cSigmaBias_;
     const FloatArray cMeanBias_;
+
+    FloatArray prevSigma_;
+    bool firstFrame_ = true;
+    LaneArray latData_;
+    LaneArray latRawData_;
+    Mask latLMask_{false};
+    AlignedCircularBuffer<Mask> latHMask_{2};
+    FloatArray thrLow_;
+    FloatArray thrHigh_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

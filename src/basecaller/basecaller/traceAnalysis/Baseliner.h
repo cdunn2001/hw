@@ -52,6 +52,8 @@ public:
         return Process(std::move(rawTrace));
     }
 
+    const float Scale() const { return scaler_; }
+
 private:    // Customizable implementation
     virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
 
