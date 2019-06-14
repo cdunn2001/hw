@@ -182,7 +182,7 @@ public:     // Mutating methods
 
     /// Reset all elements
     void Reset()
-    { m0_ = m1_ = m2_ = 0; }
+    { m0_ = m1_ = m2_ = VF(0); }
 
     /// \brief Adjust moments to account for a uniform shift of the samples already added.
     /// \details

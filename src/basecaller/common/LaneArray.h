@@ -32,12 +32,12 @@ class LaneArray : public LaneArrayRef<T, N>
 
 public:     // Types
     using Super = LaneArrayRef<T, N>;
+    using Super2 = typename Super::Super;
 
 public:     // Structors and assignment
     LaneArray() : Super(nullptr)
-    { this->SetBasePointer(data_); }
+    { Super::SetBasePointer(data_); }
 
-    // Copy construction handled by copy from LaneArrayRef.
     LaneArray(const LaneArray& other)
         : Super(nullptr)
     {
@@ -45,7 +45,7 @@ public:     // Structors and assignment
         std::copy(other.begin(), other.end(), begin());
     }
 
-    explicit LaneArray(const Super& other)
+    explicit LaneArray(const Super2& other)
         : Super(nullptr)
     {
         this->SetBasePointer(data_);
@@ -59,6 +59,18 @@ public:     // Structors and assignment
     {
         this->SetBasePointer(data_);
         std::fill(begin(), end(), val);
+    }
+
+    LaneArray& operator=(const LaneArray& that)
+    {
+        Super::operator=(that);
+        return *this;
+    }
+
+    LaneArray& operator=(const Super2& that)
+    {
+        Super::operator=(that);
+        return *this;
     }
 
 public:     // Iterators
@@ -186,6 +198,14 @@ private:
 
 
 // Binary operators
+template <typename T, unsigned int N>
+LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const T& rhs)
+{
+    LaneArray<T, N> nrv (lhs);
+    nrv += rhs;
+    return nrv;
+}
+
 template <typename T, unsigned int N>
 LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N>& rhs)
 {

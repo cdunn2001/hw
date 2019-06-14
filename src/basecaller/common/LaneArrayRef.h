@@ -93,7 +93,7 @@ public:     // Element access
     ConstPointer Data() const
     { return data_; }
 
-public:     // Comparison operators
+public:     // Element-wise comparison operators
     friend LaneMask<N> operator==(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
     {
         LaneMask<N> ret;
@@ -102,6 +102,11 @@ public:     // Comparison operators
             ret[i] = lhs[i] == rhs[i];
         }
         return ret;
+    }
+
+    friend LaneMask<N> operator!=(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
+    {
+        return !(lhs == rhs);
     }
 
     friend LaneMask<N> operator<(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
@@ -206,6 +211,13 @@ public:     // Structors and assignment
         return *this;
     }
 
+    /// Assign contained elements.
+    LaneArrayRef& operator=(const Super& that)
+    {
+        std::copy(that.begin(), that.end(), begin());
+        return *this;
+    }
+
 public:     // Random-access iterators
     Iterator begin()  { return Super::MutableData(); }
     Iterator end()  { return begin() + N; }
@@ -235,7 +247,7 @@ public:     // Element access
 public:
     // TODO: Do we want to return Pointer& in order to allow "rebinding".
     Pointer Data()
-    { return Super::data_; }
+    { return Super::MutableData(); }
 
 public:     // Compound assigment
     LaneArrayRef& operator+=(const ElementType& a)
