@@ -34,11 +34,12 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
     {
         auto traceData = rawTrace.GetBlockView(laneIdx);
         auto baseline = out.GetBlockView(laneIdx);
+        auto& baseliner = baselinerByLane_[laneIdx];
 
-        auto baselinerStats = EstimateBaseline(traceData,
-                                               lowerBuffer.GetBlockView(laneIdx),
-                                               upperBuffer.GetBlockView(laneIdx),
-                                               baseline);
+        auto baselinerStats = baseliner.EstimateBaseline(traceData,
+                                                         lowerBuffer.GetBlockView(laneIdx),
+                                                         upperBuffer.GetBlockView(laneIdx),
+                                                         baseline);
 
         out.Stats(laneIdx) = baselinerStats.ToBaselineStats();
     }
@@ -47,10 +48,10 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
 }
 
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
-HostMultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
-                                          Data::BlockView<ElementTypeIn> lowerBuffer,
-                                          Data::BlockView<ElementTypeIn> upperBuffer,
-                                          Data::BlockView<ElementTypeOut> baselineEst)
+HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
+                                                               Data::BlockView<ElementTypeIn> lowerBuffer,
+                                                               Data::BlockView<ElementTypeIn> upperBuffer,
+                                                               Data::BlockView<ElementTypeOut> baselineEst)
 {
     // Run lower filter, results are strided out.
     std::memcpy(lowerBuffer.Data(), traceData.Data(), traceData.Size()*sizeof(ElementTypeIn));
@@ -72,7 +73,7 @@ HostMultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& 
         // NOTE: We are storing the results as int16_t so this division will bias the results.
         auto bias = (*upperIter + *lowerIter) / LaneArray{2};
         auto framebkgndSigma = (*upperIter - *lowerIter).AsFloat() / cSigmaBias_;
-        auto smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma);
+        auto smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
         auto frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
@@ -98,9 +99,9 @@ HostMultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& 
     return baselinerStats;
 }
 
-void HostMultiScaleBaseliner::AddToBaselineStats(const LaneArray& traceData,
-                                                 const LaneArray& baselineSubtractedFrame,
-                                                 Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
+void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const LaneArray& traceData,
+                                                                      const LaneArray& baselineSubtractedFrame,
+                                                                      Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
     if (!firstFrame_)
     {
@@ -126,6 +127,36 @@ void HostMultiScaleBaseliner::AddToBaselineStats(const LaneArray& traceData,
     latData_ = baselineSubtractedFrame;
 }
 
-HostMultiScaleBaseliner::~HostMultiScaleBaseliner() = default;
+HostMultiScaleBaseliner::FloatArray
+HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray& sigma)
+{
+    // Fixed thresholds for variance computation.
+    // TODO - Make these tunable parameters.
+    const float sigmaThrL { 4.5 };
+    const float sigmaThrH { 4.5 };
+
+    if (firstFrame_)
+    {
+        // NOTE: We initialize with the first sigma value
+        // but a different strategy might be better here i.e
+        // taking the average of the first few sigmas before
+        // applying the smoothing.
+        prevSigma_ = sigma;
+    }
+
+    // TODO: Make configurable.
+    const FloatArray alphaFactor{0.7f};
+
+    FloatArray newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
+                          + (alphaFactor * sigma);
+
+    // Update thresholds for classifying baseline frames.
+    thrLow_ = FloatArray{sigmaThrL} * newSigma;
+    thrHigh_ = FloatArray{sigmaThrH} * newSigma;
+
+    prevSigma_ = sigma;
+
+    return newSigma;
+}
 
 }}}      // namespace PacBio::Mongo::Basecaller

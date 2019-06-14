@@ -31,150 +31,150 @@ public:
     static void Finalize();
 
 public:
-    HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config)
-            : Baseliner(poolId, scaler)
-              , msLowerOpen_(config.Strides(), config.Widths())
-              , msUpperOpen_(config.Strides(), config.Widths())
-              , stride_(config.AggregateStride())
-              , cSigmaBias_{config.SigmaBias()}
-              , cMeanBias_{config.MeanBias()}
+    HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config, uint32_t lanesPerPool)
+        : Baseliner(poolId, scaler)
     {
-        latHMask_.push_back(Mask{false});
-        latHMask_.push_back(Mask{false});
+       baselinerByLane_.reserve(lanesPerPool);
+       for (uint32_t l = 0; l < lanesPerPool; l++)
+       {
+           baselinerByLane_.emplace_back(config, scaler);
+       }
     }
 
     HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
     HostMultiScaleBaseliner(HostMultiScaleBaseliner&&) = default;
-    ~HostMultiScaleBaseliner() override;
+    ~HostMultiScaleBaseliner() override = default;
 
 private:
-    const size_t Stride() const { return stride_; }
-
-    Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
-                                                                    Data::BlockView<ElementTypeIn> lowerBuffer,
-                                                                    Data::BlockView<ElementTypeIn> upperBuffer,
-                                                                    Data::BlockView<ElementTypeOut> baselineEstimate);
-
-    void AddToBaselineStats(const LaneArray& traceData,
-                            const LaneArray& baselineSubtractedFrames,
-                            Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
-
-    FloatArray GetSmoothedSigma(const FloatArray& sigma)
-    {
-        // Fixed thresholds for variance computation.
-        // TODO - Make these tunable parameters.
-        const float sigmaThrL { 4.5 };
-        const float sigmaThrH { 4.5 };
-
-        if (firstFrame_)
-        {
-            // NOTE: We initialize with the first sigma value
-            // but a different strategy might be better here i.e
-            // taking the average of the first few sigmas before
-            // applying the smoothing.
-            prevSigma_ = sigma;
-        }
-
-        // TODO: Make configurable.
-        const FloatArray alphaFactor{0.7f};
-
-        FloatArray newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
-                            + (alphaFactor * sigma);
-
-        prevSigma_ = sigma;
-
-        // Update thresholds for classifying baseline frames.
-        thrLow_ = FloatArray{sigmaThrL} * sigma;
-        thrHigh_ = FloatArray{sigmaThrH} * sigma;
-
-        return newSigma;
-    }
 
     Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
-private:    // Multi-stage filter
-    enum class FilterType
-    {
-        Upper,
-        Lower,
-    };
+private:
 
-    template <typename VIn, FilterType>
-    struct FilterTraits;
-
-    template <typename VIn>
-    struct FilterTraits<VIn, FilterType::Lower>
+    class MultiScaleBaseliner
     {
-        using FirstStage  = BlockFilterStage<VIn, ErodeHgw<VIn>>;
-        using SecondStage = BlockFilterStage<VIn, DilateHgw<VIn>>;
-    };
-    template <typename VIn>
-    struct FilterTraits<VIn, FilterType::Upper>
-    {
-        using FirstStage  = BlockFilterStage<VIn, DilateHgw<VIn>>;
-        using SecondStage = BlockFilterStage<VIn, ErodeHgw<VIn>>;
-    };
-
-    template <typename VIn, FilterType filter>
-    struct MultiStageFilter
-    {
-        using InputContainer = Data::BlockView<VIn>;
-
-        MultiStageFilter(const std::vector<size_t>& strides, const std::vector<size_t>& widths)
-                : first(widths[0], strides[0])
-                  , second(widths[0])
+    public:
+        MultiScaleBaseliner(const BaselinerParams& config, float scaler)
+            : msLowerOpen_(config.Strides(), config.Widths())
+            , msUpperOpen_(config.Strides(), config.Widths())
+            , stride_(config.AggregateStride())
+            , cSigmaBias_{config.SigmaBias()}
+            , cMeanBias_{config.MeanBias()}
+            , scaler_(scaler)
         {
-            assert(strides.size() == widths.size());
-            for (size_t i = 1; i < strides.size(); ++i)
-            {
-                firstv.emplace_back(new BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i]));
-                secondv.emplace_back(new BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i]));
-            }
+            latHMask_.push_back(Mask{false});
+            latHMask_.push_back(Mask{false});
         }
 
-        MultiStageFilter(const MultiStageFilter&) = delete;
-        MultiStageFilter& operator=(const MultiStageFilter&) = delete;
-        MultiStageFilter(MultiStageFilter&&) = default;
-        MultiStageFilter& operator=(MultiStageFilter&&) = default;
+        MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
+        MultiScaleBaseliner(MultiScaleBaseliner&&) = default;
+        ~MultiScaleBaseliner() = default;
 
-        InputContainer* operator()(InputContainer* input)
+    public:
+        const size_t Stride() const { return stride_; }
+
+        const float Scale() const { return scaler_; }
+
+        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
+                                                                        Data::BlockView<ElementTypeIn> lowerBuffer,
+                                                                        Data::BlockView<ElementTypeIn> upperBuffer,
+                                                                        Data::BlockView<ElementTypeOut> baselineEstimate);
+
+        void AddToBaselineStats(const LaneArray& traceData,
+                                const LaneArray& baselineSubtractedFrames,
+                                Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
+
+        FloatArray GetSmoothedSigma(const FloatArray& sigma);
+
+    private:    // Multi-stage filter
+        enum class FilterType
         {
-            first(input);
-            second(input);
-            for (size_t i = 0; i < firstv.size(); ++i)
+            Upper,
+            Lower,
+        };
+
+        template <typename VIn, FilterType>
+        struct FilterTraits;
+
+        template <typename VIn>
+        struct FilterTraits<VIn, FilterType::Lower>
+        {
+            using FirstStage  = BlockFilterStage<VIn, ErodeHgw<VIn>>;
+            using SecondStage = BlockFilterStage<VIn, DilateHgw<VIn>>;
+        };
+        template <typename VIn>
+        struct FilterTraits<VIn, FilterType::Upper>
+        {
+            using FirstStage  = BlockFilterStage<VIn, DilateHgw<VIn>>;
+            using SecondStage = BlockFilterStage<VIn, ErodeHgw<VIn>>;
+        };
+
+        template <typename VIn, FilterType filter>
+        struct MultiStageFilter
+        {
+            using InputContainer = Data::BlockView<VIn>;
+
+            MultiStageFilter(const std::vector<size_t>& strides, const std::vector<size_t>& widths)
+                    : first(widths[0], strides[0])
+                      , second(widths[0])
             {
-                (*firstv[i])(input);
-                (*secondv[i])(input);
+                assert(strides.size() == widths.size());
+                for (size_t i = 1; i < strides.size(); ++i)
+                {
+                    firstv.emplace_back(new BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i]));
+                    secondv.emplace_back(new BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i]));
+                }
             }
-            return input;
-        }
 
-        typename FilterTraits<VIn, filter>::FirstStage first;
-        typename FilterTraits<VIn, filter>::SecondStage second;
+            MultiStageFilter(const MultiStageFilter&) = delete;
+            MultiStageFilter& operator=(const MultiStageFilter&) = delete;
+            MultiStageFilter(MultiStageFilter&&) = default;
+            MultiStageFilter& operator=(MultiStageFilter&&) = default;
 
-        // These unique_ptrs are an unfortunate extra indirection necessitated
-        // because icc compiles as if it was gcc 4.7 when mpss 3.5 is installed.
-        // The ptrs can probably be removed once we upgrade to a newer mpss
-        std::vector<std::unique_ptr<BlockFilterStage<VIn, ErodeHgw<VIn>>>> firstv;
-        std::vector<std::unique_ptr<BlockFilterStage<VIn, DilateHgw<VIn>>>> secondv;
-    };
+            InputContainer* operator()(InputContainer* input)
+            {
+                first(input);
+                second(input);
+                for (size_t i = 0; i < firstv.size(); ++i)
+                {
+                    (*firstv[i])(input);
+                    (*secondv[i])(input);
+                }
+                return input;
+            }
+
+            typename FilterTraits<VIn, filter>::FirstStage first;
+            typename FilterTraits<VIn, filter>::SecondStage second;
+
+            // These unique_ptrs are an unfortunate extra indirection necessitated
+            // because icc compiles as if it was gcc 4.7 when mpss 3.5 is installed.
+            // The ptrs can probably be removed once we upgrade to a newer mpss
+            std::vector<std::unique_ptr<BlockFilterStage<VIn, ErodeHgw<VIn>>>> firstv;
+            std::vector<std::unique_ptr<BlockFilterStage<VIn, DilateHgw<VIn>>>> secondv;
+        };  // MultiStageFilter
+
+    private:
+        MultiStageFilter<ElementTypeIn, FilterType::Lower> msLowerOpen_;
+        MultiStageFilter<ElementTypeIn, FilterType::Upper> msUpperOpen_;
+
+        const size_t stride_;
+        const FloatArray cSigmaBias_;
+        const FloatArray cMeanBias_;
+        float scaler_;
+
+        FloatArray prevSigma_;
+        bool firstFrame_ = true;
+        LaneArray latData_;
+        LaneArray latRawData_;
+        Mask latLMask_{false};
+        AlignedCircularBuffer<Mask> latHMask_{2};
+        FloatArray thrLow_;
+        FloatArray thrHigh_;
+
+    };  // MultiScaleBaseliner
 
 private:
-    MultiStageFilter<ElementTypeIn, FilterType::Lower> msLowerOpen_;
-    MultiStageFilter<ElementTypeIn, FilterType::Upper> msUpperOpen_;
-
-    const size_t stride_;
-    const FloatArray cSigmaBias_;
-    const FloatArray cMeanBias_;
-
-    FloatArray prevSigma_;
-    bool firstFrame_ = true;
-    LaneArray latData_;
-    LaneArray latRawData_;
-    Mask latLMask_{false};
-    AlignedCircularBuffer<Mask> latHMask_{2};
-    FloatArray thrLow_;
-    FloatArray thrHigh_;
+    std::vector<MultiScaleBaseliner> baselinerByLane_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

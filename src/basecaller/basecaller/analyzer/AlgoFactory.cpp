@@ -101,7 +101,9 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
             // TODO: scaler currently set to default 1.0f
-            return std::unique_ptr<Baseliner>(new HostMultiScaleBaseliner(poolId, 1.0f, FilterParamsLookup(baselinerOpt_)));
+            return std::unique_ptr<Baseliner>(new HostMultiScaleBaseliner(poolId, 1.0f,
+                                                                          FilterParamsLookup(baselinerOpt_),
+                                                                          Data::GetPrimaryConfig().lanesPerPool));
         default:
             ostringstream msg;
             msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
