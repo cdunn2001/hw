@@ -65,19 +65,20 @@ TEST(TestLaneArray, Ops)
 }
 
 
-struct TestConstLaneArrayRef : public ::testing::Test
+struct TestLaneArrayBase
 {
     static constexpr size_t n = 10u;
     using ElementType = int;
-
-    using ConstLarType = ConstLaneArrayRef<ElementType, n>;
-    using LarConstType = LaneArrayRef<const ElementType, n>;
-
     using VecType = std::vector<ElementType>;
-    using VecConstType = std::vector<const ElementType>;
 
-    VecType vPrime {2,  3,  5,  7, 11, 13, 17, 19, 23, 29};
-    VecType vFibon {1,  2,  3,  5,  8, 13, 21, 34, 55, 89};
+    const VecType vPrime {2,  3,  5,  7, 11, 13, 17, 19, 23, 29};
+    const VecType vFibon {1,  2,  3,  5,  8, 13, 21, 34, 55, 89};
+};
+
+
+struct TestConstLaneArrayRef : public ::testing::Test, TestLaneArrayBase
+{
+    using ConstLarType = ConstLaneArrayRef<ElementType, n>;
 
     void SetUp()
     {
@@ -102,6 +103,7 @@ TEST_F(TestConstLaneArrayRef, CopyAndElementAccess)
         ASSERT_EQ(va[i], larb[i]);
     }
 
+    ASSERT_EQ(vFibon.size(), va.size());
     std::copy(vFibon.cbegin(), vFibon.cend(), va.begin());
 
     for (size_t i = 0; i < n; ++i)
@@ -126,6 +128,223 @@ TEST_F(TestConstLaneArrayRef, Iterators)
     {
         ASSERT_NE(larPrime.end(), lari);
         ASSERT_EQ(*vi++, *lari++);
+    }
+}
+
+TEST_F(TestConstLaneArrayRef, Comparisons)
+{
+    ConstLarType larPrime (vPrime.data());
+    ConstLarType larFibon (vFibon.data());
+
+    auto result = (larPrime == larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] == vFibon[i], result[i]);
+    }
+
+    result = (larPrime != larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] != vFibon[i], result[i]);
+    }
+
+    result = (larPrime < larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] < vFibon[i], result[i]);
+    }
+
+    result = (larPrime <= larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] <= vFibon[i], result[i]);
+    }
+
+    result = (larPrime > larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] > vFibon[i], result[i]);
+    }
+
+    result = (larPrime >= larFibon);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] >= vFibon[i], result[i]);
+    }
+}
+
+
+struct TestLaneArrayRef : public ::testing::Test, TestLaneArrayBase
+{
+    using LarType = LaneArrayRef<ElementType, n>;
+    using ConstLarType = ConstLaneArrayRef<ElementType, n>;
+
+    void SetUp()
+    {
+        ASSERT_LE(LarType::Size(), vPrime.size());
+        ASSERT_LE(LarType::Size(), vFibon.size());
+    }
+};
+
+
+TEST_F(TestLaneArrayRef, CopyAndElementAccess)
+{
+    VecType v (vPrime);
+    LarType lar1 (v.data());
+    LarType lar2 (lar1);
+
+    EXPECT_EQ(v.data(), lar1.Data());
+    EXPECT_EQ(v.data(), lar2.Data());
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(v[i], lar1[i]);
+        ASSERT_EQ(v[i], lar2[i]);
+    }
+
+    ASSERT_EQ(vFibon.size(), lar2.Size());
+    std::copy(vFibon.cbegin(), vFibon.cend(), lar2.begin());
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vFibon[i], v[i]);
+        ASSERT_EQ(vFibon[i], lar1[i]);
+        ASSERT_EQ(vFibon[i], lar1[i]);
+    }
+}
+
+
+TEST_F(TestLaneArrayRef, Assignment)
+{
+    VecType v (n, 0);
+    LarType lar (v.data());
+
+    // Assignment from ConstLaneArrayRef.
+    const ConstLarType clarPrime (vPrime.data());
+    lar = clarPrime;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i], lar[i]);
+        ASSERT_EQ(vPrime[i], v[i]);
+    }
+
+    // Assignment from LaneArrayRef.
+    VecType vf (vFibon);
+    const LarType larFibon (vf.data());
+    lar = larFibon;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vFibon[i], lar[i]);
+        ASSERT_EQ(vFibon[i], v[i]);
+    }
+}
+
+TEST_F(TestLaneArrayRef, Iterators)
+{
+    VecType v (vPrime);
+    LarType lar (v.data());
+    std::sort(lar.begin(), lar.end(), std::greater<int>());
+    ASSERT_EQ(vPrime.size(), lar.Size());
+    const auto mm = std::mismatch(vPrime.crbegin(), vPrime.crend(), lar.cbegin());
+    EXPECT_EQ(mm.first, vPrime.crend());
+    EXPECT_EQ(mm.second, lar.cend());
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[n-1-i], v[i]);
+    }
+}
+
+
+TEST_F(TestLaneArrayRef, CompoundAssignmentScalar)
+{
+    const ElementType a = 7;
+
+    {   // +=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar += a;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] + a, v[i]);
+        }
+    }
+
+    {   // -=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar -= a;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] - a, v[i]);
+        }
+    }
+
+    {   // *=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar *= a;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] * a, v[i]);
+        }
+    }
+
+    {   // /=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar /= a;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] / a, v[i]);
+        }
+    }
+}
+
+
+TEST_F(TestLaneArrayRef, CompoundAssignmentArray)
+{
+    VecType a (vPrime);
+    LarType lara (a.data());
+    lara /= 2;
+
+    {   // +=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar += lara;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] + a[i], v[i]);
+        }
+    }
+
+    {   // -=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar -= lara;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] - a[i], v[i]);
+        }
+    }
+
+    {   // *=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar *= lara;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] * a[i], v[i]);
+        }
+    }
+
+    {   // /=
+        VecType v (vFibon);
+        LarType lar (v.data());
+        lar /= lara;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i] / a[i], v[i]);
+        }
     }
 }
 
