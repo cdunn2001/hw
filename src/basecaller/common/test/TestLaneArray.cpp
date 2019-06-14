@@ -53,17 +53,6 @@ TEST(TestLaneMask, Ops)
     EXPECT_TRUE(none(!y));
 }
 
-TEST(TestLaneArray, Ops)
-{
-    LaneArray<short, laneSize> one{1};
-    LaneArray<short, laneSize> zero{0};
-
-    EXPECT_TRUE(all(one >= zero));
-    EXPECT_TRUE(all((one * zero) == zero));
-    EXPECT_TRUE(none(((one + one) * zero) > one));
-    EXPECT_TRUE(any((one - one) == zero));
-}
-
 
 struct TestLaneArrayBase
 {
@@ -237,6 +226,13 @@ TEST_F(TestLaneArrayRef, Assignment)
         ASSERT_EQ(vFibon[i], lar[i]);
         ASSERT_EQ(vFibon[i], v[i]);
     }
+
+    // Assign fixed value.
+    lar = 3;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(3, v[i]);
+    }
 }
 
 TEST_F(TestLaneArrayRef, Iterators)
@@ -304,8 +300,8 @@ TEST_F(TestLaneArrayRef, CompoundAssignmentScalar)
 TEST_F(TestLaneArrayRef, CompoundAssignmentArray)
 {
     VecType a (vPrime);
-    LarType lara (a.data());
-    lara /= 2;
+    for (auto& x : a) x /= 2;
+    ConstLarType lara (a.data());
 
     {   // +=
         VecType v (vFibon);
@@ -345,6 +341,211 @@ TEST_F(TestLaneArrayRef, CompoundAssignmentArray)
         {
             ASSERT_EQ(vFibon[i] / a[i], v[i]);
         }
+    }
+}
+
+
+struct TestLaneArray : public ::testing::Test, TestLaneArrayBase
+{
+    using LaneArrayType = LaneArray<ElementType, n>;
+    using ConstLarType = ConstLaneArrayRef<ElementType, n>;
+
+
+    void SetUp()
+    {
+        ASSERT_LE(LaneArrayType::Size(), vPrime.size());
+        ASSERT_LE(LaneArrayType::Size(), vFibon.size());
+    }
+};
+
+
+TEST_F(TestLaneArray, Ops)
+{
+    LaneArray<short, laneSize> one{1};
+    LaneArray<short, laneSize> zero{0};
+
+    EXPECT_TRUE(all(one >= zero));
+    EXPECT_TRUE(all((one * zero) == zero));
+    EXPECT_TRUE(none(((one + one) * zero) > one));
+    EXPECT_TRUE(any((one - one) == zero));
+}
+
+
+TEST_F(TestLaneArray, ConstructAndElementAccess)
+{
+    // Constructor that initializes with fixed value.
+    LaneArrayType five (5);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(5, five[i]);
+    }
+
+    // Initialization with sequence range represented by iterator pair.
+    const LaneArrayType laPrime (vPrime.begin(), vPrime.end());
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i], laPrime[i]);
+    }
+
+    // Initialize with ConstLaneArrayRef.
+    ConstLarType larFibon (vFibon.data());
+    {
+        LaneArrayType la (larFibon);
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vFibon[i], la[i]);
+        }
+    }
+
+    // Copy construction.
+    {
+        LaneArrayType la (laPrime);
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vPrime[i], la[i]);
+        }
+    }
+
+    // Default construction and copy assignment.
+    LaneArrayType la;
+    {
+        la = laPrime;
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            ASSERT_EQ(vPrime[i], la[i]);
+        }
+    }
+
+    // Assignment from ConstLaneArrayRef.
+    la = larFibon;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vFibon[i], la[i]);
+    }
+
+    // Assign fixed value.
+    la = 7;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(7, la[i]);
+    }
+}
+
+
+TEST_F(TestLaneArray, Iterators)
+{
+    LaneArrayType la (vPrime.begin(), vPrime.end());
+    const LaneArrayType cla (vFibon.begin(), vFibon.end());
+    std::copy(cla.begin(), cla.end(), la.begin());
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vFibon[i], la[i]);
+    }
+}
+
+TEST_F(TestLaneArray, ComparisonOps)
+{
+    const LaneArrayType lap (vPrime.begin(), vPrime.end());
+    const LaneArrayType laf (vFibon.begin(), vFibon.end());
+
+    // ==
+    auto result = lap == laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] == vFibon[i], result[i]);
+    }
+
+    // !=
+    result = lap != laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] != vFibon[i], result[i]);
+    }
+
+    // <
+    result = lap < laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] < vFibon[i], result[i]);
+    }
+
+    // <=
+    result = lap <= laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] <= vFibon[i], result[i]);
+    }
+
+    // >
+    result = lap > laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] > vFibon[i], result[i]);
+    }
+
+    // >=
+    result = lap >= laf;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(vPrime[i] >= vFibon[i], result[i]);
+    }
+}
+
+
+TEST_F(TestLaneArray, NamedBinaryOps)
+{
+    const LaneArrayType lap (vPrime.begin(), vPrime.end());
+    const LaneArrayType laf (vFibon.begin(), vFibon.end());
+
+    // max
+    auto result = max(lap, laf);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(std::max(vPrime[i], vFibon[i]), result[i]);
+    }
+
+    // min
+    result = min(lap, laf);
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(std::min(vPrime[i], vFibon[i]), result[i]);
+    }
+}
+
+
+TEST_F(TestLaneArray, BinaryArithmeticOps)
+{
+    const LaneArrayType lap (vPrime.begin(), vPrime.end());
+    const LaneArrayType laf (vFibon.begin(), vFibon.end());
+    const ElementType a = 2;
+    const ElementType b = 3;
+
+    // +
+    auto result = a + lap + laf + b;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(a + vPrime[i] + vFibon[i] + b, result[i]);
+    }
+
+    // -
+    result = a - lap - laf - b;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(a - vPrime[i] - vFibon[i] - b, result[i]);
+    }
+
+    // *
+    result = a * lap * laf * b;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(a * vPrime[i] * vFibon[i] * b, result[i]);
+    }
+
+    // /
+    result = 10000 / laf / lap / b;
+    for (unsigned int i = 0; i < n; ++i)
+    {
+        ASSERT_EQ(10000 / vFibon[i] / vPrime[i] / b, result[i]);
     }
 }
 
