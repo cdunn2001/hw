@@ -20,50 +20,43 @@ namespace Mongo {
 template <typename T, unsigned int N = laneSize>
 class LaneArray : public LaneArrayRef<T, N>
 {
-    // Static assertions that enable efficient SIMD and CUDA implementations.
-    static_assert(std::is_same<T, short>::value
-                  || std::is_same<T, int>::value
-                  || std::is_same<T, float>::value,
-                  "First template argument must be short, int, or float.");
-    static constexpr auto laneUnit = std::max<unsigned int>(cudaThreadsPerWarp,
-                                                            Simd::SimdTypeTraits<Simd::m512i>::width) * 4u / sizeof(T);
-    static_assert(N != 0, "Second template argument cannot be 0.");
-    static_assert(N % laneUnit == 0u, "Bad LaneArray size.");
-
 public:     // Types
     using Super = LaneArrayRef<T, N>;
     using Super2 = typename Super::Super;
+    using ElementType = T;
 
 public:     // Structors and assignment
     LaneArray() : Super(nullptr)
     { Super::SetBasePointer(data_); }
 
     LaneArray(const LaneArray& other)
-        : Super(nullptr)
-    {
-        Super::SetBasePointer(data_);
-        std::copy(other.begin(), other.end(), begin());
-    }
+        : LaneArray()
+    { std::copy(other.begin(), other.end(), begin()); }
 
     explicit LaneArray(const Super2& other)
-        : Super(nullptr)
-    {
-        this->SetBasePointer(data_);
-        std::copy(other.begin(), other.end(), this->begin());
-    }
+        : LaneArray()
+    { std::copy(other.begin(), other.end(), this->begin()); }
 
     /// Broadcasting constructor supports implicit conversion of scalar value
     /// to uniform vector.
     LaneArray(const T& val)
-        : Super(nullptr)
-    {
-        this->SetBasePointer(data_);
-        std::fill(begin(), end(), val);
-    }
+        : LaneArray()
+    { std::fill(begin(), end(), val); }
+
+    template <typename InputIterT>
+    LaneArray(const InputIterT& first, const InputIterT& last)
+        : LaneArray()
+    { std::copy(first, last, begin()); }
 
     LaneArray& operator=(const LaneArray& that)
     {
         Super::operator=(that);
+        return *this;
+    }
+
+    LaneArray& operator=(const ElementType& val)
+    {
+        Super::operator=(val);
         return *this;
     }
 
@@ -76,6 +69,8 @@ public:     // Structors and assignment
 public:     // Iterators
     using Super::begin;
     using Super::end;
+    using Super::cbegin;
+    using Super::cend;
 
 public:     // Export
     LaneArray<float, N> AsFloat() const
@@ -197,9 +192,10 @@ private:
 };
 
 
-// Binary operators
+// Binary operators with uniform element type.
+// TODO: Enable nonuniform types.
 template <typename T, unsigned int N>
-LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const T& rhs)
+LaneArray<T, N> operator+(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv += rhs;
@@ -207,7 +203,15 @@ LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const T& rhs)
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N>& rhs)
+LaneArray<T, N> operator+(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
+{
+    LaneArray<T, N> nrv (rhs);
+    nrv += lhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator+(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv += rhs;
@@ -215,7 +219,7 @@ LaneArray<T, N> operator+(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const LaneArrayRef<T, N>& lhs, const T& rhs)
+LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv -= rhs;
@@ -223,7 +227,7 @@ LaneArray<T, N> operator-(const LaneArrayRef<T, N>& lhs, const T& rhs)
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N>& rhs)
+LaneArray<T, N> operator-(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv -= rhs;
@@ -231,7 +235,15 @@ LaneArray<T, N> operator-(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator*(const LaneArrayRef<T, N>& lhs, const T& rhs)
+LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
+{
+    LaneArray<T, N> nrv (lhs);
+    nrv -= rhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator*(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv *= rhs;
@@ -239,7 +251,15 @@ LaneArray<T, N> operator*(const LaneArrayRef<T, N>& lhs, const T& rhs)
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator*(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N>& rhs)
+LaneArray<T, N> operator*(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
+{
+    LaneArray<T, N> nrv (rhs);
+    nrv *= lhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator*(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv *= rhs;
@@ -247,7 +267,23 @@ LaneArray<T, N> operator*(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N
 }
 
 template <typename T, unsigned int N>
-LaneArray<T, N> operator/(const LaneArrayRef<T, N>& lhs, const LaneArrayRef<T, N>& rhs)
+LaneArray<T, N> operator/(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
+{
+    LaneArray<T, N> nrv (lhs);
+    nrv /= rhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator/(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
+{
+    LaneArray<T, N> nrv (lhs);
+    nrv /= rhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator/(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
 {
     LaneArray<T, N> nrv (lhs);
     nrv /= rhs;

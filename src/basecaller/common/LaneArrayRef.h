@@ -37,6 +37,9 @@
 namespace PacBio {
 namespace Mongo {
 
+// The class-inheritance design of LaneArray, LaneArrayRef, and
+// ConstLaneArrayRef was inspired by the Boost MultiArray library.
+
 /// A statically-sized arithmetic array adapter.
 /// Provides the non-mutating LaneArray interface over an externally managed
 /// contiguous array of elements.
@@ -218,6 +221,12 @@ public:     // Structors and assignment
         return *this;
     }
 
+    LaneArrayRef& operator=(const ElementType& val)
+    {
+        std::fill(begin(), end(), val);
+        return *this;
+    }
+
 public:     // Random-access iterators
     Iterator begin()  { return Super::MutableData(); }
     Iterator end()  { return begin() + N; }
@@ -256,7 +265,7 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator+=(const LaneArrayRef& a)
+    LaneArrayRef& operator+=(const Super& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
@@ -271,7 +280,7 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator-=(const LaneArrayRef& a)
+    LaneArrayRef& operator-=(const Super& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
@@ -286,7 +295,7 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator*=(const LaneArrayRef& a)
+    LaneArrayRef& operator*=(const Super& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
@@ -301,7 +310,7 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator/=(const LaneArrayRef& a)
+    LaneArrayRef& operator/=(const Super& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
