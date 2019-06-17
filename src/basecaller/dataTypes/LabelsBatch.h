@@ -61,7 +61,7 @@ public:     // Structors and assignment
                 std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
         : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
         , curTrace_(std::move(trace))
-        , latTrace_(LatentDimensions(dims), syncDirection, tracePool, pinned)
+        , latTrace_(LatentDimensions(dims), syncDirection, latPool, pinned)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
