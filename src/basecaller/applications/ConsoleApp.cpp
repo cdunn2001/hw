@@ -39,6 +39,9 @@ public:
 
     ~MongoBasecallerConsole()
     {
+        Abort();
+        Join();
+
         PBLOG_INFO << readThroughputStats_.str();
         PBLOG_INFO << analyzeThroughputStats_.str();
         PBLOG_INFO << writeThroughputStats_.str();
