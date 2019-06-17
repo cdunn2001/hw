@@ -20,19 +20,19 @@ template <typename T, unsigned int N = laneSize>
 class LaneArray : public LaneArrayRef<T, N>
 {
 public:     // Types
-    using Super = LaneArrayRef<T, N>;
-    using Super2 = typename Super::Super;
+    using BaseRef = LaneArrayRef<T, N>;
+    using BaseConstRef = typename BaseRef::BaseConstRef;
     using ElementType = T;
 
 public:     // Structors and assignment
-    LaneArray() : Super(nullptr)
-    { Super::SetBasePointer(data_); }
+    LaneArray() : BaseRef(nullptr)
+    { BaseRef::SetBasePointer(data_); }
 
     LaneArray(const LaneArray& other)
         : LaneArray()
     { std::copy(other.begin(), other.end(), begin()); }
 
-    explicit LaneArray(const Super2& other)
+    explicit LaneArray(const BaseConstRef& other)
         : LaneArray()
     { std::copy(other.begin(), other.end(), this->begin()); }
 
@@ -49,27 +49,27 @@ public:     // Structors and assignment
 
     LaneArray& operator=(const LaneArray& that)
     {
-        Super::operator=(that);
+        BaseRef::operator=(that);
         return *this;
     }
 
     LaneArray& operator=(const ElementType& val)
     {
-        Super::operator=(val);
+        BaseRef::operator=(val);
         return *this;
     }
 
-    LaneArray& operator=(const Super2& that)
+    LaneArray& operator=(const BaseConstRef& that)
     {
-        Super::operator=(that);
+        BaseRef::operator=(that);
         return *this;
     }
 
 public:     // Iterators
-    using Super::begin;
-    using Super::end;
-    using Super::cbegin;
-    using Super::cend;
+    using BaseRef::begin;
+    using BaseRef::end;
+    using BaseRef::cbegin;
+    using BaseRef::cend;
 
 public:     // Export
     LaneArray<float, N> AsFloat() const
