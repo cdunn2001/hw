@@ -71,6 +71,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
+    dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 
@@ -158,8 +159,9 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     const unsigned int minFramesForDme = 4000u;
     if (traceHistAccum_->FramesAdded() >= minFramesForDme)
     {
-        //Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
-        //(void) detModel;    // Temporarily squelch unused variable warning.
+        Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram(),
+                                                ctb.PoolStats());
+        (void) detModel;    // Temporarily squelch unused variable warning.
         // TODO: reset histogram
     }
 

@@ -31,6 +31,9 @@ public:
     std::unique_ptr<TraceHistogramAccumulator>
     CreateTraceHistAccumulator(unsigned int poolId) const;
 
+    std::unique_ptr<DetectionModelEstimator>
+    CreateDetectionModelEstimator(unsigned int poolId) const;
+
     // TODO: Add Create* functions for other strategy interfaces.
 
 private:
@@ -39,6 +42,7 @@ private:
     Data::BasecallerBaselinerConfig::MethodName baselinerOpt_;
     Data::BasecallerFrameLabelerConfig::MethodName frameLabelerOpt_;
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
+    Data::BasecallerDmeConfig::MethodName dmeOpt_;
 
     // TODO: Add enums for other strategy options as needed.
 };
