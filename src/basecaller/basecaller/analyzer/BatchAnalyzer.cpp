@@ -32,6 +32,7 @@
 #include <algorithm>
 
 #include <pacbio/PBAssert.h>
+#include <pacbio/logging/Logger.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
@@ -57,10 +58,20 @@ BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 // static
+unsigned int BatchAnalyzer::poolSize_ = 0;
+unsigned int BatchAnalyzer::chunkSize_ = 0;
+
+// static
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
 {
+    poolSize_ = bcConfig.LanesPerPool;
+    PBLOG_INFO << poolSize_ << "lanes per pool.";
+
+    chunkSize_ = bcConfig.FramesPerChunk;
+    PBLOG_INFO << chunkSize_ << "frames per chunk.";
 }
+
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
     : poolId_ (poolId)

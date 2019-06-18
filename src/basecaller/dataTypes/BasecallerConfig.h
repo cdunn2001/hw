@@ -65,8 +65,8 @@ namespace Data {
     class BasecallerDmeConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, SpiderFixed, Monochrome);
-        ADD_ENUM(MethodName, Method, MethodName::SpiderFixed);
+        SMART_ENUM(MethodName, Fixed, Monochrome);
+        ADD_ENUM(MethodName, Method, MethodName::Fixed);
 
         // Parameters for the SpiderFixed model, when in use
         ADD_OBJECT(SpiderFixedDmeConfig, SpiderSimModel);
@@ -272,6 +272,8 @@ namespace Data {
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
         ADD_PARAMETER(bool, staticAnalysis, true);
+        ADD_PARAMETER(unsigned int, LanesPerPool, 256u);
+        ADD_PARAMETER(unsigned int, FramesPerChunk, 64u);
 
     public:
         std::string CombinedMethodName() const
