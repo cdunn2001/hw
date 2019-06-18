@@ -53,6 +53,7 @@ private:    // Data
     PoolHistType poolHist_;
 
 private:
+    // Bins frames in ctb and updates poolHist_.
     virtual void AddBatchImpl(const Data::CameraTraceBatch& ctb) = 0;
 };
 

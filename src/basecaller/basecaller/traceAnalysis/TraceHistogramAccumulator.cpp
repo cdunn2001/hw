@@ -19,7 +19,7 @@ void TraceHistogramAccumulator::Configure(
 
 TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId)
     : poolId_ (poolId)
-    , poolHist_ (numLanes)
+    , poolHist_ (poolId, numLanes)
 {
 
 }
