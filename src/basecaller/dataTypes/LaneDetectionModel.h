@@ -84,7 +84,7 @@ struct __align__(128) LaneModelParameters
 {
     static constexpr int numAnalogs = 4;
 
-    __host__ __device__ LaneModelParameters& operator=(const LaneModelParameters& other)
+    CUDA_ENABLED LaneModelParameters& operator=(const LaneModelParameters& other)
     {
         baseline_ = other.baseline_;
         for (int i = 0; i < numAnalogs; ++i)
@@ -94,20 +94,20 @@ struct __align__(128) LaneModelParameters
         return *this;
     }
 
-    __host__ __device__ const LaneAnalogMode<T, laneWidth>& BaselineMode() const
+    CUDA_ENABLED const LaneAnalogMode<T, laneWidth>& BaselineMode() const
     {
         return baseline_;
     }
-    __host__ __device__ LaneAnalogMode<T, laneWidth>& BaselineMode()
+    CUDA_ENABLED LaneAnalogMode<T, laneWidth>& BaselineMode()
     {
         return baseline_;
     }
 
-    __host__ __device__ const LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i) const
+    CUDA_ENABLED const LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i) const
     {
         return analogs_[i];
     }
-    __host__ __device__ LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i)
+    CUDA_ENABLED LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i)
     {
         return analogs_[i];
     }
