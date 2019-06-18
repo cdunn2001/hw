@@ -40,7 +40,7 @@ namespace Basecaller {
 void DeviceSGCFrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = false;
-    InitAllocationPools(hostExecution);
+    InitAllocationPools(hostExecution, ViterbiStitchLookback);
 
     // TODO need to plumb through configurations for this somehow
     std::array<Subframe::AnalogMeta, 4> meta{};

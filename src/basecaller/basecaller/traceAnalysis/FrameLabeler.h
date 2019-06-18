@@ -44,19 +44,9 @@ public:  // types
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
 
 public:     // Static functions
-    /// Sets algorithm configuration and system calibration properties.
-    /// Static because the config types keep a JSON representation and
-    /// deserialize on each reference, but the values will be the same for
-    /// each FrameLabeler instance for a given movie.
-    /// \note Not thread safe. Do not call this function while threads are
-    /// running analysis.
-    static void Configure(const Data::BasecallerFrameLabelerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig);
 
-    static void InitAllocationPools(bool hostExecution);
+    static void InitAllocationPools(bool hostExecution, size_t latentFrames);
     static void DestroyAllocationPools();
-
-    static void Finalize();
 
 protected: // static members
     static std::unique_ptr<Data::LabelsBatchFactory> batchFactory_;

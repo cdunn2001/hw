@@ -42,10 +42,10 @@ using Label_t = int16_t;
 /// Baseline-subtracted trace data with statistics
 class LabelsBatch : public TraceBatch<Label_t>
 {
-    static BatchDimensions LatentDimensions(const BatchDimensions& traceDims)
+    static BatchDimensions LatentDimensions(const BatchDimensions& traceDims, size_t latentFrames)
     {
         BatchDimensions ret{traceDims};
-        ret.framesPerBatch = ViterbiStitchLookback;
+        ret.framesPerBatch = latentFrames;
         return ret;
     }
 public:     // Types
@@ -55,13 +55,14 @@ public:     // Structors and assignment
     LabelsBatch(const BatchMetadata& meta,
                 const BatchDimensions& dims,
                 CameraTraceBatch trace,
+                size_t latentFrames,
                 bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
                 std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
                 std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
         : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
         , curTrace_(std::move(trace))
-        , latTrace_(LatentDimensions(dims), syncDirection, latPool, pinned)
+        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, latPool, pinned)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -90,23 +91,27 @@ class LabelsBatchFactory
 public:
     LabelsBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
+                       size_t latentFrames,
                        Cuda::Memory::SyncDirection syncDirection,
                        bool pinned = true)
-        : syncDirection_(syncDirection)
+        : latentFrames_(latentFrames)
+        , syncDirection_(syncDirection)
         , pinned_(pinned)
         , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(ViterbiStitchLookback * lanesPerPool * laneSize * sizeof(int16_t), pinned))
+        , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(latentFrames_* lanesPerPool * laneSize * sizeof(int16_t), pinned))
     {}
 
     LabelsBatch NewBatch(CameraTraceBatch trace)
     {
         auto meta = trace.Metadata();
         auto dims = trace.Dimensions();
-        return LabelsBatch(meta, dims, std::move(trace), pinned_,
+        return LabelsBatch(meta, dims, std::move(trace),
+                           latentFrames_, pinned_,
                            syncDirection_, tracePool_, latPool_);
     }
 
 private:
+    size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
     bool pinned_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;

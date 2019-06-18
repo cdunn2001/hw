@@ -36,31 +36,24 @@ namespace Basecaller {
 std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
 
 // static
-void FrameLabeler::Configure(const Data::BasecallerFrameLabelerConfig& baselinerConfig,
-                             const Data::MovieConfig& movConfig)
-{
-    const auto hostExecution = true;
-    InitAllocationPools(hostExecution);
-}
-
-void FrameLabeler::InitAllocationPools(bool hostExecution)
+void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
 {
     using Cuda::Memory::SyncDirection;
 
     const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
+    batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(
+            framesPerChunk,
+            lanesPerPool,
+            latentFrames,
+            syncDir,
+            true);
 }
 
 void FrameLabeler::DestroyAllocationPools()
 {
     batchFactory_.release();
-}
-
-void FrameLabeler::Finalize()
-{
-    DestroyAllocationPools();
 }
 
 FrameLabeler::FrameLabeler(uint32_t poolId)

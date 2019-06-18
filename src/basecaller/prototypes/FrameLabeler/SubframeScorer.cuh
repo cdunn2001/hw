@@ -38,7 +38,11 @@
 
 namespace PacBio {
 namespace Cuda {
+
+static constexpr unsigned int ViterbiStitchLookback = 16u;
+
 namespace Subframe {
+
 
 static constexpr int numAnalogs = 4;
 static constexpr int numStates = 13;
