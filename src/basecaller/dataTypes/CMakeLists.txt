@@ -15,6 +15,10 @@ set(CPP_LIST
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
+    DetectionModel.h
+    DetectionModel.cpp
+    DetectionModel.cuh
+    DetectionModel.cu
     LaneDetectionModel.h
     LaneDetectionModel.cpp
     LabelsBatch.h
