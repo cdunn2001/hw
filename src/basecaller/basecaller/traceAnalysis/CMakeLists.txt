@@ -6,6 +6,12 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     Baseliner.cpp
     BaselinerParams.h
     BaselinerParams.cpp
+    FrameLabeler.h
+    FrameLabeler.cpp
+    DeviceMultiScaleBaseliner.h
+    DeviceMultiScaleBaseliner.cu
+    DeviceSGCFrameLabeler.h
+    DeviceSGCFrameLabeler.cu
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
     BlockFilterStage.h

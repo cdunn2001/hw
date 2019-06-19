@@ -24,42 +24,42 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_CUDA_SIMD_H
-#define PACBIO_CUDA_SIMD_H
+#include "FrameLabeler.h"
 
-#include <cuda_fp16.h>
-#include <common/cuda/CudaFunctionDecorators.h>
-
-#include <vector_types.h>
+#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/MovieConfig.h>
 
 namespace PacBio {
-namespace Cuda {
+namespace Mongo {
+namespace Basecaller {
 
-// Aliasing for now, mostly so there is an easy hook if we want to either
-// have a proper wrapper type like PBHalf2, or need to stub in third
-// part half precision float for the host.
-using PBHalf = half;
+std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
 
-class PBHalf2
+// static
+void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
 {
-public:
-    PBHalf2() = default;
+    using Cuda::Memory::SyncDirection;
 
-    explicit CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
-    explicit CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
-    explicit CUDA_ENABLED PBHalf2(short2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
-    explicit CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
-    explicit CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
+    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
+    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
+    batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(
+            framesPerChunk,
+            lanesPerPool,
+            latentFrames,
+            syncDir,
+            true);
+}
 
-    CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
-    CUDA_ENABLED void SetX(float f) {}
-    CUDA_ENABLED void SetY(float f) {}
+void FrameLabeler::DestroyAllocationPools()
+{
+    batchFactory_.release();
+}
 
-    half2 CUDA_ENABLED data() const { return data_; }
-private:
-    half2 data_;
-};
+FrameLabeler::FrameLabeler(uint32_t poolId)
+    : poolId_ (poolId)
+{
 
-}}
+}
 
-#endif // PACBIO_CUDA_SIMD_H
+}}}     // namespace PacBio::Mongo::Basecaller

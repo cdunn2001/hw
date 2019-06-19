@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 
 set(SRC_LIST
+    src/common/KernelThreadPool.h
+    src/common/KernelThreadPool.cpp
     src/common/ZmwDataManager.h
     src/common/ZmwDataManager.cpp
     src/common/memory/UnifiedCudaArray.h

@@ -194,22 +194,21 @@ namespace Data {
     };
 
 
-    class BasecallerPulseDetectionConfig : public PacBio::Process::ConfigurationObject
+    class BasecallerFrameLabelerConfig : public PacBio::Process::ConfigurationObject
     {
     public:
         // TODO: When we are done testing subframe and it presumably becomes
         //       default, consider putting subframe specific options into a
         //       new subgroup
 
-        SMART_ENUM(MethodName, FullFrameHmm, SubFrameHmmGaussCaps, SubFrameHmmNormal, NoOp);
-        ADD_ENUM(MethodName, Method, MethodName::SubFrameHmmGaussCaps);
+        SMART_ENUM(MethodName, DeviceSubFrameGaussCaps)
+        ADD_ENUM(MethodName, Method, MethodName::DeviceSubFrameGaussCaps);
 
         ADD_PARAMETER(float, UpperThreshold, 7.0f);
         ADD_PARAMETER(float, LowerThreshold, 2.0f);
         ADD_PARAMETER(float, Alpha, 1.0f);
         ADD_PARAMETER(float, Beta, 1.0f);
         ADD_PARAMETER(float, Gamma, 1.0f);
-        ADD_PARAMETER(unsigned int, MaxDetectionLatency, 16);
     };
 
 
@@ -264,7 +263,7 @@ namespace Data {
         ADD_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
         ADD_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
         ADD_OBJECT(BasecallerDmeConfig, dmeConfig);
-        ADD_OBJECT(BasecallerPulseDetectionConfig, PulseDetection);
+        ADD_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
@@ -276,7 +275,7 @@ namespace Data {
         {
             return baselinerConfig.Method().toString() + "_"
                  + dmeConfig.Method().toString() + "_"
-                 + PulseDetection.Method().toString() + "_"
+                 + frameLabelerConfig.Method().toString() + "_"
                  + PulseToBase.Method().toString() + "_"
                  + Metrics.Method().toString();
         }

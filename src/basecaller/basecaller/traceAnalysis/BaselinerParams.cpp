@@ -62,6 +62,13 @@ BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::Method
             logChoice(ret);
             return ret;
         }
+        case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        {
+            // TODO: Need to fill in parameters.
+            BaselinerParams ret(Strides{}, Widths{}, 0, 0);
+            logChoice(ret);
+            return ret;
+        }
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
             // Should never get here...
             assert(false);

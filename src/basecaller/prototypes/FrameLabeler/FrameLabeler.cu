@@ -20,9 +20,10 @@ namespace PacBio {
 namespace Cuda {
 
 
-std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(const Data::DataManagerParams& dataParams,
-                                                          const Data::PicketFenceParams& picketParams,
-                                                          const Data::TraceFileParams& traceParams)
+static std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(
+        const Data::DataManagerParams& dataParams,
+        const Data::PicketFenceParams& picketParams,
+        const Data::TraceFileParams& traceParams)
 {
     return traceParams.traceFileName.empty()
         ? std::unique_ptr<GeneratorBase<int16_t>>(new PicketFenceGenerator(dataParams, picketParams))
@@ -39,10 +40,11 @@ void run(const Data::DataManagerParams& dataParams,
          size_t simulKernels)
 {
     static constexpr size_t gpuBlockThreads = 32;
+    static constexpr size_t laneWidth = 64;
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneWidth>>> models;
 
-    LaneModelParameters<gpuBlockThreads> referenceModel;
+    LaneModelParameters<PBHalf, laneWidth> referenceModel;
     referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
     {

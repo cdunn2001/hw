@@ -25,9 +25,10 @@ using namespace PacBio::Mongo::Data;
 namespace PacBio {
 namespace Cuda {
 
-std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(const Data::DataManagerParams& dataParams,
-                                                        const Data::PicketFenceParams& picketParams,
-                                                        const Data::TraceFileParams& traceParams)
+static std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(
+        const Data::DataManagerParams& dataParams,
+        const Data::PicketFenceParams& picketParams,
+        const Data::TraceFileParams& traceParams)
 {
     return traceParams.traceFileName.empty()
         ? std::unique_ptr<GeneratorBase<int16_t>>(new PicketFenceGenerator(dataParams, picketParams))

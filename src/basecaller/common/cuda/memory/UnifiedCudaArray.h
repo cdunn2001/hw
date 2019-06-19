@@ -29,6 +29,8 @@
 #include <cassert>
 #include <memory>
 
+#include <common/cuda/PBCudaSimd.h>
+
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
 #include "AllocationPool.h"
@@ -51,6 +53,8 @@ enum class SyncDirection
 
 template <typename T> struct gpu_type { using type = T; };
 template <> struct gpu_type<int16_t> { using type = short2; };
+template <> struct gpu_type<uint16_t> { using type = ushort2; };
+template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 
 // TODO handle pitched allocations for multidimensional data?
 template <typename T>

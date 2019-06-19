@@ -39,6 +39,9 @@ public:
 
     ~MongoBasecallerConsole()
     {
+        Abort();
+        Join();
+
         PBLOG_INFO << readThroughputStats_.str();
         PBLOG_INFO << analyzeThroughputStats_.str();
         PBLOG_INFO << writeThroughputStats_.str();
@@ -197,7 +200,8 @@ private:
                               PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
                               ChipClass::Spider,
                               false,
-                              true);
+                              true,
+                              false);
             fh.BaseCallerVersion("0.1");
 
             bazWriter_.reset(new BazWriter(outputBazFile_, fh, BazIOConfig{}, ReadBuffer::MaxNumSamplesPerBuffer()));
@@ -317,7 +321,7 @@ private:
             for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
                 PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(std::move(batchGenerator_->PopulateChunk()));
+                inputDataQueue_.Push(batchGenerator_->PopulateChunk());
             }
             PBLOG_INFO << "Done preloading input queue.";
         }

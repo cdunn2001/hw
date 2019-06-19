@@ -7,9 +7,12 @@
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 
 #include <dataTypes/MovieConfig.h>
 
@@ -23,6 +26,9 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
+
+
+    frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -51,6 +57,17 @@ AlgoFactory::~AlgoFactory()
                         << ".  Should be impossible to see this message, constructor should have thrown";
             break;
     }
+
+    switch (frameLabelerOpt_)
+    {
+    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+        DeviceSGCFrameLabeler::Finalize();
+        break;
+    default:
+        PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
+                    << frameLabelerOpt_.toString()
+                    << ".  Should be impossible to see this message, constructor should have thrown";
+    }
 }
 
 
@@ -77,6 +94,18 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
             ostringstream msg;
             msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
             throw PBException(msg.str());
+    }
+
+    switch (frameLabelerOpt_)
+    {
+    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+        DeviceSGCFrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
+                                         Data::GetPrimaryConfig().framesPerChunk);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for FrameLabeler: " << frameLabelerOpt_.toString() << '.';
+        throw PBException(msg.str());
     }
 
     // TODO: Configure other algorithms according to options.
@@ -109,6 +138,20 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
             msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
             throw PBException(msg.str());
             break;
+    }
+}
+
+std::unique_ptr<FrameLabeler>
+AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
+{
+    switch (frameLabelerOpt_)
+    {
+    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+        return std::make_unique<DeviceSGCFrameLabeler>(poolId);
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for FrameLabeler: " << frameLabelerOpt_.toString() << '.';
+        throw PBException(msg.str());
     }
 }
 

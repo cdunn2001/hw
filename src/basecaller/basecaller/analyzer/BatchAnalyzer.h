@@ -32,7 +32,10 @@
 #include <memory>
 
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
+#include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/MongoConstants.h>
 #include <dataTypes/BasecallBatch.h>
+#include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
 
@@ -62,12 +65,12 @@ public:     // Structors & assignment operators
     BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
-    BatchAnalyzer(BatchAnalyzer&&) = default;
+    BatchAnalyzer(BatchAnalyzer&&);
 
     BatchAnalyzer& operator=(const BatchAnalyzer&) = delete;
     BatchAnalyzer& operator=(BatchAnalyzer&&) = default;
 
-    ~BatchAnalyzer() = default;
+    ~BatchAnalyzer();
 
 public:
     /// Call operator is non-reentrant and will throw if a trace batch is
@@ -83,8 +86,11 @@ private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
     std::unique_ptr<Baseliner> baseliner_;
+    std::unique_ptr<FrameLabeler> frameLabeler_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
+
+    Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
     // runs the main compute phases with a static model, bypassing things like the
     // dme and trace binning.  This is necessary for now because they are not

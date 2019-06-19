@@ -30,22 +30,21 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
+#include <common/MongoConstants.h>
 
 #include <dataTypes/TraceBatch.cuh>
 
 #include "SubframeScorer.cuh"
 
+using namespace PacBio::Mongo;
+
 namespace PacBio {
 namespace Cuda {
-
-// TODO move?
-namespace Viterbi {
-static constexpr unsigned int lookbackDist = 16;
-}
 
 template <size_t laneWidth>
 struct __align__(128) LatentViterbi
 {
+    using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
  public:
     __device__ LatentViterbi()
         : boundary_(make_short2(0,0))
@@ -55,17 +54,17 @@ struct __align__(128) LatentViterbi
     __device__ void SetBoundary(short2 boundary) { boundary_ = boundary; }
     __device__ short2 GetBoundary() const { return boundary_; }
 
-    __device__ const LaneModelParameters<laneWidth>& GetModel() const { return oldModel; }
-    __device__ void SetModel(const LaneModelParameters<laneWidth>& model)
+    __device__ const LaneModelParameters& GetModel() const { return oldModel; }
+    __device__ void SetModel(const LaneModelParameters& model)
     {
         oldModel = model;
     }
 
     __device__ void SetData(const Mongo::Data::StridedBlockView<const short2>& block)
     {
-        numFrames_ = Viterbi::lookbackDist;
-        auto start = block.size() - Viterbi::lookbackDist;
-        for (int i = 0; i < Viterbi::lookbackDist; ++i)
+        numFrames_ = ViterbiStitchLookback;
+        auto start = block.size() - ViterbiStitchLookback;
+        for (int i = 0; i < ViterbiStitchLookback; ++i)
         {
             oldData_[i*laneWidth + threadIdx.x] = block[start+i];
         }
@@ -76,8 +75,8 @@ struct __align__(128) LatentViterbi
     __device__ int NumFrames() const { return numFrames_; }
 
 private:
-    LaneModelParameters<laneWidth> oldModel;
-    short2 oldData_[laneWidth * Viterbi::lookbackDist];
+    LaneModelParameters oldModel;
+    short2 oldData_[laneWidth * ViterbiStitchLookback];
     short2 boundary_;
     int numFrames_;
 };
@@ -150,9 +149,9 @@ public:
     FrameLabeler& operator=(FrameLabeler&&) = default;
 
 
-void ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
-                  const Mongo::Data::TraceBatch<int16_t>& input,
-                  Mongo::Data::TraceBatch<int16_t>& output);
+    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
+                      const Mongo::Data::BatchData<int16_t>& input,
+                      Mongo::Data::BatchData<int16_t>& output);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
 
