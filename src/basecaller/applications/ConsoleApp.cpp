@@ -39,6 +39,9 @@ public:
 
     ~MongoBasecallerConsole()
     {
+        Abort();
+        Join();
+
         PBLOG_INFO << readThroughputStats_.str();
         PBLOG_INFO << analyzeThroughputStats_.str();
         PBLOG_INFO << writeThroughputStats_.str();
@@ -317,7 +320,7 @@ private:
             for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
                 PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(std::move(batchGenerator_->PopulateChunk()));
+                inputDataQueue_.Push(batchGenerator_->PopulateChunk());
             }
             PBLOG_INFO << "Done preloading input queue.";
         }

@@ -28,6 +28,7 @@
 
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
+using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Cuda {
@@ -85,7 +86,7 @@ std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>> FrameLabele
     bool success = scratchData_.TryPop(ret);
     if (! success)
     {
-        ret = std::make_unique<ViterbiDataHost<short2, BlockThreads>>(framesPerChunk_ + Viterbi::lookbackDist, lanesPerPool_);
+        ret = std::make_unique<ViterbiDataHost<short2, BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
     }
     assert(ret);
     return ret;
@@ -108,7 +109,7 @@ FrameLabeler::FrameLabeler()
 
 __launch_bounds__(32, 32)
 __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<32>> models,
+                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, 32>> models,
                                    const Mongo::Data::GpuBatchData<const short2> input,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
                                    ViterbiData<short2, 32> labels,
@@ -181,7 +182,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     Normalize(logLike);
     auto& prob = scratch;
     const int lookStart = numFrames + latentFrames - 1;
-    const int lookStop = lookStart - Viterbi::lookbackDist;
+    const int lookStop = lookStart - ViterbiStitchLookback;
     for (int i = lookStart; i > lookStop; --i)
     {
         CudaArray<PBHalf2, numStates> newProb;
@@ -211,12 +212,12 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     // Traceback
     auto traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
-    const int stopFrame = latentFrames == 0 ? Viterbi::lookbackDist : 0;
+    const int stopFrame = latentFrames == 0 ? ViterbiStitchLookback : 0;
     const int startFrame = numFrames - 1;
     for (int frame = startFrame; frame >= stopFrame; --frame)
     {
         outZmw[frame] = traceState;
-        const auto lookbackIdx = frame + latentFrames - Viterbi::lookbackDist;
+        const auto lookbackIdx = frame + latentFrames - ViterbiStitchLookback;
         traceState.x = labels(lookbackIdx, traceState.x).x;
         traceState.y = labels(lookbackIdx, traceState.y).y;
     }
@@ -227,9 +228,9 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     latent.SetData(inZmw);
 }
 
-void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<32>>& models,
-                                const Mongo::Data::TraceBatch<int16_t>& input,
-                                Mongo::Data::TraceBatch<int16_t>& output)
+void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
+                                const Mongo::Data::BatchData<int16_t>& input,
+                                Mongo::Data::BatchData<int16_t>& output)
 {
     auto labels = BorrowScratch();
 

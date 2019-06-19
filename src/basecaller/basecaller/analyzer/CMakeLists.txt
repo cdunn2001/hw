@@ -23,6 +23,7 @@ target_link_libraries(libMongoBasecallerAnalyzer
         libTbb
         libPacbioSmrtdata
         libBaselineFilter
+        libFrameLabeler
 )
 
 target_include_directories(libMongoBasecallerAnalyzer

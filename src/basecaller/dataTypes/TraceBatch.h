@@ -158,18 +158,23 @@ public:
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
 
-    BlockView<T> GetBlockView(size_t laneIdx) { return GetBlockViewImpl<T>(laneIdx); }
-    BlockView<const T> GetBlockView(size_t laneIdx) const { return GetBlockViewImpl<const T>(laneIdx); }
-private:
-    template <typename U>
-    BlockView<U> GetBlockViewImpl(size_t laneIdx)
+    BlockView<T> GetBlockView(size_t laneIdx)
     {
         auto view = data_.GetHostView();
-        return BlockView<U>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
+        return BlockView<T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
                             dims_.laneWidth,
                             dims_.framesPerBatch,
                             DataKey());
     }
+    BlockView<const T> GetBlockView(size_t laneIdx) const
+    {
+        auto view = data_.GetHostView();
+        return BlockView<const T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
+                            dims_.laneWidth,
+                            dims_.framesPerBatch,
+                            DataKey());
+    }
+private:
     BatchDimensions dims_;
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };

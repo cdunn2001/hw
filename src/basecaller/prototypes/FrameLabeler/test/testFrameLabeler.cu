@@ -23,7 +23,6 @@ using namespace PacBio::Primary;
 TEST(FrameLabelerTest, CompareVsGroundTruth)
 {
     static constexpr size_t laneWidth = 64;
-    static constexpr size_t gpuBlockThreads = laneWidth/2;
     static constexpr size_t lanesPerPool = 2;
     static constexpr size_t poolsPerChip = 2;
     static constexpr size_t numBlocks = 64;
@@ -91,14 +90,14 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         baselineMeta.var = 33;
     }
 
-    LaneModelParameters<gpuBlockThreads> refModel;
+    LaneModelParameters<PBHalf, laneWidth> refModel;
     refModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
     {
         refModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
     }
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<gpuBlockThreads>>> models;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneWidth>>> models;
     FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
     std::vector<FrameLabeler> frameLabelers(poolsPerChip);
 
@@ -139,7 +138,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
                 for (size_t k = 0; k < block.LaneWidth(); ++k)
                 {
                     int zmw = batchIdx * laneWidth * lanesPerPool + i * laneWidth + k;
-                    int frame = firstFrame + j - Viterbi::lookbackDist;
+                    int frame = firstFrame + j - ViterbiStitchLookback;
                     if (frame < 0) continue;
                     LabelValidator(block(j,k), GroundTruth[zmw][frame]);
                 }
