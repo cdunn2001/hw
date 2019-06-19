@@ -39,6 +39,12 @@ namespace PacBio {
 namespace Mongo {
 
 template <typename T, unsigned int N>
+class ConstLaneArrayRef;
+
+template <typename T, unsigned int N>
+class LaneArrayRef;
+
+template <typename T, unsigned int N>
 class LaneArray;
 
 namespace Data {
@@ -76,8 +82,171 @@ class BlockView
 {
     using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
 public:
-    using iterator = LaneArray<T, laneSize>*;
-    using const_iterator = const LaneArray<T, laneSize>*;
+    class LaneIterator
+    {
+    public:
+        using DiffType = std::ptrdiff_t;
+        //using ValueType = LaneArray<T, laneSize>;
+    public:
+        DiffType static distance(const LaneIterator& iter1, const LaneIterator& iter2)
+        {
+            return iter1.ptr_ - iter2.ptr_;
+        }
+
+    public:
+        LaneIterator(T* ptr, size_t laneWidth)
+            : ptr_(ptr)
+            , laneWidth_(laneWidth)
+        { }
+
+        bool operator==(const LaneIterator& other) const
+        {
+            return ptr_ == other.ptr_;
+        }
+
+        bool operator!=(const LaneIterator& other) const
+        {
+            return ptr_ != other.ptr_;
+        }
+
+        LaneIterator& operator++()
+        {
+            ptr_ += laneWidth_;
+            return *this;
+        }
+
+        LaneIterator operator++(int)
+        {
+            LaneIterator tmp = *this;
+            ++*this;
+            return tmp;
+        }
+
+        void operator+=(size_t v)
+        {
+            ptr_ += v * laneWidth_;
+        }
+
+        LaneArrayRef<T, laneSize> operator*()
+        {
+            return LaneArrayRef<T, laneSize>(ptr_);
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*() const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_);
+        }
+
+        LaneArrayRef<T, laneSize> operator[](size_t idx)
+        {
+            return LaneArrayRef<T, laneSize>(ptr_ + (idx * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (idx * laneWidth_));
+        }
+    private:
+        T* ptr_;
+        size_t laneWidth_;
+    };
+
+    class ConstLaneIterator
+    {
+    public:
+        using DiffType = std::ptrdiff_t;
+        using ValueType = LaneArray<T, laneSize>;
+    public:
+        DiffType static distance(const ConstLaneIterator& iter1, const ConstLaneIterator& iter2)
+        {
+            return iter1.ptr_ - iter2.ptr_;
+        }
+    public:
+        ConstLaneIterator(T* ptr, size_t laneWidth)
+            : ptr_(ptr)
+            , laneWidth_(laneWidth)
+        { }
+
+        ConstLaneIterator(LaneIterator& iter)
+            : ptr_((*iter).Data())
+            , laneWidth_((*iter).Size())
+        { }
+
+        bool operator==(const ConstLaneIterator& other) const
+        {
+            return ptr_ == other.ptr_;
+        }
+
+        bool operator!=(const ConstLaneIterator& other) const
+        {
+            return ptr_ != other.ptr_;
+        }
+
+        ConstLaneIterator& operator++()
+        {
+            ptr_ += laneWidth_;
+            return *this;
+        }
+
+        ConstLaneIterator operator++(int)
+        {
+            ConstLaneIterator tmp = *this;
+            ++*this;
+            return tmp;
+        }
+
+        void operator+=(size_t v)
+        {
+            ptr_ += v * laneWidth_;
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*()
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_);
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*() const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_);
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (idx * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (idx * laneWidth_));
+        }
+    private:
+        T* ptr_;
+        size_t laneWidth_;
+    };
+
+public:
+    using Iterator = LaneIterator;
+    using ConstIterator = ConstLaneIterator;
+
+    //using iterator = LaneArray<T, laneSize>*;
+    //using const_iterator = const LaneArray<T, laneSize>*;
+
+public:
+
+    Iterator Begin() { return LaneIterator(data_, laneWidth_); }
+    Iterator End()   { return LaneIterator(data_ + (laneWidth_ * numFrames_), laneWidth_); }
+
+    ConstIterator CBegin() const { return ConstLaneIterator(data_, laneWidth_); }
+    ConstIterator CEnd() const { return ConstLaneIterator(data_ + (laneWidth_ * numFrames_), laneWidth_); }
+
+    /*
+    iterator begin() { return nullptr; }
+    iterator end()   { return nullptr; }
+
+    const_iterator cbegin() const  { return nullptr; }
+    const_iterator cend() const    { return nullptr; }
+    */
+
 public:
     BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
         : data_(data)
@@ -94,12 +263,6 @@ public:
 
     T& operator[](size_t idx) { return data_[idx]; }
     const T& operator[](size_t idx) const { return data_[idx]; }
-
-    iterator begin() { return nullptr; }
-    iterator end()   { return nullptr; }
-
-    const_iterator cbegin() const  { return nullptr; }
-    const_iterator cend() const    { return nullptr; }
 
     T& operator()(size_t frame, size_t zmw) { return data_[frame*laneWidth_ + zmw]; }
     const T& operator()(size_t frame, size_t zmw) const { return data_[frame*laneWidth_ + zmw]; }

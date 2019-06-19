@@ -11,7 +11,7 @@ namespace Basecaller {
 void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
                                           const Data::MovieConfig &movConfig)
 {
-    const auto hostExecution = false;
+    const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);
 }
 

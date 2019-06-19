@@ -20,6 +20,7 @@ class BaselinerStatAccumulator
 {
 public:     // Types
     using LaneArray = PacBio::Mongo::LaneArray<T>;
+    using ConstLaneArray = PacBio::Mongo::ConstLaneArrayRef<T>;
     using FloatArray = PacBio::Mongo::LaneArray<float>;
     using Mask = PacBio::Mongo::LaneMask<>;
 

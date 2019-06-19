@@ -10,7 +10,7 @@ namespace Basecaller {
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
                                   const Data::MovieConfig &movConfig)
 {
-    const auto hostExecution = false;
+    const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);
 }
 
@@ -26,9 +26,9 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
     Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.Dimensions(),
-                                               Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.Dimensions(),
-                                               Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
@@ -63,34 +63,32 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
 
     // Compute and subtract baseline while tabulating the stats.
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
-    auto trIter = traceData.cbegin();
-    auto blIter = baselineEst.begin();
-    auto lowerIter = lower->cbegin();
-    auto upperIter = upper->cbegin();
-    for ( ; blIter != baselineEst.end() && lowerIter != lower->end() && upperIter != upper->end();
+    auto trIter = traceData.CBegin();
+    auto blIter = baselineEst.Begin();
+    auto lowerIter = lower->CBegin();
+    auto upperIter = upper->CBegin();
+
+    using ValueType = typename decltype(trIter)::ValueType;
+    for ( ; blIter != baselineEst.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
             blIter += Stride(), lowerIter += Stride(), upperIter += Stride())
     {
-        // NOTE: We are storing the results as int16_t so this division will bias the results.
-        auto bias = (*upperIter + *lowerIter) / LaneArray{2};
+        auto bias = (*upperIter + *lowerIter).AsFloat() / FloatArray{2.0f};
         auto framebkgndSigma = (*upperIter - *lowerIter).AsFloat() / cSigmaBias_;
         auto smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
         auto frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
-        for (auto strideIter = blIter; strideIter != baselineEst.end() && trIter != traceData.cend();
+        for (auto strideIter = blIter; strideIter != baselineEst.End() && trIter != traceData.CEnd();
              strideIter++, trIter++)
         {
-            auto rawSignal = *trIter;
-
-            // NOTE: We convert the bias estimate to short.
-            *strideIter = rawSignal - bias - frameBiasEstimate.AsShort();
+            auto rawSignal = ValueType(*trIter);
 
             // NOTE: We need to scale the trace data (from DN to e-) and
             // end up converting the baseline subtracted data to float in order
             // to perform the conversion and then end up converting it back.
-            *strideIter = ((*strideIter).AsFloat() * FloatArray{Scale()}).AsShort();
+            *strideIter = ((rawSignal.AsFloat() - bias - frameBiasEstimate) * FloatArray{Scale()}).AsShort();
 
-            AddToBaselineStats(rawSignal, *strideIter, baselinerStats);
+            AddToBaselineStats(rawSignal, ValueType(*strideIter), baselinerStats);
 
             firstFrame_ = false;
         }
