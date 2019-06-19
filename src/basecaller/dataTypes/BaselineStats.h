@@ -30,6 +30,7 @@
 #define PACBIO_MONGO_BASELINE_STATS_H_
 
 #include <common/cuda/utility/CudaArray.h>
+#include <common/cuda/CudaFunctionDecorators.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -43,31 +44,31 @@ public:
     BaselineStats() = default;
 
 public:     // Accesors
-    const Cuda::Utility::CudaArray<int16_t, LaneWidth> TraceMin() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& TraceMin() const
     { return traceMin_; }
 
-    const Cuda::Utility::CudaArray<int16_t, LaneWidth> TraceMax() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& TraceMax() const
     { return traceMax_; }
 
-    const Cuda::Utility::CudaArray<int16_t, LaneWidth> RawBaselineSum() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& RawBaselineSum() const
     { return rawBaselineSum_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineCount() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineCount() const
     { return m0_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineMean() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineMean() const
     { return m1_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> BaselineVariance() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineVariance() const
     { return m2_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM1First() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM1First() const
     { return lagM1First_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM1Last() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM1Last() const
     { return lagM1Last_; }
 
-    const Cuda::Utility::CudaArray<float, LaneWidth> AutocorrLagM2() const
+    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM2() const
     { return lagM2_; }
 
 public:     // Modifiers
