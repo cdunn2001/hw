@@ -29,6 +29,8 @@ set(CPP_LIST
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h
+    Pulse.h
+    Pulse.cpp
     TraceBatch.h
     TraceBatch.cpp
     UHistogramSimd.h
