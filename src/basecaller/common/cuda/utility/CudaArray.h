@@ -46,11 +46,6 @@ struct CudaArray
         memcpy(data_, data.data(), sizeof(T)*len);
     }
 
-    CudaArray(const T* data)
-    {
-        memcpy(data_, data, sizeof(T)*len);
-    }
-
     CUDA_ENABLED T& operator[](unsigned idx) { return data_[idx]; }
     CUDA_ENABLED const T& operator[](unsigned idx) const { return data_[idx]; }
     CUDA_ENABLED T* data() { return data_; }

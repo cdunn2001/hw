@@ -78,7 +78,7 @@ private:
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                         Data::BlockView<ElementTypeIn> upperBuffer,
-                                                                        Data::BlockView<ElementTypeOut> baselineEstimate);
+                                                                        Data::BlockView<ElementTypeOut> baselineSubtractedData);
 
         void AddToBaselineStats(const LaneArray& traceData,
                                 const LaneArray& baselineSubtractedFrames,

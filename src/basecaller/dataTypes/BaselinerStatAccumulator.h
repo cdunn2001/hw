@@ -20,7 +20,6 @@ class BaselinerStatAccumulator
 {
 public:     // Types
     using LaneArray = PacBio::Mongo::LaneArray<T>;
-    using ConstLaneArray = PacBio::Mongo::ConstLaneArrayRef<T>;
     using FloatArray = PacBio::Mongo::LaneArray<float>;
     using Mask = PacBio::Mongo::LaneMask<>;
 
@@ -29,26 +28,26 @@ public:     // Mutating functions
     /// \a x contains raw trace values.
     /// \a y contains baseline-subtracted trace values.
     /// Only add to baseline statistics where \a isBaseline is true.
-    void AddSample(const LaneArray& x,
-                   const LaneArray& y,
+    void AddSample(const LaneArray& rawTrace,
+                   const LaneArray& baselineSubtracted,
                    const Mask& isBaseline);
 public:
     const BaselineStats<laneSize> ToBaselineStats() const;
 
 public:
-    const AutocorrAccumulator<FloatArray> BaselineSubtractedStats() const
+    const AutocorrAccumulator<FloatArray>& BaselineSubtractedStats() const
     { return baselineSubtractedStats_; }
 
-    const StatAccumulator<FloatArray> BaselineFramesStats() const
+    const StatAccumulator<FloatArray>& BaselineFramesStats() const
     { return baselineStats_; }
 
-    const LaneArray TraceMin() const
+    const LaneArray& TraceMin() const
     { return traceMin; }
 
-    const LaneArray TraceMax() const
+    const LaneArray& TraceMax() const
     { return traceMax; }
 
-    const LaneArray RawBaselineSum() const
+    const LaneArray& RawBaselineSum() const
     { return rawBaselineSum_; }
 
 private:

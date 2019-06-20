@@ -1,6 +1,8 @@
 
 #include "BaselinerParams.h"
 
+#include <pacbio/logging/Logger.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {

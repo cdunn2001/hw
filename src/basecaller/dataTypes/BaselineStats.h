@@ -43,74 +43,9 @@ class BaselineStats
 public:
     BaselineStats() = default;
 
-public:     // Accesors
-    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& TraceMin() const
-    { return traceMin_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& TraceMax() const
-    { return traceMax_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<int16_t, LaneWidth>& RawBaselineSum() const
-    { return rawBaselineSum_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineCount() const
-    { return m0_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineMean() const
-    { return m1_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& BaselineVariance() const
-    { return m2_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM1First() const
-    { return lagM1First_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM1Last() const
-    { return lagM1Last_; }
-
-    CUDA_ENABLED const Cuda::Utility::CudaArray<float, LaneWidth>& AutocorrLagM2() const
-    { return lagM2_; }
-
-public:     // Modifiers
-    BaselineStats& TraceMin(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& traceMin)
-    {
-        traceMin_ = traceMin;
-        return *this;
-    }
-
-    BaselineStats& TraceMax(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& traceMax)
-    {
-        traceMax_ = traceMax;
-        return *this;
-    }
-
-    BaselineStats& RawBaselineSum(const Cuda::Utility::CudaArray<int16_t, LaneWidth>& rawBaselineSum)
-    {
-        rawBaselineSum_ = rawBaselineSum;
-        return *this;
-    }
-
-    BaselineStats& BaselineMoments(const Cuda::Utility::CudaArray<float, LaneWidth>& count,
-                                   const Cuda::Utility::CudaArray<float, LaneWidth>& mean,
-                                   const Cuda::Utility::CudaArray<float, LaneWidth>& variance)
-    {
-        m0_ = count;
-        m1_ = mean;
-        m2_ = variance;
-        return *this;
-    }
-
-    BaselineStats& AutocorrMoments(const Cuda::Utility::CudaArray<float, LaneWidth>& lagM1First,
-                                   const Cuda::Utility::CudaArray<float, LaneWidth>& lagM1Last,
-                                   const Cuda::Utility::CudaArray<float, LaneWidth>& lagM2)
-    {
-        lagM1First_ = lagM1First;
-        lagM1Last_ = lagM1Last;
-        lagM2_ = lagM2;
-        return *this;
-    }
-
-private:
+    // NOTE: We make the member variables public as this is
+    // meant to be data transport type to avoid the need to write
+    // accessors/setters.
 
     // Represents statistics from all frames
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;

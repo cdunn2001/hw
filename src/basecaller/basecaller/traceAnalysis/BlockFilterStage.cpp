@@ -5,12 +5,12 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-template <typename V, typename F>
-Data::BlockView<V>* BlockFilterStage<V, F>::operator()(Data::BlockView<V>* pInput)
+template <typename T, typename Filter>
+Data::BlockView<T>* BlockFilterStage<T, Filter>::operator()(Data::BlockView<T>* pInput)
 {
     // Note that output is an input alias: filtering is in-place.
-    Data::BlockView<V>& input = *pInput;
-    Data::BlockView<V>& output = input;
+    Data::BlockView<T>& input = *pInput;
+    Data::BlockView<T>& output = input;
 
     // Iterators initially pointing at start and end of block,
     // these will be adjusted below as necessary to account

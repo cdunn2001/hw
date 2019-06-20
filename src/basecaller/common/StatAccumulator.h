@@ -97,6 +97,12 @@ public:     // Const methods
         return r;
     }
 
+    const VF& M1() const
+    { return m1_; }
+
+    const VF& M2() const
+    { return m2_; }
+
 public:     // Mutating methods
     StatAccumulator& operator=(const StatAccumulator& that) = default;
 

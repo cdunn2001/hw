@@ -13,7 +13,9 @@ namespace Mongo {
 namespace Basecaller {
 
 /// A block filter stage
-template <typename V, typename F>
+// T: data type
+// Filter: Filter class
+template <typename T, typename Filter>
 class BlockFilterStage
 {
 public: // Structors
@@ -31,7 +33,7 @@ public: // Structors
     ~BlockFilterStage() = default;
 
     /// Transform input block to output block
-    Data::BlockView<V>* operator()(Data::BlockView<V>* input);
+    Data::BlockView<T>* operator()(Data::BlockView<T>* input);
 
 private:
     const size_t width_;
@@ -40,10 +42,10 @@ private:
     const size_t stride_;
 
     // Filter functor
-    F filter_;
+    Filter filter_;
 
     // Buffers
-    WindowBuffer<LaneArray<V>> winbuf_;
+    WindowBuffer<LaneArray<T>> winbuf_;
     int rhsDeficit_;
 };
 

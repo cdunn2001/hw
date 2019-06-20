@@ -32,14 +32,14 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
-        auto traceData = rawTrace.GetBlockView(laneIdx);
-        auto baseline = out.GetBlockView(laneIdx);
+        const auto& traceData = rawTrace.GetBlockView(laneIdx);
+        auto baselineSubtracted = out.GetBlockView(laneIdx);
         auto& baseliner = baselinerByLane_[laneIdx];
 
         auto baselinerStats = baseliner.EstimateBaseline(traceData,
                                                          lowerBuffer.GetBlockView(laneIdx),
                                                          upperBuffer.GetBlockView(laneIdx),
-                                                         baseline);
+                                                         baselineSubtracted);
 
         out.Stats(laneIdx) = baselinerStats.ToBaselineStats();
     }
@@ -51,37 +51,38 @@ Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
 HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
                                                                Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                Data::BlockView<ElementTypeIn> upperBuffer,
-                                                               Data::BlockView<ElementTypeOut> baselineEst)
+                                                               Data::BlockView<ElementTypeOut> baselineSubtractedData)
 {
     // Run lower filter, results are strided out.
     std::memcpy(lowerBuffer.Data(), traceData.Data(), traceData.Size()*sizeof(ElementTypeIn));
-    auto lower = msLowerOpen_(&lowerBuffer);
+    const auto& lower = msLowerOpen_(&lowerBuffer);
 
     // Run upper filter, results are strided out.
     std::memcpy(upperBuffer.Data(), traceData.Data(), traceData.Size()*sizeof(ElementTypeIn));
-    auto upper = msUpperOpen_(&upperBuffer);
+    const auto& upper = msUpperOpen_(&upperBuffer);
 
     // Compute and subtract baseline while tabulating the stats.
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     auto trIter = traceData.CBegin();
-    auto blIter = baselineEst.Begin();
+    auto blsIter = baselineSubtractedData.Begin();
     auto lowerIter = lower->CBegin();
     auto upperIter = upper->CBegin();
 
     using ValueType = typename decltype(trIter)::ValueType;
-    for ( ; blIter != baselineEst.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
-            blIter += Stride(), lowerIter += Stride(), upperIter += Stride())
+    for ( ; blsIter != baselineSubtractedData.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
+            blsIter += Stride(), lowerIter += Stride(), upperIter += Stride())
     {
-        auto bias = (*upperIter + *lowerIter).AsFloat() / FloatArray{2.0f};
-        auto framebkgndSigma = (*upperIter - *lowerIter).AsFloat() / cSigmaBias_;
-        auto smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
-        auto frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
+        const auto& bias = (*upperIter + *lowerIter).AsFloat() / FloatArray{2.0f};
+        const auto& framebkgndSigma = (*upperIter - *lowerIter).AsFloat() / cSigmaBias_;
+        const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
+        const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
-        for (auto strideIter = blIter; strideIter != baselineEst.End() && trIter != traceData.CEnd();
-             strideIter++, trIter++)
+        auto& strideIter = blsIter;
+        for (size_t i = 0; i < Stride() && strideIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
+             i++, strideIter++, trIter++)
         {
-            auto rawSignal = ValueType(*trIter);
+            const auto& rawSignal = ValueType(*trIter);
 
             // NOTE: We need to scale the trace data (from DN to e-) and
             // end up converting the baseline subtracted data to float in order
@@ -107,11 +108,11 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
         // incoming frame data are shorts.
 
         // Compute the high mask at the plus-1 position (this) for variance
-        const auto maskHp1 = baselineSubtractedFrame.AsFloat() < thrHigh_;
+        const auto& maskHp1 = baselineSubtractedFrame.AsFloat() < thrHigh_;
 
         // Compute the full mask to use for the single-frame latent variance
         // Minus-1[High] & Pos-0[Low] & Plus-1[High]
-        const Mask mask = latHMask_.front() & latLMask_ & maskHp1;
+        const auto& mask = latHMask_.front() & latLMask_ & maskHp1;
 
         // Push the plus-1 frame masks
         latLMask_ = baselineSubtractedFrame.AsFloat() < thrLow_;
@@ -145,8 +146,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
     // TODO: Make configurable.
     const FloatArray alphaFactor{0.7f};
 
-    FloatArray newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
-                          + (alphaFactor * sigma);
+    const auto& newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
+                             + (alphaFactor * sigma);
 
     // Update thresholds for classifying baseline frames.
     thrLow_ = FloatArray{sigmaThrL} * newSigma;

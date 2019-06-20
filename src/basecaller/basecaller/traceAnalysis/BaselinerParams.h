@@ -1,7 +1,9 @@
 #ifndef mongo_basecaller_traceAnalysis_BaselinerParams_H_
 #define mongo_basecaller_traceAnalysis_BaselinerParams_H_
 
+#include <cstddef>
 #include <initializer_list>
+#include <vector>
 
 #include <dataTypes/BasecallerConfig.h>
 

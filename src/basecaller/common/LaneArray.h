@@ -8,7 +8,6 @@
 #include <common/MongoConstants.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
-#include <common/cuda/utility/CudaArray.h>
 
 #include "LaneArrayRef.h"
 #include "LaneMask.h"
@@ -91,11 +90,6 @@ public:     // Export
             ret[i] = static_cast<short>(data_[i]);
         }
         return ret;
-    }
-
-    Cuda::Utility::CudaArray<T, N> AsCudaArray() const
-    {
-        return Cuda::Utility::CudaArray<T, N>(data_);
     }
 
 public:     // Comparison operators

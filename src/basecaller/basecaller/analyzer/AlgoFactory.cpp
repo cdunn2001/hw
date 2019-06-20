@@ -12,7 +12,6 @@
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
-#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 
 #include <dataTypes/MovieConfig.h>
 
@@ -77,7 +76,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            Baseliner::Configure(bcConfig.baselinerConfig, movConfig);
+            HostNoOpBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
@@ -117,6 +116,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 std::unique_ptr<Baseliner>
 AlgoFactory::CreateBaseliner(unsigned int poolId) const
 {
+    // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
+    // to represent both the baseliner method and param. When the GPU version
+    // is ready to take params, then the Configure() above should store the params
+    // and a new baseliner config option should be for selecting the actual baseliner.
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
