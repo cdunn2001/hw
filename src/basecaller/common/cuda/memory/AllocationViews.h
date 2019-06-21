@@ -55,6 +55,7 @@ public:
     const T& operator[](size_t idx) const {return data_[idx]; }
 
     T* Data() { return data_; }
+    const T* Data() const { return data_; }
     size_t Size() const { return len_; }
 private:
     T* data_;

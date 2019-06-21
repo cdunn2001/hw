@@ -32,11 +32,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallingMetrics::BasecallingMetrics()
-    : numBasesByAnalog_{ 0, 0, 0, 0}
-    , numPulsesByAnalog_{0, 0, 0, 0}
-{ }
-
 BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
 {
     uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
@@ -51,28 +46,19 @@ BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::Basecal
     return *this;
 }
 
-BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
-                             const BatchDimensions& batchDims,
-                             const BatchMetadata& batchMetadata)
+BasecallBatch::BasecallBatch(
+        const size_t maxCallsPerZmwChunk,
+        const BatchDimensions& batchDims,
+        const BatchMetadata& batchMetadata,
+        Cuda::Memory::SyncDirection syncDir,
+        bool pinned,
+        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
+        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
+        std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
     : dims_ (batchDims)
-    , maxCallsPerZmwChunk_ (maxCallsPerZmwChunk)
-    , metaData_ (batchMetadata)
-    , seqLengths_ (batchDims.ZmwsPerBatch(), 0)
-    , basecalls_ (batchDims.ZmwsPerBatch() * maxCallsPerZmwChunk)
-    , metrics_ (batchDims.ZmwsPerBatch())
-{ }
-
-bool BasecallBatch::PushBack(uint32_t z, Basecall bc)
-{
-    if (seqLengths_[z] < maxCallsPerZmwChunk_)
-    {
-        basecalls_[zmwOffset(z) + seqLengths_[z]] = bc;
-        metrics_[z].Count(bc);
-        seqLengths_[z]++;
-        return true;
-    }
-
-    return false;
-}
+    , metaData_(batchMetadata)
+    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
+    , metrics_(batchDims.ZmwsPerBatch(), syncDir, pinned, metricsPool)
+{}
 
 }}}     // namespace PacBio::Mongo::Data

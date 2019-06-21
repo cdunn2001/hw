@@ -133,7 +133,12 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
+    // temporary hack, until we have a proper pipeline phase to generate basecalls
+    static BasecallBatchFactory factory(maxCallsPerZmwChunk,
+                                        tbatch.Dimensions(),
+                                        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                        true);
+    return factory.NewBatch(tbatch.Metadata());
 }
 
 
@@ -181,7 +186,12 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    auto basecalls = BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
+    // temporary hack, until we have a proper pipeline phase to generate basecalls
+    static BasecallBatchFactory factory(maxCallsPerZmwChunk,
+                                        tbatch.Dimensions(),
+                                        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                        true);
+    auto basecallsBatch = factory.NewBatch(tbatch.Metadata());
 
     using NucleotideLabel = PacBio::SmrtData::NucleotideLabel;
 
@@ -196,36 +206,41 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     static constexpr int8_t qvDefault_ = 0;
 
-    for (uint32_t z = 0; z < basecalls.Dims().ZmwsPerBatch(); z++)
+    auto& basecalls = basecallsBatch.Basecalls();
+    for (uint32_t l = 0; l < basecallsBatch.Dims().lanesPerBatch; l++)
     {
-        for (uint16_t b = 0; b < maxCallsPerZmwChunk; b++)
+        auto laneCalls = basecalls.LaneView(l);
+        for (uint32_t z = 0; z < laneSize; ++z)
         {
-            BasecallBatch::Basecall bc;
-            auto& pulse = bc.GetPulse();
+            for (uint16_t b = 0; b < maxCallsPerZmwChunk; b++)
+            {
+                BasecallBatch::Basecall bc;
+                auto& pulse = bc.GetPulse();
 
-            size_t iL = b % 4;
-            size_t iA = (b + 1) % 4;
+                size_t iL = b % 4;
+                size_t iA = (b + 1) % 4;
 
-            auto label = labels[iL];
-            auto altLabel = labels[iA];
+                auto label = labels[iL];
+                auto altLabel = labels[iA];
 
-            // Populate pulse data
-            pulse.Start(1).Width(3);
-            pulse.MeanSignal(meanSignals[iL]).MidSignal(midSignals[iL]).MaxSignal(maxSignals[iL]);
-            pulse.Label(label).LabelQV(qvDefault_);
-            pulse.AltLabel(altLabel).AltLabelQV(qvDefault_);
-            pulse.MergeQV(qvDefault_);
+                // Populate pulse data
+                pulse.Start(1).Width(3);
+                pulse.MeanSignal(meanSignals[iL]).MidSignal(midSignals[iL]).MaxSignal(maxSignals[iL]);
+                pulse.Label(label).LabelQV(qvDefault_);
+                pulse.AltLabel(altLabel).AltLabelQV(qvDefault_);
+                pulse.MergeQV(qvDefault_);
 
-            // Populate base data.
-            bc.Base(label).InsertionQV(qvDefault_);
-            bc.DeletionTag(NucleotideLabel::N).DeletionQV(qvDefault_);
-            bc.SubstitutionTag(NucleotideLabel::N).SubstitutionQV(qvDefault_);
+                // Populate base data.
+                bc.Base(label).InsertionQV(qvDefault_);
+                bc.DeletionTag(NucleotideLabel::N).DeletionQV(qvDefault_);
+                bc.SubstitutionTag(NucleotideLabel::N).SubstitutionQV(qvDefault_);
 
-            basecalls.PushBack(z, bc);
+                laneCalls.push_back(z, bc);
+            }
         }
     }
 
-    return basecalls;
+    return basecallsBatch;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
