@@ -15,6 +15,10 @@ set(CPP_LIST
     BatchData.h
     BatchData.cpp
     BatchMetadata.h
+    BatchVectors.h
+    BatchVectors.cpp
+    BatchVectors.cuh
+    BatchVectors.cu
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
