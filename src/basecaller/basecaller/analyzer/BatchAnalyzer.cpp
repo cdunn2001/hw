@@ -152,18 +152,22 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     // Includes computing baseline moments.
     CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
 
-    // Accumulate histogram of baseline-subtracted trace data.
-    traceHistAccum_->AddBatch(ctb);
-
-    // TODO: When sufficient trace data have been histogrammed, estimate detection model.
-    // TODO: Make this configurable.
-    const unsigned int minFramesForDme = 4000u;
-    if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+    if (!isModelInitialized_)
     {
-        const auto& detModel = (*dme_)(traceHistAccum_->Histogram(),
-                                       ctb.PoolStats());
-        (void) detModel;    // Temporarily squelch unused variable warning.
-        // TODO: reset histogram
+        // Accumulate histogram of baseline-subtracted trace data.
+        // This operation also accumulates baseliner statistics.
+        traceHistAccum_->AddBatch(ctb);
+
+        // When sufficient trace data have been histogrammed,
+        // estimate detection model.
+        // TODO: Make this configurable.
+        const unsigned int minFramesForDme = 4000u;
+        if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+        {
+            auto detModel = (*dme_)(traceHistAccum_->Histogram(),
+                                    traceHistAccum_->TraceStats());
+            models_ = std::move(detModel.laneModels);
+        }
     }
 
     // TODO: When detection model is available, classify frames.

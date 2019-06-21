@@ -40,6 +40,9 @@ namespace Data {
 template <uint32_t LaneWidth>
 class BaselineStats
 {
+public:     // Types
+    using ElementType = float;
+
 public:
     BaselineStats() = default;
 
@@ -48,16 +51,27 @@ public:
     // accessors/setters.
 
     // Represents statistics from all frames
+    /// State of AutocorrAccumulator.
+    // TODO: This appears incomplete.
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1Last_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM2_;
+
+    /// Minimum and Maximum of all frames after baseline subtraction.
     Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
     Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
 
     // Represents statistics from baseline frames
+    /// Number of baseline frames.
     Cuda::Utility::CudaArray<float, LaneWidth> m0_;
+
+    /// Sum of baseline frames after baseline subtraction.
     Cuda::Utility::CudaArray<float, LaneWidth> m1_;
+
+    /// Sum of squares of baseline frames after baseline subtraction.
     Cuda::Utility::CudaArray<float, LaneWidth> m2_;
+
+    /// Sum of baseline frames before baseline subtraction.
     Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
 };
 

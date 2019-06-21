@@ -41,6 +41,9 @@ namespace Mongo {
 
 // TODO: Add declaration decorators to enable use on CUDA device.
 
+// TODO: Use a type-traits-like technique to enable accepting
+// [Const]LaneArrayRef as function parameters instead of [const] LaneArray&.
+
 /// \brief A bundle of moment statistics.
 /// \details
 /// Provides mean and variance statistics on augmentable dataset.
@@ -78,8 +81,8 @@ public:     // Structors
         , m1_ {m1}
         , m2_ {m2}
     {
-        assert(all(m0_) >= 0.0f);
-        assert(all(m2_) >= 0.0f);
+        assert(all(m0_ >= 0.0f));
+        assert(all(m2_ >= 0.0f));
     }
 
 public:     // Const methods

@@ -1,5 +1,5 @@
-#ifndef mongo_basecaller_traceAnalysis_DetectionModelEstimation_H_
-#define mongo_basecaller_traceAnalysis_DetectionModelEstimation_H_
+#ifndef mongo_basecaller_traceAnalysis_DetectionModelEstimator_H_
+#define mongo_basecaller_traceAnalysis_DetectionModelEstimator_H_
 
 #include <stdint.h>
 
@@ -21,6 +21,7 @@ class DetectionModelEstimator
 public:     // Types
     using DetModelElementType = Cuda::PBHalf;
     using PoolDetModel = Data::PoolDetectionModel<DetModelElementType>;
+    using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
@@ -34,16 +35,18 @@ public:     // Structors and assignment
     {
         assert (hist.poolId == poolId_);
 
+        PoolDetModel pdm (poolId_, poolSize_, Cuda::Memory::SyncDirection::Symmetric);
+
+        auto pdmHost = pdm.laneModels.GetHostView();
         const auto& blStatsHost = blStats.GetHostView();
         for (unsigned int lane = 0; lane < poolSize_; ++lane)
         {
-            InitDetModel(lane, blStatsHost[lane]);
+            InitDetModel(blStatsHost[lane], pdmHost[lane]);
         }
 
         // TODO
 
-        return PoolDetModel(poolId_, poolSize_,
-                            Cuda::Memory::SyncDirection::Symmetric);
+        return pdm;
     }
 
 private:    // Static data
@@ -55,9 +58,9 @@ private:
     unsigned int poolSize_;
 
 private:    // Functions
-    void InitDetModel(unsigned int lane, const Data::BaselineStats<laneSize>& blStats);
+    void InitDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif // mongo_basecaller_traceAnalysis_DetectionModelEstimation_H_
+#endif // mongo_basecaller_traceAnalysis_DetectionModelEstimator_H_

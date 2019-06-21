@@ -93,6 +93,8 @@ private:
 
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
+    bool isModelInitialized_ {false};
+
     // runs the main compute phases with a static model, bypassing things like the
     // dme and trace binning.  This is necessary for now because they are not
     // even implemented, but may remain desirable in the future when tweaking/profiling

@@ -60,15 +60,37 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int p
     // TODO
 }
 
-void DetectionModelEstimator::InitDetModel(unsigned int lane,
-                                           const Data::BaselineStats<laneSize>& blStats)
+void DetectionModelEstimator::InitDetModel(const Data::BaselineStats<laneSize>& blStats,
+                                           LaneDetModel& ldm)
 {
-    // TODO: Convert blStats from CudaArray to LaneArrayRef.
+    using ElementType = typename Data::BaselineStats<laneSize>::ElementType;
+    using LaneArr = LaneArray<ElementType>;
+    using Clar = ConstLaneArrayRef<ElementType>;
 
-    // TODO: Initialize baseline stat accumulator.
-    StatAccumulator<LaneArray<float>> bStats;
+    Clar mom0 (blStats.m0_.data());
+    Clar mom1 (blStats.m1_.data());
+    Clar mom2 (blStats.m2_.data());
 
-    // TODO: Initialize the lane detection model.
+    StatAccumulator<LaneArr> bStats (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
+
+    using std::copy;
+    const auto& blMean = bStats.Mean();
+    std::copy(blMean.begin(), blMean.end(), ldm.BaselineMode().means.data());
+    const auto& blVar = bStats.Variance();
+    const auto& blSigma = sqrt(blVar);
+    std::copy(blVar.begin(), blVar.end(), ldm.BaselineMode().vars.data());
+    assert(numAnalogs <= analogs_.size());
+    const auto refSignal = refSnr_ * blSigma;
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        copy(aMean.begin(), aMean.end(), ldm.AnalogMode(a).means.data());
+
+        // This noise model assumes that the trace data have been converted to
+        // photoelectron units.
+        const auto aVar = blVar + aMean + analogs_[a].excessNoiseCV * pow2(aMean);
+        copy(aVar.begin(), aVar.end(), ldm.AnalogMode(a).vars.data());
+    }
 }
 
 
