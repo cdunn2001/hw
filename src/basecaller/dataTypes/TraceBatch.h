@@ -91,7 +91,7 @@ public:
     public:
         static DiffType distance(const LaneIterator& first, const LaneIterator& last)
         {
-            return (last.ptr_ - first.ptr_) / first.laneWidth_;
+            return (last.curFrame_ - first.curFrame_);
         }
 
         friend ConstLaneIterator;
@@ -168,7 +168,7 @@ public:
     public:
         static DiffType distance(const ConstLaneIterator& first, const ConstLaneIterator& last)
         {
-            return (last.ptr_ - first.ptr_) / first.laneWidth_;
+            return (last.curFrame_ - first.curFrame_);
         }
     public:
         ConstLaneIterator(T* ptr, size_t curFrame, size_t laneWidth, size_t numFrames)
