@@ -41,7 +41,7 @@
 
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
-#include <dataTypes/DetectionModel.h>
+#include <dataTypes/PoolDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
@@ -78,7 +78,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     // Not running DME, need to fake our model
     if (staticAnalysis_)
     {
-        Data::LaneModelParameters<PBHalf, laneSize> model;
+        Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
         model.AnalogMode(0).SetAllMeans(227.13);
         model.AnalogMode(1).SetAllMeans(154.45);
         model.AnalogMode(2).SetAllMeans(97.67);
@@ -99,7 +99,6 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
         {
             view[i] = model;
         }
-
     }
 }
 
@@ -113,6 +112,7 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
         return StandardPipeline(std::move(tbatch));
     }
 }
+
 
 BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -135,6 +135,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     return BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
 }
+
 
 BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -159,8 +160,8 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     const unsigned int minFramesForDme = 4000u;
     if (traceHistAccum_->FramesAdded() >= minFramesForDme)
     {
-        Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram(),
-                                                ctb.PoolStats());
+        const auto& detModel = (*dme_)(traceHistAccum_->Histogram(),
+                                       ctb.PoolStats());
         (void) detModel;    // Temporarily squelch unused variable warning.
         // TODO: reset histogram
     }
