@@ -15,6 +15,7 @@ set(CPP_LIST
     BatchData.h
     BatchData.cpp
     BatchMetadata.h
+    BatchMetadata.cpp
     BatchVectors.h
     BatchVectors.cpp
     BatchVectors.cuh
@@ -35,6 +36,8 @@ set(CPP_LIST
     PrimaryConfig.h
     Pulse.h
     Pulse.cpp
+    PulseBatch.h
+    PulseBatch.cpp
     TraceBatch.h
     TraceBatch.cpp
     UHistogramSimd.h
