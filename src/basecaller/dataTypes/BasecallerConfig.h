@@ -223,6 +223,7 @@ namespace Data {
 
     class BasecallerPulseAccumConfig : public PacBio::Process::ConfigurationObject
     {
+    public:
         SMART_ENUM(MethodName, NoOp)
         ADD_ENUM(MethodName, Method, MethodName::NoOp);
 
@@ -283,6 +284,7 @@ namespace Data {
         ADD_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
         ADD_OBJECT(BasecallerDmeConfig, dmeConfig);
         ADD_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
+        ADD_OBJECT(BasecallerPulseAccumConfig, pulseAccumConfig);
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);

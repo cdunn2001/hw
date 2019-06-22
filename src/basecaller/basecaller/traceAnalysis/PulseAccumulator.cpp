@@ -63,6 +63,15 @@ void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPe
             true);
 }
 
+Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
+{
+    // Be sure to trigger a download at least if necessary, otherwise create empty
+    // batch
+    auto view = labels.GetBlockView(0);
+    (void)view;
+    return batchFactory_->NewBatch(labels.Metadata());
+}
+
 void PulseAccumulator::DestroyAllocationPools()
 {
     batchFactory_.release();

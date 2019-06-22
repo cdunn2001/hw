@@ -57,7 +57,7 @@ public:
 public:
     /// \returns LabelsBatch with estimated labels for each frame, along with the associated
     ///          baseline subtracted trace
-    Data::LabelsBatch operator()(Data::LabelsBatch labels)
+    Data::PulseBatch operator()(Data::LabelsBatch labels)
     {
         // TODO
         assert(labels.GetMeta().PoolId() == poolId_);
@@ -68,7 +68,7 @@ private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::LabelsBatch Process(Data::LabelsBatch trace) = 0;
+    virtual Data::PulseBatch Process(Data::LabelsBatch trace); // = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

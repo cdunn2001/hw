@@ -36,6 +36,7 @@
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 
@@ -129,7 +130,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     // Includes computing baseline moments.
     auto ctb = (*baseliner_)(std::move(tbatch));
     auto labels = (*frameLabeler_)(std::move(ctb), models_);
-    labels.DeactivateGpuMem();
+    auto pulses = (*pulseAccumulator_)(std::move(labels));
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
