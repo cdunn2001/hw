@@ -72,6 +72,7 @@ public:     // Structors and assignment
     LabelsBatch& operator=(LabelsBatch&&) = default;
 
     const BatchData& TraceData() const { return curTrace_; }
+    BatchData& LatentTrace() { return latTrace_; }
 
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for

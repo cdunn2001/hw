@@ -87,7 +87,7 @@ DeviceSGCFrameLabeler::Process(CameraTraceBatch trace,
                                const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
-    labeler_->ProcessBatch(models, ret.TraceData(), ret);
+    labeler_->ProcessBatch(models, ret.TraceData(), ret.LatentTrace(), ret);
 
     return ret;
 }

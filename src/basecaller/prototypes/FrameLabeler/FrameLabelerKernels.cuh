@@ -48,7 +48,6 @@ struct __align__(128) LatentViterbi
  public:
     __device__ LatentViterbi()
         : boundary_(make_short2(0,0))
-        , numFrames_(0)
     {}
 
     __device__ void SetBoundary(short2 boundary) { boundary_ = boundary; }
@@ -60,25 +59,9 @@ struct __align__(128) LatentViterbi
         oldModel.ParallelAssign(model);
     }
 
-    __device__ void SetData(const Mongo::Data::StridedBlockView<const short2>& block)
-    {
-        numFrames_ = ViterbiStitchLookback;
-        auto start = block.size() - ViterbiStitchLookback;
-        for (int i = 0; i < ViterbiStitchLookback; ++i)
-        {
-            oldData_[i*laneWidth + threadIdx.x] = block[start+i];
-        }
-    }
-
-    __device__ short2& FrameData(int idx) { return oldData_[idx*laneWidth + threadIdx.x]; }
-
-    __device__ int NumFrames() const { return numFrames_; }
-
 private:
     LaneModelParameters oldModel;
-    short2 oldData_[laneWidth * ViterbiStitchLookback];
     short2 boundary_;
-    int numFrames_;
 };
 
 // TODO this needs cleanup.  If numLanes doesn't match what is actually used on the gpu, we're dead
@@ -151,9 +134,11 @@ public:
 
     void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
                       const Mongo::Data::BatchData<int16_t>& input,
+                      Mongo::Data::BatchData<int16_t>& latOut,
                       Mongo::Data::BatchData<int16_t>& output);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
+    Mongo::Data::BatchData<int16_t> prevLat_;
 
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
