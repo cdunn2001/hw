@@ -47,7 +47,10 @@ public:     // Structors and assignment operators
                      const Data::BasecallerConfig& bcConfig,
                      const Data::MovieConfig& movConfig);
 
-    ~TraceAnalyzerTbb() noexcept override = default;
+    ~TraceAnalyzerTbb() noexcept override
+    {
+        BatchAnalyzer::Finalize();
+    }
 
 public:     // ITraceAnalyzer interface
     /// The number of worker threads used by this analyzer.

@@ -61,6 +61,11 @@ public:     // Static functions
     static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                           const Data::MovieConfig& movConfig);
 
+    static void Finalize()
+    {
+        batchFactory_.release();
+    }
+
 public:     // Structors & assignment operators
     BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
 
@@ -101,6 +106,9 @@ private:
     // even implemented, but may remain desirable in the future when tweaking/profiling
     // steady-state basecalling performance
     bool staticAnalysis_;
+
+    static std::unique_ptr<Data::BasecallBatchFactory> batchFactory_;
+    static uint16_t maxCallsPerZmwChunk_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

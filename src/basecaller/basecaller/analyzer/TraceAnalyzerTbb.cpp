@@ -101,8 +101,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     const size_t n = input.size();
     assert(input.size() <= bAnalyzer_.size());
 
-    vector<std::unique_ptr<Data::BasecallBatch>> output;
-    output.reserve(n);
+    vector<std::unique_ptr<Data::BasecallBatch>> output(n);
 
     tbb::task_scheduler_init init(NumWorkerThreads());
     // TODO: Customize optional parameters of parallel_for.

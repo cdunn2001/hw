@@ -55,6 +55,9 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+std::unique_ptr<Data::BasecallBatchFactory> BatchAnalyzer::batchFactory_;
+uint16_t BatchAnalyzer::maxCallsPerZmwChunk_;
+
 BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
@@ -62,7 +65,21 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 // static
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
-{ }
+{
+
+    BatchDimensions dims;
+    dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
+    dims.laneWidth = laneSize;
+    dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
+
+    batchFactory_ = std::make_unique<BasecallBatchFactory>(
+        bcConfig.pulseAccumConfig.maxCallsPerZmw,
+        dims,
+        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+        true);
+
+    maxCallsPerZmwChunk_ = bcConfig.pulseAccumConfig.maxCallsPerZmw;
+}
 
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
@@ -74,6 +91,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
+    pulseAccumulator_ = algoFac.CreateAccumulator(poolId);
     // TODO: Create other algorithm components.
 
     // Not running DME, need to fake our model
@@ -120,10 +138,6 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
-    // TODO: Define this so that it scales properly with chunk size, frame rate,
-    // and max polymerization rate.
-    const uint16_t maxCallsPerZmwChunk = 96;
-
     // TODO: Develop error handling logic.
 
     // Baseline estimation and subtraction.
@@ -134,12 +148,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    // temporary hack, until we have a proper pipeline phase to generate basecalls
-    static BasecallBatchFactory factory(maxCallsPerZmwChunk,
-                                        tbatch.Dimensions(),
-                                        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                                        true);
-    return factory.NewBatch(tbatch.Metadata());
+    return batchFactory_->NewBatch(tbatch.Metadata());
 }
 
 
@@ -147,10 +156,6 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
-
-    // TODO: Define this so that it scales properly with chunk size, frame rate,
-    // and max polymerization rate.
-    const uint16_t maxCallsPerZmwChunk = 96;
 
     // TODO: Develop error handling logic.
 
@@ -187,12 +192,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    // temporary hack, until we have a proper pipeline phase to generate basecalls
-    static BasecallBatchFactory factory(maxCallsPerZmwChunk,
-                                        tbatch.Dimensions(),
-                                        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                                        true);
-    auto basecallsBatch = factory.NewBatch(tbatch.Metadata());
+    auto basecallsBatch = batchFactory_->NewBatch(tbatch.Metadata());
 
     using NucleotideLabel = PacBio::SmrtData::NucleotideLabel;
 
@@ -213,7 +213,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
         auto laneCalls = basecalls.LaneView(l);
         for (uint32_t z = 0; z < laneSize; ++z)
         {
-            for (uint16_t b = 0; b < maxCallsPerZmwChunk; b++)
+            for (uint16_t b = 0; b < maxCallsPerZmwChunk_; b++)
             {
                 BasecallBatch::Basecall bc;
                 auto& pulse = bc.GetPulse();
