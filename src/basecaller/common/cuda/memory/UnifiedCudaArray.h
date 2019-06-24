@@ -57,7 +57,7 @@ template <> struct gpu_type<uint16_t> { using type = ushort2; };
 template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 
 // TODO handle pitched allocations for multidimensional data?
-template <typename T>
+template <typename T, bool allow_expensive_construct = false>
 class UnifiedCudaArray : private detail::DataManager
 {
 public:
@@ -75,7 +75,16 @@ public:
         , syncDir_(dir)
         , pools_(pools)
     {
-        static_assert(sizeof(GpuType) % sizeof(HostType) == 0, "Gpu type not even multiple of host types");
+        static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
+
+        // Preferrably we'd ensure GpuType is trivially copyable as well, but for whatever reason
+        // the half2 type is not implemented as such, which casues problems.  Best we can do is
+        // try and ensure binary compatability on our end as much as wel can.
+        static_assert(sizeof(HostType) == sizeof(GpuType) || 2*sizeof(HostType) == sizeof(GpuType), "");
+
+        static_assert(std::is_trivially_default_constructible<HostType>::value || allow_expensive_construct,
+                      "Must explicitly opt-in to use non-trivial construction types by setting the allow_expensive_construct template parameter");
+
         if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
         {
             // If we're doing something special like using int16_t on the host and
@@ -102,6 +111,12 @@ public:
         for (size_t i = 0; i < count; ++i)
         {
             new(ptr+i) HostType();
+        }
+
+        if (!std::is_trivially_default_constructible<HostType>::value && dir == SyncDirection::HostReadDeviceWrite)
+        {
+            CopyToDevice();
+            CudaSynchronizeDefaultStream();
         }
     }
 

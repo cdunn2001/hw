@@ -57,7 +57,7 @@ struct __align__(128) LatentViterbi
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
     {
-        oldModel = model;
+        oldModel.ParallelAssign(model);
     }
 
     __device__ void SetData(const Mongo::Data::StridedBlockView<const short2>& block)
