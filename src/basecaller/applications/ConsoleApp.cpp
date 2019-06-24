@@ -200,7 +200,8 @@ private:
                               PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
                               ChipClass::Spider,
                               false,
-                              true);
+                              true,
+                              false);
             fh.BaseCallerVersion("0.1");
 
             bazWriter_.reset(new BazWriter(outputBazFile_, fh, BazIOConfig{}, ReadBuffer::MaxNumSamplesPerBuffer()));

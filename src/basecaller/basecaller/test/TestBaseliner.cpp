@@ -28,7 +28,13 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
+#include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
+
+#include <common/DataGenerators/BatchGenerator.h>
+#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/MovieConfig.h>
+#include <dataTypes/PrimaryConfig.h>
 
 #include <gtest/gtest.h>
 
@@ -36,10 +42,77 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TEST(TestBaseliner, Foo)
+TEST(TestNoOpBaseliner, Run)
 {
-    Baseliner foo ();
-    FAIL() << "Need to define some unit tests.";
+    Data::MovieConfig movConfig;
+    Data::BasecallerBaselinerConfig baselinerConfig;
+
+    Data::GetPrimaryConfig().lanesPerPool = 1;
+
+    HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
+    HostNoOpBaseliner baseliner{0};
+
+    Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
+                                              Data::GetPrimaryConfig().zmwsPerLane,
+                                              Data::GetPrimaryConfig().lanesPerPool,
+                                              8192,
+                                              Data::GetPrimaryConfig().lanesPerPool);
+
+    while (!batchGenerator.Finished())
+    {
+        auto chunk = batchGenerator.PopulateChunk();
+        Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
+        const auto& baselineStats = cameraBatch.Stats(0);
+        EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
+                                baselineStats.m0_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.m1_.data(),
+                                baselineStats.m1_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.m2_.data(),
+                                baselineStats.m2_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+    }
+
+    HostNoOpBaseliner::Finalize();
 }
 
-}}}
+TEST(TestHostMultiScaleBaseliner, Zeros)
+{
+    Data::MovieConfig movConfig;
+    Data::BasecallerBaselinerConfig baselinerConfig;
+    baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
+
+    Data::GetPrimaryConfig().lanesPerPool = 1;
+
+    HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+
+    HostMultiScaleBaseliner baseliner(0, 1.0f,
+                                      FilterParamsLookup(baselinerConfig.Method),
+                                      Data::GetPrimaryConfig().lanesPerPool);
+
+    Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
+                                              Data::GetPrimaryConfig().zmwsPerLane,
+                                              Data::GetPrimaryConfig().lanesPerPool,
+                                              128,
+                                              Data::GetPrimaryConfig().lanesPerPool);
+    while (!batchGenerator.Finished())
+    {
+        auto chunk = batchGenerator.PopulateChunk();
+        Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
+        const auto& baselineStats = cameraBatch.Stats(0);
+        EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
+                                baselineStats.m0_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.m1_.data(),
+                                baselineStats.m1_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+        EXPECT_TRUE(std::all_of(baselineStats.m2_.data(),
+                                baselineStats.m2_.data()+laneSize,
+                                [](float v) { return v == 0; }));
+    }
+
+    HostMultiScaleBaseliner::Finalize();
+}
+
+}}} // PacBio::Mongo::Basecaller

@@ -30,33 +30,35 @@
 #define PACBIO_MONGO_BASELINE_STATS_H_
 
 #include <common/cuda/utility/CudaArray.h>
+#include <common/cuda/CudaFunctionDecorators.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Baseline stats for a whole batch of data
+// Baseline stats for a lane of data
 template <uint32_t LaneWidth>
 class BaselineStats
 {
 public:
     BaselineStats() = default;
 
-private:
+    // NOTE: We make the member variables public as this is
+    // meant to be data transport type to avoid the need to write
+    // accessors/setters.
 
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
-    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
-
-    // Raw moments
-    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
-    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
-    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
-
+    // Represents statistics from all frames
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1First_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM1Last_;
     Cuda::Utility::CudaArray<float, LaneWidth> lagM2_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMin_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> traceMax_;
 
+    // Represents statistics from baseline frames
+    Cuda::Utility::CudaArray<float, LaneWidth> m0_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m1_;
+    Cuda::Utility::CudaArray<float, LaneWidth> m2_;
+    Cuda::Utility::CudaArray<int16_t, LaneWidth> rawBaselineSum_;
 };
 
 }}} // ::PacBio::Mongo::Data

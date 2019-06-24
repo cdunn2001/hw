@@ -37,17 +37,4 @@ void Baseliner::Finalize()
     DestroyAllocationPools();
 }
 
-Baseliner::Baseliner(uint32_t poolId)
-    : poolId_ (poolId)
-{
-
-}
-
-Data::CameraTraceBatch
-Baseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
-{
-    // TODO
-    return batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
-}
-
 }}}     // namespace PacBio::Mongo::Basecaller

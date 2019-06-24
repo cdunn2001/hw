@@ -52,6 +52,7 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
     : algoFactory_ (bcConfig.algorithm)
     , init_(bcConfig.init.numWorkerThreads)
 {
+    // TODO: Check logic of worker threads
     NumWorkerThreads(bcConfig.init.numWorkerThreads);
 
     algoFactory_.Configure(bcConfig.algorithm, movConfig);

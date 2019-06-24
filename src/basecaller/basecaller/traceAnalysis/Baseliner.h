@@ -16,6 +16,7 @@ class Baseliner
 {
 public:     // Types
     using ElementTypeIn = Data::RawTraceElement;
+    using ElementTypeOut = Data::BaselinedTraceElement;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -36,7 +37,10 @@ protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
 
 public:
-    Baseliner(uint32_t poolId);
+    Baseliner(uint32_t poolId, float scaler = 1.0f)
+        : poolId_(poolId)
+        , scaler_(scaler)
+    { }
     virtual ~Baseliner() = default;
 
 public:
@@ -44,16 +48,18 @@ public:
     /// \returns Baseline-subtracted traces with certain trace statistics.
     Data::CameraTraceBatch operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
     {
-        // TODO
         assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return process(std::move(rawTrace));
+        return Process(std::move(rawTrace));
     }
+
+    float Scale() const { return scaler_; }
+
+private:    // Customizable implementation
+    virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;
-
-private:    // Customizable implementation
-    virtual Data::CameraTraceBatch process(Data::TraceBatch<ElementTypeIn> rawTrace);
+    float scaler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

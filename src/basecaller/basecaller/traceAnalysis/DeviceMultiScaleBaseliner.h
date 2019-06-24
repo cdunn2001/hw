@@ -86,7 +86,7 @@ public:
     ~DeviceMultiScaleBaseliner() override;
 
 private:    // Customizable implementation
-    Data::CameraTraceBatch process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2>;
     std::unique_ptr<Filter> filter_;

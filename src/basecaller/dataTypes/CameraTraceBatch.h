@@ -6,13 +6,13 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
 
+#include "BasicTypes.h"
 #include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-using BaselinedTraceElement = int16_t;
 
 /// Baseline-subtracted trace data with statistics
 class CameraTraceBatch : public TraceBatch<BaselinedTraceElement>

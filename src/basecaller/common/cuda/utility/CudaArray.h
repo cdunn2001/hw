@@ -29,6 +29,7 @@
 
 #include <common/cuda/CudaFunctionDecorators.h>
 
+#include <cstring>
 #include <array>
 
 namespace PacBio {
@@ -40,7 +41,7 @@ struct CudaArray
 {
     CudaArray() = default;
     // implicit conversion from std::array intentional
-    CudaArray(const std::array<T, len> &data)
+    CudaArray(const std::array<T, len>& data)
     {
         memcpy(data_, data.data(), sizeof(T)*len);
     }
@@ -48,6 +49,7 @@ struct CudaArray
     CUDA_ENABLED T& operator[](unsigned idx) { return data_[idx]; }
     CUDA_ENABLED const T& operator[](unsigned idx) const { return data_[idx]; }
     CUDA_ENABLED T* data() { return data_; }
+    CUDA_ENABLED const T* data() const { return data_; }
 private:
     T data_[len];
 };

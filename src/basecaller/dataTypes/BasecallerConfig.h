@@ -227,6 +227,8 @@ namespace Data {
         CONF_OBJ_SUPPORT_COPY(BasecallerBaselinerConfig)
     public:
         SMART_ENUM(MethodName,
+                   MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
+                   TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
                    DeviceMultiScale,
                    NoOp);
         ADD_ENUM(MethodName, Method, MethodName::DeviceMultiScale);

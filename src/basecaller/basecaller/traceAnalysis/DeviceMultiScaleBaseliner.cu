@@ -53,7 +53,7 @@ void DeviceMultiScaleBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch DeviceMultiScaleBaseliner::process(Data::TraceBatch<ElementTypeIn> rawTrace)
+Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
     auto pools = rawTrace.GetAllocationPools();

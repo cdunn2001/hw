@@ -31,11 +31,22 @@
 
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/MongoConstants.h>
 
 #include "BatchMetadata.h"
 
 namespace PacBio {
 namespace Mongo {
+
+template <typename T, unsigned int N>
+class ConstLaneArrayRef;
+
+template <typename T, unsigned int N>
+class LaneArrayRef;
+
+template <typename T, unsigned int N>
+class LaneArray;
+
 namespace Data {
 
 // Non-owning host-side representation of a gpu batch.  Does not
@@ -71,6 +82,185 @@ class BlockView
 {
     using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
 public:
+    class ConstLaneIterator;
+
+    class LaneIterator
+    {
+    public:
+        using DiffType = std::ptrdiff_t;
+    public:
+        static DiffType distance(const LaneIterator& first, const LaneIterator& last)
+        {
+            return (last.curFrame_ - first.curFrame_);
+        }
+
+        friend ConstLaneIterator;
+    public:
+        LaneIterator(T* ptr, size_t curFrame, size_t laneWidth, size_t numFrames)
+            : ptr_(ptr)
+            , curFrame_(curFrame)
+            , laneWidth_(laneWidth)
+            , numFrames_(numFrames)
+        { }
+
+        bool operator==(const LaneIterator& other) const
+        {
+            return curFrame_ == other.curFrame_;
+        }
+
+        bool operator!=(const LaneIterator& other) const
+        {
+            return curFrame_ != other.curFrame_;
+        }
+
+        LaneIterator& operator++()
+        {
+            curFrame_ = std::min(curFrame_ + 1, numFrames_);
+            return *this;
+        }
+
+        LaneIterator operator++(int)
+        {
+            LaneIterator tmp = *this;
+            ++*this;
+            return tmp;
+        }
+
+        LaneIterator& operator+=(size_t v)
+        {
+            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            return *this;
+        }
+
+        LaneArrayRef<T, laneSize> operator*()
+        {
+            return LaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*() const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+        }
+
+        LaneArrayRef<T, laneSize> operator[](size_t idx)
+        {
+            assert(curFrame_ + idx < numFrames_);
+            return LaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        {
+            assert(curFrame_ + idx < numFrames_);
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        }
+    private:
+        T* ptr_;
+        size_t curFrame_;
+        size_t laneWidth_;
+        size_t numFrames_;
+    };
+
+    class ConstLaneIterator
+    {
+    public:
+        using DiffType = std::ptrdiff_t;
+        using ValueType = LaneArray<T, laneSize>;
+    public:
+        static DiffType distance(const ConstLaneIterator& first, const ConstLaneIterator& last)
+        {
+            return (last.curFrame_ - first.curFrame_);
+        }
+    public:
+        ConstLaneIterator(T* ptr, size_t curFrame, size_t laneWidth, size_t numFrames)
+            : ptr_(ptr)
+            , curFrame_(curFrame)
+            , laneWidth_(laneWidth)
+            , numFrames_(numFrames)
+        { }
+
+        ConstLaneIterator(LaneIterator& iter)
+            : ptr_(iter.ptr_)
+            , curFrame_(iter.curFrame_)
+            , laneWidth_(iter.laneWidth_)
+            , numFrames_(iter.numFrames_)
+        { }
+
+        bool operator==(const ConstLaneIterator& other) const
+        {
+            return curFrame_ == other.curFrame_;
+        }
+
+        bool operator!=(const ConstLaneIterator& other) const
+        {
+            return curFrame_ != other.curFrame_;
+        }
+
+        ConstLaneIterator& operator++()
+        {
+            curFrame_ = std::min(curFrame_ + 1, numFrames_);
+            return *this;
+        }
+
+        ConstLaneIterator operator++(int)
+        {
+            ConstLaneIterator tmp = *this;
+            ++*this;
+            return tmp;
+        }
+
+        ConstLaneIterator& operator+=(size_t v)
+        {
+            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            return *this;
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*()
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator*() const
+        {
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
+        {
+            assert(curFrame_ + idx < numFrames_);
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        }
+
+        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        {
+            assert(curFrame_ + idx < numFrames_);
+            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        }
+    private:
+        T* ptr_;
+        size_t curFrame_;
+        size_t laneWidth_;
+        size_t numFrames_;
+    };
+
+public:
+    using Iterator = LaneIterator;
+    using ConstIterator = ConstLaneIterator;
+
+public:
+
+    Iterator Begin()
+    { return LaneIterator(data_, 0, laneWidth_, numFrames_); }
+
+    Iterator End()
+    { return LaneIterator(data_, numFrames_, laneWidth_, numFrames_); }
+
+    ConstIterator CBegin() const
+    { return ConstLaneIterator(data_, 0, laneWidth_, numFrames_); }
+
+    ConstIterator CEnd() const
+    { return ConstLaneIterator(data_ , numFrames_, laneWidth_, numFrames_); }
+
+public:
     BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
         : data_(data)
         , laneWidth_(laneWidth)
@@ -82,6 +272,7 @@ public:
     size_t Size() const { return laneWidth_ * numFrames_; }
 
     T* Data() { return data_; }
+    const T* Data() const { return data_; }
 
     T& operator[](size_t idx) { return data_[idx]; }
     const T& operator[](size_t idx) const { return data_[idx]; }
