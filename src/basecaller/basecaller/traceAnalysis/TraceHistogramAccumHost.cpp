@@ -32,8 +32,8 @@ namespace Basecaller {
 
 // TODO: Can we add a `numLanes` parameter? That would enable us to allocate
 // memory for members upon construction.
-TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId)
-    : TraceHistogramAccumulator(poolId)
+TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize)
+    : TraceHistogramAccumulator(poolId, poolSize)
 {
     // TODO
 }

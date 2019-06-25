@@ -165,12 +165,12 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
 }
 
 unique_ptr<TraceHistogramAccumulator>
-AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
+AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, unsigned int poolSize) const
 {
     switch (histAccumOpt_)
     {
     case Data::BasecallerTraceHistogramConfig::MethodName::Host:
-        return unique_ptr<TraceHistogramAccumulator>(new TraceHistogramAccumHost(poolId));
+        return unique_ptr<TraceHistogramAccumulator>(new TraceHistogramAccumHost(poolId, poolSize));
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
         // TODO: For now fall through to throw exception.
     default:

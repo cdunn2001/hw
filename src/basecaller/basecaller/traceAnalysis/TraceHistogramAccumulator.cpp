@@ -5,10 +5,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// TODO: Where should these come from.
-const unsigned int numLanes = 12;
-const unsigned int numBins = 100;
-
 // static
 void TraceHistogramAccumulator::Configure(
         const Data::BasecallerTraceHistogramConfig& histConfig,
@@ -17,9 +13,9 @@ void TraceHistogramAccumulator::Configure(
     // TODO
 }
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId)
+TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
-    , poolHist_ (poolId, numLanes)
+    , poolHist_ (poolId, poolSize)
 {
 
 }

@@ -9,7 +9,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// TODO: I suppose that the members of LaneHistogram should use CudaArray
+// TODO: Members of LaneHistogram should use CudaArray
 // instead of LaneArray.
 
 /// A pure data type that represents a histogram for each ZMW in a lane.

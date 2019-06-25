@@ -79,7 +79,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
-    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, poolSize_);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 

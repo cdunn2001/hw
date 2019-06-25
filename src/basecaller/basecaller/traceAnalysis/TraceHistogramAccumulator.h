@@ -23,7 +23,7 @@ public:     // Static functions
                           const Data::MovieConfig& movConfig);
 
 public:     // Structors and assignment
-    TraceHistogramAccumulator(uint32_t poolId);
+    TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
 
 public:     // Const functions
     /// Total pool frames added.
