@@ -110,7 +110,7 @@ public:
         auto* ptr = hostData_.get<HostType>(DataKey());
         for (size_t i = 0; i < count; ++i)
         {
-            new(ptr+i) HostType();
+            new(ptr+i) HostType;
         }
 
         if (!std::is_trivially_default_constructible<HostType>::value && dir == SyncDirection::HostReadDeviceWrite)
