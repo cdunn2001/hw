@@ -28,11 +28,15 @@ public:
     std::unique_ptr<Baseliner> CreateBaseliner(unsigned int poolId) const;
     std::unique_ptr<FrameLabeler> CreateFrameLabeler(unsigned int poolId) const;
 
+    std::unique_ptr<TraceHistogramAccumulator>
+    CreateTraceHistAccumulator(unsigned int poolId) const;
+
     // TODO: Add Create* functions for other strategy interfaces.
 
 private:
     Data::BasecallerBaselinerConfig::MethodName baselinerOpt_;
     Data::BasecallerFrameLabelerConfig::MethodName frameLabelerOpt_;
+    Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
 
     // TODO: Add enums for other strategy options as needed.
 };

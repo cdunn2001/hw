@@ -38,6 +38,14 @@ namespace Data {
     };
 
 
+    class BasecallerTraceHistogramConfig : public PacBio::Process::ConfigurationObject
+    {
+    public:
+        SMART_ENUM(MethodName, Host, Gpu);
+        ADD_ENUM(MethodName, Method, MethodName::Host);
+        // TODO
+    };
+
     class SpiderFixedDmeConfig : public PacBio::Process::ConfigurationObject
     {
         // Configuration parameters for a (temporary) fixed model DME, until we
@@ -51,11 +59,6 @@ namespace Data {
         ADD_PARAMETER(float, baselineVar, 33.0f);
         ADD_PARAMETER(float, pulseCV, 0.1);
         ADD_PARAMETER(float, shotCoeff, 1.37);
-    };
-
-    class BasecallerTraceHistogramConfig : public PacBio::Process::ConfigurationObject
-    {
-        // TODO
     };
 
 

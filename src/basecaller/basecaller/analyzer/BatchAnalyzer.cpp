@@ -68,6 +68,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 
@@ -153,8 +154,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     // TODO: When sufficient trace data have been histogrammed, estimate detection model.
     // TODO: Make this configurable.
     const unsigned int minFramesForDme = 4000u;
-    const auto histTotals = traceHistAccum_->FrameCount();
-    if (*std::min_element(histTotals.cbegin(), histTotals.cend()) >= minFramesForDme)
+    if (traceHistAccum_->FramesAdded() >= minFramesForDme)
     {
         //Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
         //(void) detModel;    // Temporarily squelch unused variable warning.

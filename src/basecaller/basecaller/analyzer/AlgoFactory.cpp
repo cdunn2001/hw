@@ -12,10 +12,13 @@
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 
 #include <dataTypes/MovieConfig.h>
 
 using std::ostringstream;
+using std::unique_ptr;
 
 namespace PacBio {
 namespace Mongo {
@@ -28,6 +31,9 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
 
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
+
+    // Histogram accumulator
+    histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -113,7 +119,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 }
 
 
-std::unique_ptr<Baseliner>
+unique_ptr<Baseliner>
 AlgoFactory::CreateBaseliner(unsigned int poolId) const
 {
     // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
@@ -158,4 +164,19 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
     }
 }
 
+unique_ptr<TraceHistogramAccumulator>
+AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
+{
+    switch (histAccumOpt_)
+    {
+    case Data::BasecallerTraceHistogramConfig::MethodName::Host:
+        return unique_ptr<TraceHistogramAccumulator>(new TraceHistogramAccumHost(poolId));
+    case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
+        // TODO: For now fall through to throw exception.
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_ << '.';
+        throw PBException(msg.str());
+    }
+}
 }}}     // namespace PacBio::Mongo::Basecaller

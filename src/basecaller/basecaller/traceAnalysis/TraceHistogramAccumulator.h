@@ -14,7 +14,9 @@ class TraceHistogramAccumulator
 {
 public:     // Types
     using DataType = Data::CameraTraceBatch::ElementType;
-    using CountType = unsigned int;
+    using HistDataType = float;
+    using HistCountType = unsigned short;
+    using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
@@ -24,31 +26,31 @@ public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId);
 
 public:     // Const functions
-    /// Total number of frames accumulated for each ZMW of the pool.
-    /// Note that these counts are not necessarily uniform due to filtering of
-    /// edge frames.
-    std::vector<CountType> FrameCount() const
-    {
-        // TODO
-        return std::vector<CountType>();
-    }
+    /// Total pool frames added.
+    /// Total of counts in each zmw histogram will typically be somewhat
+    /// smaller due to filtering of edge frames.
+    size_t FramesAdded() const
+    { return frameCount_; }
 
-    Data::PoolHistogram Histogram() const
-    {
-        // TODO
-        return Data::PoolHistogram();
-    }
+    const PoolHistType& Histogram() const
+    { return poolHist_; }
 
 public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
     void AddBatch(const Data::CameraTraceBatch& ctb)
     {
-        // TODO
+        frameCount_ += ctb.numFrames();
+        AddBatchImpl(ctb);
     }
 
-private:    // Data
+protected:    // Data
     uint32_t poolId_;
+    size_t frameCount_ = 0;
+    PoolHistType poolHist_;
+
+private:
+    virtual void AddBatchImpl(const Data::CameraTraceBatch& ctb) = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

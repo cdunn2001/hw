@@ -20,7 +20,8 @@ public:     // Static functions
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId);
 
-    void operator()(const Data::PoolHistogram& hist, Data::DetectionModel& model)
+    void operator()(const Data::PoolHistogram<float, unsigned short>& hist,
+                    Data::DetectionModel& model)
     {
         // TODO
     }
