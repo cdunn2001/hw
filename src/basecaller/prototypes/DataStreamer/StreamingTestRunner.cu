@@ -2,7 +2,7 @@
 
 #include "StreamingTestRunner.h"
 
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
 #include <common/DataGenerators/TemplateGenerator.h>
 
 #include <cuda_runtime.h>

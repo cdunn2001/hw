@@ -36,32 +36,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Non-owning host-side representation of a gpu batch.  Does not
-// grant access to the data and is meant primarily as a shim class
-// helping segregate vanilla c++ code from cuda code.  Actual
-// device functions can access the data by including TraceBatch.cuh.
-// which defines the GpuBatchData class and can interact with the
-// data while running on the device.
-template <typename T>
-class GpuBatchDataHandle
-{
-    using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
-public:
-    GpuBatchDataHandle(const BatchDimensions& dims,
-                       Cuda::Memory::DeviceHandle<T> data,
-                       DataManagerKey key)
-        : dims_(dims)
-        , data_(data)
-    {}
-
-    const BatchDimensions& Dimensions() const { return dims_; }
-    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey key) { return data_; }
-
-protected:
-    BatchDimensions dims_;
-    Cuda::Memory::DeviceHandle<T> data_;
-};
-
 // A TraceBatch is just a wrapper around a BatchData, with some associated metadata
 // that identifies the batch within the larger acquisition.
 template <typename T>

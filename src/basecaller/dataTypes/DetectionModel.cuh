@@ -28,7 +28,7 @@
 #define mongo_dataTypes_DetectionModel_CUH_
 
 #include "DetectionModel.h"
-#include "TraceBatch.cuh"
+#include "BatchData.cuh"
 
 namespace PacBio {
 namespace Mongo {

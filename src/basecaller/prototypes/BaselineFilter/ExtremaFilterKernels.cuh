@@ -1,7 +1,7 @@
 #ifndef EXTREMA_FILTER_KERNELS_CUH
 #define EXTREMA_FILTER_KERNELS_CUH
 
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
 
 #include "ExtremaFilter.cuh"
 

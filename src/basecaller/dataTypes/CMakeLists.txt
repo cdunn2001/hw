@@ -35,8 +35,8 @@ set(CPP_LIST
 )
 
 set(CUDA_LIST
-    TraceBatch.cuh
-    TraceBatch.cu
+    BatchData.cuh
+    BatchData.cu
 )
 
 add_library(libMongoDataTypes STATIC

@@ -5,7 +5,7 @@
 #include <common/cuda/utility/CudaArray.h>
 #include <common/KernelThreadPool.h>
 
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
 
 #include "SubframeScorer.cuh"
 #include "FrameLabelerKernels.cuh"

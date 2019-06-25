@@ -24,4 +24,4 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
