@@ -50,7 +50,7 @@ public:     // Structors and assignment
     }
 
 private:    // Static data
-    static Data::AnalogSet analogs_;
+    static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
 
 private:

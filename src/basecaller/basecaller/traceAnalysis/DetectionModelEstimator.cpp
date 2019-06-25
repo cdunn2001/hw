@@ -9,7 +9,9 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-std::array<Data::AnalogMode, 4> DetectionModelEstimator::analogs_;
+Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
+DetectionModelEstimator::analogs_;
+
 float DetectionModelEstimator::refSnr_;
 
 // static
@@ -56,6 +58,7 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
 
 DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
+    , poolSize_ (poolSize)
 {
     // TODO
 }

@@ -129,14 +129,6 @@ inline std::ostream& operator<<(std::ostream& os, const AnalogMode& am)
     return os;
 }
 
-using AnalogSet = std::array<AnalogMode, numAnalogs>;
-
-inline void Sort(AnalogSet& analogs)
-{
-    std::sort(analogs.begin(), analogs.end(),
-              [](const AnalogMode&a , const AnalogMode& b){return a.relAmplitude > b.relAmplitude;});
-}
-
 }}}     // namespace PacBio::Mongo::Data
 
 #endif // mongo_dataTypes_AnalogMode_H_
