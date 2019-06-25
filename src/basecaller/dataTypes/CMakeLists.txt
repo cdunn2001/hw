@@ -11,6 +11,8 @@ set(CPP_LIST
     BaselineStats.h
     BaselineStats.cpp
     BasicTypes.h
+    BatchData.h
+    BatchData.cpp
     BatchMetadata.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
@@ -33,8 +35,8 @@ set(CPP_LIST
 )
 
 set(CUDA_LIST
-    TraceBatch.cuh
-    TraceBatch.cu
+    BatchData.cuh
+    BatchData.cu
 )
 
 add_library(libMongoDataTypes STATIC

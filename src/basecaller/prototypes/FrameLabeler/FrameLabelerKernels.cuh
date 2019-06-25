@@ -32,7 +32,7 @@
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/MongoConstants.h>
 
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
 
 #include "SubframeScorer.cuh"
 

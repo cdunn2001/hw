@@ -4,7 +4,7 @@
 #include "BaselineFilter.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <dataTypes/TraceBatch.cuh>
+#include <dataTypes/BatchData.cuh>
 
 namespace PacBio {
 namespace Cuda {
