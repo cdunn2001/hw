@@ -48,7 +48,7 @@ namespace Data {
 /// \note The alignment requirement of UHistogramSimd<DataT> is at least as
 /// large as that of DataT. When creating on the heap, this may require use of
 /// a special allocator.
-template <typename DataT>
+template <typename DataT, typename CountT = Simd::IndexConv<DataT>>
 class alignas(alignof(DataT) > 8u ? alignof(DataT) : 8u) UHistogramSimd
 {
 public:     // Types
@@ -56,7 +56,7 @@ public:     // Types
     using DataType = DataT;
 
     /// The type of the bin counts.
-    using CountType = Simd::IndexConv<DataType>;
+    using CountType = CountT;
 
     using FloatType = Simd::FloatConv<DataType>;
 
@@ -69,7 +69,6 @@ public:     // Types
     /// The type returned by predicates (e.g., InRange()).
     using BoolType = Simd::BoolConv<DataType>;
 
-    // TODO: Make this CUDA friendly.
     template <typename T>
     using ArrayType = AlignedVector<T>;
 

@@ -46,8 +46,10 @@ namespace Data {
 
 using namespace Simd;
 
-template <typename DataT>
-UHistogramSimd<DataT>::UHistogramSimd(unsigned int numBins, const DataType& lowerBound, const DataType& upperBound)
+template <typename DataT, typename CountT>
+UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
+                                              const DataType& lowerBound,
+                                              const DataType& upperBound)
     : binSize_ {0}
     , nLowOutliers_ {0}
     , nHighOutliers_ {0}
@@ -102,9 +104,10 @@ UHistogramSimd<DataT>::UHistogramSimd(unsigned int numBins, const DataType& lowe
 
 // TODO: If this remains very simple, move the definition into the class
 // definition once the dust settles.
-template <typename DataT>
-typename UHistogramSimd<DataT>::CountType
-UHistogramSimd<DataT>::Count(ScalarIndexType first, ScalarIndexType last) const
+template <typename DataT, typename CountT>
+typename UHistogramSimd<DataT, CountT>::CountType
+UHistogramSimd<DataT, CountT>::Count(ScalarIndexType first,
+                                     ScalarIndexType last) const
 {
     if (first >= last) return CountType(0);
     assert (last <= NumBins());
@@ -113,9 +116,10 @@ UHistogramSimd<DataT>::Count(ScalarIndexType first, ScalarIndexType last) const
     return std::accumulate(start, stop, CountType(0));
 }
 
-template <typename DataT>
-typename UHistogramSimd<DataT>::CountType
-UHistogramSimd<DataT>::CountNonuniform(IndexType first, IndexType last) const
+template <typename DataT, typename CountT>
+typename UHistogramSimd<DataT, CountT>::CountType
+UHistogramSimd<DataT, CountT>::CountNonuniform(IndexType first,
+                                               IndexType last) const
 {
     assert (all(last <= NumBins()));
     auto i = std::max<ScalarIndexType>(0, reduceMin(first));
@@ -129,9 +133,9 @@ UHistogramSimd<DataT>::CountNonuniform(IndexType first, IndexType last) const
     return sum;
 }
 
-template <typename DataT>
-typename UHistogramSimd<DataT>::DataType
-UHistogramSimd<DataT>::Fractile(FloatType frac) const
+template <typename DataT, typename CountT>
+typename UHistogramSimd<DataT, CountT>::DataType
+UHistogramSimd<DataT, CountT>::Fractile(FloatType frac) const
 {
     if (any(frac < 0.0f))
     {
@@ -198,9 +202,9 @@ UHistogramSimd<DataT>::Fractile(FloatType frac) const
 }
 
 
-template <typename DataT>
-typename UHistogramSimd<DataT>::FloatType
-UHistogramSimd<DataT>::CumulativeCount(DataType x) const
+template <typename DataT, typename CountT>
+typename UHistogramSimd<DataT, CountT>::FloatType
+UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 {
     const auto mNan = isnan(x);
     const auto mLow = (x < LowerBound());
