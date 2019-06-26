@@ -25,6 +25,11 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+//  Defines class TraceHistogramAccumHost, which customizes
+//  TraceHistogramAccumulator.
+
 
 #include <common/AlignedVector.h>
 #include <common/LaneArray.h>
@@ -48,16 +53,19 @@ public:     // Structors and assignment.
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;
 
+    PoolHistType HistogramImpl() const override;
+
+    PoolTraceStatsType TraceStatsImpl() const override;
+
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>>> hist_;
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
+    bool isHistInitialized_ {false};
 
 private:    // Functions.
     // Compute histogram parameters (e.g., bin size, lower bound, etc.),
     // construct empty histogram, and add it to hist_.
-    void InitHistogram(unsigned int lane,
-                       Data::BlockView<const TraceElementType> traceBlock,
-                       const Data::BaselineStats<laneSize>& stats);
+    void InitHistogram(unsigned int lane);
 
     // Allocates, if necessary, and initializes all the baseliner statistics
     // accumulators contained in stats_.

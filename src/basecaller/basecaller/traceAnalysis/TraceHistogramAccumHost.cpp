@@ -23,6 +23,10 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+//  Defines some members of class TraceHistogramAccumHost.
+
 
 #include "TraceHistogramAccumHost.h"
 
@@ -30,8 +34,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// TODO: Can we add a `numLanes` parameter? That would enable us to allocate
-// memory for members upon construction.
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
 {
@@ -41,19 +43,26 @@ TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId, unsigned i
 
 void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
 {
+    // TODO: Can some of this logic be lifted into the base class's AddBatch
+    // method (template method pattern)?
+
     const auto numLanes = ctb.Dimensions().lanesPerBatch;
 
-    const bool firstBatch = FramesAdded() == 0;
-
-    if (firstBatch)
+    if (FramesAdded() == ctb.Dimensions().framesPerBatch)
     {
+        // This is the first trace batch.
+
         // Reset all the histograms.
         hist_.clear();
         hist_.reserve(ctb.Dimensions().lanesPerBatch);
+        isHistInitialized_ = false;
 
         // Reset baseline stat accumulators.
         InitStats(numLanes);
     }
+
+    const bool doInitHist = !isHistInitialized_
+            && FramesAdded() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
     for (unsigned int i = 0; i < numLanes; ++i)
@@ -62,20 +71,20 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
         const auto traceBlock = ctb.GetBlockView(i);
         const auto stats = ctb.Stats(i);
 
-        if (firstBatch)
+        // TODO: Accumulate baseliner stats.
+
+        if (doInitHist)
         {
             // Define histogram parameters and construct empty histogram.
-            InitHistogram(i, traceBlock, stats);
+            InitHistogram(i);
         }
 
-        // TODO: Map them to LaneArray and feed to UHistogramSimd.
+        // TODO: Map trace data to LaneArray and feed to UHistogramSimd.
     }
 }
 
 
-void TraceHistogramAccumHost::InitHistogram(unsigned int lane,
-                                            Data::BlockView<const TraceElementType> traceBlock,
-                                            const Data::BaselineStats<laneSize>& stats)
+void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
 {
     assert (hist_.size() == lane);
 
@@ -135,6 +144,22 @@ void TraceHistogramAccumHost::InitStats(unsigned int numLanes)
 {
     stats_.clear();
     stats_.resize(numLanes);
+}
+
+
+TraceHistogramAccumHost::PoolHistType
+TraceHistogramAccumHost::HistogramImpl() const
+{
+    // TODO
+    return PoolHistType(PoolId(), PoolSize());
+}
+
+TraceHistogramAccumHost::PoolTraceStatsType
+TraceHistogramAccumHost::TraceStatsImpl() const
+{
+    // TODO
+    return PoolTraceStatsType(PoolSize(),
+                              Cuda::Memory::SyncDirection::Symmetric);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

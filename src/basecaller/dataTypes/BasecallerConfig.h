@@ -43,7 +43,7 @@ namespace Data {
     public:
         SMART_ENUM(MethodName, Host, Gpu);
         ADD_ENUM(MethodName, Method, MethodName::Host);
-        // TODO
+        ADD_PARAMETER(unsigned int, NumFramesPreAccumStats, 1000u);
     };
 
     class SpiderFixedDmeConfig : public PacBio::Process::ConfigurationObject
