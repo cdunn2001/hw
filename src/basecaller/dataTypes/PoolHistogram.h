@@ -1,9 +1,9 @@
 #ifndef mongo_dataTypes_PoolHistogram_H_
 #define mongo_dataTypes_PoolHistogram_H_
 
-#include <array>
+#include <common/MongoConstants.h>
+#include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
-#include <common/LaneArray.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -18,23 +18,25 @@ namespace Data {
 template <typename DataT, typename CountT>
 struct LaneHistogram
 {
+    template <typename T>
+    using Array = Cuda::Utility::CudaArray<T, laneSize>;
+
     static constexpr unsigned int numBins = 100;
 
     /// The lower bound of the lowest bin.
-    LaneArray<DataT> lowBound;
+    Array<DataT> lowBound;
 
     /// The size of all bins for each ZMW.
-    LaneArray<DataT> binSize;
+    Array<DataT> binSize;
 
     /// The number of data less than lowBound.
-    LaneArray<CountT> outlierCountLow;
+    Array<CountT> outlierCountLow;
 
     /// The number of data >= the high bound = lowBound + numBins*binSize.
-    LaneArray<CountT> outlierCountHigh;
+    Array<CountT> outlierCountHigh;
 
     /// The number of data in each bin.
-    // TODO: Replace std::array with Ben's CudaArray.
-    std::array<LaneArray<CountT>, numBins> binCount;
+    Cuda::Utility::CudaArray<Array<CountT>, numBins> binCount;
 };
 
 
