@@ -6,6 +6,7 @@
 #include <boost/operators.hpp>
 
 #include <common/MongoConstants.h>
+#include <common/cuda/utility/CudaArray.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 
@@ -46,6 +47,15 @@ public:     // Structors and assignment
     LaneArray(const InputIterT& first, const InputIterT& last)
         : LaneArray()
     { std::copy(first, last, begin()); }
+
+    // This could be accomplished with LaneArray(ConstLaneArrayRef(ca.data())),
+    // but this convenience seems worth the dependency on CudaArray.h.
+    // It's also safer since we ensure that ca has the correct size.
+    // TODO: Should we enable implicit conversion (i.e., remove the explicit qualifier)?
+    // TODO: Make the element type of CudaArray a template parameter.
+    explicit LaneArray(const Cuda::Utility::CudaArray<T, N>& ca)
+        : LaneArray(ca.begin(), ca.end())
+    { }
 
     LaneArray& operator=(const LaneArray& that)
     {

@@ -234,8 +234,8 @@ public:     // Random-access iterators
     ConstIterator begin() const  { return BaseConstRef::begin(); }
     ConstIterator end() const  { return BaseConstRef::end(); }
 
-    ConstIterator cbegin()  { return BaseConstRef::begin(); }
-    ConstIterator cend()  { return BaseConstRef::end(); }
+    ConstIterator cbegin() const  { return BaseConstRef::begin(); }
+    ConstIterator cend() const  { return BaseConstRef::end(); }
 
 public:     // Export
 //    Cuda::Utility::CudaArray<T, N> AsCudaArray() const
