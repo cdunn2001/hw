@@ -50,6 +50,9 @@ public:
     const LaneArray& RawBaselineSum() const
     { return rawBaselineSum_; }
 
+public:     // Non-const functions
+    BaselinerStatAccumulator& Merge(const BaselinerStatAccumulator& other);
+
 private:
     // Statistics of trace after baseline estimate has been subtracted.
     AutocorrAccumulator<FloatArray> baselineSubtractedStats_;

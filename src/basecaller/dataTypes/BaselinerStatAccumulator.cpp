@@ -46,6 +46,19 @@ const BaselineStats<laneSize> BaselinerStatAccumulator<T>::ToBaselineStats() con
     return baselineStats;
 }
 
+
+template <typename T>
+BaselinerStatAccumulator<T>&
+BaselinerStatAccumulator<T>::Merge(const BaselinerStatAccumulator& other)
+{
+    baselineSubtractedStats_.Merge(other.BaselineSubtractedStats());
+    traceMin = min(traceMin, other.traceMin);
+    traceMax = max(traceMax, other.traceMax);
+    baselineStats_.Merge(other.BaselineFramesStats());
+    rawBaselineSum_ += rawBaselineSum_;
+    return *this;
+}
+
 //
 // Explicit Instantiations
 //
