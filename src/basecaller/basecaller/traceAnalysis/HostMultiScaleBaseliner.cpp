@@ -153,7 +153,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
     thrLow_ = FloatArray{sigmaThrL} * newSigma;
     thrHigh_ = FloatArray{sigmaThrH} * newSigma;
 
-    prevSigma_ = sigma;
+    prevSigma_ = newSigma;
 
     return newSigma;
 }
