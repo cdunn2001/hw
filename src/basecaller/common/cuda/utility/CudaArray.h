@@ -30,26 +30,51 @@
 #include <common/cuda/CudaFunctionDecorators.h>
 
 #include <cstring>
+#include <algorithm>
 #include <array>
+#include <iterator>
 
 namespace PacBio {
 namespace Cuda {
 namespace Utility {
 
+/// A CUDA-friendly replacement for std::array.
 template <typename T, size_t len>
 struct CudaArray
 {
+    using value_type = T;
+
     CudaArray() = default;
+
     // implicit conversion from std::array intentional
     CudaArray(const std::array<T, len>& data)
     {
         memcpy(data_, data.data(), sizeof(T)*len);
     }
 
+    template <typename InIter>
+    CudaArray(InIter&& first, InIter&& last)
+    {
+        assert(std::distance(first, last) == len);
+        std::copy(std::forward<InIter>(first),
+                  std::forward<InIter>(last),
+                  data_);
+    }
+
     CUDA_ENABLED T& operator[](unsigned idx) { return data_[idx]; }
     CUDA_ENABLED const T& operator[](unsigned idx) const { return data_[idx]; }
     CUDA_ENABLED T* data() { return data_; }
     CUDA_ENABLED const T* data() const { return data_; }
+
+    CUDA_ENABLED T* begin()  { return data_; }
+    CUDA_ENABLED T* end()  { return data_ + len; }
+
+    CUDA_ENABLED const T* begin() const  { return data_; }
+    CUDA_ENABLED const T* end() const  { return data_ + len; }
+
+    CUDA_ENABLED const T* cbegin() const  { return data_; }
+    CUDA_ENABLED const T* cend() const  { return data_ + len; }
+
 private:
     T data_[len];
 };
