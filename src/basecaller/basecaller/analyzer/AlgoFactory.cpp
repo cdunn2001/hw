@@ -83,6 +83,9 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         PulseAccumulator::Finalize();
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        HostSimulatedPulseAccumulator::Finalize();
+        break;
     default:
         ostringstream msg;
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
