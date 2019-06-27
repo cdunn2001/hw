@@ -43,13 +43,13 @@ namespace Basecaller {
 
 TEST(TestNoOpPulseAccumulator, Run)
 {
-    Data::BasecallerAlgorithmConfig bcConfig;
-    PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
-
     // Simulate a single lane of data.
     Data::GetPrimaryConfig().lanesPerPool = 1;
     const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+
+    Data::BasecallerAlgorithmConfig bcConfig;
+    PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
@@ -67,7 +67,7 @@ TEST(TestNoOpPulseAccumulator, Run)
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(
             Data::BatchMetadata(0, 0, 128),
-            Data::BatchDimensions{Data::GetPrimaryConfig().zmwsPerLane, framesPerChunk, lanesPerPool});
+            Data::BatchDimensions{lanesPerPool, framesPerChunk, Data::GetPrimaryConfig().zmwsPerLane});
 
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
 
@@ -89,13 +89,13 @@ TEST(TestNoOpPulseAccumulator, Run)
 
 TEST(TestHostSimulatedPulseAccumulator, Run)
 {
-    Data::BasecallerAlgorithmConfig bcConfig;
-    HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
-
     // Simulate a single lane of data.
     Data::GetPrimaryConfig().lanesPerPool = 1;
     const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+
+    Data::BasecallerAlgorithmConfig bcConfig;
+    HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
@@ -113,7 +113,7 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(
             Data::BatchMetadata(0, 0, 128),
-            Data::BatchDimensions{Data::GetPrimaryConfig().zmwsPerLane, framesPerChunk, lanesPerPool});
+            Data::BatchDimensions{lanesPerPool, framesPerChunk, Data::GetPrimaryConfig().zmwsPerLane});
 
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
 
