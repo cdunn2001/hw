@@ -4,16 +4,16 @@
 #include <sstream>
 #include <pacbio/PBException.h>
 
+#include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
-#include <basecaller/traceAnalysis/Baseliner.h>
-#include <basecaller/traceAnalysis/FrameLabeler.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
-#include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
+#include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
+#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
@@ -33,8 +33,6 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
-
-
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
     pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
@@ -139,6 +137,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
@@ -235,6 +236,9 @@ AlgoFactory::CreateAccumulator(unsigned int poolId) const
     {
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         return std::make_unique<PulseAccumulator>(poolId);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
         break;
     default:
         ostringstream msg;

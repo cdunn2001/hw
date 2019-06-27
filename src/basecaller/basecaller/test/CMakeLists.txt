@@ -7,6 +7,7 @@ include(pacbio-cplusplus-gtest)
 add_library(libMongoBasecallerTest OBJECT
     TestBaseliner.cpp
     TestTraceAnalyzerTbb.cpp
+    TestPulseAccumulator.cpp
 )
 
 target_link_libraries(libMongoBasecallerTest
