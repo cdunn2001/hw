@@ -27,7 +27,7 @@
 //  Description:
 //  Defines some members of class TraceHistogramAccumHost.
 
-
+#include <algorithm>
 #include "TraceHistogramAccumHost.h"
 
 namespace PacBio {
@@ -65,21 +65,19 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
             && FramesAdded() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
-    for (unsigned int i = 0; i < numLanes; ++i)
+    for (unsigned int lane = 0; lane < numLanes; ++lane)
     {
-        // Get views to the trace data and the statistics.
-        const auto traceBlock = ctb.GetBlockView(i);
-        const auto stats = ctb.Stats(i);
-
-        // TODO: Accumulate baseliner stats.
+        // Accumulate baseliner stats.
+        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(ctb.Stats(lane)));
 
         if (doInitHist)
         {
             // Define histogram parameters and construct empty histogram.
-            InitHistogram(i);
+            InitHistogram(lane);
         }
 
         // TODO: Map trace data to LaneArray and feed to UHistogramSimd.
+        AddBlock(ctb, lane);
     }
 }
 
@@ -88,55 +86,50 @@ void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
 {
     assert (hist_.size() == lane);
 
+    // Number of bins in the histogram is a compile-time constant!
+    constexpr unsigned int numBins = LaneHistType::numBins;
+
     // Determine histogram parameters.
+    const auto& laneBlStats = stats_[lane].BaselineFramesStats();
 
-// Code from Sequel DmeMonochrome.
-//    unsigned int nBins;
-//    {
-//        auto minSignal = dtbs[0]->MinSignal().first();
-//        auto maxSignal = dtbs[0]->MaxSignal().first();
-//        for (size_t i = 1; i < dtbs.size(); ++i)
-//        {
-//            minSignal = min(minSignal, dtbs[i]->MinSignal().first());
-//            maxSignal = max(maxSignal, dtbs[i]->MaxSignal().first());
-//        }
+    const auto& blCount = laneBlStats.Count();
+    const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
+    const auto& blMean = Blend(sufficientData,
+                               laneBlStats.Mean(),
+                               LaneArray<float>(0.0f));
+    const auto& blSigma = Blend(sufficientData,
+                                sqrt(laneBlStats.Variance()),
+                                LaneArray<float>(FallBackBaselineSigma()));
 
-//        // Nominally define the bin size as a fraction of the baseline sigma.
-//        const auto binSize = binSizeCoeff_ * bgSigma;
+    const auto binSize = BinSizeCoeff() * blSigma;
+    const auto lowerBound = blMean - 4.0f*blSigma;
+    const auto upperBound = lowerBound + float(numBins)*binSize;
 
-//        // Push lower bound down by a small amount to avoid any subtle boundary
-//        // issues in histogram.
-//        lowerBound = minSignal - 0.1f * bgSigma;
+    // TODO: Should we do anything if upperBound < stats_[lane].TraceMax()?
 
-//        // Scale up just a bit to avoid boundary problems in histogram.
-//        // Does not assume that data > 0.
-//        const auto nudge = max(0.1f * binSize, 10.0f * abs(maxSignal) * numeric_limits<float>::epsilon());
-//        upperBound = maxSignal + nudge;
+    hist_.emplace_back(numBins, lowerBound, upperBound);
+}
 
-//        nBins = round_cast<unsigned int>(reduceMax((upperBound - lowerBound) / binSize));
-//        nBins = std::max(nBins, 20u);
 
-//        // Cap the bins at 250 if necessary
-//        if (nBins > binCap)
-//        {
-//            const auto newBinSize = (upperBound - lowerBound) / binCap;
-//            nBins = binCap;
+void TraceHistogramAccumHost::AddBlock(const Data::CameraTraceBatch& ctb,
+                                       unsigned int lane)
+{
+    assert(lane < hist_.size());
 
-//            binClampCount_++;
-//            if (any(newBinSize > bgSigma))
-//                majorBinClampCount_++;
-//            for (const auto& dtb : dtbs)
-//            {
-//                if (any(sqrt(dtb->BaselineCovar()[0]) < 1.0f))
-//                {
-//                    tinyBaselineSigmaCount_++;
-//                }
-//            }
-//        }
-//    }
+    auto& h = hist_[lane];
 
-//    UHistogramSimd<FloatVec> hist(nBins, lowerBound, upperBound);
-//    ScrubEdgeFrames(dtbs, *workModel, &hist);
+    // Get view to the trace data of lane i.
+    const auto traceBlock = ctb.GetBlockView(lane);
+
+    // Iterate over lane-frames.
+    for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
+    {
+        // TODO: Filter edge frames.
+        // TODO: Would be nice to avoid copying to the temporary, x.
+        // Note that there is a possible type conversion here.
+        const LaneArray<HistDataType> x {*lfi};
+        h.AddDatum(x);
+    }
 }
 
 
@@ -150,16 +143,55 @@ void TraceHistogramAccumHost::InitStats(unsigned int numLanes)
 TraceHistogramAccumHost::PoolHistType
 TraceHistogramAccumHost::HistogramImpl() const
 {
-    // TODO
-    return PoolHistType(PoolId(), PoolSize());
+    using std::copy;
+
+    assert(hist_.size() == PoolSize());
+    PoolHistType ph (PoolId(), PoolSize());
+    auto phv = ph.data.GetHostView();
+
+    using CArray = Cuda::Utility::CudaArray<HistCountType, laneSize>;
+
+    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    {
+        LaneHistType& phvl = phv[lane];
+        const auto& histl = hist_[lane];
+
+        // TODO: Should define a conversion operator that converts from ConstLaneArrayRef to CudaArray.
+
+        const auto& lb = histl.LowerBound();
+        copy(lb.begin(), lb.end(), phvl.lowBound.begin());
+
+        const auto& bs = histl.BinSize();
+        copy(bs.begin(), bs.end(), phvl.binSize.begin());
+
+        const auto& ocLow = histl.LowOutlierCount();
+        copy(ocLow.begin(), ocLow.end(), phvl.outlierCountLow.begin());
+
+        const auto& ocHigh = histl.HighOutlierCount();
+        copy(ocHigh.begin(), ocHigh.end(), phvl.outlierCountHigh.begin());
+
+        assert(histl.NumBins() == phvl.numBins);
+        for (unsigned int bin = 0; bin < phvl.numBins; ++bin)
+        {
+            const auto& bc = histl.BinCount(bin);
+            copy(bc.begin(), bc.end(), phvl.binCount[bin].begin());
+        }
+    }
+
+    return ph;
 }
+
 
 TraceHistogramAccumHost::PoolTraceStatsType
 TraceHistogramAccumHost::TraceStatsImpl() const
 {
-    // TODO
-    return PoolTraceStatsType(PoolSize(),
-                              Cuda::Memory::SyncDirection::Symmetric);
+    PoolTraceStatsType pts (PoolSize(), Cuda::Memory::SyncDirection::Symmetric);
+    auto ptsv = pts.GetHostView();
+    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    {
+        ptsv[lane] = stats_[lane].ToBaselineStats();
+    }
+    return pts;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

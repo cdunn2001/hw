@@ -46,8 +46,10 @@ public:     // Types
     using DataType = Data::CameraTraceBatch::ElementType;
     using HistDataType = float;
     using HistCountType = unsigned short;
+    using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
     using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    // TODO: Switch from BaselineStats to BaselinerStatAccumState.
 
 public:     // Static functions
     static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,

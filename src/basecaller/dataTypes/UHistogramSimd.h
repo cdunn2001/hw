@@ -199,7 +199,7 @@ public:     // Modifying methods
         const auto maskSkip = (!select) | (maskLow | maskHigh);
         // Toss out of bounds values into extra bin at the end that will be 
         // ignored.  It's cheaper than putting a conditional in the loop below.
-        bin = Blend(maskSkip, numBins_, bin);
+        bin = Blend(maskSkip, IndexType(numBins_), bin);
         for (unsigned int i = 0; i < Simd::SimdTypeTraits<DataType>::width; ++i)
         {
             ++binCount_[bin[i]][i];

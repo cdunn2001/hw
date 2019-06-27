@@ -21,7 +21,13 @@ struct LaneHistogram
     template <typename T>
     using Array = Cuda::Utility::CudaArray<T, laneSize>;
 
-    static constexpr unsigned int numBins = 100;
+    // This constant must be large enough to accomodate high SNR data.
+    // Ideally, it would be a function of BinSizeCoeff and the SNR and excess-
+    // noise CV of the brightest analog.
+    // nBins(snr, bsc, xsn) = (snr + 4(1 + sqrt(1 + snr + xsn*snr^2))) / bsc,
+    // where bsc = binSizeCoeff, and xsn = excess noise CV.
+    // In practice, the value will probably be determined somewhat empirically.
+    static constexpr unsigned int numBins = 300;
 
     /// The lower bound of the lowest bin.
     Array<DataT> lowBound;

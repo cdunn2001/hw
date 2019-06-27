@@ -37,6 +37,8 @@
 #include <pacbio/PBException.h>
 #include <common/simd/SimdVectorTypes.h>
 
+#include <common/LaneArray.h>
+
 using std::ostringstream;
 using boost::numeric_cast;
 
@@ -70,10 +72,8 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
     if (any(badBounds))
     {
         ostringstream msg;
-        msg << "lowerBound must be less than upperBound.";
-        msg << " lowerBound = " << lowerBound;
-        msg << ". upperBound = " << upperBound << ".";
-        throw std::invalid_argument(msg.str());
+        msg << "UHistogramSimd: lowerBound must be less than upperBound.";
+        throw PBException(msg.str());
     }
 
     // Check for underflow of bin size.
@@ -81,11 +81,7 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
     binSize_ = (upperBound - lowerBound) / static_cast<float>(numBins);
     if (any(binSize_ <= float(0)))
     {
-        ostringstream msg;
-        msg << errUnderflowMsg
-            << "  Bin size = "
-            << binSize_ << '.';
-        throw std::underflow_error(msg.str());
+        throw PBException(errUnderflowMsg);
     }
 
     // Set up bin starts (i.e., lower bound of each bin).
@@ -95,7 +91,7 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
         binStart_[i] = binSize_ * numeric_cast<float>(i) + lowerBound;
         if (any(binStart_[i-1] == binStart_[i]))
         {
-            throw std::underflow_error(errUnderflowMsg);
+            throw PBException(errUnderflowMsg);
         }
     }
     binStart_.back() = upperBound;
@@ -127,7 +123,7 @@ UHistogramSimd<DataT, CountT>::CountNonuniform(IndexType first,
     CountType sum = 0;
     while (i < j)
     {
-        sum += Blend((i >= first) & (i < last), binCount_[i], 0);
+        sum += Blend((i >= first) & (i < last), binCount_[i], CountType(0));
         ++i;
     }
     return sum;
@@ -140,15 +136,13 @@ UHistogramSimd<DataT, CountT>::Fractile(FloatType frac) const
     if (any(frac < 0.0f))
     {
         std::ostringstream msg;
-        msg << "Fractile argument must be >= 0: "
-            << frac << '.';
+        msg << "Fractile argument must be >= 0.";
         throw PBException(msg.str());
     }
     if (any(frac > 1.0f))
     {
         std::ostringstream msg;
-        msg << "Fractile argument must be <= 1: "
-            << frac << '.';
+        msg << "Fractile argument must be <= 1.";
         throw PBException(msg.str());
     }
 
@@ -214,7 +208,7 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
     UnionConv<IndexType> xbin (BinIndex(x));
 
     // Avoid out-of-bounds array indexes.
-    xbin = Blend(mInBounds, xbin, 0);
+    xbin = Blend(mInBounds, xbin, IndexType(0));
 
     // Interpolation in bin containing x.
     const auto& xx = MakeUnion(x);
@@ -234,14 +228,15 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 
     cc = Blend(mLow, FloatType(LowOutlierCount()), cc);
     cc = Blend(mHigh, FloatType(LowOutlierCount() + InRangeCount()), cc);
-    cc = Blend(mNan, NAN, cc);
+    cc = Blend(mNan, FloatType(NAN), cc);
 
     return cc;
 }
 
 
 // Explicit instantiations
-template class UHistogramSimd<float>;
-template class UHistogramSimd<m512f>;
+//template class UHistogramSimd<float>;
+//template class UHistogramSimd<m512f>;
+template class UHistogramSimd<LaneArray<float>>;
 
 }}}     // namespace PacBio::Mongo::Data

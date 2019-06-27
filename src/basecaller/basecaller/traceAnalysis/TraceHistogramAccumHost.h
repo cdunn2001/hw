@@ -62,7 +62,7 @@ private:    // Data
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
     bool isHistInitialized_ {false};
 
-private:    // Functions.
+private:    // Functions
     // Compute histogram parameters (e.g., bin size, lower bound, etc.),
     // construct empty histogram, and add it to hist_.
     void InitHistogram(unsigned int lane);
@@ -70,6 +70,9 @@ private:    // Functions.
     // Allocates, if necessary, and initializes all the baseliner statistics
     // accumulators contained in stats_.
     void InitStats(unsigned int numLanes);
+
+    // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
+    void AddBlock(const Data::CameraTraceBatch& ctb, unsigned int lane);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
