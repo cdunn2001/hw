@@ -10,6 +10,7 @@ add_library(libMongoCommon STATIC
     AlignedVector.h
     AutocorrAccumulator.h
     AutocorrAccumulator.cpp
+    AutocorrAccumState.h
     LaneArray.h
     LaneArray.cpp
     LaneArrayRef.h
@@ -17,6 +18,7 @@ add_library(libMongoCommon STATIC
     MongoConstants.h
     NumericUtil.h
     StatAccumulator.h
+    StatAccumState.h
 )
 
 find_package(Boost)

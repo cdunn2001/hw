@@ -124,8 +124,8 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
 
 
 // Explicit instantiation.
-template class AutocorrAccumulator<float>;
-template class AutocorrAccumulator<Simd::m512f>;
-template class AutocorrAccumulator<LaneArray<float, 64u>>;
+//template class AutocorrAccumulator<float>;
+//template class AutocorrAccumulator<Simd::m512f>;
+template class AutocorrAccumulator<LaneArray<float, laneSize>>;
 
 }}      // namespace PacBio::Mongo

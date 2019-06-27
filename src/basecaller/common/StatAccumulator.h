@@ -34,6 +34,7 @@
 #include <pacbio/logging/Logger.h>
 #include <common/simd/SimdVectorTypes.h>
 #include "NumericUtil.h"
+#include "StatAccumState.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -45,6 +46,7 @@ namespace Mongo {
 /// Provides mean and variance statistics on augmentable dataset.
 /// Offset is defined at construction, but can be modified.
 /// The closer Offset() is to Mean(), the greater the precision of Variance().
+/// \tparam VF A LaneArray type.
 template <typename VF>
 class StatAccumulator
 {
@@ -60,6 +62,13 @@ public:     // Structors
     { }
 
     StatAccumulator(const StatAccumulator& that) = default;
+
+    StatAccumulator(const StatAccumState& state)
+        : offset_ {state.offset}
+        , m0_ {state.moment0}
+        , m1_ {state.moment1}
+        , m2_ {state.moment2}
+    { }
 
 public:     // Const methods
     /// Number of samples aggregated.
@@ -95,6 +104,17 @@ public:     // Const methods
         r.m1_ = m1_ * s;
         r.m2_ = m2_ * s;
         return r;
+    }
+
+    StatAccumState GetState() const
+    {
+        return StatAccumState
+        {
+            {offset_.cbegin(), offset_.cend()},
+            {m0_.cbegin(), m0_.cend()},
+            {m1_.cbegin(), m1_.cend()},
+            {m2_.cbegin(), m2_.cend()}
+        };
     }
 
     const VF& M1() const

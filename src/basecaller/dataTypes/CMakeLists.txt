@@ -8,6 +8,7 @@ set(CPP_LIST
     BasecallerConfig.h
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
+    BaselinerStatAccumState.h
     BaselineStats.h
     BaselineStats.cpp
     BasicTypes.h
