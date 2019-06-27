@@ -4,6 +4,7 @@
 #include "BaselineFilter.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/PBCudaSimd.cuh>
 #include <dataTypes/BatchData.cuh>
 
 namespace PacBio {
@@ -190,6 +191,56 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> i
     }
 }
 
+template <size_t blockThreads, size_t stride>
+__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const short2> input,
+                                 Memory::DeviceView<PBHalf2> bgSigmas,
+                                 const Mongo::Data::GpuBatchData<const short2> lower,
+                                 const Mongo::Data::GpuBatchData<const short2> upper,
+                                 Mongo::Data::GpuBatchData<short2> out)
+{
+    // TODO unify these somehow with the host multiscale implementation
+    static constexpr float sigmaThrL = 4.5f;
+    static constexpr float sigmaThrH = 4.5f;
+    static constexpr float alphaFactor = 0.7f;
+
+    PBHalf2 localSigma = bgSigmas[blockIdx.x*blockDim.x + threadIdx.x];
+    // For determining if baseline or not.
+    PBHalf2 thrLow;
+    PBHalf2 thrHigh;
+    // For bias estimate
+    // TODO: these need to be set consistent with filter widths
+    PBHalf2 cSigmaBias(2.44f);
+    PBHalf2 cMeanBias(0.5f);
+
+    const size_t numFrames = out.Dims().framesPerBatch;
+
+    assert(numFrames % stride == 0);
+    int inputCount = numFrames / stride;
+
+    const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& lowerZmw = lower.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& upperZmw = upper.ZmwData(blockIdx.x, threadIdx.x);
+    auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
+
+    for (int i = 0; i < inputCount; ++i)
+    {
+        auto baseline = (PBHalf2(lowerZmw[i]) + PBHalf2(upperZmw[i])) / PBHalf2(2.0f);
+        auto tmpSigma = (PBHalf2(lowerZmw[i]) - PBHalf2(upperZmw[i])) / cSigmaBias;
+        localSigma = (1.0f - alphaFactor) * localSigma + alphaFactor * tmpSigma;
+        auto frameBiasEstimate = cMeanBias * localSigma;
+
+        thrLow = localSigma * sigmaThrL;
+        thrHigh = localSigma * sigmaThrH;
+
+        for (int j = i*stride; j < stride; ++j)
+        {
+            outZmw[j] = ToShort(PBHalf2(inZmw[i]) - baseline - frameBiasEstimate);
+        }
+    }
+
+    bgSigmas[blockIdx.x*blockDim.x + threadIdx.x] = localSigma;
+}
+
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
 class ComposedFilter
 {
@@ -202,6 +253,7 @@ class ComposedFilter
     Memory::DeviceOnlyArray<Lower2> lower2;
     Memory::DeviceOnlyArray<Upper1> upper1;
     Memory::DeviceOnlyArray<Upper2> upper2;
+    Memory::DeviceOnlyArray<PBHalf2> bgSigma;
     size_t numLanes_;
 
 public:
@@ -211,8 +263,11 @@ public:
         , upper1(numLanes, val)
         , upper2(numLanes, val)
         , numLanes_(numLanes)
+        , bgSigma(numLanes*blockThreads, 0.0f)
     {}
 
+    // TODO should probably rename or remove.  Computes a naive baseline, but does
+    // not do the actual baseline subtraction, nor does it do any bias corrections
     __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<int16_t>& input,
                                     Mongo::Data::TraceBatch<int16_t>& output,
                                     Mongo::Data::BatchData<int16_t>& workspace1,
@@ -246,6 +301,46 @@ public:
             workspace2);
 
         AverageAndExpand<blockThreads, 16><<<numLanes_, blockThreads>>>(workspace1, workspace2, output);
+    }
+
+    __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
+                                    Mongo::Data::TraceBatch<int16_t>& output,
+                                    Mongo::Data::BatchData<int16_t>& workspace1,
+                                    Mongo::Data::BatchData<int16_t>& workspace2)
+    {
+        const uint64_t numFrames = input.Dimensions().framesPerBatch;
+
+        assert(input.Dimensions().laneWidth == 2*blockThreads);
+        assert(input.Dimensions().lanesPerBatch == numLanes_);
+
+        StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
+            input,
+            lower1.GetDeviceView(),
+            numFrames,
+            workspace1);
+        StridedFilter<blockThreads, 8, Lower2><<<numLanes_, blockThreads>>>(
+            workspace1,
+            lower2.GetDeviceView(),
+            numFrames/2,
+            workspace1);
+
+        StridedFilter<blockThreads, 2, Upper1><<<numLanes_, blockThreads>>>(
+            input,
+            upper1.GetDeviceView(),
+            numFrames,
+            workspace2);
+        StridedFilter<blockThreads, 8, Upper2><<<numLanes_, blockThreads>>>(
+            workspace2,
+            upper2.GetDeviceView(),
+            numFrames/2,
+            workspace2);
+
+        SubtractBaseline<blockThreads, 16><<<numLanes_, blockThreads>>>(
+            input,
+            bgSigma.GetDeviceView(),
+            workspace1,
+            workspace2,
+            output);
     }
 
 };

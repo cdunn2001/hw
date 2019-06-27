@@ -61,7 +61,7 @@ Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<Eleme
     Data::BatchData<ElementTypeIn> work1(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
     Data::BatchData<ElementTypeIn> work2(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
 
-    filter_->RunComposedFilter(rawTrace, out, work1, work2);
+    filter_->RunBaselineFilter(rawTrace, out, work1, work2);
 
     return std::move(out);
 }

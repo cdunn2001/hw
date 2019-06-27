@@ -45,15 +45,15 @@ class PBHalf2
 public:
     PBHalf2() = default;
 
-    explicit CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
-    explicit CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
-    explicit CUDA_ENABLED PBHalf2(short2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
-    explicit CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
-    explicit CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
+    CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
+    CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
+    CUDA_ENABLED PBHalf2(short2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
+    CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
+    CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
 
     CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
-    CUDA_ENABLED void SetX(float f) {}
-    CUDA_ENABLED void SetY(float f) {}
+    CUDA_ENABLED void SetX(float f) {data_.x = __float2half(f); }
+    CUDA_ENABLED void SetY(float f) {data_.y = __float2half(f); }
 
     half2 CUDA_ENABLED data() const { return data_; }
 private:

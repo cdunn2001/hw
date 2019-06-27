@@ -96,6 +96,14 @@ inline __device__ short2 Blend(PBHalf2 cond, short2 l, short2 r)
     return ret;
 }
 
+inline __device__ short2 ToShort(PBHalf2 h)
+{
+    short2 ret;
+    ret.x = __half2short_rn(h.data().x);
+    ret.y = __half2short_rn(h.data().y);
+    return ret;
+}
+
 }}
 
 #endif //PACBIO_CUDA_SIMD_CUH
