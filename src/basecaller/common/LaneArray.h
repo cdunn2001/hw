@@ -33,7 +33,8 @@ public:     // Structors and assignment
         : LaneArray()
     { std::copy(other.begin(), other.end(), begin()); }
 
-    explicit LaneArray(const BaseConstRef& other)
+    template <typename U>
+    explicit LaneArray(const ConstLaneArrayRef<U, N>& other)
         : LaneArray()
     { std::copy(other.begin(), other.end(), this->begin()); }
 
@@ -141,6 +142,17 @@ public:     // Comparison operators
     friend LaneMask<N> operator>=(const LaneArray& lhs, const LaneArray& rhs)
     {
         return !(lhs < rhs);
+    }
+
+public:     // Named unary operators
+    friend LaneArray sqrt(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = std::sqrt(x[i]);
+        }
+        return ret;
     }
 
 public:     // Named binary operators
@@ -320,7 +332,9 @@ max(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
 }
 
 template <typename T, unsigned int N>
-LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const LaneArray<T,N>& failure)
+LaneArray<T,N> Blend(const LaneMask<N>& tf,
+                     const ConstLaneArrayRef<T,N>& success,
+                     const ConstLaneArrayRef<T,N>& failure)
 {
     LaneArray<T,N> ret;
     for (unsigned int i = 0; i < N; ++i)
@@ -328,6 +342,25 @@ LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const
         ret[i] = tf[i] ? success[i] : failure[i];
     }
     return ret;
+}
+
+template <typename T, unsigned int N> inline
+LaneArray<int, N> floorCastInt(const ConstLaneArrayRef<T, N>& f)
+{
+    static_assert(std::is_floating_point<T>::value, "T must be floating-point type.");
+    LaneArray<int, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<int>(std::floor(f[i]));
+    }
+    return ret;
+}
+
+template <typename T, unsigned int N> inline
+LaneArray<T, N> inc(const ConstLaneArrayRef<T, N>& a, const LaneMask<N>& mask)
+{
+    const LaneArray<T, N> ap1 = a + T(1);
+    return Blend(mask, ap1 , a);
 }
 
 }}      // namespace PacBio::Mongo
@@ -345,6 +378,13 @@ struct SimdConvTraits<Mongo::LaneArray<T,N>>
     typedef Mongo::LaneArray<int,N> index_conv;
     typedef Mongo::LaneArray<short,N> pixel_conv;
     typedef Mongo::LaneArray<T,N> union_conv;
+};
+
+template <typename T, unsigned int N>
+struct SimdTypeTraits<Mongo::LaneArray<T,N>>
+{
+    typedef T scalar_type;
+    static const uint16_t width = N;
 };
 
 }}   // namespace PacBio::Simd

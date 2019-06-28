@@ -30,6 +30,7 @@
 //  Defines class templates LaneArrayRef and ConstLaneArrayRef.
 
 #include <algorithm>
+#include <limits>
 
 #include "LaneMask.h"
 #include "MongoConstants.h"
@@ -155,6 +156,26 @@ public:     // Miscellaneous friend functions.
             }
         }
         return ret;
+    }
+
+    friend ElementType reduceMin(const ConstLaneArrayRef& a)
+    {
+        auto r = std::numeric_limits<ElementType>::max();
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            r = std::min(r, a[i]);
+        }
+        return r;
+    }
+
+    friend ElementType reduceMax(const ConstLaneArrayRef& a)
+    {
+        auto r = std::numeric_limits<ElementType>::lowest();
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            r = std::max(r, a[i]);
+        }
+        return r;
     }
 
 protected:
