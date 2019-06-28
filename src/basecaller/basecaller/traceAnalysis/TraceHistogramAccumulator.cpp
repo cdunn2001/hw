@@ -27,7 +27,9 @@
 //  Description:
 //  Defines some members of class TraceHistogramAccumulator.
 
+#include <sstream>
 #include <pacbio/logging/Logger.h>
+#include <pacbio/PBException.h>
 #include <dataTypes/BasecallerConfig.h>
 #include "TraceHistogramAccumulator.h"
 
@@ -37,6 +39,9 @@ namespace Basecaller {
 
 // static
 unsigned int TraceHistogramAccumulator::numFramesPreAccumStats_;
+float TraceHistogramAccumulator::binSizeCoeff_;
+unsigned int TraceHistogramAccumulator::baselineStatMinFrameCount_;
+float TraceHistogramAccumulator::fallBackBaselineSigma_;
 
 // static
 void TraceHistogramAccumulator::Configure(
@@ -45,7 +50,31 @@ void TraceHistogramAccumulator::Configure(
 {
     numFramesPreAccumStats_ = histConfig.NumFramesPreAccumStats;
     PBLOG_INFO << "TraceHistogramAccumulator: NumFramesPreAccumStats = "
-               << numFramesPreAccumStats_;
+               << numFramesPreAccumStats_ << '.';
+
+    binSizeCoeff_ = histConfig.BinSizeCoeff;
+    PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
+               << binSizeCoeff_ << '.';
+    if (binSizeCoeff_ <= 0.0f)
+    {
+        std::ostringstream msg;
+        msg << "BinSizeCoeff must be positive.";
+        throw PBException(msg.str());
+    }
+
+    baselineStatMinFrameCount_ = histConfig.BaselineStatMinFrameCount;
+    PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
+               << baselineStatMinFrameCount_ << '.';
+
+    fallBackBaselineSigma_ = histConfig.FallBackBaselineSigma;
+    PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
+               << fallBackBaselineSigma_ << '.';
+    if (fallBackBaselineSigma_ <= 0.0f)
+    {
+        std::ostringstream msg;
+        msg << "FallBackBaselineSigma must be positive.";
+        throw PBException(msg.str());
+    }
 }
 
 TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)

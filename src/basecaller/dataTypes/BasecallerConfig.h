@@ -44,6 +44,18 @@ namespace Data {
         SMART_ENUM(MethodName, Host, Gpu);
         ADD_ENUM(MethodName, Method, MethodName::Host);
         ADD_PARAMETER(unsigned int, NumFramesPreAccumStats, 1000u);
+
+        // Bin size of data histogram is nominally defined as initial estimate
+        // of baseline sigma multiplied by this coefficient.
+        ADD_PARAMETER(float, BinSizeCoeff, 0.25f);
+
+        // Use fall-back baseline sigma when number of baseline frames is
+        // less than this value.
+        ADD_PARAMETER(unsigned int, BaselineStatMinFrameCount, 50u);
+
+        // Use this value as an estimate for baseline standard deviation when
+        // we have insufficient data.
+        ADD_PARAMETER(float, FallBackBaselineSigma, 10.0f);
     };
 
     class SpiderFixedDmeConfig : public PacBio::Process::ConfigurationObject
@@ -92,11 +104,6 @@ namespace Data {
         ADD_PARAMETER(float, ThreshAnalogSNR, 2.149f);
 
         ADD_PARAMETER(uint32_t, FirstAttemptsIterMultiple, 2);
-
-        // Bin size of data histogram is nominally defined as initial estimated
-        // of baseline sigma multiplied by this coefficient.
-        // Used by both DmeTwoPhase and DmeMonochrome.
-        ADD_PARAMETER(float, BinSizeCoeff, 0.20f);
 
         ADD_PARAMETER(unsigned int, NumBinsMin, 500);
 

@@ -53,6 +53,18 @@ public:     // Static functions
     static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
                           const Data::MovieConfig& movConfig);
 
+    static unsigned int NumFramesPreAccumStats()
+    { return numFramesPreAccumStats_; }
+
+    static float BinSizeCoeff()
+    { return binSizeCoeff_; }
+
+    static unsigned int BaselineStatMinFrameCount()
+    { return baselineStatMinFrameCount_; }
+
+    static float FallBackBaselineSigma()
+    { return fallBackBaselineSigma_; }
+
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
 
@@ -77,9 +89,6 @@ public:     // Const functions
         return TraceStatsImpl();
     }
 
-    unsigned int NumFramesPreAccumStats() const
-    { return numFramesPreAccumStats_; }
-
     /// The ZMW pool associated with this instance.
     uint32_t PoolId() const
     { return poolId_; }
@@ -102,6 +111,9 @@ private:    // Static data
     // Number of frames to accumulate baseliner statistics before initializing
     // histograms.
     static unsigned int numFramesPreAccumStats_;
+    static float binSizeCoeff_;
+    static unsigned int baselineStatMinFrameCount_;
+    static float fallBackBaselineSigma_;
 
 private:    // Data
     size_t frameCount_ = 0;
