@@ -98,6 +98,7 @@ private:
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
+    std::unique_ptr<HFMetricsFilter> hfMetrics_;
 
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 

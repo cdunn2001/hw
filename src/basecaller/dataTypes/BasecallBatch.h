@@ -45,6 +45,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+
 // A type stub for representing the sundry basecalling and trace metrics for a
 // single ZMW over a single "metrics block" (i.e., metrics frame interval).
 // Will be modeled, to some degree, after PacBio::Primary::BasecallingMetrics.
@@ -124,6 +125,11 @@ public:     // Functions
 
     Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() { return metrics_; }
     const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() const { return metrics_; }
+
+    void Metrics(Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>&& metrics)
+    {
+        metrics_ = std::move(metrics);
+    }
 
 private:    // Data
     BatchDimensions dims_;

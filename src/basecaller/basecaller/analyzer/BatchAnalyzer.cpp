@@ -40,6 +40,7 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/HFMetricsFilter.h>
 
 #include <common/cuda/PBCudaRuntime.h>
 
@@ -91,6 +92,11 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     dims.laneWidth = laneSize;
     dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
 
+    // TODO: make a metrics factory (or even just include the necessary parts
+    // as member variables that can be used to make new Metrics objects) within
+    // HFMetricsFilter. Most of the necessary elements are here:
+    // The biggest problem will be the metricsPool_ item. I think we should
+    // just not generate it in BasecallBatch, and only generate it in HFMetrics
     batchFactory_ = std::make_unique<BasecallBatchFactory>(
         bcConfig.pulseAccumConfig.maxCallsPerZmw,
         dims,
@@ -111,6 +117,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
+    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
     // TODO: Create other algorithm components.
 
     // Not running DME, need to fake our model
@@ -254,6 +261,8 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
+    (*hfMetrics_)(bases);
+
     return bases;
 }
 
@@ -314,6 +323,11 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
+    // potentially modify basecalls to add a metrics block for some number of
+    // preceding blocks
+    (*hfMetrics_)(basecalls);
+    // TODO (mds 20190626) how do you recover the final metrics block if you
+    // end before getting to a yield block?
     return basecalls;
 }
 

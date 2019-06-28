@@ -12,6 +12,7 @@
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/HFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
@@ -191,6 +192,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
+    HFMetricsFilter::Configure(bcConfig.Metrics);
 }
 
 
@@ -305,6 +307,12 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
         throw PBException(msg.str());
         break;
     }
+}
+
+std::unique_ptr<HFMetricsFilter>
+AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
+{
+    return std::make_unique<HFMetricsFilter>(poolId);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
