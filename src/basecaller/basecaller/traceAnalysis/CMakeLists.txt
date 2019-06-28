@@ -20,6 +20,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     HostMultiScaleBaseliner.cpp
     HostNoOpBaseliner.h
     HostNoOpBaseliner.cpp
+    HostPulseAccumulator.cpp
+    HostPulseAccumulator.h
     HostSimulatedPulseAccumulator.h
     HostSimulatedPulseAccumulator.cpp
     PulseAccumulator.h
