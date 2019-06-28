@@ -69,6 +69,8 @@ Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {
+        auto view = labels.GetBlockView(laneIdx);
+        (void)view;
         auto lanePulses = ret.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
     }

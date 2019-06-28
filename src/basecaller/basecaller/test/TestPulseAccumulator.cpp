@@ -60,7 +60,7 @@ TEST(TestNoOpPulseAccumulator, Run)
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
             framesPerChunk,
             lanesPerPool,
-            16u,
+            16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             true);
 
@@ -106,7 +106,7 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
             framesPerChunk,
             lanesPerPool,
-            16u,
+            16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             true);
 
