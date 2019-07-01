@@ -121,11 +121,35 @@ struct __align__(128) MultiFilter<laneWidth, IntSeq<Strides...>, Filters...>
         }
     }
 
+    // Setting up some types to help with template recursion.  Using types instead of
+    // values to control our recursion allows us to use function overloads to control
+    // recursion termination.  A previous incarnation used values and in order to
+    // terminate the final iteration had a call to the 0th iteration again, but
+    // was disabled by a conditional that was always false.  That approach does
+    // get optimized away in release builds, but debug builds couldn't tell the
+    // conditional was always false, and emitted numerous warnings about being
+    // unable to determine the stack size due to the apparrent runtime (not compile time)
+    // recursion.  Those warnings were mostly harmless, but annoying, so this alternate
+    // version was written instead.
     template <size_t idx>
-    __device__ void ApplyFilterStage(short2 val)
+    struct IdxWrapper
+    {
+        static constexpr size_t value = idx;
+    };
+    struct Terminus{};
+
+    __device__ void InvokeNext(short2 val, Terminus){}
+    template <typename Idx>
+    __device__ void InvokeNext(short2 val, Idx)
+    {
+        ApplyFilterStage(val, Idx{});
+    }
+
+    template <typename Idx, size_t idx = Idx::value>
+    __device__ void ApplyFilterStage(short2 val, Idx)
     {
         assert(blockDim.x == laneWidth);
-        static constexpr size_t nextIdx = (idx < length-1) ? idx+1 : 0;
+        using NextIdx = typename std::conditional<idx < length-1, IdxWrapper<idx+1> , Terminus>::type;
 
         auto lidx = strideIdx[idx][threadIdx.x];
         const bool cont = (lidx == 0);
@@ -142,14 +166,14 @@ struct __align__(128) MultiFilter<laneWidth, IntSeq<Strides...>, Filters...>
             }
             else
             {
-                ApplyFilterStage<nextIdx>(tmp);
+                InvokeNext(tmp, NextIdx{});
             }
         }
     }
 
     __device__ short2 operator()(short2 val)
     {
-        ApplyFilterStage<0>(val);
+        ApplyFilterStage(val, IdxWrapper<0>{});
         return ret[threadIdx.x];
     }
 

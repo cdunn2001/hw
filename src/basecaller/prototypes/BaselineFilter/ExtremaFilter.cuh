@@ -104,74 +104,56 @@ struct __align__(128) ExtremaFilter
 template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp>
 struct LocalExtremaFilter
 {
-    // Compile time loop, which is necessary to keep `data` in registers
-    // instead of pushed out to device memory
-    template <size_t id>
-    __device__ void RotateLoop()
-    {
-        data[id] = data[id+1];
-        static constexpr size_t nextId = (id < filterWidth-2) ? id+1 : 0;
-        if (id < filterWidth-2) RotateLoop<nextId>();
-    }
     // Does a rolling swap of `data`, to keep the active element in data[0]
     __device__ void Rotate()
     {
         auto tmp = data[0];
-        RotateLoop<0>();
+        // All loops over `data` *must* be unrolled to allow storage in register
+        #pragma unroll(filterWidth-1)
+        for (int i = 0; i < filterWidth-1; ++i)
+        {
+            data[i] = data[i+1];
+        }
         data[filterWidth-1] = tmp;
     }
 
-    // Another compile time loop, to keep `data` in registers
-    template <size_t id>
-    __device__
-    void ExtractZmwData(const ExtremaFilter<blockThreads, filterWidth, Op>& f)
-    {
-        data[id] = f.data[id][threadIdx.x];
-
-        static constexpr size_t next = (id+1 < filterWidth) ? id+1 : filterWidth-1;
-        if (id == filterWidth-1) return;
-        else ExtractZmwData<next>(f);
-    }
     __device__ LocalExtremaFilter(const ExtremaFilter<blockThreads, filterWidth, Op>& f)
         : idx(0)
     {
-        ExtractZmwData<0>(f);
+        // All loops over `data` *must* be unrolled to allow storage in register
+        #pragma unroll(filterWidth)
+        for (int i = 0; i < filterWidth; ++i)
+        {
+            data[i] = f.data[i][threadIdx.x];
+        }
         s = f.s[threadIdx.x];
         idx = f.idx[threadIdx.x];
         __syncthreads();
     }
 
-    // compile time loop, to keep `data` in registers
-    template <size_t id>
-    __device__
-    void ReplaceZmwData(ExtremaFilter<blockThreads, filterWidth, Op>& f)
-    {
-        f.data[id][threadIdx.x] = data[id];
-
-        static constexpr size_t next = (id+1 < filterWidth) ? id+1 : filterWidth-1;
-        if (id == filterWidth-1) return;
-        else ReplaceZmwData<next>(f);
-    }
     __device__ void ReplaceShared(ExtremaFilter<blockThreads, filterWidth, Op> & f)
     {
-        ReplaceZmwData<0>(f);
+        // All loops over `data` *must* be unrolled to allow storage in register
+        #pragma unroll(filterWidth)
+        for (int i = 0; i < filterWidth; ++i)
+        {
+            f.data[i][threadIdx.x] = data[i];
+        }
         f.s[threadIdx.x] = s;
         f.idx[threadIdx.x] = idx;
         __syncthreads();
     }
 
-    template <int id>
-    __device__ void OpLoop()
-    {
-        data[id-1] = Op::op(data[id] , data[id-1]);
-        static constexpr int nextId = (id > 1) ? id-1 : 1;
-        if (id > 1) OpLoop<nextId>();
-    }
     __device__ short2 operator()(short2 val)
     {
         if (idx == 0)
         {
-            OpLoop<filterWidth-1>();
+            // All loops over `data` *must* be unrolled to allow storage in register
+            #pragma unroll(filterWidth)
+            for (int i = filterWidth-1; i > 0; --i)
+            {
+                data[i-1] = Op::op(data[i], data[i-1]);
+            }
             s = data[filterWidth-1];
         }
         else s = Op::op(s, data[filterWidth-1]);
