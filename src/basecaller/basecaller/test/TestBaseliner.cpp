@@ -62,7 +62,7 @@ TEST(TestNoOpBaseliner, Run)
     {
         auto chunk = batchGenerator.PopulateChunk();
         Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
-        const auto& baselineStats = cameraBatch.Stats(0);
+        const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
         EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
                                 baselineStats.m0_.data()+laneSize,
                                 [](float v) { return v == 0; }));
@@ -100,7 +100,7 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
     {
         auto chunk = batchGenerator.PopulateChunk();
         Data::CameraTraceBatch cameraBatch = baseliner(std::move(chunk.front()));
-        const auto& baselineStats = cameraBatch.Stats(0);
+        const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
         EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
                                 baselineStats.m0_.data()+laneSize,
                                 [](float v) { return v == 0; }));

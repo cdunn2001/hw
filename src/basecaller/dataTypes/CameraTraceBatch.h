@@ -38,17 +38,10 @@ public:     // Structors and assignment
     CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
 
 public:     // Access to statistics
-    /// The statistics computed by the baseliner for a specific lane.
-    const BaselineStats<laneSize>& Stats(unsigned int lane) const
-    { return stats_.GetHostView()[lane]; }
+    const Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>>& Stats() const
+    { return stats_; }
 
-    /// The statistics computed by the baseliner for a specific lane.
-    BaselineStats<laneSize>& Stats(unsigned int lane)
-    { return stats_.GetHostView()[lane]; }
-
-    /// The statistics computed by the baseliner for the entire pool of ZMWs.
-    const Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>>&
-    PoolStats() const
+    Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>>& Stats()
     { return stats_; }
 
 private:    // Data

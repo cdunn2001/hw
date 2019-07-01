@@ -55,6 +55,14 @@ inline __device__ PBHalf2 operator ||(PBHalf2 first, PBHalf2 second)
     return PBHalf2(__halves2half2(low, high));
 }
 
+inline __device__ PBHalf2 operator &&(PBHalf2 first, PBHalf2 second)
+{
+    half zero = __float2half(0.0f);
+    half low  = (__low2half(first.data())  != zero) && (__low2half(second.data())  != zero);
+    half high = (__high2half(first.data()) != zero) && (__high2half(second.data()) != zero);
+    return PBHalf2(__halves2half2(low, high));
+}
+
 inline __device__ PBHalf2 operator + (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() + r.data()); }
 inline __device__ PBHalf2 operator - (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() - r.data()); }
 inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() * r.data()); }

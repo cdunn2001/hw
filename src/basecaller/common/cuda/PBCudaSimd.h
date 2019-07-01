@@ -54,6 +54,8 @@ public:
     CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
     CUDA_ENABLED void SetX(float f) {data_.x = __float2half(f); }
     CUDA_ENABLED void SetY(float f) {data_.y = __float2half(f); }
+    CUDA_ENABLED float X() const { return __half2float(data_.x); }
+    CUDA_ENABLED float Y() const { return __half2float(data_.y); }
 
     half2 CUDA_ENABLED data() const { return data_; }
 private:

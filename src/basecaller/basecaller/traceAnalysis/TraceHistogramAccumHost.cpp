@@ -65,10 +65,11 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
             && FramesAdded() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
+    const auto& statsView = ctb.Stats().GetHostView();
     for (unsigned int lane = 0; lane < numLanes; ++lane)
     {
         // Accumulate baseliner stats.
-        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(ctb.Stats(lane)));
+        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
 
         if (doInitHist)
         {

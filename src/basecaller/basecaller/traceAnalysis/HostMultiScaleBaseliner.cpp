@@ -30,6 +30,7 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.Dimensions(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
 
+    auto statsView = out.Stats().GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);
@@ -41,7 +42,7 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
                                                          upperBuffer.GetBlockView(laneIdx),
                                                          baselineSubtracted);
 
-        out.Stats(laneIdx) = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.ToBaselineStats();
     }
 
     return std::move(out);

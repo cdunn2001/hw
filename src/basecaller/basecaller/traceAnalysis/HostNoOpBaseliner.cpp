@@ -29,6 +29,7 @@ Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeI
         auto frameData = rawTrace.GetBlockView(laneIdx);
         auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
 
+        auto statsView = out.Stats().GetHostView();
         for (size_t frame = 0; frame < frameData.NumFrames(); ++frame)
         {
             ElementTypeIn* f = frameData.Data() + (frame * frameData.LaneWidth());
@@ -38,10 +39,10 @@ Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeI
             baselinerStats.AddSample(rawData, rawData, isBaseline);
         }
 
-        out.Stats(laneIdx) = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.ToBaselineStats();
     }
 
-    return std::move(out);
+    return out;
 }
 
 HostNoOpBaseliner::~HostNoOpBaseliner() = default;
