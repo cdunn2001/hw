@@ -132,23 +132,85 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     }
 }
 
+namespace {
+
+// Temporary helper function for converting from the mongo Pulse data type to the old Sequel
+// Base data type.  Will eventually be replaed by a proper pulse-to-base stage, (and presumably
+// Conversion will be done to a new mongo-specific Base type
+void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& bases)
+{
+    auto LabelConv = [](Data::Pulse::NucleotideLabel label) {
+        switch (label)
+        {
+        case Data::Pulse::NucleotideLabel::A:
+            return SmrtData::NucleotideLabel::A;
+        case Data::Pulse::NucleotideLabel::C:
+            return SmrtData::NucleotideLabel::C;
+        case Data::Pulse::NucleotideLabel::G:
+            return SmrtData::NucleotideLabel::G;
+        case Data::Pulse::NucleotideLabel::T:
+            return SmrtData::NucleotideLabel::T;
+        case Data::Pulse::NucleotideLabel::N:
+            return SmrtData::NucleotideLabel::N;
+        default:
+            assert(label == Data::Pulse::NucleotideLabel::NONE);
+            return SmrtData::NucleotideLabel::NONE;
+        }
+    };
+    for (size_t lane = 0; lane < pulses.Dims().lanesPerBatch; ++lane)
+    {
+        auto baseView = bases.Basecalls().LaneView(lane);
+        auto pulsesView = pulses.Pulses().LaneView(lane);
+
+        baseView.Reset();
+        for (size_t zmw = 0; zmw < laneSize; ++zmw)
+        {
+            auto numBases = pulsesView.size(zmw);
+            for (size_t b = 0; b < numBases; ++b)
+            {
+                const auto& pulse = pulsesView(zmw, b);
+                PacBio::SmrtData::Basecall bc;
+
+                static constexpr int8_t qvDefault_ = 0;
+
+                auto label = LabelConv(pulse.Label());
+
+                // Populate pulse data
+                bc.GetPulse().Start(pulse.Start()).Width(pulse.Stop());
+                bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
+                bc.GetPulse().Label(label).LabelQV(qvDefault_);
+                bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
+                bc.GetPulse().MergeQV(qvDefault_);
+
+                // Populate base data.
+                bc.Base(label).InsertionQV(qvDefault_);
+                bc.DeletionTag(SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
+                bc.SubstitutionTag(SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
+
+                baseView.push_back(zmw, bc);
+            }
+        }
+    }
+
+}
+
+}
 
 BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
-    // TODO: Develop error handling logic.
-
-    // Baseline estimation and subtraction.
-    // Includes computing baseline moments.
     auto ctb = (*baseliner_)(std::move(tbatch));
     auto labels = (*frameLabeler_)(std::move(ctb), models_);
     auto pulses = (*pulseAccumulator_)(std::move(labels));
 
+    auto bases = batchFactory_->NewBatch(tbatch.Metadata());
+    ConvertPulsesToBases(pulses, bases);
+
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return batchFactory_->NewBatch(tbatch.Metadata());
+    return bases;
 }
 
 
@@ -208,10 +270,10 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     static constexpr int8_t qvDefault_ = 0;
 
     auto& basecalls = basecallsBatch.Basecalls();
-    for (uint32_t l = 0; l < basecallsBatch.Dims().lanesPerBatch; l++)
+    for (uint32_t lane = 0; lane < basecallsBatch.Dims().lanesPerBatch; lane++)
     {
-        auto laneCalls = basecalls.LaneView(l);
-        for (uint32_t z = 0; z < laneSize; ++z)
+        auto laneCalls = basecalls.LaneView(lane);
+        for (uint32_t zmw = 0; zmw < laneSize; ++zmw)
         {
             for (uint16_t b = 0; b < maxCallsPerZmwChunk_; b++)
             {
@@ -236,7 +298,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
                 bc.DeletionTag(NucleotideLabel::N).DeletionQV(qvDefault_);
                 bc.SubstitutionTag(NucleotideLabel::N).SubstitutionQV(qvDefault_);
 
-                laneCalls.push_back(z, bc);
+                laneCalls.push_back(zmw, bc);
             }
         }
     }
