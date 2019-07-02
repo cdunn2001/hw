@@ -89,6 +89,9 @@ DeviceSGCFrameLabeler::Process(CameraTraceBatch trace,
     auto ret = batchFactory_->NewBatch(std::move(trace));
     labeler_->ProcessBatch(models, ret.TraceData(), ret.LatentTrace(), ret);
 
+    // Update the trace data so downstream filters can't see the held back portion
+    ret.TraceData().SetFrameLimit(ret.NumFrames() - ViterbiStitchLookback);
+
     return ret;
 }
 
