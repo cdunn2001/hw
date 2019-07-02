@@ -21,13 +21,13 @@ void HostMultiScaleBaseliner::Finalize()
 
 Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
     auto pools = rawTrace.GetAllocationPools();
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
-    Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.Dimensions(),
+    Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
-    Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.Dimensions(),
+    Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
 
     auto statsView = out.Stats().GetHostView();

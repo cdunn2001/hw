@@ -183,7 +183,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
-    const int numFrames = input.Dims().framesPerBatch;
+    const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
     for (int frame = 0; frame < numFrames; ++frame)
     {

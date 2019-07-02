@@ -17,7 +17,7 @@ __global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const short
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
     auto& myFilter = filters[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
@@ -33,7 +33,7 @@ __global__ void SharedBaselineFilter(const Mongo::Data::GpuBatchData<const short
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
     __shared__ Filter myFilter;
     myFilter = filters[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
@@ -70,7 +70,7 @@ __global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const s
                                          Mongo::Data::GpuBatchData<short2> workspace2,
                                          Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
 
     // Grab a swath of memory that can fit our largest filter
     constexpr size_t maxSize = constexprMax(sizeof(ErodeDilate<blockThreads, width1>), sizeof(ErodeDilate<blockThreads, width2>));
@@ -134,10 +134,10 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const short2> in,
                               int numFrames,
                               Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t maxFrames = in.Dims().framesPerBatch;
+    const size_t maxFrames = in.NumFrames();
 
     assert(blockThreads == blockDim.x);
-    assert(numFrames <= out.Dims().framesPerBatch);
+    assert(numFrames <= out.NumFrames());
     assert(numFrames <= maxFrames);
     assert(numFrames % 4 == 0);
     assert((numFrames/4) % stride == 0);
@@ -171,7 +171,7 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> i
                                  const Mongo::Data::GpuBatchData<const short2> in2,
                                  Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = out.Dims().framesPerBatch;
+    const size_t numFrames = out.NumFrames();
 
     assert(numFrames % stride == 0);
     int inputCount = numFrames / stride;
@@ -362,7 +362,7 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const short2> i
     PBHalf2 cSigmaBias(2.44f);
     PBHalf2 cMeanBias(0.5f);
 
-    const size_t numFrames = out.Dims().framesPerBatch;
+    const size_t numFrames = out.NumFrames();
 
     assert(numFrames % stride == 0);
     int inputCount = numFrames / stride;
@@ -426,10 +426,10 @@ public:
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        const uint64_t numFrames = input.Dimensions().framesPerBatch;
+        const uint64_t numFrames = input.NumFrames();
 
-        assert(input.Dimensions().laneWidth == 2*blockThreads);
-        assert(input.Dimensions().lanesPerBatch == numLanes_);
+        assert(input.LaneWidth() == 2*blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
 
         StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
             input,
@@ -462,10 +462,10 @@ public:
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        const uint64_t numFrames = input.Dimensions().framesPerBatch;
+        const uint64_t numFrames = input.NumFrames();
 
-        assert(input.Dimensions().laneWidth == 2*blockThreads);
-        assert(input.Dimensions().lanesPerBatch == numLanes_);
+        assert(input.LaneWidth() == 2*blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
 
         StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
             input,

@@ -46,15 +46,15 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
     // TODO: Can some of this logic be lifted into the base class's AddBatch
     // method (template method pattern)?
 
-    const auto numLanes = ctb.Dimensions().lanesPerBatch;
+    const auto numLanes = ctb.LanesPerBatch();
 
-    if (FramesAdded() == ctb.Dimensions().framesPerBatch)
+    if (FramesAdded() == ctb.NumFrames())
     {
         // This is the first trace batch.
 
         // Reset all the histograms.
         hist_.clear();
-        hist_.reserve(ctb.Dimensions().lanesPerBatch);
+        hist_.reserve(ctb.LanesPerBatch());
         isHistInitialized_ = false;
 
         // Reset baseline stat accumulators.

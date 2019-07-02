@@ -65,17 +65,21 @@ public:
         , pinned_(pinned)
         , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
         , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselineStats<laneSize>), pinned))
-    {}
-
-    CameraTraceBatch NewBatch(const BatchMetadata& meta,
-                              const BatchDimensions& dims)
     {
-        return CameraTraceBatch(meta, dims, pinned_, syncDirection_, tracePool_, statsPool_);
+        dims_.laneWidth = laneSize;
+        dims_.framesPerBatch = framesPerChunk;
+        dims_.lanesPerBatch = lanesPerPool;
+    }
+
+    CameraTraceBatch NewBatch(const BatchMetadata& meta)
+    {
+        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_, tracePool_, statsPool_);
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
     bool pinned_;
+    BatchDimensions dims_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };

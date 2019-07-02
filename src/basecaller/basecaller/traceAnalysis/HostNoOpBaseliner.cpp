@@ -22,7 +22,7 @@ void HostNoOpBaseliner::Finalize()
 
 Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {

@@ -316,6 +316,7 @@ public:
               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
               bool pinnedHost = true)
         : dims_(dims)
+        , availableFrames_(dims.framesPerBatch)
         , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
                 syncDirection, pinnedHost, pool)
     {}
@@ -334,10 +335,16 @@ public:
     }
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
-    size_t numFrames()     const { return dims_.framesPerBatch; }
+    size_t NumFrames()     const { return availableFrames_; }
     size_t LanesPerBatch() const { return dims_.lanesPerBatch; }
 
-    const BatchDimensions& Dimensions() const { return dims_; }
+    void SetFrameLimit(uint32_t frames)
+    {
+        if (frames > dims_.framesPerBatch) throw PBException("New BatchData frame limit exceeds underlying storage");
+        availableFrames_ = frames;
+    }
+
+    const BatchDimensions& StorageDims() const { return dims_; }
 
     Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
     const Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) const { return data_; }
@@ -350,7 +357,7 @@ public:
         auto view = data_.GetHostView();
         return BlockView<T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
                             dims_.laneWidth,
-                            dims_.framesPerBatch,
+                            availableFrames_,
                             DataKey());
     }
     BlockView<const T> GetBlockView(size_t laneIdx) const
@@ -358,12 +365,13 @@ public:
         auto view = data_.GetHostView();
         return BlockView<const T>(view.Data() + laneIdx * dims_.framesPerBatch * dims_.laneWidth,
                             dims_.laneWidth,
-                            dims_.framesPerBatch,
+                            availableFrames_,
                             DataKey());
     }
 
 private:
     BatchDimensions dims_;
+    uint32_t availableFrames_; // Can have fewer frames than specified in dims_;
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
@@ -380,9 +388,11 @@ class GpuBatchDataHandle
     using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
 public:
     GpuBatchDataHandle(const BatchDimensions& dims,
+                       uint32_t availableFrames,
                        Cuda::Memory::DeviceHandle<T> data,
                        DataManagerKey key)
         : dims_(dims)
+        , availableFrames_(availableFrames)
         , data_(data)
     {}
 
@@ -391,6 +401,7 @@ public:
 
 protected:
     BatchDimensions dims_;
+    uint32_t availableFrames_;
     Cuda::Memory::DeviceHandle<T> data_;
 };
 
