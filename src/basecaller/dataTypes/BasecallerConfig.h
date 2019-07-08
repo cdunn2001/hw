@@ -224,7 +224,7 @@ namespace Data {
     class BasecallerPulseAccumConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, NoOp, HostSimulatedPulses)
+        SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses)
         ADD_ENUM(MethodName, Method, MethodName::NoOp);
 
         // Increasing this number will directly increase memory usage, even if

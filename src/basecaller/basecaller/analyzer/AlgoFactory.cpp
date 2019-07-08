@@ -10,6 +10,7 @@
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
@@ -86,6 +87,8 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
         HostSimulatedPulseAccumulator::Finalize();
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        HostPulseAccumulator::Finalize();
     default:
         ostringstream msg;
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
@@ -142,6 +145,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
         HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        HostPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -242,6 +248,9 @@ AlgoFactory::CreateAccumulator(unsigned int poolId) const
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
         return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        return std::make_unique<HostPulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
         break;
     default:
         ostringstream msg;
