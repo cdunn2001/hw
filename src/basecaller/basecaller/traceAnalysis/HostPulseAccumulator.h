@@ -70,18 +70,10 @@ public:
     public:
 
         static LaneMask<laneSize> IsPulseUpState(const ConstLabelArrayRef& i)
-        { return (i > numAnalogs) & (i <= 2*numAnalogs); }
+        { return (i > LabelArray{numAnalogs}) & (i <= LabelArray{2*numAnalogs}); }
 
         static LaneMask<laneSize> IsPulseDownState(const ConstLabelArrayRef& i)
-        { return (i > 2*numAnalogs) & (i < numStates); }
-
-        static LabelArray ToFullFrame(const ConstLabelArrayRef& label)
-        {
-            LabelArray ret = label;
-            ret = Blend(IsPulseDownState(label), label - 2*numAnalogs, ret);
-            ret = Blend(IsPulseUpState(label), label - numAnalogs, ret);
-            return ret;
-        }
+        { return (i > LabelArray{2*numAnalogs}) & (i < LabelArray{numStates}); }
 
     public:
         LabelsSegment(const FrameArray& startFrame, const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
@@ -117,16 +109,62 @@ public:
             return label_ != 0;
         }
 
+        LabelArray FullFrameLabel()
+        {
+            LabelArray ret(this->label_);
+            ret = Blend(IsPulseDownState(this->label_),
+                        this->label_ - static_cast<Data::LabelsBatch::ElementType>(2*numAnalogs), ret);
+            ret = Blend(IsPulseUpState(this->label_),
+                        this->label_ - static_cast<Data::LabelsBatch::ElementType>(numAnalogs), ret);
+            return ret;
+        }
+
+        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw)
+        {
+            using NucleotideLabel = Data::Pulse::NucleotideLabel;
+            const std::array<NucleotideLabel, 5>& analogMap =
+            {
+                NucleotideLabel::NONE, NucleotideLabel::A, NucleotideLabel::C, NucleotideLabel::G, NucleotideLabel::T
+            };
+            const float maxSignal = Data::Pulse::SignalMax();
+            const float minSignal = 0.0f;
+
+            Data::Pulse pls{};
+
+            endFrame_ = frameIndex;
+
+            int width = frameIndex - startFrame_[zmw];
+
+            using std::min;
+            using std::max;
+
+            LaneArray<float> raw_mean(signalTotal_ + signalLastFrame_ + signalFrstFrame_);
+            LaneArray<float> raw_mid(signalTotal_);
+
+            raw_mean /= static_cast<float>(width);
+            raw_mid /= static_cast<float>(width - 2);
+
+            pls.Start(startFrame_[zmw])
+                .Width(width)
+                .MeanSignal(min(maxSignal, max(minSignal, raw_mean[zmw])))
+                .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid[zmw])))
+                .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
+                .SignalM2(signalM2_[zmw])
+                .Label(analogMap[FullFrameLabel()[zmw]]);
+
+            return pls;
+        }
+
         void ResetSegment(const LaneMask<laneSize>& boundaryMask, uint32_t frameIndex,
                           const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
         {
-            startFrame_ = Blend(boundaryMask, frameIndex, startFrame_);
-            endFrame_ = Blend(boundaryMask, 0, endFrame_);
+            startFrame_ = Blend(boundaryMask, FrameArray{frameIndex}, startFrame_);
+            endFrame_ = Blend(boundaryMask, FrameArray{0}, endFrame_);
             signalFrstFrame_ = Blend(boundaryMask, signal, signalFrstFrame_);
-            signalLastFrame_ = Blend(boundaryMask, 0, signalLastFrame_);
+            signalLastFrame_ = Blend(boundaryMask, SignalArray{0}, signalLastFrame_);
             signalMax_ = Blend(boundaryMask, signal, signalMax_);
-            signalTotal_ = Blend(boundaryMask, 0, signalTotal_);
-            signalM2_ = Blend(boundaryMask, 0, signalM2_);
+            signalTotal_ = Blend(boundaryMask, SignalArray{0}, signalTotal_);
+            signalM2_ = Blend(boundaryMask, SignalArray{0}, signalM2_);
             label_ = Blend(boundaryMask, label, label_);
         }
         
@@ -135,7 +173,7 @@ public:
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
             signalM2_ = Blend(update, signalM2_ + (signalLastFrame_ * signalLastFrame_), signalM2_);
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
-            signalMax_ = Blend(update, max(signalMax_, signal), signalMax_);
+            signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }
 
     private:
