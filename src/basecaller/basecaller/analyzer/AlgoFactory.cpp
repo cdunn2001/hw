@@ -312,7 +312,7 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
 std::unique_ptr<HFMetricsFilter>
 AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
 {
-    return std::make_unique<HFMetricsFilter>(poolId);
+    return std::make_unique<HostHFMetricsFilter>(poolId);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

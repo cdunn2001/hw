@@ -102,8 +102,7 @@ public:     // Structors & assignment operators
                   Cuda::Memory::SyncDirection syncDir,
                   bool pinned,
                   std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-                  std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
-                  std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool);
+                  std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool);
 
     BasecallBatch(const BasecallBatch&) = delete;
     BasecallBatch(BasecallBatch&&) = default;
@@ -123,10 +122,10 @@ public:     // Functions
     BatchVectors<Basecall>& Basecalls() { return basecalls_; }
     const BatchVectors<Basecall>& Basecalls() const { return basecalls_; }
 
-    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() { return metrics_; }
-    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() const { return metrics_; }
+    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() { return *metrics_; }
+    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() const { return *metrics_; }
 
-    void Metrics(Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>&& metrics)
+    void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> metrics)
     {
         metrics_ = std::move(metrics);
     }
@@ -136,8 +135,8 @@ private:    // Data
     BatchMetadata   metaData_;
     BatchVectors<Basecall> basecalls_;
 
-    // Metrics per ZMW. Size is dims_.zmwsPerBatch() or 0.
-    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics> metrics_;
+    // Metrics per ZMW. Size is dims_.zmwsPerBatch() or nullptr.
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> metrics_;
 };
 
 class BasecallBatchFactory
@@ -155,7 +154,6 @@ public:
         , pinned_(pinned)
         , callsPool_(std::make_shared<Pools>(maxCallsPerZmw*batchDims.ZmwsPerBatch()*sizeof(Basecall), pinned))
         , lenPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(uint32_t), pinned))
-        , metricsPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(BasecallingMetrics), pinned))
     {}
 
     BasecallBatch NewBatch(const BatchMetadata& batchMetadata)
@@ -167,8 +165,7 @@ public:
                 syncDir_,
                 pinned_,
                 callsPool_,
-                lenPool_,
-                metricsPool_);
+                lenPool_);
     }
 
 private:
@@ -179,7 +176,6 @@ private:
 
     std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

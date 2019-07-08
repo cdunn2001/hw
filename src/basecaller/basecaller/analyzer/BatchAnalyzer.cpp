@@ -92,11 +92,6 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     dims.laneWidth = laneSize;
     dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
 
-    // TODO: make a metrics factory (or even just include the necessary parts
-    // as member variables that can be used to make new Metrics objects) within
-    // HFMetricsFilter. Most of the necessary elements are here:
-    // The biggest problem will be the metricsPool_ item. I think we should
-    // just not generate it in BasecallBatch, and only generate it in HFMetrics
     batchFactory_ = std::make_unique<BasecallBatchFactory>(
         bcConfig.pulseAccumConfig.maxCallsPerZmw,
         dims,
@@ -261,7 +256,12 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    (*hfMetrics_)(bases);
+    auto basecallingMetrics = (*hfMetrics_)(bases);
+
+    if (basecallingMetrics)
+    {
+        bases.Metrics(std::move(basecallingMetrics));
+    }
 
     return bases;
 }
@@ -325,7 +325,13 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     // potentially modify basecalls to add a metrics block for some number of
     // preceding blocks
-    (*hfMetrics_)(basecalls);
+    auto basecallingMetrics = (*hfMetrics_)(basecallsBatch);
+
+    if (basecallingMetrics)
+    {
+        basecallsBatch.Metrics(std::move(basecallingMetrics));
+    }
+
     // TODO (mds 20190626) how do you recover the final metrics block if you
     // end before getting to a yield block?
     return basecalls;

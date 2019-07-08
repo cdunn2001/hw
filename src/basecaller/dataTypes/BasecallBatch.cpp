@@ -53,12 +53,10 @@ BasecallBatch::BasecallBatch(
         Cuda::Memory::SyncDirection syncDir,
         bool pinned,
         std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
+        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
     : dims_ (batchDims)
     , metaData_(batchMetadata)
     , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-    , metrics_(batchDims.ZmwsPerBatch(), syncDir, pinned, metricsPool)
 {}
 
 }}}     // namespace PacBio::Mongo::Data

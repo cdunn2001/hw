@@ -44,6 +44,7 @@ uint32_t HFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double HFMetricsFilter::frameRate_ = 0;
 bool HFMetricsFilter::realtimeActivityLabels_ = 0;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
+std::unique_ptr<BasecallingMetricsFactory> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
 {
@@ -62,18 +63,48 @@ void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
     dims.laneWidth = laneSize;
     dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
     zmwsPerBatch_ = dims.zmwsPerBatch();
+
+    InitAllocationPools(true);
 }
 
-// TODO (mds 20190628) share a metricsPool with BasecallBatchFactory?
+void HFMetricsFilter::Finalize()
+{
+    DestroyAllocationPools();
+}
+
+void HFMetricsFilter::InitAllocationPools(bool hostExecution)
+{
+    using Cuda::Memory::SyncDirection;
+
+    Data::BatchDimensions dims;
+    dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
+    dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
+    dims.laneWidth = laneSize;
+
+    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
+    metricsFactory_ = std::make_unique<BasecallingMetricsFactory>(
+            dims, syncDir, true);
+}
+
+void HFMetricsFilter::DestroyAllocationPools()
+{
+    metricsFactory_.release();
+}
+
 HFMetricsFilter::HFMetricsFilter(uint32_t poolId)
     : poolId_(poolId)
     , framesSeen_(0)
-    , metrics_(zmwsPerBatch_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, true)
-    , metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(
-        zmwsPerBatch_*sizeof(Data::BasecallingMetrics), true))
+    //, metrics_(zmwsPerBatch_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, true)
+    //, metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(
+        //zmwsPerBatch_*sizeof(Data::BasecallingMetrics), true))
 {}
 
-void HFMetricsFilter::AddBatch(ElementTypeIn& batch)
+void HFMetricsFilter::FinalizeBlock()
+{
+    // Add HQR blocklabel, etc
+}
+
+void HostHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
 {
     auto& basecalls = batch.Basecalls();
     for (uint32_t l = 0; l < batch.Dims().lanesPerBatch; l++)
@@ -83,28 +114,17 @@ void HFMetricsFilter::AddBatch(ElementTypeIn& batch)
         {
             for (uint32_t b = 0; b < laneCalls.size(z); ++b)
             {
-                metrics_.GetHostView()[l * laneSize + z].Count(laneCalls(z, b));
+                metrics_->GetHostView()[l * laneSize + z].Count(laneCalls(z, b));
             }
         }
     }
 }
 
-void HFMetricsFilter::Finalize()
-{
-    // Add HQR blocklabel, etc
-}
-
-void HFMetricsFilter::NewMetrics()
-{
-    metrics_ = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>(
-            zmwsPerBatch_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, true, metricsPool_);
-}
-
-void HFMetricsFilter::operator()(ElementTypeIn& batch)
+std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Process(const ElementTypeIn& batch)
 {
     if (framesSeen_ == 0)
     {
-        NewMetrics();
+        metrics_ = std::move(metricsFactory_->NewBatch());
     }
 
     AddBatch(batch);
@@ -112,10 +132,12 @@ void HFMetricsFilter::operator()(ElementTypeIn& batch)
 
     if (framesSeen_ >= framesPerHFMetricBlock_)
     {
-        Finalize();
-        batch.Metrics(std::move(metrics_));
+        FinalizeBlock();
+        //batch.Metrics(std::move(metrics_));
         framesSeen_ = 0;
+        return std::move(metrics_);
     }
+    return std::unique_ptr<ElementTypeOut>();
 }
 
 

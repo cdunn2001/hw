@@ -44,46 +44,101 @@ namespace Mongo {
 namespace Basecaller {
 
 
+class BasecallingMetricsFactory
+{
+    using Pools = Cuda::Memory::DualAllocationPools;
+    using MetricsBlock = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>;
+
+public:
+    BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
+                              Cuda::Memory::SyncDirection syncDir,
+                              bool pinned)
+        : batchDims_(batchDims)
+        , syncDir_(syncDir)
+        , pinned_(pinned)
+        , metricsPool_(std::make_shared<Pools>(batchDims.zmwsPerBatch()*sizeof(Data::BasecallingMetrics), pinned))
+    {}
+
+    std::unique_ptr<MetricsBlock> NewBatch()
+    {
+        return std::make_unique<MetricsBlock>(
+            batchDims_.zmwsPerBatch(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, true, metricsPool_);
+    }
+
+private:
+    Data::BatchDimensions batchDims_;
+    Cuda::Memory::SyncDirection syncDir_;
+    bool pinned_;
+
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
+};
+
 class HFMetricsFilter
 {
 public:     // Types, static constants
     using ElementTypeIn = Data::BasecallBatch;
+    using ElementTypeOut = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>;
 
-public: // Static initializers
+public: // Static functions
     static void Configure(const Data::BasecallerMetricsConfig&);
+    static void Finalize();
+    static void InitAllocationPools(bool hostExecution);
+    static void DestroyAllocationPools();
 
-public: // Structors
-    HFMetricsFilter(uint32_t poolId);
-    HFMetricsFilter(const HFMetricsFilter&) = delete;
-    HFMetricsFilter(HFMetricsFilter&&) = default;
-    virtual ~HFMetricsFilter() {}
+protected: // Static members
 
-public: // Filter API
-    void operator()(ElementTypeIn& batch);
-
-private:    // Static data
+    static std::unique_ptr<BasecallingMetricsFactory> metricsFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
     static bool realtimeActivityLabels_;
     static uint32_t zmwsPerBatch_;
 
+
+public: // Structors
+    HFMetricsFilter(uint32_t poolId);
+    HFMetricsFilter(const HFMetricsFilter&) = delete;
+    HFMetricsFilter(HFMetricsFilter&&) = default;
+    virtual ~HFMetricsFilter() = default;
+
+public: // Filter API
+    std::unique_ptr<ElementTypeOut> operator()(const ElementTypeIn& batch)
+    {
+        assert(batch.GetMeta().PoolId() == poolId_);
+        return Process(std::move(batch));
+    }
+
+protected:    // Block management
+    void FinalizeBlock();
+
 private:    // Block management
-    void AddBatch(ElementTypeIn& batch);
-
-    void Finalize();
-
-    void NewMetrics();
+    virtual std::unique_ptr<ElementTypeOut> Process(const ElementTypeIn& batch) = 0;
 
 private:    // State
-
     uint32_t poolId_;
-    uint32_t framesSeen_;
 
-    Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics> metrics_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
+protected: // State
+    uint32_t framesSeen_;
+    std::unique_ptr<ElementTypeOut> metrics_;
 
 };
+
+class HostHFMetricsFilter : public HFMetricsFilter
+{
+public:
+
+    using HFMetricsFilter::HFMetricsFilter;
+
+    ~HostHFMetricsFilter() override
+    {};
+
+private:    // Block management
+    void AddBatch(const ElementTypeIn& batch);
+
+    std::unique_ptr<ElementTypeOut> Process(const ElementTypeIn& batch) override;
+
+};
+
 
 }}} // PacBio::Mongo::Basecaller
 
