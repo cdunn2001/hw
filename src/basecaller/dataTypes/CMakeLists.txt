@@ -6,6 +6,8 @@ set(CPP_LIST
     BasecallBatch.h
     BasecallBatch.cpp
     BasecallerConfig.h
+    BasecallingMetrics.h
+    BasecallingMetrics.cpp
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
     BaselinerStatAccumState.h
@@ -38,6 +40,7 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp
     UHistogramSimd.h

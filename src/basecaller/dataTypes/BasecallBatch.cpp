@@ -32,20 +32,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
-{
-    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
-    numPulsesByAnalog_[pulseLabel]++;
-
-    if (!base.IsNoCall())
-    {
-        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
-        numBasesByAnalog_[baseLabel]++;
-    }
-
-    return *this;
-}
-
 BasecallBatch::BasecallBatch(
         const size_t maxCallsPerZmwChunk,
         const BatchDimensions& batchDims,

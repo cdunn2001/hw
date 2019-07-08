@@ -37,6 +37,7 @@
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
+#include "BasecallingMetrics.h"
 #include "BatchMetadata.h"
 #include "BatchData.h"
 #include "BatchVectors.h"
@@ -44,45 +45,6 @@
 namespace PacBio {
 namespace Mongo {
 namespace Data {
-
-
-// A type stub for representing the sundry basecalling and trace metrics for a
-// single ZMW over a single "metrics block" (i.e., metrics frame interval).
-// Will be modeled, to some degree, after PacBio::Primary::BasecallingMetrics.
-class BasecallingMetrics
-{
-    // TODO: Fill in the details of class BasecallingMetrics.
-public:
-    using Basecall = PacBio::SmrtData::Basecall;
-
-    BasecallingMetrics() = default;
-
-    BasecallingMetrics& Count(const Basecall& base);
-
-public:
-    const Cuda::Utility::CudaArray<uint8_t,4> NumBasesByAnalog() const
-    { return numBasesByAnalog_; }
-
-    const Cuda::Utility::CudaArray<uint8_t,4> NumPulsesByAnalog() const
-    { return numPulsesByAnalog_; }
-
-    uint16_t NumBases() const
-    { return std::accumulate(numBasesByAnalog_.begin(), numBasesByAnalog_.end(), 0); }
-
-    uint16_t NumPulses() const
-    { return std::accumulate(numPulsesByAnalog_.begin(), numPulsesByAnalog_.end(), 0); }
-
-public:
-    Cuda::Utility::CudaArray<uint8_t,4>& NumBasesByAnalog()
-    { return numBasesByAnalog_; }
-
-    Cuda::Utility::CudaArray<uint8_t,4>& NumPulsesByAnalog()
-    { return numPulsesByAnalog_; }
-
-private:
-    Cuda::Utility::CudaArray<uint8_t,4> numBasesByAnalog_;
-    Cuda::Utility::CudaArray<uint8_t,4> numPulsesByAnalog_;
-};
 
 
 /// BasecallBatch represents the results of basecalling, a sequence of basecalls
@@ -122,10 +84,22 @@ public:     // Functions
     BatchVectors<Basecall>& Basecalls() { return basecalls_; }
     const BatchVectors<Basecall>& Basecalls() const { return basecalls_; }
 
-    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() { return *metrics_; }
-    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() const { return *metrics_; }
+    bool HasMetrics() const
+    { return metrics_.get() != nullptr; }
 
-    void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> metrics)
+    BasecallingMetrics<laneSize>& Metrics(size_t laneIdx)
+    { return metrics_->GetHostView()[laneIdx]; }
+
+    const BasecallingMetrics<laneSize>& Metrics(size_t laneIdx) const
+    { return metrics_->GetHostView()[laneIdx]; }
+
+    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>* Metrics()
+    { return metrics_.get(); }
+
+    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>* Metrics() const
+    { return metrics_.get(); }
+
+    void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics)
     {
         metrics_ = std::move(metrics);
     }
@@ -136,7 +110,7 @@ private:    // Data
     BatchVectors<Basecall> basecalls_;
 
     // Metrics per ZMW. Size is dims_.zmwsPerBatch() or nullptr.
-    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> metrics_;
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics_;
 };
 
 class BasecallBatchFactory

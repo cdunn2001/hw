@@ -44,7 +44,7 @@ uint32_t HFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double HFMetricsFilter::frameRate_ = 0;
 bool HFMetricsFilter::realtimeActivityLabels_ = 0;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
-std::unique_ptr<BasecallingMetricsFactory> HFMetricsFilter::metricsFactory_;
+std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
 {
@@ -62,7 +62,7 @@ void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
     dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
     dims.laneWidth = laneSize;
     dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
-    zmwsPerBatch_ = dims.zmwsPerBatch();
+    zmwsPerBatch_ = dims.ZmwsPerBatch();
 
     InitAllocationPools(true);
 }
@@ -82,7 +82,7 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
     dims.laneWidth = laneSize;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<BasecallingMetricsFactory>(
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
             dims, syncDir, true);
 }
 
@@ -94,17 +94,66 @@ void HFMetricsFilter::DestroyAllocationPools()
 HFMetricsFilter::HFMetricsFilter(uint32_t poolId)
     : poolId_(poolId)
     , framesSeen_(0)
-    //, metrics_(zmwsPerBatch_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, true)
-    //, metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(
-        //zmwsPerBatch_*sizeof(Data::BasecallingMetrics), true))
 {}
 
-void HFMetricsFilter::FinalizeBlock()
+void HostHFMetricsFilter::FinalizeBlock()
 {
-    // Add HQR blocklabel, etc
+    // TODO Add HQR blocklabel etc.
+    PBLOG_INFO << "Finalizing HFMetricsBlock";
+    for (size_t l = 0; l < laneSize; ++l)
+        metrics_->GetHostView()[l].FinalizeMetrics();
+    PBLOG_INFO << "(TODO) Labeling Sequencing Activity";
+
 }
 
+HostHFMetricsFilter::~HostHFMetricsFilter() = default;
+
 void HostHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
+{
+    const auto& basecalls = batch.Basecalls();
+    for (size_t l = 0; l < batch.Dims().lanesPerBatch; l++)
+    {
+        const auto& laneCalls = basecalls.LaneView(l);
+        metrics_->GetHostView()[l].Count(laneCalls);
+    }
+}
+
+std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Process(const ElementTypeIn& batch)
+{
+    if (framesSeen_ == 0)
+    {
+        metrics_ = std::move(metricsFactory_->NewBatch());
+    }
+
+    AddBatch(batch);
+    framesSeen_ += batch.Dims().framesPerBatch;
+    // TODO: Populate TraceMetrics (ProcessIntervalMetrics AND settracemetrics)
+
+    if (framesSeen_ >= framesPerHFMetricBlock_)
+    {
+        FinalizeBlock();
+        framesSeen_ = 0;
+        return std::move(metrics_);
+    }
+    return std::unique_ptr<ElementTypeOut>();
+}
+
+
+
+/*
+uint32_t MinimalHFMetricsFilter::sandwichTolerance_ = 0;
+uint32_t MinimalHFMetricsFilter::framesPerHFMetricBlock_ = 0;
+double MinimalHFMetricsFilter::frameRate_ = 0;
+bool MinimalHFMetricsFilter::realtimeActivityLabels_ = 0;
+uint32_t MinimalHFMetricsFilter::zmwsPerBatch_;
+std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
+
+MinimalHFMetricsFilter::MinimalHFMetricsFilter(uint32_t poolId)
+    : poolId_(poolId)
+    , framesSeen_(0)
+{}
+
+void MinimalHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
 {
     auto& basecalls = batch.Basecalls();
     for (uint32_t l = 0; l < batch.Dims().lanesPerBatch; l++)
@@ -120,25 +169,20 @@ void HostHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
     }
 }
 
-std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Process(const ElementTypeIn& batch)
+std::unique_ptr<MinimalHFMetricsFilter::ElementTypeOut> MinimalHFMetricsFilter::Process(const ElementTypeIn& batch)
 {
-    if (framesSeen_ == 0)
-    {
-        metrics_ = std::move(metricsFactory_->NewBatch());
-    }
-
+    metrics_ = std::move(metricsFactory_->NewBatch());
     AddBatch(batch);
-    framesSeen_ += batch.Dims().framesPerBatch;
-
-    if (framesSeen_ >= framesPerHFMetricBlock_)
-    {
-        FinalizeBlock();
-        //batch.Metrics(std::move(metrics_));
-        framesSeen_ = 0;
-        return std::move(metrics_);
-    }
-    return std::unique_ptr<ElementTypeOut>();
+    FinalizeBlock();
+    return std::move(metrics_);
 }
+
+void MinimalHFMetricsFilter::FinalizeBlock()
+{
+    PBLOG_INFO << "Finalizing HFMetricsBlock";
+}
+
+*/
 
 
 }}} // PacBio::Mongo::Basecaller

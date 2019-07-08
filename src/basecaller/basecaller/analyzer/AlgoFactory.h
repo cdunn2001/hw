@@ -46,6 +46,7 @@ private:
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
     Data::BasecallerDmeConfig::MethodName dmeOpt_;
     Data::BasecallerPulseAccumConfig::MethodName pulseAccumOpt_;
+    Data::BasecallerMetricsConfig::MethodName hfMetricsOpt_;
 
     // TODO: Add enums for other strategy options as needed.
 };

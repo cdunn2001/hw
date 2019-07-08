@@ -38,6 +38,7 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
+#include <dataTypes/PulseBatch.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -113,6 +114,12 @@ private:
     static std::unique_ptr<Data::BasecallBatchFactory> batchFactory_;
     static uint16_t maxCallsPerZmwChunk_;
 };
+
+namespace Temporary {
+
+void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& bases);
+
+}
 
 }}}     // namespace PacBio::Mongo::Basecaller
 

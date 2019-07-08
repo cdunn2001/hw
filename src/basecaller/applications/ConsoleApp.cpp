@@ -222,14 +222,16 @@ private:
         }
     }
 
-    void ConvertMetric(const PacBio::Mongo::Data::BasecallingMetrics& bm, SpiderMetricBlock& sm)
+    void ConvertMetric(const PacBio::Mongo::Data::BasecallingMetrics<laneSize>& bm,
+                       SpiderMetricBlock& sm,
+                       size_t zmwIndex)
     {
-        sm.numBasesA_ = bm.NumBasesByAnalog()[0];
-        sm.numBasesC_ = bm.NumBasesByAnalog()[1];
-        sm.numBasesG_ = bm.NumBasesByAnalog()[2];
-        sm.numBasesT_ = bm.NumBasesByAnalog()[3];
+        sm.numBasesA_ = bm.NumBasesByAnalog()[0][zmwIndex];
+        sm.numBasesC_ = bm.NumBasesByAnalog()[1][zmwIndex];
+        sm.numBasesG_ = bm.NumBasesByAnalog()[2][zmwIndex];
+        sm.numBasesT_ = bm.NumBasesByAnalog()[3][zmwIndex];
 
-        sm.numPulses_ = bm.NumPulses();
+        sm.numPulses_ = bm.NumPulses()[zmwIndex];
     }
 
     void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
@@ -241,10 +243,12 @@ private:
         for (const auto& basecallBatchPtr : basecallChunk)
         {
             const auto& basecallBatch = *basecallBatchPtr;
-            const auto& metrics = basecallBatch.Metrics().GetHostView();
             for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
             {
                 const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
+                // TODO: handle nullptr case
+                const auto& metrics = basecallBatch.Metrics(lane);
+
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
@@ -255,7 +259,7 @@ private:
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
+                                                            ConvertMetric(metrics, dest[i], zmw);
                                                         }
                                                      },
                                                      1,

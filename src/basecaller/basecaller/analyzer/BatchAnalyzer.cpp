@@ -153,7 +153,7 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     }
 }
 
-namespace {
+namespace Temporary {
 
 // Temporary helper function for converting from the mongo Pulse data type to the old Sequel
 // Base data type.  Will eventually be replaed by a proper pulse-to-base stage, (and presumably
@@ -252,7 +252,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     auto convProfile = profiler.CreateScopedProfiler(ProfileStages::SequelConv);
     (void) convProfile;
     auto bases = batchFactory_->NewBatch(tbatch.Metadata());
-    ConvertPulsesToBases(pulses, bases);
+    Temporary::ConvertPulsesToBases(pulses, bases);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

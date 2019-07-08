@@ -46,6 +46,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
     pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
+    hfMetricsOpt_ = bcConfig.Metrics.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -312,7 +313,21 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
 std::unique_ptr<HFMetricsFilter>
 AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
 {
-    return std::make_unique<HostHFMetricsFilter>(poolId);
+    switch (hfMetricsOpt_)
+    {
+        /*
+    case Data::BasecallerMetricsConfig::MethodName::NoOp:
+        return std::make_unique<MinimalHFMetricsFilter>(poolId);
+        break;
+        */
+    case Data::BasecallerMetricsConfig::MethodName::Host:
+        return std::make_unique<HostHFMetricsFilter>(poolId);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for HFMetricsFilter: " << hfMetricsOpt_.toString() << '.';
+        throw PBException(msg.str());
+    }
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
