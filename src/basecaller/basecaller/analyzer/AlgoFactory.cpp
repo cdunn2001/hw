@@ -16,6 +16,7 @@
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/PrimaryConfig.h>
 
 using std::ostringstream;
 using std::unique_ptr;
@@ -79,6 +80,9 @@ AlgoFactory::~AlgoFactory()
 void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                             const Data::MovieConfig& movConfig)
 {
+    poolSize_ = Data::GetPrimaryConfig().lanesPerPool;
+    chunkSize_ = Data::GetPrimaryConfig().framesPerChunk;
+
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
@@ -165,12 +169,12 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
 }
 
 unique_ptr<TraceHistogramAccumulator>
-AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, unsigned int poolSize) const
+AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
 {
     switch (histAccumOpt_)
     {
     case Data::BasecallerTraceHistogramConfig::MethodName::Host:
-        return unique_ptr<TraceHistogramAccumulator>(new TraceHistogramAccumHost(poolId, poolSize));
+        return std::make_unique<TraceHistogramAccumHost>(poolId, poolSize_);
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
         // TODO: For now fall through to throw exception.
     default:

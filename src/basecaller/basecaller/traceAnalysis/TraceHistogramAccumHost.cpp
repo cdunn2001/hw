@@ -76,7 +76,6 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
             InitHistogram(lane);
         }
 
-        // TODO: Map trace data to LaneArray and feed to UHistogramSimd.
         AddBlock(ctb, lane);
     }
 }

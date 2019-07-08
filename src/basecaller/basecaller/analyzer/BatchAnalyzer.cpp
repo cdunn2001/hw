@@ -57,20 +57,11 @@ namespace Basecaller {
 BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
-// static
-unsigned int BatchAnalyzer::poolSize_ = 0;
-unsigned int BatchAnalyzer::chunkSize_ = 0;
 
 // static
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
-{
-    poolSize_ = bcConfig.LanesPerPool;
-    PBLOG_INFO << poolSize_ << "lanes per pool.";
-
-    chunkSize_ = bcConfig.FramesPerChunk;
-    PBLOG_INFO << chunkSize_ << "frames per chunk.";
-}
+{ }
 
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
@@ -79,7 +70,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
-    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, poolSize_);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 

@@ -10,7 +10,7 @@ namespace Mongo {
 namespace Data {
 
 /// A CUDA-friendly POD struct that represents the state of a BaselinerStatAccumState.
-/// The ability to add more data samples is not be preserved by this
+/// The ability to add more data samples is not preserved by this
 /// representation.
 struct BaselinerStatAccumState
 {

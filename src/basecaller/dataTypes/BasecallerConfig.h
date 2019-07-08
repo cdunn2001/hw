@@ -279,8 +279,6 @@ namespace Data {
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
         ADD_PARAMETER(bool, staticAnalysis, true);
-        ADD_PARAMETER(unsigned int, LanesPerPool, 256u);
-        ADD_PARAMETER(unsigned int, FramesPerChunk, 64u);
 
     public:
         std::string CombinedMethodName() const

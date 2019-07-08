@@ -29,11 +29,13 @@ public:
     std::unique_ptr<FrameLabeler> CreateFrameLabeler(unsigned int poolId) const;
 
     std::unique_ptr<TraceHistogramAccumulator>
-    CreateTraceHistAccumulator(unsigned int poolId, unsigned int poolSize) const;
+    CreateTraceHistAccumulator(unsigned int poolId) const;
 
     // TODO: Add Create* functions for other strategy interfaces.
 
 private:
+    unsigned int poolSize_;     // Number of ZMW lanes per pool.
+    unsigned int chunkSize_;    // Number of frames per chunk.
     Data::BasecallerBaselinerConfig::MethodName baselinerOpt_;
     Data::BasecallerFrameLabelerConfig::MethodName frameLabelerOpt_;
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
