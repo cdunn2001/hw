@@ -1,3 +1,6 @@
+#ifndef mongo_common_StatAccumState_H_
+#define mongo_common_StatAccumState_H_
+
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -24,55 +27,33 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines members of class BasecallBatch.
+//  Defines POD struct StatAccumState.
 
-#include "BasecallBatch.h"
+#include <common/cuda/utility/CudaArray.h>
+#include <common/MongoConstants.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
 
-BasecallingMetrics::BasecallingMetrics()
-    : numBasesByAnalog_{ 0, 0, 0, 0}
-    , numPulsesByAnalog_{0, 0, 0, 0}
-{ }
-
-BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
+/// A CUDA-friendly POD struct that represents the state of a StatAccumulator.
+struct StatAccumState
 {
-    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
-    numPulsesByAnalog_[pulseLabel]++;
+    using FloatArray = Cuda::Utility::CudaArray<float, laneSize>;
 
-    if (!base.IsNoCall())
-    {
-        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
-        numBasesByAnalog_[baseLabel]++;
-    }
+    // Data offset.
+    FloatArray offset;
 
-    return *this;
-}
+    // The number of data samples included in the moment statistics.
+    // Floating-point to support scaling smoothly.
+    FloatArray moment0;
 
-BasecallBatch::BasecallBatch(const size_t maxCallsPerZmwChunk,
-                             const BatchDimensions& batchDims,
-                             const BatchMetadata& batchMetadata)
-    : dims_ (batchDims)
-    , maxCallsPerZmwChunk_ (maxCallsPerZmwChunk)
-    , metaData_ (batchMetadata)
-    , seqLengths_ (batchDims.ZmwsPerBatch(), 0)
-    , basecalls_ (batchDims.ZmwsPerBatch() * maxCallsPerZmwChunk)
-    , metrics_ (batchDims.ZmwsPerBatch())
-{ }
+    // First moment (a.k.a., sum).
+    FloatArray moment1;
 
-bool BasecallBatch::PushBack(uint32_t z, Basecall bc)
-{
-    if (seqLengths_[z] < maxCallsPerZmwChunk_)
-    {
-        basecalls_[zmwOffset(z) + seqLengths_[z]] = bc;
-        metrics_[z].Count(bc);
-        seqLengths_[z]++;
-        return true;
-    }
+    // Second moment.
+    FloatArray moment2;
+};
 
-    return false;
-}
+}}      // namespace PacBio::Mongo
 
-}}}     // namespace PacBio::Mongo::Data
+#endif // mongo_common_StatAccumState_H_

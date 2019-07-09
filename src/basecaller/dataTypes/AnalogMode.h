@@ -35,37 +35,21 @@
 #include <cassert>
 #include <cmath>
 #include <ostream>
-#include <vector>
 #include <algorithm>
 #include <cstdint>
 
 #include <pacbio/PBException.h>
 #include <pacbio/process/ConfigurationBase.h>
 
+#include <common/MongoConstants.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// internal JSON structure (deprecated)
-class AnalogConfig : public PacBio::Process::ConfigurationObject
-{
-    CONF_OBJ_SUPPORT_COPY(AnalogConfig)
-public:
-    // Defaults will be handled by the ctor of AnalogSetConfig
-    ADD_PARAMETER(float, red, 0.0f);
-    ADD_PARAMETER(float, green, 0.0f);
-    ADD_PARAMETER(float, relAmp, 0.0f);
-    ADD_PARAMETER(float, excessNoise, 0.0f);
-    ADD_PARAMETER(float, meanIpdSec, 0.0f);
-    ADD_PARAMETER(float, meanPulseWidthSec, 0.0f);
-    ADD_PARAMETER(float, pw2SlowStepRatio, 0.0f);
-    ADD_PARAMETER(float, ipd2SlowStepRatio, 0.0f);
-};
-
-
 class AnalogConfigEx : public PacBio::Process::ConfigurationObject
 {
-    ADD_PARAMETER(std::string, base, "X"); // or baseMap
+    ADD_PARAMETER(std::string, base, "X");
     ADD_PARAMETER(float, wavelength, 0.0f);
     ADD_PARAMETER(float, relativeAmplitude, 1.0f);
     ADD_PARAMETER(float, intraPulseXsnCV, 0.0f);
@@ -73,7 +57,6 @@ class AnalogConfigEx : public PacBio::Process::ConfigurationObject
     ADD_PARAMETER(float, pulseWidthMeanSeconds, 0.0f);
     ADD_PARAMETER(float, pw2SlowStepRatio, 0.0f);
     ADD_PARAMETER(float, ipd2SlowStepRatio, 0.0f);
-
 };
 
 
@@ -130,12 +113,7 @@ public:
     float pulseWidth;                       // seconds
     float pw2SlowStepRatio;
     float ipd2SlowStepRatio;
-
-public:
-    float RelativeAmplitude() const
-    { return relAmplitude; }
 };
-
 
 
 inline std::ostream& operator<<(std::ostream& os, const AnalogMode& am)
@@ -151,27 +129,12 @@ inline std::ostream& operator<<(std::ostream& os, const AnalogMode& am)
     return os;
 }
 
-
-using AnalogSet = std::vector<AnalogMode>;
-
-/// \param json - JSON array of AnalogConfigEx objects, in T, G, C, A order
-inline AnalogSet ParseAnalogSet(const Json::Value& json)
-{
-    AnalogSet analogs;
-    for (auto j : json)
-    {
-        AnalogConfigEx conf;
-        conf.Load(j);
-        analogs.push_back(AnalogMode(conf));
-    }
-    return analogs;
-}
-
+using AnalogSet = std::array<AnalogMode, numAnalogs>;
 
 inline void Sort(AnalogSet& analogs)
 {
     std::sort(analogs.begin(), analogs.end(),
-              [](const AnalogMode&a , const AnalogMode& b){return a.RelativeAmplitude() > b.RelativeAmplitude();});
+              [](const AnalogMode&a , const AnalogMode& b){return a.relAmplitude > b.relAmplitude;});
 }
 
 }}}     // namespace PacBio::Mongo::Data

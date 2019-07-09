@@ -237,7 +237,7 @@ private:
 
         for (const auto& basecallBatch : basecallChunk)
         {
-            for (uint32_t z = 0; z < basecallBatch.Dims().zmwsPerBatch(); z++)
+            for (uint32_t z = 0; z < basecallBatch.Dims().ZmwsPerBatch(); z++)
             {
                 if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                 {

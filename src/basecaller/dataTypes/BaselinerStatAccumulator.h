@@ -1,11 +1,12 @@
 #ifndef mongo_dataTypes_BaselinerStatAccumulator_H_
 #define mongo_dataTypes_BaselinerStatAccumulator_H_
 
-#include "BaselineStats.h"
-
 #include <common/AutocorrAccumulator.h>
 #include <common/LaneArray.h>
 #include <common/MongoConstants.h>
+
+#include "BaselinerStatAccumState.h"
+#include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -14,7 +15,8 @@ namespace Data {
 // TODO: Add declaration decorators to enable use on CUDA device.
 // TODO: Add another template parameter to control the precision used for floating-point members.
 
-// Statistics computed by the baseliner for one lane of ZMWs.
+/// Statistics computed by the baseliner for one lane of ZMWs.
+/// \tparam T The elemental type of the raw trace data.
 template <typename T>
 class BaselinerStatAccumulator
 {
@@ -22,6 +24,18 @@ public:     // Types
     using LaneArray = PacBio::Mongo::LaneArray<T>;
     using FloatArray = PacBio::Mongo::LaneArray<float>;
     using Mask = PacBio::Mongo::LaneMask<>;
+
+public:     // Structors
+    BaselinerStatAccumulator() = default;
+    explicit BaselinerStatAccumulator(const BaselineStats<laneSize>& bs);
+
+    BaselinerStatAccumulator(const BaselinerStatAccumState& state)
+        : baselineSubtractedStats_ {state.fullAutocorrState}
+        , traceMin {state.traceMin}
+        , traceMax {state.traceMax}
+        , baselineStats_ {state.baselineStats}
+        , rawBaselineSum_ {state.rawBaselineSum}
+    { }
 
 public:     // Mutating functions
     /// Add a lane-frame to the statistics.
@@ -31,10 +45,22 @@ public:     // Mutating functions
     void AddSample(const LaneArray& rawTrace,
                    const LaneArray& baselineSubtracted,
                    const Mask& isBaseline);
-public:
+
+public:     // Const functions
     const BaselineStats<laneSize> ToBaselineStats() const;
 
-public:
+    BaselinerStatAccumState GetState() const
+    {
+        return BaselinerStatAccumState
+        {
+            baselineSubtractedStats_.GetState(),
+            {traceMin.cbegin(), traceMin.cend()},
+            {traceMax.cbegin(), traceMax.cend()},
+            baselineStats_.GetState(),
+            {rawBaselineSum_.cbegin(), rawBaselineSum_.cend()}
+        };
+    }
+
     const AutocorrAccumulator<FloatArray>& BaselineSubtractedStats() const
     { return baselineSubtractedStats_; }
 
@@ -49,6 +75,9 @@ public:
 
     const LaneArray& RawBaselineSum() const
     { return rawBaselineSum_; }
+
+public:     // Non-const functions
+    BaselinerStatAccumulator& Merge(const BaselinerStatAccumulator& other);
 
 private:
     // Statistics of trace after baseline estimate has been subtracted.

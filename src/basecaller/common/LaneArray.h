@@ -6,6 +6,7 @@
 #include <boost/operators.hpp>
 
 #include <common/MongoConstants.h>
+#include <common/cuda/utility/CudaArray.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 
@@ -20,19 +21,20 @@ template <typename T, unsigned int N = laneSize>
 class LaneArray : public LaneArrayRef<T, N>
 {
 public:     // Types
-    using Super = LaneArrayRef<T, N>;
-    using Super2 = typename Super::Super;
+    using BaseRef = LaneArrayRef<T, N>;
+    using BaseConstRef = typename BaseRef::BaseConstRef;
     using ElementType = T;
 
 public:     // Structors and assignment
-    LaneArray() : Super(nullptr)
-    { Super::SetBasePointer(data_); }
+    LaneArray() : BaseRef(nullptr)
+    { BaseRef::SetBasePointer(data_); }
 
     LaneArray(const LaneArray& other)
         : LaneArray()
     { std::copy(other.begin(), other.end(), begin()); }
 
-    explicit LaneArray(const Super2& other)
+    template <typename U>
+    explicit LaneArray(const ConstLaneArrayRef<U, N>& other)
         : LaneArray()
     { std::copy(other.begin(), other.end(), this->begin()); }
 
@@ -47,29 +49,38 @@ public:     // Structors and assignment
         : LaneArray()
     { std::copy(first, last, begin()); }
 
+    // This could be accomplished with LaneArray(ConstLaneArrayRef(ca.data())),
+    // but this convenience seems worth the dependency on CudaArray.h.
+    // It's also safer since we ensure that ca has the correct size.
+    // TODO: Should we enable implicit conversion (i.e., remove the explicit qualifier)?
+    // TODO: Make the element type of CudaArray a template parameter.
+    explicit LaneArray(const Cuda::Utility::CudaArray<T, N>& ca)
+        : LaneArray(ca.begin(), ca.end())
+    { }
+
     LaneArray& operator=(const LaneArray& that)
     {
-        Super::operator=(that);
+        BaseRef::operator=(that);
         return *this;
     }
 
     LaneArray& operator=(const ElementType& val)
     {
-        Super::operator=(val);
+        BaseRef::operator=(val);
         return *this;
     }
 
-    LaneArray& operator=(const Super2& that)
+    LaneArray& operator=(const BaseConstRef& that)
     {
-        Super::operator=(that);
+        BaseRef::operator=(that);
         return *this;
     }
 
 public:     // Iterators
-    using Super::begin;
-    using Super::end;
-    using Super::cbegin;
-    using Super::cend;
+    using BaseRef::begin;
+    using BaseRef::end;
+    using BaseRef::cbegin;
+    using BaseRef::cend;
 
 public:     // Export
     LaneArray<float, N> AsFloat() const
@@ -131,6 +142,17 @@ public:     // Comparison operators
     friend LaneMask<N> operator>=(const LaneArray& lhs, const LaneArray& rhs)
     {
         return !(lhs < rhs);
+    }
+
+public:     // Named unary operators
+    friend LaneArray sqrt(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = std::sqrt(x[i]);
+        }
+        return ret;
     }
 
 public:     // Named binary operators
@@ -310,7 +332,9 @@ max(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
 }
 
 template <typename T, unsigned int N>
-LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const LaneArray<T,N>& failure)
+LaneArray<T,N> Blend(const LaneMask<N>& tf,
+                     const ConstLaneArrayRef<T,N>& success,
+                     const ConstLaneArrayRef<T,N>& failure)
 {
     LaneArray<T,N> ret;
     for (unsigned int i = 0; i < N; ++i)
@@ -318,6 +342,25 @@ LaneArray<T,N> Blend(const LaneMask<N>& tf, const LaneArray<T,N>& success, const
         ret[i] = tf[i] ? success[i] : failure[i];
     }
     return ret;
+}
+
+template <typename T, unsigned int N> inline
+LaneArray<int, N> floorCastInt(const ConstLaneArrayRef<T, N>& f)
+{
+    static_assert(std::is_floating_point<T>::value, "T must be floating-point type.");
+    LaneArray<int, N> ret;
+    for (unsigned int i = 0; i < N; ++i)
+    {
+        ret[i] = static_cast<int>(std::floor(f[i]));
+    }
+    return ret;
+}
+
+template <typename T, unsigned int N> inline
+LaneArray<T, N> inc(const ConstLaneArrayRef<T, N>& a, const LaneMask<N>& mask)
+{
+    const LaneArray<T, N> ap1 = a + T(1);
+    return Blend(mask, ap1 , a);
 }
 
 }}      // namespace PacBio::Mongo
@@ -335,6 +378,13 @@ struct SimdConvTraits<Mongo::LaneArray<T,N>>
     typedef Mongo::LaneArray<int,N> index_conv;
     typedef Mongo::LaneArray<short,N> pixel_conv;
     typedef Mongo::LaneArray<T,N> union_conv;
+};
+
+template <typename T, unsigned int N>
+struct SimdTypeTraits<Mongo::LaneArray<T,N>>
+{
+    typedef T scalar_type;
+    static const uint16_t width = N;
 };
 
 }}   // namespace PacBio::Simd

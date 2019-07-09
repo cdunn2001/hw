@@ -32,6 +32,7 @@
 #include <algorithm>
 
 #include <pacbio/PBAssert.h>
+#include <pacbio/logging/Logger.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
@@ -56,11 +57,12 @@ namespace Basecaller {
 BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
+
 // static
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
-{
-}
+{ }
+
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
     : poolId_ (poolId)
@@ -68,6 +70,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 
@@ -153,8 +156,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     // TODO: When sufficient trace data have been histogrammed, estimate detection model.
     // TODO: Make this configurable.
     const unsigned int minFramesForDme = 4000u;
-    const auto histTotals = traceHistAccum_->FrameCount();
-    if (*std::min_element(histTotals.cbegin(), histTotals.cend()) >= minFramesForDme)
+    if (traceHistAccum_->FramesAdded() >= minFramesForDme)
     {
         //Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
         //(void) detModel;    // Temporarily squelch unused variable warning.
@@ -184,7 +186,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     static constexpr int8_t qvDefault_ = 0;
 
-    for (uint32_t z = 0; z < basecalls.Dims().zmwsPerBatch(); z++)
+    for (uint32_t z = 0; z < basecalls.Dims().ZmwsPerBatch(); z++)
     {
         for (uint16_t b = 0; b < maxCallsPerZmwChunk; b++)
         {

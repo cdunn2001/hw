@@ -30,6 +30,7 @@
 //  Defines class templates LaneArrayRef and ConstLaneArrayRef.
 
 #include <algorithm>
+#include <limits>
 
 #include "LaneMask.h"
 #include "MongoConstants.h"
@@ -157,6 +158,26 @@ public:     // Miscellaneous friend functions.
         return ret;
     }
 
+    friend ElementType reduceMin(const ConstLaneArrayRef& a)
+    {
+        auto r = std::numeric_limits<ElementType>::max();
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            r = std::min(r, a[i]);
+        }
+        return r;
+    }
+
+    friend ElementType reduceMax(const ConstLaneArrayRef& a)
+    {
+        auto r = std::numeric_limits<ElementType>::lowest();
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            r = std::max(r, a[i]);
+        }
+        return r;
+    }
+
 protected:
     void SetBasePointer(ConstPointer dataPtr)
     { data_ = dataPtr; }
@@ -183,7 +204,7 @@ template <typename T, unsigned int N = laneSize>
 class LaneArrayRef : public ConstLaneArrayRef<T, N>
 {
 public:     // Types
-    using Super = ConstLaneArrayRef<T, N>;
+    using BaseConstRef = ConstLaneArrayRef<T, N>;
     using ElementType = T;
     using Reference = ElementType&;
     using ConstReference = const ElementType&;
@@ -199,7 +220,7 @@ public:     // Structors and assignment
     /// located at \a data.
     // Note that this is where the Pointer is stored as ConstPointer in the
     // super object. We use Super:MutableData to get non-const access.
-    LaneArrayRef(Pointer data) : Super(data) { }
+    LaneArrayRef(Pointer data) : BaseConstRef(data) { }
 
     /// Create a wrapper referring to the same data as \a that.
     /// \note Cannot create a LaneArrayRef from a ConstLaneArrayRef.
@@ -215,7 +236,7 @@ public:     // Structors and assignment
     }
 
     /// Assign contained elements.
-    LaneArrayRef& operator=(const Super& that)
+    LaneArrayRef& operator=(const BaseConstRef& that)
     {
         std::copy(that.begin(), that.end(), begin());
         return *this;
@@ -228,14 +249,14 @@ public:     // Structors and assignment
     }
 
 public:     // Random-access iterators
-    Iterator begin()  { return Super::MutableData(); }
+    Iterator begin()  { return BaseConstRef::MutableData(); }
     Iterator end()  { return begin() + N; }
 
-    ConstIterator begin() const  { return Super::begin(); }
-    ConstIterator end() const  { return Super::end(); }
+    ConstIterator begin() const  { return BaseConstRef::begin(); }
+    ConstIterator end() const  { return BaseConstRef::end(); }
 
-    ConstIterator cbegin()  { return Super::begin(); }
-    ConstIterator cend()  { return Super::end(); }
+    ConstIterator cbegin() const  { return BaseConstRef::begin(); }
+    ConstIterator cend() const  { return BaseConstRef::end(); }
 
 public:     // Export
 //    Cuda::Utility::CudaArray<T, N> AsCudaArray() const
@@ -247,16 +268,15 @@ public:     // Element access
     Reference operator[](unsigned int i)
     {
         assert(i < N);
-        return Super::MutableData()[i];
+        return BaseConstRef::MutableData()[i];
     }
 
-    ConstReference operator[](unsigned int i) const
-    { return Super::operator[](i); }
+    using BaseConstRef::operator[];
 
 public:
     // TODO: Do we want to return Pointer& in order to allow "rebinding".
     Pointer Data()
-    { return Super::MutableData(); }
+    { return BaseConstRef::MutableData(); }
 
 public:     // Compound assigment
     LaneArrayRef& operator+=(const ElementType& a)
@@ -265,11 +285,11 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator+=(const Super& a)
+    LaneArrayRef& operator+=(const BaseConstRef& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
-            Super::MutableData()[i] += a[i];
+            BaseConstRef::MutableData()[i] += a[i];
         }
         return *this;
     }
@@ -280,11 +300,11 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator-=(const Super& a)
+    LaneArrayRef& operator-=(const BaseConstRef& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
-            Super::MutableData()[i] -= a[i];
+            BaseConstRef::MutableData()[i] -= a[i];
         }
         return *this;
     }
@@ -295,11 +315,11 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator*=(const Super& a)
+    LaneArrayRef& operator*=(const BaseConstRef& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
-            Super::MutableData()[i] *= a[i];
+            BaseConstRef::MutableData()[i] *= a[i];
         }
         return *this;
     }
@@ -310,11 +330,11 @@ public:     // Compound assigment
         return *this;
     }
 
-    LaneArrayRef& operator/=(const Super& a)
+    LaneArrayRef& operator/=(const BaseConstRef& a)
     {
         for (unsigned int i = 0; i < N; ++i)
         {
-            Super::MutableData()[i] /= a[i];
+            BaseConstRef::MutableData()[i] /= a[i];
         }
         return *this;
     }

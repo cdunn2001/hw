@@ -131,7 +131,7 @@ public:    // Functions
     // the batch.
     size_t zmwOffset(size_t z) const
     {
-        assert(z < dims_.zmwsPerBatch());
+        assert(z < dims_.ZmwsPerBatch());
         return z * maxCallsPerZmwChunk_;
     }
 

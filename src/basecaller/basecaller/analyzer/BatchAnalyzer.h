@@ -82,6 +82,7 @@ public:
     StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
     PacBio::Mongo::Data::BasecallBatch
     StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.

@@ -192,10 +192,9 @@ TEST_F(TestLaneArrayRef, CopyAndElementAccess)
     }
 
     ASSERT_EQ(vFibon.size(), lar2.Size());
-    std::copy(vFibon.cbegin(), vFibon.cend(), lar2.begin());
-
-    for (size_t i = 0; i < n; ++i)
+    for (unsigned int i = 0; i < n; ++i)
     {
+        lar2[i] = vFibon[i];
         ASSERT_EQ(vFibon[i], v[i]);
         ASSERT_EQ(vFibon[i], lar1[i]);
         ASSERT_EQ(vFibon[i], lar1[i]);

@@ -33,6 +33,7 @@
 #include <common/simd/SimdConvTraits.h>
 
 #include "AlignedCircularBuffer.h"
+#include "AutocorrAccumState.h"
 #include "NumericUtil.h"
 #include "StatAccumulator.h"
 
@@ -65,7 +66,28 @@ public:     // Structors
     /// Copy constructor.
     AutocorrAccumulator(const AutocorrAccumulator& that) = default;
 
+    AutocorrAccumulator(const AutocorrAccumState& state)
+        : stats_ {state.basicStats}
+        , m1First_ {state.moment1First}
+        , m1Last_ {state.moment1Last}
+        , m2_ {state.moment2}
+        , lag_ {state.lag}
+        , canAddSample_ {false}
+    { }
+
 public:     // Const methods
+    AutocorrAccumState GetState() const
+    {
+        return AutocorrAccumState
+        {
+            stats_.GetState(),
+            {m1First_.cbegin(), m1First_.cend()},
+            {m1Last_.cbegin(), m1Last_.cend()},
+            {m2_.cbegin(), m2_.cend()},
+            lag_
+        };
+    }
+
     const T& M1First() const
     { return m1First_; }
 

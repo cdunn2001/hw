@@ -47,7 +47,7 @@ public:     // Structors and assignment operators
                      const Data::BasecallerConfig& bcConfig,
                      const Data::MovieConfig& movConfig);
 
-    virtual ~TraceAnalyzerTbb() noexcept = default;
+    ~TraceAnalyzerTbb() noexcept override = default;
 
 public:     // ITraceAnalyzer interface
     /// The number of worker threads used by this analyzer.

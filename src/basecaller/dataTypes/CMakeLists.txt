@@ -8,6 +8,7 @@ set(CPP_LIST
     BasecallerConfig.h
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
+    BaselinerStatAccumState.h
     BaselineStats.h
     BaselineStats.cpp
     BasicTypes.h
@@ -32,6 +33,8 @@ set(CPP_LIST
     PrimaryConfig.h
     TraceBatch.h
     TraceBatch.cpp
+    UHistogramSimd.h
+    UHistogramSimd.cpp
 )
 
 set(CUDA_LIST
