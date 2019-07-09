@@ -53,13 +53,15 @@ public:     // Structors and assignment.
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;
 
-    PoolHistType HistogramImpl() const override;
+    const PoolHistType& HistogramImpl() const override;
 
-    PoolTraceStatsType TraceStatsImpl() const override;
+    const PoolTraceStatsType& TraceStatsImpl() const override;
 
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>>> hist_;
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
+    mutable PoolHistType poolHist_;
+    mutable PoolTraceStatsType poolTraceStats_;
     bool isHistInitialized_ {false};
 
 private:    // Functions

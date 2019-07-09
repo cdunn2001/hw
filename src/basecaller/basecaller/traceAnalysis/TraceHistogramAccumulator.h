@@ -77,16 +77,16 @@ public:     // Const functions
     size_t FramesAdded() const
     { return frameCount_; }
 
-    // TODO: Maybe Histogram() and TraceStats() should return const &.
-
     /// The accumulated histogram.
-    PoolHistType Histogram() const
+    /// \note Calls to AddBatch will modify the referenced value.
+    /// \note Calling this function is not necessarily cheap.
+    const PoolHistType& Histogram() const
     {
         return HistogramImpl();
     }
 
     /// The accumulated trace statistics.
-    PoolTraceStatsType TraceStats() const
+    const PoolTraceStatsType& TraceStats() const
     {
         return TraceStatsImpl();
     }
@@ -126,9 +126,9 @@ private:    // Customizable implementation.
     // Bins frames in ctb and updates poolHist_.
     virtual void AddBatchImpl(const Data::CameraTraceBatch& ctb) = 0;
 
-    virtual PoolHistType HistogramImpl() const = 0;
+    virtual const PoolHistType& HistogramImpl() const = 0;
 
-    virtual PoolTraceStatsType TraceStatsImpl() const = 0;
+    virtual const PoolTraceStatsType& TraceStatsImpl() const = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

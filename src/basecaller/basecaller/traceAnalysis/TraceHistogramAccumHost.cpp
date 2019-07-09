@@ -36,9 +36,9 @@ namespace Basecaller {
 
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
-{
-    // TODO
-}
+    , poolHist_ (poolId, poolSize)
+    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric)
+{ }
 
 
 void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
@@ -139,14 +139,13 @@ void TraceHistogramAccumHost::InitStats(unsigned int numLanes)
 }
 
 
-TraceHistogramAccumHost::PoolHistType
+const TraceHistogramAccumHost::PoolHistType&
 TraceHistogramAccumHost::HistogramImpl() const
 {
     using std::copy;
 
     assert(hist_.size() == PoolSize());
-    PoolHistType ph (PoolId(), PoolSize());
-    auto phv = ph.data.GetHostView();
+    auto phv = poolHist_.data.GetHostView();
 
     using CArray = Cuda::Utility::CudaArray<HistCountType, laneSize>;
 
@@ -177,20 +176,19 @@ TraceHistogramAccumHost::HistogramImpl() const
         }
     }
 
-    return ph;
+    return poolHist_;
 }
 
 
-TraceHistogramAccumHost::PoolTraceStatsType
+const TraceHistogramAccumulator::PoolTraceStatsType&
 TraceHistogramAccumHost::TraceStatsImpl() const
 {
-    PoolTraceStatsType pts (PoolSize(), Cuda::Memory::SyncDirection::Symmetric);
-    auto ptsv = pts.GetHostView();
+    auto ptsv = poolTraceStats_.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
         ptsv[lane] = stats_[lane].ToBaselineStats();
     }
-    return pts;
+    return poolTraceStats_;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
