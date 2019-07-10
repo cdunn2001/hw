@@ -18,6 +18,7 @@
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
 
+using std::make_unique;
 using std::ostringstream;
 using std::unique_ptr;
 
@@ -183,4 +184,21 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
         throw PBException(msg.str());
     }
 }
+
+std::unique_ptr<DetectionModelEstimator>
+AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
+{
+    switch (dmeOpt_)
+    {
+    case Data::BasecallerDmeConfig::MethodName::Fixed:
+        return make_unique<DetectionModelEstimator>(poolId, poolSize_);
+    case Data::BasecallerDmeConfig::MethodName::Monochrome:
+        // TODO: for now fall through to throw exception.
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';
+        throw PBException(msg.str());
+    }
+}
+
 }}}     // namespace PacBio::Mongo::Basecaller

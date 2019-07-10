@@ -1,3 +1,6 @@
+#ifndef mongo_dataTypes_PoolDetectionModel_H_
+#define mongo_dataTypes_PoolDetectionModel_H_
+
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -23,59 +26,44 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+//  Defines types PoolDetectionModel and LaneDetectionModel.
 
-#ifndef mongo_dataTypes_DetectionModel_CUH_
-#define mongo_dataTypes_DetectionModel_CUH_
-
-#include "DetectionModel.h"
-#include "BatchData.cuh"
+#include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/MongoConstants.h>
+#include "LaneDetectionModel.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+/// A bundle of model parameters for a normal mixture representing the
+/// baselined trace data for a lane of ZMWs.
+/// \tparam T is the elemental data type (e.g., float).
 template <typename T>
-class ZmwDetectionModel
-{
-public:
-    __device__ ZmwDetectionModel(StridedBlockView<T> data, Memory::detail::DataManagerKey)
-        : data_(data)
-    {}
+using LaneDetectionModel = LaneModelParameters<T, laneSize>;
 
-    template <typename U, std::enable_if_t<!std::is_const<U>::value, int> = 0>
-    __device__ operator ZmwDetectionModel<const U>() const
-    {
-        return ZmwDetectionModel<const U>(data_);
-    }
 
-    __device__ T& BaselineMean() { return data_[DetectionModelIdx::BaselineMean()]; }
-    __device__ T& BaselineVar()  { return data_[DetectionModelIdx::BaselineVar()]; }
-
-    __device__ T& AnalogMean(int i) { return data_[DetectionModelIdx::AnalogMean(i)]; }
-    __device__ T& AnalogVar(int i)  { return data_[DetectionModelIdx::AnalogVar(i)]; }
-private:
-    StridedBlockView<T> data_;
-};
-
+/// A bundle of model parameters for a normal mixture representing the
+/// baselined trace data for a pool of ZMWs.
+/// \tparam T is the elemental data type (e.g., float).
 template <typename T>
-class GpuDetectionModel : private Memory::detail::DataManager
+struct PoolDetectionModel
 {
-    GpuDetectionModel(DetectionModel& model)
-        : data_(model.Data(DataKey()))
-    {}
+    using ElementType = T;
 
-    ZmwDetectionModel<T> GetZmwModel(int lane, int zmw)
-    {
-        return ZmwDetectionModel<T>(data_.ZmwData(lane, zmw));
-    }
-    ZmwDetectionModel<const T> GetZmwModel(int lane, int zmw) const
-    {
-        return ZmwDetectionModel<const T>(data_.ZmwData(lane, zmw));
-    }
-private:
-    GpuBatchData<T> data_;
+    Cuda::Memory::UnifiedCudaArray<LaneDetectionModel<T>> laneModels;
+    uint32_t poolId;
+
+    PoolDetectionModel(uint32_t aPoolId,
+                       unsigned int lanesPerPool,
+                       Cuda::Memory::SyncDirection syncDirection,
+                       bool pinned = true)
+        : laneModels (lanesPerPool, syncDirection, pinned, nullptr)
+        , poolId (aPoolId)
+    {}
 };
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif // mongo_dataTypes_DetectionModel_H_
+#endif  // mongo_dataTypes_PoolDetectionModel_H_

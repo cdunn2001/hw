@@ -41,6 +41,9 @@ namespace Mongo {
 
 // TODO: Add declaration decorators to enable use on CUDA device.
 
+// TODO: Use a type-traits-like technique to enable accepting
+// [Const]LaneArrayRef as function parameters instead of [const] LaneArray&.
+
 /// \brief A bundle of moment statistics.
 /// \details
 /// Provides mean and variance statistics on augmentable dataset.
@@ -69,6 +72,18 @@ public:     // Structors
         , m1_ {state.moment1}
         , m2_ {state.moment2}
     { }
+    /// Constructs an instance from previously computed moments.
+    /// m0 and m2 cannot be negative.
+    StatAccumulator(const VF& m0, const VF& m1, const VF& m2,
+                    const VF& offset = VF(0))
+        : offset_ {offset}
+        , m0_ {m0}
+        , m1_ {m1}
+        , m2_ {m2}
+    {
+        assert(all(m0_ >= 0.0f));
+        assert(all(m2_ >= 0.0f));
+    }
 
 public:     // Const methods
     /// Number of samples aggregated.
@@ -232,6 +247,19 @@ public:     // Mutating methods
         m1_ = m1new;
         // Guard against NaN.
         m2_ = Blend(m0_ == VF(0), VF(0), m2new);
+    }
+
+    /// Set the internal moments to arbitrary values.
+    /// m0 and m2 cannot be negative.
+    void Moments(const VF& m0, const VF& m1, const VF& m2,
+                 const VF& offset = VF(0))
+    {
+        assert(all(m0 >= 0.0f));
+        assert(all(m2 >= 0.0f));
+        m0_ = m0;
+        m1_ = m1;
+        m2_ = m2;
+        offset_ = offset;
     }
 
 private:    // Data

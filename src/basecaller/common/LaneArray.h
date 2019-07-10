@@ -47,7 +47,10 @@ public:     // Structors and assignment
     template <typename InputIterT>
     LaneArray(const InputIterT& first, const InputIterT& last)
         : LaneArray()
-    { std::copy(first, last, begin()); }
+    {
+        assert(std::distance(first, last) == N);
+        std::copy(first, last, begin());
+    }
 
     // This could be accomplished with LaneArray(ConstLaneArrayRef(ca.data())),
     // but this convenience seems worth the dependency on CudaArray.h.

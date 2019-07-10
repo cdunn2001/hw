@@ -41,7 +41,7 @@
 
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
-#include <dataTypes/DetectionModel.h>
+#include <dataTypes/PoolDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
@@ -71,13 +71,14 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
+    dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     // TODO: Create other algorithm components.
 
     // Not running DME, need to fake our model
     if (staticAnalysis_)
     {
-        Data::LaneModelParameters<PBHalf, laneSize> model;
+        Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
         model.AnalogMode(0).SetAllMeans(227.13);
         model.AnalogMode(1).SetAllMeans(154.45);
         model.AnalogMode(2).SetAllMeans(97.67);
@@ -98,7 +99,6 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
         {
             view[i] = model;
         }
-
     }
 }
 
@@ -112,6 +112,7 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
         return StandardPipeline(std::move(tbatch));
     }
 }
+
 
 BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -135,6 +136,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     return BasecallBatch(maxCallsPerZmwChunk, tbatch.Dimensions(), tbatch.Metadata());
 }
 
+
 BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
@@ -150,17 +152,25 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     // Includes computing baseline moments.
     CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
 
-    // Accumulate histogram of baseline-subtracted trace data.
-    traceHistAccum_->AddBatch(ctb);
-
-    // TODO: When sufficient trace data have been histogrammed, estimate detection model.
-    // TODO: Make this configurable.
-    const unsigned int minFramesForDme = 4000u;
-    if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+    if (!isModelInitialized_)
     {
-        //Data::DetectionModel detModel = (*dme_)(traceHistAccum_->Histogram());
-        //(void) detModel;    // Temporarily squelch unused variable warning.
-        // TODO: reset histogram
+        // TODO: Factor model initialization and estimation operations.
+
+        // Accumulate histogram of baseline-subtracted trace data.
+        // This operation also accumulates baseliner statistics.
+        traceHistAccum_->AddBatch(ctb);
+
+        // When sufficient trace data have been histogrammed,
+        // estimate detection model.
+        // TODO: Make this configurable.
+        const unsigned int minFramesForDme = 4000u;
+        if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+        {
+            auto detModel = (*dme_)(traceHistAccum_->Histogram(),
+                                    traceHistAccum_->TraceStats());
+            models_ = std::move(detModel.laneModels);
+            isModelInitialized_ = true;
+        }
     }
 
     // TODO: When detection model is available, classify frames.
