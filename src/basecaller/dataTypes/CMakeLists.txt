@@ -25,6 +25,7 @@ set(CPP_LIST
     MovieConfig.h
     MovieConfig.cpp
     PoolDetectionModel.h
+    PoolDetectionModel.cpp
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h

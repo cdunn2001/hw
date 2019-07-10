@@ -154,6 +154,8 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     if (!isModelInitialized_)
     {
+        // TODO: Factor model initialization and estimation operations.
+
         // Accumulate histogram of baseline-subtracted trace data.
         // This operation also accumulates baseliner statistics.
         traceHistAccum_->AddBatch(ctb);
@@ -167,6 +169,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
             auto detModel = (*dme_)(traceHistAccum_->Histogram(),
                                     traceHistAccum_->TraceStats());
             models_ = std::move(detModel.laneModels);
+            isModelInitialized_ = true;
         }
     }
 
