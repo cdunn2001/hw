@@ -44,11 +44,12 @@ Data::PulseBatch HostPulseAccumulator::Process(Data::LabelsBatch labels)
              ++relativeFrameIndex, ++blIter)
         {
             auto label = *blIter;
-            if (labels.GetMeta().FirstFrame() == 0)
+            if (firstFrame_)
             {
                 // This should only happen on the the very first frame.
                 ConstSignalArrayRef signal = Signal(relativeFrameIndex, blockLatTrace, currTrace);
-                currSegment = LabelsSegment(0, label, signal);
+                currSegment = LabelsSegment(LabelsSegment::FrameArray{0}, label, signal);
+                firstFrame_ = false;
             }
             else
             {

@@ -168,8 +168,60 @@ TEST(TestHostPulseAccumulator, Run)
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
 
-    // TODO: Simulate out labels batch accordingly.
+    // Simulate out labels batch accordingly fixed pattern of baseline + pulse frames.
+    const size_t ipd = 6;
+    const size_t pw = 10;
+    assert(framesPerChunk % (ipd + pw) == 0);
+    std::vector<Data::LabelsBatch::ElementType> simLabels;
+    std::vector<Data::CameraTraceBatch::ElementType> simTrc;
 
+    // Fixed signal values for pulses.
+    const short latTraceVal = 400;
+    const short curTraceVal = 500;
+
+    size_t frameNum = 0;
+    size_t base = 0;
+    while (frameNum < framesPerChunk)
+    {
+        simTrc.insert(simTrc.end(), ipd, 0);
+        simLabels.insert(simLabels.end(), ipd, 0);
+        frameNum += ipd;
+
+        // Insert pulse down states and final pulse up state to complete pulse.
+        simLabels.insert(simLabels.end(), 1, (base % 4) + 5);
+        simLabels.insert(simLabels.end(), pw-1, (base % 4 ) + 9);
+
+        // Hardcode latency for now.
+        simTrc.insert(simTrc.end(), pw, frameNum < 16u ? latTraceVal : curTraceVal);
+
+        base++;
+        frameNum += pw;
+    }
+
+    for (uint32_t laneIdx = 0; laneIdx < labelsBatch.LanesPerBatch(); ++laneIdx)
+    {
+        auto blockLabels = labelsBatch.GetBlockView(laneIdx);
+        auto latTrace = labelsBatch.LatentTrace().GetBlockView(laneIdx);
+        auto curTrace = labelsBatch.TraceData().GetBlockView(laneIdx);
+        for (size_t frameNum = 0; frameNum < simLabels.size(); ++frameNum)
+        {
+            std::vector<Data::LabelsBatch::ElementType> simll(blockLabels.LaneWidth(), simLabels[frameNum]);
+            std::memcpy(blockLabels.Data() + (frameNum * blockLabels.LaneWidth()),
+                        simll.data(), sizeof(Data::LabelsBatch::ElementType) * simll.size());
+
+            std::vector<Data::CameraTraceBatch::ElementType> trcVal(curTrace.LaneWidth(), simTrc[frameNum]);
+            if (frameNum < latTrace.NumFrames())
+            {
+                std::memcpy(latTrace.Data() + (frameNum * latTrace.LaneWidth()),
+                            trcVal.data(), sizeof(Data::CameraTraceBatch::ElementType) * trcVal.size());
+            }
+            else
+            {
+                std::memcpy(curTrace.Data() + ((frameNum - latTrace.NumFrames()) * curTrace.LaneWidth()),
+                            trcVal.data(), sizeof(Data::CameraTraceBatch::ElementType) * trcVal.size());
+            }
+        }
+    }
 
     HostPulseAccumulator pulseAccumulator(poolId, lanesPerPool);
 
@@ -186,14 +238,26 @@ TEST(TestHostPulseAccumulator, Run)
         const auto& lanePulses = pulseBatch.Pulses().LaneView(laneIdx);
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
-            //EXPECT_EQ(bcConfig.pulseAccumConfig.maxCallsPerZmw, lanePulses.size(zmwIdx));
-            for (uint32_t pulseNum = 0; pulseNum < bcConfig.pulseAccumConfig.maxCallsPerZmw; ++pulseNum)
+            for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
-
-                //const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
-                //EXPECT_EQ(labels[pulseNum % 4], pulse.Label());
-                //EXPECT_EQ(1, pulse.Start());
-                //EXPECT_EQ(3, pulse.Width());
+                const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
+                EXPECT_EQ(labels[pulseNum % 4], pulse.Label());
+                EXPECT_EQ(pulseNum * (ipd + pw) + ipd, pulse.Start());
+                EXPECT_EQ(pw, pulse.Width());
+                if (pulse.Start() < 16u)
+                {
+                   EXPECT_EQ(latTraceVal, pulse.MidSignal());
+                   EXPECT_EQ(latTraceVal, pulse.MeanSignal());
+                   EXPECT_EQ(latTraceVal, pulse.MaxSignal());
+                   EXPECT_EQ((latTraceVal * latTraceVal) * (pw-2), pulse.SignalM2());
+                }
+                else
+                {
+                    EXPECT_EQ(curTraceVal, pulse.MidSignal());
+                    EXPECT_EQ(curTraceVal, pulse.MeanSignal());
+                    EXPECT_EQ(curTraceVal, pulse.MaxSignal());
+                    EXPECT_EQ((curTraceVal * curTraceVal) * (pw-2), pulse.SignalM2());
+                }
             }
         }
     }

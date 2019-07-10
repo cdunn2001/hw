@@ -58,6 +58,7 @@ public:
     {
     public:
         using FrameArray = LaneArray<uint32_t>;
+        using FloatArray = LaneArray<float>;
         using SignalArray = LaneArray<Data::CameraTraceBatch::ElementType>;
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
 
@@ -70,10 +71,10 @@ public:
     public:
 
         static LaneMask<laneSize> IsPulseUpState(const ConstLabelArrayRef& i)
-        { return (i > LabelArray{numAnalogs}) & (i <= LabelArray{2*numAnalogs}); }
+        { return (LabelArray{numAnalogs} < i) & (i <= LabelArray{2*numAnalogs}); }
 
         static LaneMask<laneSize> IsPulseDownState(const ConstLabelArrayRef& i)
-        { return (i > LabelArray{2*numAnalogs}) & (i < LabelArray{numStates}); }
+        { return (LabelArray{2*numAnalogs} < i) & (i < LabelArray{numStates}); }
 
     public:
         LabelsSegment(const FrameArray& startFrame, const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
@@ -101,12 +102,12 @@ public:
     public:
         LaneMask<laneSize> IsNewSegment(const ConstLabelArrayRef& label)
         {
-            return IsPulseUpState(label) | ((label == 0) & (this->label_ != 0));
+            return IsPulseUpState(label) | ((label == LabelArray{0}) & (this->label_ != LabelArray{0}));
         }
         
         LaneMask<laneSize> IsPulse()
         {
-            return label_ != 0;
+            return label_ != LabelArray{0};
         }
 
         LabelArray FullFrameLabel()
@@ -164,14 +165,14 @@ public:
             signalLastFrame_ = Blend(boundaryMask, SignalArray{0}, signalLastFrame_);
             signalMax_ = Blend(boundaryMask, signal, signalMax_);
             signalTotal_ = Blend(boundaryMask, SignalArray{0}, signalTotal_);
-            signalM2_ = Blend(boundaryMask, SignalArray{0}, signalM2_);
+            signalM2_ = Blend(boundaryMask, FloatArray{0}, signalM2_);
             label_ = Blend(boundaryMask, label, label_);
         }
         
         void AddSignal(const LaneMask<laneSize>& update, const ConstSignalArrayRef& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
-            signalM2_ = Blend(update, signalM2_ + (signalLastFrame_ * signalLastFrame_), signalM2_);
+            signalM2_ = Blend(update, signalM2_ + (FloatArray(signalLastFrame_) * FloatArray(signalLastFrame_)), signalM2_);
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
             signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }
@@ -184,7 +185,7 @@ public:
         SignalArray signalLastFrame_;   // Signal recorded for the last frame in the segment
         SignalArray signalMax_;         // Max signal over all frames in segment
         SignalArray signalTotal_;       // Signal total, excluding the first and last frame
-        SignalArray signalM2_;          // Sum of squared signals, excluding the first and last frame
+        FloatArray  signalM2_;          // Sum of squared signals, excluding the first and last frame
 
         LabelArray  label_;             // // Internal label ID corresponding to detection modes
     };
@@ -213,6 +214,7 @@ private:
 
 private:
     std::vector<LabelsSegment> startSegmentByLane;
+    bool firstFrame_ = true;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller
