@@ -176,7 +176,7 @@ void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& b
                 auto label = LabelConv(pulse.Label());
 
                 // Populate pulse data
-                bc.GetPulse().Start(pulse.Start()).Width(pulse.Stop());
+                bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
                 bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
                 bc.GetPulse().Label(label).LabelQV(qvDefault_);
                 bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
