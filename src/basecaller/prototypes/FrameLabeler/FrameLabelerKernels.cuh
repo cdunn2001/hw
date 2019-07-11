@@ -47,11 +47,30 @@ struct __align__(128) LatentViterbi
     using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
  public:
     __device__ LatentViterbi()
-        : boundary_(make_short2(0,0))
-    {}
+    {
+        boundary_[threadIdx.x] = make_short2(0,0);
 
-    __device__ void SetBoundary(short2 boundary) { boundary_ = boundary; }
-    __device__ short2 GetBoundary() const { return boundary_; }
+        // I'm a little uncertain how to initialize this model.  I'm tryin to
+        // make it work with latent data that we are guaranteed to be all zeroes,
+        // and needs to produce baseline labels.
+        //
+        // I'm not even sure we need this `oldModel` it may be sufficient to use
+        // the current block's model while processing the few frames of latent data
+        //
+        // In either case, any issues here are flushed out after only a few frames
+        // (16) and we hit steady state, so I'm not hugely concerned.
+        oldModel.BaselineMode().means[threadIdx.x] = 0;
+        oldModel.BaselineMode().vars[threadIdx.x] = 50;
+
+        for (int i = 0; i < numAnalogs; ++i)
+        {
+            oldModel.AnalogMode(i).means[threadIdx.x] = 1000;
+            oldModel.AnalogMode(i).vars[threadIdx.x] = 10;
+        }
+    }
+
+    __device__ void SetBoundary(short2 boundary) { boundary_[threadIdx.x] = boundary; }
+    __device__ short2 GetBoundary() const { return boundary_[threadIdx.x]; }
 
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
@@ -61,7 +80,7 @@ struct __align__(128) LatentViterbi
 
 private:
     LaneModelParameters oldModel;
-    short2 boundary_;
+    Utility::CudaArray<short2, laneWidth> boundary_;
 };
 
 // TODO this needs cleanup.  If numLanes doesn't match what is actually used on the gpu, we're dead

@@ -106,6 +106,12 @@ static BatchDimensions LatBatchDims(size_t lanesPerPool)
     return ret;
 }
 
+__global__ void InitLatent(Mongo::Data::GpuBatchData<short2> latent)
+{
+    auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
+    for (auto val : zmwData) val = make_short2(0, 0);
+}
+
 FrameLabeler::FrameLabeler()
     : latent_(lanesPerPool_)
     , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, nullptr, true)
@@ -114,6 +120,9 @@ FrameLabeler::FrameLabeler()
     {
         throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
     }
+
+    InitLatent<<<lanesPerPool_, BlockThreads>>>(prevLat_);
+    CudaSynchronizeDefaultStream();
 }
 
 
