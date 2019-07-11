@@ -63,13 +63,10 @@ public:
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
 
     public:     // Static constants
-        /// Number nucleotide analogs supported.
-        static constexpr int numAnalogs = 4;
-
         /// Number of states in HMM.
         static constexpr int numStates = 1 + 3*numAnalogs;
-    public:
 
+    public:
         static LaneMask<laneSize> IsPulseUpState(const ConstLabelArrayRef& i)
         { return (LabelArray{numAnalogs} < i) & (i <= LabelArray{2*numAnalogs}); }
 
@@ -100,17 +97,17 @@ public:
         { }
 
     public:
-        LaneMask<laneSize> IsNewSegment(const ConstLabelArrayRef& label)
+        LaneMask<laneSize> IsNewSegment(const ConstLabelArrayRef& label) const
         {
             return IsPulseUpState(label) | ((label == LabelArray{0}) & (this->label_ != LabelArray{0}));
         }
         
-        LaneMask<laneSize> IsPulse()
+        LaneMask<laneSize> IsPulse() const
         {
             return label_ != LabelArray{0};
         }
 
-        LabelArray FullFrameLabel()
+        LabelArray FullFrameLabel() const
         {
             LabelArray ret(this->label_);
             ret = Blend(IsPulseDownState(this->label_),
@@ -123,10 +120,16 @@ public:
         Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw)
         {
             using NucleotideLabel = Data::Pulse::NucleotideLabel;
+
+            // TODO: The analog map is currently hard-coded to be
+            // in alphabetical order but this will need to eventually be passed
+            // into this function where it is set either from the trace file
+            // or via ICS.
             const std::array<NucleotideLabel, 5>& analogMap =
             {
                 NucleotideLabel::NONE, NucleotideLabel::A, NucleotideLabel::C, NucleotideLabel::G, NucleotideLabel::T
             };
+
             const float maxSignal = Data::Pulse::SignalMax();
             const float minSignal = 0.0f;
 
@@ -194,27 +197,20 @@ private:
     Data::PulseBatch Process(Data::LabelsBatch trace) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
-                         const ConstLabelArrayRef& label,
-                         const SignalBlockView& blockLatTrace, const SignalBlockView& currTrace,
-                         size_t relativeFrameIndex, uint32_t absFrameIndex);
+                         const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
+                         const SignalBlockView& currTrace, size_t relativeFrameIndex, uint32_t absFrameIndex);
 
-    ConstSignalArrayRef Signal(size_t relativeFrameIndex,
-                               const SignalBlockView& latTrace, const SignalBlockView& currTrace)
+    ConstSignalArrayRef Signal(size_t relativeFrameIndex, const SignalBlockView& latTrace,
+                               const SignalBlockView& currTrace) const
     {
-        if (relativeFrameIndex < latTrace.NumFrames())
-        {
-            return ConstSignalArrayRef(latTrace.Data() + (relativeFrameIndex * latTrace.LaneWidth()));
-        }
-        else
-        {
-            return ConstSignalArrayRef(currTrace.Data() +
-                                       ((relativeFrameIndex - latTrace.NumFrames()) * currTrace.LaneWidth()));
-        }
+        return relativeFrameIndex < latTrace.NumFrames()
+               ?  ConstSignalArrayRef(latTrace.Data() + (relativeFrameIndex * latTrace.LaneWidth()))
+               :  ConstSignalArrayRef(currTrace.Data() + ((relativeFrameIndex - latTrace.NumFrames())
+                                      * currTrace.LaneWidth()));
     }
 
 private:
     std::vector<LabelsSegment> startSegmentByLane;
-    bool firstFrame_ = true;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller

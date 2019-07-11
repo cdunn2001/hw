@@ -43,20 +43,8 @@ Data::PulseBatch HostPulseAccumulator::Process(Data::LabelsBatch labels)
              blIter != blockLabels.CEnd();
              ++relativeFrameIndex, ++blIter)
         {
-            auto label = *blIter;
-            if (firstFrame_)
-            {
-                // This should only happen on the the very first frame.
-                ConstSignalArrayRef signal = Signal(relativeFrameIndex, blockLatTrace, currTrace);
-                currSegment = LabelsSegment(LabelsSegment::FrameArray{0}, label, signal);
-                firstFrame_ = false;
-            }
-            else
-            {
-                EmitFrameLabels(currSegment, lanePulses, label,
-                                blockLatTrace, currTrace,
-                                relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
-            }
+            EmitFrameLabels(currSegment, lanePulses, *blIter, blockLatTrace, currTrace,
+                            relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
         }
     }
 
@@ -64,9 +52,9 @@ Data::PulseBatch HostPulseAccumulator::Process(Data::LabelsBatch labels)
 }
 
 void HostPulseAccumulator::EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
-                                           const ConstLabelArrayRef& label,
-                                           const SignalBlockView& blockLatTrace, const SignalBlockView& currTrace,
-                                           size_t relativeFrameIndex, uint32_t absFrameIndex)
+                                           const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
+                                           const SignalBlockView& currTrace, size_t relativeFrameIndex,
+                                           uint32_t absFrameIndex)
 {
     auto signal = Signal(relativeFrameIndex, blockLatTrace, currTrace);
 

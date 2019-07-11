@@ -225,7 +225,7 @@ namespace Data {
     {
     public:
         SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses)
-        ADD_ENUM(MethodName, Method, MethodName::NoOp);
+        ADD_ENUM(MethodName, Method, MethodName::HostPulses);
 
         // Increasing this number will directly increase memory usage, even if
         // we don't saturate the allowed number of calls, so be conservative
