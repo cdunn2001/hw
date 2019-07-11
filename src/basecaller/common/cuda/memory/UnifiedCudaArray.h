@@ -79,7 +79,7 @@ public:
 
         // Preferrably we'd ensure GpuType is trivially copyable as well, but for whatever reason
         // the half2 type is not implemented as such, which casues problems.  Best we can do is
-        // try and ensure binary compatability on our end as much as wel can.
+        // try and ensure binary compatability on our end as much as we can.
         static_assert(sizeof(HostType) == sizeof(GpuType) || 2*sizeof(HostType) == sizeof(GpuType), "");
 
         static_assert(std::is_trivially_default_constructible<HostType>::value || allow_expensive_construct,

@@ -226,20 +226,20 @@ public:
 
     __device__ void FillOutputStats(Mongo::Data::BaselineStats<blockThreads*2>& stats)
     {
-        stats.m0_[2*threadIdx.x] = m0_[threadIdx.x].X();
-        stats.m0_[2*threadIdx.x+1] = m0_[threadIdx.x].Y();
-        stats.m1_[2*threadIdx.x] = m1_[threadIdx.x].X();
-        stats.m1_[2*threadIdx.x+1] = m1_[threadIdx.x].Y();
-        stats.m2_[2*threadIdx.x] = m2_[threadIdx.x].X();
-        stats.m2_[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
+        stats.m0_[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        stats.m0_[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
+        stats.m1_[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.m1_[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.m2_[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
+        stats.m2_[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
-        stats.rawBaselineSum_[2*threadIdx.x] = rawSum_[threadIdx.x].X();
-        stats.rawBaselineSum_[2*threadIdx.x+1] = rawSum_[threadIdx.x].Y();
-        stats.traceMin_[2*threadIdx.x] = min_[threadIdx.x].X();
-        stats.traceMin_[2*threadIdx.x+1] = min_[threadIdx.x].Y();
-        stats.traceMax_[2*threadIdx.x] = max_[threadIdx.x].X();
-        stats.traceMax_[2*threadIdx.x+1] = max_[threadIdx.x].Y();
+        stats.rawBaselineSum_[2*threadIdx.x] = rawSum_[threadIdx.x].FloatX();
+        stats.rawBaselineSum_[2*threadIdx.x+1] = rawSum_[threadIdx.x].FloatY();
+        stats.traceMin_[2*threadIdx.x] = min_[threadIdx.x].FloatX();
+        stats.traceMin_[2*threadIdx.x+1] = min_[threadIdx.x].FloatY();
+        stats.traceMax_[2*threadIdx.x] = max_[threadIdx.x].FloatX();
+        stats.traceMax_[2*threadIdx.x+1] = max_[threadIdx.x].FloatY();
     }
 
 private:

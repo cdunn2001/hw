@@ -52,10 +52,18 @@ public:
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
 
     CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
-    CUDA_ENABLED void SetX(float f) {data_.x = __float2half(f); }
-    CUDA_ENABLED void SetY(float f) {data_.y = __float2half(f); }
-    CUDA_ENABLED float X() const { return __half2float(data_.x); }
-    CUDA_ENABLED float Y() const { return __half2float(data_.y); }
+
+    // Set/get individual elements
+    CUDA_ENABLED void X(half f) {data_.x = f; }
+    CUDA_ENABLED void Y(half f) {data_.y = f; }
+    CUDA_ENABLED half X() const {return data_.x; }
+    CUDA_ENABLED half Y() const {return data_.y; }
+
+    // Helper functions to ease float/half incompatability
+    CUDA_ENABLED void X(float f) {data_.x = __float2half(f); }
+    CUDA_ENABLED void Y(float f) {data_.y = __float2half(f); }
+    CUDA_ENABLED float FloatX() const { return __half2float(data_.x); }
+    CUDA_ENABLED float FloatY() const { return __half2float(data_.y); }
 
     half2 CUDA_ENABLED data() const { return data_; }
 private:

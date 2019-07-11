@@ -29,6 +29,10 @@
 // creating this type will consume the same memory as if it were entirely full,
 // so this is only really suitable for cases where each zmw is expected to be
 // (roughly) the same size and things have conservative bounds.
+//
+// File: Defines a set of classes used to give a consistent and synchronized
+//       view of a fixed allocation size vector implementation, with one
+//       vector per zmw in a pool
 
 #ifndef PACBIO_MONGO_DATA_BATCH_VECTORS_H
 #define PACBIO_MONGO_DATA_BATCH_VECTORS_H
@@ -50,6 +54,9 @@ class BatchVectors;
 template <typename T>
 class GpuBatchVectors;
 
+// Host side view of the vectors for a given Lane.  If you are doing the
+// first write operations after initial construction, you must call the
+// Reset function to make things initialized.
 template <typename T,
           typename Len_t = typename std::conditional<
               std::is_const<T>::value,
@@ -74,6 +81,7 @@ public:
         return LaneVectorView<const T>(data_.Data(), lens_.Data(), maxLen_);
     }
 
+    // Sets all lengths back to zero.
     void Reset()
     {
         std::fill(lens_.Data(), lens_.Data() + lens_.Size(), 0);
@@ -111,10 +119,19 @@ private:
     Cuda::Memory::HostView<Len_t> lens_;
 };
 
-// Be aware, lifetime management gets a bit fuzzy with this class.
-// Upon creation the data is still uninitialized.  Both the host
-// and gpu need to call `Reset` on the view types before writing,
-// and they need to write before they read.
+// This class manages a set of vectors, with one vector for each zmw
+// in a pool.  The vector has a fixed maximum capacity, and the class
+// will always allocate enough memory for each zmw to saturate this capacity.
+// It has the same semantics as classes like BatchData, where this is an
+// opaque owning class, and you request host/gpu 'views' that
+// automatically synchronize the data as necessary.
+//
+// As a special note, to avoid unecessary data transfers this class only
+// supports trivially default constructible types, and upon construction
+// will not initialize the per-zmw `length` information.  The first writes
+// to a newly constructed `BatchData` need to be preceeded by a call to the
+// `Reset` functions provided by the host/gpu view classes, to set all
+// the lengths to zero.
 template <typename T>
 class BatchVectors
 {
@@ -160,6 +177,8 @@ public:
 
     uint32_t MaxLen() const { return maxLen_; }
 
+    // Semi-private functions.  `GpuBatchVectors` uses these to construct themselves,
+    // but no one else should pay attention to these.
     UnifiedCudaArray<T>& Data(PassKey<GpuBatchVectors<T>>) { return data_; }
     const UnifiedCudaArray<T>& Data(PassKey<GpuBatchVectors<T>>) const { return data_; }
 

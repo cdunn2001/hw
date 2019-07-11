@@ -142,8 +142,6 @@ public:
         }
     }
 
-    //__device__ const BatchDimensions& Dims() const { return dims_; }
-
     __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
     {
         return ZmwDataImpl<T>(laneIdx, zmwIdx);
