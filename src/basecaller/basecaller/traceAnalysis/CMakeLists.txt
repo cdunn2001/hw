@@ -16,6 +16,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DetectionModelEstimator.cpp
     DeviceMultiScaleBaseliner.h
     DeviceMultiScaleBaseliner.cu
+    DevicePulseAccumulator.h
+    DevicePulseAccumulator.cu
     DeviceSGCFrameLabeler.h
     DeviceSGCFrameLabeler.cu
     DmeDiagnostics.h

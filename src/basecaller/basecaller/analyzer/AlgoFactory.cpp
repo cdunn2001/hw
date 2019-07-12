@@ -9,6 +9,7 @@
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
@@ -91,10 +92,13 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         HostPulseAccumulator::Finalize();
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        DevicePulseAccumulator::Finalize();
+        break;
     default:
         ostringstream msg;
-        PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
-                    << frameLabelerOpt_.toString()
+        PBLOG_ERROR << "Unrecognized method option for PulseAccumulator: "
+                    << pulseAccumOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
         break;
     }
@@ -153,6 +157,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         HostPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        DevicePulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -266,6 +273,9 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         return std::make_unique<HostPulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        return std::make_unique<DevicePulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
         break;
     default:
         ostringstream msg;

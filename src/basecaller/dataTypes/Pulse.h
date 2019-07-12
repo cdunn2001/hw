@@ -193,7 +193,7 @@ public:     // Property modifiers
 private:    // Static data
     // Scale factor used for fixed-point representation of signal levels.
     // The representation has this precision in DN or e-.
-    CUDA_ENABLED static constexpr float repScaleSignal_ = .1f;
+    static constexpr float repScaleSignal_ = .1f;
 
     CUDA_ENABLED static constexpr uint16_t ToFixedPrecision(float val)
     {
