@@ -16,7 +16,7 @@ __global__ void MaxGlobalFilter(const Mongo::Data::GpuBatchData<const short2> in
 {
     assert(blockThreads == blockDim.x);
 
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
 
     auto& myFilter = filters[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
@@ -36,7 +36,7 @@ __global__ void MaxSharedFilter(const Mongo::Data::GpuBatchData<const short2> in
 {
     assert(blockThreads == blockDim.x);
 
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
 
     __shared__ ExtremaFilter<blockThreads, filterWidth> myFilter;
     myFilter = filters[blockIdx.x];
@@ -58,7 +58,7 @@ __global__ void MaxLocalFilter(const Mongo::Data::GpuBatchData<const short2> in,
                                Mongo::Data::GpuBatchData<short2> out)
 {
 
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
     LocalExtremaFilter<blockThreads, filterWidth> myFilter(filters[blockIdx.x]);
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);

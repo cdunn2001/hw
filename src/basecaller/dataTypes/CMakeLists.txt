@@ -15,6 +15,11 @@ set(CPP_LIST
     BatchData.h
     BatchData.cpp
     BatchMetadata.h
+    BatchMetadata.cpp
+    BatchVectors.h
+    BatchVectors.cpp
+    BatchVectors.cuh
+    BatchVectors.cu
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
@@ -29,6 +34,10 @@ set(CPP_LIST
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h
+    Pulse.h
+    Pulse.cpp
+    PulseBatch.h
+    PulseBatch.cpp
     TraceBatch.h
     TraceBatch.cpp
     UHistogramSimd.h

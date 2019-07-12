@@ -95,20 +95,20 @@ unsigned int TraceAnalyzerTbb::NumZmwPools() const
 }
 
 
-vector<Data::BasecallBatch>
+vector<std::unique_ptr<Data::BasecallBatch>>
 TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
 {
     const size_t n = input.size();
     assert(input.size() <= bAnalyzer_.size());
 
-    vector<Data::BasecallBatch> output (n);
+    vector<std::unique_ptr<Data::BasecallBatch>> output(n);
 
     tbb::task_scheduler_init init(NumWorkerThreads());
     // TODO: Customize optional parameters of parallel_for.
     tbb::parallel_for(size_t(0), n, [&](size_t i)
     {
         const auto pid = input[i].GetMeta().PoolId();
-        output[i] = bAnalyzer_[pid](std::move(input[i]));
+        output[i] = std::make_unique<Data::BasecallBatch>(bAnalyzer_[pid](std::move(input[i])));
     });
 
     return output;

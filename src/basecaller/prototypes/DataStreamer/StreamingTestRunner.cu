@@ -18,9 +18,6 @@ using namespace PacBio::Cuda::Data;
 // function implicitly assumes that the kernel blocks only contain 32 threads.
 __global__ void BasicSanity(Mongo::Data::GpuBatchData<short2> in, size_t tid, Memory::DeviceView<size_t> ret)
 {
-    assert(gridDim.x == in.Dims().lanesPerBatch);
-    assert(blockDim.x == in.Dims().laneWidth);
-
     const size_t reps = 10;
     auto zmwData = in.ZmwData(blockIdx.x, threadIdx.x);
     for (size_t i = 0; i < reps; ++i)

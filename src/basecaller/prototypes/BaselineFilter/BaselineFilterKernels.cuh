@@ -4,7 +4,10 @@
 #include "BaselineFilter.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/utility/CudaArray.h>
+#include <common/cuda/PBCudaSimd.cuh>
 #include <dataTypes/BatchData.cuh>
+#include <dataTypes/BaselineStats.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -14,7 +17,7 @@ __global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const short
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
     auto& myFilter = filters[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
@@ -30,7 +33,7 @@ __global__ void SharedBaselineFilter(const Mongo::Data::GpuBatchData<const short
                                      Memory::DeviceView<Filter> filters,
                                      Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
     __shared__ Filter myFilter;
     myFilter = filters[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
@@ -67,7 +70,7 @@ __global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const s
                                          Mongo::Data::GpuBatchData<short2> workspace2,
                                          Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = in.Dims().framesPerBatch;
+    const size_t numFrames = in.NumFrames();
 
     // Grab a swath of memory that can fit our largest filter
     constexpr size_t maxSize = constexprMax(sizeof(ErodeDilate<blockThreads, width1>), sizeof(ErodeDilate<blockThreads, width2>));
@@ -131,10 +134,10 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const short2> in,
                               int numFrames,
                               Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t maxFrames = in.Dims().framesPerBatch;
+    const size_t maxFrames = in.NumFrames();
 
     assert(blockThreads == blockDim.x);
-    assert(numFrames <= out.Dims().framesPerBatch);
+    assert(numFrames <= out.NumFrames());
     assert(numFrames <= maxFrames);
     assert(numFrames % 4 == 0);
     assert((numFrames/4) % stride == 0);
@@ -168,7 +171,7 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> i
                                  const Mongo::Data::GpuBatchData<const short2> in2,
                                  Mongo::Data::GpuBatchData<short2> out)
 {
-    const size_t numFrames = out.Dims().framesPerBatch;
+    const size_t numFrames = out.NumFrames();
 
     assert(numFrames % stride == 0);
     int inputCount = numFrames / stride;
@@ -190,6 +193,207 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> i
     }
 }
 
+// TODO support autocorrelation
+template <size_t blockThreads>
+class StatAccumulator
+{
+public:
+    __device__ void Reset()
+    {
+        auto largest = std::numeric_limits<int16_t>::max();
+        auto lowest = std::numeric_limits<int16_t>::min();
+        min_[threadIdx.x] = make_short2(largest, largest);
+        max_[threadIdx.x] = make_short2(lowest, lowest);
+
+        rawSum_[threadIdx.x] = 0.0f;
+        m0_[threadIdx.x] = 0.0f;
+        m1_[threadIdx.x] = 0.0f;
+        m2_[threadIdx.x] = 0.0f;
+    }
+
+    __device__ void AddData(PBHalf2 raw,
+                            PBHalf2 bs, //baseline subtracted
+                            PBHalf2 baselineMask)
+    {
+        min_[threadIdx.x] = min(bs, min_[threadIdx.x]);
+        max_[threadIdx.x] = max(bs, max_[threadIdx.x]);
+        rawSum_[threadIdx.x] += Blend(baselineMask, raw, 0.0f);
+
+        m0_[threadIdx.x] += Blend(baselineMask, 1, 0);
+        m1_[threadIdx.x] += Blend(baselineMask, bs, 0);
+        m2_[threadIdx.x] += Blend(baselineMask, bs*bs, 0);
+    }
+
+    __device__ void FillOutputStats(Mongo::Data::BaselineStats<blockThreads*2>& stats)
+    {
+        stats.m0_[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        stats.m0_[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
+        stats.m1_[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.m1_[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.m2_[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
+        stats.m2_[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+
+        // TODO weird float/short conversions going on.  Should make these consistently shorts probably
+        stats.rawBaselineSum_[2*threadIdx.x] = rawSum_[threadIdx.x].FloatX();
+        stats.rawBaselineSum_[2*threadIdx.x+1] = rawSum_[threadIdx.x].FloatY();
+        stats.traceMin_[2*threadIdx.x] = min_[threadIdx.x].FloatX();
+        stats.traceMin_[2*threadIdx.x+1] = min_[threadIdx.x].FloatY();
+        stats.traceMax_[2*threadIdx.x] = max_[threadIdx.x].FloatX();
+        stats.traceMax_[2*threadIdx.x+1] = max_[threadIdx.x].FloatY();
+    }
+
+private:
+    Utility::CudaArray<PBHalf2, blockThreads> min_;
+    Utility::CudaArray<PBHalf2, blockThreads> max_;
+    Utility::CudaArray<PBHalf2, blockThreads> rawSum_;
+    Utility::CudaArray<PBHalf2, blockThreads> m0_;
+    Utility::CudaArray<PBHalf2, blockThreads> m1_;
+    Utility::CudaArray<PBHalf2, blockThreads> m2_;
+};
+
+template <size_t blockThreads>
+struct LatentBaselineData
+{
+    __device__ LatentBaselineData(PBHalf2 sig)
+    {
+        for (int i = 0; i < blockThreads; ++i)
+        {
+            bgSigma[i] = sig;
+        }
+    }
+    class LocalLatent
+    {
+        friend LatentBaselineData;
+
+        PBHalf2 bgSigma;
+        PBHalf2 latData;
+        PBHalf2 latRawData;
+        PBHalf2 latLMask;
+        PBHalf2 latHMask1;
+        PBHalf2 latHMask2;
+
+        PBHalf2 thrHigh;
+        PBHalf2 thrLow;
+
+        // TODO unify these somehow with the host multiscale implementation
+        static constexpr float sigmaThrL = 4.5f;
+        static constexpr float sigmaThrH = 4.5f;
+        static constexpr float alphaFactor = 0.7f;
+
+    public:
+        __device__ PBHalf2 SmoothedSigma(PBHalf2 frameSigma)
+        {
+            static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
+            bgSigma = (1.0f - alphaFactor) * bgSigma + alphaFactor * max(frameSigma, minSigma);
+
+            thrLow = bgSigma * sigmaThrL;
+            thrHigh = bgSigma * sigmaThrH;
+
+            return bgSigma;
+        }
+
+        __device__ void ProcessFrame(
+                PBHalf2 raw,
+                PBHalf2 subtracted,
+                StatAccumulator<blockThreads>& stats)
+        {
+            auto maskHp1 = subtracted < thrHigh;
+            auto mask = latHMask1 && latLMask && maskHp1;
+
+            latLMask = subtracted < thrLow;
+            latHMask2 = latHMask1;
+            latHMask1 = maskHp1;
+
+            stats.AddData(latRawData, latData, mask);
+
+            latRawData = raw;
+            latData = subtracted;
+        }
+    };
+
+    __device__ LocalLatent GetLocal()
+    {
+        LocalLatent local;
+
+        local.bgSigma    = bgSigma[threadIdx.x];
+        local.latData    = latData[threadIdx.x];
+        local.latRawData = latRawData[threadIdx.x];
+        local.latLMask   = latLMask[threadIdx.x];
+        local.latHMask1  = latHMask1[threadIdx.x];
+        local.latHMask2  = latHMask2[threadIdx.x];
+
+        return local;
+    }
+
+    __device__ void StoreLocal(const LocalLatent& local)
+    {
+        bgSigma[threadIdx.x]     = local.bgSigma;
+        latData[threadIdx.x]     = local.latData;
+        latRawData[threadIdx.x]  = local.latRawData;
+        latLMask[threadIdx.x]    = local.latLMask;
+        latHMask1[threadIdx.x]   = local.latHMask1;
+        latHMask2[threadIdx.x]   = local.latHMask2;
+    }
+private:
+    // TODO init
+    Utility::CudaArray<PBHalf2, blockThreads> bgSigma;
+    Utility::CudaArray<PBHalf2, blockThreads> latData;
+    Utility::CudaArray<PBHalf2, blockThreads> latRawData;
+    Utility::CudaArray<PBHalf2, blockThreads> latLMask;
+    Utility::CudaArray<PBHalf2, blockThreads> latHMask1;
+    Utility::CudaArray<PBHalf2, blockThreads> latHMask2;
+};
+
+template <size_t blockThreads, size_t stride>
+__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const short2> input,
+                                 Memory::DeviceView<LatentBaselineData<blockThreads>> latent,
+                                 const Mongo::Data::GpuBatchData<const short2> lower,
+                                 const Mongo::Data::GpuBatchData<const short2> upper,
+                                 Mongo::Data::GpuBatchData<short2> out,
+                                 Memory::DeviceView<Mongo::Data::BaselineStats<blockThreads*2>> outputStats)
+{
+    __shared__ StatAccumulator<blockThreads> stats;
+    stats.Reset();
+
+    auto localLatent = latent[blockIdx.x].GetLocal();
+
+    // For bias estimate
+    // TODO: these need to be set consistent with filter widths
+    PBHalf2 cSigmaBias(2.44f);
+    PBHalf2 cMeanBias(0.5f);
+
+    const size_t numFrames = out.NumFrames();
+
+    assert(numFrames % stride == 0);
+    int inputCount = numFrames / stride;
+
+    const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& lowerZmw = lower.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& upperZmw = upper.ZmwData(blockIdx.x, threadIdx.x);
+    auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
+
+    for (int i = 0; i < inputCount; ++i)
+    {
+        auto baseline = (PBHalf2(upperZmw[i]) + PBHalf2(lowerZmw[i])) / PBHalf2(2.0f);
+        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / cSigmaBias);
+        auto frameBiasEstimate = cMeanBias * sigma;
+
+        auto start = i*stride;
+        auto end = (i+1)*stride;
+        for (int j = start; j < end; ++j)
+        {
+            auto raw = PBHalf2(inZmw[j]);
+            auto val = raw - baseline - frameBiasEstimate;
+            localLatent.ProcessFrame(raw, val, stats);
+
+            outZmw[j] = ToShort(val);
+        }
+    }
+
+    stats.FillOutputStats(outputStats[blockIdx.x]);
+    latent[blockIdx.x].StoreLocal(localLatent);
+}
+
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
 class ComposedFilter
 {
@@ -202,6 +406,7 @@ class ComposedFilter
     Memory::DeviceOnlyArray<Lower2> lower2;
     Memory::DeviceOnlyArray<Upper1> upper1;
     Memory::DeviceOnlyArray<Upper2> upper2;
+    Memory::DeviceOnlyArray<LatentBaselineData<blockThreads>> latent;
     size_t numLanes_;
 
 public:
@@ -211,17 +416,20 @@ public:
         , upper1(numLanes, val)
         , upper2(numLanes, val)
         , numLanes_(numLanes)
+        , latent(numLanes, 0.0f)
     {}
 
+    // TODO should probably rename or remove.  Computes a naive baseline, but does
+    // not do the actual baseline subtraction, nor does it do any bias corrections
     __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<int16_t>& input,
                                     Mongo::Data::TraceBatch<int16_t>& output,
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        const uint64_t numFrames = input.Dimensions().framesPerBatch;
+        const uint64_t numFrames = input.NumFrames();
 
-        assert(input.Dimensions().laneWidth == 2*blockThreads);
-        assert(input.Dimensions().lanesPerBatch == numLanes_);
+        assert(input.LaneWidth() == 2*blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
 
         StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
             input,
@@ -246,6 +454,48 @@ public:
             workspace2);
 
         AverageAndExpand<blockThreads, 16><<<numLanes_, blockThreads>>>(workspace1, workspace2, output);
+    }
+
+    __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
+                                    Mongo::Data::TraceBatch<int16_t>& output,
+                                    Memory::UnifiedCudaArray<Mongo::Data::BaselineStats<blockThreads*2>>& stats,
+                                    Mongo::Data::BatchData<int16_t>& workspace1,
+                                    Mongo::Data::BatchData<int16_t>& workspace2)
+    {
+        const uint64_t numFrames = input.NumFrames();
+
+        assert(input.LaneWidth() == 2*blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
+
+        StridedFilter<blockThreads, 2, Lower1><<<numLanes_, blockThreads>>>(
+            input,
+            lower1.GetDeviceView(),
+            numFrames,
+            workspace1);
+        StridedFilter<blockThreads, 8, Lower2><<<numLanes_, blockThreads>>>(
+            workspace1,
+            lower2.GetDeviceView(),
+            numFrames/2,
+            workspace1);
+
+        StridedFilter<blockThreads, 2, Upper1><<<numLanes_, blockThreads>>>(
+            input,
+            upper1.GetDeviceView(),
+            numFrames,
+            workspace2);
+        StridedFilter<blockThreads, 8, Upper2><<<numLanes_, blockThreads>>>(
+            workspace2,
+            upper2.GetDeviceView(),
+            numFrames/2,
+            workspace2);
+
+        SubtractBaseline<blockThreads, 16><<<numLanes_, blockThreads>>>(
+            input,
+            latent.GetDeviceView(),
+            workspace1,
+            workspace2,
+            output,
+            stats.GetDeviceHandle());
     }
 
 };

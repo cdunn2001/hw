@@ -97,13 +97,32 @@ void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<short2, FrameLa
     scratchData_.Push(std::move(data));
 }
 
+static BatchDimensions LatBatchDims(size_t lanesPerPool)
+{
+    BatchDimensions ret;
+    ret.framesPerBatch = ViterbiStitchLookback;
+    ret.laneWidth = laneSize;
+    ret.lanesPerBatch = lanesPerPool;
+    return ret;
+}
+
+__global__ void InitLatent(Mongo::Data::GpuBatchData<short2> latent)
+{
+    auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
+    for (auto val : zmwData) val = make_short2(0, 0);
+}
+
 FrameLabeler::FrameLabeler()
     : latent_(lanesPerPool_)
+    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, nullptr, true)
 {
     if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
     {
         throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
     }
+
+    InitLatent<<<lanesPerPool_, BlockThreads>>>(prevLat_);
+    CudaSynchronizeDefaultStream();
 }
 
 
@@ -113,6 +132,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                                    const Mongo::Data::GpuBatchData<const short2> input,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
                                    ViterbiData<short2, 32> labels,
+                                   Mongo::Data::GpuBatchData<short2> prevLat,
+                                   Mongo::Data::GpuBatchData<short2> nextLat,
                                    Mongo::Data::GpuBatchData<short2> output)
 {
     using namespace Subframe;
@@ -160,20 +181,22 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     };
 
     // Forward recursion on latent data
-    const int latentFrames = latent.NumFrames();
-    scorer.Setup(latent.GetModel());
-    for (int frame = 0; frame < latentFrames; ++frame)
     {
-        Recursion(latent.FrameData(frame), frame);
+        auto latZmw = prevLat.ZmwData(blockIdx.x, threadIdx.x);
+        scorer.Setup(latent.GetModel());
+        for (int frame = 0; frame < ViterbiStitchLookback; ++frame)
+        {
+            Recursion(latZmw[frame], frame);
+        }
     }
 
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
-    const int numFrames = input.Dims().framesPerBatch;
+    const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
     for (int frame = 0; frame < numFrames; ++frame)
     {
-        Recursion(inZmw[frame], frame + latentFrames);
+        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
     }
 
     // Compute the probabilities of the possible end states.  Propagate
@@ -181,8 +204,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     // can have a more certain estimate.
     Normalize(logLike);
     auto& prob = scratch;
-    const int lookStart = numFrames + latentFrames - 1;
-    const int lookStop = lookStart - ViterbiStitchLookback;
+    const int lookStart = numFrames + ViterbiStitchLookback - 1;
+    const int lookStop = numFrames - 1;
     for (int i = lookStart; i > lookStop; --i)
     {
         CudaArray<PBHalf2, numStates> newProb;
@@ -212,24 +235,29 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     // Traceback
     auto traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
-    const int stopFrame = latentFrames == 0 ? ViterbiStitchLookback : 0;
-    const int startFrame = numFrames - 1;
-    for (int frame = startFrame; frame >= stopFrame; --frame)
+    for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
-        const auto lookbackIdx = frame + latentFrames - ViterbiStitchLookback;
-        traceState.x = labels(lookbackIdx, traceState.x).x;
-        traceState.y = labels(lookbackIdx, traceState.y).y;
+        traceState.x = labels(frame, traceState.x).x;
+        traceState.y = labels(frame, traceState.y).y;
     }
 
     // Update latent data
     latent.SetBoundary(anchorState);
     latent.SetModel(models[blockIdx.x]);
-    latent.SetData(inZmw);
+
+    auto outLatZmw = nextLat.ZmwData(blockIdx.x, threadIdx.x);
+    const auto offset = numFrames - ViterbiStitchLookback;
+    for (int i = 0; i < ViterbiStitchLookback; ++i)
+    {
+
+        outLatZmw[i] = inZmw[i + offset];
+    }
 }
 
 void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
+                                Mongo::Data::BatchData<int16_t>& latOut,
                                 Mongo::Data::BatchData<int16_t>& output)
 {
     auto labels = BorrowScratch();
@@ -239,7 +267,11 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
                                                         input,
                                                         latent_.GetDeviceView(),
                                                         *labels,
+                                                        prevLat_,
+                                                        latOut,
                                                         output);
+
+    std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
 

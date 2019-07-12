@@ -23,42 +23,54 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines members of class BasecallBatch.
 
-#include "BasecallBatch.h"
+#ifndef PACBIO_MONGO_BASECALLER_PULSE_ACCUMULATOR_H_
+#define PACBIO_MONGO_BASECALLER_PULSE_ACCUMULATOR_H_
+
+#include <stdint.h>
+
+#include <dataTypes/ConfigForward.h>
+#include <dataTypes/LabelsBatch.h>
+#include <dataTypes/PulseBatch.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
+class PulseAccumulator
 {
-    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
-    numPulsesByAnalog_[pulseLabel]++;
+public:     // Static functions
 
-    if (!base.IsNoCall())
+    static void Configure(size_t maxCallsPerZmw);
+    static void Finalize();
+
+    static void InitAllocationPools(bool hostExecution, size_t maxCallsPerZmw);
+    static void DestroyAllocationPools();
+
+protected: // static members
+    static std::unique_ptr<Data::PulseBatchFactory> batchFactory_;
+
+public:
+    PulseAccumulator(uint32_t poolId);
+    virtual ~PulseAccumulator() = default;
+
+public:
+    /// \returns LabelsBatch with estimated labels for each frame, along with the associated
+    ///          baseline subtracted trace
+    Data::PulseBatch operator()(Data::LabelsBatch labels)
     {
-        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
-        numBasesByAnalog_[baseLabel]++;
+        // TODO
+        assert(labels.GetMeta().PoolId() == poolId_);
+        return Process(std::move(labels));
     }
 
-    return *this;
-}
+private:    // Data
+    uint32_t poolId_;
 
-BasecallBatch::BasecallBatch(
-        const size_t maxCallsPerZmwChunk,
-        const BatchDimensions& batchDims,
-        const BatchMetadata& batchMetadata,
-        Cuda::Memory::SyncDirection syncDir,
-        bool pinned,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
-    : dims_ (batchDims)
-    , metaData_(batchMetadata)
-    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-    , metrics_(batchDims.ZmwsPerBatch(), syncDir, pinned, metricsPool)
-{}
+private:    // Customizable implementation
+    virtual Data::PulseBatch Process(Data::LabelsBatch trace); // = 0;
+};
 
-}}}     // namespace PacBio::Mongo::Data
+}}}     // namespace PacBio::Mongo::Basecaller
+
+#endif //PACBIO_MONGO_BASECALLER_PULSE_ACCUMULATOR_H_

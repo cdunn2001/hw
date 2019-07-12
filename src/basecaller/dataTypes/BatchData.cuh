@@ -101,6 +101,7 @@ template <typename T>
 class GpuBatchData : public GpuBatchDataHandle<T>, private Cuda::Memory::detail::DataManager
 {
     using GpuBatchDataHandle<T>::data_;
+    using GpuBatchDataHandle<T>::availableFrames_;
     using GpuBatchDataHandle<T>::dims_;
 public:
     GpuBatchData(const GpuBatchDataHandle<T>& handle)
@@ -108,7 +109,8 @@ public:
     {}
     template <typename U>
     GpuBatchData(BatchData<U>& data)
-        : GpuBatchDataHandle<T>(data.Dimensions(),
+        : GpuBatchDataHandle<T>(data.StorageDims(),
+                                data.NumFrames(),
                                 data.GetRawData(DataKey()).GetDeviceHandle(),
                                 DataKey())
     {
@@ -125,7 +127,8 @@ public:
     // T, else we'd violate the const of the incoming `BatchData`
     template <typename U, typename U2 = T, std::enable_if_t<std::is_const<U2>::value, int> = 0>
     GpuBatchData(const BatchData<U>& data)
-        : GpuBatchDataHandle<T>(data.Dimensions(),
+        : GpuBatchDataHandle<T>(data.StorageDims(),
+                                data.NumFrames(),
                                 data.GetRawData(DataKey()).GetDeviceHandle(),
                                 DataKey())
     {
@@ -139,8 +142,6 @@ public:
         }
     }
 
-    __device__ const BatchDimensions& Dims() const { return dims_; }
-
     __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
     {
         return ZmwDataImpl<T>(laneIdx, zmwIdx);
@@ -149,13 +150,16 @@ public:
     {
         return ZmwDataImpl<const T>(laneIdx, zmwIdx);
     }
+
+    __device__ uint32_t NumFrames() const { return availableFrames_; }
+
 private:
     template <typename U>
     __device__ StridedBlockView<U> ZmwDataImpl(size_t laneIdx, size_t zmwIdx) const
     {
         Cuda::Memory::DeviceView<T> view(data_);
         auto startIdx = laneIdx * dims_.laneWidth * dims_.framesPerBatch + zmwIdx;
-        auto endIdx = startIdx + dims_.framesPerBatch * dims_.laneWidth;
+        auto endIdx = startIdx + availableFrames_ * dims_.laneWidth;
         return StridedBlockView<U>(view.Data() + startIdx,
                                    view.Data() + endIdx,
                                    dims_.laneWidth,

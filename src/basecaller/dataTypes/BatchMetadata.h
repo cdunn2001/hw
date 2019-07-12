@@ -29,6 +29,9 @@
 //  Description:
 //  Defines classes BatchMetadata and BatchDimensions.
 
+#include <cassert>
+#include <cstdint>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {

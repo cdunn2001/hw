@@ -12,6 +12,9 @@
 namespace PacBio {
 namespace Cuda {
 
+size_t RequiredRegisterCount(const void* func);
+size_t AvailableRegistersPerBlock();
+
 void* CudaRawMalloc(size_t size);
 void* CudaRawMallocHost(size_t size);
 void* CudaRawMallocManaged(size_t size);

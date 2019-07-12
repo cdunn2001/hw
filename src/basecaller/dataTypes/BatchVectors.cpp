@@ -23,42 +23,5 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines members of class BasecallBatch.
 
-#include "BasecallBatch.h"
-
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
-{
-    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
-    numPulsesByAnalog_[pulseLabel]++;
-
-    if (!base.IsNoCall())
-    {
-        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
-        numBasesByAnalog_[baseLabel]++;
-    }
-
-    return *this;
-}
-
-BasecallBatch::BasecallBatch(
-        const size_t maxCallsPerZmwChunk,
-        const BatchDimensions& batchDims,
-        const BatchMetadata& batchMetadata,
-        Cuda::Memory::SyncDirection syncDir,
-        bool pinned,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
-    : dims_ (batchDims)
-    , metaData_(batchMetadata)
-    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-    , metrics_(batchDims.ZmwsPerBatch(), syncDir, pinned, metricsPool)
-{}
-
-}}}     // namespace PacBio::Mongo::Data
+#include "BatchVectors.h"

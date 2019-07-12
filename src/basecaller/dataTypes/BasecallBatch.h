@@ -34,8 +34,12 @@
 #include <vector>
 #include <pacbio/smrtdata/Basecall.h>
 
+#include <common/cuda/utility/CudaArray.h>
+#include <common/cuda/memory/UnifiedCudaArray.h>
+
 #include "BatchMetadata.h"
 #include "BatchData.h"
+#include "BatchVectors.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -50,15 +54,15 @@ class BasecallingMetrics
 public:
     using Basecall = PacBio::SmrtData::Basecall;
 
-    BasecallingMetrics();
+    BasecallingMetrics() = default;
 
     BasecallingMetrics& Count(const Basecall& base);
 
 public:
-    const std::array<uint8_t,4> NumBasesByAnalog() const
+    const Cuda::Utility::CudaArray<uint8_t,4> NumBasesByAnalog() const
     { return numBasesByAnalog_; }
 
-    const std::array<uint8_t,4> NumPulsesByAnalog() const
+    const Cuda::Utility::CudaArray<uint8_t,4> NumPulsesByAnalog() const
     { return numPulsesByAnalog_; }
 
     uint16_t NumBases() const
@@ -68,15 +72,15 @@ public:
     { return std::accumulate(numPulsesByAnalog_.begin(), numPulsesByAnalog_.end(), 0); }
 
 public:
-    std::array<uint8_t,4>& NumBasesByAnalog()
+    Cuda::Utility::CudaArray<uint8_t,4>& NumBasesByAnalog()
     { return numBasesByAnalog_; }
 
-    std::array<uint8_t,4>& NumPulsesByAnalog()
+    Cuda::Utility::CudaArray<uint8_t,4>& NumPulsesByAnalog()
     { return numPulsesByAnalog_; }
 
 private:
-    std::array<uint8_t,4> numBasesByAnalog_;
-    std::array<uint8_t,4> numPulsesByAnalog_;
+    Cuda::Utility::CudaArray<uint8_t,4> numBasesByAnalog_;
+    Cuda::Utility::CudaArray<uint8_t,4> numPulsesByAnalog_;
 };
 
 
@@ -91,11 +95,14 @@ public:     // Types
     using Basecall = PacBio::SmrtData::Basecall;
 
 public:     // Structors & assignment operators
-    BasecallBatch() = default;
-
     BasecallBatch(const size_t maxCallsPerZmwChunk,
                   const BatchDimensions& batchDims,
-                  const BatchMetadata& batchMetadata);
+                  const BatchMetadata& batchMetadata,
+                  Cuda::Memory::SyncDirection syncDir,
+                  bool pinned,
+                  std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
+                  std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
+                  std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool);
 
     BasecallBatch(const BasecallBatch&) = delete;
     BasecallBatch(BasecallBatch&&) = default;
@@ -105,11 +112,6 @@ public:     // Structors & assignment operators
 
     ~BasecallBatch() = default;
 
-private:    // Types
-    // TODO: Should we use Cuda::Memory::UnifiedCudaArray?
-    template <typename T>
-    using ArrayType = std::vector<T>;
-
 public:     // Functions
     const BatchMetadata& GetMeta() const
     { return metaData_; }
@@ -117,44 +119,61 @@ public:     // Functions
     const BatchDimensions& Dims() const
     { return dims_; }
 
-    const ArrayType<Basecall>& Basecalls() const
-    { return basecalls_; }
+    BatchVectors<Basecall>& Basecalls() { return basecalls_; }
+    const BatchVectors<Basecall>& Basecalls() const { return basecalls_; }
 
-    const ArrayType<uint32_t>& SeqLengths() const
-    { return seqLengths_; }
-
-    const ArrayType<BasecallingMetrics>& Metrics() const
-    { return metrics_; }
-
-public:    // Functions
-    // Offset into basecalls_ for the start of the read for the z-th ZMW of
-    // the batch.
-    size_t zmwOffset(size_t z) const
-    {
-        assert(z < dims_.ZmwsPerBatch());
-        return z * maxCallsPerZmwChunk_;
-    }
-
-    // Offset into basecalls_ to the start of the read for the first ZMW of
-    // lane l.
-    size_t laneOffset(size_t l) const
-    {
-        assert(l < dims_.lanesPerBatch);
-        return l * dims_.laneWidth * maxCallsPerZmwChunk_;
-    }
-
-public:   // Modifying methods
-    bool PushBack(uint32_t z, Basecall bc);
+    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() { return metrics_; }
+    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>& Metrics() const { return metrics_; }
 
 private:    // Data
     BatchDimensions dims_;
-    size_t maxCallsPerZmwChunk_;
     BatchMetadata   metaData_;
-    ArrayType<uint32_t> seqLengths_;        // Length of each zmw-read segment.
-    ArrayType<Basecall> basecalls_;         // Storage for zmw-read segments.
+    BatchVectors<Basecall> basecalls_;
 
     // Metrics per ZMW. Size is dims_.zmwsPerBatch() or 0.
-    ArrayType<PacBio::Mongo::Data::BasecallingMetrics> metrics_;
+    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics> metrics_;
+};
+
+class BasecallBatchFactory
+{
+    using Pools = Cuda::Memory::DualAllocationPools;
+    using Basecall = PacBio::SmrtData::Basecall;
+public:
+    BasecallBatchFactory(const size_t maxCallsPerZmw,
+                         const BatchDimensions& batchDims,
+                         Cuda::Memory::SyncDirection syncDir,
+                         bool pinned)
+        : maxCallsPerZmw_(maxCallsPerZmw)
+        , batchDims_(batchDims)
+        , syncDir_(syncDir)
+        , pinned_(pinned)
+        , callsPool_(std::make_shared<Pools>(maxCallsPerZmw*batchDims.ZmwsPerBatch()*sizeof(Basecall), pinned))
+        , lenPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(uint32_t), pinned))
+        , metricsPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(BasecallingMetrics), pinned))
+    {}
+
+    BasecallBatch NewBatch(const BatchMetadata& batchMetadata)
+    {
+        return BasecallBatch(
+                maxCallsPerZmw_,
+                batchDims_,
+                batchMetadata,
+                syncDir_,
+                pinned_,
+                callsPool_,
+                lenPool_,
+                metricsPool_);
+    }
+
+private:
+    size_t maxCallsPerZmw_;
+    BatchDimensions batchDims_;
+    Cuda::Memory::SyncDirection syncDir_;
+    bool pinned_;
+
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

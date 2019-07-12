@@ -21,15 +21,16 @@ void HostMultiScaleBaseliner::Finalize()
 
 Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
     auto pools = rawTrace.GetAllocationPools();
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
-    Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.Dimensions(),
+    Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
-    Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.Dimensions(),
+    Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
 
+    auto statsView = out.Stats().GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);
@@ -41,7 +42,7 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
                                                          upperBuffer.GetBlockView(laneIdx),
                                                          baselineSubtracted);
 
-        out.Stats(laneIdx) = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.ToBaselineStats();
     }
 
     return std::move(out);

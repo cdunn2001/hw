@@ -4,6 +4,7 @@
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
 #include <common/DataGenerators/BatchGenerator.h>
+#include <common/MongoConstants.h>
 
 #include <pacbio/primary/BazWriter.h>
 #include <pacbio/primary/FileHeaderBuilder.h>
@@ -17,6 +18,7 @@
 
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Mongo::Basecaller;
 
@@ -229,41 +231,47 @@ private:
         sm.numPulses_ = bm.NumPulses();
     }
 
-    void WriteBasecallsChunk(const std::vector<BasecallBatch>& basecallChunk)
+    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
         if (!bazWriter_) return; // NoOp if we're not doing output
 
-        for (const auto& basecallBatch : basecallChunk)
+        for (const auto& basecallBatchPtr : basecallChunk)
         {
-            for (uint32_t z = 0; z < basecallBatch.Dims().ZmwsPerBatch(); z++)
+            const auto& basecallBatch = *basecallBatchPtr;
+            const auto& metrics = basecallBatch.Metrics().GetHostView();
+            for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
             {
-                if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
+                const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
+                for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
-                    if (!bazWriter_->AddZmwSlice(basecallBatch.Basecalls().data() + basecallBatch.zmwOffset(z),
-                                                 basecallBatch.SeqLengths()[z],
-                                                 [&](MemoryBufferView<SpiderMetricBlock>& dest)
-                                                 {
-                                                    for (size_t i = 0; i < dest.size(); i++)
-                                                    {
-                                                        ConvertMetric(basecallBatch.Metrics()[z], dest[i]);
-                                                    }
-                                                 },
-                                                 1,
-                                                 currentZmwIndex_))
+                    if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
+                                                     laneCalls.size(zmw),
+                                                     [&](MemoryBufferView<SpiderMetricBlock>& dest)
+                                                     {
+                                                        for (size_t i = 0; i < dest.size(); i++)
+                                                        {
+                                                            ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
+                                                        }
+                                                     },
+                                                     1,
+                                                     currentZmwIndex_))
+                        {
+                            throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                        }
                     }
-                }
-                else
-                {
-                    if (!bazWriter_->AddZmwSlice(NULL, 0, [](auto&){}, 0, currentZmwIndex_))
+                    else
                     {
-                        throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                        if (!bazWriter_->AddZmwSlice(NULL, 0, [](auto&){}, 0, currentZmwIndex_))
+                        {
+                            throw PBException(bazWriterError + bazWriter_->ErrorMessage());
+                        }
                     }
+                    currentZmwIndex_++;
                 }
-                currentZmwIndex_++;
             }
         }
         bazWriter_->Flush();
@@ -276,7 +284,7 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<BasecallBatch> basecallChunk;
+            std::vector<std::unique_ptr<BasecallBatch>> basecallChunk;
             if (outputDataQueue_.TryPop(basecallChunk))
             {
                 currentZmwIndex_ = 0;
@@ -367,7 +375,7 @@ private:
     // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<std::vector<BasecallBatch>> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BasecallBatch>>> outputDataQueue_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;

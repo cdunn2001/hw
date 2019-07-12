@@ -6,6 +6,9 @@
 
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
@@ -33,6 +36,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
 
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
+    pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
@@ -71,6 +75,18 @@ AlgoFactory::~AlgoFactory()
         DeviceSGCFrameLabeler::Finalize();
         break;
     default:
+        PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
+                    << frameLabelerOpt_.toString()
+                    << ".  Should be impossible to see this message, constructor should have thrown";
+    }
+
+    switch (pulseAccumOpt_)
+    {
+    case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
+        PulseAccumulator::Finalize();
+        break;
+    default:
+        ostringstream msg;
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
                     << frameLabelerOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
@@ -115,6 +131,17 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     default:
         ostringstream msg;
         msg << "Unrecognized method option for FrameLabeler: " << frameLabelerOpt_.toString() << '.';
+        throw PBException(msg.str());
+    }
+
+    switch (pulseAccumOpt_)
+    {
+    case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
+        PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
         throw PBException(msg.str());
     }
 
@@ -197,6 +224,21 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
     default:
         ostringstream msg;
         msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';
+        throw PBException(msg.str());
+    }
+}
+
+std::unique_ptr<PulseAccumulator>
+AlgoFactory::CreateAccumulator(unsigned int poolId) const
+{
+    switch (pulseAccumOpt_)
+    {
+    case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
+        return std::make_unique<PulseAccumulator>(poolId);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
         throw PBException(msg.str());
     }
 }

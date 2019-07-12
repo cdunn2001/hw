@@ -55,13 +55,13 @@ void DeviceMultiScaleBaseliner::Finalize()
 
 Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.Dimensions());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
     auto pools = rawTrace.GetAllocationPools();
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
-    Data::BatchData<ElementTypeIn> work2(rawTrace.Dimensions(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
 
-    filter_->RunComposedFilter(rawTrace, out, work1, work2);
+    filter_->RunBaselineFilter(rawTrace, out, out.Stats(), work1, work2);
 
     return std::move(out);
 }

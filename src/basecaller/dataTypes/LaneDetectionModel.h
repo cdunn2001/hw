@@ -46,22 +46,17 @@ struct __align__(128) LaneAnalogMode
                   std::is_same<T, Cuda::PBHalf2>::value,
                   "Invalid type for LaneAnalogMode");
 
-    CUDA_ENABLED LaneAnalogMode& operator=(const LaneAnalogMode& other)
-    {
 #ifdef __CUDA_ARCH__
+    __device__ LaneAnalogMode& ParallelAssign(const LaneAnalogMode& other)
+    {
         assert(blockDim.x == laneWidth);
         means[threadIdx.x] = other.means[threadIdx.x];
         vars[threadIdx.x] = other.vars[threadIdx.x];
         return  *this;
-#else
-        for (int i = 0; i < laneWidth; ++i)
-        {
-            means[i] = other.means[i];
-            vars[i] = other.vars[i];
-        }
-        return *this;
-#endif
     }
+#endif
+
+    LaneAnalogMode& operator=(const LaneAnalogMode& other) = default;
 
     LaneAnalogMode& SetAllMeans(float val)
     {
@@ -84,15 +79,19 @@ struct __align__(128) LaneModelParameters
 {
     static constexpr int numAnalogs = 4;
 
-    CUDA_ENABLED LaneModelParameters& operator=(const LaneModelParameters& other)
+#ifdef __CUDA_ARCH__
+    __device__ LaneModelParameters& ParallelAssign(const LaneModelParameters& other)
     {
-        baseline_ = other.baseline_;
+        baseline_.ParallelAssign(other.baseline_);
         for (int i = 0; i < numAnalogs; ++i)
         {
-            analogs_[i] = other.analogs_[i];
+            analogs_[i].ParallelAssign(other.analogs_[i]);
         }
         return *this;
     }
+#endif
+
+    LaneModelParameters& operator=(const LaneModelParameters& other) = default;
 
     CUDA_ENABLED const LaneAnalogMode<T, laneWidth>& BaselineMode() const
     {

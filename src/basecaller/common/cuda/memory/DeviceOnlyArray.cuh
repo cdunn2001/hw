@@ -27,11 +27,14 @@
 #define PACBIO_CUDA_MEMORY_DEVICE_ONLY_ARRAY_CUH_
 
 #include <cassert>
+#include <cmath>
 #include <utility>
 
 #include <common/cuda/PBCudaRuntime.h>
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
+
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -76,18 +79,38 @@ __global__ void DestroyFilters(T* data, size_t count)
 template <typename T>
 class DeviceOnlyArray : private detail::DataManager
 {
-    // Not really choosing these because they are efficient or well suited to the
-    // problem, just choosing something that works, and takes advantage of some
-    // ammount of parallelism if there are a lot of elements in the array
-    static constexpr size_t cudaBlocks = 1;
-    static constexpr size_t cudaThreadsPerBlock = 1024;
+    // Try to find the best way to allocate one thread per entry in the array, somewhat
+    // taking in to account both register requirements as well as warp size
+    static constexpr size_t maxThreadsPerBlock = 1024;
+    static std::pair<size_t, size_t> ComputeBlocksThreads(size_t arrayLen, const void* func)
+    {
+        auto requiredRegisters = RequiredRegisterCount(func);
+        auto regsPerBlock = AvailableRegistersPerBlock();
+
+        auto threadsPerBlock = regsPerBlock / requiredRegisters;
+        if (threadsPerBlock == 0) throw PBException("Cannot invoke constructor on device, insufficient registers\n");
+
+        threadsPerBlock = std::min(threadsPerBlock, std::min(arrayLen, maxThreadsPerBlock));
+
+        // If we need more than one block, try to efficiently map to warps for better occupancy
+        if (threadsPerBlock > 32 && threadsPerBlock < arrayLen)
+        {
+            size_t numWarps = threadsPerBlock / 32;
+            numWarps = static_cast<size_t>(std::pow(2, std::floor(std::log(numWarps)/std::log(2))));
+            threadsPerBlock = 32*numWarps;
+        }
+
+        auto numBlocks = (arrayLen + threadsPerBlock-1)/threadsPerBlock;
+        return std::make_pair(numBlocks, threadsPerBlock);
+    }
 public:
     template <typename... Args>
     DeviceOnlyArray(size_t count, Args&&... args)
         : data_(count*sizeof(T))
         , count_(count)
     {
-        detail::InitFilters<<<cudaBlocks, cudaThreadsPerBlock>>>(
+        auto launchParams = ComputeBlocksThreads(count, (void*)&detail::InitFilters<T, Args...>);
+        detail::InitFilters<<<launchParams.first, launchParams.second>>>(
                 data_.get<T>(DataKey()),
                 count_,
                 std::forward<Args>(args)...);
@@ -112,7 +135,8 @@ public:
     {
         if (data_)
         {
-            detail::DestroyFilters<<<cudaBlocks, cudaThreadsPerBlock>>>(
+            auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<T>);
+            detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
                     data_.get<T>(DataKey()),
                     count_);
         }
@@ -123,6 +147,9 @@ private:
     SmartDeviceAllocation data_;
     size_t count_;
 };
+
+template <typename T>
+constexpr size_t DeviceOnlyArray<T>::maxThreadsPerBlock;
 
 }}}
 

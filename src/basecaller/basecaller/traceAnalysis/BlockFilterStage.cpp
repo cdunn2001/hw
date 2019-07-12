@@ -18,8 +18,7 @@ Data::BlockView<T>* BlockFilterStage<T, Filter>::operator()(Data::BlockView<T>* 
     auto filterRangeStart = input.CBegin();
     auto filterRangeEnd = input.CEnd();
 
-    auto inSize = input.NumFrames();
-    assert (inSize > 0);
+    assert (pInput->NumFrames() > 0);
 
     // LHS boundary condition: Load LH values into window buffer
     if (winbuf_.size() == 0)
@@ -37,7 +36,7 @@ Data::BlockView<T>* BlockFilterStage<T, Filter>::operator()(Data::BlockView<T>* 
 
     // Set the appropriate skip to use for the next interval.
     auto sskipIn = winbuf_.GetStrideSkip();
-    assert(sskipIn < inSize);
+    assert(sskipIn < pInput->NumFrames());
     filterRangeStart += sskipIn;
     auto ovrhang = (decltype(filterRangeStart)::distance(filterRangeStart, filterRangeEnd) - 1) % stride_;
     winbuf_.SetStrideSkip(stride_ - ovrhang - 1);

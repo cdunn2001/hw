@@ -24,6 +24,20 @@ void cudaCheckErrors(T&& result)
 
 }
 
+size_t RequiredRegisterCount(const void* func)
+{
+    cudaFuncAttributes funcAttrib;
+    cudaCheckErrors(cudaFuncGetAttributes(&funcAttrib, func));
+    return funcAttrib.numRegs;
+}
+
+size_t AvailableRegistersPerBlock()
+{
+    cudaDeviceProp props;
+    cudaCheckErrors(cudaGetDeviceProperties(&props, 0));
+    return props.regsPerBlock;
+}
+
 void* CudaRawMalloc(size_t size)
 {
     void* ret;

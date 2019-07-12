@@ -55,6 +55,14 @@ inline __device__ PBHalf2 operator ||(PBHalf2 first, PBHalf2 second)
     return PBHalf2(__halves2half2(low, high));
 }
 
+inline __device__ PBHalf2 operator &&(PBHalf2 first, PBHalf2 second)
+{
+    half zero = __float2half(0.0f);
+    half low  = (__low2half(first.data())  != zero) && (__low2half(second.data())  != zero);
+    half high = (__high2half(first.data()) != zero) && (__high2half(second.data()) != zero);
+    return PBHalf2(__halves2half2(low, high));
+}
+
 inline __device__ PBHalf2 operator + (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() + r.data()); }
 inline __device__ PBHalf2 operator - (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() - r.data()); }
 inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() * r.data()); }
@@ -93,6 +101,14 @@ inline __device__ short2 Blend(PBHalf2 cond, short2 l, short2 r)
     short2 ret;
     ret.x =  (__low2half(cond.data())  == zero) ? r.x  : l.x;
     ret.y =  (__high2half(cond.data())  == zero) ? r.y  : l.y;
+    return ret;
+}
+
+inline __device__ short2 ToShort(PBHalf2 h)
+{
+    short2 ret;
+    ret.x = __half2short_rn(h.data().x);
+    ret.y = __half2short_rn(h.data().y);
     return ret;
 }
 

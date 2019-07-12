@@ -221,6 +221,16 @@ namespace Data {
         ADD_PARAMETER(float, Gamma, 1.0f);
     };
 
+    class BasecallerPulseAccumConfig : public PacBio::Process::ConfigurationObject
+    {
+    public:
+        SMART_ENUM(MethodName, NoOp)
+        ADD_ENUM(MethodName, Method, MethodName::NoOp);
+
+        // Increasing this number will directly increase memory usage, even if
+        // we don't saturate the allowed number of calls, so be conservative
+        ADD_PARAMETER(uint32_t, maxCallsPerZmw, 96);
+    };
 
     class BasecallerMetricsConfig : public PacBio::Process::ConfigurationObject
     {
@@ -274,6 +284,7 @@ namespace Data {
         ADD_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
         ADD_OBJECT(BasecallerDmeConfig, dmeConfig);
         ADD_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
+        ADD_OBJECT(BasecallerPulseAccumConfig, pulseAccumConfig);
         ADD_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);

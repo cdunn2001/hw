@@ -119,6 +119,29 @@ protected:
     CUDA_ENABLED static DataManagerKey DataKey() { return DataManagerKey{}; }
 };
 
+
+// As an update, now a second approach is provided for giving limited special access.
+// 1. DataManager and DataManagerKey are for "groups" where a collection
+//    of tightly knit classes can work together.  It's nice in that if
+//    a class want's to provide special access to multiple other classes
+//    the other classes do not have be explicitly enumerated.  It's cumbersome
+//    in that it requires the other class to inherit from DataManager, and
+//    there (currently) is no real way to distinguish between different groups
+//    of classes using the DataManager setup (though that could be fixed with
+//    the addition of a tag style template parameter)
+//
+// 2. The PassKey approach is simpler to use and does not require special inheritance,
+//    but it only supports giving access to a single external class.  The simpler
+//    use and more limited access means it should probably be the preferred appraoch,
+//    at least until multiple classes need access to the same function
+
+template <typename Special>
+class PassKey
+{
+    friend Special;
+    CUDA_ENABLED PassKey() {};
+};
+
 }}}}
 
 #endif // PACBIO_CUDA_MEMORY_DATA_MANAGER_KEY_H

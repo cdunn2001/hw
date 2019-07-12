@@ -72,6 +72,10 @@ public:     // Structors and assignment
     LabelsBatch& operator=(LabelsBatch&&) = default;
 
     const BatchData& TraceData() const { return curTrace_; }
+    BatchData& TraceData() { return curTrace_; }
+
+    const BatchData& LatentTrace() const { return latTrace_; }
+    BatchData& LatentTrace() { return latTrace_; }
 
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
@@ -104,7 +108,7 @@ public:
     LabelsBatch NewBatch(CameraTraceBatch trace)
     {
         auto meta = trace.Metadata();
-        auto dims = trace.Dimensions();
+        auto dims = trace.StorageDims();
         return LabelsBatch(meta, dims, std::move(trace),
                            latentFrames_, pinned_,
                            syncDirection_, tracePool_, latPool_);

@@ -1,4 +1,3 @@
-
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -24,52 +23,64 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines unit tests for class TraceAnalyzerTbb.
 
-#include <vector>
-#include <gtest/gtest.h>
+#include "PulseAccumulator.h"
 
-#include <basecaller/analyzer/ITraceAnalyzer.h>
 #include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/BatchMetadata.h>
-#include <dataTypes/MovieConfig.h>
-
-using std::vector;
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TEST(TestTraceAnalyzerTbb, CheckMetadata)
+std::unique_ptr<Data::PulseBatchFactory> PulseAccumulator::batchFactory_;
+
+// static
+
+void PulseAccumulator::Configure(size_t maxCallsPerZmw)
 {
-    const unsigned int numPools = 8;
-    Data::BasecallerConfig bcConfig;
-    Data::MovieConfig movConfig;
-    auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
+    InitAllocationPools(true, maxCallsPerZmw);
+}
 
-    ASSERT_EQ(numPools, traceAnalyzer->NumZmwPools());
+void PulseAccumulator::Finalize()
+{
+    DestroyAllocationPools();
+}
 
-    const Data::BatchDimensions dims {64, 16, 4};
-    vector<Data::TraceBatch<int16_t>> chunk;
-    vector<Data::BatchMetadata> bmdVec;
-    // Notice that we skip some pool ids.
-    for (unsigned int i = 0; i < numPools; i += 2)
-    {
-        const Data::BatchMetadata bmd(i, 0, dims.framesPerBatch);
-        bmdVec.push_back(bmd);
-        // Construct batches with neither allocation pooling nor memory pinning enabled
-        chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, nullptr, false);
-    }
+void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPerZmw)
+{
+    using Cuda::Memory::SyncDirection;
 
-    // The function under test.
-    const auto bcBatch = (*traceAnalyzer)(std::move(chunk));
+    Data::BatchDimensions dims;
+    dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
+    dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
+    dims.laneWidth = laneSize;
 
-    ASSERT_EQ(bmdVec.size(), bcBatch.size());
-    for (unsigned int i = 0; i < bcBatch.size(); ++i)
-    {
-        EXPECT_EQ(bmdVec[i], bcBatch[i]->GetMeta());
-    }
+    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
+    batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
+            maxCallsPerZmw,
+            dims,
+            syncDir,
+            true);
+}
+
+Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
+{
+    // Be sure to trigger a download at least if necessary, otherwise create empty
+    // batch
+    auto view = labels.GetBlockView(0);
+    (void)view;
+    return batchFactory_->NewBatch(labels.Metadata());
+}
+
+void PulseAccumulator::DestroyAllocationPools()
+{
+    batchFactory_.release();
+}
+
+PulseAccumulator::PulseAccumulator(uint32_t poolId)
+    : poolId_ (poolId)
+{
+
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

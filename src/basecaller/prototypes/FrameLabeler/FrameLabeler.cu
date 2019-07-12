@@ -51,6 +51,12 @@ void run(const Data::DataManagerParams& dataParams,
         referenceModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
     }
 
+    BatchDimensions latBatchDims;
+    latBatchDims.framesPerBatch = dataParams.blockLength;
+    latBatchDims.laneWidth = laneWidth;
+    latBatchDims.lanesPerBatch = dataParams.kernelLanes;
+    std::vector<Data::BatchData<int16_t>> latTrace;
+
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
 
     FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
@@ -65,15 +71,18 @@ void run(const Data::DataManagerParams& dataParams,
         {
             modelView[j] = referenceModel;
         }
+
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
     }
 
-    auto tmp = [&models, &dataParams, &frameLabelers](
+    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](
         const TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
         if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, ret);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret);
+        (void)latTrace[batchIdx].GetBlockView(0);
     };
 
     ZmwDataManager<int16_t, int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
