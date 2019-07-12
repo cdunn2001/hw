@@ -254,7 +254,7 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
 }
 
 std::unique_ptr<PulseAccumulator>
-AlgoFactory::CreateAccumulator(unsigned int poolId) const
+AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
 {
     switch (pulseAccumOpt_)
     {
