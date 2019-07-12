@@ -67,10 +67,10 @@ public:
         static constexpr int numStates = 1 + 3*numAnalogs;
 
     public:
-        static LaneMask<laneSize> IsPulseUpState(const ConstLabelArrayRef& i)
+        static LaneMask<> IsPulseUpState(const ConstLabelArrayRef& i)
         { return (LabelArray{numAnalogs} < i) & (i <= LabelArray{2*numAnalogs}); }
 
-        static LaneMask<laneSize> IsPulseDownState(const ConstLabelArrayRef& i)
+        static LaneMask<> IsPulseDownState(const ConstLabelArrayRef& i)
         { return (LabelArray{2*numAnalogs} < i) & (i < LabelArray{numStates}); }
 
     public:
@@ -97,12 +97,12 @@ public:
         { }
 
     public:
-        LaneMask<laneSize> IsNewSegment(const ConstLabelArrayRef& label) const
+        LaneMask<> IsNewSegment(const ConstLabelArrayRef& label) const
         {
             return IsPulseUpState(label) | ((label == LabelArray{0}) & (this->label_ != LabelArray{0}));
         }
         
-        LaneMask<laneSize> IsPulse() const
+        LaneMask<> IsPulse() const
         {
             return label_ != LabelArray{0};
         }
@@ -136,22 +136,18 @@ public:
             Data::Pulse pls{};
 
             endFrame_ = frameIndex;
-
             int width = frameIndex - startFrame_[zmw];
+
+            float raw_mean = (signalTotal_[zmw] + signalLastFrame_[zmw] + signalFrstFrame_[zmw]) / static_cast<float>(width);
+            float raw_mid = signalTotal_[zmw] / static_cast<float>(width - 2);
 
             using std::min;
             using std::max;
 
-            LaneArray<float> raw_mean(signalTotal_ + signalLastFrame_ + signalFrstFrame_);
-            LaneArray<float> raw_mid(signalTotal_);
-
-            raw_mean /= static_cast<float>(width);
-            raw_mid /= static_cast<float>(width - 2);
-
             pls.Start(startFrame_[zmw])
                 .Width(width)
-                .MeanSignal(min(maxSignal, max(minSignal, raw_mean[zmw])))
-                .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid[zmw])))
+                .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
+                .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
                 .SignalM2(signalM2_[zmw])
                 .Label(analogMap[FullFrameLabel()[zmw]]);
