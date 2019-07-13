@@ -48,7 +48,7 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
 
     const auto numLanes = ctb.LanesPerBatch();
 
-    if (FramesAdded() == ctb.NumFrames())
+    if (FramesAdded() == 0)
     {
         // This is the first trace batch.
 
@@ -61,8 +61,10 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
         InitStats(numLanes);
     }
 
+    // Have we accumulated enough data for baseline statistics, which are
+    // needed to initialize the histograms?
     const bool doInitHist = !isHistInitialized_
-            && FramesAdded() >= NumFramesPreAccumStats();
+            && FramesAdded() + ctb.NumFrames() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
     const auto& statsView = ctb.Stats().GetHostView();
@@ -75,9 +77,10 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
         {
             // Define histogram parameters and construct empty histogram.
             InitHistogram(lane);
+            isHistInitialized_ = true;
         }
 
-        AddBlock(ctb, lane);
+        if (isHistInitialized_) AddBlock(ctb, lane);
     }
 }
 
@@ -126,7 +129,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::CameraTraceBatch& ctb,
     {
         // TODO: Filter edge frames.
         // TODO: Would be nice to avoid copying to the temporary, x.
-        // Note that there is a possible type conversion here.
+        // Note that there is a possible elemental type conversion here.
         const LaneArray<HistDataType> x {*lfi};
         h.AddDatum(x);
     }
@@ -148,31 +151,34 @@ TraceHistogramAccumHost::HistogramImpl() const
     assert(hist_.size() == PoolSize());
     auto phv = poolHist_.data.GetHostView();
 
-    using CArray = Cuda::Utility::CudaArray<HistCountType, laneSize>;
-
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
         LaneHistType& phvl = phv[lane];
         const auto& histl = hist_[lane];
 
-        // TODO: Should define a conversion operator that converts from ConstLaneArrayRef to CudaArray.
-
         const auto& lb = histl.LowerBound();
+        assert(lb.Size() == phvl.lowBound.size());
         copy(lb.begin(), lb.end(), phvl.lowBound.begin());
+        // TODO: Is this alternative std::copy any better?
+        // LaneArrayRef<HistDataType>(phvl.lowBound.data()) = lb;
 
         const auto& bs = histl.BinSize();
+        assert(bs.Size() == phvl.binSize.size());
         copy(bs.begin(), bs.end(), phvl.binSize.begin());
 
         const auto& ocLow = histl.LowOutlierCount();
+        assert(ocLow.Size() == phvl.outlierCountLow.size());
         copy(ocLow.begin(), ocLow.end(), phvl.outlierCountLow.begin());
 
         const auto& ocHigh = histl.HighOutlierCount();
+        assert(ocHigh.Size() == phvl.outlierCountHigh.size());
         copy(ocHigh.begin(), ocHigh.end(), phvl.outlierCountHigh.begin());
 
         assert(histl.NumBins() == phvl.numBins);
         for (unsigned int bin = 0; bin < phvl.numBins; ++bin)
         {
             const auto& bc = histl.BinCount(bin);
+            assert(bc.Size() == phvl.binCount[bin].size());
             copy(bc.begin(), bc.end(), phvl.binCount[bin].begin());
         }
     }

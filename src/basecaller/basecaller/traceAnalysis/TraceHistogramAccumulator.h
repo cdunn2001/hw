@@ -105,8 +105,8 @@ public:     // Non-const functions
     void AddBatch(const Data::CameraTraceBatch& ctb)
     {
         assert (ctb.GetMeta().PoolId() == poolId_);
-        frameCount_ += ctb.NumFrames();
         AddBatchImpl(ctb);
+        frameCount_ += ctb.NumFrames();
     }
 
 private:    // Static data
