@@ -66,7 +66,6 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
 {
-
     BatchDimensions dims;
     dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
     dims.laneWidth = laneSize;
@@ -235,9 +234,8 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
         // When sufficient trace data have been histogrammed,
         // estimate detection model.
-        // TODO: Make this configurable.
-        const unsigned int minFramesForDme = 4000u;
-        if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+        const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
+        if (traceHistAccum_->HistogramFrameCount() >= minFramesForDme)
         {
             auto detModel = (*dme_)(traceHistAccum_->Histogram(),
                                     traceHistAccum_->TraceStats());

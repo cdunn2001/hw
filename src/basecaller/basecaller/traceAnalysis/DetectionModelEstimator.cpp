@@ -1,6 +1,7 @@
 
 #include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
+#include <dataTypes/BasecallerConfig.h>
 
 #include "DetectionModelEstimator.h"
 
@@ -13,12 +14,13 @@ Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
 DetectionModelEstimator::analogs_;
 
 float DetectionModelEstimator::refSnr_;
+uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
 
 // static
 void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig,
                                         const Data::MovieConfig& movConfig)
 {
-    // TODO
+    minFramesForEstimate_ = dmeConfig.MinFramesForEstimate;
 
     // TODO: These values are bogus. They should be extracted from movConfig.
     refSnr_ = 20.0f;

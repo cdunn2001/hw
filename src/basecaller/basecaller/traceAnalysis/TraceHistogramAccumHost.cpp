@@ -56,6 +56,7 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
         hist_.clear();
         hist_.reserve(ctb.LanesPerBatch());
         isHistInitialized_ = false;
+        histFrameCount_ = 0;
 
         // Reset baseline stat accumulators.
         InitStats(numLanes);
@@ -132,6 +133,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::CameraTraceBatch& ctb,
         // Note that there is a possible elemental type conversion here.
         const LaneArray<HistDataType> x {*lfi};
         h.AddDatum(x);
+        ++histFrameCount_;
     }
 }
 

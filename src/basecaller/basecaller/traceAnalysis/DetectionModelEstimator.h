@@ -57,6 +57,11 @@ public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
                           const Data::MovieConfig& movConfig);
 
+    /// Minimum number of frames added to trace histograms before we estimate
+    /// model parameters.
+    static uint32_t MinFramesForEstimate()
+    { return minFramesForEstimate_; }
+
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);
 
@@ -82,6 +87,7 @@ public:     // Structors and assignment
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
+    static uint32_t minFramesForEstimate_;
 
 private:
     uint32_t poolId_;
