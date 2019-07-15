@@ -65,11 +65,17 @@ void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPe
 
 Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
 {
-    // Be sure to trigger a download at least if necessary, otherwise create empty
-    // batch
-    auto view = labels.GetBlockView(0);
-    (void)view;
-    return batchFactory_->NewBatch(labels.Metadata());
+    auto ret = batchFactory_->NewBatch(labels.Metadata());
+
+    for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
+    {
+        auto view = labels.GetBlockView(laneIdx);
+        (void)view;
+        auto lanePulses = ret.Pulses().LaneView(laneIdx);
+        lanePulses.Reset();
+    }
+
+    return ret;
 }
 
 void PulseAccumulator::DestroyAllocationPools()

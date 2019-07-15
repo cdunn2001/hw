@@ -4,16 +4,17 @@
 #include <sstream>
 #include <pacbio/PBException.h>
 
+#include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
-#include <basecaller/traceAnalysis/Baseliner.h>
-#include <basecaller/traceAnalysis/FrameLabeler.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
-#include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
+#include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/HostPulseAccumulator.h>
+#include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
+#include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
@@ -33,8 +34,6 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
-
-
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
     pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
@@ -48,25 +47,25 @@ AlgoFactory::~AlgoFactory()
 {
     switch (baselinerOpt_)
     {
-        case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            HostNoOpBaseliner::Finalize();
-            break;
-        case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            DeviceMultiScaleBaseliner::Finalize();
-            break;
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
-            HostMultiScaleBaseliner::Finalize();
-            break;
-        default:
-            PBLOG_ERROR << "Unrecognized method option for Baseliner: "
-                        << baselinerOpt_.toString()
-                        << ".  Should be impossible to see this message, constructor should have thrown";
-            break;
+    case Data::BasecallerBaselinerConfig::MethodName::NoOp:
+        HostNoOpBaseliner::Finalize();
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        DeviceMultiScaleBaseliner::Finalize();
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+        HostMultiScaleBaseliner::Finalize();
+        break;
+    default:
+        PBLOG_ERROR << "Unrecognized method option for Baseliner: "
+                    << baselinerOpt_.toString()
+                    << ".  Should be impossible to see this message, constructor should have thrown";
+        break;
     }
 
     switch (frameLabelerOpt_)
@@ -78,6 +77,7 @@ AlgoFactory::~AlgoFactory()
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
                     << frameLabelerOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
+        break;
     }
 
     switch (pulseAccumOpt_)
@@ -85,11 +85,18 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         PulseAccumulator::Finalize();
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        HostSimulatedPulseAccumulator::Finalize();
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        HostPulseAccumulator::Finalize();
+        break;
     default:
         ostringstream msg;
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
                     << frameLabelerOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
+        break;
     }
 }
 
@@ -102,24 +109,25 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     switch (baselinerOpt_)
     {
-        case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            HostNoOpBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
-            break;
-        case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
-            break;
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
-            HostMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
-            break;
-        default:
-            ostringstream msg;
-            msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
-            throw PBException(msg.str());
+    case Data::BasecallerBaselinerConfig::MethodName::NoOp:
+        HostNoOpBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
+        DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        break;
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
+    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
+    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+        HostMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
+        throw PBException(msg.str());
+        break;
     }
 
     switch (frameLabelerOpt_)
@@ -132,6 +140,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         ostringstream msg;
         msg << "Unrecognized method option for FrameLabeler: " << frameLabelerOpt_.toString() << '.';
         throw PBException(msg.str());
+        break;
     }
 
     switch (pulseAccumOpt_)
@@ -139,10 +148,17 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        HostPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
         throw PBException(msg.str());
+        break;
     }
 
     // TODO: Configure other algorithms according to options.
@@ -161,9 +177,11 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            return std::unique_ptr<Baseliner>(new HostNoOpBaseliner(poolId));
+            return std::make_unique<HostNoOpBaseliner>(poolId);
+            break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             return std::make_unique<DeviceMultiScaleBaseliner>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+            break;
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
@@ -171,9 +189,9 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
             // TODO: scaler currently set to default 1.0f
-            return std::unique_ptr<Baseliner>(new HostMultiScaleBaseliner(poolId, 1.0f,
-                                                                          FilterParamsLookup(baselinerOpt_),
-                                                                          Data::GetPrimaryConfig().lanesPerPool));
+            return std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f, FilterParamsLookup(baselinerOpt_),
+                                                             Data::GetPrimaryConfig().lanesPerPool);
+            break;
         default:
             ostringstream msg;
             msg << "Unrecognized method option for Baseliner: " << baselinerOpt_.toString() << '.';
@@ -189,10 +207,12 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
         return std::make_unique<DeviceSGCFrameLabeler>(poolId);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for FrameLabeler: " << frameLabelerOpt_.toString() << '.';
         throw PBException(msg.str());
+        break;
     }
 }
 
@@ -203,12 +223,14 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
     {
     case Data::BasecallerTraceHistogramConfig::MethodName::Host:
         return std::make_unique<TraceHistogramAccumHost>(poolId, poolSize_);
+        break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
         // TODO: For now fall through to throw exception.
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_ << '.';
         throw PBException(msg.str());
+        break;
     }
 }
 
@@ -219,12 +241,14 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
         return make_unique<DetectionModelEstimator>(poolId, poolSize_);
+        break;
     case Data::BasecallerDmeConfig::MethodName::Monochrome:
         // TODO: for now fall through to throw exception.
     default:
         ostringstream msg;
         msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';
         throw PBException(msg.str());
+        break;
     }
 }
 
@@ -236,10 +260,17 @@ AlgoFactory::CreateAccumulator(unsigned int poolId) const
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
         return std::make_unique<PulseAccumulator>(poolId);
         break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
+        return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
+        return std::make_unique<HostPulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
         throw PBException(msg.str());
+        break;
     }
 }
 
