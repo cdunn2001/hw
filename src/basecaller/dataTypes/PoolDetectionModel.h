@@ -33,6 +33,8 @@
 #include <common/MongoConstants.h>
 #include "LaneDetectionModel.h"
 
+// TODO: Reconcile this header and LaneDetectionModel.h.
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -42,27 +44,6 @@ namespace Data {
 /// \tparam T is the elemental data type (e.g., float).
 template <typename T>
 using LaneDetectionModel = LaneModelParameters<T, laneSize>;
-
-
-/// A bundle of model parameters for a normal mixture representing the
-/// baselined trace data for a pool of ZMWs.
-/// \tparam T is the elemental data type (e.g., float).
-template <typename T>
-struct PoolDetectionModel
-{
-    using ElementType = T;
-
-    Cuda::Memory::UnifiedCudaArray<LaneDetectionModel<T>> laneModels;
-    uint32_t poolId;
-
-    PoolDetectionModel(uint32_t aPoolId,
-                       unsigned int lanesPerPool,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
-        : laneModels (lanesPerPool, syncDirection, pinned, nullptr)
-        , poolId (aPoolId)
-    {}
-};
 
 }}}     // namespace PacBio::Mongo::Data
 

@@ -237,10 +237,12 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
         const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
         if (traceHistAccum_->HistogramFrameCount() >= minFramesForDme)
         {
-            auto detModel = (*dme_)(traceHistAccum_->Histogram(),
-                                    traceHistAccum_->TraceStats());
-            models_ = std::move(detModel.laneModels);
+            // Initialize the detection model from baseliner statistics.
+            models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());
             isModelInitialized_ = true;
+
+            // Estimate model parameters from histogram.
+            dme_->Estimate(traceHistAccum_->Histogram(), &models_);
         }
     }
 

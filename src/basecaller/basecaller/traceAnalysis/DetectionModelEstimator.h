@@ -50,8 +50,10 @@ class DetectionModelEstimator
 {
 public:     // Types
     using DetModelElementType = Cuda::PBHalf;
-    using PoolDetModel = Data::PoolDetectionModel<DetModelElementType>;
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
+    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using PoolHist = Data::PoolHistogram<float, unsigned short>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
@@ -65,24 +67,14 @@ public:     // Static functions
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);
 
-    PoolDetModel operator()(const Data::PoolHistogram<float, unsigned short>& hist,
-                            const Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>& blStats)
-    {
-        assert (hist.poolId == poolId_);
+public:     // Functions
+    /// Initialize detection models based soley on baseline variance and
+    /// reference SNR.
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats);
 
-        PoolDetModel pdm (poolId_, poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead);
-
-        auto pdmHost = pdm.laneModels.GetHostView();
-        const auto& blStatsHost = blStats.GetHostView();
-        for (unsigned int lane = 0; lane < poolSize_; ++lane)
-        {
-            InitDetModel(blStatsHost[lane], pdmHost[lane]);
-        }
-
-        // TODO
-
-        return pdm;
-    }
+    /// Estimate detection model parameters based on existing values and
+    /// trace histogram.
+    virtual void Estimate(const PoolHist& hist, PoolDetModel* detModel);
 
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
@@ -94,7 +86,7 @@ private:
     unsigned int poolSize_;
 
 private:    // Functions
-    void InitDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm);
+    void InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

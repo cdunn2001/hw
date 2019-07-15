@@ -65,7 +65,32 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int p
     // TODO
 }
 
-void DetectionModelEstimator::InitDetModel(const Data::BaselineStats<laneSize>& blStats,
+
+DetectionModelEstimator::PoolDetModel
+DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats)
+{
+    // TODO: Use allocation pool.
+    PoolDetModel pdm (poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead);
+
+    auto pdmHost = pdm.GetHostView();
+    const auto& blStatsHost = blStats.GetHostView();
+    for (unsigned int lane = 0; lane < poolSize_; ++lane)
+    {
+        InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
+    }
+
+    return pdm;
+}
+
+
+void DetectionModelEstimator::Estimate(const PoolHist& hist,
+                                       PoolDetModel* detModel)
+{
+    // Base implementation does nothing.
+}
+
+
+void DetectionModelEstimator::InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats,
                                            LaneDetModel& ldm)
 {
     using ElementType = typename Data::BaselineStats<laneSize>::ElementType;
