@@ -29,8 +29,6 @@ set(CPP_LIST
     LabelsBatch.cpp
     MovieConfig.h
     MovieConfig.cpp
-    PoolDetectionModel.h
-    PoolDetectionModel.cpp
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h

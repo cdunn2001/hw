@@ -37,7 +37,7 @@
 #include <dataTypes/AnalogMode.h>
 #include <dataTypes/BaselineStats.h>
 #include <dataTypes/ConfigForward.h>
-#include <dataTypes/PoolDetectionModel.h>
+#include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 
 namespace PacBio {
