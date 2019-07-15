@@ -48,7 +48,7 @@ struct __align__(128) LatentViterbi
  public:
     __device__ LatentViterbi()
     {
-        boundary_[threadIdx.x] = make_short2(0,0);
+        boundary_[threadIdx.x] = PBShort2(0);
 
         // I'm a little uncertain how to initialize this model.  I'm tryin to
         // make it work with latent data that we are guaranteed to be all zeroes,
@@ -69,8 +69,8 @@ struct __align__(128) LatentViterbi
         }
     }
 
-    __device__ void SetBoundary(short2 boundary) { boundary_[threadIdx.x] = boundary; }
-    __device__ short2 GetBoundary() const { return boundary_[threadIdx.x]; }
+    __device__ void SetBoundary(PBShort2 boundary) { boundary_[threadIdx.x] = boundary; }
+    __device__ PBShort2 GetBoundary() const { return boundary_[threadIdx.x]; }
 
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
@@ -80,7 +80,7 @@ struct __align__(128) LatentViterbi
 
 private:
     LaneModelParameters oldModel;
-    Utility::CudaArray<short2, laneWidth> boundary_;
+    Utility::CudaArray<PBShort2, laneWidth> boundary_;
 };
 
 // TODO this needs cleanup.  If numLanes doesn't match what is actually used on the gpu, we're dead
@@ -134,8 +134,8 @@ public:
     static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
                           int32_t lanesPerPool, int32_t framesPerChunk);
 private:
-    static std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> BorrowScratch();
-    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> data);
+    static std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> BorrowScratch();
+    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> data);
 
 public:
     // This is necessary to call, if we wait until the C++ runtime is tearing down, the static scratch data
@@ -162,7 +162,7 @@ private:
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
     static std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> trans_;
-    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<short2, BlockThreads>>> scratchData_;
+    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>>> scratchData_;
 };
 
 }}

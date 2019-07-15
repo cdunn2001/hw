@@ -114,7 +114,7 @@ public:
                                 data.GetRawData(DataKey()).GetDeviceHandle(),
                                 DataKey())
     {
-        // We support using things like int16_t on the host but short2 on
+        // We support using things like int16_t on the host but PBShort2 on
         // the device.  To enable that, we may need to tweak our apparent
         // lane width
         if (sizeof(U) != sizeof(T))
@@ -132,7 +132,7 @@ public:
                                 data.GetRawData(DataKey()).GetDeviceHandle(),
                                 DataKey())
     {
-        // We support using things like int16_t on the host but short2 on
+        // We support using things like int16_t on the host but PBShort2 on
         // the device.  To enable that, we may need to tweak our apparent
         // lane width
         if (sizeof(U) != sizeof(T))

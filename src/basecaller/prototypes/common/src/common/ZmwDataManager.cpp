@@ -1,5 +1,7 @@
 #include <common/ZmwDataManager.h>
 
+#include <common/cuda/PBCudaSimd.h>
+
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/utilities/SmartEnum.h>
@@ -210,6 +212,6 @@ void ZmwDataManager<TIn, TOut>::FillerThread()
 }
 
 template class ZmwDataManager<short>;
-template class ZmwDataManager<short2>;
+template class ZmwDataManager<PBShort2>;
 
 }}}

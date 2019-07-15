@@ -37,8 +37,6 @@
 #include "SmartDeviceAllocation.h"
 #include "SmartHostAllocation.h"
 
-#include <vector_types.h>
-
 namespace PacBio {
 namespace Cuda {
 namespace Memory {
@@ -52,8 +50,7 @@ enum class SyncDirection
 };
 
 template <typename T> struct gpu_type { using type = T; };
-template <> struct gpu_type<int16_t> { using type = short2; };
-template <> struct gpu_type<uint16_t> { using type = ushort2; };
+template <> struct gpu_type<int16_t> { using type = PBShort2; };
 template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 
 // TODO handle pitched allocations for multidimensional data?
@@ -88,7 +85,7 @@ public:
         if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
         {
             // If we're doing something special like using int16_t on the host and
-            // short2 on the gpu, we need to make sure things tile evenly, else the
+            // PBShort2 on the gpu, we need to make sure things tile evenly, else the
             // last gpu element will walk off the array
             throw PBException("Invalid array length.");
         }
