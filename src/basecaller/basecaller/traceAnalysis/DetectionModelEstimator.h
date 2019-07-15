@@ -70,11 +70,19 @@ public:     // Structors and assignment
 public:     // Functions
     /// Initialize detection models based soley on baseline variance and
     /// reference SNR.
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats);
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const;
 
     /// Estimate detection model parameters based on existing values and
     /// trace histogram.
-    virtual void Estimate(const PoolHist& hist, PoolDetModel* detModel);
+    void Estimate(const PoolHist& hist, PoolDetModel* detModel) const
+    {
+        assert(hist.data.Size() == poolSize_);
+        assert(detModel->Size() == poolSize_);
+        EstimateImpl(hist, detModel);
+    }
+
+    unsigned int PoolSize() const
+    { return poolSize_; }
 
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
@@ -85,8 +93,15 @@ private:
     uint32_t poolId_;
     unsigned int poolSize_;
 
+private:    // Customization functions
+    virtual void EstimateImpl(const PoolHist& hist, PoolDetModel* detModel) const
+    {
+        // Do nothing.
+        // Derived implementation class should update detModel.
+    }
+
 private:    // Functions
-    void InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm);
+    void InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

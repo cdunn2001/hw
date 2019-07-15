@@ -236,7 +236,8 @@ public:     // Structors and assignment
     }
 
     /// Assign contained elements.
-    LaneArrayRef& operator=(const BaseConstRef& that)
+    template <typename U>
+    LaneArrayRef& operator=(const ConstLaneArrayRef<U, N>& that)
     {
         std::copy(that.begin(), that.end(), begin());
         return *this;

@@ -67,7 +67,7 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int p
 
 
 DetectionModelEstimator::PoolDetModel
-DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats)
+DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     // TODO: Use allocation pool.
     PoolDetModel pdm (poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead);
@@ -83,45 +83,37 @@ DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats)
 }
 
 
-void DetectionModelEstimator::Estimate(const PoolHist& hist,
-                                       PoolDetModel* detModel)
-{
-    // Base implementation does nothing.
-}
-
-
 void DetectionModelEstimator::InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats,
-                                           LaneDetModel& ldm)
+                                               LaneDetModel& ldm) const
 {
     using ElementType = typename Data::BaselineStats<laneSize>::ElementType;
     using LaneArr = LaneArray<ElementType>;
-    using Clar = ConstLaneArrayRef<ElementType>;
+    using CLanArrRef = ConstLaneArrayRef<ElementType>;
+    using LanArrRef = LaneArrayRef<DetModelElementType>;
 
-    Clar mom0 (blStats.m0_.data());
-    Clar mom1 (blStats.m1_.data());
-    Clar mom2 (blStats.m2_.data());
+    CLanArrRef mom0 (blStats.m0_.data());
+    CLanArrRef mom1 (blStats.m1_.data());
+    CLanArrRef mom2 (blStats.m2_.data());
 
-    StatAccumulator<LaneArr> bStats (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
+    StatAccumulator<LaneArr> blsa (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
 
-    using std::copy;
-    const auto& blMean = bStats.Mean();
-    std::copy(blMean.begin(), blMean.end(), ldm.BaselineMode().means.data());
-    const auto& blVar = bStats.Variance();
-    const auto& blSigma = sqrt(blVar);
-    std::copy(blVar.begin(), blVar.end(), ldm.BaselineMode().vars.data());
+    const auto& blMean = blsa.Mean();
+    LanArrRef(ldm.BaselineMode().means.data()) = blMean;
+    const auto& blVar = blsa.Variance();
+    LanArrRef(ldm.BaselineMode().vars.data()) = blVar;
     assert(numAnalogs <= analogs_.size());
-    const auto refSignal = refSnr_ * blSigma;
+    const auto refSignal = refSnr_ * sqrt(blVar);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
-        copy(aMean.begin(), aMean.end(), ldm.AnalogMode(a).means.data());
+        auto& aMode = ldm.AnalogMode(a);
+        LanArrRef(aMode.means.data()) = aMean;
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         const auto aVar = blVar + aMean + analogs_[a].excessNoiseCV * pow2(aMean);
-        copy(aVar.begin(), aVar.end(), ldm.AnalogMode(a).vars.data());
+        LanArrRef(aMode.vars.data()) = aVar;
     }
 }
-
 
 }}}     // namespace PacBio::Mongo::Basecaller
