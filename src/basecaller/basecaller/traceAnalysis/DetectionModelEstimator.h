@@ -54,6 +54,7 @@ public:     // Types
     using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
     using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
+    using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
@@ -83,6 +84,12 @@ public:     // Functions
 
     unsigned int PoolSize() const
     { return poolSize_; }
+
+    const Data::AnalogMode& Analog(unsigned int i) const
+    { return analogs_[i]; }
+
+protected:
+    static PacBio::Logging::PBLogger logger_;
 
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;

@@ -77,24 +77,33 @@ namespace Data {
     class BasecallerDmeConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, Fixed, Monochrome);
+        SMART_ENUM(MethodName, Fixed, EmHost);
         ADD_ENUM(MethodName, Method, MethodName::Fixed);
 
         // Parameters for the SpiderFixed model, when in use
         ADD_OBJECT(SpiderFixedDmeConfig, SpiderSimModel);
 
-        // Model update is all or nothing (as opposed to mixing update)?
-        ADD_PARAMETER(bool, PureUpdate, false);
-
-        // Upper limit for iteration of the EM algorithm used for bivariate
-        // model estimation (phase 2).
-        ADD_PARAMETER(uint32_t, IterationLimit, 20);
+        // Number of expectation-maximization iterations.
+        ADD_PARAMETER(unsigned short, EmIterationLimit, 20);
 
         // If IterateToLimit is set, EM estimation algorithm will consistently
-        // iterate until it reaches the IterationLimit, regardless of meeting
+        // iterate until it reaches EmIterationLimit, regardless of meeting
         // the convergence criterion. This is primarily useful for
         // speed benchmarking.
         ADD_PARAMETER(bool, IterateToLimit, false);
+
+        // A non-negative coefficient for the regularization term for pulse
+        // amplitude scale estimation in DmeMonochrome. This is multiplied by
+        // the confidence of the running-average model. Setting this parameter
+        // to zero effectively disables the regularization.
+        ADD_PARAMETER(float, PulseAmpRegularization, 0.0f);
+
+        // ----------------------------------------------------
+        // Stuff below here was merely copied from Sequel and
+        // is not _yet_ used in Mongo.
+
+        // Model update is all or nothing (as opposed to mixing update)?
+        ADD_PARAMETER(bool, PureUpdate, false);
 
         // Maximum weight used for updating detection model.
         ADD_PARAMETER(float, ModelUpdateWeightMax, 0.50f);
@@ -195,12 +204,6 @@ namespace Data {
         // If set < 0, the G-test computation is skipped entirely.
         // Used only be DmeMonochrome.
         ADD_PARAMETER(float, GTestStatFactor, -1.0f);
-
-        // A non-negative coefficient for the regularization term for pulse
-        // amplitude scale estimation in DmeMonochrome. This is multiplied by
-        // the confidence of the running-average model. Setting this parameter
-        // to zero effectively disables the regularization.
-        ADD_PARAMETER(float, PulseAmpRegularization, 0.0f);
     };
 
 

@@ -13,6 +13,8 @@ namespace Basecaller {
 Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
 DetectionModelEstimator::analogs_;
 
+PacBio::Logging::PBLogger DetectionModelEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
+
 float DetectionModelEstimator::refSnr_;
 uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
 
