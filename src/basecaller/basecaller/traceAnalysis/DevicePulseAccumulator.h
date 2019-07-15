@@ -37,7 +37,8 @@ namespace Basecaller {
 
 class DevicePulseAccumulator : public PulseAccumulator
 {
-public:     // Types
+private:     // Types
+    struct AccumImpl;
 
 public:     // Static functions
     static void Configure(size_t maxCallsPerZmw);
@@ -50,6 +51,8 @@ public:
 
 private:    // Customizable implementation
     Data::PulseBatch Process(Data::LabelsBatch labels) override;
+
+    std::unique_ptr<AccumImpl> impl_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
