@@ -1,6 +1,6 @@
   $ BAZFILE=${CRAMTMP}/designer.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
-  $ mongo-basecaller --numZmwLanes 64 --config common.lanesPerPool=64 --frames=1024 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
+  $ mongo-basecaller --numZmwLanes 64 --config common.lanesPerPool=16 --frames=1024 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
   4097

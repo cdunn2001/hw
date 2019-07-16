@@ -1,4 +1,4 @@
-  $ mongo-basecaller --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ mongo-basecaller --numZmwLanes 1 --config common.lanesPerPool=1 --config basecaller.algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65
@@ -8,12 +8,7 @@
   $ bazviewer --silent -d -n 63 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
-  $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz | grep NUM_PULSES | cut -d':' -f 2 | sed 's/,//' | sed 's/ //g' | paste -s -d+ - | bc
-  768
-  $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz | grep 'NUM_BASES_[ACGT]' | cut -d':' -f 2 | sed 's/,//' | sed 's/ //g' | paste -s -d+ - | bc
-  768
-
-  $ mongo-basecaller --zmwOutputStrideFactor 4 --numZmwLanes 1 --config common.lanesPerPool=1 --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ mongo-basecaller --zmwOutputStrideFactor 4 --numZmwLanes 1 --config common.lanesPerPool=1 --config basecaller.algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65
@@ -33,6 +28,3 @@
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-
-  $ bazviewer --silent -d -n 8 ${CRAMTMP}/test.baz | grep NUM_PULSES | cut -d':' -f 2 | sed 's/,//' | sed 's/ //g' | paste -s -d+ - | bc
-  768
