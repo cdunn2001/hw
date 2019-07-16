@@ -56,6 +56,14 @@ public:
     CUDA_ENABLED short X() const {return data_.x; }
     CUDA_ENABLED short Y() const {return data_.y; }
 
+    template <int id>
+    CUDA_ENABLED short Get() const
+    {
+        static_assert(id < 2, "Out of bounds access in PBShort2");
+        if (id == 0) return X();
+        else return Y();
+    }
+
     short2 CUDA_ENABLED data() const { return data_; }
 private:
     short2 data_;
@@ -84,6 +92,14 @@ public:
     CUDA_ENABLED float FloatX() const { return __half2float(data_.x); }
     CUDA_ENABLED float FloatY() const { return __half2float(data_.y); }
 
+    template <int id>
+    CUDA_ENABLED float Get() const
+    {
+        static_assert(id < 2, "Out of bounds access in PBHalf2");
+        if (id == 0) return FloatX();
+        else return FloatY();
+    }
+
     half2 CUDA_ENABLED data() const { return data_; }
 private:
     half2 data_;
@@ -97,6 +113,8 @@ public:
     CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
     CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
                                                                       b2 ? 1.0f : 0.0f)} {}
+    CUDA_ENABLED bool X() const { return __half2float(data_.x) != 0.0f; }
+    CUDA_ENABLED bool Y() const { return __half2float(data_.y) != 0.0f; }
 
     CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
     half2 CUDA_ENABLED data() const { return data_; }

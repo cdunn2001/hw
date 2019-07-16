@@ -56,6 +56,14 @@ inline __device__ PBBool2 operator &&(PBBool2 first, PBBool2 second)
     return PBBool2(low, high);
 }
 
+inline __device__ PBBool2 operator!(PBBool2 b)
+{
+    half zero = __float2half(0.0f);
+    bool low  = (__low2half(b.data()) == zero);
+    bool high = (__high2half(b.data()) == zero);
+    return PBBool2(low, high);
+}
+
 inline __device__ PBHalf2 operator + (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() + r.data()); }
 inline __device__ PBHalf2 operator - (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() - r.data()); }
 inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() * r.data()); }
@@ -118,13 +126,13 @@ inline __device__ PBShort2 ToShort(PBHalf2 h)
 //           need to enable these functions then do so, but that also increases our need to evaluate
 //           a SIMD implementation sooner than later.
 
-//inline __device__ PBShort2 operator + (PBShort2 l, PBShort2 r) { return PBShort2(l.X() + r.X(), l.Y() + r.Y()); }
-//inline __device__ PBShort2 operator - (PBShort2 l, PBShort2 r) { return PBShort2(l.X() - r.X(), l.Y() - r.Y()); }
+inline __device__ PBShort2 operator + (PBShort2 l, PBShort2 r) { return PBShort2(l.X() + r.X(), l.Y() + r.Y()); }
+inline __device__ PBShort2 operator - (PBShort2 l, PBShort2 r) { return PBShort2(l.X() - r.X(), l.Y() - r.Y()); }
 //inline __device__ PBShort2 operator * (PBShort2 l, PBShort2 r) { return PBShort2(l.X() * r.X(), l.Y() * r.Y()); }
 //inline __device__ PBShort2 operator / (PBShort2 l, PBShort2 r) { return PBShort2(l.X() / r.X(), l.Y() / r.Y()); }
 
-//inline __device__ PBShort2& operator +=(PBShort2& l, const PBShort2 r) { l = l + r; return l;}
-//inline __device__ PBShort2& operator -=(PBShort2& l, const PBShort2 r) { l = l - r; return l;}
+inline __device__ PBShort2& operator +=(PBShort2& l, const PBShort2 r) { l = l + r; return l;}
+inline __device__ PBShort2& operator -=(PBShort2& l, const PBShort2 r) { l = l - r; return l;}
 //inline __device__ PBShort2& operator *=(PBShort2& l, const PBShort2 r) { l = l * r; return l;}
 //inline __device__ PBShort2& operator /=(PBShort2& l, const PBShort2 r) { l = l / r; return l;}
 
@@ -133,6 +141,7 @@ inline __device__ PBBool2 operator <= (PBShort2 l, PBShort2 r) { return PBBool2(
 inline __device__ PBBool2 operator >  (PBShort2 l, PBShort2 r) { return PBBool2(l.X() >  r.X(), l.Y() >  r.Y()); }
 inline __device__ PBBool2 operator >= (PBShort2 l, PBShort2 r) { return PBBool2(l.X() >= r.X(), l.Y() >= r.Y()); }
 inline __device__ PBBool2 operator == (PBShort2 l, PBShort2 r) { return PBBool2(l.X() == r.X(), l.Y() == r.Y()); }
+inline __device__ PBBool2 operator != (PBShort2 l, PBShort2 r) { return PBBool2(l.X() != r.X(), l.Y() != r.Y()); }
 
 inline __device__ PBShort2 Blend(PBBool2 cond, PBShort2 l, PBShort2 r)
 {
