@@ -59,7 +59,7 @@ public:
 
     __device__ void Reset()
     {
-        len_ = 0;
+        *len_ = 0;
     }
 
     __device__ const T& operator[](size_t idx) const
@@ -76,7 +76,7 @@ public:
     __device__ void push_back(U&& val)
     {
         assert(*len_ < data_.Size());
-        data_[*len_] = std::forward(val);
+        data_[*len_] = std::forward<U>(val);
         (*len_)++;
     }
 
