@@ -10,6 +10,7 @@ if [[ ! -v NO_MODULE_LOAD ]]; then
     module use /mnt/software/modulefiles
     module purge
     module load cram/0.7
+    module load hdf5-tools
     unset WORKSPACE  # if this is set, then the following module will use it instead of the cwd
     module load pacbio-pa-mongo/workspace
 fi
