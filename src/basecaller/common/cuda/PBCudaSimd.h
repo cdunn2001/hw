@@ -31,6 +31,7 @@
 #include <common/cuda/CudaFunctionDecorators.h>
 
 #include <vector_types.h>
+#include <vector_functions.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -40,6 +41,34 @@ namespace Cuda {
 // part half precision float for the host.
 using PBHalf = half;
 
+class PBShort2
+{
+public:
+    PBShort2() = default;
+
+    CUDA_ENABLED PBShort2(short s) : PBShort2(s,s) {}
+    CUDA_ENABLED PBShort2(short s1, short s2) : data_{ make_short2(s1, s2) } {}
+    CUDA_ENABLED PBShort2(short2 s) : data_{s} {}
+
+    // Set/get individual elements
+    CUDA_ENABLED void X(short s) {data_.x = s; }
+    CUDA_ENABLED void Y(short s) {data_.y = s; }
+    CUDA_ENABLED short X() const {return data_.x; }
+    CUDA_ENABLED short Y() const {return data_.y; }
+
+    template <int id>
+    CUDA_ENABLED short Get() const
+    {
+        static_assert(id < 2, "Out of bounds access in PBShort2");
+        if (id == 0) return X();
+        else return Y();
+    }
+
+    short2 CUDA_ENABLED data() const { return data_; }
+private:
+    short2 data_;
+};
+
 class PBHalf2
 {
 public:
@@ -47,11 +76,9 @@ public:
 
     CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
     CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
-    CUDA_ENABLED PBHalf2(short2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
+    CUDA_ENABLED PBHalf2(PBShort2 f) : PBHalf2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
-
-    CUDA_ENABLED PBHalf2& operator=(PBHalf2 o) { data_ = o.data_; return *this;}
 
     // Set/get individual elements
     CUDA_ENABLED void X(half f) {data_.x = f; }
@@ -65,6 +92,31 @@ public:
     CUDA_ENABLED float FloatX() const { return __half2float(data_.x); }
     CUDA_ENABLED float FloatY() const { return __half2float(data_.y); }
 
+    template <int id>
+    CUDA_ENABLED float Get() const
+    {
+        static_assert(id < 2, "Out of bounds access in PBHalf2");
+        if (id == 0) return FloatX();
+        else return FloatY();
+    }
+
+    half2 CUDA_ENABLED data() const { return data_; }
+private:
+    half2 data_;
+};
+
+class PBBool2
+{
+public:
+    PBBool2() = default;
+
+    CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
+    CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
+                                                                      b2 ? 1.0f : 0.0f)} {}
+    CUDA_ENABLED bool X() const { return __half2float(data_.x) != 0.0f; }
+    CUDA_ENABLED bool Y() const { return __half2float(data_.y) != 0.0f; }
+
+    CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
     half2 CUDA_ENABLED data() const { return data_; }
 private:
     half2 data_;

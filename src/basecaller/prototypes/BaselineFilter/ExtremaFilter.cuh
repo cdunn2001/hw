@@ -1,27 +1,27 @@
 #ifndef EXTREMA_FILTER_CUH
 #define EXTREMA_FILTER_CUH
 
-#include <utility>
-#include <vector_types.h>
+#include <common/cuda/PBCudaSimd.cuh>
 
 #include <cassert>
 #include <cstdlib>
+#include <utility>
 
 namespace PacBio {
 namespace Cuda {
 
 struct MaxOp
 {
-    __device__ static short2 op(short2 v1, short2 v2)
+    __device__ static PBShort2 op(PBShort2 v1, PBShort2 v2)
     {
-        return make_short2(max(v1.x, v2.x), max(v1.y, v2.y));
+        return max(v1, v2);
     }
 };
 struct MinOp
 {
-    __device__ static short2 op(short2 v1, short2 v2)
+    __device__ static PBShort2 op(PBShort2 v1, PBShort2 v2)
     {
-        return make_short2(min(v1.x, v2.x), min(v1.y, v2.y));
+        return min(v1, v2);
     }
 };
 
@@ -46,7 +46,7 @@ struct __align__(128) ExtremaFilter
         {
             for (size_t j = 0; j < blockThreads; ++j)
             {
-                data[i][j] = make_short2(0,0);
+                data[i][j] = PBShort2(0);
             }
         }
     }
@@ -64,7 +64,7 @@ struct __align__(128) ExtremaFilter
         return *this;
     }
 
-    __device__ short2 operator()(short2 val)
+    __device__ PBShort2 operator()(PBShort2 val)
     {
         assert(blockDim.x == blockThreads);
 
@@ -82,7 +82,7 @@ struct __align__(128) ExtremaFilter
             s[threadIdx.x] = Op::op(s[threadIdx.x], data[myIdx-1][threadIdx.x]);
         }
 
-        short2 tmp = data[myIdx][threadIdx.x];
+        PBShort2 tmp = data[myIdx][threadIdx.x];
         data[myIdx][threadIdx.x] = val;
 
         myIdx++;
@@ -92,7 +92,7 @@ struct __align__(128) ExtremaFilter
         return Op::op(s[threadIdx.x], tmp);
     }
 
-    using row = short2[blockThreads];
+    using row = PBShort2[blockThreads];
     // TODO create cuda version of std::array
     row data[filterWidth];
     row s;
@@ -144,7 +144,7 @@ struct LocalExtremaFilter
         __syncthreads();
     }
 
-    __device__ short2 operator()(short2 val)
+    __device__ PBShort2 operator()(PBShort2 val)
     {
         if (idx == 0)
         {
@@ -166,8 +166,8 @@ struct LocalExtremaFilter
         return Op::op(s, tmp);
     }
 
-    short2 data[filterWidth];
-    short2 s;
+    PBShort2 data[filterWidth];
+    PBShort2 s;
     int idx;
 };
 

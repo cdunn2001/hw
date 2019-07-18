@@ -13,9 +13,9 @@ namespace PacBio {
 namespace Cuda {
 
 template <typename Filter>
-__global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
+__global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const PBShort2> in,
                                      Memory::DeviceView<Filter> filters,
-                                     Mongo::Data::GpuBatchData<short2> out)
+                                     Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t numFrames = in.NumFrames();
     auto& myFilter = filters[blockIdx.x];
@@ -29,9 +29,9 @@ __global__ void GlobalBaselineFilter(const Mongo::Data::GpuBatchData<const short
 }
 
 template <typename Filter>
-__global__ void SharedBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
+__global__ void SharedBaselineFilter(const Mongo::Data::GpuBatchData<const PBShort2> in,
                                      Memory::DeviceView<Filter> filters,
-                                     Mongo::Data::GpuBatchData<short2> out)
+                                     Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t numFrames = in.NumFrames();
     __shared__ Filter myFilter;
@@ -61,14 +61,14 @@ __device__ int constexpr constexprMax(int a, int b)
 // data, but now the kernels with smaller filters can use a lot less shared memory and get a lot
 // more increased occupancy, making them run significantly faster.
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
-__global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const short2> in,
+__global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const PBShort2> in,
                                          Memory::DeviceView<ErodeDilate<blockThreads, width1>> lower1,
                                          Memory::DeviceView<ErodeDilate<blockThreads, width2>> lower2,
                                          Memory::DeviceView<DilateErode<blockThreads, width1>> upper1,
                                          Memory::DeviceView<ErodeDilate<blockThreads, width2>> upper2,
-                                         Mongo::Data::GpuBatchData<short2> workspace1,
-                                         Mongo::Data::GpuBatchData<short2> workspace2,
-                                         Mongo::Data::GpuBatchData<short2> out)
+                                         Mongo::Data::GpuBatchData<PBShort2> workspace1,
+                                         Mongo::Data::GpuBatchData<PBShort2> workspace2,
+                                         Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t numFrames = in.NumFrames();
 
@@ -129,10 +129,10 @@ __global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const s
 // Runs a filter over the input data, but only outputs 1/stride of the
 // results.
 template <size_t blockThreads, size_t stride, typename Filter>
-__global__ void StridedFilter(const Mongo::Data::GpuBatchData<const short2> in,
+__global__ void StridedFilter(const Mongo::Data::GpuBatchData<const PBShort2> in,
                               Memory::DeviceView<Filter> filters,
                               int numFrames,
-                              Mongo::Data::GpuBatchData<short2> out)
+                              Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t maxFrames = in.NumFrames();
 
@@ -167,9 +167,9 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const short2> in,
 // Averages the output of the lower and upper filters, and expands the data
 // to back to the original (unstrided) size
 template <size_t blockThreads, size_t stride>
-__global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> in1,
-                                 const Mongo::Data::GpuBatchData<const short2> in2,
-                                 Mongo::Data::GpuBatchData<short2> out)
+__global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2> in1,
+                                 const Mongo::Data::GpuBatchData<const PBShort2> in2,
+                                 Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t numFrames = out.NumFrames();
 
@@ -182,10 +182,8 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const short2> i
 
     for (int i = 0; i < inputCount; ++i)
     {
-        short2 val;
-        val.x = (inZmw1[i].x + inZmw2[i].x)/2;
-        val.y = (inZmw1[i].y + inZmw2[i].y)/2;
-
+        PBShort2 val((inZmw1[i].X() + inZmw2[i].X()) / 2,
+                     (inZmw1[i].Y() + inZmw2[i].Y()) / 2);
         for (int j = i*stride; j < stride; ++j)
         {
             outZmw[j] = val;
@@ -202,8 +200,8 @@ public:
     {
         auto largest = std::numeric_limits<int16_t>::max();
         auto lowest = std::numeric_limits<int16_t>::min();
-        min_[threadIdx.x] = make_short2(largest, largest);
-        max_[threadIdx.x] = make_short2(lowest, lowest);
+        min_[threadIdx.x] = PBShort2(largest);
+        max_[threadIdx.x] = PBShort2(lowest);
 
         rawSum_[threadIdx.x] = 0.0f;
         m0_[threadIdx.x] = 0.0f;
@@ -213,15 +211,18 @@ public:
 
     __device__ void AddData(PBHalf2 raw,
                             PBHalf2 bs, //baseline subtracted
-                            PBHalf2 baselineMask)
+                            PBBool2 baselineMask)
     {
+        PBHalf2 zero(0.0f);
+        PBHalf2 one(1.0f);
+
         min_[threadIdx.x] = min(bs, min_[threadIdx.x]);
         max_[threadIdx.x] = max(bs, max_[threadIdx.x]);
-        rawSum_[threadIdx.x] += Blend(baselineMask, raw, 0.0f);
+        rawSum_[threadIdx.x] += Blend(baselineMask, raw, zero);
 
-        m0_[threadIdx.x] += Blend(baselineMask, 1, 0);
-        m1_[threadIdx.x] += Blend(baselineMask, bs, 0);
-        m2_[threadIdx.x] += Blend(baselineMask, bs*bs, 0);
+        m0_[threadIdx.x] += Blend(baselineMask, one, zero);
+        m1_[threadIdx.x] += Blend(baselineMask, bs, zero);
+        m2_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);
     }
 
     __device__ void FillOutputStats(Mongo::Data::BaselineStats<blockThreads*2>& stats)
@@ -268,9 +269,9 @@ struct LatentBaselineData
         PBHalf2 bgSigma;
         PBHalf2 latData;
         PBHalf2 latRawData;
-        PBHalf2 latLMask;
-        PBHalf2 latHMask1;
-        PBHalf2 latHMask2;
+        PBBool2 latLMask;
+        PBBool2 latHMask1;
+        PBBool2 latHMask2;
 
         PBHalf2 thrHigh;
         PBHalf2 thrLow;
@@ -339,17 +340,17 @@ private:
     Utility::CudaArray<PBHalf2, blockThreads> bgSigma;
     Utility::CudaArray<PBHalf2, blockThreads> latData;
     Utility::CudaArray<PBHalf2, blockThreads> latRawData;
-    Utility::CudaArray<PBHalf2, blockThreads> latLMask;
-    Utility::CudaArray<PBHalf2, blockThreads> latHMask1;
-    Utility::CudaArray<PBHalf2, blockThreads> latHMask2;
+    Utility::CudaArray<PBBool2, blockThreads> latLMask;
+    Utility::CudaArray<PBBool2, blockThreads> latHMask1;
+    Utility::CudaArray<PBBool2, blockThreads> latHMask2;
 };
 
 template <size_t blockThreads, size_t stride>
-__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const short2> input,
+__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
                                  Memory::DeviceView<LatentBaselineData<blockThreads>> latent,
-                                 const Mongo::Data::GpuBatchData<const short2> lower,
-                                 const Mongo::Data::GpuBatchData<const short2> upper,
-                                 Mongo::Data::GpuBatchData<short2> out,
+                                 const Mongo::Data::GpuBatchData<const PBShort2> lower,
+                                 const Mongo::Data::GpuBatchData<const PBShort2> upper,
+                                 Mongo::Data::GpuBatchData<PBShort2> out,
                                  Memory::DeviceView<Mongo::Data::BaselineStats<blockThreads*2>> outputStats)
 {
     __shared__ StatAccumulator<blockThreads> stats;

@@ -1,6 +1,7 @@
 #ifndef CUDA_BASELINE_FILTER_CUH
 #define CUDA_BASELINE_FILTER_CUH
 
+#include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/utility/CudaTuple.cuh>
 
 #include <prototypes/BaselineFilter/ExtremaFilter.cuh>
@@ -13,10 +14,10 @@ namespace Cuda {
 // out of registers and into device memory.
 struct Bundle
 {
-    short2 data0;
-    short2 data1;
-    short2 data2;
-    short2 data3;
+    PBShort2 data0;
+    PBShort2 data1;
+    PBShort2 data2;
+    PBShort2 data3;
 };
 
 template <size_t laneWidth, size_t width>
@@ -32,7 +33,7 @@ struct ErodeDilate
         , f2(val)
     {}
 
-    __device__ short2 operator()(short2 in)
+    __device__ PBShort2 operator()(PBShort2 in)
     {
         return f2(f1(in));
     }
@@ -64,7 +65,7 @@ struct DilateErode
         , f2(val)
     {}
 
-    __device__ short2 operator()(short2 in)
+    __device__ PBShort2 operator()(PBShort2 in)
     {
         return f2(f1(in));
     }
@@ -138,15 +139,15 @@ struct __align__(128) MultiFilter<laneWidth, IntSeq<Strides...>, Filters...>
     };
     struct Terminus{};
 
-    __device__ void InvokeNext(short2 val, Terminus){}
+    __device__ void InvokeNext(PBShort2 val, Terminus){}
     template <typename Idx>
-    __device__ void InvokeNext(short2 val, Idx)
+    __device__ void InvokeNext(PBShort2 val, Idx)
     {
         ApplyFilterStage(val, Idx{});
     }
 
     template <typename Idx, size_t idx = Idx::value>
-    __device__ void ApplyFilterStage(short2 val, Idx)
+    __device__ void ApplyFilterStage(PBShort2 val, Idx)
     {
         assert(blockDim.x == laneWidth);
         using NextIdx = typename std::conditional<idx < length-1, IdxWrapper<idx+1> , Terminus>::type;
@@ -171,7 +172,7 @@ struct __align__(128) MultiFilter<laneWidth, IntSeq<Strides...>, Filters...>
         }
     }
 
-    __device__ short2 operator()(short2 val)
+    __device__ PBShort2 operator()(PBShort2 val)
     {
         ApplyFilterStage(val, IdxWrapper<0>{});
         return ret[threadIdx.x];
@@ -182,7 +183,7 @@ struct __align__(128) MultiFilter<laneWidth, IntSeq<Strides...>, Filters...>
     using row = T[laneWidth];
 
     row<int> strideIdx[length];
-    row<short2> ret;
+    row<PBShort2> ret;
     Utility::CudaTuple<Filters...> filters;
     int stridMax[length];
 };
@@ -199,15 +200,14 @@ struct BaselineFilter<laneWidth, IntSeq<Latencies...>, IntSeq<width1, Widths...>
         , upper(val)
     {}
 
-    __device__ short2 operator()(short2 val)
+    __device__ PBShort2 operator()(PBShort2 val)
     {
         auto tmp1 = upper(val);
         auto tmp2 = lower(val);
-        short2 ret;
-        ret.x = (tmp1.x + tmp2.x) / 2;
-        ret.y = (tmp1.y + tmp2.y) / 2;
-        return ret;
+        return PBShort2((tmp1.X() + tmp2.X()) / 2,
+                        (tmp1.Y() + tmp2.Y()) / 2);
     }
+
     MultiFilter<laneWidth, IntSeq<Latencies...>, ErodeDilate<laneWidth, width1>, ErodeDilate<laneWidth, Widths>...> lower;
     MultiFilter<laneWidth, IntSeq<Latencies...>, DilateErode<laneWidth, width1>, ErodeDilate<laneWidth, Widths>...> upper;
 };

@@ -16,17 +16,17 @@ using namespace PacBio::Cuda::Data;
 // make sure it has the expected value as per TemplateGenerator.  Can be easily tweaked
 // to loop over the data multiple times, to artificially inflate compute time.
 // function implicitly assumes that the kernel blocks only contain 32 threads.
-__global__ void BasicSanity(Mongo::Data::GpuBatchData<short2> in, size_t tid, Memory::DeviceView<size_t> ret)
+__global__ void BasicSanity(Mongo::Data::GpuBatchData<PBShort2> in, size_t tid, Memory::DeviceView<size_t> ret)
 {
     const size_t reps = 10;
     auto zmwData = in.ZmwData(blockIdx.x, threadIdx.x);
     for (size_t i = 0; i < reps; ++i)
     {
-        short val = zmwData[0].x;
+        short val = zmwData[0].X();
         bool valid = true;
         for (auto& data : zmwData)
         {
-            auto myValid = (data.x == val) && (data.y == val);
+            auto myValid = (data.X() == val) && (data.Y() == val);
             auto warpValid = __all_sync(0xFFFF, myValid);
             if (threadIdx.x == 0)
                 valid = valid && warpValid;

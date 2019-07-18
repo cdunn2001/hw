@@ -57,7 +57,7 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 
 int32_t FrameLabeler::framesPerChunk_ = 0;
 int32_t FrameLabeler::lanesPerPool_ = 0;
-ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
+ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
 std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> FrameLabeler::trans_;
 
 
@@ -80,19 +80,19 @@ void FrameLabeler::Finalize()
     trans_.release();
 }
 
-std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
+std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
 {
-    std::unique_ptr<ViterbiDataHost<short2, BlockThreads>> ret;
+    std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> ret;
     bool success = scratchData_.TryPop(ret);
     if (! success)
     {
-        ret = std::make_unique<ViterbiDataHost<short2, BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
+        ret = std::make_unique<ViterbiDataHost<PBShort2, BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
     }
     assert(ret);
     return ret;
 }
 
-void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<short2, FrameLabeler::BlockThreads>> data)
+void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> data)
 {
     scratchData_.Push(std::move(data));
 }
@@ -106,10 +106,10 @@ static BatchDimensions LatBatchDims(size_t lanesPerPool)
     return ret;
 }
 
-__global__ void InitLatent(Mongo::Data::GpuBatchData<short2> latent)
+__global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 {
     auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
-    for (auto val : zmwData) val = make_short2(0, 0);
+    for (auto val : zmwData) val = PBShort2(0);
 }
 
 FrameLabeler::FrameLabeler()
@@ -129,12 +129,12 @@ FrameLabeler::FrameLabeler()
 __launch_bounds__(32, 32)
 __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
                                    const Memory::DeviceView<const LaneModelParameters<PBHalf2, 32>> models,
-                                   const Mongo::Data::GpuBatchData<const short2> input,
+                                   const Mongo::Data::GpuBatchData<const PBShort2> input,
                                    Memory::DeviceView<LatentViterbi<32>> latentData,
-                                   ViterbiData<short2, 32> labels,
-                                   Mongo::Data::GpuBatchData<short2> prevLat,
-                                   Mongo::Data::GpuBatchData<short2> nextLat,
-                                   Mongo::Data::GpuBatchData<short2> output)
+                                   ViterbiData<PBShort2, 32> labels,
+                                   Mongo::Data::GpuBatchData<PBShort2> prevLat,
+                                   Mongo::Data::GpuBatchData<PBShort2> nextLat,
+                                   Mongo::Data::GpuBatchData<PBShort2> output)
 {
     using namespace Subframe;
 
@@ -151,11 +151,10 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
     for (int i = 0; i < numStates; ++i)
     {
-        short2 cond = {bc.x == i, bc.y == i};
-        logLike[i] = Blend(cond, zero, ninf);
+        logLike[i] = Blend(bc == i, zero, ninf);
     }
 
-    auto Recursion = [&labels, &trans, &logLike](short2 data, int idx)
+    auto Recursion = [&labels, &trans, &logLike](PBShort2 data, int idx)
     {
         CudaArray<PBHalf2, numStates> logAccum;
 
@@ -165,14 +164,14 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         {
             auto score = scorer.StateScores(dat, nextState);
             auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
-            auto maxIdx = make_short2(0,0);
+            auto maxIdx = PBShort2(0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
                 auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
 
                 auto cond = maxVal > val;
                 maxVal = Blend(cond, maxVal, val);
-                maxIdx = Blend(cond, maxIdx, make_short2(prevState, prevState));
+                maxIdx = Blend(cond, maxIdx, PBShort2(prevState));
             }
             logAccum[nextState] = maxVal;
             labels(idx, nextState) = maxIdx;
@@ -216,20 +215,20 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         for (short state = 0; state < numStates; ++state)
         {
             auto prev = labels(i, state);
-            newProb[prev.x] += Blend(make_short2(1,0), prob[state], zero);
-            newProb[prev.y] += Blend(make_short2(0,1), prob[state], zero);
+            newProb[prev.X()] += Blend(PBBool2(true,false), prob[state], zero);
+            newProb[prev.Y()] += Blend(PBBool2(false,true), prob[state], zero);
         }
         prob = newProb;
     }
 
     PBHalf2 maxProb = prob[0];
-    short2 anchorState = {0,0};
+    PBShort2 anchorState = {0,0};
     #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
         auto cond = maxProb > prob[i];
         maxProb = Blend(cond, maxProb, prob[i]);
-        anchorState = Blend(cond, anchorState, make_short2(i, i));
+        anchorState = Blend(cond, anchorState, PBShort2(i));
     }
 
     // Traceback
@@ -238,8 +237,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
-        traceState.x = labels(frame, traceState.x).x;
-        traceState.y = labels(frame, traceState.y).y;
+        traceState = PBShort2(labels(frame, traceState.X()).X(),
+                              labels(frame, traceState.Y()).Y());
     }
 
     // Update latent data
