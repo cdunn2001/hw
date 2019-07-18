@@ -36,6 +36,7 @@
 #include "AllocationPool.h"
 #include "SmartDeviceAllocation.h"
 #include "SmartHostAllocation.h"
+#include <pacbio/logging/Logger.h>
 
 namespace PacBio {
 namespace Cuda {

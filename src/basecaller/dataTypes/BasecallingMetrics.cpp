@@ -35,11 +35,39 @@ namespace Mongo {
 namespace Data {
 
 template <unsigned int LaneWidth>
+void BasecallingMetrics<LaneWidth>::Initialize()
+{
+    for (size_t z = 0; z < LaneWidth; ++z)
+    {
+        numPulseFrames_[z] = 0;
+        numBaseFrames_[z] = 0;
+        numSandwiches_[z] = 0;
+        numHalfSandwiches_[z] = 0;
+        numPulseLabelStutters_[z] = 0;
+    }
+    for (size_t a = 0; a < BasecallingMetrics<LaneWidth>::NumAnalogs; ++a)
+    {
+        for (size_t z = 0; z < LaneWidth; ++z)
+        {
+            pkMidSignal_[a][z] = 0;
+            bpZvar_[a][z] = 0;
+            pkZvar_[a][z] = 0;
+            pkMax_[a][z] = 0;
+            pkMidNumFrames_[a][z] = 0;
+            numPkMidBasesByAnalog_[a][z] = 0;
+            numBasesByAnalog_[a][z] = 0;
+            numPulsesByAnalog_[a][z] = 0;
+        }
+    }
+}
+
+template <unsigned int LaneWidth>
 void BasecallingMetrics<LaneWidth>::Count(
         const BasecallingMetrics<LaneWidth>::InputBasecalls& bases)
 {
     for (size_t zi = 0; zi < LaneWidth; ++zi)
     {
+        // TODO: fix this for the first block
         const Basecall* prevBasecall = &prevBasecallCache[zi];
         const Basecall* prevprevBasecall = &prevprevBasecallCache[zi];
         for (size_t bi = 0; bi < bases.size(zi); ++bi)
@@ -159,11 +187,9 @@ void BasecallingMetrics<LaneWidth>::FinalizeMetrics()
     }
 */
 
-    for (size_t zi = 0; zi < LaneWidth; ++zi)
+    for (size_t baseLabel = 0; baseLabel < NumAnalogs; baseLabel++)
     {
-        for (size_t baseLabel = 0;
-                baseLabel < numPkMidBasesByAnalog_[zi].size();
-                baseLabel++)
+        for (size_t zi = 0; zi < LaneWidth; ++zi)
         {
             if (numPkMidBasesByAnalog_[baseLabel][zi] == 0)
             {
@@ -194,8 +220,8 @@ void BasecallingMetrics<LaneWidth>::FinalizeMetrics()
 
 
                 bpZvar_[baseLabel][zi] -= baselineVariance
-                                      / (pkMidNumFrames_[baseLabel][zi]
-                                         / numPkMidBasesByAnalog_[baseLabel][zi]);
+                                        / (pkMidNumFrames_[baseLabel][zi]
+                                           / numPkMidBasesByAnalog_[baseLabel][zi]);
 
                 pkZvar_[baseLabel][zi] = (pkZvar_[baseLabel][zi]
                                       - (pkMidSignal_[baseLabel][zi]

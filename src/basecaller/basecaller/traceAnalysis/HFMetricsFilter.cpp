@@ -123,6 +123,10 @@ std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Proces
     if (framesSeen_ == 0)
     {
         metrics_ = std::move(metricsFactory_->NewBatch());
+        for (size_t l = 0; l < batch.Dims().lanesPerBatch; l++)
+        {
+            metrics_->GetHostView()[l].Initialize();
+        }
     }
 
     AddBatch(batch);

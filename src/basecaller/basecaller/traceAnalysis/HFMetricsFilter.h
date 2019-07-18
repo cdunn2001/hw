@@ -75,7 +75,7 @@ public: // Filter API
     std::unique_ptr<ElementTypeOut> operator()(const ElementTypeIn& batch)
     {
         assert(batch.GetMeta().PoolId() == poolId_);
-        return Process(std::move(batch));
+        return Process(batch);
     }
 
 private:    // Block management

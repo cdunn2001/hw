@@ -54,14 +54,14 @@ namespace {
 struct BaseSimConfig
 {
     unsigned int numBases = 10;
-    unsigned int baseStart = 1;
+    unsigned int ipd = 1;
     unsigned int baseWidth = 3;
     unsigned int meanSignal = 50;
     unsigned int midSignal = 55;
     unsigned int maxSignal = 72;
 };
 
-Data::BasecallBatch GenerateBases(BaseSimConfig config)
+Data::BasecallBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
 {
     Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
                                               Data::GetPrimaryConfig().zmwsPerLane,
@@ -121,7 +121,8 @@ Data::BasecallBatch GenerateBases(BaseSimConfig config)
                 auto label = LabelConv(b);
 
                 // Populate pulse data
-                bc.GetPulse().Start(config.baseStart)
+                bc.GetPulse().Start(b * config.baseWidth + b * config.ipd
+                                    + batchNo * chunkSize)
                              .Width(config.baseWidth);
                 bc.GetPulse().MeanSignal(config.meanSignal)
                              .MidSignal(config.midSignal)
@@ -237,10 +238,11 @@ TEST(TestHFMetricsFilter, Populated)
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
 
     BaseSimConfig config;
+    config.ipd = 0;
 
     for (size_t i = 0; i < numBatchesPerHFMB; ++i)
     {
-        auto bases = GenerateBases(config);
+        auto bases = GenerateBases(config, i);
         auto basecallingMetrics = hfMetrics(bases);
         if (basecallingMetrics)
         {
@@ -248,33 +250,53 @@ TEST(TestHFMetricsFilter, Populated)
             for (uint32_t l = 0; l < bases.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
+                /*
+                std::cout << "lane " << l << ":" << std::endl;
+                for (const auto& analog : mb.NumPulsesByAnalog())
+                {
+                    for (const auto& zmw : analog)
+                        std::cout << zmw << ", ";
+                    std::cout << std::endl;
+                }
+                std::cout << "lane " << l << ":" << std::endl;
+                for (const auto& analog : mb.NumBasesByAnalog())
+                {
+                    for (const auto& zmw : analog)
+                        std::cout << zmw << ", ";
+                    std::cout << std::endl;
+                }
+                */
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
-                    // 10 pulses per chunk means 2 for each analog, then three
-                    // for the first two analogs:
-                    ASSERT_EQ(numBatchesPerHFMB
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
                               mb.NumPulseFrames()[z]);
-                    ASSERT_EQ(numBatchesPerHFMB
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
                               mb.NumBaseFrames()[z]);
+                    // The pulses don't run to the end of each block, so all
+                    // but one pulse is abutted
+                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 1),
+                              mb.NumHalfSandwiches()[z]);
                     // If numBases isn't evenly divisible by numAnalogs, the
                     // first analogs will be padded by the remainder
-                    ASSERT_EQ(numBatchesPerHFMB
+                    // e.g. 10 pulses per chunk means 2 for each analog, then
+                    // three for the first two analogs:
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 0 ? 1 : 0)),
                               mb.NumPulsesByAnalog()[0][z]);
-                    ASSERT_EQ(numBatchesPerHFMB
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 1 ? 1 : 0)),
-                                mb.NumPulsesByAnalog()[1][z]);
-                    ASSERT_EQ(numBatchesPerHFMB
+                              mb.NumPulsesByAnalog()[1][z]);
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 2 ? 1 : 0)),
                               mb.NumPulsesByAnalog()[2][z]);
-                    ASSERT_EQ(numBatchesPerHFMB
+                    EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 3 ? 1 : 0)),
                               mb.NumPulsesByAnalog()[3][z]);

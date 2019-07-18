@@ -33,6 +33,7 @@
 #include <numeric>
 #include <vector>
 #include <pacbio/smrtdata/Basecall.h>
+#include <pacbio/logging/Logger.h>
 
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
@@ -71,53 +72,57 @@ public:
 
     BasecallingMetrics() = default;
 
+    void Initialize();
+
     void Count(const InputBasecalls& bases);
 
     void FinalizeMetrics();
 
 public:
-    const SingleUnsignedIntegerMetric NumPulseFrames() const
+    const SingleUnsignedIntegerMetric& NumPulseFrames() const
     { return numPulseFrames_; }
 
-    const SingleUnsignedIntegerMetric NumBaseFrames() const
+    const SingleUnsignedIntegerMetric& NumBaseFrames() const
     { return numBaseFrames_; }
 
-    const SingleUnsignedIntegerMetric NumSandwiches() const
+    const SingleUnsignedIntegerMetric& NumSandwiches() const
     { return numSandwiches_; }
 
-    const SingleUnsignedIntegerMetric NumHalfSandwiches() const
+    const SingleUnsignedIntegerMetric& NumHalfSandwiches() const
     { return numHalfSandwiches_; }
 
-    const SingleUnsignedIntegerMetric NumPulseLabelStutters() const
+    const SingleUnsignedIntegerMetric& NumPulseLabelStutters() const
     { return numPulseLabelStutters_; }
 
-    const AnalogFloatMetric PkMidSignal() const
+    const AnalogFloatMetric& PkMidSignal() const
     { return pkMidSignal_; }
 
-    const AnalogFloatMetric BpZvar() const
+    const AnalogFloatMetric& BpZvar() const
     { return bpZvar_; }
 
-    const AnalogFloatMetric PkZvar() const
+    const AnalogFloatMetric& PkZvar() const
     { return pkZvar_; }
 
-    const AnalogUnsignedIntegerMetric PkMidNumFrames() const
+    const AnalogUnsignedIntegerMetric& PkMidNumFrames() const
     { return pkMidNumFrames_; }
 
-    const AnalogFloatMetric PkMax() const
+    const AnalogFloatMetric& PkMax() const
     { return pkMax_; }
 
-    const AnalogUnsignedIntegerMetric NumPkMidBasesByAnalog() const
+    const AnalogUnsignedIntegerMetric& NumPkMidBasesByAnalog() const
     { return numPkMidBasesByAnalog_; }
 
-    const AnalogUnsignedIntegerMetric NumBasesByAnalog() const
+    const AnalogUnsignedIntegerMetric& NumBasesByAnalog() const
     { return numBasesByAnalog_; }
 
-    const AnalogUnsignedIntegerMetric NumPulsesByAnalog() const
+    const AnalogUnsignedIntegerMetric& NumPulsesByAnalog() const
     { return numPulsesByAnalog_; }
 
     SingleUnsignedIntegerMetric NumBases() const
     {
         SingleUnsignedIntegerMetric tbr;
+        for (size_t z = 0; z < LaneWidth; ++z)
+            tbr[z] = 0;
         for (size_t a = 0; a < NumAnalogs; ++a)
         {
             for (size_t z = 0; z < LaneWidth; ++z)
@@ -131,6 +136,8 @@ public:
     SingleUnsignedIntegerMetric NumPulses() const
     {
         SingleUnsignedIntegerMetric tbr;
+        for (size_t z = 0; z < LaneWidth; ++z)
+            tbr[z] = 0;
         for (size_t a = 0; a < NumAnalogs; ++a)
         {
             for (size_t z = 0; z < LaneWidth; ++z)
@@ -160,8 +167,8 @@ private: // metrics
     AnalogFloatMetric pkMidSignal_;
     AnalogFloatMetric bpZvar_;
     AnalogFloatMetric pkZvar_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
     AnalogFloatMetric pkMax_;
+    AnalogUnsignedIntegerMetric pkMidNumFrames_;
     AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
     AnalogUnsignedIntegerMetric numBasesByAnalog_;
     AnalogUnsignedIntegerMetric numPulsesByAnalog_;
@@ -299,8 +306,11 @@ private:
 template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
 {
-    using Pools = Cuda::Memory::DualAllocationPools;
-    using MetricsBlock = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics<LaneWidth>>;
+    // Switch back for DualAllocationPools:
+    //using Pools = Cuda::Memory::DualAllocationPools;
+    using Pools = Cuda::Memory::HostAllocationPool;
+    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
+    using MetricsBlock = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
 
 public:
     BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
@@ -309,13 +319,24 @@ public:
         : batchDims_(batchDims)
         , syncDir_(syncDir)
         , pinned_(pinned)
-        , metricsPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(MetricsBlock), pinned))
+        , metricsPool_(std::make_shared<Pools>(
+                Cuda::Memory::HostAllocator(
+                    batchDims.lanesPerBatch * sizeof(BasecallingMetricsT),
+                    pinned)))
+    // Switch back for DualAllocationPools:
+        //, metricsPool_(std::make_shared<Pools>(
+        //        batchDims.lanesPerBatch * sizeof(BasecallingMetricsT),
+        //        pinned))
     {}
 
     std::unique_ptr<MetricsBlock> NewBatch()
     {
         return std::make_unique<MetricsBlock>(
-            batchDims_.ZmwsPerBatch(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, true, metricsPool_);
+            batchDims_.lanesPerBatch,
+            syncDir_,
+            pinned_);
+            // Switch back for DualAllocationPools:
+            //metricsPool_);
     }
 
 private:
@@ -323,10 +344,11 @@ private:
     Cuda::Memory::SyncDirection syncDir_;
     bool pinned_;
 
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
+    std::shared_ptr<Pools> metricsPool_;
 };
 
 
+//static_assert(sizeof(BasecallingMetrics<laneSize>) == 212, "sizeof(BasecallingMetrics) is 212 bytes");
 
 }}}     // namespace PacBio::Mongo::Data
 
