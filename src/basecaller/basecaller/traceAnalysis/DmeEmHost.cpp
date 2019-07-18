@@ -38,8 +38,6 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/UHistogramSimd.h>
 
-#include "DmeDiagnostics.h"
-
 using std::numeric_limits;
 using boost::numeric_cast;
 
@@ -64,14 +62,13 @@ constexpr unsigned int DmeEmHost::nFramesMin;
 
 // Static configuration parameters
 unsigned short DmeEmHost::emIterLimit_ = 0;
-float DmeEmHost::pulseAmpRegCoeff_ = 0.0f;
+float DmeEmHost::gTestFactor_ = 1.0f;
 bool DmeEmHost::iterToLimit_ = false;
+float DmeEmHost::pulseAmpRegCoeff_ = 0.0f;
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
     : DetectionModelEstimator(poolId, poolSize)
-{
-
-}
+{ }
 
 // static
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
@@ -80,6 +77,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Validate values.
     // TODO: Log settings.
     emIterLimit_ = dmeConfig.EmIterationLimit;
+    gTestFactor_ = dmeConfig.GTestStatFactor;
     iterToLimit_ = dmeConfig.IterateToLimit;
     pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
 }
@@ -422,31 +420,31 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
         }
     }
 
-    //    SetBits(!mldx.converged, NO_CONVERGE, &zStatus);
+    SetBits(!mldx.converged, NO_CONVERGE, &zStatus);
 
-    //    using std::isfinite;
+    using std::isfinite;
 
-    //    // Package estimation results.
-    //    PBAssert(all(isfinite(rhoEst[0])), "all(isfinite(rhoEst[0])");
-    //    bgMode.Weight(rhoEst[0]);
-    //    PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
-    //    bgMode.SignalMean(TrivialArray{{muEst[0]}});
-    //    PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
-    //    bgMode.SignalCovar(TrivialArray{{varEst[0]}});
-    //    for (unsigned int a = 0; a < nAnalogs; ++a)
-    //    {
-    //        auto& pda = pulseModes[a];
-    //        const auto i = a + 1;
-    //        PBAssert(all(isfinite(rhoEst[i])), "all(isfinite(rhoEst[i])");
-    //        pda.Weight(rhoEst[i]);
-    //        PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
-    //        pda.SignalMean(TrivialArray{{muEst[i]}});
-    //        PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
-    //        pda.SignalCovar(TrivialArray{{varEst[i]}});
-    //    }
+    // Package estimation results.
+    PBAssert(all(isfinite(rhoEst[0])), "all(isfinite(rhoEst[0])");
+    bgMode.Weight(rhoEst[0]);
+    PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
+    bgMode.SignalMean(muEst[0]);
+    PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
+    bgMode.SignalCovar(varEst[0]);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& pda = pulseModes[a];
+        const auto i = a + 1;
+        PBAssert(all(isfinite(rhoEst[i])), "all(isfinite(rhoEst[i])");
+        pda.Weight(rhoEst[i]);
+        PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
+        pda.SignalMean(muEst[i]);
+        PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
+        pda.SignalCovar(varEst[i]);
+    }
 
-    //    if (gTestFactor_ >= 0.0f) dmeDx.gTest = Gtest(hist, *workModel);
-    //    else assert(all(dmeDx.gTest.pValue == 1.0f));
+    if (gTestFactor_ >= 0.0f) dmeDx.gTest = Gtest(hist, workModel);
+    else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     //    // Compute confidence score.
     //    dmeDx.confidFactors = ComputeConfidence(dmeDx, initModel, *workModel);
@@ -516,6 +514,65 @@ DmeEmHost::PrelimScaleFactor(const LaneDetModelHost& model,
     scaleFactor = max(scaleFactor, 0.1f);
 
     return scaleFactor;
+}
+
+
+// static
+GoodnessOfFitTest<typename DmeEmHost::FloatVec>
+DmeEmHost::Gtest(const UHistType& histogram, const LaneDetModelHost& model)
+{
+    const auto& bb = histogram.BinBoundaries();
+    const auto& bg = model.BaselineMode();
+
+    // Cache the standard deviations.
+    const auto bgStdDev = sqrt(bg.SignalCovar());
+    AlignedVector<FloatVec> dmStdDev (numAnalogs);
+    assert(model.DetectionModes().size() == numAnalogs);
+    for (unsigned int j = 0; j < numAnalogs; ++j)
+    {
+        dmStdDev[j] = sqrt(model.DetectionModes()[j].SignalCovar());
+    }
+
+    // Compute the bin probabilities according to the model.
+    // TODO: Improve accuracy when normalCdf is close to 1.0.
+    AlignedVector<FloatVec> p (bb.size());
+    for (unsigned int i = 0; i < bb.size(); ++i)
+    {
+        p[i] = normalCdf(bb[i], bg.SignalMean(), bgStdDev) * bg.Weight();
+        for (unsigned int j = 0; j < numAnalogs; ++j)
+        {
+            const auto& dmj = model.DetectionModes()[j];
+            p[i] += normalCdf(bb[i], dmj.SignalMean(), dmStdDev[j]) * dmj.Weight();
+        }
+    }
+
+    // TODO: By splitting out the first iteration, should be able to fuse the
+    // loop in adjacent_difference with the loop above.
+    std::adjacent_difference(p.cbegin(), p.cend(), p.begin());
+
+    assert(all(p.front() >= 0.0f));
+    assert(all(p.front() <= 1.0f));
+    assert(all(p.back() >= 0.0f));
+    assert(all(p.back() <= 1.0f));
+
+    // Compute the G test statistic.
+    const auto n = FloatVec(histogram.InRangeCount());
+    FloatVec g = 0.0f;
+    for (int i = 0; i < histogram.NumBins(); ++i)
+    {
+        const auto obs = FloatVec(histogram.BinCount(i));
+        const auto mod = n * p[i+1];
+        const auto t = obs * log(obs/mod);
+        g += Blend(obs > 0.0f, t, FloatVec(0.0f));
+    }
+    g *= 2.0f;
+
+    // Compute the p-value.
+    assert(nModelParams + 1 < static_cast<unsigned int>(histogram.NumBins()));
+    const auto dof = histogram.NumBins() - nModelParams - 1;
+    const auto pval = chi2CdfComp(g * gTestFactor_, dof);
+
+    return {g, static_cast<float>(dof), pval};
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

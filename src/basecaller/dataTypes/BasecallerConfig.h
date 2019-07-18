@@ -86,6 +86,12 @@ namespace Data {
         // Number of expectation-maximization iterations.
         ADD_PARAMETER(unsigned short, EmIterationLimit, 20);
 
+        // A factor that is multiplied into the G-test statistic before
+        // computing the p-value. Ideally, this would be 1.0.
+        // If set <= 0, the associated confidence factor will always be 1.0.
+        // If set < 0, the G-test computation is skipped entirely.
+        ADD_PARAMETER(float, GTestStatFactor, -1.0f);
+
         // If IterateToLimit is set, EM estimation algorithm will consistently
         // iterate until it reaches EmIterationLimit, regardless of meeting
         // the convergence criterion. This is primarily useful for
@@ -197,13 +203,6 @@ namespace Data {
         // When enabled, suggest GofLogChiSqrThresh1 approx 1.0.
         ADD_PARAMETER(float, GofLogChiSqrThresh1, 111.0f);
         ADD_PARAMETER(float, GofLogChiSqrThresh2, 8.0f);
-
-        // A factor that is multiplied into the G-test statistic before
-        // computing the p-value. Ideally, this would be 1.0.
-        // If set <= 0, the associated confidence factor will always be 1.0.
-        // If set < 0, the G-test computation is skipped entirely.
-        // Used only be DmeMonochrome.
-        ADD_PARAMETER(float, GTestStatFactor, -1.0f);
     };
 
 

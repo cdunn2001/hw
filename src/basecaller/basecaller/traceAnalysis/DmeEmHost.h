@@ -34,6 +34,7 @@
 #include <dataTypes/UHistogramSimd.h>
 
 #include "DetectionModelEstimator.h"
+#include "DmeDiagnostics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -87,18 +88,25 @@ private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
 
 private:    // Customized implementation
-    void EstimateImpl(const PoolHist& hist, PoolDetModel* detModel) const override;
+    void EstimateImpl(const PoolHist& hist,
+                      PoolDetModel* detModel) const override;
 
 private:    // Static data
     static unsigned short emIterLimit_;
+    static float gTestFactor_;
     static bool iterToLimit_;
     static float pulseAmpRegCoeff_;
 
 private:    // Static functions
-    static FloatVec PrelimScaleFactor(const LaneDetModelHost& model, const UHistType& hist);
+    static FloatVec PrelimScaleFactor(const LaneDetModelHost& model,
+                                      const UHistType& hist);
+
+    static GoodnessOfFitTest<typename DmeEmHost::FloatVec>
+    Gtest(const UHistType& histogram, const LaneDetModelHost& model);
 
 private:    // Functions
-    void EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* detModel) const;
+    void EstimateLaneDetModel(const UHistType& hist,
+                              LaneDetModelHost* detModel) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
