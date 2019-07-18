@@ -51,6 +51,50 @@ DetectionModelHost<VF>& DetectionModelHost<VF>::ScaleSnr(const FloatVec& scaleFa
 }
 
 
+template <typename VF>
+DetectionModelHost<VF>&
+DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
+{
+    assert (all((fraction >= 0.0f) & (fraction <= 1.0f)));
+
+    const auto mask = (fraction > 0.0f);
+    updated_ |= mask;
+    baselineMode_.Update(other.baselineMode_, fraction);
+    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+    {
+        detectionModes_[i].Update(other.detectionModes_[i], fraction);
+    }
+
+    FrameInterval(other.FrameInterval());
+
+    // Do not update confidence.
+
+    return *this;
+}
+
+
+template <typename VF>
+DetectionModelHost<VF>&
+DetectionModelHost<VF>::Update(const DetectionModelHost& other)
+{
+    assert (this->FrameInterval() == other.FrameInterval());
+    assert (all(this->Confidence() >= 0.0f));
+    assert (all(other.Confidence() >= 0.0f));
+
+    const auto confSum = this->Confidence() + other.Confidence();
+    const VF fraction = Blend(confSum > 0.0f,
+                              other.Confidence() / confSum, FloatVec(0.0f));
+
+    assert (all(fraction >= 0.0f));
+    assert (all(fraction <= 1.0f));
+    assert (all((fraction > 0) | (confSum == Confidence())));
+
+    Update(other, fraction);
+    Confidence(confSum);
+    return *this;
+}
+
+
 // Explicit instantiation
 template class DetectionModelHost<LaneArray<float>>;
 template DetectionModelHost<LaneArray<float>>::DetectionModelHost(const LaneDetectionModel<Cuda::PBHalf>& ldm);

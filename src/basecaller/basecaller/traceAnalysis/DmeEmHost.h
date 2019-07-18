@@ -87,22 +87,45 @@ public:
 private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
 
+    enum ConfFactor
+    {
+        CONVERGED = 0,
+        BL_FRACTION,
+        BL_CV,
+        BL_VAR_STABLE,
+        ANALOG_REP,
+        SNR_SUFFICIENT,
+        SNR_DROP,
+        GOOD_FIT,
+        G_TEST,
+        NUM_CONF_FACTORS
+    };
+
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
                       PoolDetModel* detModel) const override;
 
 private:    // Static data
+    static float analogMixFracThresh_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
     static bool iterToLimit_;
     static float pulseAmpRegCoeff_;
+    static float snrDropThresh_;
+    static float snrThresh0_, snrThresh1_;
+    static float successConfThresh_;
 
 private:    // Static functions
     static FloatVec PrelimScaleFactor(const LaneDetModelHost& model,
                                       const UHistType& hist);
 
-    static GoodnessOfFitTest<typename DmeEmHost::FloatVec>
-    Gtest(const UHistType& histogram, const LaneDetModelHost& model);
+    static GoodnessOfFitTest<FloatVec> Gtest(const UHistType& histogram,
+                                             const LaneDetModelHost& model);
+
+    static AlignedVector<FloatVec>
+    ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
+                      const LaneDetModelHost& refModel,
+                      const LaneDetModelHost& modelEst);
 
 private:    // Functions
     void EstimateLaneDetModel(const UHistType& hist,

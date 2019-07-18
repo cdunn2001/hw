@@ -61,10 +61,15 @@ constexpr unsigned short DmeEmHost::nModelParams;
 constexpr unsigned int DmeEmHost::nFramesMin;
 
 // Static configuration parameters
+float DmeEmHost::analogMixFracThresh_ = 0.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
 float DmeEmHost::gTestFactor_ = 1.0f;
 bool DmeEmHost::iterToLimit_ = false;
 float DmeEmHost::pulseAmpRegCoeff_ = 0.0f;
+float DmeEmHost::snrDropThresh_ = 1.0f;
+float DmeEmHost::snrThresh0_ = 0.0f;
+float DmeEmHost::snrThresh1_ = 0.0f;
+float DmeEmHost::successConfThresh_ = 0.0f;
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
     : DetectionModelEstimator(poolId, poolSize)
@@ -76,10 +81,15 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 {
     // TODO: Validate values.
     // TODO: Log settings.
+    analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
     emIterLimit_ = dmeConfig.EmIterationLimit;
     gTestFactor_ = dmeConfig.GTestStatFactor;
     iterToLimit_ = dmeConfig.IterateToLimit;
     pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
+    snrDropThresh_ = dmeConfig.SnrDropThresh;
+    snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
+    snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
+    successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
 }
 
 void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
@@ -330,15 +340,11 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 //                    << ", iteration " << it << '.';
         }
 
-        // TODO: We can probably eliminate the Pearson's chi-square.
-        // Compute Pearson's chi-squared statistic.
-        const FloatVec pcs = n_j_sum * ((n_j / n_j_sum - binProb).square() / binProb).sum();
-
         // TODO: Seems like we ought to eliminate or relax the lower bound
         // condition on deltaLogLike here.
         BoolVec conv = (deltaLogLike >= 0) & (deltaLogLike < convTol);
         conv &= (logLike >= mldx.logLike);
-        mldx.Converged(conv, it, logLike, deltaLogLike, pcs);
+        mldx.Converged(conv, it, logLike, deltaLogLike);
 
         // Update result for converged ZMWs.
         if (any(conv)) for (unsigned int k = 0; k < nModes; ++k)
@@ -446,31 +452,26 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     if (gTestFactor_ >= 0.0f) dmeDx.gTest = Gtest(hist, workModel);
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
-    //    // Compute confidence score.
-    //    dmeDx.confidFactors = ComputeConfidence(dmeDx, initModel, *workModel);
-    //    {
-    //        using std::min;  using std::max;
-    //        FloatVec conf = 1.0f;
-    //        for (const auto& cf : dmeDx.confidFactors) conf *= cf;
-    //        conf = min(max(0.0f, conf), 1.0f);
-    //        conf = Blend(conf >= successConfThresh_, conf, 0.0f);
-    //        workModel->Confidence(conf);
-    //        mldx.confidenceScore = conf;
-    //    }
+    // Compute confidence score.
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, initModel, workModel);
+    {
+        using std::min;  using std::max;
+        FloatVec conf = 1.0f;
+        for (const auto& cf : dmeDx.confidFactors) conf *= cf;
+        conf = min(max(0.0f, conf), 1.0f);
+        conf = Blend(conf >= successConfThresh_, conf, FloatVec(0.0f));
+        workModel.Confidence(conf);
+    }
 
-    //    // Push results to DmeDumpCollector.
+    // TODO: Push results to DmeDumpCollector.
     //    if (this->dmeDumpCollector_)
     //    {
     //        // TODO: Add lane and zmw event codes.
     //        this->dmeDumpCollector_->CollectRawEstimate1D(*dtbs.front(), hist, dmeDx, *workModel);
     //    }
 
-
-    //    // Blend the estimate into the first of the models in the trace
-    //    // block sequence.
-    //    model0.Update(workModel);
-    //    dtbs.front()->ModelEstimationDx(dmeDx);
-
+    // Blend the estimate into the output model.
+    detModel->Update(workModel);
 }
 
 
@@ -573,6 +574,95 @@ DmeEmHost::Gtest(const UHistType& histogram, const LaneDetModelHost& model)
     const auto pval = chi2CdfComp(g * gTestFactor_, dof);
 
     return {g, static_cast<float>(dof), pval};
+}
+
+// static
+AlignedVector<typename DmeEmHost::FloatVec>
+DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
+                             const LaneDetModelHost& refModel,
+                             const LaneDetModelHost& modelEst)
+{
+    const auto mldx = dmeDx.mldx;
+    AlignedVector<FloatVec> cf (NUM_CONF_FACTORS);
+
+    // Check EM convergence.
+    cf[CONVERGED] = Blend(mldx.converged, FloatVec(1), FloatVec(0));
+
+    // Check for missing baseline component.
+    const auto& bg = modelEst.BaselineMode();
+    // TODO: Make this configurable.
+    // Threshold level for background fraction.
+    static const float bgFracThresh0 = 0.05f;
+    static const float bgFracThresh1 = 0.15f;
+    FloatVec x = satlin<FloatVec>(bgFracThresh0, bgFracThresh1, bg.Weight());
+    cf[BL_FRACTION] = x;
+
+    // Check magnitude of residual baseline mean.
+    x = pow2(bg.SignalMean()) / bg.SignalCovar();
+    // TODO: Make this configurable.
+    static const float bgMeanTol = 1.0f;
+    assert(bgMeanTol > 0.0f);
+    x = exp(-x / (2*pow2(bgMeanTol)));
+    cf[BL_CV] = x;
+
+    // Check for large deviation of baseline variance from reference variance.
+    const auto& refBgVar = refModel.BaselineMode().SignalCovar();
+    x = log2(bg.SignalCovar() / refBgVar);
+    // TODO: Make this configurable.
+    static const float bgVarTol = 1.0f;
+    x = exp(-x*x / (2*pow2(bgVarTol)));
+    cf[BL_VAR_STABLE] = x;
+
+    // Check for missing pulse components.
+    // Require that the first (brightest) and last (dimmest) are not absent.
+    // TODO: Make this configurable. Should this threshold be defined in terms
+    // of data count instead of fraction?
+    const float dmFracThresh1 = analogMixFracThresh_;
+    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
+    const auto& detModes = modelEst.DetectionModes();
+    assert(detModes.size() > 0);
+    x = satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.front().Weight());
+    x *= satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.back().Weight());
+    cf[ANALOG_REP] = x;
+
+    // Check for low SNR.
+    x = detModes.back().SignalMean();  // Assumes last analog is dimmest.
+    const auto bgSigma = sqrt(bg.SignalCovar());
+    x /= bgSigma;
+    x = satlin<FloatVec>(snrThresh0_, snrThresh1_, x);
+    cf[SNR_SUFFICIENT] = x;
+
+    // Check for large decrease in SNR.
+    // This factor is specifically designed to catch registration errors in the
+    // fit when the brightest analog is absent. In such cases, the weight of
+    // the dimmest fraction can substantial (the fit presumably robs some
+    // weight from the background component)
+    if (snrDropThresh_ < 0.0f) cf[SNR_DROP] = 1.0f;
+    else
+    {
+        const auto snrEst = detModes.front().SignalMean() / bgSigma;
+        const auto& refDetModes = refModel.DetectionModes();
+        assert(refDetModes.size() >= 2);
+        const auto& refSignal0 = refDetModes[0].SignalMean();
+        PBAssert(all(refSignal0 >= 0.0f), "Bad SignalMean.");
+        const auto& refSignal1 = refDetModes[1].SignalMean();
+        PBAssert(all(refSignal1 >= 0.0f), "Bad SignalMean.");
+        const auto refBgSigma = sqrt(refModel.BaselineMode().SignalCovar());
+        PBAssert(all(refBgSigma >= 0.0f), "Bad baseline sigma.");
+        const auto refSnr0 = refSignal0 / refBgSigma;
+        auto refSnr1 = refSignal1 / refBgSigma;
+        refSnr1 *= snrDropThresh_;
+        refSnr1 *= min(refModel.Confidence(), 1.0f);
+        PBAssert(all(refSnr1 < refSnr0),
+                 "Bad threshold in SNR Drop confidence factor.");
+        x = satlin(refSnr1, sqrt(refSnr0*refSnr1), snrEst);
+        cf[SNR_DROP] = x;
+    }
+
+    // The G-test as a goodness-of-fit score.
+    cf[G_TEST] = dmeDx.gTest.pValue;
+
+    return cf;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
