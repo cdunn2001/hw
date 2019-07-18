@@ -60,6 +60,18 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
     analogs_[3].ipd2SlowStepRatio = 0.0f;
 }
 
+// static
+LaneArray<float> DetectionModelEstimator::ModelSignalCovar(
+        const Data::AnalogMode& analog,
+        const ConstLaneArrayRef<float>& signalMean,
+        const ConstLaneArrayRef<float>& baselineVar)
+{
+    LaneArray<float> r {baselineVar};
+    r += signalMean;
+    r += pow2(analog.excessNoiseCV * signalMean);
+    return r;
+}
+
 DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
     , poolSize_ (poolSize)
@@ -113,8 +125,7 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselineStats<laneSiz
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
-        const auto aVar = blVar + aMean + analogs_[a].excessNoiseCV * pow2(aMean);
-        LanArrRef(aMode.vars.data()) = aVar;
+        LanArrRef(aMode.vars.data()) = ModelSignalCovar(Analog(a), aMean, blVar);
     }
 }
 

@@ -33,6 +33,7 @@
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/PBCudaSimd.h>
+#include <common/LaneArray.h>
 
 #include <dataTypes/AnalogMode.h>
 #include <dataTypes/BaselineStats.h>
@@ -64,6 +65,12 @@ public:     // Static functions
     /// model parameters.
     static uint32_t MinFramesForEstimate()
     { return minFramesForEstimate_; }
+
+    /// The variance for \analog signal based on model including Poisson and
+    /// "excess" noise.
+    static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
+                                             const ConstLaneArrayRef<float>& signalMean,
+                                             const ConstLaneArrayRef<float>& baselineVar);
 
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);

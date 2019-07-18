@@ -356,75 +356,70 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
             break;
         }
 
-    //        // M-step
+        // M-step
 
-    //        // Mixing fractions.
-    //        rho = c_i / n_j_sum;
+        // Mixing fractions.
+        rho = c_i / n_j_sum;
 
-    //        // Background mean.
-    //        mu[0] = mom1[0] / c_i[0];
+        // Background mean.
+        mu[0] = mom1[0] / c_i[0];
 
-    //        // Amplitude scale parameter.
-    //        FloatVec numer = 0.0f;
-    //        FloatVec denom = 0.0f;
-    //        for (unsigned int a = 0; a < nAnalogs; ++a)
-    //        {
-    //            const auto i = a + 1;
-    //            numer += rpa[a] * varinv[i] * mom1[i];
-    //            denom += pow2(rpa[a]) * varinv[i] * c_i[i];
-    //        }
+        // Amplitude scale parameter.
+        FloatVec numer = 0.0f;
+        FloatVec denom = 0.0f;
+        for (unsigned int a = 0; a < numAnalogs; ++a)
+        {
+            const auto i = a + 1;
+            numer += rpa[a] * varinv[i] * mom1[i];
+            denom += pow2(rpa[a]) * varinv[i] * c_i[i];
+        }
 
-    //        // Add regularization/prior terms.
-    //        numer += sExpect * sExpectWeight;
-    //        denom += sExpectWeight;
+        // Add regularization/prior terms.
+        numer += sExpect * sExpectWeight;
+        denom += sExpectWeight;
 
-    //        s = numer / denom;
+        s = numer / denom;
 
-    //        // The minimum bound for the pulse-amplitude scale parameter.
-    //        static const float minSnr = 0.1f;
-    //        const auto sMin = minSnr * sqrt(var[0]) / rpa.minCoeff();
+        // The minimum bound for the pulse-amplitude scale parameter.
+        static const float minSnr = 0.1f;
+        const auto sMin = minSnr * sqrt(var[0]) / rpa.minCoeff();
 
-    //        // Constrain s > sMin.
-    //        const auto veryLowSignal = (s < sMin);
-    //        s = Blend(veryLowSignal, sMin, s);
-    //        SetBits(veryLowSignal, VLOW_SIGNAL, &zStatus);
+        // Constrain s > sMin.
+        const auto veryLowSignal = (s < sMin);
+        s = Blend(veryLowSignal, sMin, s);
+        SetBits(veryLowSignal, VLOW_SIGNAL, &zStatus);
 
-    //        // Pulse mode means.
-    //        mu.tail(nAnalogs) = s * rpa.cast<FloatVec>();
+        // Pulse mode means.
+        mu.tail(numAnalogs) = s * rpa.cast<FloatVec>();
 
-    //        // Background variance.
-    //        // Could potentially be combined with the single pass loop above, but
-    //        // would require a correction term to be added (since this loop requires
-    //        // the updated rho), and combining this loop with the above didn't show
-    //        // any major speed gains.
-    //        FloatVec mom2 = 0.0f;   // Only needed for background mode.
-    //        for (unsigned int j = 0; j < nBins; ++j)
-    //        {
-    //            const auto k = j + 1;
-    //            const auto& x0 = hist.BinStart(j) - mu[0];
-    //            const auto& x1 = hist.BinStart(k) - mu[0];
-    //            FloatVec tmp = boundaryProb[j] * x0 * x0 * tau(0,j);
-    //            tmp += boundaryProb[k] * x1 * x1 * tau(0,k);
-    //            tmp *= n_j[j] / binProb[j];
-    //            mom2 += tmp;
-    //        }
-    //        mom2 *= 0.5f * binSize;
-    //        var[0] = mom2 / c_i[0] + varQuant;
+        // Background variance.
+        // Could potentially be combined with the single pass loop above, but
+        // would require a correction term to be added (since this loop requires
+        // the updated rho), and combining this loop with the above didn't show
+        // any major speed gains.
+        FloatVec mom2 = 0.0f;   // Only needed for background mode.
+        for (unsigned int j = 0; j < nBins; ++j)
+        {
+            const auto k = j + 1;
+            const auto& x0 = hist.BinStart(j) - mu[0];
+            const auto& x1 = hist.BinStart(k) - mu[0];
+            FloatVec tmp = boundaryProb[j] * x0 * x0 * tau(0,j);
+            tmp += boundaryProb[k] * x1 * x1 * tau(0,k);
+            tmp *= n_j[j] / binProb[j];
+            mom2 += tmp;
+        }
+        mom2 *= 0.5f * binSize;
+        var[0] = mom2 / c_i[0] + varQuant;
 
-    //        // Each pulse mode variance is computed as a function of the background
-    //        // variance and the pulse mode mean.
-    //        // Note that we've ignored these dependencies when updated the means
-    //        // and the background variance above.
-    //        for (unsigned int a = 0; a < nAnalogs; ++a)
-    //        {
-    //            const auto i = a + 1;
-    //            const auto& sensorModel = workModel->GetSensorModel();
-    //            const auto& analog = workModel->Analog(a);
-    //            const TrivialArray muArr {{mu[i]}};
-    //            const TrivialArray bgVarArr {{var[0]}};
-    //            const auto& covArr = sensorModel->ModelSignalCovar(analog, muArr, bgVarArr);
-    //            var[i] = covArr[0];
-    //        }
+        // Each pulse mode variance is computed as a function of the background
+        // variance and the pulse mode mean.
+        // Note that we've ignored these dependencies when updating the means
+        // and the background variance above.
+        for (unsigned int a = 0; a < numAnalogs; ++a)
+        {
+            const auto i = a + 1;
+            var[i] = ModelSignalCovar(Analog(a), mu[i], var[0]);
+        }
     }
 
     //    SetBits(!mldx.converged, NO_CONVERGE, &zStatus);
