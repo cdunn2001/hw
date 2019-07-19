@@ -54,7 +54,7 @@ template <> struct gpu_type<int16_t> { using type = PBShort2; };
 template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 
 // TODO handle pitched allocations for multidimensional data?
-template <typename T, bool allow_expensive_construct = false>
+template <typename T, bool allow_expensive_types = false>
 class UnifiedCudaArray : private detail::DataManager
 {
 public:
@@ -79,8 +79,10 @@ public:
         // try and ensure binary compatability on our end as much as we can.
         static_assert(sizeof(HostType) == sizeof(GpuType) || 2*sizeof(HostType) == sizeof(GpuType), "");
 
-        static_assert(std::is_trivially_default_constructible<HostType>::value || allow_expensive_construct,
-                      "Must explicitly opt-in to use non-trivial construction types by setting the allow_expensive_construct template parameter");
+        static_assert(std::is_trivially_default_constructible<HostType>::value || allow_expensive_types,
+                      "Must explicitly opt-in to use non-trivial construction types by setting the allow_expensive_types template parameter");
+        static_assert(std::is_trivially_destructible<HostType>::value || allow_expensive_types,
+                      "Must explicitly opt-in to use non-trivial destruction types by setting the allow_expensive_types template parameter");
 
         if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
         {
@@ -124,11 +126,13 @@ public:
 
     ~UnifiedCudaArray()
     {
-        // Potentially hand this back to the memory pool (if active)
-        // instead of actually freeing the memory.  Note that since we
-        // are destructing, there is no point in downloading data from
-        // the gpu, so short-circuit that by toggling `ActiveOnHost = true`
-        activeOnHost_ = true;
+        // If we are trivially destructible, we can short-circuit any final
+        // download from the gpu, because desconstruction won't actually
+        // do anything observable anyway.
+        if (std::is_trivially_destructible<HostType>::value)
+        {
+            activeOnHost_ = true;
+        }
         DeactivateGpuMem();
 
         // Need to formally call destructors on host data.
