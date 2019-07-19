@@ -66,6 +66,8 @@ public:     // Static functions
         batchFactory_.release();
     }
 
+    static void ReportPerformance();
+
 public:     // Structors & assignment operators
     BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
 
