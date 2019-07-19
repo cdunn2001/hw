@@ -37,17 +37,19 @@ namespace Mongo {
 namespace Data {
 
 template <typename VF>
-template <typename FloatT>
-DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<FloatT>& ldm)
+template <typename VF2>
+DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
+    : baselineMode_ (ldm.BaselineMode())
+    , updated_ (false)  // TODO: Is this right?
 {
-    // TODO
-}
+    static_assert(numAnalogs == ldm.numAnalogs, "Mismatch in number of analogs.");
+    detectionModes_.reserve(numAnalogs);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        detectionModes_.emplace_back(ldm.AnalogMode(a));
+    }
 
-template <typename VF>
-DetectionModelHost<VF>& DetectionModelHost<VF>::ScaleSnr(const FloatVec& scaleFactor)
-{
-    // TODO
-    return *this;
+    // TODO: What about confid_ and frameInterval_?
 }
 
 
@@ -95,8 +97,42 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other)
 }
 
 
+template <typename VF>
+template <typename VF2>
+void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
+{
+    assert(ldm);
+    baselineMode_.ExportTo(&ldm->BaselineMode());
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
+    }
+    // TODO: What about confid_, updated_, and frameInterval_?
+}
+
+template <typename VF>
+template <typename FloatT>
+SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam)
+    : weight_ (0.0f)    // TODO: What should we use here?
+    , mean_ (ConstLaneArrayRef<FloatT, laneSize>(lam.means.data()))
+    , var_ (ConstLaneArrayRef<FloatT, laneSize>(lam.vars.data()))
+{ }
+
+template <typename VF>
+template <typename VF2>
+void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
+{
+    assert(lam);
+    LaneArrayRef<VF2, laneSize>(lam->means.data()) =  mean_;
+    LaneArrayRef<VF2, laneSize>(lam->vars.data()) = var_;
+    // TODO: What about weight_?
+}
+
+
 // Explicit instantiation
 template class DetectionModelHost<LaneArray<float>>;
 template DetectionModelHost<LaneArray<float>>::DetectionModelHost(const LaneDetectionModel<Cuda::PBHalf>& ldm);
+template void DetectionModelHost<LaneArray<float>>::ExportTo(LaneDetectionModel<Cuda::PBHalf>* ldm) const;
+template SignalModeHost<LaneArray<float>>::SignalModeHost(const LaneAnalogMode<Cuda::PBHalf, laneSize>& lam);
 
 }}}     // namespace PacBio::Mongo::Data

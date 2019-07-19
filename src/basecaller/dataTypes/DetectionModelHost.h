@@ -161,6 +161,11 @@ public:     // Const interface
     const FrameIntervalType& FrameInterval() const
     { return frameInterval_; }
 
+    /// Transcribe data to \a *ldm.
+    /// ldm != nullptr.
+    template <typename VF2>
+    void ExportTo(LaneDetectionModel<VF2>* ldm) const;
+
 public:     // Non-const interface
     /// Updates *this with the SIMD weighted average
     /// "\a fraction * other + (1 - \a fraction) * *this".
@@ -178,13 +183,6 @@ public:     // Non-const interface
     /// The frame intervals of this and other must match.
     /// \returns *this.
     DetectionModelHost& Update(const DetectionModelHost& other);
-
-    /// Updates *this by increasing the amplitude of all detection modes by
-    /// \a scaleFactor. Also updates all detection mode covariances according
-    /// to the standard noise model. Ratios of amplitudes among detection modes
-    /// and properties of the background mode are preserved.
-    /// \returns *this.
-    DetectionModelHost& ScaleSnr(const FloatVec& scaleFactor);
 
     /// Sets the estimation confidence score for all unit cells.
     /// value >= 0.
@@ -272,6 +270,9 @@ public:     // Structors
         , var_ (variance)
     { }
 
+    template <typename VF2>
+    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam);
+
     ~SignalModeHost() = default;
 
 public:     // Vectorized comparisons
@@ -293,6 +294,11 @@ public:     // Read Access
     /// The signal variance signal.
     const FloatVec& SignalCovar() const
     { return var_; }
+
+    /// Transcribe data to *lam.
+    /// lam != nullptr.
+    template <typename VF2>
+    void ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const;
 
 public: // Modify Access
     void Weight(const FloatVec& w)

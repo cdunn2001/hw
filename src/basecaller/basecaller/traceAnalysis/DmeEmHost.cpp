@@ -92,27 +92,32 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
 }
 
+
 void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
 {
     const auto& hView = hist.data.GetHostView();
     auto dmView = detModel->GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
+        auto& dmLane = dmView[lane];
+
         // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd).
         const UHistType uhist (hView[lane]);
-        LaneDetModelHost laneDetModel (dmView[lane]);
+        LaneDetModelHost laneDetModel (dmLane);
 
+        // Estimate parameters for this lane.
         EstimateLaneDetModel(uhist, &laneDetModel);
+
+        // Transcribe results back into *detModel.
+        laneDetModel.ExportTo(&dmLane);
     }
 }
 
 
 void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* detModel) const
 {
-    // TODO
-
-    //    // Evolve model0. Use trace autocorrelation to adjust confidence half-life.
-    //    EvolveModel(dtbs, &model0);
+    // TODO: Evolve model. Use trace autocorrelation to adjust confidence
+    // half-life.
 
     const auto& numFrames = hist.TotalCount();
 
@@ -125,12 +130,10 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.BaselineMode();
     auto& pulseModes = workModel.DetectionModes();
-    const LaneArray<float>& bgVar = bgMode.SignalCovar();
-    const auto bgSigma = sqrt(bgVar);
 
     // Scale the model based on fractile of the data.
     const auto scaleFactor = PrelimScaleFactor(workModel, hist);
-    workModel.ScaleSnr(scaleFactor);
+    ScaleModelSnr(scaleFactor, &workModel);
 
     const auto& binSize = hist.BinSize();
 
@@ -142,16 +145,16 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     ModeArray var;     // Variance of each mode.
 
     rho[0] = bgMode.Weight();
-    mu[0] = bgMode.SignalMean()[0];
-    var[0] = bgMode.SignalCovar()[0];
+    mu[0] = bgMode.SignalMean();
+    var[0] = bgMode.SignalCovar();
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto k = a + 1;
         PBAssert(k < nModes, "k < nModes");
         const auto& pma = pulseModes[a];
         rho[k] = pma.Weight();
-        mu[k] = pma.SignalMean()[0];
-        var[k] = pma.SignalCovar()[0];
+        mu[k] = pma.SignalMean();
+        var[k] = pma.SignalCovar();
     }
 
     // Variance associated with data binning.
@@ -635,7 +638,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     // Check for large decrease in SNR.
     // This factor is specifically designed to catch registration errors in the
     // fit when the brightest analog is absent. In such cases, the weight of
-    // the dimmest fraction can substantial (the fit presumably robs some
+    // the dimmest fraction can be substantial (the fit presumably robs some
     // weight from the background component)
     if (snrDropThresh_ < 0.0f) cf[SNR_DROP] = 1.0f;
     else
@@ -664,5 +667,26 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
 
     return cf;
 }
+
+
+// static
+void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
+                              LaneDetModelHost* detModel) const
+{
+    assert (all(scale > 0.0f));
+    const auto baselineCovar = detModel->BaselineMode().SignalCovar();
+    auto& detectionModes_ = detModel->DetectionModes();
+    assert (detectionModes_.size() == numAnalogs);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& dmi = detectionModes_[a];
+        dmi.SignalMean(scale * dmi.SignalMean());
+        dmi.SignalCovar(ModelSignalCovar(Analog(a),
+                                         dmi.SignalMean(),
+                                         baselineCovar));
+    }
+    // TODO: Should we update updated_?
+}
+
 
 }}}     // namespace PacBio::Mongo::Basecaller

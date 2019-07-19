@@ -116,20 +116,35 @@ private:    // Static data
     static float successConfThresh_;
 
 private:    // Static functions
+    // Compute a preliminary scaling factor based on a fractile statistic.
     static FloatVec PrelimScaleFactor(const LaneDetModelHost& model,
                                       const UHistType& hist);
 
+    // Apply a G-test significance test to assess goodness of fit of the model
+    // to the trace histogram.
     static GoodnessOfFitTest<FloatVec> Gtest(const UHistType& histogram,
                                              const LaneDetModelHost& model);
 
+    // Compute the confidence factors of a model estimate, given the
+    // diagnostics of the estimation, a reference model.
     static AlignedVector<FloatVec>
     ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);
 
 private:    // Functions
+    // Use the trace histogram and the input detection model to compute a new
+    // estimate for the detection model. Mix the new estimate with the input
+    // model, weighted by confidence scores. That result is returned in detModel.
     void EstimateLaneDetModel(const UHistType& hist,
                               LaneDetModelHost* detModel) const;
+
+
+    /// Updates *detModel by increasing the amplitude of all detection modes by
+    /// \a scaleFactor. Also updates all detection mode covariances according
+    /// to the standard noise model. Ratios of amplitudes among detection modes
+    /// and properties of the background mode are preserved.
+    void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

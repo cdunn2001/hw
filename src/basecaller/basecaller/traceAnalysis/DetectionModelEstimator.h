@@ -61,6 +61,9 @@ public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
                           const Data::MovieConfig& movConfig);
 
+    static const Data::AnalogMode& Analog(unsigned int i)
+    { return analogs_[i]; }
+
     /// Minimum number of frames added to trace histograms before we estimate
     /// model parameters.
     static uint32_t MinFramesForEstimate()
@@ -91,9 +94,6 @@ public:     // Functions
 
     unsigned int PoolSize() const
     { return poolSize_; }
-
-    const Data::AnalogMode& Analog(unsigned int i) const
-    { return analogs_[i]; }
 
 protected:
     static PacBio::Logging::PBLogger logger_;
