@@ -41,7 +41,7 @@ namespace Mongo {
 namespace Basecaller {
 
 /// Implements DetectionModelEstimator using a Expectation-Maximization (EM)
-/// approach for model estimation.
+/// approach for model estimation that runs on the CPU (as opposed to the GPU).
 class DmeEmHost : public DetectionModelEstimator
 {
 public:     // Types
@@ -141,7 +141,7 @@ private:    // Functions
 
 
     /// Updates *detModel by increasing the amplitude of all detection modes by
-    /// \a scaleFactor. Also updates all detection mode covariances according
+    /// \a scale. Also updates all detection mode covariances according
     /// to the standard noise model. Ratios of amplitudes among detection modes
     /// and properties of the background mode are preserved.
     void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel) const;

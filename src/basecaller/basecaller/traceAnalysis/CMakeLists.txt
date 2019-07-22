@@ -36,10 +36,10 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     TraceAnalysisForward.h
     TraceFilters.h
     TraceFilters.cpp
-    TraceHistogramAccumulator.h
-    TraceHistogramAccumulator.cpp
     TraceHistogramAccumHost.h
     TraceHistogramAccumHost.cpp
+    TraceHistogramAccumulator.h
+    TraceHistogramAccumulator.cpp
     WindowBuffer.h
 )
 

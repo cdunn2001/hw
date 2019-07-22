@@ -163,6 +163,7 @@ public:     // Named unary operators
         return ret;
     }
 
+    /// Absolute value
     friend LaneArray abs(const BaseConstRef& x)
     {
         LaneArray ret;
@@ -200,6 +201,7 @@ public:     // Named unary operators
         return ret;
     }
 
+    /// Base-2 logarithm
     friend LaneArray log2(const BaseConstRef& x)
     {
         LaneArray ret;

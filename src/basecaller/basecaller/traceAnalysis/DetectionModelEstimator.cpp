@@ -76,7 +76,6 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int p
     : poolId_ (poolId)
     , poolSize_ (poolSize)
 {
-    // TODO
 }
 
 

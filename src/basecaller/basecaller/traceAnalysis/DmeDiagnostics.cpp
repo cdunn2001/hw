@@ -29,6 +29,12 @@
 
 #include "DmeDiagnostics.h"
 
-#include <common/simd/m512f.h>
+#include <common/LaneArray.h>
 
-template struct PacBio::Mongo::Basecaller::DmeDiagnostics<PacBio::Simd::m512f>;
+namespace PacBio {
+namespace Mongo {
+namespace Basecaller {
+
+template struct DmeDiagnostics<LaneArray<float>>;
+
+}}}     // namespace PacBio::Mongo::Basecaller

@@ -93,7 +93,7 @@ struct alignas(VF) MaxLikelihoodDiagnostics
         converged |= aConverged;
     }
 
-    /// Update the log liklihood and delta log likelihood for any element where
+    /// Update the log likelihood and delta log likelihood for any element where
     /// we've not already fully converged.  \a softConverged is used to indicate
     /// lanes where we want to record our progress but have not necessarily
     /// fully converged, and \a hardConverged is used to indicate lanes that

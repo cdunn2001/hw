@@ -78,8 +78,8 @@ public:     // Structors and assignment
     template <typename FloatT>
     DetectionModelHost(const LaneDetectionModel<FloatT>& ldm);
 
-    // Copy assignment
     DetectionModelHost& operator=(const DetectionModelHost&) = default;
+    DetectionModelHost& operator=(DetectionModelHost&&) = default;
 
 public:     // Copy scalar slice
     /// Extract a scalar detection model for a specific unit cell (i.e., ZMW).
