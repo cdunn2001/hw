@@ -114,6 +114,7 @@ public:
                 data_.get<T>(DataKey()),
                 count_,
                 std::forward<Args>(args)...);
+        CudaSynchronizeDefaultStream();
     }
 
     DeviceOnlyArray() = delete;
@@ -139,6 +140,7 @@ public:
             detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
                     data_.get<T>(DataKey()),
                     count_);
+            CudaSynchronizeDefaultStream();
         }
     }
 
