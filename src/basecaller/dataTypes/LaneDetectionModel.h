@@ -24,15 +24,16 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_MONGO_DATA_ANALOG_MODEL_H_
-#define PACBIO_MONGO_DATA_ANALOG_MODEL_H_
+#ifndef mongo_dataTypes_LaneDetectionModel_H_
+#define mongo_dataTypes_LaneDetectionModel_H_
 
 
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/CudaFunctionDecorators.h>
-
 #include <common/cuda/memory/UnifiedCudaArray.h>
+
+#include <common/MongoConstants.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -119,7 +120,14 @@ struct __align__(128) LaneModelParameters
 static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*10, "Unexpected size");
 static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*10, "Unexpected size");
 
-}}} // ::PacBio::Mongo::Data
+/// A bundle of model parameters for a normal mixture representing the
+/// baselined trace data for a lane of ZMWs.
+/// \tparam T is the elemental data type (e.g., float).
+template <typename T>
+using LaneDetectionModel = LaneModelParameters<T, laneSize>;
+
+}}}     // namespace PacBio::Mongo::Data
+
 
 namespace PacBio {
 namespace Cuda {
@@ -133,6 +141,6 @@ struct gpu_type<Mongo::Data::LaneModelParameters<PBHalf, laneWidth>>
     using type = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth/2>;
 };
 
-}}}
+}}}     // namespace PacBio::Cuda::Memory
 
-#endif // PACBIO_MONGO_DATA_ANALOG_MODEL_H_
+#endif  // mongo_dataTypes_LaneDetectionModel_H_

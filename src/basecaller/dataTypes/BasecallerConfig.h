@@ -77,24 +77,72 @@ namespace Data {
     class BasecallerDmeConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, Fixed, Monochrome);
+        SMART_ENUM(MethodName, Fixed, EmHost);
         ADD_ENUM(MethodName, Method, MethodName::Fixed);
 
         // Parameters for the SpiderFixed model, when in use
         ADD_OBJECT(SpiderFixedDmeConfig, SpiderSimModel);
 
-        // Model update is all or nothing (as opposed to mixing update)?
-        ADD_PARAMETER(bool, PureUpdate, false);
+        // Threshold for mixing fractions of analog modes in detection model fit.
+        // Associated confidence factor is defined using this threshold.
+        // Must be non-negative.
+        ADD_PARAMETER(float, AnalogMixFractionThreshold, 0.039f);
 
-        // Upper limit for iteration of the EM algorithm used for bivariate
-        // model estimation (phase 2).
-        ADD_PARAMETER(uint32_t, IterationLimit, 20);
+        // Upper bound for expectation-maximization iterations.
+        ADD_PARAMETER(unsigned short, EmIterationLimit, 20);
+
+        // A factor that is multiplied into the G-test statistic before
+        // computing the p-value. Ideally, this would be 1.0.
+        // If set <= 0, the associated confidence factor will always be 1.0.
+        // If set < 0, the G-test computation is skipped entirely.
+        ADD_PARAMETER(float, GTestStatFactor, -1.0f);
 
         // If IterateToLimit is set, EM estimation algorithm will consistently
-        // iterate until it reaches the IterationLimit, regardless of meeting
+        // iterate until it reaches EmIterationLimit, regardless of meeting
         // the convergence criterion. This is primarily useful for
         // speed benchmarking.
         ADD_PARAMETER(bool, IterateToLimit, false);
+
+        // Parameters for the fuzzy threshold for minimum analog SNR in
+        // DmeMonochrome confidence factor.
+        // Largest SNR for which the confidence factor is 0.
+        ADD_PARAMETER(float, MinAnalogSnrThresh0, 2.0f);
+        // Smallest SNR for which the confidence factor is 1.
+        ADD_PARAMETER(float, MinAnalogSnrThresh1, 4.0f);
+
+        // A non-negative coefficient for the regularization term for pulse
+        // amplitude scale estimation in DmeMonochrome. This is multiplied by
+        // the confidence of the running-average model. Setting this parameter
+        // to zero effectively disables the regularization.
+        ADD_PARAMETER(float, PulseAmpRegularization, 0.0f);
+
+        // A coefficient to scale the threshold used in DmeMonochrome to
+        // penalize the confidence if the SNR drops dramatically.
+        // The primary motive for this confidence factor is to guard against
+        // registration error in the fit when there are few data representing
+        // incorporation of the brightest analog in the data.
+        // If this parameter is set to 1.0, the SnrDrop confidence factor will
+        // be zero if the signal level for the brightest analog is estimated to
+        // be less than a threshold, which is defined to be logarithmically
+        // one-third of the way from the second-brightest analog to the
+        // brightest one, according to the running-average model, and possibly
+        // reduced by low confidence.
+        // Set this parameter to a negative value to effectively disable this
+        // confidence factor (i.e., make it always evaluate to 1.0).
+        // Cannot be larger than the pulse amplitude ratio of the brightest to
+        // the second-brightest analog.
+        ADD_PARAMETER(float, SnrDropThresh, 1.0f);
+
+        // If the confidence score for an estimate is less than
+        // SuccessConfidenceThresh, it is set to zero.
+        ADD_PARAMETER(float, SuccessConfidenceThresh, 0.10f);
+
+        // ----------------------------------------------------
+        // Stuff below here was merely copied from Sequel and
+        // is not _yet_ used in Mongo.
+
+        // Model update is all or nothing (as opposed to mixing update)?
+        ADD_PARAMETER(bool, PureUpdate, false);
 
         // Maximum weight used for updating detection model.
         ADD_PARAMETER(float, ModelUpdateWeightMax, 0.50f);
@@ -114,22 +162,6 @@ namespace Data {
 
         // Number of frames to skip between estimation attempts.
         ADD_PARAMETER(unsigned int, MinSkipFrames, 0);
-
-        // If the confidence score for an estimate is less than
-        // SuccessConfidenceThresh, it is set to zero.
-        ADD_PARAMETER(float, SuccessConfidenceThresh, 0.10f);
-
-        // Threshold for mixing fractions of analog modes in detection model fit.
-        // Associated confidence factor is defined using this threshold.
-        // Must be non-negative.
-        ADD_PARAMETER(float, AnalogMixFractionThreshold, 0.039f);
-
-        // Parameters for the fuzzy threshold for minimum analog SNR in
-        // DmeMonochrome confidence factor.
-        // Largest SNR for which the confidence factor is 0.
-        ADD_PARAMETER(float, MinAnalogSnrThresh0, 2.0f);
-        // Smallest SNR for which the confidence factor is 1.
-        ADD_PARAMETER(float, MinAnalogSnrThresh1, 4.0f);
 
         // Coefficient for the reduction of model confidence triggered by laser
         // power changes.
@@ -159,23 +191,6 @@ namespace Data {
         // Used only by 1C4A (Spider).
         ADD_PARAMETER(float, ConfidenceHalfLifePauseEnhance, 0.0f);
 
-        // A coefficient to scale the threshold used in DmeMonochrome to
-        // penalize the confidence if the SNR drops dramatically.
-        // The primary motive for this confidence factor is to guard against
-        // registration error in the fit when there are few data representing
-        // incorporation of the brightest analog in the data.
-        // If this parameter is set to 1.0, the SnrDrop confidence factor will
-        // be zero if the signal level for the brightest analog is estimated to
-        // be less than a threshold, which is defined to be logarithmically
-        // one-third of the way from the second-brightest analog to the
-        // brightest one, according to the running-average model, and possibly
-        // reduced by low confidence.
-        // Set this parameter to a negative value to effectively disable this
-        // confidence factor (i.e., make it always evaluate to 1.0).
-        // Cannot be larger than the pulse amplitude ratio of the brightest to
-        // the second-brightest analog.
-        ADD_PARAMETER(float, SnrDropThresh, 1.0f);
-
         // Parameters to control the DmeMonochrome confidence factor that
         // applies a fuzzy threshold on the log of a Pearson's chi-square (PCS)
         // statistic. Both are offsets from a scale A set by the total of the
@@ -188,19 +203,6 @@ namespace Data {
         // When enabled, suggest GofLogChiSqrThresh1 approx 1.0.
         ADD_PARAMETER(float, GofLogChiSqrThresh1, 111.0f);
         ADD_PARAMETER(float, GofLogChiSqrThresh2, 8.0f);
-
-        // A factor that is multiplied into the G-test statistic before
-        // computing the p-value. Ideally, this would be 1.0.
-        // If set <= 0, the associated confidence factor will always be 1.0.
-        // If set < 0, the G-test computation is skipped entirely.
-        // Used only be DmeMonochrome.
-        ADD_PARAMETER(float, GTestStatFactor, -1.0f);
-
-        // A non-negative coefficient for the regularization term for pulse
-        // amplitude scale estimation in DmeMonochrome. This is multiplied by
-        // the confidence of the running-average model. Setting this parameter
-        // to zero effectively disables the regularization.
-        ADD_PARAMETER(float, PulseAmpRegularization, 0.0f);
     };
 
 

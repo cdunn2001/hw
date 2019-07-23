@@ -23,14 +23,14 @@ set(CPP_LIST
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
+    DetectionModelHost.h
+    DetectionModelHost.cpp
     LaneDetectionModel.h
     LaneDetectionModel.cpp
     LabelsBatch.h
     LabelsBatch.cpp
     MovieConfig.h
     MovieConfig.cpp
-    PoolDetectionModel.h
-    PoolDetectionModel.cpp
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h

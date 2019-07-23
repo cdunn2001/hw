@@ -7,6 +7,7 @@
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
@@ -17,7 +18,6 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
@@ -241,9 +241,10 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
         return make_unique<DetectionModelEstimator>(poolId, poolSize_);
-        break;
-    case Data::BasecallerDmeConfig::MethodName::Monochrome:
-        // TODO: for now fall through to throw exception.
+
+    case Data::BasecallerDmeConfig::MethodName::EmHost:
+        return make_unique<DmeEmHost>(poolId, poolSize_);
+
     default:
         ostringstream msg;
         msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';

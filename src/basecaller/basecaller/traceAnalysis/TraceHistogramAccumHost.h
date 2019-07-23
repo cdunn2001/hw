@@ -58,7 +58,7 @@ private:    // TraceHistogramAccumulator implementation.
     const PoolTraceStatsType& TraceStatsImpl() const override;
 
 private:    // Data
-    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>>> hist_;
+    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
     mutable PoolHistType poolHist_;
     mutable PoolTraceStatsType poolTraceStats_;

@@ -30,16 +30,20 @@
 /// \file UHistogramSimd.h
 /// Defines class UHistogramSimd.h.
 
+#include <numeric>
 #include <vector>
 #include <pacbio/PBException.h>
 #include <pacbio/PBAssert.h>
 #include <common/AlignedVector.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
+#include <dataTypes/PoolHistogram.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
+
+// TODO: Make this LaneArray specific.
 
 /// A histogram with uniform bin boundaries that supports SIMD data types.
 /// Similar to class template UHistogram.
@@ -48,7 +52,7 @@ namespace Data {
 /// \note The alignment requirement of UHistogramSimd<DataT> is at least as
 /// large as that of DataT. When creating on the heap, this may require use of
 /// a special allocator.
-template <typename DataT, typename CountT = Simd::IndexConv<DataT>>
+template <typename DataT, typename CountT>
 class alignas(alignof(DataT) > 8u ? alignof(DataT) : 8u) UHistogramSimd
 {
 public:     // Types
@@ -66,6 +70,12 @@ public:     // Types
     /// Scalar type for bin indexes.
     using ScalarIndexType = Simd::ScalarType<IndexType>;
 
+    /// Scalar type for data.
+    using ScalarDataType = Simd::ScalarType<DataType>;
+
+    /// Scalar type for bin counts.
+    using ScalarCountType = Simd::ScalarType<CountType>;
+
     /// The type returned by predicates (e.g., InRange()).
     using BoolType = Simd::BoolConv<DataType>;
 
@@ -75,7 +85,11 @@ public:     // Types
 public:     // Structors
     /// Constructs a histogram with \a numBins bins that span the data range
     /// from \a lowerBound to \a upperBound.
-    UHistogramSimd(unsigned int numBins, const DataType& lowerBound, const DataType& upperBound);
+    UHistogramSimd(unsigned int numBins,
+                   const DataType& lowerBound, const DataType& upperBound);
+
+    /// Constructs a histogram by loading data from an instance of PoolHistogram.
+    explicit UHistogramSimd(const LaneHistogram<ScalarDataType, ScalarCountType>& laneHist);
 
 public:     // Const methods
     /// \returns The number of bins composing the histogram.
@@ -132,7 +146,15 @@ public:     // Const methods
     { return binCount_[i]; }
 
     /// \returns Number of data populating bins in the range [first, last).
-    CountType Count(ScalarIndexType first, ScalarIndexType last) const;
+    CountType Count(ScalarIndexType first, ScalarIndexType last) const
+    {
+        if (first >= last) return CountType(0);
+        assert (last <= NumBins());
+        const auto start = binCount_.begin() + first;
+        const auto stop = binCount_.begin() + last;
+        return std::accumulate(start, stop, CountType(0));
+    }
+
 
     /// Vectorized version of Count(ScalarIndexType, ScalarIndexType) const;
     CountType CountNonuniform(IndexType first, IndexType last) const;
@@ -223,7 +245,7 @@ private:    // Data
     CountType nHighOutliers_;
     ArrayType<DataType> binStart_;
     ArrayType<Simd::UnionConv<CountType>> binCount_;
-    int numBins_;
+    unsigned int numBins_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

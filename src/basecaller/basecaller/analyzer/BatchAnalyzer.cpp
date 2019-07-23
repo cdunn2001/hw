@@ -42,7 +42,7 @@
 
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
-#include <dataTypes/PoolDetectionModel.h>
+#include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasecallerConfig.h>
@@ -66,7 +66,6 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                               const Data::MovieConfig& movConfig)
 {
-
     BatchDimensions dims;
     dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
     dims.laneWidth = laneSize;
@@ -235,14 +234,15 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
         // When sufficient trace data have been histogrammed,
         // estimate detection model.
-        // TODO: Make this configurable.
-        const unsigned int minFramesForDme = 4000u;
-        if (traceHistAccum_->FramesAdded() >= minFramesForDme)
+        const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
+        if (traceHistAccum_->HistogramFrameCount() >= minFramesForDme)
         {
-            auto detModel = (*dme_)(traceHistAccum_->Histogram(),
-                                    traceHistAccum_->TraceStats());
-            models_ = std::move(detModel.laneModels);
+            // Initialize the detection model from baseliner statistics.
+            models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());
             isModelInitialized_ = true;
+
+            // Estimate model parameters from histogram.
+            dme_->Estimate(traceHistAccum_->Histogram(), &models_);
         }
     }
 

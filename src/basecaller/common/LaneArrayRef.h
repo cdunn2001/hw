@@ -30,6 +30,7 @@
 //  Defines class templates LaneArrayRef and ConstLaneArrayRef.
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "LaneMask.h"
@@ -158,6 +159,16 @@ public:     // Miscellaneous friend functions.
         return ret;
     }
 
+    friend LaneMask<N> isfinite(const ConstLaneArrayRef& a)
+    {
+        LaneMask<N> r (true);
+        if (std::is_floating_point<T>::value)
+        {
+            for (unsigned int i = 0; i < N; ++i) r[i] = std::isfinite(a[i]);
+        }
+        return r;
+    }
+
     friend ElementType reduceMin(const ConstLaneArrayRef& a)
     {
         auto r = std::numeric_limits<ElementType>::max();
@@ -236,7 +247,8 @@ public:     // Structors and assignment
     }
 
     /// Assign contained elements.
-    LaneArrayRef& operator=(const BaseConstRef& that)
+    template <typename U>
+    LaneArrayRef& operator=(const ConstLaneArrayRef<U, N>& that)
     {
         std::copy(that.begin(), that.end(), begin());
         return *this;
@@ -336,6 +348,13 @@ public:     // Compound assigment
         {
             BaseConstRef::MutableData()[i] /= a[i];
         }
+        return *this;
+    }
+
+    LaneArrayRef& operator|=(const BaseConstRef& a)
+    {
+        auto* p = BaseConstRef::MutableData();
+        for (unsigned int i = 0; i < N; ++i) p[i] |= a[i];
         return *this;
     }
 };

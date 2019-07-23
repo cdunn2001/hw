@@ -30,7 +30,6 @@
 #include "UHistogramSimd.h"
 
 #include <algorithm>
-#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <boost/numeric/conversion/cast.hpp>
@@ -98,19 +97,25 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
 }
 
 
-// TODO: If this remains very simple, move the definition into the class
-// definition once the dust settles.
 template <typename DataT, typename CountT>
-typename UHistogramSimd<DataT, CountT>::CountType
-UHistogramSimd<DataT, CountT>::Count(ScalarIndexType first,
-                                     ScalarIndexType last) const
+UHistogramSimd<DataT, CountT>::UHistogramSimd(const LaneHistogram<ScalarDataType, ScalarCountType>& laneHist)
+    : binSize_ (laneHist.binSize.begin(), laneHist.binSize.end())
+    , nLowOutliers_ (laneHist.outlierCountLow.begin(), laneHist.outlierCountLow.end())
+    , nHighOutliers_ (laneHist.outlierCountHigh.begin(), laneHist.outlierCountHigh.end())
+    , binStart_ (laneHist.numBins + 1u)
+    , binCount_ (laneHist.numBins + 1u)
+    , numBins_ (laneHist.numBins)
 {
-    if (first >= last) return CountType(0);
-    assert (last <= NumBins());
-    const auto start = binCount_.begin() + first;
-    const auto stop = binCount_.begin() + last;
-    return std::accumulate(start, stop, CountType(0));
+    static_assert(Simd::SimdTypeTraits<DataType>::width == laneHist.binSize.size(),
+                  "Array size mismatch.");
+    const ConstLaneArrayRef<ScalarDataType> lb (laneHist.lowBound.data());
+    for (unsigned int bin = 0; bin < numBins_ + 1u; ++bin)
+    {
+        binStart_[bin] = lb + ScalarDataType(bin) * binSize_;
+        binCount_[bin] = ConstLaneArrayRef<ScalarCountType>(laneHist.binCount[bin].data());
+    }
 }
+
 
 template <typename DataT, typename CountT>
 typename UHistogramSimd<DataT, CountT>::CountType
@@ -235,8 +240,6 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 
 
 // Explicit instantiations
-//template class UHistogramSimd<float>;
-//template class UHistogramSimd<m512f>;
-template class UHistogramSimd<LaneArray<float>>;
+template class UHistogramSimd<LaneArray<float>, LaneArray<unsigned short>>;
 
 }}}     // namespace PacBio::Mongo::Data

@@ -1,5 +1,5 @@
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2018, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -25,12 +25,16 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines some members of PoolDetectionModel.
+//  Defines some members of DmeDiagnostics.
 
-#include "PoolDetectionModel.h"
+#include "DmeDiagnostics.h"
+
+#include <common/LaneArray.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-}}}     // namespace PacBio::Mongo::Data
+template struct DmeDiagnostics<LaneArray<float>>;
+
+}}}     // namespace PacBio::Mongo::Basecaller
