@@ -73,7 +73,7 @@ public:     // Structors and assignment
     ConstLaneArrayRef() = delete;
 
     /// Create wrapper referring to \a data.
-    ConstLaneArrayRef(ConstPointer data) : data_ (data) { }
+    explicit ConstLaneArrayRef(ConstPointer data) : data_ (data) { }
 
     /// Create a wrapper referring to the same data as \a that.
     ConstLaneArrayRef(const ConstLaneArrayRef& that) = default;
@@ -220,7 +220,7 @@ public:     // Structors and assignment
     /// located at \a data.
     // Note that this is where the Pointer is stored as ConstPointer in the
     // super object. We use Super:MutableData to get non-const access.
-    LaneArrayRef(Pointer data) : BaseConstRef(data) { }
+    explicit LaneArrayRef(Pointer data) : BaseConstRef(data) { }
 
     /// Create a wrapper referring to the same data as \a that.
     /// \note Cannot create a LaneArrayRef from a ConstLaneArrayRef.

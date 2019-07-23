@@ -125,6 +125,7 @@ private:
                               + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
                 Profiler::Mode mode = Profiler::Mode::REPORT;
                 if (numChunksAnalyzed < 15) mode = Profiler::Mode::OBSERVE;
+                if (numChunksAnalyzed < 3) mode = Profiler::Mode::IGNORE;
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
@@ -321,7 +322,7 @@ private:
 
     void PreloadInputQueue()
     {
-        size_t numPreload = std::min(numChunksPreloadInputQueue_, batchGenerator_->NumTraceChunks());
+        size_t numPreload = std::min(numChunksPreloadInputQueue_, batchGenerator_->NumChunks());
 
         if (numPreload > 0)
         {
@@ -346,6 +347,7 @@ private:
 
                 auto chunk = batchGenerator_->PopulateChunk();
                 numChunksRead++;
+                while (inputDataQueue_.Size() > 0) usleep(1000);
                 inputDataQueue_.Push(std::move(chunk));
             }
             else
@@ -437,9 +439,9 @@ int main(int argc, char* argv[])
             return 0;
         }
 
-        if (options.get("numWorkerThreads"))
+        if (options.is_set_by_user("numWorkerThreads"))
         {
-            basecallerConfig.init.numWorkerThreads = options.is_set_by_user("numWorkerThreads");
+            basecallerConfig.init.numWorkerThreads = options.get("numWorkerThreads");
         }
 
         auto bc = std::unique_ptr<MongoBasecallerConsole>(new MongoBasecallerConsole());

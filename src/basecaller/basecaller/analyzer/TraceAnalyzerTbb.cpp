@@ -114,4 +114,21 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     return output;
 }
 
+TraceAnalyzerTbb::~TraceAnalyzerTbb()
+{
+    if (NumWorkerThreads() != 1)
+    {
+        Logging::LogStream msg(PacBio::Logging::LogLevel::WARN);
+        msg << "\nNote: The following detailed report really only makes sense if \n"
+            "there is only a single worker thread.  Otherwise the time reported in a \n"
+            "given filter stage also includes the time waiting for other threads \n"
+            "that are already utilizing the gpu\n";
+    }
+    BatchAnalyzer::ReportPerformance();
+    PBLOG_INFO << "Peak GPU memory usage: " << Cuda::Memory::SmartDeviceAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+    PBLOG_INFO << "Peak (Managed) Host memory usage: " << Cuda::Memory::SmartHostAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+
+    BatchAnalyzer::Finalize();
+}
+
 }}}     // namespace PacBio::Mongo::Basecaller
