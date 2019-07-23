@@ -315,11 +315,9 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
 {
     switch (hfMetricsOpt_)
     {
-        /*
     case Data::BasecallerMetricsConfig::MethodName::NoOp:
         return std::make_unique<MinimalHFMetricsFilter>(poolId);
         break;
-        */
     case Data::BasecallerMetricsConfig::MethodName::Host:
         return std::make_unique<HostHFMetricsFilter>(poolId);
         break;

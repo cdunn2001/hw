@@ -44,22 +44,25 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+// TODO: This is a somewhat in-between implementation. The host version woudld be
+// improved by moving to LaneArrays for value initialization and "vector"
+// operators. The GPU version would benefit from GPU "vector" operations.
 template <uint32_t LaneWidth>
 class TraceAnalysisMetrics
 {
 public:
     static constexpr unsigned int numAnalogs = 4;
-    using UInt = uint32_t;
+    using UnsignedInt = uint32_t;
     using Int = int16_t;
     using Flt = float;
     using SingleIntegerMetric = Cuda::Utility::CudaArray<Int, LaneWidth>;
-    using SingleUIntegerMetric = Cuda::Utility::CudaArray<UInt, LaneWidth>;
+    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>;
     using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
     using SingleBoolMetric = Cuda::Utility::CudaArray<bool, LaneWidth>;
 
 public:
     /*
-    // TODO: CudaArray initializers might not work this way...
+    // TODO: CudaArray initializers do not work this way, but LaneArrays do
     TraceAnalysisMetrics(size_t startFrame = 0, size_t numFrames = 0)
         : startFrame_(startFrame)
         , numFrames_(numFrames)
@@ -73,56 +76,52 @@ public:
     TraceAnalysisMetrics& operator=(const TraceAnalysisMetrics&) = default;
     ~TraceAnalysisMetrics() = default;
 
+    void Initialize(size_t startFrame = 0, size_t numFrames = 0)
+    {
+        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
+        {
+            startFrame_[zmw] = startFrame;
+            numFrames_[zmw] = numFrames;
+            autocorr_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
+            pulseDetectionScore_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
+        }
+    }
+
+
 public:
     // Start frame of trace metric block
-    SingleUIntegerMetric StartFrame() const
+    const SingleUnsignedIntegerMetric& StartFrame() const
+    { return startFrame_; }
+
+    SingleUnsignedIntegerMetric& StartFrame()
     { return startFrame_; }
 
     // First frame after end of trace metric block
-    SingleUIntegerMetric StopFrame() const
+    SingleUnsignedIntegerMetric StopFrame() const
     {
-        SingleUIntegerMetric tbr;
+        SingleUnsignedIntegerMetric ret;
         for (size_t i = 0; i < LaneWidth; ++i)
-            tbr = startFrame_[i] + numFrames_[i];
-        return tbr;
+            ret = startFrame_[i] + numFrames_[i];
+        return ret;
         // Can we re-enable this if "vector" operators are implemented for
         // CudaArrays?
         //return startFrame_ + numFrames_;
     }
 
-    // Set start frame of trace metric block
-    TraceAnalysisMetrics& StartFrame(uint32_t startFrame)
-    {
-        startFrame_ = startFrame;
-        return *this;
-    }
-
     // Number of frames used to compute trace metrics.
-    SingleUIntegerMetric NumFrames() const
+    // These don't need to be stored for each ZMW in a lane...
+    const SingleUnsignedIntegerMetric& NumFrames() const
     { return numFrames_; }
 
-    // Set the number of frames used to compute trace metrics.
-    TraceAnalysisMetrics& NumFrames(uint16_t numFrames)
-    {
-        numFrames_ = numFrames;
-        return *this;
-    }
+    SingleUnsignedIntegerMetric& NumFrames()
+    { return numFrames_; }
 
     /// Autocorrelation of baseline-subtracted traces.
-    SingleFloatMetric Autocorrelation() const
+    const SingleFloatMetric& Autocorrelation() const
     { return autocorr_; }
 
-    /// Mutable reference to autocorrelation of baseline-subtraced traces.
     SingleFloatMetric& Autocorrelation()
     { return autocorr_; }
-
-    /// Sets the autocorrelation.
-    /// \returns *this.
-    TraceAnalysisMetrics& Autocorrelation(const SingleFloatMetric& value)
-    {
-        autocorr_ = value;
-        return *this;
-    }
 
 /*
     // Set detection modes for baseline and analog channels
@@ -143,139 +142,126 @@ public:
 */
 
     /// The mean of the DWS baseline as computed by the pulse detection filter.
-    const SingleFloatMetric FrameBaselineDWS() const
+    SingleFloatMetric FrameBaselineDWS() const
     {
-        return frameBaselineDWS_;
-    }
-
-    /// The mean of the DWS baseline as computed by the pulse detection filter.
-    SingleFloatMetric FrameBaselineDWS()
-    {
-        return frameBaselineDWS_;
+        SingleFloatMetric ret;
+        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
+            ret[zmw] = frameBaselineM1DWS_[zmw] / frameBaselineM0DWS_[zmw];
+        return ret;
     }
 
     /// The unbiased sample variance of the DWS baseline as computed by the pulse detection filter.
-    const SingleFloatMetric FrameBaselineVarianceDWS() const
+    SingleFloatMetric FrameBaselineVarianceDWS() const
     {
-        return frameBaselineVarianceDWS_;
+        SingleFloatMetric ret;
+        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
+        {
+            ret[zmw] = frameBaselineM1DWS_[zmw]
+                       * frameBaselineM1DWS_[zmw]
+                       / frameBaselineM0DWS_[zmw];
+            ret[zmw] = (frameBaselineM2DWS_[zmw] - ret[zmw])
+                       / (frameBaselineM0DWS_[zmw] - 1.0f);
+            ret[zmw] = std::max(ret[zmw], 0.0f);
+            ret[zmw] = frameBaselineM0DWS_[zmw] > 1.0f
+                       ? ret[zmw] : std::numeric_limits<Flt>::quiet_NaN();
+        }
+        return ret;
     }
 
-    /// The unbiased sample variance of the DWS baseline as computed by the pulse detection filter.
-    SingleFloatMetric FrameBaselineVarianceDWS()
-    {
-        return frameBaselineVarianceDWS_;
-    }
+    const SingleFloatMetric& FrameBaselineM0DWS() const
+    { return frameBaselineM0DWS_; }
+
+    SingleFloatMetric& FrameBaselineM0DWS()
+    { return frameBaselineM0DWS_; }
+
+    const SingleFloatMetric& FrameBaselineM1DWS() const
+    { return frameBaselineM1DWS_; }
+
+    SingleFloatMetric& FrameBaselineM1DWS()
+    { return frameBaselineM1DWS_; }
+
+    const SingleFloatMetric& FrameBaselineM2DWS() const
+    { return frameBaselineM2DWS_; }
+
+    SingleFloatMetric& FrameBaselineM2DWS()
+    { return frameBaselineM2DWS_; }
 
     /// The sample standard deviation of the DWS baseline as computed by the pulse detection filter.
     SingleFloatMetric FrameBaselineSigmaDWS() const
     {
 
-        SingleFloatMetric tbr;
+        SingleFloatMetric ret;
         for (size_t i = 0; i < LaneWidth; ++i)
-            tbr[i] = sqrtf(FrameBaselineVarianceDWS()[i]);
-        return tbr;
-        // Can we implement some of these for CudaArrays?
+            ret[i] = sqrtf(FrameBaselineVarianceDWS()[i]);
+        return ret;
+        // use something like the following for a LaneArray version:
         //return sqrtf(FrameBaselineVarianceDWS());
     }
 
     /// The number of baseline frames used by the pulse detection filter to
     /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
-    const uint16_t NumFramesBaseline() const
-    {
-        return numFramesBaseline_;
-    }
-
-    /// The number of baseline frames used by the pulse detection filter to
-    /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
-    uint16_t NumFramesBaseline()
-    {
-        return numFramesBaseline_;
-    }
+    const SingleUnsignedIntegerMetric& NumFramesBaseline() const
+    { return frameBaselineM0DWS_; }
 
     // Indicates whether complete analysis for estimation of the current
     // detection model was tried for this ZMW. This will be identical
     // for all ZMWs for a given lane and in the current implementation
     // all ZMWs for a given block.
-    SingleBoolMetric FullEstimationAttempted() const
+    const SingleBoolMetric& FullEstimationAttempted() const
     { return fullEstimationAttempted_; }
 
-    TraceAnalysisMetrics& FullEstimationAttempted(
-            const SingleBoolMetric fullEstimationAttempted)
-    {
-        fullEstimationAttempted_ = fullEstimationAttempted;
-        return *this;
-    }
-
-    /// Indicates specifically whether estimation of dye angles (a.k.a. spectra)
-    /// was successful for this unit cell. In the current implementation this
-    /// will be identical for all ZMWs for a given lane.
-    SingleBoolMetric AngleEstimationSuceeded() const
-    { return angleEstimationSucceeded_; }
-
-    TraceAnalysisMetrics& AngleEstimationSucceeded(
-            const SingleBoolMetric angleEstimationSucceeded)
-    {
-        angleEstimationSucceeded_ = angleEstimationSucceeded;
-        return *this;
-    }
+    SingleBoolMetric& FullEstimationAttempted()
+    { return fullEstimationAttempted_; }
 
     // Indicates whether the model was updated since the previous trace block
     // for this ZMW.
-    SingleBoolMetric ModelUpdated() const
+    const SingleBoolMetric& ModelUpdated() const
     { return modelUpdated_; }
 
-    TraceAnalysisMetrics& ModelUpdated(const SingleBoolMetric modelUpdated)
-    {
-        modelUpdated_ = modelUpdated;
-        return *this;
-    }
+    SingleBoolMetric& ModelUpdated()
+    { return modelUpdated_; }
 
     /// The heuristic confidence score from the estimation algorithm for this ZMW.
     /// 0 indicates failure; 1, success with flying colors.
-    SingleFloatMetric ConfidenceScore() const
+    const SingleFloatMetric& ConfidenceScore() const
     { return confidenceScore_; }
 
-    TraceAnalysisMetrics& ConfidenceScore(const SingleFloatMetric confidenceScore)
-    {
-        confidenceScore_ = confidenceScore;
-        return *this;
-    }
+    SingleFloatMetric& ConfidenceScore()
+    { return confidenceScore_; }
 
     /// Returns pulse detection score.
-    SingleFloatMetric PulseDetectionScore() const
+    const SingleFloatMetric& PulseDetectionScore() const
     { return pulseDetectionScore_; }
 
-    // Sets pulse detection score.
-    TraceAnalysisMetrics& PulseDetectionScore(const SingleFloatMetric& value)
-    {
-        pulseDetectionScore_ = value;
-        return *this;
-    }
+    SingleFloatMetric& PulseDetectionScore()
+    { return pulseDetectionScore_; }
 
 private:
-    SingleUIntegerMetric startFrame_;
-    SingleUIntegerMetric numFrames_;
+    SingleUnsignedIntegerMetric startFrame_;
+    SingleUnsignedIntegerMetric numFrames_;
+
 public:
     SingleIntegerMetric pixelChecksum;
+
 private:
     // TODO These are going to have to come from somewhere:
     //DetectionMode<Flt,NCam> baseline_;
     //std::array<DetectionMode<Flt,NCam>,numAnalogs> analog_;
 
-    SingleFloatMetric frameBaselineVarianceDWS_;
-    SingleFloatMetric frameBaselineDWS_;
-    SingleUIntegerMetric numFramesBaseline_;
-
+    //SingleFloatMetric frameBaselineVarianceDWS_;
+    //SingleFloatMetric frameBaselineDWS_;
+    //SingleUnsignedIntegerMetric numFramesBaseline_;
+    //
+    SingleFloatMetric frameBaselineM0DWS_;
+    SingleFloatMetric frameBaselineM1DWS_;
+    SingleFloatMetric frameBaselineM2DWS_;
 
     SingleFloatMetric autocorr_;  // Autocorrelation coefficient at configured lag.
     SingleFloatMetric confidenceScore_;
     SingleFloatMetric pulseDetectionScore_;
     SingleBoolMetric fullEstimationAttempted_;
     SingleBoolMetric modelUpdated_;
-    SingleBoolMetric angleEstimationSucceeded_;
 };
-
-
 
 }}}     // namespace PacBio::Mongo::Data
 

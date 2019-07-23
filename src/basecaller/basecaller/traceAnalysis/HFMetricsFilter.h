@@ -40,15 +40,20 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BasecallingMetrics.h>
 
+#include "ActivityLabeler.h"
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
 class HFMetricsFilter
 {
-public:     // Types, static constants
-    using ElementTypeIn = Data::BasecallBatch;
-    using ElementTypeOut = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics<laneSize>>;
+public:     // Types
+    using BasecallBatchT = Data::BasecallBatch;
+    using BaselineStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
+    using ElementTypeOut = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
+    using MetricsAccumulatorT = Data::FullAccumulationMethods<laneSize>;
 
 public: // Static functions
     static void Configure(const Data::BasecallerMetricsConfig&);
@@ -57,11 +62,12 @@ public: // Static functions
     static void DestroyAllocationPools();
 
 protected: // Static members
-    static std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> metricsFactory_;
+    static std::unique_ptr<Data::BasecallingMetricsFactory<BasecallingMetricsT, laneSize>> metricsFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
     static bool realtimeActivityLabels_;
+    static uint32_t lanesPerBatch_;
     static uint32_t zmwsPerBatch_;
 
 
@@ -72,17 +78,21 @@ public: // Structors
     virtual ~HFMetricsFilter() = default;
 
 public: // Filter API
-    std::unique_ptr<ElementTypeOut> operator()(const ElementTypeIn& batch)
+    std::unique_ptr<ElementTypeOut> operator()(const BasecallBatchT& basecallBatch,
+                                               const BaselineStatsT& baselineStats)
     {
-        assert(batch.GetMeta().PoolId() == poolId_);
-        return Process(batch);
+        assert(basecallBatch.GetMeta().PoolId() == poolId_);
+        return Process(basecallBatch, baselineStats);
     }
 
-private:    // Block management
+protected:    // Block management
     virtual void FinalizeBlock() = 0;
 
+    void AddBasecalls(const BasecallBatchT& batch);
+
 private:    // Block management
-    virtual std::unique_ptr<ElementTypeOut> Process(const ElementTypeIn& batch) = 0;
+    virtual std::unique_ptr<ElementTypeOut> Process(const BasecallBatchT& basecallBatch,
+                                                    const BaselineStatsT& baselineStats) = 0;
 
 private:    // State
     uint32_t poolId_;
@@ -95,42 +105,44 @@ protected: // State
 
 class HostHFMetricsFilter : public HFMetricsFilter
 {
+public:     // Types, static constants
+    using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
+
 public:
 
     using HFMetricsFilter::HFMetricsFilter;
 
     ~HostHFMetricsFilter() override;
 
+private:    // Block management
     void FinalizeBlock() override;
 
-private:    // Block management
-    void AddBatch(const ElementTypeIn& batch);
+    void AddBaselineStats(const BaselineStatsT& baselineStats);
 
-    std::unique_ptr<ElementTypeOut> Process(const ElementTypeIn& batch) override;
+    std::unique_ptr<ElementTypeOut> Process(const BasecallBatchT& basecallBatch,
+                                            const BaselineStatsT& baselineStats) override;
 
 };
 
-/*
-class MinimalHFMetricsFilter
+class MinimalHFMetricsFilter : public HFMetricsFilter
 {
+public:  // types
+    using MetricsAccumulatorT = Data::SimpleAccumulationMethods<laneSize>;
+
 private: // static
-    static std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> metricsFactory_;
+    static std::unique_ptr<Data::BasecallingMetricsFactory<BasecallingMetricsT, laneSize>> metricsFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
     static bool realtimeActivityLabels_;
     static uint32_t zmwsPerBatch_;
 
-public:     // Types, static constants
-    using ElementTypeIn = Data::BasecallBatch;
-    using ElementTypeOut = Cuda::Memory::UnifiedCudaArray<Data::MinimalBasecallingMetrics>;
-
 public:
 
     MinimalHFMetricsFilter(uint32_t poolId);
     MinimalHFMetricsFilter(const MinimalHFMetricsFilter&) = delete;
     MinimalHFMetricsFilter(MinimalHFMetricsFilter&&) = default;
-    ~MinimalHFMetricsFilter() = default;
+    ~MinimalHFMetricsFilter() override;
 
 private:
     uint32_t poolId_;
@@ -138,12 +150,11 @@ private:
     std::unique_ptr<ElementTypeOut> metrics_;
 
 private:    // Block management
-    void AddBatch(const ElementTypeIn& batch);
+    std::unique_ptr<ElementTypeOut> Process(const BasecallBatchT& basecallBatch,
+                                            const BaselineStatsT& baselineStats) override;
 
-    std::unique_ptr<ElementTypeOut> Process(const ElementTypeIn& batch);
+    void FinalizeBlock() override;
 };
-
-*/
 
 }}} // PacBio::Mongo::Basecaller
 

@@ -256,7 +256,7 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    auto basecallingMetrics = (*hfMetrics_)(bases);
+    auto basecallingMetrics = (*hfMetrics_)(bases, ctb.Stats());
 
     if (basecallingMetrics)
     {
@@ -325,7 +325,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     // potentially modify basecalls to add a metrics block for some number of
     // preceding blocks
-    auto basecallingMetrics = (*hfMetrics_)(basecallsBatch);
+    auto basecallingMetrics = (*hfMetrics_)(basecallsBatch, ctb.Stats());
 
     if (basecallingMetrics)
     {

@@ -11,6 +11,7 @@ add_library(libMongoCommon STATIC
     AutocorrAccumulator.h
     AutocorrAccumulator.cpp
     AutocorrAccumState.h
+    BlockActivityLabels.h
     LaneArray.h
     LaneArray.cpp
     LaneArrayRef.h
@@ -19,6 +20,8 @@ add_library(libMongoCommon STATIC
     NumericUtil.h
     StatAccumulator.h
     StatAccumState.h
+    TrainedCartParams.h
+    TrainedCartParams.cpp
 )
 
 find_package(Boost)

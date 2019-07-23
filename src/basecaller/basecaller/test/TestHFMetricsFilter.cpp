@@ -38,6 +38,7 @@
 
 #include <common/DataGenerators/BatchGenerator.h>
 #include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/BaselineStats.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
 #include <common/MongoConstants.h>
@@ -101,7 +102,6 @@ Data::BasecallBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
         case 4:
             return SmrtData::NucleotideLabel::N;
         default:
-            assert(label == Data::Pulse::NucleotideLabel::NONE);
             return SmrtData::NucleotideLabel::NONE;
         }
     };
@@ -142,7 +142,29 @@ Data::BasecallBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
     }
     return bases;
 }
+
+Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> GenerateBaselineStats(BaseSimConfig config)
+{
+    unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
+    Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> ret(
+            poolSize,
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+            true);
+    for (size_t lane = 0; lane < poolSize; ++lane)
+    {
+        auto baselineStats = ret.GetHostView()[lane];
+        for (size_t zmw = 0; zmw < laneSize; ++zmw)
+        {
+            baselineStats.rawBaselineSum_[zmw] = 100;
+            baselineStats.m0_[zmw] = 98;
+            baselineStats.m1_[zmw] = 1;
+            baselineStats.m2_[zmw] = 100;
+        }
+    }
+    return ret;
 }
+
+} // anonymous namespace
 
 /*
 TEST(TestHFMetricsFilter, End2End)
@@ -226,9 +248,12 @@ TEST(TestHFMetricsFilter, End2End)
 
 TEST(TestHFMetricsFilter, Populated)
 {
+    {
+        Data::BasecallerAlgorithmConfig basecallerConfig{};
+        HostHFMetricsFilter::Configure(basecallerConfig.Metrics);
+    }
+
     int poolId = 0;
-    Data::BasecallerAlgorithmConfig basecallerConfig;
-    HostHFMetricsFilter::Configure(basecallerConfig.Metrics);
     HostHFMetricsFilter hfMetrics(poolId);
 
     // TODO: test that the last block is finalized regardless of condition?
@@ -239,33 +264,92 @@ TEST(TestHFMetricsFilter, Populated)
 
     BaseSimConfig config;
     config.ipd = 0;
+    const auto& baselineStats = GenerateBaselineStats(config);
 
     for (size_t i = 0; i < numBatchesPerHFMB; ++i)
     {
         auto bases = GenerateBases(config, i);
-        auto basecallingMetrics = hfMetrics(bases);
+        auto basecallingMetrics = hfMetrics(bases, baselineStats);
         if (basecallingMetrics)
         {
             ASSERT_EQ(i, numBatchesPerHFMB - 1); // = 31, HFMB is complete
             for (uint32_t l = 0; l < bases.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
-                /*
-                std::cout << "lane " << l << ":" << std::endl;
-                for (const auto& analog : mb.NumPulsesByAnalog())
+                for (uint32_t z = 0; z < laneSize; ++z)
                 {
-                    for (const auto& zmw : analog)
-                        std::cout << zmw << ", ";
-                    std::cout << std::endl;
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * config.numBases
+                                * config.baseWidth,
+                              mb.NumPulseFrames()[z]);
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * config.numBases
+                                * config.baseWidth,
+                              mb.NumBaseFrames()[z]);
+                    // The pulses don't run to the end of each block, so all
+                    // but one pulse is abutted
+                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 1),
+                              mb.NumHalfSandwiches()[z]);
+                    // If numBases isn't evenly divisible by numAnalogs, the
+                    // first analogs will be padded by the remainder
+                    // e.g. 10 pulses per chunk means 2 for each analog, then
+                    // three for the first two analogs:
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * (config.numBases/numAnalogs
+                                   + (config.numBases % numAnalogs > 0 ? 1 : 0)),
+                              mb.NumPulsesByAnalog()[0][z]);
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * (config.numBases/numAnalogs
+                                   + (config.numBases % numAnalogs > 1 ? 1 : 0)),
+                              mb.NumPulsesByAnalog()[1][z]);
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * (config.numBases/numAnalogs
+                                   + (config.numBases % numAnalogs > 2 ? 1 : 0)),
+                              mb.NumPulsesByAnalog()[2][z]);
+                    EXPECT_EQ(numBatchesPerHFMB
+                                * (config.numBases/numAnalogs
+                                   + (config.numBases % numAnalogs > 3 ? 1 : 0)),
+                              mb.NumPulsesByAnalog()[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                              mb.NumPulses()[z]);
+                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                              mb.NumBases()[z]);
                 }
-                std::cout << "lane " << l << ":" << std::endl;
-                for (const auto& analog : mb.NumBasesByAnalog())
-                {
-                    for (const auto& zmw : analog)
-                        std::cout << zmw << ", ";
-                    std::cout << std::endl;
-                }
-                */
+            }
+        }
+    }
+}
+
+TEST(TestHFMetricsFilter, Minimal)
+{
+    {
+        Data::BasecallerAlgorithmConfig basecallerConfig{};
+        HostHFMetricsFilter::Configure(basecallerConfig.Metrics);
+    }
+
+    int poolId = 0;
+    HostHFMetricsFilter hfMetrics(poolId);
+
+    // TODO: test that the last block is finalized regardless of condition?
+
+    size_t numFramesPerBatch = 128;
+    size_t numBatchesPerHFMB = Data::GetPrimaryConfig().framesPerHFMetricBlock
+                             / numFramesPerBatch; // = 32, for 4096 frame HFMBs
+
+    BaseSimConfig config;
+    config.ipd = 0;
+    const auto& baselineStats = GenerateBaselineStats(config);
+
+    for (size_t i = 0; i < numBatchesPerHFMB; ++i)
+    {
+        auto bases = GenerateBases(config, i);
+        auto basecallingMetrics = hfMetrics(bases, baselineStats);
+        if (basecallingMetrics)
+        {
+            ASSERT_EQ(i, numBatchesPerHFMB - 1); // = 31, HFMB is complete
+            for (uint32_t l = 0; l < bases.Dims().lanesPerBatch; l++)
+            {
+                const auto& mb = basecallingMetrics->GetHostView()[l];
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     EXPECT_EQ(numBatchesPerHFMB

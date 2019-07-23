@@ -43,8 +43,9 @@ uint32_t HFMetricsFilter::sandwichTolerance_ = 0;
 uint32_t HFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double HFMetricsFilter::frameRate_ = 0;
 bool HFMetricsFilter::realtimeActivityLabels_ = 0;
+uint32_t HFMetricsFilter::lanesPerBatch_;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
-std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
+std::unique_ptr<Data::BasecallingMetricsFactory<HFMetricsFilter::BasecallingMetricsT, laneSize>> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
 {
@@ -62,9 +63,11 @@ void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
     dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
     dims.laneWidth = laneSize;
     dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
+    lanesPerBatch_ = dims.lanesPerBatch;
     zmwsPerBatch_ = dims.ZmwsPerBatch();
 
     InitAllocationPools(true);
+    Data::BasecallingMetrics<laneSize>::Configure(std::make_unique<MetricsAccumulatorT>());
 }
 
 void HFMetricsFilter::Finalize()
@@ -82,7 +85,7 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
     dims.laneWidth = laneSize;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<HFMetricsFilter::BasecallingMetricsT, laneSize>>(
             dims, syncDir, true);
 }
 
@@ -98,40 +101,62 @@ HFMetricsFilter::HFMetricsFilter(uint32_t poolId)
 
 void HostHFMetricsFilter::FinalizeBlock()
 {
-    // TODO Add HQR blocklabel etc.
     PBLOG_INFO << "Finalizing HFMetricsBlock";
-    for (size_t l = 0; l < laneSize; ++l)
+    for (size_t l = 0; l < lanesPerBatch_; ++l)
+    {
         metrics_->GetHostView()[l].FinalizeMetrics();
-    PBLOG_INFO << "(TODO) Labeling Sequencing Activity";
+    }
 
+    if (realtimeActivityLabels_)
+    {
+        PBLOG_INFO << "Labeling Sequencing Activity";
+        // Adds activity label directly to basecalling metrics object:
+        for (size_t l = 0; l < lanesPerBatch_; ++l)
+        {
+            ActivityLabeler::LabelBlock(metrics_->GetHostView()[l], frameRate_, laneSize);
+        }
+    }
 }
 
 HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 
-void HostHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
+void HFMetricsFilter::AddBasecalls(const Data::BasecallBatch& basecallBatch)
 {
-    const auto& basecalls = batch.Basecalls();
-    for (size_t l = 0; l < batch.Dims().lanesPerBatch; l++)
+    const auto& basecalls = basecallBatch.Basecalls();
+    for (size_t l = 0; l < lanesPerBatch_; l++)
     {
         const auto& laneCalls = basecalls.LaneView(l);
-        metrics_->GetHostView()[l].Count(laneCalls);
+        metrics_->GetHostView()[l].Count(laneCalls, basecallBatch.Dims().framesPerBatch);
     }
 }
 
-std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Process(const ElementTypeIn& batch)
+void HostHFMetricsFilter::AddBaselineStats(const BaselineStatsT& baselineStats)
+{
+    for (size_t l = 0; l < lanesPerBatch_; l++)
+    {
+        const auto& laneStats = baselineStats.GetHostView()[l];
+        metrics_->GetHostView()[l].AddBaselineStats(laneStats);
+    }
+}
+
+std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Process(
+        const BasecallBatchT& basecallBatch,
+        const BaselineStatsT& baselineStats)
 {
     if (framesSeen_ == 0)
     {
         metrics_ = std::move(metricsFactory_->NewBatch());
-        for (size_t l = 0; l < batch.Dims().lanesPerBatch; l++)
+        for (size_t l = 0; l < lanesPerBatch_; l++)
         {
             metrics_->GetHostView()[l].Initialize();
         }
     }
 
-    AddBatch(batch);
-    framesSeen_ += batch.Dims().framesPerBatch;
-    // TODO: Populate TraceMetrics (ProcessIntervalMetrics AND settracemetrics)
+    AddBasecalls(basecallBatch);
+    AddBaselineStats(baselineStats);
+    // TODO: AddPulseDetectionScore/Confidence
+    // TODO: AddAutocorrelation
+    framesSeen_ += basecallBatch.Dims().framesPerBatch;
 
     if (framesSeen_ >= framesPerHFMetricBlock_)
     {
@@ -144,49 +169,38 @@ std::unique_ptr<HostHFMetricsFilter::ElementTypeOut> HostHFMetricsFilter::Proces
 
 
 
-/*
+// TODO: Finish "NoOp" version of metrics
 uint32_t MinimalHFMetricsFilter::sandwichTolerance_ = 0;
 uint32_t MinimalHFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double MinimalHFMetricsFilter::frameRate_ = 0;
 bool MinimalHFMetricsFilter::realtimeActivityLabels_ = 0;
 uint32_t MinimalHFMetricsFilter::zmwsPerBatch_;
-std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
+std::unique_ptr<Data::BasecallingMetricsFactory<MinimalHFMetricsFilter::BasecallingMetricsT, laneSize>> MinimalHFMetricsFilter::metricsFactory_;
 
 MinimalHFMetricsFilter::MinimalHFMetricsFilter(uint32_t poolId)
-    : poolId_(poolId)
-    , framesSeen_(0)
+    : HFMetricsFilter(poolId)
+    , poolId_(poolId)
+
 {}
 
-void MinimalHFMetricsFilter::AddBatch(const ElementTypeIn& batch)
+std::unique_ptr<MinimalHFMetricsFilter::ElementTypeOut> MinimalHFMetricsFilter::Process(
+        const BasecallBatchT& basecallBatch,
+        const BaselineStatsT& baselineStats)
 {
-    auto& basecalls = batch.Basecalls();
-    for (uint32_t l = 0; l < batch.Dims().lanesPerBatch; l++)
-    {
-        auto laneCalls = basecalls.LaneView(l);
-        for (uint32_t z = 0; z < laneSize; ++z)
-        {
-            for (uint32_t b = 0; b < laneCalls.size(z); ++b)
-            {
-                metrics_->GetHostView()[l * laneSize + z].Count(laneCalls(z, b));
-            }
-        }
-    }
-}
-
-std::unique_ptr<MinimalHFMetricsFilter::ElementTypeOut> MinimalHFMetricsFilter::Process(const ElementTypeIn& batch)
-{
+    (void)baselineStats; // ignore
     metrics_ = std::move(metricsFactory_->NewBatch());
-    AddBatch(batch);
+    AddBasecalls(basecallBatch);
     FinalizeBlock();
     return std::move(metrics_);
 }
 
 void MinimalHFMetricsFilter::FinalizeBlock()
 {
-    PBLOG_INFO << "Finalizing HFMetricsBlock";
+    PBLOG_INFO << "Finalizing MinimalHFMetricsBlock";
 }
 
-*/
+MinimalHFMetricsFilter::~MinimalHFMetricsFilter() = default;
+
 
 
 }}} // PacBio::Mongo::Basecaller
