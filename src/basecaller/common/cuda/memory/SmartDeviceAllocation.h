@@ -26,14 +26,14 @@
 #ifndef PACBIO_CUDA_MEMORY_SMART_DEVICE_ALLOCATION_H
 #define PACBIO_CUDA_MEMORY_SMART_DEVICE_ALLOCATION_H
 
-#include <common/cuda/PBCudaRuntime.h>
-
-#include "DataManagerKey.h"
-
 #include <atomic>
 #include <cassert>
 #include <memory>
 #include <mutex>
+
+#include <common/cuda/PBCudaRuntime.h>
+
+#include "DataManagerKey.h"
 
 namespace PacBio {
 namespace Cuda {
@@ -55,9 +55,12 @@ public:
         : data_(size ? CudaRawMalloc(size) : nullptr)
         , size_(size)
     {
-        std::lock_guard<std::mutex> lm(m_);
-        bytesAllocated_ += size;
-        peakBytesAllocated_ = std::max(peakBytesAllocated_.load(), bytesAllocated_.load());
+        if (size_ > 0)
+        {
+            std::lock_guard<std::mutex> lm(m_);
+            bytesAllocated_ += size;
+            peakBytesAllocated_ = std::max(peakBytesAllocated_.load(), bytesAllocated_.load());
+        }
     }
 
     SmartDeviceAllocation(const SmartDeviceAllocation&) = delete;
