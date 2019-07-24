@@ -176,8 +176,8 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
         }
 
         Data::CameraTraceBatch cameraBatch = baseliner(std::move(batch));
-        const auto& cameraBlock = cameraBatch.GetBlockView(0);
-        const auto& baselineStats = cameraBatch.Stats(0);
+        //const auto& cameraBlock = cameraBatch.GetBlockView(0);
+        const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
 
         // Wait for baseliner to warm up before testing.
         if (blockNum > 50)
@@ -259,8 +259,8 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
         }
 
         Data::CameraTraceBatch cameraBatch = baseliner(std::move(batch));
-        const auto& cameraBlock = cameraBatch.GetBlockView(0);
-        const auto& baselineStats = cameraBatch.Stats(0);
+        //const auto& cameraBlock = cameraBatch.GetBlockView(0);
+        const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
 
         if (blockNum > 50)
         {

@@ -58,7 +58,7 @@ void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace, const Lan
 
     // Add frame to baseline statistics if so flagged.
     baselineStats_.AddSample(bs, isBaseline);
-    rawBaselineSum_ += Blend(isBaseline, rawTrace, {0});
+    rawBaselineSum_ += Blend(isBaseline, rawTrace, LaneArray{0});
 }
 
 template <typename T>

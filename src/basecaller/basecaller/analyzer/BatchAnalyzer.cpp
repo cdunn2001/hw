@@ -33,12 +33,15 @@
 
 #include <pacbio/PBAssert.h>
 #include <pacbio/logging/Logger.h>
+#include <pacbio/dev/profile/ScopedProfilerChain.h>
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+
+#include <common/cuda/PBCudaRuntime.h>
 
 #include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
@@ -55,8 +58,25 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+SMART_ENUM(
+    ProfileStages,
+    Upload,
+    Download,
+    Baseline,
+    FrameLabeling,
+    PulseAccumulating,
+    SequelConv
+);
+
+using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
+
 std::unique_ptr<Data::BasecallBatchFactory> BatchAnalyzer::batchFactory_;
 uint16_t BatchAnalyzer::maxCallsPerZmwChunk_;
+
+void BatchAnalyzer::ReportPerformance()
+{
+    Profiler::FinalReport();
+}
 
 BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
@@ -200,10 +220,34 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
+    auto mode = Profiler::Mode::REPORT;
+    if (tbatch.Metadata().FirstFrame() < 1281) mode = Profiler::Mode::OBSERVE;
+    if (tbatch.Metadata().FirstFrame() < 257) mode = Profiler::Mode::IGNORE;
+    Profiler profiler(mode, 3.0, 100.0);
+
+    auto upload = profiler.CreateScopedProfiler(ProfileStages::Upload);
+    (void)upload;
+    tbatch.CopyToDevice();
+    Cuda::CudaSynchronizeDefaultStream();
+
+    auto baselineProfile = profiler.CreateScopedProfiler(ProfileStages::Baseline);
+    (void)baselineProfile;
     auto ctb = (*baseliner_)(std::move(tbatch));
+
+    auto frameProfile = profiler.CreateScopedProfiler(ProfileStages::FrameLabeling);
+    (void) frameProfile;
     auto labels = (*frameLabeler_)(std::move(ctb), models_);
+
+    auto pulseProfile = profiler.CreateScopedProfiler(ProfileStages::PulseAccumulating);
+    (void)pulseProfile;
     auto pulses = (*pulseAccumulator_)(std::move(labels));
 
+    auto download = profiler.CreateScopedProfiler(ProfileStages::Download);
+    (void)download;
+    pulses.Pulses().LaneView(0);
+
+    auto convProfile = profiler.CreateScopedProfiler(ProfileStages::SequelConv);
+    (void) convProfile;
     auto bases = batchFactory_->NewBatch(tbatch.Metadata());
     ConvertPulsesToBases(pulses, bases);
 

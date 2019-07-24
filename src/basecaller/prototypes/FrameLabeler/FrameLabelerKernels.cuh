@@ -48,7 +48,12 @@ struct __align__(128) LatentViterbi
  public:
     __device__ LatentViterbi()
     {
-        boundary_[threadIdx.x] = PBShort2(0);
+        auto SetAll = [](auto& arr, const auto& val) {
+            for (int i = 0; i < laneWidth; ++i)
+                arr[i] = val;
+        };
+
+        SetAll(boundary_, PBShort2(0));
 
         // I'm a little uncertain how to initialize this model.  I'm tryin to
         // make it work with latent data that we are guaranteed to be all zeroes,
@@ -59,13 +64,13 @@ struct __align__(128) LatentViterbi
         //
         // In either case, any issues here are flushed out after only a few frames
         // (16) and we hit steady state, so I'm not hugely concerned.
-        oldModel.BaselineMode().means[threadIdx.x] = 0;
-        oldModel.BaselineMode().vars[threadIdx.x] = 50;
+        SetAll(oldModel.BaselineMode().means, 0);
+        SetAll(oldModel.BaselineMode().vars, 50);
 
-        for (int i = 0; i < numAnalogs; ++i)
+        for (int a = 0; a < numAnalogs; ++a)
         {
-            oldModel.AnalogMode(i).means[threadIdx.x] = 1000;
-            oldModel.AnalogMode(i).vars[threadIdx.x] = 10;
+            SetAll(oldModel.AnalogMode(a).means, 1000);
+            SetAll(oldModel.AnalogMode(a).vars, 10);
         }
     }
 
