@@ -110,39 +110,6 @@ public:     // Export
         return ret;
     }
 
-public:     // Comparison operators
-    // TODO: Can we eliminate these comparison operations? They seem redundant
-    // with those defined for ConstLaneArrayRef.
-    friend LaneMask<N> operator<(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] < rhs[i];
-        }
-        return ret;
-    }
-
-    friend LaneMask<N> operator<=(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        return !(lhs > rhs);
-    }
-
-    friend LaneMask<N> operator>(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] > rhs[i];
-        }
-        return ret;
-    }
-
-    friend LaneMask<N> operator>=(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        return !(lhs < rhs);
-    }
-
 public:     // Named unary operators
     /// Square root
     friend LaneArray sqrt(const BaseConstRef& x)
