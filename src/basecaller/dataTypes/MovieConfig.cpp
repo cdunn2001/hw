@@ -32,9 +32,4 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-MovieConfig::MovieConfig()
-{
-
-}
-
 }}}     // namespace PacBio::Mongo::Data

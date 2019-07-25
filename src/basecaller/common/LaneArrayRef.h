@@ -109,7 +109,37 @@ public:     // Element-wise comparison operators
         return ret;
     }
 
+    friend LaneMask<N> operator==(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] == rhs;
+        }
+        return ret;
+    }
+
+    friend LaneMask<N> operator==(const ElementType& lhs, const ConstLaneArrayRef& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs == rhs[i];
+        }
+        return ret;
+    }
+
     friend LaneMask<N> operator!=(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    friend LaneMask<N> operator!=(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    friend LaneMask<N> operator!=(const ElementType& lhs, const ConstLaneArrayRef& rhs)
     {
         return !(lhs == rhs);
     }

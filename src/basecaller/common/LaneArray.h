@@ -111,16 +111,8 @@ public:     // Export
     }
 
 public:     // Comparison operators
-    friend LaneMask<N> operator==(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] == rhs[i];
-        }
-        return ret;
-    }
-
+    // TODO: Can we eliminate these comparison operations? They seem redundant
+    // with those defined for ConstLaneArrayRef.
     friend LaneMask<N> operator<(const LaneArray& lhs, const LaneArray& rhs)
     {
         LaneMask<N> ret;

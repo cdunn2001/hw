@@ -113,7 +113,7 @@ template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
 {
-    const auto m = (Count() == 0);
+    const auto m = (Count() == T(0));
     // TODO: Handle the nonuniform SIMD case.
     using PacBio::Simd::all;
     assert(all(m) || lag_ == that.lag_);
