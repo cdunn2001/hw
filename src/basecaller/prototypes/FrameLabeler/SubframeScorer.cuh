@@ -31,25 +31,33 @@
 
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/utility/CudaArray.h>
+#include <common/MongoConstants.h>
 
 #include <dataTypes/LaneDetectionModel.h>
+
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
 #include "AnalogMeta.h"
 
 namespace PacBio {
+
+// I normally wouldn't do `using namespace` in a header, but these
+// prototypes pre-exist some of the new Mongo infrastructure that has
+// come up, and there has not yet been time to clean up and "productionize"
+// them.  Eventually everything real should be moved out of the prototypes
+// anyway
+using namespace PacBio::Mongo;
+
 namespace Cuda {
 
 static constexpr unsigned int ViterbiStitchLookback = 16u;
 
 namespace Subframe {
 
-
-static constexpr int numAnalogs = 4;
-static constexpr int numStates = 13;
-
-__device__ inline constexpr int FullState(int i) { return i+1; }
-__device__ inline constexpr int UpState(int i) { return i+1 + numAnalogs; }
-__device__ inline constexpr int DownState(int i) { return i+1 + 2*numAnalogs; }
+//TODO refactor viterbi to be less strongly coupled with a particular subframe
+//     implementation
+using Mongo::Basecaller::SubframeLabelManager;
+static constexpr int numStates = SubframeLabelManager::numStates;
 
 struct __align__(128) TransitionMatrix
 {
@@ -186,7 +194,7 @@ struct __align__(128) BlockStateSubframeScorer
         case 4:
             {
                 const auto i = state-1;
-                const auto j = FullState(i);
+                const auto j = SubframeLabelManager::FullState(i);
                 const auto mu = ffmean_[i][threadIdx.x];
                 const auto y = data - mu;
                 return nhalfVal * y * pInvVar_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
@@ -195,7 +203,7 @@ struct __align__(128) BlockStateSubframeScorer
             {
                 using std::min;
                 const auto i = (state-1)%4;
-                const auto j = FullState(i);
+                const auto j = SubframeLabelManager::FullState(i);
 
                 auto score = SubframeScore(i, data);
 

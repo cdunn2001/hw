@@ -27,6 +27,7 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchVectors.cuh>
@@ -57,8 +58,7 @@ inline __device__ uint2 Blend(PBBool2 cond, uint l, uint2 r) {
     return ret;
 };
 
-
-template <size_t blockThreads>
+template <typename LabelManager, size_t blockThreads>
 class Segment
 {
 public:
@@ -73,44 +73,24 @@ public:
             signalMax_[i] = PBShort2(0);
             signalTotal_[i] = PBShort2(0);
             signalM2_[i] = PBHalf2(0.0f);
-            label_[i] = PBShort2(0);
+            label_[i] = PBShort2(LabelManager::BaselineLabel());
         }
-    }
-
-    static __device__ PBBool2 IsPulseUpState(PBShort2 label)
-    {
-        return (numAnalogs < label) && (label <= 2*numAnalogs);
-    }
-
-    static __device__ PBBool2 IsPulseDownState(PBShort2 label)
-    {
-        return (2*numAnalogs < label);
     }
 
     __device__ PBBool2 IsNewSegment(PBShort2 label) const
     {
-        return IsPulseUpState(label) || ((label == 0) && (label_[threadIdx.x] != 0));
+        return LabelManager::IsNewSegment(label_[threadIdx.x], label);
     }
 
     __device__ PBBool2 IsPulse() const
     {
-        return label_[threadIdx.x] != 0;
-    }
-
-
-    __device__ PBShort2 FullFrameLabel() const
-    {
-        PBShort2 ret = label_[threadIdx.x];
-        ret = Blend(IsPulseDownState(ret), ret - 2*numAnalogs, ret);
-        ret = Blend(IsPulseUpState(ret), ret - numAnalogs, ret);
-        return ret;
+        return LabelManager::BaselineLabel() != label_[threadIdx.x];
     }
 
     template <int id>
     __device__ Data::Pulse ToPulse(uint32_t frameIndex)
     {
         static_assert(id < 2 && id >= 0, "Invalid index");
-        using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
         // This is potentially a short term hack.  The types like PBShort2 have
         // a Get function to handle getting the 0th or 1st element.  It would be
@@ -128,38 +108,19 @@ public:
 
         const auto maxSignal = Data::Pulse::SignalMax();
 
-
-        // TODO: This is a hard coded analog mapping that really needs to be handed in somehow
-        auto LabelToAnalog = [](short label) {
-            switch (label)
-            {
-            case 0:
-                return NucleotideLabel::NONE;
-            case 1:
-                return NucleotideLabel::A;
-            case 2:
-                return NucleotideLabel::C;
-            case 3:
-                return NucleotideLabel::G;
-            default :
-            assert(label == 4);
-                return NucleotideLabel::T;
-            }
-        };
-
         ret.Start(start)
             .Width(width)
             .MeanSignal(min(maxSignal, max(0.0f, raw_mean.Get<id>())))
             .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(0.0f, raw_mid.Get<id>())))
             .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
-            .Label(LabelToAnalog(FullFrameLabel().template Get<id>()));
+            .Label(LabelManager::Nucleotide(label_[threadIdx.x].template Get<id>()));
 
         return ret;
     }
 
     __device__ void ResetSegment(PBBool2 boundaryMask, uint32_t frameIndex,
-                      PBShort2 label, PBShort2 signal)
+                                 PBShort2 label, PBShort2 signal)
     {
         startFrame_[threadIdx.x] = Blend(boundaryMask, frameIndex, startFrame_[threadIdx.x]);
         signalFrstFrame_[threadIdx.x] = Blend(boundaryMask, signal, signalFrstFrame_[threadIdx.x]);
@@ -195,13 +156,13 @@ private:
     CudaArray<PBShort2, blockThreads> label_;             // // Internal label ID corresponding to detection modes
 };
 
-template <size_t blockThreads>
+template <typename Segment>
 __launch_bounds__(32, 32)
 __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               GpuBatchData<const PBShort2> signal,
                               GpuBatchData<const PBShort2> latSignal,
                               uint32_t firstFrameIdx,
-                              DeviceView<Segment<blockThreads>> workingSegments,
+                              DeviceView<Segment> workingSegments,
                               GpuBatchVectors<Data::Pulse> pulsesOut)
 {
     assert(labels.NumFrames() == signal.NumFrames() + latSignal.NumFrames());
@@ -252,7 +213,8 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
 
 }
 
-class DevicePulseAccumulator::AccumImpl
+template <typename LabelManager>
+class DevicePulseAccumulator<LabelManager>::AccumImpl
 {
     static constexpr size_t blockThreads = laneSize / 2;
 public:
@@ -266,7 +228,7 @@ public:
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
-        ProcessLabels<threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
+        ProcessLabels<<<labels.LanesPerBatch(),threadsPerBlock>>>(
                 labels,
                 labels.TraceData(),
                 labels.LatentTrace(),
@@ -279,33 +241,41 @@ public:
     }
 
 private:
-    DeviceOnlyArray<Segment<blockThreads>> workingSegments_;
+    DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
 };
 
-void DevicePulseAccumulator::Configure(size_t maxCallsPerZmw)
+template <typename LabelManager>
+void DevicePulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)
 {
     constexpr bool hostExecution = false;
     PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
 }
 
-void DevicePulseAccumulator::Finalize()
+template <typename LabelManager>
+void DevicePulseAccumulator<LabelManager>::Finalize()
 {
     PulseAccumulator::DestroyAllocationPools();
 }
 
-DevicePulseAccumulator::DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool)
+template <typename LabelManager>
+DevicePulseAccumulator<LabelManager>::DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool)
     : PulseAccumulator(poolId)
     , impl_(std::make_unique<AccumImpl>(lanesPerPool))
 {
 
 }
 
-DevicePulseAccumulator::~DevicePulseAccumulator() = default;
+template <typename LabelManager>
+DevicePulseAccumulator<LabelManager>::~DevicePulseAccumulator() = default;
 
-Data::PulseBatch DevicePulseAccumulator::Process(Data::LabelsBatch labels)
+template <typename LabelManager>
+Data::PulseBatch DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     return impl_->Process(*batchFactory_, std::move(labels));
 }
+
+// explicit instantiations
+template class DevicePulseAccumulator<SubframeLabelManager>;
 
 }}}     // namespace PacBio::Mongo::Basecaller
 

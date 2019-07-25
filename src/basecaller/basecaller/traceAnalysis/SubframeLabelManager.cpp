@@ -26,36 +26,4 @@
 //  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 //  POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MONGO_BASECALLER_DEVICE_PULSE_ACCUMULATOR_H
-#define MONGO_BASECALLER_DEVICE_PULSE_ACCUMULATOR_H
-
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
-
-namespace PacBio {
-namespace Mongo {
-namespace Basecaller {
-
-template <class LabelManager>
-class DevicePulseAccumulator : public PulseAccumulator
-{
-private:     // Types
-    struct AccumImpl;
-
-public:     // Static functions
-    static void Configure(size_t maxCallsPerZmw);
-    static void Finalize();
-
-public:
-    DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool);
-
-    ~DevicePulseAccumulator() override;
-
-private:    // Customizable implementation
-    Data::PulseBatch Process(Data::LabelsBatch labels) override;
-
-    std::unique_ptr<AccumImpl> impl_;
-};
-
-}}}     // namespace PacBio::Mongo::Basecaller
-
-#endif //MONGO_BASECALLER_DEVICE_PULSE_ACCUMULATOR_H
+#include "SubframeLabelManager.h"

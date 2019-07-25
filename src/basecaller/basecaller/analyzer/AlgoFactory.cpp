@@ -17,6 +17,7 @@
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 
@@ -90,10 +91,10 @@ AlgoFactory::~AlgoFactory()
         HostSimulatedPulseAccumulator::Finalize();
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator::Finalize();
+        HostPulseAccumulator<SubframeLabelManager>::Finalize();
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        DevicePulseAccumulator::Finalize();
+        DevicePulseAccumulator<SubframeLabelManager>::Finalize();
         break;
     default:
         ostringstream msg;
@@ -156,10 +157,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostPulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        DevicePulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        DevicePulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -272,10 +273,10 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
         return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        return std::make_unique<HostPulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        return std::make_unique<DevicePulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
         break;
     default:
         ostringstream msg;

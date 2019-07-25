@@ -56,6 +56,14 @@ inline __device__ PBBool2 operator &&(PBBool2 first, PBBool2 second)
     return PBBool2(low, high);
 }
 
+// TODO we need to come to a concensus about things like && vs &.  These overloads are to unify
+// with host side code that does it this way
+inline __device__ PBBool2 operator |(PBBool2 first, PBBool2 second)
+{ return first || second; }
+inline __device__ PBBool2 operator &(PBBool2 first, PBBool2 second)
+{ return first && second; }
+
+
 inline __device__ PBBool2 operator!(PBBool2 b)
 {
     half zero = __float2half(0.0f);

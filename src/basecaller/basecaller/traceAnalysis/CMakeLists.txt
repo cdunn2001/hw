@@ -35,6 +35,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     MaxLikelihoodDiagnostics.h
     PulseAccumulator.h
     PulseAccumulator.cpp
+    SubframeLabelManager.h
+    SubframeLabelManager.cpp
     TraceAnalysisForward.h
     TraceFilters.h
     TraceFilters.cpp
