@@ -6,15 +6,27 @@ namespace Mongo {
 namespace Basecaller {
 
 template <typename LabelManager>
+std::unique_ptr<LabelManager> HostPulseAccumulator<LabelManager>::manager_;
+
+template <typename LabelManager>
 void HostPulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)
 {
     const auto hostExecution = true;
     PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
+
+    Cuda::Utility::CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
+    // TODO once ready, this needs to be plumbed in from the movie configuration.
+    analogMap[0] = Data::Pulse::NucleotideLabel::A;
+    analogMap[1] = Data::Pulse::NucleotideLabel::C;
+    analogMap[2] = Data::Pulse::NucleotideLabel::G;
+    analogMap[3] = Data::Pulse::NucleotideLabel::T;
+    manager_ = std::make_unique<LabelManager>(analogMap);
 }
 
 template <typename LabelManager>
 void HostPulseAccumulator<LabelManager>::Finalize()
 {
+    manager_.release();
     PulseAccumulator::Finalize();
 }
 
@@ -74,7 +86,7 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
         {
             if (emitPulse[i])
             {
-                pulses.push_back(i, currSegment.ToPulse(absFrameIndex, i));
+                pulses.push_back(i, currSegment.ToPulse(absFrameIndex, i, *manager_));
             }
         }
     }

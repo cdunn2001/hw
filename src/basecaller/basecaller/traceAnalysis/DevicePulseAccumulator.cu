@@ -33,6 +33,7 @@
 #include <dataTypes/BatchVectors.cuh>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/MongoConstants.h>
 
@@ -88,7 +89,7 @@ public:
     }
 
     template <int id>
-    __device__ Data::Pulse ToPulse(uint32_t frameIndex)
+    __device__ Data::Pulse ToPulse(uint32_t frameIndex, const LabelManager& manager)
     {
         static_assert(id < 2 && id >= 0, "Invalid index");
 
@@ -114,7 +115,7 @@ public:
             .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(0.0f, raw_mid.Get<id>())))
             .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
-            .Label(LabelManager::Nucleotide(label_[threadIdx.x].template Get<id>()));
+            .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()));
 
         return ret;
     }
@@ -156,13 +157,14 @@ private:
     CudaArray<PBShort2, blockThreads> label_;             // // Internal label ID corresponding to detection modes
 };
 
-template <typename Segment>
+template <typename LabelManager, size_t blockThreads>
 __launch_bounds__(32, 32)
 __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               GpuBatchData<const PBShort2> signal,
                               GpuBatchData<const PBShort2> latSignal,
                               uint32_t firstFrameIdx,
-                              DeviceView<Segment> workingSegments,
+                              DeviceView<Segment<LabelManager, blockThreads>> workingSegments,
+                              DevicePtr<const LabelManager> manager,
                               GpuBatchVectors<Data::Pulse> pulsesOut)
 {
     assert(labels.NumFrames() == signal.NumFrames() + latSignal.NumFrames());
@@ -187,11 +189,11 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
         auto emit = boundaryMask && pulseMask;
         if (emit.X())
         {
-            pulsesZmw1.push_back(segment.ToPulse<0>(frame));
+            pulsesZmw1.push_back(segment.ToPulse<0>(frame, *manager));
         }
         if (emit.Y())
         {
-            pulsesZmw2.push_back(segment.ToPulse<1>(frame));
+            pulsesZmw2.push_back(segment.ToPulse<1>(frame, *manager));
         }
 
         segment.ResetSegment(boundaryMask, frame, label, signal);
@@ -228,32 +230,56 @@ public:
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
-        ProcessLabels<<<labels.LanesPerBatch(),threadsPerBlock>>>(
+        ProcessLabels<LabelManager, threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
                 labels,
                 labels.TraceData(),
                 labels.LatentTrace(),
                 labels.Metadata().FirstFrame(),
                 workingSegments_.GetDeviceView(),
+                manager_->GetDevicePtr(),
                 ret.Pulses());
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;
     }
 
+    static void Configure(CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
+    {
+        manager_ = std::make_unique<DeviceOnlyObj<LabelManager>>(analogMap);
+    }
+
+    static void Finalize()
+    {
+        manager_.release();
+    }
+
 private:
     DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
+    static std::unique_ptr<DeviceOnlyObj<LabelManager>> manager_;
 };
+
+template <typename LabelManager>
+std::unique_ptr<DeviceOnlyObj<LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)
 {
     constexpr bool hostExecution = false;
     PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
+
+    CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
+    // TODO once ready, this needs to be plumbed in from the movie configuration.
+    analogMap[0] = Data::Pulse::NucleotideLabel::A;
+    analogMap[1] = Data::Pulse::NucleotideLabel::C;
+    analogMap[2] = Data::Pulse::NucleotideLabel::G;
+    analogMap[3] = Data::Pulse::NucleotideLabel::T;
+    AccumImpl::Configure(analogMap);
 }
 
 template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Finalize()
 {
+    AccumImpl::Finalize();
     PulseAccumulator::DestroyAllocationPools();
 }
 

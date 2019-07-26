@@ -31,6 +31,7 @@
 
 #include <common/MongoConstants.h>
 #include <common/cuda/CudaFunctionDecorators.h>
+#include <common/cuda/utility/CudaArray.h>
 
 #include <dataTypes/Pulse.h>
 
@@ -45,6 +46,7 @@ namespace Basecaller {
 // the same functions and members.
 class SubframeLabelManager
 {
+public:
     static constexpr int numStates = 13;
 
     // Would be nice to not have to use this shadowing declaration to
@@ -82,27 +84,21 @@ class SubframeLabelManager
         return 0;
     }
 
-    CUDA_ENABLED static NucleotideLabel Nucleotide(short label)
+    // analogMap should list analogs in order of descending relative amplitude
+    CUDA_ENABLED SubframeLabelManager(const Cuda::Utility::CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
+        : analogMap_(analogMap)
+    {}
+
+    CUDA_ENABLED NucleotideLabel Nucleotide(short label) const
     {
         if (IsPulseDownState(label)) label -= 2*numAnalogs;
         if (IsPulseUpState(label)) label -= numAnalogs;
 
-        // TODO is this supposed to be configurable?
-        switch (label)
-        {
-        case 0:
-            return NucleotideLabel::NONE;
-        case 1:
-            return NucleotideLabel::A;
-        case 2:
-            return NucleotideLabel::C;
-        case 3:
-            return NucleotideLabel::G;
-        default :
-        assert(label == 4);
-            return NucleotideLabel::T;
-        }
+        assert(label > 0 && label < numAnalogs);
+        return analogMap_[label-1];
     }
+private:
+    Cuda::Utility::CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap_;
 };
 
 }}}

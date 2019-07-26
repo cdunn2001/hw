@@ -98,7 +98,7 @@ public:
             return label_ != LabelArray{LabelManager::BaselineLabel()};
         }
 
-        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw)
+        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw, const LabelManager& manager)
         {
             using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
@@ -122,7 +122,7 @@ public:
                 .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
                 .SignalM2(signalM2_[zmw])
-                .Label(LabelManager::Nucleotide(label_[zmw]));
+                .Label(manager.Nucleotide(label_[zmw]));
 
             return pls;
         }
@@ -139,7 +139,7 @@ public:
             signalM2_ = Blend(boundaryMask, FloatArray{0}, signalM2_);
             label_ = Blend(boundaryMask, label, label_);
         }
-        
+
         void AddSignal(const LaneMask<laneSize>& update, const ConstSignalArrayRef& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
@@ -179,6 +179,7 @@ private:
 
 private:
     std::vector<LabelsSegment> startSegmentByLane;
+    static std::unique_ptr<LabelManager> manager_;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller
