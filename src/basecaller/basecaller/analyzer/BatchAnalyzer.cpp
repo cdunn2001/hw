@@ -213,7 +213,8 @@ void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& b
 
 }
 
-}
+}   // anonymous namespace
+
 
 BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -264,6 +265,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
+    assert(baseliner_);
     CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
 
     if (!isModelInitialized_)
@@ -272,6 +274,7 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
         // Accumulate histogram of baseline-subtracted trace data.
         // This operation also accumulates baseliner statistics.
+        assert(traceHistAccum_);
         traceHistAccum_->AddBatch(ctb);
 
         // When sufficient trace data have been histogrammed,
@@ -284,22 +287,26 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
             isModelInitialized_ = true;
 
             // Estimate model parameters from histogram.
+            assert(dme_);
             dme_->Estimate(traceHistAccum_->Histogram(), &models_);
         }
     }
 
+    assert(batchFactory_);
     auto basecalls = batchFactory_->NewBatch(tbatch.Metadata());
 
     // When detection model is available, ...
     if (isModelInitialized_)
     {
         // Classify frames.
+        assert(frameLabeler_);
         auto labels = (*frameLabeler_)(std::move(ctb), models_);
 
         // Generate pulses with metrics.
+        assert(pulseAccumulator_);
         auto pulses = (*pulseAccumulator_)(std::move(labels));
 
-        // TODO: When pulses are generated, call bases.
+        // TODO: Use a pulse-to-base strategy when it's available.
         ConvertPulsesToBases(pulses, basecalls);
 
         // TODO: Compute block-level metrics.
