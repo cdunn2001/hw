@@ -80,6 +80,22 @@ public:
         (*len_)++;
     }
 
+    // Creates a default initialized entry at the back of the vector
+    // Note that this implementation is limited to trivially_default_constructible
+    // types, so this is in fact a noop.
+    __device__ void emplace_back_default()
+    {
+        assert(*len_ < data_.Size());
+        (*len_)++;
+    }
+
+    __device__ T& back()
+    {
+        assert(*len_ <= data_.Size());
+        assert(*len_ > 0);
+        return data_[*len_-1];
+    }
+
 private:
     Cuda::Memory::DeviceView<T> data_;
     Len_t* len_;

@@ -63,7 +63,9 @@ template <typename LabelManager, size_t blockThreads>
 class Segment
 {
 public:
-    __device__  Segment()
+    Segment() = default;
+
+    __device__  Segment(short initialState)
     {
         for (int i = 0; i < blockThreads; ++i)
         {
@@ -74,8 +76,20 @@ public:
             signalMax_[i] = PBShort2(0);
             signalTotal_[i] = PBShort2(0);
             signalM2_[i] = PBHalf2(0.0f);
-            label_[i] = PBShort2(LabelManager::BaselineLabel());
+            label_[i] = PBShort2(initialState);
         }
+    }
+
+    __device__ void SharedCopy(const Segment& other)
+    {
+        startFrame_[threadIdx.x] = other.startFrame_[threadIdx.x];
+        endFrame_[threadIdx.x] = other.endFrame_[threadIdx.x];
+        signalFrstFrame_[threadIdx.x] = other.signalFrstFrame_[threadIdx.x];
+        signalLastFrame_[threadIdx.x] = other.signalLastFrame_[threadIdx.x];
+        signalMax_[threadIdx.x] = other.signalMax_[threadIdx.x];
+        signalTotal_[threadIdx.x] = other.signalTotal_[threadIdx.x];
+        signalM2_[threadIdx.x] = other.signalM2_[threadIdx.x];
+        label_[threadIdx.x] = other.label_[threadIdx.x];
     }
 
     __device__ PBBool2 IsNewSegment(PBShort2 label) const
@@ -88,8 +102,10 @@ public:
         return LabelManager::BaselineLabel() != label_[threadIdx.x];
     }
 
+    // Pulse is an in/out reference to avoid memory churn.  We're going to populate it's
+    // values directly in it's final destination.
     template <int id>
-    __device__ Data::Pulse ToPulse(uint32_t frameIndex, const LabelManager& manager)
+    __device__ void ToPulse(uint32_t frameIndex, const LabelManager& manager, Data::Pulse& pulse)
     {
         static_assert(id < 2 && id >= 0, "Invalid index");
 
@@ -99,7 +115,6 @@ public:
         // PBUint2 type, and I don't think this is enough motivation to add one
         auto Get = [](uint2& var) -> uint& { return id ? var.x : var.y; };
 
-        Data::Pulse ret;
         Get(endFrame_[threadIdx.x]) = frameIndex;
         auto start = Get(startFrame_[threadIdx.x]);
         short width = frameIndex - start;
@@ -109,15 +124,13 @@ public:
 
         const auto maxSignal = Data::Pulse::SignalMax();
 
-        ret.Start(start)
+        pulse.Start(start)
             .Width(width)
             .MeanSignal(min(maxSignal, max(0.0f, raw_mean.Get<id>())))
             .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(0.0f, raw_mid.Get<id>())))
             .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
             .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()));
-
-        return ret;
     }
 
     __device__ void ResetSegment(PBBool2 boundaryMask, uint32_t frameIndex,
@@ -169,8 +182,9 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
 {
     assert(labels.NumFrames() == signal.NumFrames() + latSignal.NumFrames());
 
-    // TODO: move this to shared mem?
-    auto& segment = workingSegments[blockIdx.x];
+    __shared__ Segment<LabelManager, blockThreads> segment;
+
+    segment.SharedCopy(workingSegments[blockIdx.x]);
 
     // each thread handles 2 zmw, which normally are interleaved in something like PBShort2,
     // but cannot be for pulses
@@ -189,11 +203,13 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
         auto emit = boundaryMask && pulseMask;
         if (emit.X())
         {
-            pulsesZmw1.push_back(segment.ToPulse<0>(frame, *manager));
+            pulsesZmw1.emplace_back_default();
+            segment.ToPulse<0>(frame, *manager, pulsesZmw1.back());
         }
         if (emit.Y())
         {
-            pulsesZmw2.push_back(segment.ToPulse<1>(frame, *manager));
+            pulsesZmw2.emplace_back_default();
+            segment.ToPulse<1>(frame, *manager, pulsesZmw2.back());
         }
 
         segment.ResetSegment(boundaryMask, frame, label, signal);
@@ -211,6 +227,8 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     {
         HandleFrame(labelZmw[i+latFrames], signalZmw[i], i + latFrames + firstFrameIdx);
     }
+
+    workingSegments[blockIdx.x].SharedCopy(segment);
 }
 
 }
@@ -221,7 +239,7 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
     static constexpr size_t blockThreads = laneSize / 2;
 public:
     AccumImpl(size_t lanesPerPool)
-        : workingSegments_(lanesPerPool)
+        : workingSegments_(lanesPerPool, LabelManager::BaselineLabel())
     {
     }
 
