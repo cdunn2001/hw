@@ -87,6 +87,7 @@ public:     // Functions
     /// trace histogram.
     void Estimate(const PoolHist& hist, PoolDetModel* detModel) const
     {
+        assert(detModel);
         assert(hist.data.Size() == poolSize_);
         assert(detModel->Size() == poolSize_);
         EstimateImpl(hist, detModel);

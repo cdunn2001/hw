@@ -262,8 +262,6 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
-    // TODO: Develop error handling logic.
-
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
@@ -290,64 +288,26 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
         }
     }
 
-    // TODO: When detection model is available, classify frames.
+    auto basecalls = batchFactory_->NewBatch(tbatch.Metadata());
 
-    // TODO: When frames are classified, generate pulses with metrics.
+    // When detection model is available, ...
+    if (isModelInitialized_)
+    {
+        // Classify frames.
+        auto labels = (*frameLabeler_)(std::move(ctb), models_);
 
-    // TODO: When pulses are generated, call bases.
+        // Generate pulses with metrics.
+        auto pulses = (*pulseAccumulator_)(std::move(labels));
+
+        // TODO: When pulses are generated, call bases.
+        ConvertPulsesToBases(pulses, basecalls);
+
+        // TODO: Compute block-level metrics.
+    }
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    auto basecallsBatch = batchFactory_->NewBatch(tbatch.Metadata());
-
-    using NucleotideLabel = PacBio::SmrtData::NucleotideLabel;
-
-    // Repeating sequence of ACGT.
-    const NucleotideLabel labels[] = { NucleotideLabel::A, NucleotideLabel::C,
-                                       NucleotideLabel::G, NucleotideLabel::T };
-
-    // Associated values
-    const std::array<float, 4> meanSignals { { 20.0f, 10.0f, 16.0f, 8.0f } };
-    const std::array<float, 4> midSignals { { 21.0f, 11.0f, 17.0f, 9.0f } };
-    const std::array<float, 4> maxSignals { { 21.0f, 11.0f, 17.0f, 9.0f } };
-
-    static constexpr int8_t qvDefault_ = 0;
-
-    auto& basecalls = basecallsBatch.Basecalls();
-    for (uint32_t lane = 0; lane < basecallsBatch.Dims().lanesPerBatch; lane++)
-    {
-        auto laneCalls = basecalls.LaneView(lane);
-        for (uint32_t zmw = 0; zmw < laneSize; ++zmw)
-        {
-            for (uint16_t b = 0; b < maxCallsPerZmwChunk_; b++)
-            {
-                BasecallBatch::Basecall bc;
-                auto& pulse = bc.GetPulse();
-
-                size_t iL = b % 4;
-                size_t iA = (b + 1) % 4;
-
-                auto label = labels[iL];
-                auto altLabel = labels[iA];
-
-                // Populate pulse data
-                pulse.Start(1).Width(3);
-                pulse.MeanSignal(meanSignals[iL]).MidSignal(midSignals[iL]).MaxSignal(maxSignals[iL]);
-                pulse.Label(label).LabelQV(qvDefault_);
-                pulse.AltLabel(altLabel).AltLabelQV(qvDefault_);
-                pulse.MergeQV(qvDefault_);
-
-                // Populate base data.
-                bc.Base(label).InsertionQV(qvDefault_);
-                bc.DeletionTag(NucleotideLabel::N).DeletionQV(qvDefault_);
-                bc.SubstitutionTag(NucleotideLabel::N).SubstitutionQV(qvDefault_);
-
-                laneCalls.push_back(zmw, bc);
-            }
-        }
-    }
-
-    return basecallsBatch;
+    return basecalls;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
