@@ -5,25 +5,13 @@
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
   4097
 
-  $ ZMW=0
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ diff ${CRAMTMP}/out_${ZMW}.txt ${CRAMTMP}/exp_${ZMW}.txt
+  $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/designer_zmw_0.txt ${CRAMTMP}/exp_designer_zmw_0.txt
 
-  $ ZMW=10
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ diff ${CRAMTMP}/out_${ZMW}.txt ${CRAMTMP}/exp_${ZMW}.txt
+  $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 10 ${CRAMTMP}/designer_zmw_10.txt ${CRAMTMP}/exp_designer_zmw_10.txt
 
-  $ ZMW=100
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ diff ${CRAMTMP}/out_${ZMW}.txt ${CRAMTMP}/exp_${ZMW}.txt
+  $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 100 ${CRAMTMP}/designer_zmw_100.txt ${CRAMTMP}/exp_designer_zmw_100.txt
 
-  $ ZMW=1000
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ diff ${CRAMTMP}/out_${ZMW}.txt ${CRAMTMP}/exp_${ZMW}.txt
+  $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 1000 ${CRAMTMP}/designer_zmw_1000.txt ${CRAMTMP}/exp_designer_zmw_1000.txt
 
   $ BAZFILE=${CRAMTMP}/test4.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
@@ -32,38 +20,18 @@
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
   257
 
-  $ ZMW=0
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ outSeq=$(<${CRAMTMP}/out_${ZMW}.txt)
-  $ expSeq=$(<${CRAMTMP}/exp_${ZMW}.txt)
-  $ nwalign ${outSeq} ${expSeq}
+  $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/align_zmw_0.txt ${CRAMTMP}/expected_align_zmw_0.txt
   -CACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATAC-
   CCACATTAACACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTGTGATGGTGTCGAAGCAGTGTATTGCTACTGTGTTGCCCGTTGACGAGTTTGCCGATTGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCCGTTGGTACTGCATACACCCGACGACTAATACG
 
-  $ ZMW=64
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ outSeq=$(<${CRAMTMP}/out_${ZMW}.txt)
-  $ expSeq=$(<${CRAMTMP}/exp_${ZMW}.txt)
-  $ nwalign ${outSeq} ${expSeq}
+  $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 64 ${CRAMTMP}/align_zmw_64.txt ${CRAMTMP}/expected_align_zmw_64.txt
   -TTGTAATACGCGCCCACACATAGCGTGGCGCGCATCCAGTA-CCAGGGACGGCTCGTCGCGCAATTGCTTCACGAGGGTCAG-CCCAAAACGGTCCATTGGTAAGGTGGTTTCATTATCCCTCGCTTTTACATCTCTCACCGGATGCAAGCTTACCTCATGCGAGATTGTG-A-
   GTTCTAATACGCGCCCACACATAGCCTGGCGCGCATCCAGTACCCAGGGACGGCTGGTCGCGCAATTGCTTCACGAGGGTCAGCCCCAAAACGGTCCATTGGTAAGGTGGTTTCAGTATCCCTCGCTTTTACAGCTCTCACCGTATGCAAGCTTACCTCATGCGAGATTGTGAAC
 
-  $ ZMW=160
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ outSeq=$(<${CRAMTMP}/out_${ZMW}.txt)
-  $ expSeq=$(<${CRAMTMP}/exp_${ZMW}.txt)
-  $ nwalign ${outSeq} ${expSeq}
+  $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 160 ${CRAMTMP}/align_zmw_160.txt ${CRAMTMP}/expected_align_zmw_160.txt
   -ATTATGAGACGGCATAAGTCCAAATCAATGCTCCACCCGAAAAACAGGGTTTGCTTAACGCCAGTAAGACCAGGTGGTACCTCTGCCGTCTGCCTTAGATTGAGGATCGAAGCCCAACACGATCGTCTGGTC-TTTGCGTTGCGTGATACAAGGGTGCAGGGTTCTACATGTCCCTT-GG
   AATTATGAGACGGCATAAGTCCAAATCAATGCTCCACCCGAAAAACAGGGTTTGCTTAACGCCAGTAAGACCAGGTGGTACCTCTGCCGTCTGCCTTAGATTGAGGATCGAAGCCCAACACGATCGTCTGGTCTTTTGCGTGGCGTGATACAAGGGTGGAGGGTTCTACATGTCCCTTGGG
 
-  $ ZMW=255
-  $ bazviewer --silent -d -n ${ZMW} ${BAZFILE} | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g' | cut -c13- > ${CRAMTMP}/out_${ZMW}.txt
-  $ h5dump -d /GroundTruth/Bases -s ${ZMW} -c 1 ${TRCFILE} | grep "(${ZMW})" | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | cut -c12- > ${CRAMTMP}/exp_${ZMW}.txt
-  $ outSeq=$(<${CRAMTMP}/out_${ZMW}.txt)
-  $ expSeq=$(<${CRAMTMP}/exp_${ZMW}.txt)
-  $ nwalign ${outSeq} ${expSeq}
+  $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 255 ${CRAMTMP}/align_zmw_255.txt ${CRAMTMP}/expected_align_zmw_255.txt
   -AAGTTGGTTTAGGGCGGACCCGCAGGTCGTGCTTATTCTAACGGCTGAGGGACTTCGAGTCCTCCATACTGAGTATATCTGTCTTGCAACC-GCAGCTAAATCGTAAATCAGCATGCCTGGCAATATACGACAGTC--CACCGTATCGAGTATGCTCTAGGAACGCACACGGGTCGCACACAGAGCAA-AGGGC
   CAAGTTGGTTTAGGGCGGACCCGCAGGTAGTGCTTATTCGAACGGCTGAGGGACTTCGAGTCCTCCATACTGAGTATATCTGTCTTGCAACCTGCAGCTAAATCGTAAATCAGCATGCCTGGCAATATACCACAGTCGACACCGTATCGAGTATGCTCTAGGAACGCAAACGGGTCGCACACAGAGCAACAGGGC

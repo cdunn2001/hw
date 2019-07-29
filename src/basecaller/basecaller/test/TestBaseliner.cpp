@@ -51,14 +51,15 @@ TEST(TestNoOpBaseliner, Run)
     Data::MovieConfig movConfig;
     Data::BasecallerBaselinerConfig baselinerConfig;
 
-    Data::GetPrimaryConfig().lanesPerPool = 2;
-    uint32_t numZmwLanes = 4;
-    assert(numZmwLanes % Data::GetPrimaryConfig().lanesPerPool == 0);
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
+    const uint32_t lanesPerPool = numZmwLanes / numPools;
 
+    Data::GetPrimaryConfig().lanesPerPool = lanesPerPool;
     HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<HostNoOpBaseliner>> baseliners;
 
-    for (size_t poolId = 0; poolId < numZmwLanes/Data::GetPrimaryConfig().lanesPerPool; poolId++)
+    for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostNoOpBaseliner>(poolId));
     }
@@ -116,19 +117,19 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
     Data::BasecallerBaselinerConfig baselinerConfig;
     baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
 
-    Data::GetPrimaryConfig().lanesPerPool = 2;
-    uint32_t numZmwLanes = 4;
-    assert(numZmwLanes % Data::GetPrimaryConfig().lanesPerPool == 0);
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
+    const uint32_t lanesPerPool = numZmwLanes / numPools;
 
+    Data::GetPrimaryConfig().lanesPerPool = lanesPerPool;
     HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<HostMultiScaleBaseliner>> baseliners;
 
-    for (size_t poolId = 0; poolId < numZmwLanes/Data::GetPrimaryConfig().lanesPerPool; poolId++)
+    for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
                                                                           FilterParamsLookup(baselinerConfig.Method),
                                                                           Data::GetPrimaryConfig().lanesPerPool));
-
     }
 
     Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
@@ -164,21 +165,20 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
     Data::BasecallerBaselinerConfig baselinerConfig;
     baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
 
-    Data::GetPrimaryConfig().lanesPerPool = 2;
-    uint32_t numZmwLanes = 4;
-    assert(numZmwLanes % Data::GetPrimaryConfig().lanesPerPool == 0);
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
+    const uint32_t lanesPerPool = numZmwLanes / numPools;
+    const size_t numBlocks = 256;
 
-    size_t numBlocks = 256;
-
+    Data::GetPrimaryConfig().lanesPerPool = lanesPerPool;
     HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<HostMultiScaleBaseliner>> baseliners;
 
-    for (size_t poolId = 0; poolId < numZmwLanes/Data::GetPrimaryConfig().lanesPerPool; poolId++)
+    for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
                                                                           FilterParamsLookup(baselinerConfig.Method),
                                                                           Data::GetPrimaryConfig().lanesPerPool));
-
     }
 
     auto dmParams = Cuda::Data::DataManagerParams()
@@ -190,10 +190,10 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 
     // Generate all baseline frames, these should be normally
     // distributed with given mean and sigma below.
-    short baselineLevel = 250;
-    short baselineSigma = 30;
-    uint16_t pulseWidth = 0;    // No pulses.
-    uint16_t pulseIpd = Data::GetPrimaryConfig().framesPerChunk;
+    const short baselineLevel = 250;
+    const short baselineSigma = 30;
+    const uint16_t pulseWidth = 0;    // No pulses.
+    const uint16_t pulseIpd = Data::GetPrimaryConfig().framesPerChunk;
     auto pfParams = Cuda::Data::PicketFenceParams()
             .PulseWidth(pulseWidth)
             .PulseIpd(Data::GetPrimaryConfig().framesPerChunk)
@@ -230,11 +230,11 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
             // Wait for baseliner to warm up before testing.
             if (blockNum > burnIn)
             {
-                auto count = baselineStats.m0_[0];
-                auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
+                const auto count = baselineStats.m0_[0];
+                const auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
                 auto var = baselineStats.m1_[0] * baselineStats.m1_[0] / baselineStats.m0_[0];
                 var = (baselineStats.m2_[0] - var) / (baselineStats.m0_[0] - 1.0f);
-                auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
+                const auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
 
                 EXPECT_NEAR(count, (Data::GetPrimaryConfig().framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
                 EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));
@@ -242,7 +242,6 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
                 EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / sqrt(count));
             }
         }
-
         blockNum++;
     }
 
@@ -256,21 +255,20 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
     Data::BasecallerBaselinerConfig baselinerConfig;
     baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
 
-    Data::GetPrimaryConfig().lanesPerPool = 2;
-    uint32_t numZmwLanes = 4;
-    assert(numZmwLanes % Data::GetPrimaryConfig().lanesPerPool == 0);
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
+    const uint32_t lanesPerPool = numZmwLanes / numPools;
+    const size_t numBlocks = 256;
 
-    size_t numBlocks = 256;
-
+    Data::GetPrimaryConfig().lanesPerPool = lanesPerPool;
     HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<HostMultiScaleBaseliner>> baseliners;
 
-    for (size_t poolId = 0; poolId < numZmwLanes/Data::GetPrimaryConfig().lanesPerPool; poolId++)
+    for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
                                                                           FilterParamsLookup(baselinerConfig.Method),
                                                                           Data::GetPrimaryConfig().lanesPerPool));
-
     }
 
     auto dmParams = Cuda::Data::DataManagerParams()
@@ -281,11 +279,11 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
             .NumBlocks(numBlocks);
 
     // Generate baseline and single signal level.
-    short baselineLevel = 250;
-    short baselineSigma = 30;
-    short signalLevel = 600;
-    uint16_t pulseWidth = 24;
-    uint16_t pulseIpd = 20;
+    const short baselineLevel = 250;
+    const short baselineSigma = 30;
+    const short signalLevel = 600;
+    const uint16_t pulseWidth = 24;
+    const uint16_t pulseIpd = 20;
     auto pfParams = Cuda::Data::PicketFenceParams()
             .NumSignals(1)
             .PulseSignalLevels({ std::to_string(signalLevel) })
@@ -324,11 +322,11 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
             // Wait for baseliner to warm up.
             if (blockNum > burnIn)
             {
-                auto count = baselineStats.m0_[0];
-                auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
+                const auto count = baselineStats.m0_[0];
+                const auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
                 auto var = baselineStats.m1_[0] * baselineStats.m1_[0] / baselineStats.m0_[0];
                 var = (baselineStats.m2_[0] - var) / (baselineStats.m0_[0] - 1.0f);
-                auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
+                const auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
 
                 EXPECT_NEAR(count, (Data::GetPrimaryConfig().framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
                 EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));
@@ -336,7 +334,6 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
                 EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / sqrt(count));
             }
         }
-
         blockNum++;
     }
 
