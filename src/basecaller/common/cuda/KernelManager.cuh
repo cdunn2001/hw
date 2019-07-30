@@ -27,8 +27,33 @@
 #ifndef PACBIO_CUDA_KERNEL_MANAGER_CUH_
 #define PACBIO_CUDA_KERNEL_MANAGER_CUH_
 
+#include "KernelManager.h"
+
 namespace PacBio {
 namespace Cuda {
+
+// TODO change namespace?
+// Conversion function.  This is a default pass-through implementation
+// For any types that need to convert from a host-based storage class to
+// a gpu usable view class, provide an overload that is a more specific
+// match
+template <typename T>
+T&& KernelArgConvert(T&& t, const LaunchInfo& info) { return std::forward<T>(t); }
+
+template <typename FT, typename... LaunchParams>
+template <typename... Args>
+void Launcher<FT, LaunchParams...>::operator()(Args&&... args) const
+{
+    LaunchInfo info;
+    Invoke(std::make_index_sequence<sizeof...(LaunchParams)>{}, KernelArgConvert(std::forward<Args>(args), info)...);
+}
+
+template <typename FT, typename... LaunchParams>
+template <size_t... Is, typename... Args>
+void Launcher<FT, LaunchParams...>::Invoke(std::index_sequence<Is...>, Args&&... args) const
+{
+   std::get<0>(params_)<<<std::get<Is+1>(params_)...>>>(std::forward<Args>(args)...);
+}
 
 }}
 

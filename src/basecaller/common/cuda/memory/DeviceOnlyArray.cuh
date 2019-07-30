@@ -31,6 +31,7 @@
 #include <utility>
 
 #include <common/cuda/PBCudaRuntime.h>
+#include <common/cuda/KernelManager.h>
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
 
@@ -123,11 +124,11 @@ public:
     DeviceOnlyArray& operator=(const DeviceOnlyArray&) = delete;
     DeviceOnlyArray& operator=(DeviceOnlyArray&& other) = default;
 
-    DeviceView<T> GetDeviceView()
+    DeviceView<T> GetDeviceView(const LaunchInfo& info)
     {
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
-    DeviceView<const T> GetDeviceView() const
+    DeviceView<const T> GetDeviceView(const LaunchInfo& info) const
     {
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
@@ -152,6 +153,11 @@ private:
 
 template <typename T>
 constexpr size_t DeviceOnlyArray<T>::maxThreadsPerBlock;
+
+template <typename T>
+DeviceView<T> KernelArgConvert(DeviceOnlyArray<T>& obj, const LaunchInfo& info) { return obj.GetDeviceView(info); }
+template <typename T>
+DeviceView<T> KernelArgConvert(const DeviceOnlyArray<T>& obj, const LaunchInfo& info) { return obj.GetDeviceView(info); }
 
 }}}
 

@@ -33,7 +33,7 @@
 namespace PacBio {
 namespace Cuda {
 
-#include <tuple>
+struct LaunchInfo;
 
 template <typename FT, typename... LaunchParams>
 class Launcher
@@ -42,19 +42,21 @@ public:
     Launcher(FT f, LaunchParams... params) : params_{f, params...} {}
 
     template <typename... Args>
-    void operator()(Args&&... args)
-    {
-        Invoke(std::make_index_sequence<sizeof...(LaunchParams)>{}, std::forward<Args>(args)...);
-    }
+    void operator()(Args&&... args) const;
 
 private:
     template <size_t... Is, typename... Args>
-    void Invoke(std::index_sequence<Is...>, Args&&... args)
-    {
-        std::get<0>(params_)<<<std::get<Is+1>(params_)...>>>(std::forward<Args>(args)...);
-    }
+    void Invoke(std::index_sequence<Is...>, Args&&... args) const;
 
     std::tuple<FT, LaunchParams...> params_;
+};
+
+struct LaunchInfo {
+private:
+    template <typename FT, typename... LaunchParams>
+    friend class Launcher;
+
+    LaunchInfo() = default;
 };
 
 template <typename FT, typename... Params>

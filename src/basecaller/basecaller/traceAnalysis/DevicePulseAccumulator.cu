@@ -37,7 +37,7 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/MongoConstants.h>
 
-#include <common/cuda/KernelManager.h>
+#include <common/cuda/KernelManager.cuh>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -251,23 +251,18 @@ public:
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
-        //ProcessLabels<LabelManager, threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
-        //        labels,
-        //        labels.TraceData(),
-        //        labels.LatentTrace(),
-        //        labels.Metadata().FirstFrame(),
-        //        workingSegments_.GetDeviceView(),
-        //        manager_->GetDevicePtr(),
-        //        ret.Pulses());
-        PBLaunch(ProcessLabels<LabelManager, threadsPerBlock>,
-                 labels.LanesPerBatch(),threadsPerBlock)(
-            labels,
-            labels.TraceData(),
-            labels.LatentTrace(),
-            labels.Metadata().FirstFrame(),
-            workingSegments_.GetDeviceView(),
-            manager_->GetDevicePtr(),
-            ret.Pulses());
+
+        const auto& launcher = PBLaunch(
+            ProcessLabels<LabelManager, threadsPerBlock>,
+            labels.LanesPerBatch(),
+            threadsPerBlock);
+        launcher(labels,
+                 labels.TraceData(),
+                 labels.LatentTrace(),
+                 labels.Metadata().FirstFrame(),
+                 workingSegments_,
+                 *manager_,
+                 ret.Pulses());
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;

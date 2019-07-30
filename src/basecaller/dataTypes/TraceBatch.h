@@ -75,6 +75,17 @@ private:
     BatchMetadata meta_;
 };
 
+template <typename T>
+auto KernelArgConvert(TraceBatch<T>& obj, const Cuda::LaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+template <typename T>
+auto KernelArgConvert(const TraceBatch<T>& obj, const Cuda::LaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+
 }}}
 
 #endif //PACBIO_MONGO_DATA_TRACE_BATCH_H

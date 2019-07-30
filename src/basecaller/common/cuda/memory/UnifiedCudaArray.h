@@ -30,6 +30,7 @@
 #include <memory>
 
 #include <common/cuda/PBCudaSimd.h>
+#include <common/cuda/KernelManager.h>
 
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
@@ -195,12 +196,12 @@ public:
         return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
 
-    DeviceHandle<GpuType> GetDeviceHandle()
+    DeviceHandle<GpuType> GetDeviceHandle(const LaunchInfo& info)
     {
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
-    DeviceHandle<const GpuType> GetDeviceHandle() const
+    DeviceHandle<const GpuType> GetDeviceHandle(const LaunchInfo& info) const
     {
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
@@ -276,6 +277,20 @@ private:
     SyncDirection syncDir_;
     std::weak_ptr<DualAllocationPools> pools_;
 };
+
+template <typename T, bool allow_expensive_types = false>
+auto KernelArgConvert(UnifiedCudaArray<T, allow_expensive_types>& obj,
+                      const LaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+
+template <typename T, bool allow_expensive_types = false>
+auto KernelArgConvert(const UnifiedCudaArray<T, allow_expensive_types>& obj,
+                      const LaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
 
 }}} //::Pacbio::Cuda::Memory
 

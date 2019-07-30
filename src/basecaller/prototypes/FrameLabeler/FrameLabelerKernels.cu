@@ -26,6 +26,8 @@
 
 #include "FrameLabelerKernels.cuh"
 
+#include <common/cuda/KernelManager.cuh>
+
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
 using namespace PacBio::Mongo::Data;
@@ -121,7 +123,7 @@ FrameLabeler::FrameLabeler()
         throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
     }
 
-    InitLatent<<<lanesPerPool_, BlockThreads>>>(prevLat_);
+    PBLaunch(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
     CudaSynchronizeDefaultStream();
 }
 
@@ -261,18 +263,21 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
 {
     auto labels = BorrowScratch();
 
-    FrameLabelerKernel<<<lanesPerPool_, BlockThreads>>>(trans_->GetDevicePtr(),
-                                                        models.GetDeviceHandle(),
-                                                        input,
-                                                        latent_.GetDeviceView(),
-                                                        *labels,
-                                                        prevLat_,
-                                                        latOut,
-                                                        output);
+    const auto& launcher = PBLaunch(FrameLabelerKernel, lanesPerPool_, BlockThreads);
+    launcher(*trans_,
+             models,
+             input,
+             latent_,
+             *labels,
+             prevLat_,
+             latOut,
+             output);
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
+
+constexpr size_t FrameLabeler::BlockThreads;
 
 }}

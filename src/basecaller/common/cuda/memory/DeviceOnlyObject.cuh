@@ -27,6 +27,7 @@
 #define PACBIO_CUDA_MEMORY_DEVICE_ONLY_OBJECT_CUH_
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/KernelManager.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -70,18 +71,23 @@ public:
         : data_(1, std::forward<Args>(args)...)
     {}
 
-    DevicePtr<T> GetDevicePtr()
+    DevicePtr<T> GetDevicePtr(const LaunchInfo& info)
     {
-        return DevicePtr<T>(data_.GetDeviceView(), DataKey());
+        return DevicePtr<T>(data_.GetDeviceView(info), DataKey());
     }
-    DevicePtr<const T> GetDevicePtr() const
+    DevicePtr<const T> GetDevicePtr(const LaunchInfo& info) const
     {
-        return DevicePtr<T>(data_.GetDeviceView(), DataKey());
+        return DevicePtr<T>(data_.GetDeviceView(info), DataKey());
     }
 
 private:
     Memory::DeviceOnlyArray<T> data_;
 };
+
+template <typename T>
+DevicePtr<T> KernelArgConvert(DeviceOnlyObj<T>& obj, const LaunchInfo& info) { return obj.GetDevicePtr(info); }
+template <typename T>
+DevicePtr<T> KernelArgConvert(const DeviceOnlyObj<T>& obj, const LaunchInfo& info) { return obj.GetDevicePtr(info); }
 
 
 }}}

@@ -280,6 +280,36 @@ private:
     size_t numFrames_;
 };
 
+// Non-owning host-side representation of a gpu batch.  Does not
+// grant access to the data and is meant primarily as a shim class
+// helping segregate vanilla c++ code from cuda code.  Actual
+// device functions can access the data by including TraceBatch.cuh.
+// which defines the GpuBatchData class and can interact with the
+// data while running on the device.
+template <typename T>
+class GpuBatchDataHandle
+{
+    using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
+public:
+    GpuBatchDataHandle(const BatchDimensions& dims,
+                       uint32_t availableFrames,
+                       Cuda::Memory::DeviceHandle<T> data,
+                       DataManagerKey key)
+        : dims_(dims)
+        , availableFrames_(availableFrames)
+        , data_(data)
+    {}
+
+    const BatchDimensions& Dimensions() const { return dims_; }
+    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey key) const { return data_; }
+    uint32_t NumFrames() const { return availableFrames_; }
+
+protected:
+    BatchDimensions dims_;
+    uint32_t availableFrames_;
+    Cuda::Memory::DeviceHandle<T> data_;
+};
+
 
 // BatchData defines a 3D layout of data designed for efficient usage on the GPU.
 // Data is conceptually laid out as [lane][frame][zmw], where this is standard C
@@ -310,6 +340,9 @@ private:
 template <typename T>
 class BatchData : private Cuda::Memory::detail::DataManager
 {
+    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
+    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
+
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
@@ -346,8 +379,18 @@ public:
 
     const BatchDimensions& StorageDims() const { return dims_; }
 
-    Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
-    const Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) const { return data_; }
+    GpuBatchDataHandle<GpuType> GetDeviceHandle(const Cuda::LaunchInfo& info)
+    {
+        auto gpuDims = dims_;
+        gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
+        return GpuBatchDataHandle<GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
+    }
+    GpuBatchDataHandle<const GpuType> GetDeviceHandle(const Cuda::LaunchInfo& info) const
+    {
+        auto gpuDims = dims_;
+        gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
+        return GpuBatchDataHandle<const GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
+    }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
@@ -375,35 +418,16 @@ private:
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
-
-// Non-owning host-side representation of a gpu batch.  Does not
-// grant access to the data and is meant primarily as a shim class
-// helping segregate vanilla c++ code from cuda code.  Actual
-// device functions can access the data by including TraceBatch.cuh.
-// which defines the GpuBatchData class and can interact with the
-// data while running on the device.
 template <typename T>
-class GpuBatchDataHandle
+auto KernelArgConvert(BatchData<T>& obj, const Cuda::LaunchInfo& info)
 {
-    using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
-public:
-    GpuBatchDataHandle(const BatchDimensions& dims,
-                       uint32_t availableFrames,
-                       Cuda::Memory::DeviceHandle<T> data,
-                       DataManagerKey key)
-        : dims_(dims)
-        , availableFrames_(availableFrames)
-        , data_(data)
-    {}
-
-    const BatchDimensions& Dimensions() const { return dims_; }
-    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey key) { return data_; }
-
-protected:
-    BatchDimensions dims_;
-    uint32_t availableFrames_;
-    Cuda::Memory::DeviceHandle<T> data_;
-};
+    return obj.GetDeviceHandle(info);
+}
+template <typename T>
+auto KernelArgConvert(const BatchData<T>& obj, const Cuda::LaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
 
 }}}     // namespace PacBio::Mongo::Data
 
