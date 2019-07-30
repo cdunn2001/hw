@@ -48,7 +48,9 @@ public:     // Types
     using TraceElementType = Data::CameraTraceBatch::ElementType;
 
 public:     // Structors and assignment.
-    TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize);
+    TraceHistogramAccumHost(unsigned int poolId,
+                            unsigned int poolSize,
+                            bool pinnedAlloc = true);
 
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;

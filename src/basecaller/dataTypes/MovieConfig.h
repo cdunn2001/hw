@@ -52,6 +52,10 @@ public:
     // TODO: Will likely need additional members.
 };
 
+/// Creates an instance with somewhat arbitrary value.
+/// Convenient for some unit tests.
+MovieConfig MockMovieConfig();
+
 }}}     // namespace PacBio::Mongo::Data
 
 #endif // mongo_dataTypes_MovieConfig_H_
