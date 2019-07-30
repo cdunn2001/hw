@@ -34,11 +34,15 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
-    frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
-    pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
+
+    // Detection model estimator
+    dmeOpt_ = bcConfig.dmeConfig.Method;
+
+    frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
+    pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -130,6 +134,22 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
+    switch (dmeOpt_)
+    {
+    case Data::BasecallerDmeConfig::MethodName::Fixed:
+        DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
+        break;
+    case Data::BasecallerDmeConfig::MethodName::EmHost:
+        DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for DetectionModelEstimator: "
+            << dmeOpt_.toString() << '.';
+        throw PBException(msg.str());
+        break;
+    }
+
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
@@ -163,7 +183,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
 }
 
 
@@ -228,7 +247,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
         // TODO: For now fall through to throw exception.
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_ << '.';
+        msg << "Unrecognized method option for TraceHistogramAccumulator: "
+            << histAccumOpt_ << '.';
         throw PBException(msg.str());
         break;
     }
@@ -247,7 +267,8 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
 
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';
+        msg << "Unrecognized method option for DetectionModelEstimator: "
+            << dmeOpt_ << '.';
         throw PBException(msg.str());
         break;
     }
