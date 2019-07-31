@@ -30,7 +30,8 @@ class MongoBasecallerConsole : public ThreadedProcessBase
     SMART_ENUM(
         ProfileSpots,
         ANALYZE_CHUNK,
-        WRITE_CHUNK
+        WRITE_CHUNK,
+        READ_CHUNK
     );
 
     using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
@@ -329,8 +330,12 @@ private:
             PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
             for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
-                PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(batchGenerator_->PopulateChunk());
+                auto chunk = batchGenerator_->PopulateChunk();
+                PBLOG_INFO << "Read in chunk frames = ["
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                inputDataQueue_.Push(std::move(chunk));
+                numChunksRead_++;
             }
             PBLOG_INFO << "Done preloading input queue.";
         }
@@ -338,16 +343,26 @@ private:
 
     void RunReader()
     {
-        size_t numChunksRead = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
             if (!batchGenerator_->Finished())
             {
-
+                Profiler::Mode mode = Profiler::Mode::REPORT;
+                if (numChunksRead_ < 15) mode = Profiler::Mode::OBSERVE;
+                Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
+                auto readChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::READ_CHUNK);
+                (void)readChunkProfile;
                 auto chunk = batchGenerator_->PopulateChunk();
-                numChunksRead++;
-                while (inputDataQueue_.Size() > 0) usleep(1000);
+                PBLOG_INFO << "Read in chunk frames = ["
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                readChunkProfile.~ScopedProfiler();
+                numChunksRead_++;
+                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_)
+                {
+                    usleep(100);
+                }
                 inputDataQueue_.Push(std::move(chunk));
             }
             else
@@ -356,9 +371,9 @@ private:
                 break;
             }
         }
-        timer.SetCount(numChunksRead);
+        timer.SetCount(numChunksRead_);
         double chunkReadRate = timer.GetRate();
-        readThroughputStats_ << "Read " << numChunksRead
+        readThroughputStats_ << "Read " << numChunksRead_
             << " chunks at " << chunkReadRate << " chunks/sec"
             << " (" << batchGenerator_->NumZmwLanes() *
                        PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane *
@@ -386,6 +401,7 @@ private:
     std::ostringstream writeThroughputStats_;
     size_t numChunksPreloadInputQueue_ = 0;
     size_t numChunksWritten_ = 0;
+    size_t numChunksRead_ = 0;
     bool hasBazFile_ = false;
     uint64_t numZmwsSoFar_ = 0;
     size_t zmwOutputStrideFactor_ = 1;
