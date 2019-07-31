@@ -78,7 +78,7 @@ private:
                                  blockIdx * framesPerChunk_,
                                  framesPerChunk_,
                                  pixelCache_[0][laneIdx].origin());
-                laneCurrentChunk_[laneIdx]++;
+                laneCurrentChunk_[laneIdx] = (laneCurrentChunk_[laneIdx] + 1) % numChunks_;
             }
             std::memcpy(data, pixelCache_[0][laneIdx].origin(),
                         framesPerChunk_ * zmwsPerLane_ * sizeof(int16_t));
