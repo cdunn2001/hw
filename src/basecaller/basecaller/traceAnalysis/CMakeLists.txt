@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.13)
 include(eigen)
 
 add_library(libMongoBasecallerTraceAnalysis STATIC
-    ActivityLabeler.h
     Baseliner.h
     Baseliner.cpp
     BaselinerParams.h

@@ -33,21 +33,20 @@
 #include <common/BlockActivityLabels.h>
 #include <common/TrainedCartParams.h>
 
-#include <vector>
-
 namespace PacBio {
 namespace Mongo {
 namespace ActivityLabeler {
 
 namespace {
 
-// TODO: replace the vector with a CudaArray
 // Evaluates a polynomial with a list of coefficients by descending degree
 // (e.g. y = ax^2 + bx + c)
-float evaluatePolynomial(const std::vector<float>& coeff, float x)
+template <size_t size>
+float evaluatePolynomial(const float (&coeff)[size], float x)
 {
+    static_assert(size > 0);
     float y = coeff[0];
-    for (unsigned int i = 1; i < coeff.size(); i++)
+    for (unsigned int i = 1; i < size; ++i)
         y = y * x + coeff[i];
     return y;
 }
@@ -57,7 +56,7 @@ float evaluatePolynomial(const std::vector<float>& coeff, float x)
 // perhaps this would be better if it accepted const bm and returned the
 // labels...
 template <typename BasecallingMetricsType>
-void LabelBlock(BasecallingMetricsType& bm, float frameRate, unsigned int laneSize)
+void LabelBlock(const BasecallingMetricsType& bm, float frameRate, unsigned int laneSize)
 {
     const auto& stdDevAll = bm.TraceMetrics().FrameBaselineSigmaDWS();
     for (size_t zmw = 0; zmw < laneSize; ++zmw)
@@ -74,8 +73,7 @@ void LabelBlock(BasecallingMetricsType& bm, float frameRate, unsigned int laneSi
             static_cast<float>(bm.NumHalfSandwiches()[zmw]) / bm.NumPulses()[zmw] : 0.0f;
         const float hswrExp = std::min(
                 TrainedCart::maxAcceptableHalfsandwichRate,
-                evaluatePolynomial(std::vector<float>{TrainedCart::hswCurve.begin(),
-                                                      TrainedCart::hswCurve.end()},
+                evaluatePolynomial(TrainedCart::hswCurve,
                                    features[PULSERATE]));
         features[LOCALHSWRATENORM] = hswr - hswrExp;
 

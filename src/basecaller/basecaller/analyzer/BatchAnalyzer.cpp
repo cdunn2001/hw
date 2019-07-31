@@ -153,7 +153,7 @@ BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     }
 }
 
-namespace Temporary {
+namespace {
 
 // Temporary helper function for converting from the mongo Pulse data type to the old Sequel
 // Base data type.  Will eventually be replaed by a proper pulse-to-base stage, (and presumably
@@ -252,14 +252,15 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     auto convProfile = profiler.CreateScopedProfiler(ProfileStages::SequelConv);
     (void) convProfile;
     auto bases = batchFactory_->NewBatch(tbatch.Metadata());
-    Temporary::ConvertPulsesToBases(pulses, bases);
+    ConvertPulsesToBases(pulses, bases);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    auto basecallingMetrics = (*hfMetrics_)(bases, ctb.Stats());
+    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
 
     if (basecallingMetrics)
     {
+        pulses.Metrics(std::move(basecallingMetrics));
         bases.Metrics(std::move(basecallingMetrics));
     }
 
@@ -325,12 +326,15 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     // potentially modify basecalls to add a metrics block for some number of
     // preceding blocks
-    auto basecallingMetrics = (*hfMetrics_)(basecallsBatch, ctb.Stats());
+    /* TODO (mds 20190724) pulseBatch isn't present in this pipeline yet
+    auto basecallingMetrics = (*hfMetrics_)(pulsecallsBatch, ctb.Stats(), models_);
 
     if (basecallingMetrics)
     {
+        pulsecallsBatch.Metrics(std::move(basecallingMetrics));
         basecallsBatch.Metrics(std::move(basecallingMetrics));
     }
+    */
 
     // TODO (mds 20190626) how do you recover the final metrics block if you
     // end before getting to a yield block?

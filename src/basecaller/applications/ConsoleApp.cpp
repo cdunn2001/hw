@@ -222,16 +222,21 @@ private:
         }
     }
 
-    void ConvertMetric(const PacBio::Mongo::Data::BasecallingMetrics<laneSize>& bm,
+    void ConvertMetric(const PacBio::Mongo::Data::BasecallBatch& bb,
                        SpiderMetricBlock& sm,
+                       size_t laneIndex,
                        size_t zmwIndex)
     {
-        sm.numBasesA_ = bm.NumBasesByAnalog()[0][zmwIndex];
-        sm.numBasesC_ = bm.NumBasesByAnalog()[1][zmwIndex];
-        sm.numBasesG_ = bm.NumBasesByAnalog()[2][zmwIndex];
-        sm.numBasesT_ = bm.NumBasesByAnalog()[3][zmwIndex];
+        if (bb.HasMetrics())
+        {
+            const auto& metrics = bb.Metrics().GetHostView()[laneIndex];
+            sm.numBasesA_ = metrics.numBasesByAnalog_[0][zmwIndex];
+            sm.numBasesC_ = metrics.numBasesByAnalog_[1][zmwIndex];
+            sm.numBasesG_ = metrics.numBasesByAnalog_[2][zmwIndex];
+            sm.numBasesT_ = metrics.numBasesByAnalog_[3][zmwIndex];
 
-        sm.numPulses_ = bm.NumPulses()[zmwIndex];
+            sm.numPulses_ = metrics.numBases_[zmwIndex];
+        }
     }
 
     void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
@@ -246,8 +251,6 @@ private:
             for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
             {
                 const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
-                // TODO: handle nullptr case
-                const auto& metrics = basecallBatch.Metrics(lane);
 
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
@@ -259,7 +262,7 @@ private:
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            ConvertMetric(metrics, dest[i], zmw);
+                                                            ConvertMetric(basecallBatch, dest[i], lane, zmw);
                                                         }
                                                      },
                                                      1,

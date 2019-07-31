@@ -35,8 +35,6 @@
 #include <numeric>
 #include <vector>
 
-#include <pacbio/smrtdata/Basecall.h>
-
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
@@ -84,6 +82,15 @@ public:
             numFrames_[zmw] = numFrames;
             autocorr_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
             pulseDetectionScore_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
+
+            frameBaselineM0DWS_[zmw] = 0;
+            frameBaselineM1DWS_[zmw] = 0;
+            frameBaselineM2DWS_[zmw] = 0;
+            autocorr_[zmw] = 0;
+            confidenceScore_[zmw] = 0;
+            pulseDetectionScore_[zmw] = 0;
+            fullEstimationAttempted_[zmw] = 0;
+            modelUpdated_[zmw] = 0;
         }
     }
 

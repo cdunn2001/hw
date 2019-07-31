@@ -6,6 +6,7 @@ add_subdirectory(simd)
 add_subdirectory(test)
 
 add_library(libMongoCommon STATIC
+    ActivityLabeler.h
     AlignedCircularBuffer.h
     AlignedVector.h
     AutocorrAccumulator.h

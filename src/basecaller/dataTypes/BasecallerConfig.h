@@ -237,8 +237,8 @@ namespace Data {
     class BasecallerMetricsConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, Host, Gpu, NoOp);
-        ADD_ENUM(MethodName, Method, MethodName::Host);
+        SMART_ENUM(MethodName, Host, Gpu, Minimal, NoOp);
+        ADD_ENUM(MethodName, Method, MethodName::NoOp);
 
         ADD_PARAMETER(uint32_t, sandwichTolerance, 0);
     };

@@ -87,17 +87,13 @@ public:     // Functions
     bool HasMetrics() const
     { return metrics_.get() != nullptr; }
 
-    BasecallingMetrics<laneSize>& Metrics(size_t laneIdx)
-    { return metrics_->GetHostView()[laneIdx]; }
+    // Safety first: call HasMetrics before you dig
+    //Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics()
+    //{ return *(metrics_.get()); }
 
-    const BasecallingMetrics<laneSize>& Metrics(size_t laneIdx) const
-    { return metrics_->GetHostView()[laneIdx]; }
-
-    Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>* Metrics()
-    { return metrics_.get(); }
-
-    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>* Metrics() const
-    { return metrics_.get(); }
+    // Safety first: call HasMetrics before you dig
+    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics() const
+    { return *(metrics_.get()); }
 
     void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics)
     {

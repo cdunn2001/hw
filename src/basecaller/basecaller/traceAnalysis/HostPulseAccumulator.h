@@ -123,6 +123,7 @@ public:
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
                 .SignalM2(signalM2_[zmw])
                 .Label(manager.Nucleotide(label_[zmw]));
+                .IsReject(false);
 
             return pls;
         }

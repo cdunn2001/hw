@@ -109,6 +109,28 @@ AlgoFactory::~AlgoFactory()
                     << ".  Should be impossible to see this message, constructor should have thrown";
         break;
     }
+
+    switch (hfMetricsOpt_)
+    {
+    case Data::BasecallerMetricsConfig::MethodName::NoOp:
+        NoHFMetricsFilter::Finalize();
+        break;
+    /*
+    case Data::BasecallerMetricsConfig::MethodName::Minimal:
+        MinimalHFMetricsFilter::Finalize();
+        break;
+    */
+    case Data::BasecallerMetricsConfig::MethodName::Host:
+        HostHFMetricsFilter::Finalize();
+        break;
+    default:
+        ostringstream msg;
+        PBLOG_ERROR << "Unrecognized method option for HFMetricsFilter: "
+                    << hfMetricsOpt_.toString()
+                    << ".  Should be impossible to see this message, "
+                    << "constructor should have thrown";
+        break;
+    }
 }
 
 
@@ -316,8 +338,13 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
     switch (hfMetricsOpt_)
     {
     case Data::BasecallerMetricsConfig::MethodName::NoOp:
+        return std::make_unique<NoHFMetricsFilter>(poolId);
+        break;
+    /*
+    case Data::BasecallerMetricsConfig::MethodName::Minimal:
         return std::make_unique<MinimalHFMetricsFilter>(poolId);
         break;
+    */
     case Data::BasecallerMetricsConfig::MethodName::Host:
         return std::make_unique<HostHFMetricsFilter>(poolId);
         break;
