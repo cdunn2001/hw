@@ -28,8 +28,64 @@
 //  Description:
 //  Defines members of class MovieConfig.
 
+#include "MovieConfig.h"
+
+#include <cmath>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
+
+MovieConfig MockMovieConfig()
+{
+    constexpr float raMin = 0.25f;
+
+    MovieConfig movConfig;
+    movConfig.frameRate = 100.0f;
+    movConfig.photoelectronSensitivity = 2.0f;
+    movConfig.refSnr = 20.0f;
+    {
+        auto& mca = movConfig.analogs[0];
+        mca.baseLabel = 'C';
+        mca.relAmplitude = 1.0f;
+        mca.excessNoiseCV = 0.1f;
+        mca.interPulseDistance = 0.10f;
+        mca.pulseWidth = 0.10f;
+        mca.pw2SlowStepRatio = 0.5;
+        mca.ipd2SlowStepRatio = 0.0;
+    }
+    {
+        auto& mca = movConfig.analogs[1];
+        mca.baseLabel = 'A';
+        mca.relAmplitude = std::pow(raMin, 1.0f/3);
+        mca.excessNoiseCV = 0.1f;
+        mca.interPulseDistance = 0.10f;
+        mca.pulseWidth = 0.10f;
+        mca.pw2SlowStepRatio = 0.5;
+        mca.ipd2SlowStepRatio = 0.0;
+    }
+    {
+        auto& mca = movConfig.analogs[2];
+        mca.baseLabel = 'T';
+        mca.relAmplitude = std::pow(raMin, 2.0f/3);
+        mca.excessNoiseCV = 0.1f;
+        mca.interPulseDistance = 0.10f;
+        mca.pulseWidth = 0.10f;
+        mca.pw2SlowStepRatio = 0.5;
+        mca.ipd2SlowStepRatio = 0.0;
+    }
+    {
+        auto& mca = movConfig.analogs[3];
+        mca.baseLabel = 'G';
+        mca.relAmplitude = raMin;
+        mca.excessNoiseCV = 0.1f;
+        mca.interPulseDistance = 0.10f;
+        mca.pulseWidth = 0.10f;
+        mca.pw2SlowStepRatio = 0.5;
+        mca.ipd2SlowStepRatio = 0.0;
+    }
+
+    return movConfig;
+}
 
 }}}     // namespace PacBio::Mongo::Data

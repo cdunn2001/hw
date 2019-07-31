@@ -33,6 +33,8 @@
 #include <cmath>
 #include <limits>
 
+#include <common/cuda/utility/CudaArray.h>
+
 #include "LaneMask.h"
 #include "MongoConstants.h"
 
@@ -75,6 +77,11 @@ public:     // Structors and assignment
 
     /// Create wrapper referring to \a data.
     explicit ConstLaneArrayRef(ConstPointer data) : data_ (data) { }
+
+    /// Wraps a const CudaArray.
+    explicit ConstLaneArrayRef(const Cuda::Utility::CudaArray<ElementType, N>& ca)
+        : ConstLaneArrayRef(ca.data())
+    { }
 
     /// Create a wrapper referring to the same data as \a that.
     ConstLaneArrayRef(const ConstLaneArrayRef& that) = default;
@@ -322,6 +329,11 @@ public:     // Structors and assignment
     // Note that this is where the Pointer is stored as ConstPointer in the
     // super object. We use Super:MutableData to get non-const access.
     explicit LaneArrayRef(Pointer data) : BaseConstRef(data) { }
+
+    /// Wraps a CudaArray.
+    explicit LaneArrayRef(Cuda::Utility::CudaArray<ElementType, N>& ca)
+        : LaneArrayRef(ca.data())
+    { }
 
     /// Create a wrapper referring to the same data as \a that.
     /// \note Cannot create a LaneArrayRef from a ConstLaneArrayRef.

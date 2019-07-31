@@ -71,9 +71,10 @@ public:
         dims_.lanesPerBatch = lanesPerPool;
     }
 
-    CameraTraceBatch NewBatch(const BatchMetadata& meta)
+    CameraTraceBatch NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_, tracePool_, statsPool_);
+        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_,
+                                tracePool_, statsPool_);
     }
 
 private:

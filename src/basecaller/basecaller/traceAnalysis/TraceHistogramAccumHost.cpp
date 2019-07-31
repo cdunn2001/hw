@@ -34,10 +34,12 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize)
+TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
+                                                 unsigned int poolSize,
+                                                 bool pinnedAlloc)
     : TraceHistogramAccumulator(poolId, poolSize)
-    , poolHist_ (poolId, poolSize)
-    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric)
+    , poolHist_ (poolId, poolSize, pinnedAlloc)
+    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, pinnedAlloc)
 { }
 
 
