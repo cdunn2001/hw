@@ -33,11 +33,13 @@
 #include <dataTypes/Pulse.h>
 
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+template <typename LabelManager>
 class HostPulseAccumulator : public PulseAccumulator
 {
     using ConstLabelArrayRef = ConstLaneArrayRef<Data::LabelsBatch::ElementType>;
@@ -62,17 +64,6 @@ public:
         using SignalArray = LaneArray<Data::CameraTraceBatch::ElementType>;
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
 
-    public:     // Static constants
-        /// Number of states in HMM.
-        static constexpr int numStates = 1 + 3*numAnalogs;
-
-    public:
-        static LaneMask<> IsPulseUpState(const ConstLabelArrayRef& i)
-        { return (LabelArray{numAnalogs} < i) & (i <= LabelArray{2*numAnalogs}); }
-
-        static LaneMask<> IsPulseDownState(const ConstLabelArrayRef& i)
-        { return (LabelArray{2*numAnalogs} < i) & (i < LabelArray{numStates}); }
-
     public:
         LabelsSegment(const FrameArray& startFrame, const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
             : startFrame_(startFrame)
@@ -93,42 +84,23 @@ public:
             , signalMax_(0)
             , signalTotal_(0)
             , signalM2_(0)
-            , label_(0)
+            , label_(LabelManager::BaselineLabel())
         { }
 
     public:
         LaneMask<> IsNewSegment(const ConstLabelArrayRef& label) const
         {
-            return IsPulseUpState(label) | ((label == LabelArray{0}) & (this->label_ != LabelArray{0}));
+            return LabelManager::IsNewSegment(this->label_, label);
         }
         
         LaneMask<> IsPulse() const
         {
-            return label_ != LabelArray{0};
+            return label_ != LabelArray{LabelManager::BaselineLabel()};
         }
 
-        LabelArray FullFrameLabel() const
-        {
-            LabelArray ret(this->label_);
-            ret = Blend(IsPulseDownState(this->label_),
-                        this->label_ - static_cast<Data::LabelsBatch::ElementType>(2*numAnalogs), ret);
-            ret = Blend(IsPulseUpState(this->label_),
-                        this->label_ - static_cast<Data::LabelsBatch::ElementType>(numAnalogs), ret);
-            return ret;
-        }
-
-        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw)
+        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw, const LabelManager& manager)
         {
             using NucleotideLabel = Data::Pulse::NucleotideLabel;
-
-            // TODO: The analog map is currently hard-coded to be
-            // in alphabetical order but this will need to eventually be passed
-            // into this function where it is set either from the trace file
-            // or via ICS.
-            const std::array<NucleotideLabel, 5>& analogMap =
-            {
-                NucleotideLabel::NONE, NucleotideLabel::A, NucleotideLabel::C, NucleotideLabel::G, NucleotideLabel::T
-            };
 
             const float maxSignal = Data::Pulse::SignalMax();
             const float minSignal = 0.0f;
@@ -150,7 +122,7 @@ public:
                 .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
                 .SignalM2(signalM2_[zmw])
-                .Label(analogMap[FullFrameLabel()[zmw]]);
+                .Label(manager.Nucleotide(label_[zmw]));
 
             return pls;
         }
@@ -167,7 +139,7 @@ public:
             signalM2_ = Blend(boundaryMask, FloatArray{0}, signalM2_);
             label_ = Blend(boundaryMask, label, label_);
         }
-        
+
         void AddSignal(const LaneMask<laneSize>& update, const ConstSignalArrayRef& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
@@ -207,6 +179,7 @@ private:
 
 private:
     std::vector<LabelsSegment> startSegmentByLane;
+    static std::unique_ptr<LabelManager> manager_;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller

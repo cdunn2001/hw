@@ -110,7 +110,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
-    pulseAccumulator_ = algoFac.CreateAccumulator(poolId);
+    pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
     // TODO: Create other algorithm components.
 
     // Not running DME, need to fake our model

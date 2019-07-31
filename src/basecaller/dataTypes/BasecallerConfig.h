@@ -226,12 +226,12 @@ namespace Data {
     class BasecallerPulseAccumConfig : public PacBio::Process::ConfigurationObject
     {
     public:
-        SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses)
-        ADD_ENUM(MethodName, Method, MethodName::HostPulses);
+        SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses)
+        ADD_ENUM(MethodName, Method, MethodName::GpuPulses);
 
         // Increasing this number will directly increase memory usage, even if
         // we don't saturate the allowed number of calls, so be conservative
-        ADD_PARAMETER(uint32_t, maxCallsPerZmw, 96);
+        ADD_PARAMETER(uint32_t, maxCallsPerZmw, 12);
     };
 
     class BasecallerMetricsConfig : public PacBio::Process::ConfigurationObject
