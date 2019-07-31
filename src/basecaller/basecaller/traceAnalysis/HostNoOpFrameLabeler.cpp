@@ -8,10 +8,7 @@ namespace Basecaller {
 void HostNoOpFrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = true;
-    // FIXME: Viterbi lookback of 16 frames which should
-    // not be hard-coded and eventually pulled from a single
-    // source.
-    InitAllocationPools(hostExecution, 16u);
+    InitAllocationPools(hostExecution, 0);
 }
 
 void HostNoOpFrameLabeler::Finalize()
@@ -30,6 +27,11 @@ HostNoOpFrameLabeler::Process(Data::CameraTraceBatch trace,
                               const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
+    for (size_t laneIdx = 0; laneIdx < ret.LanesPerBatch(); laneIdx++)
+    {
+        std::memset(ret.GetBlockView(laneIdx).Data(), 0,
+                    ret.GetBlockView(laneIdx).Size() * sizeof(Data::LabelsBatch::ElementType));
+    }
     return ret;
 }
 

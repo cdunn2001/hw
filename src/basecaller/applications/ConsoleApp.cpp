@@ -348,7 +348,7 @@ private:
         {
             if (!batchGenerator_->Finished())
             {
-                auto readChunk = [=]() {
+                auto readChunk = [&numChunksRead, this]() {
                     Profiler::Mode mode = Profiler::Mode::REPORT;
                     if (numChunksRead < 15) mode = Profiler::Mode::OBSERVE;
                     Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
