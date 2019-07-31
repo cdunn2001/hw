@@ -231,7 +231,7 @@ namespace Data {
 
         // Increasing this number will directly increase memory usage, even if
         // we don't saturate the allowed number of calls, so be conservative
-        ADD_PARAMETER(uint32_t, maxCallsPerZmw, 12);
+        ADD_PARAMETER(uint32_t, maxCallsPerZmw, 24);
     };
 
     class BasecallerMetricsConfig : public PacBio::Process::ConfigurationObject

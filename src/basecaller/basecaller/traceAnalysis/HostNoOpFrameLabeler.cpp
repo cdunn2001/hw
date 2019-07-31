@@ -8,7 +8,9 @@ namespace Basecaller {
 void HostNoOpFrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = true;
-    // Viterbi lookback of 16 frames
+    // FIXME: Viterbi lookback of 16 frames which should
+    // not be hard-coded and eventually pulled from a single
+    // source.
     InitAllocationPools(hostExecution, 16u);
 }
 
