@@ -59,7 +59,7 @@ public:
 
     __device__ void Reset()
     {
-        len_ = 0;
+        *len_ = 0;
     }
 
     __device__ const T& operator[](size_t idx) const
@@ -76,8 +76,24 @@ public:
     __device__ void push_back(U&& val)
     {
         assert(*len_ < data_.Size());
-        data_[*len_] = std::forward(val);
+        data_[*len_] = std::forward<U>(val);
         (*len_)++;
+    }
+
+    // Creates a default initialized entry at the back of the vector
+    // Note that this implementation is limited to trivially_default_constructible
+    // types, so this is in fact a noop.
+    __device__ void emplace_back_default()
+    {
+        assert(*len_ < data_.Size());
+        (*len_)++;
+    }
+
+    __device__ T& back()
+    {
+        assert(*len_ <= data_.Size());
+        assert(*len_ > 0);
+        return data_[*len_-1];
     }
 
 private:

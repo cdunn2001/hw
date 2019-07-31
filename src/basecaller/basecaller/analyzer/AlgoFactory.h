@@ -27,7 +27,7 @@ public:
 
     std::unique_ptr<Baseliner> CreateBaseliner(unsigned int poolId) const;
     std::unique_ptr<FrameLabeler> CreateFrameLabeler(unsigned int poolId) const;
-    std::unique_ptr<PulseAccumulator> CreateAccumulator(unsigned int poolId) const;
+    std::unique_ptr<PulseAccumulator> CreatePulseAccumulator(unsigned int poolId) const;
 
     std::unique_ptr<TraceHistogramAccumulator>
     CreateTraceHistAccumulator(unsigned int poolId) const;

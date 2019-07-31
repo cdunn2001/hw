@@ -9,6 +9,7 @@
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
@@ -17,6 +18,7 @@
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpFrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 
@@ -35,11 +37,15 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
-    frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
-    pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
+
+    // Detection model estimator
+    dmeOpt_ = bcConfig.dmeConfig.Method;
+
+    frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
+    pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -92,12 +98,15 @@ AlgoFactory::~AlgoFactory()
         HostSimulatedPulseAccumulator::Finalize();
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator::Finalize();
+        HostPulseAccumulator<SubframeLabelManager>::Finalize();
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        DevicePulseAccumulator<SubframeLabelManager>::Finalize();
         break;
     default:
         ostringstream msg;
-        PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
-                    << frameLabelerOpt_.toString()
+        PBLOG_ERROR << "Unrecognized method option for PulseAccumulator: "
+                    << pulseAccumOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
         break;
     }
@@ -133,6 +142,22 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
+    switch (dmeOpt_)
+    {
+    case Data::BasecallerDmeConfig::MethodName::Fixed:
+        DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
+        break;
+    case Data::BasecallerDmeConfig::MethodName::EmHost:
+        DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for DetectionModelEstimator: "
+            << dmeOpt_.toString() << '.';
+        throw PBException(msg.str());
+        break;
+    }
+
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
@@ -159,7 +184,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostPulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        DevicePulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -170,7 +198,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
 }
 
 
@@ -238,7 +265,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
         // TODO: For now fall through to throw exception.
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_ << '.';
+        msg << "Unrecognized method option for TraceHistogramAccumulator: "
+            << histAccumOpt_ << '.';
         throw PBException(msg.str());
         break;
     }
@@ -257,14 +285,15 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
 
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: " << dmeOpt_ << '.';
+        msg << "Unrecognized method option for DetectionModelEstimator: "
+            << dmeOpt_ << '.';
         throw PBException(msg.str());
         break;
     }
 }
 
 std::unique_ptr<PulseAccumulator>
-AlgoFactory::CreateAccumulator(unsigned int poolId) const
+AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
 {
     switch (pulseAccumOpt_)
     {
@@ -275,7 +304,10 @@ AlgoFactory::CreateAccumulator(unsigned int poolId) const
         return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        return std::make_unique<HostPulseAccumulator>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        break;
+    case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
+        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
         break;
     default:
         ostringstream msg;

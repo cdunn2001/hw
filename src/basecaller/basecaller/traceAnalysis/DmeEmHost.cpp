@@ -79,6 +79,8 @@ DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig)
 {
+    DetectionModelEstimator::Configure(dmeConfig, movConfig);
+
     // TODO: Validate values.
     // TODO: Log settings.
     analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
