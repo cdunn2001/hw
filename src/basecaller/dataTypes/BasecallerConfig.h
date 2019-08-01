@@ -8,6 +8,7 @@
 
 #include "AnalogMode.h"
 #include "PrimaryConfig.h"
+#include "StaticDetModelConfig.h"
 
 // TODO: After some mongo dust has settled, purge unused configuration properties.
 
@@ -291,6 +292,7 @@ namespace Data {
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
+        ADD_OBJECT(StaticDetModelConfig, staticDetModelConfig);
         ADD_PARAMETER(bool, staticAnalysis, true);
 
     public:

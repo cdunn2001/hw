@@ -67,7 +67,12 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
     const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, algoFactory_, staticAnalysis);
+        auto batchAnalyzer = BatchAnalyzer(poolId, algoFactory_);
+        if (staticAnalysis)
+        {
+            batchAnalyzer.SetupStaticModel(bcConfig.algorithm.staticDetModelConfig, movConfig);
+        }
+        bAnalyzer_.push_back(std::move(batchAnalyzer));
     }
 }
 

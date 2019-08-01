@@ -101,10 +101,9 @@ void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 }
 
 
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
     , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, true)
-    , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
@@ -112,34 +111,32 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
     // TODO: Create other algorithm components.
-
-    // Not running DME, need to fake our model
-    if (staticAnalysis_)
-    {
-        Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
-        model.AnalogMode(0).SetAllMeans(227.13);
-        model.AnalogMode(1).SetAllMeans(154.45);
-        model.AnalogMode(2).SetAllMeans(97.67);
-        model.AnalogMode(3).SetAllMeans(61.32);
-
-        model.AnalogMode(0).SetAllVars(776);
-        model.AnalogMode(1).SetAllVars(426);
-        model.AnalogMode(2).SetAllVars(226);
-        model.AnalogMode(3).SetAllVars(132);
-
-        // Need a new trace file to target, these values come from a file with
-        // zero baseline mean
-        model.BaselineMode().SetAllMeans(0);
-        model.BaselineMode().SetAllVars(33);
-
-        auto view = models_.GetHostView();
-        for (size_t i = 0; i < view.Size(); ++i)
-        {
-            view[i] = model;
-        }
-    }
 }
 
+void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,
+                                     const PacBio::Mongo::Data::MovieConfig& movieConfig)
+{
+    staticAnalysis_ = true;
+
+    // Not running DME, need to fake our model
+    Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
+
+    model.BaselineMode().SetAllMeans(staticDetModelConfig.baselineMean);
+    model.BaselineMode().SetAllVars(staticDetModelConfig.baselineVariance);
+
+    auto analogs = staticDetModelConfig.SetupAnalogs(movieConfig);
+    for (size_t i = 0; i < analogs.size(); i++)
+    {
+        model.AnalogMode(i).SetAllMeans(analogs[i].mean);
+        model.AnalogMode(i).SetAllVars(analogs[i].var);
+    }
+
+    auto view = models_.GetHostView();
+    for (size_t i = 0; i < view.Size(); ++i)
+    {
+        view[i] = model;
+    }
+}
 
 BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {

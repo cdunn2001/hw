@@ -69,7 +69,7 @@ public:     // Static functions
     static void ReportPerformance();
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&);
@@ -89,6 +89,9 @@ public:
     StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
     PacBio::Mongo::Data::BasecallBatch
     StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+
+    void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
+                          const Data::MovieConfig& movieConfig);
 
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.

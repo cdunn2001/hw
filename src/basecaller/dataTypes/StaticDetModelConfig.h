@@ -1,0 +1,70 @@
+// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#ifndef mongo_datatypes_StaticDetectionModel_h
+#define mongo_datatypes_StaticDetectionModel_h
+
+#include <common/MongoConstants.h>
+#include "MovieConfig.h"
+
+#include <pacbio/process/ConfigurationBase.h>
+
+namespace PacBio {
+namespace Mongo {
+namespace Data {
+
+class StaticDetModelConfig : public PacBio::Process::ConfigurationObject
+{
+public:
+    ADD_PARAMETER(float, baselineMean, 0);
+    ADD_PARAMETER(float, baselineVariance, 33.0f);
+
+public:
+    struct AnalogMode
+    {
+        float mean;
+        float var;
+    };
+
+    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
+    {
+        std::array<AnalogMode, numAnalogs> analogs;
+        const auto refSignal = movieConfig.refSnr * sqrt(baselineVariance);
+        for (size_t i = 0; i < analogs.size(); i++)
+        {
+            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
+            const auto var = baselineVariance + mean + pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
+
+            analogs[i].mean = mean;
+            analogs[i].var = var;
+        }
+
+        return analogs;
+    }
+};
+
+}}} // PacBio::Mongo::Data
+
+#endif // mongo_datatypes_StaticDetectionModel_h
