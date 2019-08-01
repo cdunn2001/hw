@@ -30,7 +30,8 @@ class MongoBasecallerConsole : public ThreadedProcessBase
     SMART_ENUM(
         ProfileSpots,
         ANALYZE_CHUNK,
-        WRITE_CHUNK
+        WRITE_CHUNK,
+        READ_CHUNK
     );
 
     using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
@@ -329,8 +330,11 @@ private:
             PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
             for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
-                PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(batchGenerator_->PopulateChunk());
+                auto chunk = batchGenerator_->PopulateChunk();
+                PBLOG_INFO << "Read in chunk frames = ["
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                inputDataQueue_.Push(std::move(chunk));
             }
             PBLOG_INFO << "Done preloading input queue.";
         }
@@ -338,16 +342,30 @@ private:
 
     void RunReader()
     {
-        size_t numChunksRead = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
+        size_t numChunksRead = 0;
         while (!ExitRequested())
         {
             if (!batchGenerator_->Finished())
             {
-
-                auto chunk = batchGenerator_->PopulateChunk();
+                auto readChunk = [&numChunksRead, this]() {
+                    Profiler::Mode mode = Profiler::Mode::REPORT;
+                    if (numChunksRead < 15) mode = Profiler::Mode::OBSERVE;
+                    Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
+                    auto readChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::READ_CHUNK);
+                    (void)readChunkProfile;
+                    auto chunk = batchGenerator_->PopulateChunk();
+                    PBLOG_INFO << "Read in chunk frames = ["
+                                  + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                                  + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                    return chunk;
+                };
+                auto chunk = readChunk();
                 numChunksRead++;
-                while (inputDataQueue_.Size() > 0) usleep(1000);
+                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_)
+                {
+                    usleep(1000);
+                }
                 inputDataQueue_.Push(std::move(chunk));
             }
             else

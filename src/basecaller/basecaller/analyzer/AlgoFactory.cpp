@@ -16,6 +16,7 @@
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/HostNoOpBaseliner.h>
+#include <basecaller/traceAnalysis/HostNoOpFrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
@@ -76,6 +77,8 @@ AlgoFactory::~AlgoFactory()
 
     switch (frameLabelerOpt_)
     {
+    case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
+        HostNoOpFrameLabeler::Finalize();
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
         DeviceSGCFrameLabeler::Finalize();
         break;
@@ -157,6 +160,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     switch (frameLabelerOpt_)
     {
+    case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
+        HostNoOpFrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
+                                        Data::GetPrimaryConfig().framesPerChunk);
+        break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
         DeviceSGCFrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
                                          Data::GetPrimaryConfig().framesPerChunk);
@@ -232,6 +239,9 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
 {
     switch (frameLabelerOpt_)
     {
+    case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
+        return std::make_unique<HostNoOpFrameLabeler>(poolId);
+        break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
         return std::make_unique<DeviceSGCFrameLabeler>(poolId);
         break;
