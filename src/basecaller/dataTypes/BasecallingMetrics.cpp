@@ -172,27 +172,27 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
     const auto& numBases = NumBases();
     for (size_t z = 0; z < LaneWidth; ++z)
     {
-        metrics.numPulseFrames_[z] = numPulseFrames_[z];
-        metrics.numBaseFrames_[z] = numBaseFrames_[z];
-        metrics.numSandwiches_[z] = numSandwiches_[z];
-        metrics.numHalfSandwiches_[z] = numHalfSandwiches_[z];
-        metrics.numPulseLabelStutters_[z] = numPulseLabelStutters_[z];
-        metrics.numPulses_[z] = numPulses[z];
-        metrics.numBases_[z] = numBases[z];
-        metrics.activityLabel_[z] = activityLabel_[z];
+        metrics.numPulseFrames[z] = numPulseFrames_[z];
+        metrics.numBaseFrames[z] = numBaseFrames_[z];
+        metrics.numSandwiches[z] = numSandwiches_[z];
+        metrics.numHalfSandwiches[z] = numHalfSandwiches_[z];
+        metrics.numPulseLabelStutters[z] = numPulseLabelStutters_[z];
+        metrics.numPulses[z] = numPulses[z];
+        metrics.numBases[z] = numBases[z];
+        metrics.activityLabel[z] = activityLabel_[z];
     }
     for (size_t a = 0; a < NumAnalogs; ++a)
     {
         for (size_t z = 0; z < LaneWidth; ++z)
         {
-            metrics.pkMidSignal_[a][z] = pkMidSignal_[a][z];
-            metrics.bpZvar_[a][z] = bpZvar_[a][z];
-            metrics.pkZvar_[a][z] = pkZvar_[a][z];
-            metrics.pkMax_[a][z] = pkMax_[a][z];
-            metrics.pkMidNumFrames_[a][z] = pkMidNumFrames_[a][z];
-            metrics.numPkMidBasesByAnalog_[a][z] = numPkMidBasesByAnalog_[a][z];
-            metrics.numBasesByAnalog_[a][z] = numBasesByAnalog_[a][z];
-            metrics.numPulsesByAnalog_[a][z] = numPulsesByAnalog_[a][z];
+            metrics.pkMidSignal[a][z] = pkMidSignal_[a][z];
+            metrics.bpZvar[a][z] = bpZvar_[a][z];
+            metrics.pkZvar[a][z] = pkZvar_[a][z];
+            metrics.pkMax[a][z] = pkMax_[a][z];
+            metrics.pkMidNumFrames[a][z] = pkMidNumFrames_[a][z];
+            metrics.numPkMidBasesByAnalog[a][z] = numPkMidBasesByAnalog_[a][z];
+            metrics.numBasesByAnalog[a][z] = numBasesByAnalog_[a][z];
+            metrics.numPulsesByAnalog[a][z] = numPulsesByAnalog_[a][z];
         }
     }
 }

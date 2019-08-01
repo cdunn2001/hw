@@ -122,7 +122,7 @@ public:
                 .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
                 .SignalM2(signalM2_[zmw])
-                .Label(manager.Nucleotide(label_[zmw]));
+                .Label(manager.Nucleotide(label_[zmw]))
                 .IsReject(false);
 
             return pls;

@@ -202,15 +202,15 @@ TEST(TestHFMetricsFilter, Populated)
                     EXPECT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
-                              mb.numPulseFrames_[z]);
+                              mb.numPulseFrames[z]);
                     EXPECT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
-                              mb.numBaseFrames_[z]);
+                              mb.numBaseFrames[z]);
                     // The pulses don't run to the end of each block, so all
                     // but one pulse is abutted
                     ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 1),
-                              mb.numHalfSandwiches_[z]);
+                              mb.numHalfSandwiches[z]);
                     // If numBases isn't evenly divisible by numAnalogs, the
                     // first analogs will be padded by the remainder
                     // e.g. 10 pulses per chunk means 2 for each analog, then
@@ -218,23 +218,23 @@ TEST(TestHFMetricsFilter, Populated)
                     EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 0 ? 1 : 0)),
-                              mb.numPulsesByAnalog_[0][z]);
+                              mb.numPulsesByAnalog[0][z]);
                     EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 1 ? 1 : 0)),
-                              mb.numPulsesByAnalog_[1][z]);
+                              mb.numPulsesByAnalog[1][z]);
                     EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 2 ? 1 : 0)),
-                              mb.numPulsesByAnalog_[2][z]);
+                              mb.numPulsesByAnalog[2][z]);
                     EXPECT_EQ(numBatchesPerHFMB
                                 * (config.numBases/numAnalogs
                                    + (config.numBases % numAnalogs > 3 ? 1 : 0)),
-                              mb.numPulsesByAnalog_[3][z]);
+                              mb.numPulsesByAnalog[3][z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
-                              mb.numPulses_[z]);
+                              mb.numPulses[z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
-                              mb.numBases_[z]);
+                              mb.numBases[z]);
                 }
             }
             ++blocks_tested;

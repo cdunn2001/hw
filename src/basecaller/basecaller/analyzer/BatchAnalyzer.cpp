@@ -66,7 +66,8 @@ SMART_ENUM(
     Baseline,
     FrameLabeling,
     PulseAccumulating,
-    SequelConv
+    SequelConv,
+    Metrics
 );
 
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
@@ -256,8 +257,9 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
+    auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
+    (void) metricsProfile;
     auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
-
     if (basecallingMetrics)
     {
         pulses.Metrics(std::move(basecallingMetrics));

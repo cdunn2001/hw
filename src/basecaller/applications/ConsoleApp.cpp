@@ -230,12 +230,12 @@ private:
         if (bb.HasMetrics())
         {
             const auto& metrics = bb.Metrics().GetHostView()[laneIndex];
-            sm.numBasesA_ = metrics.numBasesByAnalog_[0][zmwIndex];
-            sm.numBasesC_ = metrics.numBasesByAnalog_[1][zmwIndex];
-            sm.numBasesG_ = metrics.numBasesByAnalog_[2][zmwIndex];
-            sm.numBasesT_ = metrics.numBasesByAnalog_[3][zmwIndex];
+            sm.numBasesA_ = metrics.numBasesByAnalog[0][zmwIndex];
+            sm.numBasesC_ = metrics.numBasesByAnalog[1][zmwIndex];
+            sm.numBasesG_ = metrics.numBasesByAnalog[2][zmwIndex];
+            sm.numBasesT_ = metrics.numBasesByAnalog[3][zmwIndex];
 
-            sm.numPulses_ = metrics.numBases_[zmwIndex];
+            sm.numPulses_ = metrics.numBases[zmwIndex];
         }
     }
 

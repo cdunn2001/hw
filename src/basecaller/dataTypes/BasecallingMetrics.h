@@ -75,31 +75,31 @@ public: // types
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
     Cuda::Utility::CudaArray<ActivityLabeler::HQRFPhysicalState,
-                             LaneWidth> activityLabel_;
-    SingleUnsignedIntegerMetric numPulseFrames_;
-    SingleUnsignedIntegerMetric numBaseFrames_;
-    SingleUnsignedIntegerMetric numSandwiches_;
-    SingleUnsignedIntegerMetric numHalfSandwiches_;
-    SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    AnalogFloatMetric pkMidSignal_;
-    AnalogFloatMetric bpZvar_;
-    AnalogFloatMetric pkZvar_;
-    AnalogFloatMetric pkMax_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog_;
-    SingleUnsignedIntegerMetric numBases_;
-    SingleUnsignedIntegerMetric numPulses_;
+                             LaneWidth> activityLabel;
+    SingleUnsignedIntegerMetric numPulseFrames;
+    SingleUnsignedIntegerMetric numBaseFrames;
+    SingleUnsignedIntegerMetric numSandwiches;
+    SingleUnsignedIntegerMetric numHalfSandwiches;
+    SingleUnsignedIntegerMetric numPulseLabelStutters;
+    AnalogFloatMetric pkMidSignal;
+    AnalogFloatMetric bpZvar;
+    AnalogFloatMetric pkZvar;
+    AnalogFloatMetric pkMax;
+    AnalogUnsignedIntegerMetric pkMidNumFrames;
+    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog;
+    AnalogUnsignedIntegerMetric numBasesByAnalog;
+    AnalogUnsignedIntegerMetric numPulsesByAnalog;
+    SingleUnsignedIntegerMetric numBases;
+    SingleUnsignedIntegerMetric numPulses;
 
     // TODO Add useful tracemetrics members here (there are others in the accumulator member..., not sure if they
     // are used):
-    SingleUnsignedIntegerMetric startFrame_;
-    SingleUnsignedIntegerMetric stopFrame_;
-    SingleUnsignedIntegerMetric numFrames_;
-    SingleFloatMetric autocorrelation_;
-    SingleFloatMetric pulseDetectionScore_;
-    SingleIntegerMetric pixelChecksum_;
+    SingleUnsignedIntegerMetric startFrame;
+    SingleUnsignedIntegerMetric stopFrame;
+    SingleUnsignedIntegerMetric numFrames;
+    SingleFloatMetric autocorrelation;
+    SingleFloatMetric pulseDetectionScore;
+    SingleIntegerMetric pixelChecksum;
 };
 
 template <unsigned int LaneWidth>
@@ -156,7 +156,7 @@ public: // complex accessors
 
     SingleFloatMetric PulseWidth() const;
 
-protected: // metrics
+private: // metrics
     SingleUnsignedIntegerMetric numPulseFrames_;
     SingleUnsignedIntegerMetric numBaseFrames_;
     SingleUnsignedIntegerMetric numSandwiches_;
