@@ -3,6 +3,9 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/Pulse.h>
+#include <dataTypes/PulseBatch.h>
 #include <common/DataGenerators/BatchGenerator.h>
 #include <common/MongoConstants.h>
 
@@ -15,6 +18,7 @@
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
+#include <pacbio/smrtdata/NucleotideLabel.h>
 
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
@@ -130,9 +134,9 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
-                auto baseCalls = (*analyzer_)(std::move(chunk));
+                auto pulses = (*analyzer_)(std::move(chunk));
                 numChunksAnalyzed++;
-                outputDataQueue_.Push(std::move(baseCalls));
+                outputDataQueue_.Push(std::move(pulses));
             }
             else
             {
@@ -233,30 +237,80 @@ private:
         sm.numPulses_ = bm.NumPulses();
     }
 
-    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
+    auto ConvertMongoPulsesToSequelBasecalls(const Pulse* pulses, uint32_t numPulses)
+    {
+        auto LabelConv = [](Data::Pulse::NucleotideLabel label) {
+            switch (label)
+            {
+                case Data::Pulse::NucleotideLabel::A:
+                    return PacBio::SmrtData::NucleotideLabel::A;
+                case Data::Pulse::NucleotideLabel::C:
+                    return PacBio::SmrtData::NucleotideLabel::C;
+                case Data::Pulse::NucleotideLabel::G:
+                    return PacBio::SmrtData::NucleotideLabel::G;
+                case Data::Pulse::NucleotideLabel::T:
+                    return PacBio::SmrtData::NucleotideLabel::T;
+                case Data::Pulse::NucleotideLabel::N:
+                    return PacBio::SmrtData::NucleotideLabel::N;
+                default:
+                    assert(label == Data::Pulse::NucleotideLabel::NONE);
+                    return PacBio::SmrtData::NucleotideLabel::NONE;
+            }
+        };
+
+        std::vector<Basecall> basecalls(numPulses);
+        for (size_t pulseNum = 0; pulseNum < numPulses; ++pulseNum)
+        {
+            const auto& pulse = pulses[pulseNum];
+            auto& bc = basecalls[pulseNum];
+
+            static constexpr int8_t qvDefault_ = 0;
+
+            auto label = LabelConv(pulse.Label());
+
+            // Populate pulse data
+            bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
+            bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
+            bc.GetPulse().Label(label).LabelQV(qvDefault_);
+            bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
+            bc.GetPulse().MergeQV(qvDefault_);
+
+            // Populate base data.
+            bc.Base(label).InsertionQV(qvDefault_);
+            bc.DeletionTag(PacBio::SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
+            bc.SubstitutionTag(PacBio::SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
+        }
+        return basecalls;
+    }
+
+    void WritePulseChunk(const std::vector<std::unique_ptr<PulseBatch>>& pulseChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
         if (!bazWriter_) return; // NoOp if we're not doing output
 
-        for (const auto& basecallBatchPtr : basecallChunk)
+        for (const auto& pulseBatchPtr : pulseChunk)
         {
-            const auto& basecallBatch = *basecallBatchPtr;
-            const auto& metrics = basecallBatch.Metrics().GetHostView();
-            for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
+            // TODO: Need to convert the pulse batch metrics
+            // at which point BasecallBatch.h can be removed.
+            const auto& pulseBatch = *pulseBatchPtr;
+            //const auto& metrics = pulseBatch.Metrics().GetHostView();
+            for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
             {
-                const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
+                const auto& laneCalls = pulseBatch.Pulses().LaneView(lane);
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
-                                                     laneCalls.size(zmw),
+                        const auto& basecalls = ConvertMongoPulsesToSequelBasecalls(laneCalls.ZmwData(zmw),
+                                                                                    laneCalls.size(zmw));
+                        if (!bazWriter_->AddZmwSlice(basecalls.data(),
+                                                     basecalls.size(),
                                                      [&](MemoryBufferView<SpiderMetricBlock>& dest)
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
+                                                            //ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
                                                         }
                                                      },
                                                      1,
@@ -286,8 +340,8 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<std::unique_ptr<BasecallBatch>> basecallChunk;
-            if (outputDataQueue_.TryPop(basecallChunk))
+            std::vector<std::unique_ptr<PulseBatch>> pulseChunk;
+            if (outputDataQueue_.TryPop(pulseChunk))
             {
                 currentZmwIndex_ = 0;
                 Profiler::Mode mode = Profiler::Mode::REPORT;
@@ -295,7 +349,7 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
                 (void)writeChunkProfile;
-                WriteBasecallsChunk(basecallChunk);
+                WritePulseChunk(pulseChunk);
                 numChunksWritten_++;
             }
             else
@@ -395,7 +449,7 @@ private:
     // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BasecallBatch>>> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<PulseBatch>>> outputDataQueue_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
