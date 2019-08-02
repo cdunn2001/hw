@@ -160,8 +160,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
-        FrameLabeler::Configure(movConfig,
-                                Data::GetPrimaryConfig().lanesPerPool,
+        FrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
                                 Data::GetPrimaryConfig().framesPerChunk);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
@@ -185,10 +184,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostPulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        DevicePulseAccumulator<SubframeLabelManager>::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        DevicePulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
