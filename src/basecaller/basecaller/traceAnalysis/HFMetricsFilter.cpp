@@ -50,9 +50,7 @@ void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
         throw PBException("HFMetric frame block size cannot be smaller than "
                           "trace block size!");
 
-    PBLOG_INFO << "framesPerHFMetricBlock = " << framesPerHFMetricBlock_;
     sandwichTolerance_ = config.sandwichTolerance;
-    PBLOG_INFO << "Definition of sandwich = " << sandwichTolerance_ << " ipd";
     frameRate_ = Data::GetPrimaryConfig().sensorFrameRate;
     realtimeActivityLabels_ = Data::GetPrimaryConfig().realtimeActivityLabels;
 
@@ -63,7 +61,9 @@ void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
     lanesPerBatch_ = dims.lanesPerBatch;
     zmwsPerBatch_ = dims.ZmwsPerBatch();
 
-    InitAllocationPools(true);
+    constexpr bool hostExecution = true;
+
+    InitAllocationPools(hostExecution);
 }
 
 void HFMetricsFilter::Finalize()
@@ -97,7 +97,6 @@ void HFMetricsFilter::DestroyAllocationPools()
 
 void HostHFMetricsFilter::FinalizeBlock()
 {
-    PBLOG_INFO << "Finalizing HFMetricsBlock";
     for (size_t l = 0; l < lanesPerBatch_; ++l)
     {
         metrics_->GetHostView()[l].FinalizeMetrics(realtimeActivityLabels_,

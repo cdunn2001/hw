@@ -36,6 +36,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+namespace {
+
 // Evaluates a polynomial with a list of coefficients by descending degree
 // (e.g. y = ax^2 + bx + c)
 template <size_t size>
@@ -46,6 +48,7 @@ float evaluatePolynomial(const std::array<float, size>& coeff, float x)
     for (unsigned int i = 1; i < size; ++i)
         y = y * x + coeff[i];
     return y;
+}
 }
 
 template <unsigned int LaneWidth>
@@ -59,7 +62,6 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
     const auto& pkmid = PkmidMean();
     for (size_t zmw = 0; zmw < laneSize; ++zmw)
     {
-        // TODO: replace with non-dynamic CudaArray...
         std::vector<float> features;
         features.resize(ActivityLabeler::NUM_FEATURES, 0.0f);
         const float seconds = traceMetrics_.NumFrames()[zmw] / frameRate;
@@ -100,7 +102,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
             std::transform(amps.begin(), amps.end(), std::back_inserter(relamps),
                            [maxamp](float amp) { return amp/maxamp; });
         }
-        // This never changes, could be a member of an object
+        // This never changes, could be a member or at least not recomputed...
         const float minamp = *std::min_element(relamps.begin(), relamps.end());
 
         for (size_t i = 0; i < NumAnalogs; ++i)
@@ -317,8 +319,8 @@ void BasecallingMetricsAccumulator<LaneWidth>::AddBaselineStats(
     */
 }
 
-// TODO: This only keeps the most recent model. Should this accumulate
-// instead?
+// TODO: This only keeps the most recent model (which is how Sequel handled
+// it). Should this accumulate instead?
 template <unsigned int LaneWidth>
 void BasecallingMetricsAccumulator<LaneWidth>::AddModels(
         const InputModelsT& models)
@@ -491,14 +493,13 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
         }
     }
 
-/* TODO harvest these when available then re-enable (but merge with the loop
- * below)
+/* TODO harvest these when available then re-enable (some refactoring still
+ * needed)
     const auto& pdMetrics = pulseDetectMetrics_.Value();
     const auto& autocorr = autocorr_.Value().Autocorrelation();
     for (unsigned int z = 0; z < laneSize; ++z)
     {
-        auto& tm = laneMetrics_[z].TraceMetrics();
-        const auto& nf = laneMetrics_[z].TraceMetrics().NumFrames();
+        const auto& nf = traceMetrics_.NumFrames()[z];
         // Normalize score by number of frames.
         tm.PulseDetectionScore((nf != 0) ? MakeUnion(pdMetrics.score)[z] / nf : 0);
         const auto acz = MakeUnion(autocorr)[z];
@@ -511,30 +512,6 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
     }
 }
 
-
-/*
-template <unsigned int LaneWidth>
-void SimpleAccumulationMethods<LaneWidth>::Count(
-        BasecallingMetrics<LaneWidth>& bm,
-        const typename BasecallingMetrics<LaneWidth>::InputPulses& pulses,
-        uint32_t numFrames)
-{
-    (void)numFrames;
-    for (size_t zi = 0; zi < LaneWidth; ++zi)
-    {
-        for (size_t bi = 0; bi < pulses.size(zi); ++bi)
-        {
-            const Pulse& pulse = pulses(zi, bi);
-            uint8_t pulseLabel = static_cast<uint8_t>(pulse.Label());
-            bm.numPulsesByAnalog_[pulseLabel][zi]++;
-            if (!pulse.IsReject())
-            {
-                bm.numBasesByAnalog_[pulseLabel][zi]++;
-            }
-        }
-    }
-}
-*/
 
 template class BasecallingMetricsAccumulator<laneSize>;
 template class BasecallingMetrics<laneSize>;

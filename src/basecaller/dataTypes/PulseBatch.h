@@ -29,7 +29,6 @@
 //  Description:
 //  Defines class PulseBatch.
 
-#include "BasecallingMetrics.h"
 #include "BatchMetadata.h"
 #include "BatchData.h"
 #include "BatchVectors.h"
@@ -73,29 +72,10 @@ public:     // Functions
     BatchVectors<Pulse>& Pulses() { return pulses_; }
     const BatchVectors<Pulse>& Pulses() const { return pulses_; }
 
-    bool HasMetrics() const
-    { return metrics_.get() != nullptr; }
-
-    // Safety first: call HasMetrics before you dig
-    //Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics()
-    //{ return *(metrics_.get()); }
-
-    // Safety first: call HasMetrics before you dig
-    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics() const
-    { return *(metrics_.get()); }
-
-    void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics)
-    {
-        metrics_ = std::move(metrics);
-    }
-
 private:    // Data
     BatchDimensions dims_;
     BatchMetadata   metaData_;
     BatchVectors<Pulse> pulses_;
-
-    // Metrics per ZMW. Size is dims_.zmwsPerBatch() or nullptr.
-    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics_;
 };
 
 class PulseBatchFactory

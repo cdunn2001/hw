@@ -197,6 +197,7 @@ TEST(TestHFMetricsFilter, Populated)
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
+                EXPECT_EQ(sizeof(mb), 8128);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     EXPECT_EQ(numBatchesPerHFMB

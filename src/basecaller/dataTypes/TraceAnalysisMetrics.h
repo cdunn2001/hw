@@ -27,8 +27,9 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class TraceAnalysisMetrics, which are held by BasecallingMetrics
-//  and populated by HFMetricsFilter from other stages in the analysis pipeline
+//  Defines class TraceAnalysisMetrics, which are held by
+//  BasecallingMetricAccumulators and populated by HFMetricsFilter from other
+//  stages in the analysis pipeline
 
 #include <array>
 #include <math.h>
@@ -42,9 +43,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// TODO: This is a somewhat in-between implementation. The host version woudld be
-// improved by moving to LaneArrays for value initialization and "vector"
-// operators. The GPU version would benefit from GPU "vector" operations.
+// TODO: This could benefit from the StatAccumulator and Accumulator/State
+// models demonstrated in BaselinerStatAccumulator
 template <uint32_t LaneWidth>
 class TraceAnalysisMetrics
 {
@@ -59,15 +59,6 @@ public:
     using SingleBoolMetric = Cuda::Utility::CudaArray<bool, LaneWidth>;
 
 public:
-    /*
-    // TODO: CudaArray initializers do not work this way, but LaneArrays do
-    TraceAnalysisMetrics(size_t startFrame = 0, size_t numFrames = 0)
-        : startFrame_(startFrame)
-        , numFrames_(numFrames)
-        , autocorr_ (std::numeric_limits<Flt>::quiet_NaN())
-        , pulseDetectionScore_(std::numeric_limits<Flt>::lowest())
-    { }
-    */
 
     TraceAnalysisMetrics() = default;
     TraceAnalysisMetrics(const TraceAnalysisMetrics&) = default;
@@ -110,9 +101,6 @@ public:
         for (size_t i = 0; i < LaneWidth; ++i)
             ret = startFrame_[i] + numFrames_[i];
         return ret;
-        // Can we re-enable this if "vector" operators are implemented for
-        // CudaArrays?
-        //return startFrame_ + numFrames_;
     }
 
     // Number of frames used to compute trace metrics.
@@ -129,24 +117,6 @@ public:
 
     SingleFloatMetric& Autocorrelation()
     { return autocorr_; }
-
-/*
-    // Set detection modes for baseline and analog channels
-    TraceAnalysisMetrics& DetectionModes(const std::array<DetectionMode<float,NCam>, 5>& detModes)
-    {
-        baseline_  = detModes.front();
-        std::copy(detModes.begin()+1, detModes.end(), analog_.begin());
-        return *this;
-    }
-
-    // Detection mode properties for baseline (background) channels
-    const DetectionMode& Baseline() const
-    { return baseline_; }
-
-    // Detection mode properties for analog channels [A, C, G, T]
-    const std::array<DetectionMode<Flt,NCam>,4>& Analog() const
-    { return analog_; }
-*/
 
     /// The mean of the DWS baseline as computed by the pulse detection filter.
     SingleFloatMetric FrameBaselineDWS() const
@@ -201,8 +171,6 @@ public:
         for (size_t i = 0; i < LaneWidth; ++i)
             ret[i] = sqrtf(FrameBaselineVarianceDWS()[i]);
         return ret;
-        // use something like the following for a LaneArray version:
-        //return sqrtf(FrameBaselineVarianceDWS());
     }
 
     /// The number of baseline frames used by the pulse detection filter to
@@ -251,19 +219,12 @@ public:
     SingleIntegerMetric pixelChecksum;
 
 private:
-    // TODO These are going to have to come from somewhere:
-    //DetectionMode<Flt,NCam> baseline_;
-    //std::array<DetectionMode<Flt,NCam>,numAnalogs> analog_;
-
-    //SingleFloatMetric frameBaselineVarianceDWS_;
-    //SingleFloatMetric frameBaselineDWS_;
-    //SingleUnsignedIntegerMetric numFramesBaseline_;
-    //
     SingleFloatMetric frameBaselineM0DWS_;
     SingleFloatMetric frameBaselineM1DWS_;
     SingleFloatMetric frameBaselineM2DWS_;
 
-    SingleFloatMetric autocorr_;  // Autocorrelation coefficient at configured lag.
+    // None of these are used yet, perhaps some will never be used:
+    SingleFloatMetric autocorr_;
     SingleFloatMetric confidenceScore_;
     SingleFloatMetric pulseDetectionScore_;
     SingleBoolMetric fullEstimationAttempted_;

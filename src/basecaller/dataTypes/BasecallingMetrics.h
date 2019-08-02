@@ -92,8 +92,8 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleUnsignedIntegerMetric numBases;
     SingleUnsignedIntegerMetric numPulses;
 
-    // TODO Add useful tracemetrics members here (there are others in the accumulator member..., not sure if they
-    // are used):
+    // TODO Add useful tracemetrics members here (there are others in the
+    // accumulator member..., not sure if they are used):
     SingleUnsignedIntegerMetric startFrame;
     SingleUnsignedIntegerMetric stopFrame;
     SingleUnsignedIntegerMetric numFrames;
@@ -101,6 +101,9 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleFloatMetric pulseDetectionScore;
     SingleIntegerMetric pixelChecksum;
 };
+
+static_assert(sizeof(BasecallingMetrics<laneSize>) == 8128, "sizeof(BasecallingMetrics) is 8128 bytes");
+
 
 template <unsigned int LaneWidth>
 class BasecallingMetricsAccumulator
@@ -137,7 +140,6 @@ public:
 
     void FinalizeMetrics(bool realtimeActivityLabels, float frameRate);
 
-    // TODO: write this:
     void PopulateBasecallingMetrics(BasecallingMetricsT& metrics);
 
     void Reset()
@@ -255,8 +257,6 @@ private: // members:
     bool pinned_;
     std::shared_ptr<Pools> metricsPool_;
 };
-
-//static_assert(sizeof(BasecallingMetrics<laneSize>) == 212, "sizeof(BasecallingMetrics) is 212 bytes");
 
 }}}     // namespace PacBio::Mongo::Data
 
