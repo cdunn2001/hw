@@ -34,7 +34,7 @@
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
-#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/BatchResult.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
@@ -50,7 +50,7 @@ class BatchAnalyzer
 {
 public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
-    using OutputType = PacBio::Mongo::Data::BasecallBatch;
+    using OutputType = PacBio::Mongo::Data::BatchResult;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -83,13 +83,10 @@ public:     // Structors & assignment operators
 public:
     /// Call operator is non-reentrant and will throw if a trace batch is
     /// received for the wrong ZMW batch or is out of chronological order.
-    PacBio::Mongo::Data::BasecallBatch
-    operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
-    PacBio::Mongo::Data::BasecallBatch
-    StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
-    PacBio::Mongo::Data::BasecallBatch
-    StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
@@ -114,12 +111,6 @@ private:
     static std::unique_ptr<Data::BasecallBatchFactory> batchFactory_;
     static uint16_t maxCallsPerZmwChunk_;
 };
-
-namespace Temporary {
-
-void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& bases);
-
-}
 
 }}}     // namespace PacBio::Mongo::Basecaller
 

@@ -144,7 +144,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
 }
 
 
-BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
     if(staticAnalysis_)
     {
@@ -219,7 +219,7 @@ void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& b
 }   // anonymous namespace
 
 
-BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -260,17 +260,12 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
     auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
     (void) metricsProfile;
     auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
-    if (basecallingMetrics)
-    {
-        pulses.Metrics(std::move(basecallingMetrics));
-        bases.Metrics(std::move(basecallingMetrics));
-    }
 
-    return bases;
+    return BatchResult(std::move(bases), std::move(basecallingMetrics));
 }
 
 
-BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -326,21 +321,11 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    // potentially modify basecalls to add a metrics block for some number of
-    // preceding blocks
-    /* TODO (mds 20190724) pulseBatch isn't present in this pipeline yet
-    auto basecallingMetrics = (*hfMetrics_)(pulsecallsBatch, ctb.Stats(), models_);
+    // TODO (mds 20190724) uncomment when pulseBatch is produced in this pipeline
+    //auto basecallingMetrics = (*hfMetrics_)(pulsecallsBatch, ctb.Stats(), models_);
 
-    if (basecallingMetrics)
-    {
-        pulsecallsBatch.Metrics(std::move(basecallingMetrics));
-        basecallsBatch.Metrics(std::move(basecallingMetrics));
-    }
-    */
-
-    // TODO (mds 20190626) how do you recover the final metrics block if you
-    // end before getting to a yield block?
-    return basecalls;
+    // TODO (mds 20190802) uncomment when metrics are uncommented above
+    return BatchResult(std::move(basecalls)/*, std::move(basecallingMetrics)*/);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

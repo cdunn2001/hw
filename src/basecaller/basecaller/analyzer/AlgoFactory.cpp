@@ -115,11 +115,6 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerMetricsConfig::MethodName::NoOp:
         NoHFMetricsFilter::Finalize();
         break;
-    /*
-    case Data::BasecallerMetricsConfig::MethodName::Minimal:
-        MinimalHFMetricsFilter::Finalize();
-        break;
-    */
     case Data::BasecallerMetricsConfig::MethodName::Host:
         HostHFMetricsFilter::Finalize();
         break;
@@ -340,11 +335,6 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
     case Data::BasecallerMetricsConfig::MethodName::NoOp:
         return std::make_unique<NoHFMetricsFilter>(poolId);
         break;
-    /*
-    case Data::BasecallerMetricsConfig::MethodName::Minimal:
-        return std::make_unique<MinimalHFMetricsFilter>(poolId);
-        break;
-    */
     case Data::BasecallerMetricsConfig::MethodName::Host:
         return std::make_unique<HostHFMetricsFilter>(poolId);
         break;

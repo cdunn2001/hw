@@ -140,41 +140,6 @@ private:    // Block management
 };
 
 
-/*
-class MinimalHFMetricsFilter : public HFMetricsFilter
-{
-public:  // types
-    using MetricsAccumulatorT = Data::SimpleAccumulationMethods<laneSize>;
-
-private: // static
-    static std::unique_ptr<Data::BasecallingMetricsFactory<BasecallingMetricsT, laneSize>> metricsFactory_;
-    static uint32_t sandwichTolerance_;
-    static uint32_t framesPerHFMetricBlock_;
-    static double frameRate_;
-    static bool realtimeActivityLabels_;
-    static uint32_t zmwsPerBatch_;
-
-public:
-
-    MinimalHFMetricsFilter(uint32_t poolId);
-    MinimalHFMetricsFilter(const MinimalHFMetricsFilter&) = delete;
-    MinimalHFMetricsFilter(MinimalHFMetricsFilter&&) = default;
-    ~MinimalHFMetricsFilter() override;
-
-private:
-    uint32_t poolId_;
-    uint32_t framesSeen_;
-    std::unique_ptr<BasecallingMetricsBatchT> metrics_;
-
-private:    // Block management
-    std::unique_ptr<BasecallingMetricsBatchT> Process(const PulseBatchT& basecallBatch,
-                                            const BaselineStatsT& baselineStats) override;
-
-    void FinalizeBlock() override;
-};
-*/
-
-
 class NoHFMetricsFilter : public HFMetricsFilter
 {
 public:

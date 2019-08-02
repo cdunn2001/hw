@@ -222,14 +222,14 @@ private:
         }
     }
 
-    void ConvertMetric(const PacBio::Mongo::Data::BasecallBatch& bb,
+    void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
                        SpiderMetricBlock& sm,
                        size_t laneIndex,
                        size_t zmwIndex)
     {
-        if (bb.HasMetrics())
+        if (metricsPtr)
         {
-            const auto& metrics = bb.Metrics().GetHostView()[laneIndex];
+            const auto& metrics = metricsPtr->GetHostView()[laneIndex];
             sm.numBasesA_ = metrics.numBasesByAnalog[0][zmwIndex];
             sm.numBasesC_ = metrics.numBasesByAnalog[1][zmwIndex];
             sm.numBasesG_ = metrics.numBasesByAnalog[2][zmwIndex];
@@ -239,7 +239,7 @@ private:
         }
     }
 
-    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
+    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& basecallChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
@@ -247,7 +247,8 @@ private:
 
         for (const auto& basecallBatchPtr : basecallChunk)
         {
-            const auto& basecallBatch = *basecallBatchPtr;
+            const auto& basecallBatch = basecallBatchPtr->pulses;
+            const auto& metricsPtr = basecallBatchPtr->metrics;
             for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
             {
                 const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
@@ -262,7 +263,7 @@ private:
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            ConvertMetric(basecallBatch, dest[i], lane, zmw);
+                                                            ConvertMetric(metricsPtr, dest[i], lane, zmw);
                                                         }
                                                      },
                                                      1,
@@ -292,7 +293,7 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<std::unique_ptr<BasecallBatch>> basecallChunk;
+            std::vector<std::unique_ptr<BatchAnalyzer::OutputType>> basecallChunk;
             if (outputDataQueue_.TryPop(basecallChunk))
             {
                 currentZmwIndex_ = 0;
@@ -384,7 +385,7 @@ private:
     // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BasecallBatch>>> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>> outputDataQueue_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;

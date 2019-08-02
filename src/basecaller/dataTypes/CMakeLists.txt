@@ -18,6 +18,8 @@ set(CPP_LIST
     BatchData.cpp
     BatchMetadata.h
     BatchMetadata.cpp
+    BatchResult.h
+    BatchResult.cpp
     BatchVectors.h
     BatchVectors.cpp
     BatchVectors.cuh
