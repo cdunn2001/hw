@@ -44,7 +44,7 @@ public:  // types
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
 
 public:     // Static functions
-    static void Configure(int lanesPerPool, int framesPerChunk);
+    static void Configure(const Data::MovieConfig& movieConfig, int lanesPerPool, int framesPerChunk);
     static void Finalize();
 
     static void InitAllocationPools(bool hostExecution, size_t latentFrames);

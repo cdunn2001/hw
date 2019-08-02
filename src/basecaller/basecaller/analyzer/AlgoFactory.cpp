@@ -160,11 +160,13 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
-        FrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
+        FrameLabeler::Configure(movConfig,
+                                Data::GetPrimaryConfig().lanesPerPool,
                                 Data::GetPrimaryConfig().framesPerChunk);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        DeviceSGCFrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
+        DeviceSGCFrameLabeler::Configure(movConfig,
+                                         Data::GetPrimaryConfig().lanesPerPool,
                                          Data::GetPrimaryConfig().framesPerChunk);
         break;
     default:

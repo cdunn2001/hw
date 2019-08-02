@@ -36,7 +36,7 @@ namespace Basecaller {
 std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
 
 // static
-void FrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
+void FrameLabeler::Configure(const Data::MovieConfig& movieConfig, int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = true;
     InitAllocationPools(hostExecution, 0);
