@@ -104,11 +104,7 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
     using CLanArrRef = ConstLaneArrayRef<ElementType>;
     using LanArrRef = LaneArrayRef<DetModelElementType>;
 
-    CLanArrRef mom0 (blStats.baselineStats.moment0.data());
-    CLanArrRef mom1 (blStats.baselineStats.moment1.data());
-    CLanArrRef mom2 (blStats.baselineStats.moment2.data());
-
-    StatAccumulator<LaneArr> blsa (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
+    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
 
     const auto& blMean = blsa.Mean();
     LanArrRef(ldm.BaselineMode().means.data()) = blMean;
