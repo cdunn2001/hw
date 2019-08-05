@@ -94,15 +94,15 @@ TEST(TestNoOpBaseliner, Run)
                                         cameraBlock.Data() + cameraBlock.Size(),
                                         [&laneIdx, &batchNum](short v) { return v == static_cast<short>(laneIdx * batchNum); }));
 
-                const auto& baselineStats = cameraBatch.Stats().GetHostView()[laneIdx];
-                EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
-                                        baselineStats.m0_.data() + laneSize,
+                const auto& baselineStats = cameraBatch.Stats().GetHostView()[laneIdx].baselineStats;
+                EXPECT_TRUE(std::all_of(baselineStats.moment0.data(),
+                                        baselineStats.moment0.data() + laneSize,
                                         [](float v) { return v == 0; }));
-                EXPECT_TRUE(std::all_of(baselineStats.m1_.data(),
-                                        baselineStats.m1_.data() + laneSize,
+                EXPECT_TRUE(std::all_of(baselineStats.moment1.data(),
+                                        baselineStats.moment1.data() + laneSize,
                                         [](float v) { return v == 0; }));
-                EXPECT_TRUE(std::all_of(baselineStats.m2_.data(),
-                                        baselineStats.m2_.data() + laneSize,
+                EXPECT_TRUE(std::all_of(baselineStats.moment2.data(),
+                                        baselineStats.moment2.data() + laneSize,
                                         [](float v) { return v == 0; }));
             }
         }
@@ -143,15 +143,15 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
             Data::CameraTraceBatch cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
-            const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
-            EXPECT_TRUE(std::all_of(baselineStats.m0_.data(),
-                                    baselineStats.m0_.data() + laneSize,
+            const auto& baselineStats = cameraBatch.Stats().GetHostView()[0].baselineStats;
+            EXPECT_TRUE(std::all_of(baselineStats.moment0.data(),
+                                    baselineStats.moment0.data() + laneSize,
                                     [](float v) { return v == 0; }));
-            EXPECT_TRUE(std::all_of(baselineStats.m1_.data(),
-                                    baselineStats.m1_.data() + laneSize,
+            EXPECT_TRUE(std::all_of(baselineStats.moment1.data(),
+                                    baselineStats.moment1.data() + laneSize,
                                     [](float v) { return v == 0; }));
-            EXPECT_TRUE(std::all_of(baselineStats.m2_.data(),
-                                    baselineStats.m2_.data() + laneSize,
+            EXPECT_TRUE(std::all_of(baselineStats.moment2.data(),
+                                    baselineStats.moment2.data() + laneSize,
                                     [](float v) { return v == 0; }));
         }
     }
@@ -225,16 +225,17 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
             Data::CameraTraceBatch cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
-            const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
+            const auto& baselinerStatAccumState = cameraBatch.Stats().GetHostView()[0];
+            const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
             // Wait for baseliner to warm up before testing.
             if (blockNum > burnIn)
             {
-                const auto count = baselineStats.m0_[0];
-                const auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
-                auto var = baselineStats.m1_[0] * baselineStats.m1_[0] / baselineStats.m0_[0];
-                var = (baselineStats.m2_[0] - var) / (baselineStats.m0_[0] - 1.0f);
-                const auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
+                const auto count = baselineStats.moment0[0];
+                const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
+                auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
+                var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
+                const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
                 EXPECT_NEAR(count, (Data::GetPrimaryConfig().framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
                 EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));
@@ -317,16 +318,17 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_OneSignalLevel)
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
             Data::CameraTraceBatch cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
-            const auto& baselineStats = cameraBatch.Stats().GetHostView()[0];
+            const auto& baselinerStatAccumState = cameraBatch.Stats().GetHostView()[0];
+            const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
             // Wait for baseliner to warm up.
             if (blockNum > burnIn)
             {
-                const auto count = baselineStats.m0_[0];
-                const auto mean = baselineStats.m1_[0] / baselineStats.m0_[0];
-                auto var = baselineStats.m1_[0] * baselineStats.m1_[0] / baselineStats.m0_[0];
-                var = (baselineStats.m2_[0] - var) / (baselineStats.m0_[0] - 1.0f);
-                const auto rawMean = baselineStats.rawBaselineSum_[0] / baselineStats.m0_[0];
+                const auto count = baselineStats.moment0[0];
+                const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
+                auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
+                var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
+                const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
                 EXPECT_NEAR(count, (Data::GetPrimaryConfig().framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
                 EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));

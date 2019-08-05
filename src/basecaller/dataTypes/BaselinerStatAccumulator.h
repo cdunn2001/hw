@@ -6,7 +6,6 @@
 #include <common/MongoConstants.h>
 
 #include "BaselinerStatAccumState.h"
-#include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -27,7 +26,6 @@ public:     // Types
 
 public:     // Structors
     BaselinerStatAccumulator() = default;
-    explicit BaselinerStatAccumulator(const BaselineStats<laneSize>& bs);
 
     BaselinerStatAccumulator(const BaselinerStatAccumState& state)
         : baselineSubtractedStats_ {state.fullAutocorrState}
@@ -47,8 +45,6 @@ public:     // Mutating functions
                    const Mask& isBaseline);
 
 public:     // Const functions
-    const BaselineStats<laneSize> ToBaselineStats() const;
-
     BaselinerStatAccumState GetState() const
     {
         return BaselinerStatAccumState

@@ -197,7 +197,7 @@ TraceHistogramAccumHost::TraceStatsImpl() const
     auto ptsv = poolTraceStats_.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
-        ptsv[lane] = stats_[lane].ToBaselineStats();
+        ptsv[lane] = stats_[lane].GetState();
     }
     return poolTraceStats_;
 }

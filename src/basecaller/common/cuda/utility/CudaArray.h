@@ -29,6 +29,7 @@
 
 #include <common/cuda/CudaFunctionDecorators.h>
 
+#include "assert.h"
 #include <cstring>
 #include <algorithm>
 #include <array>

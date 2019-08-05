@@ -40,7 +40,7 @@ Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeI
             baselinerStats.AddSample(rawTrace, rawTrace, isBaseline);
         }
 
-        statsView[laneIdx] = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.GetState();
     }
 
     return out;

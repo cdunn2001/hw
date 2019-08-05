@@ -72,12 +72,12 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             // Mock up some baseliner statistics.
-            Data::BaselineStats<laneSize>& bls = ctb.Stats().GetHostView()[l];
-            LaneArrayRef<float>(bls.lagM2_) = 0;
-            bls.lagM1First_ = bls.lagM1Last_ = bls.lagM2_;
-            LaneArrayRef<float>(bls.m0_) = n0;
-            LaneArrayRef<float>(bls.m1_) = n0 * blMean;
-            LaneArrayRef<float>(bls.m2_) = (n0 - 1)*blVar + n0*pow2(blMean);
+            Data::BaselinerStatAccumState& bls = ctb.Stats().GetHostView()[l];
+            LaneArrayRef<float>(bls.fullAutocorrState.moment2) = 0;
+            bls.fullAutocorrState.moment1First = bls.fullAutocorrState.moment1Last = bls.fullAutocorrState.moment2;
+            LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
+            LaneArrayRef<float>(bls.baselineStats.moment1) = n0 * blMean;
+            LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
 
             // Fill in the trace data.
             auto bvl = ctb.GetBlockView(l);
@@ -85,8 +85,8 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
             {
                 *lfi = x;
             }
-            LaneArrayRef<TraceElementType>(bls.traceMin_) = x;
-            LaneArrayRef<TraceElementType>(bls.traceMax_) = x;
+            LaneArrayRef<TraceElementType>(bls.traceMin) = x;
+            LaneArrayRef<TraceElementType>(bls.traceMax) = x;
         }
 
         // Prepare for the next call.
