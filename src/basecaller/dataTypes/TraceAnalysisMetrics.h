@@ -133,6 +133,7 @@ public:
         SingleFloatMetric ret;
         for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
         {
+            //std::cout << frameBaselineM0DWS_[zmw] << " " << frameBaselineM1DWS_[zmw] << " " << frameBaselineM2DWS_[zmw] << std::endl;
             ret[zmw] = frameBaselineM1DWS_[zmw]
                        * frameBaselineM1DWS_[zmw]
                        / frameBaselineM0DWS_[zmw];

@@ -309,14 +309,13 @@ template <unsigned int LaneWidth>
 void BasecallingMetricsAccumulator<LaneWidth>::AddBaselineStats(
         const InputBaselineStats& baselineStats)
 {
-    /* TODO: segfaulting here, are baselineStats initialized?
     for (size_t zi = 0; zi < LaneWidth; ++zi)
     {
+        //std::cout << baselineStats.m0_[zi] << " " << baselineStats.m1_[zi] << " " << baselineStats.m2_[zi] << std::endl;
         traceMetrics_.FrameBaselineM0DWS()[zi] += baselineStats.m0_[zi];
         traceMetrics_.FrameBaselineM1DWS()[zi] += baselineStats.m1_[zi];
         traceMetrics_.FrameBaselineM2DWS()[zi] += baselineStats.m2_[zi];
     }
-    */
 }
 
 // TODO: This only keeps the most recent model (which is how Sequel handled
@@ -435,31 +434,40 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
                 pkMidSignal_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 pkZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
+                //std::cout << "no bases" << std::endl;
             } else if (numPkMidBasesByAnalog_[pulseLabel][zi] < 2
                     || pkMidNumFrames_[pulseLabel][zi] < 2)
             {
                 bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 pkZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
+                //std::cout << "noframes or few bases" << std::endl;
             }
             else
             {
+                //std::cout << "shouldn't be nan" << std::endl;
                 // Convert moments to interpulse variance
+                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 bpZvar_[pulseLabel][zi] = (bpZvar_[pulseLabel][zi]
-                                          - (pkMidSignal_[pulseLabel][zi]
-                                             * pkMidSignal_[pulseLabel][zi]
-                                             / pkMidNumFrames_[pulseLabel][zi]))
-                                         / (pkMidNumFrames_[pulseLabel][zi]);
+                                           - (pkMidSignal_[pulseLabel][zi]
+                                              * pkMidSignal_[pulseLabel][zi]
+                                              / pkMidNumFrames_[pulseLabel][zi]))
+                                          / (pkMidNumFrames_[pulseLabel][zi]);
+                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 // Bessel's correction with num bases, not frames
                 bpZvar_[pulseLabel][zi] *= numPkMidBasesByAnalog_[pulseLabel][zi]
-                                      / (numPkMidBasesByAnalog_[pulseLabel][zi] - 1);
+                                           / (numPkMidBasesByAnalog_[pulseLabel][zi] - 1);
 
+                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 const auto baselineVariance =
                     traceMetrics_.FrameBaselineVarianceDWS()[zi];
 
+                //std::cout << std::endl << baselineVariance << std::endl;
+                //std::cout << numPkMidBasesByAnalog_[pulseLabel][zi] << std::endl << std::endl;
 
                 bpZvar_[pulseLabel][zi] -= baselineVariance
                                         / (pkMidNumFrames_[pulseLabel][zi]
                                            / numPkMidBasesByAnalog_[pulseLabel][zi]);
+                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
 
                 pkZvar_[pulseLabel][zi] = (pkZvar_[pulseLabel][zi]
                                       - (pkMidSignal_[pulseLabel][zi]
@@ -489,6 +497,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
                         bpZvar_[pulseLabel][zi] / (pkMid * pkMid), 0.0f);
                 else
                     bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
+                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
             }
         }
     }

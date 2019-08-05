@@ -43,6 +43,7 @@
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
 #include <common/MongoConstants.h>
+#include <common/BlockActivityLabels.h>
 
 #include <gtest/gtest.h>
 
@@ -59,11 +60,20 @@ struct BaseSimConfig
     unsigned int ipd = 1;
     unsigned int baseWidth = 3;
     unsigned int meanSignal = 50;
-    unsigned int midSignal = 55;
-    unsigned int maxSignal = 72;
+    std::map<Data::Pulse::NucleotideLabel, unsigned int> midSignal = {
+        {Data::Pulse::NucleotideLabel::G, 10},
+        {Data::Pulse::NucleotideLabel::A, 20},
+        {Data::Pulse::NucleotideLabel::T, 30},
+        {Data::Pulse::NucleotideLabel::C, 40}};
+    std::map<Data::Pulse::NucleotideLabel, unsigned int> maxSignal = {
+        {Data::Pulse::NucleotideLabel::G, 15},
+        {Data::Pulse::NucleotideLabel::A, 25},
+        {Data::Pulse::NucleotideLabel::T, 35},
+        {Data::Pulse::NucleotideLabel::C, 45}};
+    std::string pattern = "ACGT";
 };
 
-Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
+Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
 {
     // TODO: replace with PulseBatch
     Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
@@ -90,18 +100,18 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
 
     auto pulses = batchFactory.NewBatch(chunk.front().Metadata());
 
-    auto LabelConv = [](size_t index) {
-        switch (index % 4)
+    auto LabelConv = [&](size_t index) {
+        switch (config.pattern[index % config.pattern.size()])
         {
-        case 0:
+        case 'A':
             return Data::Pulse::NucleotideLabel::A;
-        case 1:
+        case 'C':
             return Data::Pulse::NucleotideLabel::C;
-        case 2:
+        case 'G':
             return Data::Pulse::NucleotideLabel::G;
-        case 3:
+        case 'T':
             return Data::Pulse::NucleotideLabel::T;
-        case 4:
+        case 'N':
             return Data::Pulse::NucleotideLabel::N;
         default:
             return Data::Pulse::NucleotideLabel::NONE;
@@ -124,10 +134,13 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo=0)
                 pulse.Label(label);
                 pulse.Start(b * config.baseWidth + b * config.ipd
                                     + batchNo * chunkSize)
-                             .Width(config.baseWidth);
+                     .Width(config.baseWidth);
                 pulse.MeanSignal(config.meanSignal)
-                             .MidSignal(config.midSignal)
-                             .MaxSignal(config.maxSignal);
+                     .MidSignal(config.midSignal[label])
+                     .MaxSignal(config.maxSignal[label]);
+                pulse.SignalM2(pulse.MeanSignal()
+                               * pulse.MeanSignal()
+                               * pulse.Width());
                 pulseView.push_back(zmw, pulse);
             }
         }
@@ -149,10 +162,24 @@ Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> GenerateBaselineSt
         {
             baselineStats.rawBaselineSum_[zmw] = 100;
             baselineStats.m0_[zmw] = 98;
-            baselineStats.m1_[zmw] = 1;
+            baselineStats.m1_[zmw] = 10;
             baselineStats.m2_[zmw] = 100;
         }
     }
+    /*
+    for (size_t lane = 0; lane < poolSize; ++lane)
+    {
+        auto baselineStats = ret.GetHostView()[lane];
+        for (size_t zmw = 0; zmw < laneSize; ++zmw)
+        {
+            std::cout << baselineStats.rawBaselineSum_[zmw] << " ";
+            std::cout << baselineStats.m0_[zmw] << " ";
+            std::cout << baselineStats.m1_[zmw] << " ";
+            std::cout << baselineStats.m2_[zmw] << " ";
+            std::cout << std::endl;
+        }
+    }
+    */
     return ret;
 }
 
@@ -181,8 +208,20 @@ TEST(TestHFMetricsFilter, Populated)
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
 
     BaseSimConfig config;
+    config.pattern = "ACGTGG";
     config.ipd = 0;
     const auto& baselineStats = GenerateBaselineStats(config);
+    /*
+    for (size_t l = 0; l < Data::GetPrimaryConfig().lanesPerPool; l++)
+    {
+        const auto& laneStats = baselineStats.GetHostView()[l];
+        for (size_t zi = 0; zi < laneSize; ++zi)
+        {
+            std::cout << laneStats.m0_[zi] << " " << laneStats.m1_[zi] << " " << laneStats.m2_[zi] << std::endl;
+        }
+    }
+    return;
+    */
 
     int blocks_tested = 0;
 
@@ -197,45 +236,81 @@ TEST(TestHFMetricsFilter, Populated)
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
-                EXPECT_EQ(sizeof(mb), 8128);
+                ASSERT_EQ(sizeof(mb), 8128);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
-                    EXPECT_EQ(numBatchesPerHFMB
+                    ASSERT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
                               mb.numPulseFrames[z]);
-                    EXPECT_EQ(numBatchesPerHFMB
+                    ASSERT_EQ(numBatchesPerHFMB
                                 * config.numBases
                                 * config.baseWidth,
                               mb.numBaseFrames[z]);
                     // The pulses don't run to the end of each block, so all
-                    // but one pulse is abutted
-                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 1),
+                    // but one pulse is abutted. Plus we have the GG, which
+                    // doesn't count as a sandwich.
+                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 2),
                               mb.numHalfSandwiches[z]);
-                    // If numBases isn't evenly divisible by numAnalogs, the
-                    // first analogs will be padded by the remainder
-                    // e.g. 10 pulses per chunk means 2 for each analog, then
-                    // three for the first two analogs:
-                    EXPECT_EQ(numBatchesPerHFMB
-                                * (config.numBases/numAnalogs
-                                   + (config.numBases % numAnalogs > 0 ? 1 : 0)),
+                    // Sandwiches are one per block, on the 'GTG'
+                    ASSERT_EQ(numBatchesPerHFMB,
+                              mb.numSandwiches[z]);
+                    // Stutters are one per block, on the 'GG'
+                    ASSERT_EQ(numBatchesPerHFMB,
+                              mb.numPulseLabelStutters[z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPulsesByAnalog[0][z]);
-                    EXPECT_EQ(numBatchesPerHFMB
-                                * (config.numBases/numAnalogs
-                                   + (config.numBases % numAnalogs > 1 ? 1 : 0)),
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPulsesByAnalog[1][z]);
-                    EXPECT_EQ(numBatchesPerHFMB
-                                * (config.numBases/numAnalogs
-                                   + (config.numBases % numAnalogs > 2 ? 1 : 0)),
+                    // G is over represented in the pattern above
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
                               mb.numPulsesByAnalog[2][z]);
-                    EXPECT_EQ(numBatchesPerHFMB
-                                * (config.numBases/numAnalogs
-                                   + (config.numBases % numAnalogs > 3 ? 1 : 0)),
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPulsesByAnalog[3][z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
                               mb.numPulses[z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
                               mb.numBases[z]);
+                    // This will always be empty, unless features like
+                    // autocorrelation are populated
+                    ASSERT_EQ(ActivityLabeler::HQRFPhysicalState::EMPTY,
+                              mb.activityLabel[z]);
+                    // We've already checked that numpulsesbyanalog is correct,
+                    // so we'll just use it here for readability:
+                    // Also note that we are subtracting out the partial frames
+                    // (thus -2).
+                    ASSERT_EQ(20 * (config.baseWidth - 2) * mb.numPulsesByAnalog[0][z],
+                              mb.pkMidSignal[0][z]);
+                    ASSERT_EQ(40 * (config.baseWidth - 2) * mb.numPulsesByAnalog[1][z],
+                              mb.pkMidSignal[1][z]);
+                    ASSERT_EQ(10 * (config.baseWidth - 2) * mb.numPulsesByAnalog[2][z],
+                              mb.pkMidSignal[2][z]);
+                    ASSERT_EQ(30 * (config.baseWidth - 2) * mb.numPulsesByAnalog[3][z],
+                              mb.pkMidSignal[3][z]);
+                    ASSERT_EQ(25,
+                              mb.pkMax[0][z]);
+                    ASSERT_EQ(45,
+                              mb.pkMax[1][z]);
+                    ASSERT_EQ(15,
+                              mb.pkMax[2][z]);
+                    ASSERT_EQ(35,
+                              mb.pkMax[3][z]);
+                    ASSERT_EQ(25,
+                              mb.bpZvar[0][z]);
+                    ASSERT_EQ(45,
+                              mb.bpZvar[1][z]);
+                    ASSERT_EQ(15,
+                              mb.bpZvar[2][z]);
+                    ASSERT_EQ(35,
+                              mb.bpZvar[3][z]);
+                    ASSERT_EQ(25,
+                              mb.pkZvar[0][z]);
+                    ASSERT_EQ(45,
+                              mb.pkZvar[1][z]);
+                    ASSERT_EQ(15,
+                              mb.pkZvar[2][z]);
+                    ASSERT_EQ(35,
+                              mb.pkZvar[3][z]);
                 }
             }
             ++blocks_tested;

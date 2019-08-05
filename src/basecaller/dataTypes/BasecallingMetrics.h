@@ -102,7 +102,7 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleIntegerMetric pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics<laneSize>) == 8128, "sizeof(BasecallingMetrics) is 8128 bytes");
+static_assert(sizeof(BasecallingMetrics<laneSize>) == 127 * laneSize, "sizeof(BasecallingMetrics) is 127 bytes per zmw");
 
 
 template <unsigned int LaneWidth>
