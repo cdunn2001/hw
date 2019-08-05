@@ -1,4 +1,3 @@
-
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -24,48 +23,33 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines some members of class BaselinerStatAccumulator.
 
-#include "BaselinerStatAccumulator.h"
+#ifndef PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_
+#define PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_
 
-#include <dataTypes/BasicTypes.h>
+#include "FrameLabeler.h"
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-template <typename T>
-void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace, const LaneArray& baselineSubtracted, const Mask& isBaseline)
+class HostNoOpFrameLabeler : public FrameLabeler
 {
-    const auto& bs = baselineSubtracted.AsFloat();
+    using Parent = FrameLabeler;
+public:
+    static void Configure(int lanesPerPool, int framesPerChunk);
+    static void Finalize();
 
-    // Add frame to complete trace statistics.
-    baselineSubtractedStats_.AddSample(bs);
-    traceMin = min(bs, traceMin);
-    traceMax = max(bs, traceMax);
+public:
+    HostNoOpFrameLabeler(uint32_t poolId);
+    ~HostNoOpFrameLabeler() override;
 
-    // Add frame to baseline statistics if so flagged.
-    baselineStats_.AddSample(bs, isBaseline);
-    rawBaselineSum_ += Blend(isBaseline, rawTrace, LaneArray{0});
-}
+private:    // Customizable implementation
+    Data::LabelsBatch Process(Data::CameraTraceBatch trace,
+                              const PoolModelParameters& models) override;
+};
 
-template <typename T>
-BaselinerStatAccumulator<T>&
-BaselinerStatAccumulator<T>::Merge(const BaselinerStatAccumulator& other)
-{
-    baselineSubtractedStats_.Merge(other.BaselineSubtractedStats());
-    traceMin = min(traceMin, other.traceMin);
-    traceMax = max(traceMax, other.traceMax);
-    baselineStats_.Merge(other.BaselineFramesStats());
-    rawBaselineSum_ += rawBaselineSum_;
-    return *this;
-}
 
-//
-// Explicit Instantiations
-//
+}}} // PacBio::Mongo::Basecaller
 
-template class BaselinerStatAccumulator<short>;
-
-}}}     // namespace PacBio::Mongo::Data
+#endif // PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_

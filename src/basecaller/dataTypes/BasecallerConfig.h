@@ -213,7 +213,7 @@ namespace Data {
         //       default, consider putting subframe specific options into a
         //       new subgroup
 
-        SMART_ENUM(MethodName, DeviceSubFrameGaussCaps)
+        SMART_ENUM(MethodName, NoOp, DeviceSubFrameGaussCaps)
         ADD_ENUM(MethodName, Method, MethodName::DeviceSubFrameGaussCaps);
 
         ADD_PARAMETER(float, UpperThreshold, 7.0f);
