@@ -85,11 +85,11 @@ private:
     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
 
-inline auto KernelArgConvert(CameraTraceBatch& obj, const Cuda::LaunchInfo& info)
+inline auto KernelArgConvert(CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
-inline auto KernelArgConvert(const CameraTraceBatch& obj, const Cuda::LaunchInfo& info)
+inline auto KernelArgConvert(const CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }

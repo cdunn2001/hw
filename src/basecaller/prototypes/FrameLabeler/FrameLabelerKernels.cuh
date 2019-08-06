@@ -28,7 +28,7 @@
 #define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 
 #include <common/cuda/PBCudaSimd.cuh>
-#include <common/cuda/KernelManager.h>
+#include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/MongoConstants.h>
@@ -98,7 +98,7 @@ struct ViterbiDataHost
         , numFrames_(numFrames)
     {}
 
-    Memory::DeviceView<T> Data(const LaunchInfo& info)
+    Memory::DeviceView<T> Data(const KernelLaunchInfo& info)
     {
         return data_.GetDeviceView(info);
     }
@@ -113,7 +113,7 @@ struct ViterbiDataHost
 template <typename T, size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
-    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData, const LaunchInfo& info)
+    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData, const KernelLaunchInfo& info)
         : data_(hostData.Data(info))
         , numFrames_(hostData.NumFrames())
     {}
@@ -130,7 +130,7 @@ struct ViterbiData : private Memory::detail::DataManager
 };
 
 template <typename T, size_t laneWidth>
-ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const LaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
+ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
 
 
 class FrameLabeler
@@ -171,7 +171,7 @@ private:
 
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
-    static std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> trans_;
+    static std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> trans_;
     static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>>> scratchData_;
 };
 

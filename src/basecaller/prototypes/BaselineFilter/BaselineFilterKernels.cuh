@@ -4,11 +4,12 @@
 #include "BaselineFilter.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <common/cuda/KernelManager.cuh>
-#include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
+#include <common/cuda/utility/CudaArray.h>
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BaselinerStatAccumState.h>
+#include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -433,14 +434,14 @@ public:
         assert(input.LaneWidth() == 2*blockThreads);
         assert(input.LanesPerBatch() == numLanes_);
 
-        const auto& L1 = PBLaunch(StridedFilter<blockThreads, 2, Lower1>,
+        const auto& L1 = PBLauncher(StridedFilter<blockThreads, 2, Lower1>,
                                   numLanes_,
                                   blockThreads);
         L1(input,
            lower1,
            numFrames,
            workspace1);
-        const auto& L2 = PBLaunch(StridedFilter<blockThreads, 8, Lower2>,
+        const auto& L2 = PBLauncher(StridedFilter<blockThreads, 8, Lower2>,
                                   numLanes_,
                                   blockThreads);
         L2(workspace1,
@@ -448,14 +449,14 @@ public:
            numFrames/2,
            workspace1);
 
-        const auto& U1 = PBLaunch(StridedFilter<blockThreads, 2, Upper1>,
+        const auto& U1 = PBLauncher(StridedFilter<blockThreads, 2, Upper1>,
                                   numLanes_,
                                   blockThreads);
         U1(input,
            upper1,
            numFrames,
            workspace2);
-        const auto& U2 = PBLaunch(StridedFilter<blockThreads, 8, Upper2>,
+        const auto& U2 = PBLauncher(StridedFilter<blockThreads, 8, Upper2>,
                                   numLanes_,
                                   blockThreads);
         U2(workspace2,
@@ -463,7 +464,7 @@ public:
            numFrames/2,
            workspace2);
 
-        const auto& average = PBLaunch(AverageAndExpand<blockThreads, 16>,
+        const auto& average = PBLauncher(AverageAndExpand<blockThreads, 16>,
                                        numLanes_,
                                        blockThreads);
         average(workspace1, workspace2, output);
@@ -480,29 +481,29 @@ public:
         assert(input.LaneWidth() == 2*blockThreads);
         assert(input.LanesPerBatch() == numLanes_);
 
-        const auto& L1 = PBLaunch(StridedFilter<blockThreads, 2, Lower1>, numLanes_, blockThreads);
+        const auto& L1 = PBLauncher(StridedFilter<blockThreads, 2, Lower1>, numLanes_, blockThreads);
         L1(input,
            lower1,
            numFrames,
            workspace1);
-        const auto& L2 = PBLaunch(StridedFilter<blockThreads, 8, Lower2>, numLanes_, blockThreads);
+        const auto& L2 = PBLauncher(StridedFilter<blockThreads, 8, Lower2>, numLanes_, blockThreads);
         L2(workspace1,
            lower2,
            numFrames/2,
            workspace1);
 
-        const auto& U1 = PBLaunch(StridedFilter<blockThreads, 2, Upper1>, numLanes_, blockThreads);
+        const auto& U1 = PBLauncher(StridedFilter<blockThreads, 2, Upper1>, numLanes_, blockThreads);
         U1(input,
            upper1,
            numFrames,
            workspace2);
-        const auto& U2 = PBLaunch(StridedFilter<blockThreads, 8, Upper2>, numLanes_, blockThreads);
+        const auto& U2 = PBLauncher(StridedFilter<blockThreads, 8, Upper2>, numLanes_, blockThreads);
         U2(workspace2,
            upper2,
            numFrames/2,
            workspace2);
 
-        const auto& Subtract = PBLaunch(SubtractBaseline<blockThreads, 16>, numLanes_, blockThreads);
+        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, 16>, numLanes_, blockThreads);
         Subtract(input,
                  latent,
                  workspace1,

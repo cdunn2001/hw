@@ -105,7 +105,7 @@ template <typename T>
 class GpuBatchVectors : private Cuda::Memory::detail::DataManager
 {
 public:
-    GpuBatchVectors(BatchVectors<T>& vecs, const Cuda::LaunchInfo& info)
+    GpuBatchVectors(BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
         : maxLen_(vecs.MaxLen())
         , data_(vecs.Data({}).GetDeviceHandle(info))
         , lens_(vecs.Lens({}).GetDeviceHandle(info))
@@ -138,13 +138,13 @@ private:
 };
 
 template <typename T>
-auto KernelArgConvert(BatchVectors<T>& vecs, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
 {
     return GpuBatchVectors<T>(vecs, info);
 }
 
 template <typename T>
-auto KernelArgConvert(const BatchVectors<T>& vecs, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(const BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
 {
     return GpuBatchVectors<const T>(vecs, info);
 }

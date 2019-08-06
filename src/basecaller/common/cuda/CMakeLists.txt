@@ -19,6 +19,12 @@ set(CPP_LIST
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
     memory/UnifiedCudaArray.h
+    streams/CudaEvent.h
+    streams/CudaEvent.cpp
+    streams/KernelLaunchInfo.h
+    streams/KernelLaunchInfo.cpp
+    streams/StreamMonitors.h
+    streams/StreamMonitors.cpp
 )
 
 set(CUDA_LIST
@@ -28,6 +34,7 @@ set(CUDA_LIST
     memory/DeviceOnlyArray.cu
     memory/DeviceOnlyObject.cuh
     memory/DeviceOnlyObject.cu
+    streams/LaunchManager.cuh
     utility/CudaArray.h
     utility/CudaArray.cu
     utility/CudaTuple.cuh

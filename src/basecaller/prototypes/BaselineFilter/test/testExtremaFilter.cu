@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <common/cuda/KernelManager.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SawtoothGenerator.h>
@@ -78,7 +78,7 @@ TEST(MaxFilterTest, GlobalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLaunch(MaxGlobalFilter<gpuBlockThreads, FilterWidth>,
+        const auto& launcher = PBLauncher(MaxGlobalFilter<gpuBlockThreads, FilterWidth>,
                                         params.kernelLanes, gpuBlockThreads);
         launcher(in,
                  filterData[batchIdx],
@@ -122,7 +122,7 @@ TEST(MaxFilterTest, SharedMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLaunch(MaxSharedFilter<gpuBlockThreads, FilterWidth>,
+        const auto& launcher = PBLauncher(MaxSharedFilter<gpuBlockThreads, FilterWidth>,
                                         params.kernelLanes, gpuBlockThreads);
         launcher(in,
                  filterData[batchIdx],
@@ -166,7 +166,7 @@ TEST(MaxFilterTest, LocalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLaunch(MaxLocalFilter<gpuBlockThreads, FilterWidth>,
+        const auto& launcher = PBLauncher(MaxLocalFilter<gpuBlockThreads, FilterWidth>,
                                         params.kernelLanes, gpuBlockThreads);
         launcher(in,
                  filterData[batchIdx],

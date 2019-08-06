@@ -379,13 +379,13 @@ public:
 
     const BatchDimensions& StorageDims() const { return dims_; }
 
-    GpuBatchDataHandle<GpuType> GetDeviceHandle(const Cuda::LaunchInfo& info)
+    GpuBatchDataHandle<GpuType> GetDeviceHandle(const Cuda::KernelLaunchInfo& info)
     {
         auto gpuDims = dims_;
         gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
         return GpuBatchDataHandle<GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
     }
-    GpuBatchDataHandle<const GpuType> GetDeviceHandle(const Cuda::LaunchInfo& info) const
+    GpuBatchDataHandle<const GpuType> GetDeviceHandle(const Cuda::KernelLaunchInfo& info) const
     {
         auto gpuDims = dims_;
         gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
@@ -419,12 +419,12 @@ private:
 };
 
 template <typename T>
-auto KernelArgConvert(BatchData<T>& obj, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
 template <typename T>
-auto KernelArgConvert(const BatchData<T>& obj, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(const BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }

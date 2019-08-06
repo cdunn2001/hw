@@ -76,12 +76,12 @@ private:
 };
 
 template <typename T>
-auto KernelArgConvert(TraceBatch<T>& obj, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(TraceBatch<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
 template <typename T>
-auto KernelArgConvert(const TraceBatch<T>& obj, const Cuda::LaunchInfo& info)
+auto KernelArgConvert(const TraceBatch<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }

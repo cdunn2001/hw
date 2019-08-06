@@ -35,9 +35,8 @@
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/MongoConstants.h>
-
-#include <common/cuda/KernelManager.cuh>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -252,7 +251,7 @@ public:
         assert(threadsPerBlock*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
 
-        const auto& launcher = PBLaunch(
+        const auto& launcher = PBLauncher(
             ProcessLabels<LabelManager, threadsPerBlock>,
             labels.LanesPerBatch(),
             threadsPerBlock);
@@ -270,7 +269,7 @@ public:
 
     static void Configure(CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
     {
-        manager_ = std::make_unique<DeviceOnlyObj<LabelManager>>(analogMap);
+        manager_ = std::make_unique<DeviceOnlyObj<const LabelManager>>(analogMap);
     }
 
     static void Finalize()
@@ -280,11 +279,11 @@ public:
 
 private:
     DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
-    static std::unique_ptr<DeviceOnlyObj<LabelManager>> manager_;
+    static std::unique_ptr<DeviceOnlyObj<const LabelManager>> manager_;
 };
 
 template <typename LabelManager>
-std::unique_ptr<DeviceOnlyObj<LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
+std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)

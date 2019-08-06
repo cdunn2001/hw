@@ -3,7 +3,7 @@
 #include "StreamingTestRunner.h"
 
 #include <dataTypes/BatchData.cuh>
-#include <common/cuda/KernelManager.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/DataGenerators/TemplateGenerator.h>
 
 #include <cuda_runtime.h>
@@ -73,7 +73,7 @@ void RunTest(const Data::DataManagerParams& params, size_t simulKernels)
         {
             try {
                 auto batch = manager.NextBatch();
-                const auto& launcher = PBLaunch(BasicSanity,
+                const auto& launcher = PBLauncher(BasicSanity,
                                                 params.kernelLanes,
                                                 params.laneWidth/2);
                 launcher(batch.KernelInput(), tid, ret);

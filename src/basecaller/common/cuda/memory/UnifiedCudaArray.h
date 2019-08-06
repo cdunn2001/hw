@@ -30,7 +30,8 @@
 #include <memory>
 
 #include <common/cuda/PBCudaSimd.h>
-#include <common/cuda/KernelManager.h>
+#include <common/cuda/streams/KernelLaunchInfo.h>
+#include <common/cuda/streams/StreamMonitors.h>
 
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
@@ -173,9 +174,15 @@ public:
         if (!activeOnHost_)
         {
             GetHostView();
+            // We need to destroy the old checker (and replace it
+            // with a new one) to be sure no active kernels are
+            // using our gpu memory.  It feels like a bit of a hack
+            // to put this here, but in the long run this entire
+            // function can probably be retired, as it only supports
+            // the prototypes.  Mongo took a different route for
+            // preventing excesive gpu memory usage
+            checker_ = SingleStreamMonitor();
         }
-        CudaSynchronizeDefaultStream();
-        activeOnHost_ = true;
 
         if (auto pools = pools_.lock()) pools->gpuPool.PushAlloc(std::move(gpuData_));
     }
@@ -196,13 +203,15 @@ public:
         return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
 
-    DeviceHandle<GpuType> GetDeviceHandle(const LaunchInfo& info)
+    DeviceHandle<GpuType> GetDeviceHandle(const KernelLaunchInfo& info)
     {
+        checker_.Update(info);
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
-    DeviceHandle<const GpuType> GetDeviceHandle(const LaunchInfo& info) const
+    DeviceHandle<const GpuType> GetDeviceHandle(const KernelLaunchInfo& info) const
     {
+        checker_.Update(info);
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
@@ -276,18 +285,19 @@ private:
     mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
     std::weak_ptr<DualAllocationPools> pools_;
+    mutable SingleStreamMonitor checker_;
 };
 
 template <typename T, bool allow_expensive_types = false>
 auto KernelArgConvert(UnifiedCudaArray<T, allow_expensive_types>& obj,
-                      const LaunchInfo& info)
+                      const KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
 
 template <typename T, bool allow_expensive_types = false>
 auto KernelArgConvert(const UnifiedCudaArray<T, allow_expensive_types>& obj,
-                      const LaunchInfo& info)
+                      const KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }

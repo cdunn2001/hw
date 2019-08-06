@@ -6,7 +6,6 @@
 #include "ExtremaFilter.cuh"
 #include "ExtremaFilterKernels.cuh"
 
-#include <common/cuda/KernelManager.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/utility/CudaTuple.cuh>
@@ -52,7 +51,7 @@ void RunGlobalBaselineFilter(
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
-        const auto& launcher = PBLaunch(GlobalBaselineFilter<Filter>,
+        const auto& launcher = PBLauncher(GlobalBaselineFilter<Filter>,
                                         dataParams.kernelLanes,
                                         dataParams.laneWidth/2);
         launcher(batch,
@@ -80,7 +79,7 @@ void RunSharedBaselineFilter(
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
-        const auto& launcher = PBLaunch(SharedBaselineFilter<Filter>,
+        const auto& launcher = PBLauncher(SharedBaselineFilter<Filter>,
                                         dataParams.kernelLanes,
                                         dataParams.laneWidth/2);
         launcher(batch,
@@ -132,7 +131,7 @@ void RunCompressedBaselineFilter(
 
     auto tmp = [dataParams, &upper1, &upper2, &lower1, &lower2, &work1, &work2]
         (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
-        const auto& launcher = PBLaunch(CompressedBaselineFilter<laneWidth, 9, 31, 2, 8>,
+        const auto& launcher = PBLauncher(CompressedBaselineFilter<laneWidth, 9, 31, 2, 8>,
                                         dataParams.kernelLanes,
                                         dataParams.laneWidth/2);
         launcher(batch,
@@ -206,7 +205,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         {
         case BaselineFilterMode::GlobalMax:
         {
-            const auto& launcher = PBLaunch(MaxGlobalFilter<laneWidth,FilterWidth>,
+            const auto& launcher = PBLauncher(MaxGlobalFilter<laneWidth,FilterWidth>,
                                             params.kernelLanes,
                                             params.laneWidth/2);
             launcher(batch,
@@ -216,7 +215,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         }
         case BaselineFilterMode::SharedMax:
         {
-            const auto& launcher = PBLaunch(MaxSharedFilter<laneWidth,FilterWidth>,
+            const auto& launcher = PBLauncher(MaxSharedFilter<laneWidth,FilterWidth>,
                                             params.kernelLanes,
                                             params.laneWidth/2);
             launcher(batch,
@@ -226,7 +225,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         }
         case BaselineFilterMode::LocalMax:
         {
-            const auto& launcher = PBLaunch(MaxLocalFilter<laneWidth,FilterWidth>,
+            const auto& launcher = PBLauncher(MaxLocalFilter<laneWidth,FilterWidth>,
                                             params.kernelLanes,
                                             params.laneWidth/2);
             launcher(batch,

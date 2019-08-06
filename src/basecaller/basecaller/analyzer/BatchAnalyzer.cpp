@@ -152,6 +152,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     } else {
         return StandardPipeline(std::move(tbatch));
     }
+    if (Cuda::StreamErrorCount() > 0)
+        throw PBException("Unexpected stream synchronization issues were detected");
 }
 
 namespace {

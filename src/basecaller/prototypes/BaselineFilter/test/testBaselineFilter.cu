@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <common/cuda/KernelManager.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/PicketFenceGenerator.h>
 
@@ -59,7 +59,7 @@ TEST(BaselineFilterTest, GlobalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& baseliner = PBLaunch(GlobalBaselineFilter<Filter>,
+        const auto& baseliner = PBLauncher(GlobalBaselineFilter<Filter>,
                                          dataParams.kernelLanes,
                                          gpuBlockThreads);
         baseliner(in,
@@ -144,14 +144,14 @@ TEST(BaselineFilterTest, SharedMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& shared = PBLaunch(SharedBaselineFilter<Filter>,
+        const auto& shared = PBLauncher(SharedBaselineFilter<Filter>,
                                       dataParams.kernelLanes,
                                       gpuBlockThreads);
         shared(in,
                filterData[batchIdx],
                out);
 
-        const auto& global = PBLaunch(GlobalBaselineFilter<Filter>,
+        const auto& global = PBLauncher(GlobalBaselineFilter<Filter>,
                                       dataParams.kernelLanes,
                                       gpuBlockThreads);
         global(in,
@@ -225,7 +225,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
         filterData[batchIdx].RunComposedFilter(in, out, work1, work2);
 
-        const auto& global = PBLaunch(GlobalBaselineFilter<RefFilter>,
+        const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
                                       dataParams.kernelLanes,
                                       gpuBlockThreads);
         global(in,

@@ -29,9 +29,8 @@
 
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/UnifiedCudaArray.h>
-#include <common/cuda/KernelManager.h>
 
-#include <dataTypes/TraceBatch.h>
+#include <dataTypes/BatchData.h>
 
 namespace PacBio {
 namespace Mongo {

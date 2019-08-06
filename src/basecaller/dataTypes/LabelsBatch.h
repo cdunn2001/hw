@@ -122,11 +122,11 @@ private:
     std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool_;
 };
 
-inline auto KernelArgConvert(LabelsBatch& obj, const Cuda::LaunchInfo& info)
+inline auto KernelArgConvert(LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
-inline auto KernelArgConvert(const LabelsBatch& obj, const Cuda::LaunchInfo& info)
+inline auto KernelArgConvert(const LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);
 }
