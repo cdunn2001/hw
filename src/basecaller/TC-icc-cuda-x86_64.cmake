@@ -5,7 +5,9 @@ set(CMAKE_SYSTEM_VERSION 1)
 set(CMAKE_C_COMPILER icc)
 set(CMAKE_CXX_COMPILER icpc)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wcheck -w3 -wd304,383,424,444,981,1418,1572,2960,11074,11076 -Wno-unknown-pragmas -xCORE-AVX512 -DPB_CORE_AVX512 -DEIGEN_SIMD_SIZE=64"
+# CUDA_API_PER_THREAD_DEFAULT_STREAM is the equivalent of `--default-stream per thread` for nvcc.  Necessary if any pure
+# C++ code is going to call any cuda runtime functions.
+set(CMAKE_CXX_FLAGS "-std=c++14 -Wcheck -w3 -wd304,383,424,444,981,1418,1572,2960,11074,11076 -Wno-unknown-pragmas -xCORE-AVX512 -DPB_CORE_AVX512 -DEIGEN_SIMD_SIZE=64 -DCUDA_API_PER_THREAD_DEFAULT_STREAM"
     CACHE STRING "" FORCE)
 
 set(CMAKE_CXX_FLAGS_DEBUG           "-O0 -g" CACHE STRING "" FORCE)
