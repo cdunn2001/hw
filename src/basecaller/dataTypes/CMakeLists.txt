@@ -9,8 +9,6 @@ set(CPP_LIST
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
     BaselinerStatAccumState.h
-    BaselineStats.h
-    BaselineStats.cpp
     BasicTypes.h
     BatchData.h
     BatchData.cpp

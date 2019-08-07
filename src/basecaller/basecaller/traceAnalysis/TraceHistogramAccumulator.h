@@ -29,7 +29,6 @@
 //  Description:
 //  Defines abstract class TraceHistogramAccumulator.
 
-#include <dataTypes/BaselineStats.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/PoolHistogram.h>
@@ -48,7 +47,7 @@ public:     // Types
     using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
-    using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     // TODO: Switch from BaselineStats to BaselinerStatAccumState.
 
 public:     // Static functions

@@ -42,7 +42,7 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
                                                          upperBuffer.GetBlockView(laneIdx),
                                                          baselineSubtracted);
 
-        statsView[laneIdx] = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.GetState();
     }
 
     return std::move(out);

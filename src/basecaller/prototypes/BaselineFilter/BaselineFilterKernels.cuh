@@ -7,7 +7,7 @@
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/PBCudaSimd.cuh>
 #include <dataTypes/BatchData.cuh>
-#include <dataTypes/BaselineStats.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -225,22 +225,22 @@ public:
         m2_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);
     }
 
-    __device__ void FillOutputStats(Mongo::Data::BaselineStats<blockThreads*2>& stats)
+    __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
     {
-        stats.m0_[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
-        stats.m0_[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
-        stats.m1_[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
-        stats.m1_[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
-        stats.m2_[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
-        stats.m2_[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+        stats.baselineStats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        stats.baselineStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
+        stats.baselineStats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.baselineStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.baselineStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
+        stats.baselineStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
-        stats.rawBaselineSum_[2*threadIdx.x] = rawSum_[threadIdx.x].FloatX();
-        stats.rawBaselineSum_[2*threadIdx.x+1] = rawSum_[threadIdx.x].FloatY();
-        stats.traceMin_[2*threadIdx.x] = min_[threadIdx.x].FloatX();
-        stats.traceMin_[2*threadIdx.x+1] = min_[threadIdx.x].FloatY();
-        stats.traceMax_[2*threadIdx.x] = max_[threadIdx.x].FloatX();
-        stats.traceMax_[2*threadIdx.x+1] = max_[threadIdx.x].FloatY();
+        stats.rawBaselineSum[2*threadIdx.x] = rawSum_[threadIdx.x].FloatX();
+        stats.rawBaselineSum[2*threadIdx.x+1] = rawSum_[threadIdx.x].FloatY();
+        stats.traceMin[2*threadIdx.x] = min_[threadIdx.x].FloatX();
+        stats.traceMin[2*threadIdx.x+1] = min_[threadIdx.x].FloatY();
+        stats.traceMax[2*threadIdx.x] = max_[threadIdx.x].FloatX();
+        stats.traceMax[2*threadIdx.x+1] = max_[threadIdx.x].FloatY();
     }
 
 private:
@@ -351,7 +351,7 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
                                  Mongo::Data::GpuBatchData<PBShort2> out,
-                                 Memory::DeviceView<Mongo::Data::BaselineStats<blockThreads*2>> outputStats)
+                                 Memory::DeviceView<Mongo::Data::BaselinerStatAccumState> outputStats)
 {
     __shared__ StatAccumulator<blockThreads> stats;
     stats.Reset();
@@ -459,7 +459,7 @@ public:
 
     __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
                                     Mongo::Data::TraceBatch<int16_t>& output,
-                                    Memory::UnifiedCudaArray<Mongo::Data::BaselineStats<blockThreads*2>>& stats,
+                                    Memory::UnifiedCudaArray<Mongo::Data::BaselinerStatAccumState>& stats,
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
