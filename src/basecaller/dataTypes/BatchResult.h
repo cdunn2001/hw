@@ -30,8 +30,7 @@
 //  Defines class BatchResult, a light wrapper around a finished PulseBatch and
 //  an accumulated BasecallingMetrics object
 
-// TODO (mds 20190802) Replace with PulseBatch
-#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/PulseBatch.h>
 #include <dataTypes/BasecallingMetrics.h>
 
 namespace PacBio {
@@ -41,7 +40,7 @@ namespace Data {
 struct BatchResult
 {
 
-    using PulseBatchT = BasecallBatch;
+    using PulseBatchT = PulseBatch;
     using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>;
 
     BatchResult(PulseBatchT&& pulsesIn)

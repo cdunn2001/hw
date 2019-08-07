@@ -352,11 +352,11 @@ private:
             }
         };
 
-        std::vector<Basecall> basecalls(numPulses);
+        std::vector<Basecall> baseCalls(numPulses);
         for (size_t pulseNum = 0; pulseNum < numPulses; ++pulseNum)
         {
             const auto& pulse = pulses[pulseNum];
-            auto& bc = basecalls[pulseNum];
+            auto& bc = baseCalls[pulseNum];
 
             static constexpr int8_t qvDefault_ = 0;
 
@@ -374,7 +374,7 @@ private:
             bc.DeletionTag(PacBio::SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
             bc.SubstitutionTag(PacBio::SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
         }
-        return basecalls;
+        return baseCalls;
     }
 
     void WriteOutputChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& outputChunk)
@@ -389,14 +389,16 @@ private:
             const auto& metricsPtr = outputBatchPtr->metrics;
             for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
             {
-                const auto& laneCalls = pulseBatch.Basecalls().LaneView(lane);
+                const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
 
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
-                                                     laneCalls.size(zmw),
+                        const auto& baseCalls = ConvertMongoPulsesToSequelBasecalls(lanePulses.ZmwData(zmw),
+                                                                                    lanePulses.size(zmw));
+                        if (!bazWriter_->AddZmwSlice(baseCalls.data(),
+                                                     baseCalls.size(),
                                                      [&](MemoryBufferView<SpiderMetricBlock>& dest)
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
