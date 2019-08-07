@@ -45,7 +45,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
     const unsigned int numPools = 8;
     Data::BasecallerConfig bcConfig;
-    Data::MovieConfig movConfig;
+    Data::MovieConfig movConfig = Data::MockMovieConfig();
     auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
 
     ASSERT_EQ(numPools, traceAnalyzer->NumZmwPools());

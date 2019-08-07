@@ -151,7 +151,12 @@ TEST(TestHostPulseAccumulator, Run)
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
 
     Data::BasecallerAlgorithmConfig bcConfig;
-    HostAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+    Data::MovieConfig movieConfig;
+    movieConfig.analogs[0].baseLabel = 'A';
+    movieConfig.analogs[1].baseLabel = 'C';
+    movieConfig.analogs[2].baseLabel = 'G';
+    movieConfig.analogs[3].baseLabel = 'T';
+    HostAccumulator::Configure(movieConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,

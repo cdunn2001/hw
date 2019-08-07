@@ -36,6 +36,8 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    StaticDetModelConfig.h
+    StaticDetModelConfig.cpp
     TraceBatch.h
     TraceBatch.cpp
     UHistogramSimd.h
@@ -45,7 +47,7 @@ set(CPP_LIST
 set(CUDA_LIST
     BatchData.cuh
     BatchData.cu
-)
+        StaticDetModelConfig.h StaticDetModelConfig.cpp)
 
 add_library(libMongoDataTypes STATIC
     ${CPP_LIST}

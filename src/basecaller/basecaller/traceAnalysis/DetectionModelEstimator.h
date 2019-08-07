@@ -103,6 +103,9 @@ private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
     static uint32_t minFramesForEstimate_;
+    static bool fixedBaselineParams_;
+    static float fixedBaselineMean_;
+    static float fixedBaselineVar_;
 
 private:
     uint32_t poolId_;
