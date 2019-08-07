@@ -58,3 +58,6 @@ target_include_directories(libMongoCommonCuda
 )
 
 set_target_properties(libMongoCommonCuda PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+add_subdirectory(test)
+

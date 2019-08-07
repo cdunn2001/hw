@@ -83,11 +83,14 @@ public:
         // accidentally passed to the kernel.
         if (lastThread_ != KernelLaunchInfo::NoThreadId && info.ThreadId() != lastThread_)
         {
-            PBLOG_WARN << "Unexpected launch of cuda kernel with data already in use in another stream.  "
-                       << "Automatically synchronizing to try and maintain correctness, but this may "
-                       << "indicate a developer bug.";
-            latestEvent_->WaitForCompletion();
-            AddStreamError();
+            if (!latestEvent_->IsCompleted())
+            {
+                PBLOG_WARN << "Unexpected launch of cuda kernel with data already in use in another stream.  "
+                           << "Automatically synchronizing to try and maintain correctness, but this may "
+                           << "indicate a developer bug.";
+                latestEvent_->WaitForCompletion();
+                AddStreamError();
+            }
         }
 
         // if we're on the same thread/stream, we can just forget the old event and take the new
