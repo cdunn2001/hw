@@ -79,19 +79,15 @@ DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats) c
 }
 
 
-void DetectionModelEstimator::InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats,
+void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
                                                LaneDetModel& ldm) const
 {
-    using ElementType = typename Data::BaselineStats<laneSize>::ElementType;
+    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
     using LaneArr = LaneArray<ElementType>;
     using CLanArrRef = ConstLaneArrayRef<ElementType>;
     using LanArrRef = LaneArrayRef<DetModelElementType>;
 
-    CLanArrRef mom0 (blStats.m0_.data());
-    CLanArrRef mom1 (blStats.m1_.data());
-    CLanArrRef mom2 (blStats.m2_.data());
-
-    StatAccumulator<LaneArr> blsa (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
+    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
 
     const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
     const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();

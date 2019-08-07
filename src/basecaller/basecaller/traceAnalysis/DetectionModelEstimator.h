@@ -36,7 +36,7 @@
 #include <common/LaneArray.h>
 
 #include <dataTypes/AnalogMode.h>
-#include <dataTypes/BaselineStats.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
@@ -53,7 +53,7 @@ public:     // Types
     using DetModelElementType = Cuda::PBHalf;
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
     using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
-    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
@@ -119,7 +119,7 @@ private:    // Customization functions
     }
 
 private:    // Functions
-    void InitLaneDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm) const;
+    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
