@@ -29,22 +29,20 @@
 //  Description:
 //  Defines class BasecallingMetrics
 
-#include <array>
 #include <numeric>
-#include <vector>
 #include <pacbio/logging/Logger.h>
 
-#include <common/BlockActivityLabels.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 
+#include "HQRFPhysicalStates.h"
 #include "BatchMetadata.h"
 #include "BatchData.h"
 #include "BatchVectors.h"
 #include "TraceAnalysisMetrics.h"
-#include "BaselineStats.h"
 #include "Pulse.h"
 
 namespace PacBio {
@@ -56,7 +54,6 @@ class BasecallingMetrics
 {
 
 public: // types
-    static constexpr uint16_t NumAnalogs = 4;
     using UnsignedInt = uint16_t;
     using Int = int16_t;
     using Flt = float;
@@ -67,14 +64,14 @@ public: // types
     using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
     using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
         Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        NumAnalogs>;
+        numAnalogs>;
     using AnalogFloatMetric = Cuda::Utility::CudaArray<
         Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        NumAnalogs>;
+        numAnalogs>;
 
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
-    Cuda::Utility::CudaArray<ActivityLabeler::HQRFPhysicalState,
+    Cuda::Utility::CudaArray<HQRFPhysicalStates,
                              LaneWidth> activityLabel;
     SingleUnsignedIntegerMetric numPulseFrames;
     SingleUnsignedIntegerMetric numBaseFrames;
@@ -110,10 +107,9 @@ class BasecallingMetricsAccumulator
 {
 public: // types
     using InputPulses = LaneVectorView<const Pulse>;
-    using InputBaselineStats = Data::BaselineStats<LaneWidth>;
+    using InputBaselineStats = Data::BaselinerStatAccumState;
     using InputModelsT = LaneModelParameters<Cuda::PBHalf, LaneWidth>;
 
-    static constexpr uint16_t NumAnalogs = 4;
     using UnsignedInt = uint16_t;
     using Flt = float;
     using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt,
@@ -121,10 +117,10 @@ public: // types
     using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
     using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
         Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        NumAnalogs>;
+        numAnalogs>;
     using AnalogFloatMetric = Cuda::Utility::CudaArray<
         Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        NumAnalogs>;
+        numAnalogs>;
 
     using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
@@ -164,7 +160,7 @@ private: // metrics
     SingleUnsignedIntegerMetric numSandwiches_;
     SingleUnsignedIntegerMetric numHalfSandwiches_;
     SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    Cuda::Utility::CudaArray<ActivityLabeler::HQRFPhysicalState,
+    Cuda::Utility::CudaArray<HQRFPhysicalStates,
                              LaneWidth> activityLabel_;
     AnalogFloatMetric pkMidSignal_;
     AnalogFloatMetric bpZvar_;

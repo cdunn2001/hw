@@ -22,6 +22,7 @@ set(CPP_LIST
     BatchVectors.cpp
     BatchVectors.cuh
     BatchVectors.cu
+    HQRFPhysicalStates.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
@@ -43,6 +44,8 @@ set(CPP_LIST
     TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp
+    TrainedCartParams.h
+    TrainedCartParams.cpp
     UHistogramSimd.h
     UHistogramSimd.cpp
 )

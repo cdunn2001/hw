@@ -217,7 +217,12 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    HFMetricsFilter::Configure(bcConfig.Metrics);
+    HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                               Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                               Data::GetPrimaryConfig().framesPerChunk,
+                               Data::GetPrimaryConfig().sensorFrameRate,
+                               Data::GetPrimaryConfig().realtimeActivityLabels,
+                               Data::GetPrimaryConfig().lanesPerPool);
 }
 
 

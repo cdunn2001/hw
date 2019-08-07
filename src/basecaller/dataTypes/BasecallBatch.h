@@ -37,7 +37,6 @@
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
-#include "BasecallingMetrics.h"
 #include "BatchMetadata.h"
 #include "BatchData.h"
 #include "BatchVectors.h"
@@ -48,8 +47,7 @@ namespace Data {
 
 
 /// BasecallBatch represents the results of basecalling, a sequence of basecalls
-/// for each ZMW. Each basecall includes metrics. Some instances will also
-/// include pulse and trace metrics.
+/// for each ZMW.
 /// Memory is allocated only at construction. No reallocation during the life
 /// of an instance.
 class BasecallBatch
@@ -84,29 +82,10 @@ public:     // Functions
     BatchVectors<Basecall>& Basecalls() { return basecalls_; }
     const BatchVectors<Basecall>& Basecalls() const { return basecalls_; }
 
-    bool HasMetrics() const
-    { return metrics_.get() != nullptr; }
-
-    // Safety first: call HasMetrics before you dig
-    //Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics()
-    //{ return *(metrics_.get()); }
-
-    // Safety first: call HasMetrics before you dig
-    const Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>& Metrics() const
-    { return *(metrics_.get()); }
-
-    void Metrics(std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics)
-    {
-        metrics_ = std::move(metrics);
-    }
-
 private:    // Data
     BatchDimensions dims_;
     BatchMetadata   metaData_;
     BatchVectors<Basecall> basecalls_;
-
-    // Metrics per ZMW. Size is dims_.zmwsPerBatch() or nullptr.
-    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>> metrics_;
 };
 
 class BasecallBatchFactory

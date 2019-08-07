@@ -38,12 +38,12 @@
 
 #include <common/DataGenerators/BatchGenerator.h>
 #include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/BaselineStats.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
 #include <common/MongoConstants.h>
-#include <common/BlockActivityLabels.h>
+#include <dataTypes/HQRFPhysicalStates.h>
 
 #include <gtest/gtest.h>
 
@@ -58,8 +58,7 @@ struct BaseSimConfig
 {
     unsigned int numBases = 10;
     unsigned int ipd = 1;
-    unsigned int baseWidth = 3;
-    unsigned int meanSignal = 50;
+    unsigned int baseWidth = 4;
     std::map<Data::Pulse::NucleotideLabel, unsigned int> midSignal = {
         {Data::Pulse::NucleotideLabel::G, 10},
         {Data::Pulse::NucleotideLabel::A, 20},
@@ -135,12 +134,13 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                 pulse.Start(b * config.baseWidth + b * config.ipd
                                     + batchNo * chunkSize)
                      .Width(config.baseWidth);
-                pulse.MeanSignal(config.meanSignal)
-                     .MidSignal(config.midSignal[label])
+                pulse.MidSignal(config.midSignal[label] + b)
                      .MaxSignal(config.maxSignal[label]);
-                pulse.SignalM2(pulse.MeanSignal()
-                               * pulse.MeanSignal()
-                               * pulse.Width());
+                pulse.MeanSignal(pulse.MidSignal());
+                float m2modifier = (b % 2 == 0) ? 1.1 : 1.01;
+                pulse.SignalM2(pulse.MidSignal()
+                               * pulse.MidSignal()
+                               * (pulse.Width() - 2) * m2modifier);
                 pulseView.push_back(zmw, pulse);
             }
         }
@@ -148,39 +148,58 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
     return pulses;
 }
 
-Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> GenerateBaselineStats(BaseSimConfig config)
+Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>
+GenerateBaselineStats(BaseSimConfig config)
 {
     unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
-    Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> ret(
+    Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState> ret(
             poolSize,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             true);
     for (size_t lane = 0; lane < poolSize; ++lane)
     {
-        auto baselineStats = ret.GetHostView()[lane];
+        auto& baselineStats = ret.GetHostView()[lane];
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
-            baselineStats.rawBaselineSum_[zmw] = 100;
-            baselineStats.m0_[zmw] = 98;
-            baselineStats.m1_[zmw] = 10;
-            baselineStats.m2_[zmw] = 100;
+            baselineStats.rawBaselineSum[zmw] = 100;
+            baselineStats.baselineStats.moment0[zmw] = 98;
+            baselineStats.baselineStats.moment1[zmw] = 10;
+            baselineStats.baselineStats.moment2[zmw] = 100;
         }
     }
-    /*
-    for (size_t lane = 0; lane < poolSize; ++lane)
-    {
-        auto baselineStats = ret.GetHostView()[lane];
-        for (size_t zmw = 0; zmw < laneSize; ++zmw)
-        {
-            std::cout << baselineStats.rawBaselineSum_[zmw] << " ";
-            std::cout << baselineStats.m0_[zmw] << " ";
-            std::cout << baselineStats.m1_[zmw] << " ";
-            std::cout << baselineStats.m2_[zmw] << " ";
-            std::cout << std::endl;
-        }
-    }
-    */
     return ret;
+}
+
+Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>
+GenerateModels(BaseSimConfig config)
+{
+    Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
+                                                             laneSize>> models(
+        Data::GetPrimaryConfig().lanesPerPool,
+        Cuda::Memory::SyncDirection::Symmetric,
+        true);
+    Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
+    model.AnalogMode(0).SetAllMeans(227.13);
+    model.AnalogMode(1).SetAllMeans(154.45);
+    model.AnalogMode(2).SetAllMeans(97.67);
+    model.AnalogMode(3).SetAllMeans(61.32);
+
+    model.AnalogMode(0).SetAllVars(776);
+    model.AnalogMode(1).SetAllVars(426);
+    model.AnalogMode(2).SetAllVars(226);
+    model.AnalogMode(3).SetAllVars(132);
+
+    // Need a new trace file to target, these values come from a file with
+    // zero baseline mean
+    model.BaselineMode().SetAllMeans(0);
+    model.BaselineMode().SetAllVars(33);
+
+    auto view = models.GetHostView();
+    for (size_t i = 0; i < view.Size(); ++i)
+    {
+        view[i] = model;
+    }
+    return models;
 }
 
 } // anonymous namespace
@@ -188,15 +207,15 @@ Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>> GenerateBaselineSt
 TEST(TestHFMetricsFilter, Populated)
 {
     {
-        Data::BasecallerAlgorithmConfig basecallerConfig{};
-        HostHFMetricsFilter::Configure(basecallerConfig.Metrics);
+        Data::BasecallerAlgorithmConfig bcConfig{};
+        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                   Data::GetPrimaryConfig().framesPerChunk,
+                                   Data::GetPrimaryConfig().sensorFrameRate,
+                                   Data::GetPrimaryConfig().realtimeActivityLabels,
+                                   Data::GetPrimaryConfig().lanesPerPool);
     }
 
-    Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
-                                                             laneSize>> models(
-        Data::GetPrimaryConfig().lanesPerPool,
-        Cuda::Memory::SyncDirection::Symmetric,
-        true);
 
     int poolId = 0;
     HostHFMetricsFilter hfMetrics(poolId);
@@ -211,17 +230,7 @@ TEST(TestHFMetricsFilter, Populated)
     config.pattern = "ACGTGG";
     config.ipd = 0;
     const auto& baselineStats = GenerateBaselineStats(config);
-    /*
-    for (size_t l = 0; l < Data::GetPrimaryConfig().lanesPerPool; l++)
-    {
-        const auto& laneStats = baselineStats.GetHostView()[l];
-        for (size_t zi = 0; zi < laneSize; ++zi)
-        {
-            std::cout << laneStats.m0_[zi] << " " << laneStats.m1_[zi] << " " << laneStats.m2_[zi] << std::endl;
-        }
-    }
-    return;
-    */
+    const auto& models = GenerateModels(config);
 
     int blocks_tested = 0;
 
@@ -267,50 +276,72 @@ TEST(TestHFMetricsFilter, Populated)
                               mb.numPulsesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPulsesByAnalog[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[1][z]);
+                    // G is over represented in the pattern above
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
+                              mb.numBasesByAnalog[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[3][z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
                               mb.numPulses[z]);
                     ASSERT_EQ(numBatchesPerHFMB * config.numBases,
                               mb.numBases[z]);
-                    // This will always be empty, unless features like
-                    // autocorrelation are populated
-                    ASSERT_EQ(ActivityLabeler::HQRFPhysicalState::EMPTY,
+                    // This will always something random, doesn't matter at the
+                    // moment
+                    EXPECT_EQ(Data::HQRFPhysicalStates::MULTI,
                               mb.activityLabel[z]);
+                    EXPECT_EQ(0,
+                              mb.startFrame[z]);
+                    EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
+                              mb.stopFrame[z]);
+                    EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
+                              mb.numFrames[z]);
                     // We've already checked that numpulsesbyanalog is correct,
                     // so we'll just use it here for readability:
                     // Also note that we are subtracting out the partial frames
                     // (thus -2).
-                    ASSERT_EQ(20 * (config.baseWidth - 2) * mb.numPulsesByAnalog[0][z],
-                              mb.pkMidSignal[0][z]);
-                    ASSERT_EQ(40 * (config.baseWidth - 2) * mb.numPulsesByAnalog[1][z],
-                              mb.pkMidSignal[1][z]);
-                    ASSERT_EQ(10 * (config.baseWidth - 2) * mb.numPulsesByAnalog[2][z],
-                              mb.pkMidSignal[2][z]);
-                    ASSERT_EQ(30 * (config.baseWidth - 2) * mb.numPulsesByAnalog[3][z],
-                              mb.pkMidSignal[3][z]);
-                    ASSERT_EQ(25,
-                              mb.pkMax[0][z]);
-                    ASSERT_EQ(45,
-                              mb.pkMax[1][z]);
-                    ASSERT_EQ(15,
-                              mb.pkMax[2][z]);
-                    ASSERT_EQ(35,
-                              mb.pkMax[3][z]);
-                    ASSERT_EQ(25,
-                              mb.bpZvar[0][z]);
-                    ASSERT_EQ(45,
-                              mb.bpZvar[1][z]);
-                    ASSERT_EQ(15,
-                              mb.bpZvar[2][z]);
-                    ASSERT_EQ(35,
-                              mb.bpZvar[3][z]);
-                    ASSERT_EQ(25,
-                              mb.pkZvar[0][z]);
-                    ASSERT_EQ(45,
-                              mb.pkZvar[1][z]);
-                    ASSERT_EQ(15,
-                              mb.pkZvar[2][z]);
-                    ASSERT_EQ(35,
-                              mb.pkZvar[3][z]);
+                    EXPECT_EQ(2944, mb.pkMidSignal[0][z]);
+                    EXPECT_EQ(5632, mb.pkMidSignal[1][z]);
+                    EXPECT_EQ(3776, mb.pkMidSignal[2][z]);
+                    EXPECT_EQ(4608, mb.pkMidSignal[3][z]);
+                    ASSERT_EQ(25, mb.pkMax[0][z]);
+                    ASSERT_EQ(45, mb.pkMax[1][z]);
+                    ASSERT_EQ(15, mb.pkMax[2][z]);
+                    ASSERT_EQ(35, mb.pkMax[3][z]);
+                    EXPECT_NEAR(0.0160583, mb.bpZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0043878, mb.bpZvar[1][z], 0.001);
+                    EXPECT_NEAR(0.0192236, mb.bpZvar[2][z], 0.001);
+                    EXPECT_NEAR(0.0065546, mb.bpZvar[3][z], 0.001);
+                    EXPECT_NEAR(0.0694064, mb.pkZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0451073, mb.pkZvar[1][z], 0.001);
+                    EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
+                    EXPECT_NEAR(0.0970992, mb.pkZvar[3][z], 0.001);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.pkMidNumFrames[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.pkMidNumFrames[1][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 4 * (config.baseWidth - 2),
+                              mb.pkMidNumFrames[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.pkMidNumFrames[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[1][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
+                              mb.numPkMidBasesByAnalog[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[3][z]);
+                    // TODO: These aren't expected to be "correct", and should
+                    // be replaced when these metrics are expected to be
+                    // correct. The values themselves may need to be helped
+                    // with some simulation in the above functions
+                    EXPECT_EQ(0, mb.autocorrelation[z]);
+                    EXPECT_EQ(0, mb.pulseDetectionScore[z]);
+                    EXPECT_EQ(0, mb.pixelChecksum[z]);
                 }
             }
             ++blocks_tested;
@@ -323,8 +354,13 @@ TEST(TestHFMetricsFilter, Populated)
 TEST(TestHFMetricsFilter, Noop)
 {
     {
-        Data::BasecallerAlgorithmConfig basecallerConfig{};
-        NoHFMetricsFilter::Configure(basecallerConfig.Metrics);
+        Data::BasecallerAlgorithmConfig bcConfig{};
+        NoHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                     Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                     Data::GetPrimaryConfig().framesPerChunk,
+                                     Data::GetPrimaryConfig().sensorFrameRate,
+                                     Data::GetPrimaryConfig().realtimeActivityLabels,
+                                     Data::GetPrimaryConfig().lanesPerPool);
     }
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
                                                              laneSize>> models(

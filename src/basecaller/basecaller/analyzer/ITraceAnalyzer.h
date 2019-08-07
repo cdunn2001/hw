@@ -60,10 +60,10 @@ public:
     /// elements of input.
     /// GetMeta().FirstFrame() must be the same for all elements of input.
     /// GetMeta().LastFrame() must be the same for all elements of input.
-    std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>
+    std::vector<std::unique_ptr<Data::BatchResult>>
     operator()(std::vector<Data::TraceBatch<int16_t>> input)
     {
-        if (input.empty()) return std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>();
+        if (input.empty()) return std::vector<std::unique_ptr<Data::BatchResult>>();
         assert(IsValid(input));
         return Analyze(std::move(input));
     }
@@ -74,7 +74,7 @@ private:    // Functions
     virtual void NumWorkerThreads(unsigned int) = 0;
 
     /// The polymorphic implementation point.
-    virtual std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>
+    virtual std::vector<std::unique_ptr<Data::BatchResult>>
     Analyze(std::vector<Data::TraceBatch<int16_t>> input) = 0;
 
     // Returns true if the input meets basic contracts.

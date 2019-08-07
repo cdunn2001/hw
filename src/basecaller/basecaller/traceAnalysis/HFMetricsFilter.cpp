@@ -38,27 +38,33 @@ uint32_t HFMetricsFilter::sandwichTolerance_ = 0;
 uint32_t HFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double HFMetricsFilter::frameRate_ = 0;
 bool HFMetricsFilter::realtimeActivityLabels_ = 0;
+uint32_t HFMetricsFilter::framesPerChunk_;
 uint32_t HFMetricsFilter::lanesPerBatch_;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
 std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
 std::unique_ptr<Data::BasecallingMetricsAccumulatorFactory<laneSize>> HFMetricsFilter::metricsAccumulatorFactory_;
 
-void HFMetricsFilter::Configure(const Data::BasecallerMetricsConfig& config)
+void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
+                                uint32_t framesPerHFMetricBlock,
+                                uint32_t framesPerChunk,
+                                double frameRate,
+                                bool realtimeActivityLabels,
+                                uint32_t lanesPerBatch)
 {
-    framesPerHFMetricBlock_ = Data::GetPrimaryConfig().framesPerHFMetricBlock;
-    if (framesPerHFMetricBlock_ < Data::GetPrimaryConfig().framesPerChunk)
+    framesPerHFMetricBlock_ = framesPerHFMetricBlock;
+    framesPerChunk_ = framesPerChunk;
+    if (framesPerHFMetricBlock_ < framesPerChunk)
         throw PBException("HFMetric frame block size cannot be smaller than "
                           "trace block size!");
 
-    sandwichTolerance_ = config.sandwichTolerance;
-    frameRate_ = Data::GetPrimaryConfig().sensorFrameRate;
-    realtimeActivityLabels_ = Data::GetPrimaryConfig().realtimeActivityLabels;
-
+    sandwichTolerance_ = sandwichTolerance;
+    frameRate_ = frameRate;
+    realtimeActivityLabels_ = realtimeActivityLabels;
     Data::BatchDimensions dims;
-    dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
+    dims.framesPerBatch = framesPerChunk;
+    dims.lanesPerBatch = lanesPerBatch;
     dims.laneWidth = laneSize;
-    dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
-    lanesPerBatch_ = dims.lanesPerBatch;
+    lanesPerBatch_ = lanesPerBatch;
     zmwsPerBatch_ = dims.ZmwsPerBatch();
 
     constexpr bool hostExecution = true;
@@ -76,8 +82,8 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
     using Cuda::Memory::SyncDirection;
 
     Data::BatchDimensions dims;
-    dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
-    dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
+    dims.framesPerBatch = framesPerChunk_;
+    dims.lanesPerBatch = lanesPerBatch_;
     dims.laneWidth = laneSize;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
@@ -106,7 +112,7 @@ void HostHFMetricsFilter::FinalizeBlock()
 
 HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 
-void HFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
+void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 {
     const auto& basecalls = pulseBatch.Pulses();
     for (size_t l = 0; l < lanesPerBatch_; l++)

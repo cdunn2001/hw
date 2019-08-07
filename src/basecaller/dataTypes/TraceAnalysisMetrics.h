@@ -31,10 +31,8 @@
 //  BasecallingMetricAccumulators and populated by HFMetricsFilter from other
 //  stages in the analysis pipeline
 
-#include <array>
 #include <math.h>
 #include <numeric>
-#include <vector>
 
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
@@ -99,7 +97,7 @@ public:
     {
         SingleUnsignedIntegerMetric ret;
         for (size_t i = 0; i < LaneWidth; ++i)
-            ret = startFrame_[i] + numFrames_[i];
+            ret[i] = startFrame_[i] + numFrames_[i];
         return ret;
     }
 
@@ -133,7 +131,6 @@ public:
         SingleFloatMetric ret;
         for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
         {
-            //std::cout << frameBaselineM0DWS_[zmw] << " " << frameBaselineM1DWS_[zmw] << " " << frameBaselineM2DWS_[zmw] << std::endl;
             ret[zmw] = frameBaselineM1DWS_[zmw]
                        * frameBaselineM1DWS_[zmw]
                        / frameBaselineM0DWS_[zmw];
@@ -212,12 +209,17 @@ public:
     SingleFloatMetric& PulseDetectionScore()
     { return pulseDetectionScore_; }
 
+    /// Returns pixel checksum
+    const SingleIntegerMetric& PixelChecksum() const
+    { return pixelChecksum_; }
+
+    SingleIntegerMetric& PixelChecksum()
+    { return pixelChecksum_; }
+
 private:
     SingleUnsignedIntegerMetric startFrame_;
     SingleUnsignedIntegerMetric numFrames_;
-
-public:
-    SingleIntegerMetric pixelChecksum;
+    SingleIntegerMetric pixelChecksum_;
 
 private:
     SingleFloatMetric frameBaselineM0DWS_;

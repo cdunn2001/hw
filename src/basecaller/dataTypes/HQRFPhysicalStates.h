@@ -1,5 +1,5 @@
-#ifndef Mongo_Common_BlockActivityLabels_H_
-#define Mongo_Common_BlockActivityLabels_H_
+#ifndef Mongo_Common_HQRFPhysicalStates_H_
+#define Mongo_Common_HQRFPhysicalStates_H_
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -26,13 +26,13 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Description:
-/// \brief ActivityLabelEnum definition
+/// \brief HQRFPhsyicalStates
 
 namespace PacBio {
 namespace Mongo {
-namespace ActivityLabeler {
+namespace Data {
 
-enum class HQRFPhysicalState : std::uint8_t
+enum class HQRFPhysicalStates : std::uint8_t
 {
     EMPTY = 0,
     SINGLE,
@@ -42,5 +42,5 @@ enum class HQRFPhysicalState : std::uint8_t
     NUM_PHYS_STATES
 };
 
-}}} // ::PacBio::Mongo::ActivityLabeler
-#endif // Mongo_Common_BlockActivityLabels_H_
+}}} // ::PacBio::Mongo::Data
+#endif // Mongo_Common_HQRFPhysicalStates_H_

@@ -27,10 +27,12 @@
 //  Description:
 //  Defines members of class BasecallingMetrics.
 
+#include <array>
+#include <vector>
+
 #include "BasecallingMetrics.h"
 #include <common/MongoConstants.h>
-#include <common/BlockActivityLabels.h>
-#include <common/TrainedCartParams.h>
+#include "TrainedCartParams.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -105,7 +107,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
         // This never changes, could be a member or at least not recomputed...
         const float minamp = *std::min_element(relamps.begin(), relamps.end());
 
-        for (size_t i = 0; i < NumAnalogs; ++i)
+        for (size_t i = 0; i < numAnalogs; ++i)
         {
             if (!std::isnan(pkmid[i][zmw]) && pkbases[i][zmw] > 0 && stdDev > 0
                     && relamps[i] > 0 && totBases > 0)
@@ -115,7 +117,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
             }
         }
 
-        for (size_t aI = 0; aI < NumAnalogs && stdDev > 0; ++aI)
+        for (size_t aI = 0; aI < numAnalogs && stdDev > 0; ++aI)
         {
             features[ActivityLabeler::MAXPKMAXNORM] = std::fmax(
                 features[ActivityLabeler::MAXPKMAXNORM],
@@ -162,7 +164,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
                 current = ActivityLabeler::TrainedCart::childrenRight[current];
             }
         }
-        activityLabel_[zmw] = static_cast<ActivityLabeler::HQRFPhysicalState>(ActivityLabeler::TrainedCart::value[current]);
+        activityLabel_[zmw] = static_cast<HQRFPhysicalStates>(ActivityLabeler::TrainedCart::value[current]);
     }
 }
 
@@ -172,6 +174,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
 {
     const auto& numPulses = NumPulses();
     const auto& numBases = NumBases();
+    const auto& stopFrame = traceMetrics_.StopFrame();
     for (size_t z = 0; z < LaneWidth; ++z)
     {
         metrics.numPulseFrames[z] = numPulseFrames_[z];
@@ -182,8 +185,14 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
         metrics.numPulses[z] = numPulses[z];
         metrics.numBases[z] = numBases[z];
         metrics.activityLabel[z] = activityLabel_[z];
+        metrics.startFrame[z] = traceMetrics_.StartFrame()[z];
+        metrics.stopFrame[z] = stopFrame[z];
+        metrics.numFrames[z] = traceMetrics_.NumFrames()[z];
+        metrics.autocorrelation[z] = traceMetrics_.Autocorrelation()[z];
+        metrics.pulseDetectionScore[z] = traceMetrics_.PulseDetectionScore()[z];
+        metrics.pixelChecksum[z] = traceMetrics_.PixelChecksum()[z];
     }
-    for (size_t a = 0; a < NumAnalogs; ++a)
+    for (size_t a = 0; a < numAnalogs; ++a)
     {
         for (size_t z = 0; z < LaneWidth; ++z)
         {
@@ -214,7 +223,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::Initialize()
         prevBasecallCache_[z] = Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE);
         prevprevBasecallCache_[z] = Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE);
     }
-    for (size_t a = 0; a < NumAnalogs; ++a)
+    for (size_t a = 0; a < numAnalogs; ++a)
     {
         for (size_t z = 0; z < LaneWidth; ++z)
         {
@@ -238,7 +247,7 @@ BasecallingMetricsAccumulator<LaneWidth>::NumBases() const
     SingleUnsignedIntegerMetric ret;
     for (size_t z = 0; z < LaneWidth; ++z)
         ret[z] = 0;
-    for (size_t a = 0; a < NumAnalogs; ++a)
+    for (size_t a = 0; a < numAnalogs; ++a)
     {
         for (size_t z = 0; z < LaneWidth; ++z)
         {
@@ -255,7 +264,7 @@ BasecallingMetricsAccumulator<LaneWidth>::NumPulses() const
     SingleUnsignedIntegerMetric ret;
     for (size_t z = 0; z < LaneWidth; ++z)
         ret[z] = 0;
-    for (size_t a = 0; a < NumAnalogs; ++a)
+    for (size_t a = 0; a < numAnalogs; ++a)
     {
         for (size_t z = 0; z < LaneWidth; ++z)
         {
@@ -287,7 +296,7 @@ typename BasecallingMetricsAccumulator<LaneWidth>::AnalogFloatMetric
 BasecallingMetricsAccumulator<LaneWidth>::PkmidMean() const
 {
     AnalogFloatMetric ret;
-    for (size_t ai = 0; ai < NumAnalogs; ++ai)
+    for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
         for (size_t zi = 0; zi < LaneWidth; ++zi)
         {
@@ -311,20 +320,20 @@ void BasecallingMetricsAccumulator<LaneWidth>::AddBaselineStats(
 {
     for (size_t zi = 0; zi < LaneWidth; ++zi)
     {
-        //std::cout << baselineStats.m0_[zi] << " " << baselineStats.m1_[zi] << " " << baselineStats.m2_[zi] << std::endl;
-        traceMetrics_.FrameBaselineM0DWS()[zi] += baselineStats.m0_[zi];
-        traceMetrics_.FrameBaselineM1DWS()[zi] += baselineStats.m1_[zi];
-        traceMetrics_.FrameBaselineM2DWS()[zi] += baselineStats.m2_[zi];
+        traceMetrics_.FrameBaselineM0DWS()[zi] += baselineStats.baselineStats.moment0[zi];
+        traceMetrics_.FrameBaselineM1DWS()[zi] += baselineStats.baselineStats.moment1[zi];
+        traceMetrics_.FrameBaselineM2DWS()[zi] += baselineStats.baselineStats.moment2[zi];
     }
 }
 
 // TODO: This only keeps the most recent model (which is how Sequel handled
-// it). Should this accumulate instead?
+// it). Should this accumulate instead? Update: According to Ben, the model
+// will (currently) not change while metrics are accumulating.
 template <unsigned int LaneWidth>
 void BasecallingMetricsAccumulator<LaneWidth>::AddModels(
         const InputModelsT& models)
 {
-    for (size_t ai = 0; ai < NumAnalogs; ++ai)
+    for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
         for (size_t zi = 0; zi < LaneWidth; ++zi)
         {
@@ -398,11 +407,11 @@ void BasecallingMetricsAccumulator<LaneWidth>::Count(
                     pkMidNumFrames_[pulseLabel][zi] += midWidth;
                     // sum of signals (M1)
                     pkMidSignal_[pulseLabel][zi] += pulse->MidSignal()
-                                                 * midWidth;
+                                                    * midWidth;
                     // sum of square of signals (M2)
                     bpZvar_[pulseLabel][zi] += pulse->MidSignal()
-                                            * pulse->MidSignal()
-                                            * midWidth;
+                                               * pulse->MidSignal()
+                                               * midWidth;
 
                     // Intra-pulse M2
                     pkZvar_[pulseLabel][zi] += pulse->SignalM2();
@@ -424,7 +433,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
 {
     using Flt = typename BasecallingMetrics<LaneWidth>::Flt;
 
-    for (size_t pulseLabel = 0; pulseLabel < NumAnalogs; pulseLabel++)
+    for (size_t pulseLabel = 0; pulseLabel < numAnalogs; pulseLabel++)
     {
         for (size_t zi = 0; zi < LaneWidth; ++zi)
         {
@@ -434,40 +443,30 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
                 pkMidSignal_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 pkZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
-                //std::cout << "no bases" << std::endl;
             } else if (numPkMidBasesByAnalog_[pulseLabel][zi] < 2
                     || pkMidNumFrames_[pulseLabel][zi] < 2)
             {
                 bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
                 pkZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
-                //std::cout << "noframes or few bases" << std::endl;
             }
             else
             {
-                //std::cout << "shouldn't be nan" << std::endl;
                 // Convert moments to interpulse variance
-                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 bpZvar_[pulseLabel][zi] = (bpZvar_[pulseLabel][zi]
                                            - (pkMidSignal_[pulseLabel][zi]
                                               * pkMidSignal_[pulseLabel][zi]
                                               / pkMidNumFrames_[pulseLabel][zi]))
                                           / (pkMidNumFrames_[pulseLabel][zi]);
-                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 // Bessel's correction with num bases, not frames
                 bpZvar_[pulseLabel][zi] *= numPkMidBasesByAnalog_[pulseLabel][zi]
                                            / (numPkMidBasesByAnalog_[pulseLabel][zi] - 1);
 
-                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
                 const auto baselineVariance =
                     traceMetrics_.FrameBaselineVarianceDWS()[zi];
-
-                //std::cout << std::endl << baselineVariance << std::endl;
-                //std::cout << numPkMidBasesByAnalog_[pulseLabel][zi] << std::endl << std::endl;
 
                 bpZvar_[pulseLabel][zi] -= baselineVariance
                                         / (pkMidNumFrames_[pulseLabel][zi]
                                            / numPkMidBasesByAnalog_[pulseLabel][zi]);
-                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
 
                 pkZvar_[pulseLabel][zi] = (pkZvar_[pulseLabel][zi]
                                       - (pkMidSignal_[pulseLabel][zi]
@@ -497,7 +496,6 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
                         bpZvar_[pulseLabel][zi] / (pkMid * pkMid), 0.0f);
                 else
                     bpZvar_[pulseLabel][zi] = std::numeric_limits<Flt>::quiet_NaN();
-                //std::cout << bpZvar_[pulseLabel][zi] << std::endl;
             }
         }
     }

@@ -31,14 +31,10 @@
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale  equal to or greater than the standard block size.
 
-#include <atomic>
-#include <tbb/cache_aligned_allocator.h>
-
-#include <dataTypes/ConfigForward.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/PulseBatch.h>
-#include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BasecallingMetrics.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/LaneDetectionModel.h>
 
 
@@ -50,7 +46,7 @@ class HFMetricsFilter
 {
 public:     // Types
     using PulseBatchT = Data::PulseBatch;
-    using BaselineStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using BaselineStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
     using BasecallingMetricsAccumulatorT = Data::BasecallingMetricsAccumulator<laneSize>;
@@ -58,7 +54,12 @@ public:     // Types
     using ModelsT = Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>;
 
 public: // Static functions
-    static void Configure(const Data::BasecallerMetricsConfig&);
+    static void Configure(uint32_t sandwichTolerance,
+                          uint32_t framesPerHFMetricBlock,
+                          uint32_t framesPerChunk,
+                          double frameRate,
+                          bool realtimeActivityLabels,
+                          uint32_t lanesPerBatch);
     static void Finalize();
     static void InitAllocationPools(bool hostExecution);
     static void DestroyAllocationPools();
@@ -72,21 +73,18 @@ protected: // Static members
     static bool realtimeActivityLabels_;
     static uint32_t lanesPerBatch_;
     static uint32_t zmwsPerBatch_;
+    static uint32_t framesPerChunk_;
 
 
 public: // Structors
     HFMetricsFilter(uint32_t poolId)
         : poolId_(poolId)
         , framesSeen_(0)
-    {
-        metrics_ = std::move(metricsAccumulatorFactory_->NewBatch());
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            metrics_->GetHostView()[l].Initialize();
-        }
-    };
+    { };
     HFMetricsFilter(const HFMetricsFilter&) = delete;
     HFMetricsFilter(HFMetricsFilter&&) = default;
+    HFMetricsFilter& operator=(const HFMetricsFilter&) = delete;
+    HFMetricsFilter& operator=(HFMetricsFilter&&) = default;
     virtual ~HFMetricsFilter() = default;
 
 public: // Filter API
@@ -102,31 +100,42 @@ public: // Filter API
 protected:    // Block management
     virtual void FinalizeBlock() = 0;
 
-    void AddPulses(const PulseBatchT& batch);
-
 private:    // Block management
     virtual std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& basecallBatch,
             const BaselineStatsT& baselineStats,
             const ModelsT& models) = 0;
 
-private:    // State
+private: // State
     uint32_t poolId_;
 
 protected: // State
     uint32_t framesSeen_;
-    std::unique_ptr<BasecallingMetricsBatchAccumulatorT> metrics_;
 
 };
 
 class HostHFMetricsFilter : public HFMetricsFilter
 {
 public:
-    using HFMetricsFilter::HFMetricsFilter;
+    HostHFMetricsFilter(uint32_t poolId)
+        : HFMetricsFilter(poolId)
+        , metrics_(metricsAccumulatorFactory_->NewBatch())
+    {
+        for (size_t l = 0; l < lanesPerBatch_; ++l)
+        {
+            metrics_->GetHostView()[l].Initialize();
+        }
+    };
+    HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
+    HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
+    HostHFMetricsFilter& operator=(const HostHFMetricsFilter&) = delete;
+    HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
     ~HostHFMetricsFilter() override;
 
-private:    // Block management
+private: // Block management
     void FinalizeBlock() override;
+
+    void AddPulses(const PulseBatchT& batch);
 
     void AddBaselineStats(const BaselineStatsT& baselineStats);
 
@@ -137,6 +146,8 @@ private:    // Block management
             const BaselineStatsT& baselineStats,
             const ModelsT& models) override;
 
+private: // members
+    std::unique_ptr<BasecallingMetricsBatchAccumulatorT> metrics_;
 };
 
 

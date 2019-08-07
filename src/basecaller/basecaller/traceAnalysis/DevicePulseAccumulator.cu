@@ -131,7 +131,7 @@ public:
             .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
             .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()))
-            .IsReject(pulse.Label() != Data::Pulse::NucleotideLabel::NONE);
+            .IsReject(false);
     }
 
     __device__ void ResetSegment(PBBool2 boundaryMask, uint32_t frameIndex,
