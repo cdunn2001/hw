@@ -82,6 +82,7 @@ public:     // Equality
         if (this->maxSignal_ != that.maxSignal_) return false;
         if (this->signalM2_ != that.signalM2_) return false;
         if (this->label_ != that.label_) return false;
+        if (this->isReject_ != that.isReject_) return false;
         return true;
     }
 
@@ -130,6 +131,10 @@ public:     // Property accessors
     ///          pulses in any other manner (no "no-call" pulses).
     CUDA_ENABLED NucleotideLabel Label() const
     { return label_; }
+
+    /// \brief Whether or not the pulse call was excluded as incredible.
+    CUDA_ENABLED bool IsReject() const
+    { return isReject_; }
 
 public:     // Property modifiers
     /// Sets the start frame value.
@@ -191,6 +196,14 @@ public:     // Property modifiers
         return *this;
     }
 
+    /// \brief Sets the rejected flag.
+    /// \returns Reference to \code *this.
+    CUDA_ENABLED Pulse& IsReject(bool value)
+    {
+        isReject_ = value;
+        return *this;
+    }
+
 private:    // Static data
     // Scale factor used for fixed-point representation of signal levels.
     // The representation has this precision in DN or e-.
@@ -220,6 +233,7 @@ private:    // Data
     float signalM2_;
 
     NucleotideLabel label_;
+    bool isReject_;
 };
 
 /// \brief Maps a plain char to a NucleotideLabel.

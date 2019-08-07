@@ -57,7 +57,7 @@ public:     // ITraceAnalyzer interface
     unsigned int NumZmwPools() const override;
 
 private:    // Polymorphic analysis
-    std::vector<std::unique_ptr<Data::BasecallBatch>>
+    std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>
     Analyze(std::vector<Data::TraceBatch<int16_t>> input) override;
 
     // Sets the number of worker threads requested.

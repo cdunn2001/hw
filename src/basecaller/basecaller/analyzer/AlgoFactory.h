@@ -28,6 +28,7 @@ public:
     std::unique_ptr<Baseliner> CreateBaseliner(unsigned int poolId) const;
     std::unique_ptr<FrameLabeler> CreateFrameLabeler(unsigned int poolId) const;
     std::unique_ptr<PulseAccumulator> CreatePulseAccumulator(unsigned int poolId) const;
+    std::unique_ptr<HFMetricsFilter> CreateHFMetricsFilter(unsigned int poolId) const;
 
     std::unique_ptr<TraceHistogramAccumulator>
     CreateTraceHistAccumulator(unsigned int poolId) const;
@@ -45,6 +46,7 @@ private:
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
     Data::BasecallerDmeConfig::MethodName dmeOpt_;
     Data::BasecallerPulseAccumConfig::MethodName pulseAccumOpt_;
+    Data::BasecallerMetricsConfig::MethodName hfMetricsOpt_;
 
     // TODO: Add enums for other strategy options as needed.
 };

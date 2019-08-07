@@ -9,6 +9,7 @@ class BasecallerConfig;
 class BasecallerAlgorithmConfig;
 class BasecallerBaselinerConfig;
 class BasecallerFrameLabelerConfig;
+class BasecallerMetricsConfig;
 class BasecallerPulseAccumConfig;
 class BasecallerTraceHistogramConfig;
 class BasecallerDmeConfig;
