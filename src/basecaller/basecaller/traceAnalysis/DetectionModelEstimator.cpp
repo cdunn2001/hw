@@ -18,6 +18,9 @@ PacBio::Logging::PBLogger DetectionModelEstimator::logger_ (boost::log::keywords
 
 float DetectionModelEstimator::refSnr_;
 uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
+bool DetectionModelEstimator::fixedBaselineParams_ = false;
+float DetectionModelEstimator::fixedBaselineMean_ = 0;
+float DetectionModelEstimator::fixedBaselineVar_ = 0;
 
 // static
 void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig,
@@ -29,6 +32,14 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
     for (size_t i = 0; i < movConfig.analogs.size(); i++)
     {
         analogs_[i] = movConfig.analogs[i];
+    }
+
+    if (dmeConfig.Method() == Data::BasecallerDmeConfig::MethodName::Fixed &&
+        dmeConfig.SimModel.useFixedBaselineParams == true)
+    {
+        fixedBaselineParams_ = true;
+        fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
+        fixedBaselineVar_ = dmeConfig.SimModel.baselineVar;
     }
 }
 
@@ -82,9 +93,10 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselineStats<laneSiz
 
     StatAccumulator<LaneArr> blsa (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
 
-    const auto& blMean = blsa.Mean();
+    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
+
     LanArrRef(ldm.BaselineMode().means.data()) = blMean;
-    const auto& blVar = blsa.Variance();
     LanArrRef(ldm.BaselineMode().vars.data()) = blVar;
     assert(numAnalogs <= analogs_.size());
     const auto refSignal = refSnr_ * sqrt(blVar);

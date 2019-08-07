@@ -83,6 +83,7 @@ public:
             PBLOG_INFO << "Input Target: " << inputTargetFile_;
             batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
             MetaDataFromTraceFileSource(inputTargetFile_);
+            GroundTruthFromTraceFileSource(inputTargetFile_);
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -138,9 +139,15 @@ private:
         traceFile.ExcessNoiseCV >> excessNoiseCV;
         traceFile.IpdMean >> interPulseDistance;
         traceFile.PulseWidthMean >> pulseWidth;
+        traceFile.Ipd2SlowStepRatio >> ipd2SlowStepRatio;
+        traceFile.Pw2SlowStepRatio >> pw2SlowStepRatio;
 
-        // Analogs should be sorted in trace file based on relative amplitude,
-        // the same ordering expected by MovieConfig.
+        // Check relative amplitude is sorted decreasing.
+        if (!std::is_sorted(relativeAmpl.rbegin(), relativeAmpl.rend()))
+        {
+            throw PBException("Analogs in trace file not sorted by decreasing relative amplitude!");
+        }
+
         for (size_t i = 0; i < numAnalogs; i++)
         {
             auto& analog = movieConfig_.analogs[i];
@@ -152,15 +159,46 @@ private:
             analog.ipd2SlowStepRatio = ipd2SlowStepRatio[i];
             analog.pw2SlowStepRatio = pw2SlowStepRatio[i];
         }
+    }
 
-        // TODO: Grab information about static model if present.
-        /*
-        if (traceFile.HasStaticModel())
+    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
+    {
+        auto setBlMeanAndCovar = [](const std::string& traceFileName,
+                                    ConfigurationObject::ConfigurationPod<float>& blMean,
+                                    ConfigurationObject::ConfigurationPod<float>& blCovar,
+                                    const std::string& exceptMsg)
         {
-            traceFile.BaselineMean >> basecallerConfig_.algorithm.staticDetModelConfig.baselineMean;
-            traceFile.BaselineVariance >> basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance;
+            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+            if (traceFile.simulated)
+            {
+                boost::multi_array<float,2> stateMean;
+                boost::multi_array<float,2> stateCovar;
+                traceFile.StateMean >> stateMean;
+                traceFile.StateCovariance >> stateCovar;
+                blMean = stateMean[0][0];
+                blCovar = stateCovar[0][0];
+            }
+            else
+            {
+                throw PBException(exceptMsg);
+            }
+        };
+
+        if (basecallerConfig_.algorithm.staticAnalysis == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
+                              "Requested static pipeline analysis but input trace file is not simulated!");
         }
-        */
+        else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useFixedBaselineParams == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineVar,
+                              "Requested fixed DME with baseline params but input trace file is not simulated!");
+        }
     }
 
     void RunAnalyzer()
