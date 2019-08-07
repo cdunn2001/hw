@@ -69,9 +69,6 @@ SMART_ENUM(
 
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
 
-std::unique_ptr<Data::BasecallBatchFactory> BatchAnalyzer::batchFactory_;
-uint16_t BatchAnalyzer::maxCallsPerZmwChunk_;
-
 void BatchAnalyzer::ReportPerformance()
 {
     Profiler::FinalReport();
@@ -79,25 +76,6 @@ void BatchAnalyzer::ReportPerformance()
 
 BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
-
-
-// static
-void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                              const Data::MovieConfig& movConfig)
-{
-    BatchDimensions dims;
-    dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
-    dims.laneWidth = laneSize;
-    dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
-
-    batchFactory_ = std::make_unique<BasecallBatchFactory>(
-        bcConfig.pulseAccumConfig.maxCallsPerZmw,
-        dims,
-        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-        true);
-
-    maxCallsPerZmwChunk_ = bcConfig.pulseAccumConfig.maxCallsPerZmw;
-}
 
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
