@@ -6,6 +6,7 @@ include(pacbio-cplusplus-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoBasecallerTest OBJECT
     TestBaseliner.cpp
+    TestHFMetricsFilter.cpp
     TestTraceAnalyzerTbb.cpp
     TestTraceHistogramAccumHost.cpp
     TestPulseAccumulator.cpp

@@ -40,6 +40,7 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/HFMetricsFilter.h>
 
 #include <common/cuda/PBCudaRuntime.h>
 
@@ -65,7 +66,8 @@ SMART_ENUM(
     Baseline,
     FrameLabeling,
     PulseAccumulating,
-    SequelConv
+    SequelConv,
+    Metrics
 );
 
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
@@ -111,6 +113,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
+    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
     // TODO: Create other algorithm components.
 
     // Not running DME, need to fake our model
@@ -141,7 +144,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
 }
 
 
-BasecallBatch BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
     if(staticAnalysis_)
     {
@@ -216,7 +219,7 @@ void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& b
 }   // anonymous namespace
 
 
-BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -254,11 +257,15 @@ BasecallBatch BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return bases;
+    auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
+    (void) metricsProfile;
+    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+
+    return BatchResult(std::move(bases), std::move(basecallingMetrics));
 }
 
 
-BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -314,7 +321,11 @@ BasecallBatch BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return basecalls;
+    // TODO (mds 20190724) uncomment when pulseBatch is produced in this pipeline
+    //auto basecallingMetrics = (*hfMetrics_)(pulsecallsBatch, ctb.Stats(), models_);
+
+    // TODO (mds 20190802) uncomment when metrics are uncommented above
+    return BatchResult(std::move(basecalls)/*, std::move(basecallingMetrics)*/);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

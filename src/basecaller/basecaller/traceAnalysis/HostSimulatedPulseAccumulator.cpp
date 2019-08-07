@@ -62,7 +62,8 @@ Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(uint32_t pulseNum)
     pulse.MeanSignal(meanSignals[iL]).
         MidSignal(midSignals[iL]).
         MaxSignal(maxSignals[iL]).
-        SignalM2(meanSignals[iL] * meanSignals[iL]);
+        SignalM2(meanSignals[iL] * meanSignals[iL]).
+        IsReject(false);
 
     return pulse;
 }

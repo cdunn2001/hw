@@ -24,6 +24,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DmeDiagnostics.cpp
     DmeEmHost.h
     DmeEmHost.cpp
+    HFMetricsFilter.h
+    HFMetricsFilter.cpp
     HostMultiScaleBaseliner.h
     HostMultiScaleBaseliner.cpp
     HostNoOpBaseliner.h

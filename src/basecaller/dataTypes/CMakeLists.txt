@@ -6,6 +6,8 @@ set(CPP_LIST
     BasecallBatch.h
     BasecallBatch.cpp
     BasecallerConfig.h
+    BasecallingMetrics.h
+    BasecallingMetrics.cpp
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
     BaselinerStatAccumState.h
@@ -14,10 +16,13 @@ set(CPP_LIST
     BatchData.cpp
     BatchMetadata.h
     BatchMetadata.cpp
+    BatchResult.h
+    BatchResult.cpp
     BatchVectors.h
     BatchVectors.cpp
     BatchVectors.cuh
     BatchVectors.cu
+    HQRFPhysicalStates.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
@@ -36,8 +41,11 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp
+    TrainedCartParams.h
+    TrainedCartParams.cpp
     UHistogramSimd.h
     UHistogramSimd.cpp
 )

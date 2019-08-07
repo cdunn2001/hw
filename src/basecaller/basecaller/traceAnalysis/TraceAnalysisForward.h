@@ -11,6 +11,7 @@ class FrameLabeler;
 class PulseAccumulator;
 class TraceHistogramAccumulator;
 class DetectionModelEstimator;
+class HFMetricsFilter;
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
