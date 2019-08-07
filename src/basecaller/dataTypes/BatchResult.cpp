@@ -23,26 +23,5 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines members of class BasecallBatch.
 
-#include "BasecallBatch.h"
-
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-BasecallBatch::BasecallBatch(
-        const size_t maxCallsPerZmwChunk,
-        const BatchDimensions& batchDims,
-        const BatchMetadata& batchMetadata,
-        Cuda::Memory::SyncDirection syncDir,
-        bool pinned,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
-    : dims_ (batchDims)
-    , metaData_(batchMetadata)
-    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-{}
-
-}}}     // namespace PacBio::Mongo::Data
+#include "BatchResult.h"

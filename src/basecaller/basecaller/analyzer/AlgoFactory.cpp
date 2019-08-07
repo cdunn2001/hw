@@ -12,6 +12,7 @@
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/HFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
@@ -45,6 +46,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
     frameLabelerOpt_ = bcConfig.frameLabelerConfig.Method;
     pulseAccumOpt_ = bcConfig.pulseAccumConfig.Method;
+    hfMetricsOpt_ = bcConfig.Metrics.Method;
 
     // TODO: Capture remaining options for algorithms.
 }
@@ -107,6 +109,23 @@ AlgoFactory::~AlgoFactory()
         PBLOG_ERROR << "Unrecognized method option for PulseAccumulator: "
                     << pulseAccumOpt_.toString()
                     << ".  Should be impossible to see this message, constructor should have thrown";
+        break;
+    }
+
+    switch (hfMetricsOpt_)
+    {
+    case Data::BasecallerMetricsConfig::MethodName::NoOp:
+        NoHFMetricsFilter::Finalize();
+        break;
+    case Data::BasecallerMetricsConfig::MethodName::Host:
+        HostHFMetricsFilter::Finalize();
+        break;
+    default:
+        ostringstream msg;
+        PBLOG_ERROR << "Unrecognized method option for HFMetricsFilter: "
+                    << hfMetricsOpt_.toString()
+                    << ".  Should be impossible to see this message, "
+                    << "constructor should have thrown";
         break;
     }
 }
@@ -198,6 +217,12 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
+    HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                               Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                               Data::GetPrimaryConfig().framesPerChunk,
+                               Data::GetPrimaryConfig().sensorFrameRate,
+                               Data::GetPrimaryConfig().realtimeActivityLabels,
+                               Data::GetPrimaryConfig().lanesPerPool);
 }
 
 
@@ -314,6 +339,24 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
         msg << "Unrecognized method option for pulseAccumulator: " << pulseAccumOpt_.toString() << '.';
         throw PBException(msg.str());
         break;
+    }
+}
+
+std::unique_ptr<HFMetricsFilter>
+AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
+{
+    switch (hfMetricsOpt_)
+    {
+    case Data::BasecallerMetricsConfig::MethodName::NoOp:
+        return std::make_unique<NoHFMetricsFilter>(poolId);
+        break;
+    case Data::BasecallerMetricsConfig::MethodName::Host:
+        return std::make_unique<HostHFMetricsFilter>(poolId);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for HFMetricsFilter: " << hfMetricsOpt_.toString() << '.';
+        throw PBException(msg.str());
     }
 }
 

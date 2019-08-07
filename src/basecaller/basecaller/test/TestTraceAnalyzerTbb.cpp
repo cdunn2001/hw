@@ -68,7 +68,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     ASSERT_EQ(bmdVec.size(), bcBatch.size());
     for (unsigned int i = 0; i < bcBatch.size(); ++i)
     {
-        EXPECT_EQ(bmdVec[i], bcBatch[i]->GetMeta());
+        EXPECT_EQ(bmdVec[i], bcBatch[i]->pulses.GetMeta());
     }
 }
 

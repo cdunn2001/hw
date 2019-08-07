@@ -1,3 +1,6 @@
+#ifndef mongo_dataTypes_BatchResult_H_
+#define mongo_dataTypes_BatchResult_H_
+
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -24,25 +27,37 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines members of class BasecallBatch.
+//  Defines class BatchResult, a light wrapper around a finished PulseBatch and
+//  an accumulated BasecallingMetrics object
 
-#include "BasecallBatch.h"
+// TODO (mds 20190802) Replace with PulseBatch
+#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/BasecallingMetrics.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallBatch::BasecallBatch(
-        const size_t maxCallsPerZmwChunk,
-        const BatchDimensions& batchDims,
-        const BatchMetadata& batchMetadata,
-        Cuda::Memory::SyncDirection syncDir,
-        bool pinned,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
-    : dims_ (batchDims)
-    , metaData_(batchMetadata)
-    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-{}
+struct BatchResult
+{
 
-}}}     // namespace PacBio::Mongo::Data
+    using PulseBatchT = BasecallBatch;
+    using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>;
+
+    BatchResult(PulseBatchT&& pulsesIn)
+        : pulses(std::move(pulsesIn))
+    {};
+
+    BatchResult(PulseBatchT&& pulsesIn, std::unique_ptr<MetricsT> metricsPtr)
+        : pulses(std::move(pulsesIn))
+        , metrics(std::move(metricsPtr))
+    {};
+
+    PulseBatchT pulses;
+    std::unique_ptr<MetricsT> metrics;
+};
+
+
+}}}    // namespace PacBio::Mongo::Data
+
+#endif // mongo_dataTypes_BatchResult_H_

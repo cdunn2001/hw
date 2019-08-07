@@ -34,10 +34,11 @@
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
-#include <dataTypes/PulseBatch.h>
+#include <dataTypes/BatchResult.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
+#include <dataTypes/PulseBatch.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -49,7 +50,7 @@ class BatchAnalyzer
 {
 public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
-    using OutputType = PacBio::Mongo::Data::PulseBatch;
+    using OutputType = PacBio::Mongo::Data::BatchResult;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -97,6 +98,7 @@ private:
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
+    std::unique_ptr<HFMetricsFilter> hfMetrics_;
 
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 

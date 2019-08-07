@@ -40,6 +40,7 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/HFMetricsFilter.h>
 
 #include <common/cuda/PBCudaRuntime.h>
 
@@ -64,7 +65,8 @@ SMART_ENUM(
     Download,
     Baseline,
     FrameLabeling,
-    PulseAccumulating
+    PulseAccumulating,
+    Metrics
 );
 
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
@@ -87,6 +89,7 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
+    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
     // TODO: Create other algorithm components.
 }
 
@@ -114,6 +117,7 @@ void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelCo
         view[i] = model;
     }
 }
+
 
 BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
@@ -156,9 +160,13 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     (void)download;
     pulses.Pulses().LaneView(0);
 
+    auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
+    (void) metricsProfile;
+    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return pulses;
+    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
 BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
@@ -218,9 +226,11 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
     };
 
     auto pulses = callPulses();
+    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    return pulses;
+    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

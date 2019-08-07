@@ -108,7 +108,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
 };
 
 
-TEST_F(TestTraceHistogramAccumHost, WIP_One)
+TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
 {
     const bool pinnedAlloc = false;
     TraceHistogramAccumHost tha (bmd.PoolId(), poolSize, pinnedAlloc);

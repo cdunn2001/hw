@@ -3,7 +3,6 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
-#include <dataTypes/BasecallBatch.h>
 #include <dataTypes/Pulse.h>
 #include <dataTypes/PulseBatch.h>
 #include <common/DataGenerators/BatchGenerator.h>
@@ -223,9 +222,9 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
-                auto pulses = (*analyzer_)(std::move(chunk));
+                auto output = (*analyzer_)(std::move(chunk));
                 numChunksAnalyzed++;
-                outputDataQueue_.Push(std::move(pulses));
+                outputDataQueue_.Push(std::move(output));
             }
             else
             {
@@ -315,14 +314,21 @@ private:
         }
     }
 
-    void ConvertMetric(const PacBio::Mongo::Data::BasecallingMetrics& bm, SpiderMetricBlock& sm)
+    void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
+                       SpiderMetricBlock& sm,
+                       size_t laneIndex,
+                       size_t zmwIndex)
     {
-        sm.numBasesA_ = bm.NumBasesByAnalog()[0];
-        sm.numBasesC_ = bm.NumBasesByAnalog()[1];
-        sm.numBasesG_ = bm.NumBasesByAnalog()[2];
-        sm.numBasesT_ = bm.NumBasesByAnalog()[3];
+        if (metricsPtr)
+        {
+            const auto& metrics = metricsPtr->GetHostView()[laneIndex];
+            sm.numBasesA_ = metrics.numBasesByAnalog[0][zmwIndex];
+            sm.numBasesC_ = metrics.numBasesByAnalog[1][zmwIndex];
+            sm.numBasesG_ = metrics.numBasesByAnalog[2][zmwIndex];
+            sm.numBasesT_ = metrics.numBasesByAnalog[3][zmwIndex];
 
-        sm.numPulses_ = bm.NumPulses();
+            sm.numPulses_ = metrics.numBases[zmwIndex];
+        }
     }
 
     auto ConvertMongoPulsesToSequelBasecalls(const Pulse* pulses, uint32_t numPulses)
@@ -371,34 +377,31 @@ private:
         return basecalls;
     }
 
-    void WritePulseChunk(const std::vector<std::unique_ptr<PulseBatch>>& pulseChunk)
+    void WriteOutputChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& outputChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
         if (!bazWriter_) return; // NoOp if we're not doing output
 
-        for (const auto& pulseBatchPtr : pulseChunk)
+        for (const auto& outputBatchPtr : outputChunk)
         {
-            // TODO: Need to convert the pulse batch metrics
-            // at which point BasecallBatch.h can be removed.
-            const auto& pulseBatch = *pulseBatchPtr;
-            //const auto& metrics = pulseBatch.Metrics().GetHostView();
+            const auto& pulseBatch = outputBatchPtr->pulses;
+            const auto& metricsPtr = outputBatchPtr->metrics;
             for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
             {
-                const auto& laneCalls = pulseBatch.Pulses().LaneView(lane);
+                const auto& laneCalls = pulseBatch.Basecalls().LaneView(lane);
+
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        const auto& basecalls = ConvertMongoPulsesToSequelBasecalls(laneCalls.ZmwData(zmw),
-                                                                                    laneCalls.size(zmw));
-                        if (!bazWriter_->AddZmwSlice(basecalls.data(),
-                                                     basecalls.size(),
+                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
+                                                     laneCalls.size(zmw),
                                                      [&](MemoryBufferView<SpiderMetricBlock>& dest)
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            //ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
+                                                            ConvertMetric(metricsPtr, dest[i], lane, zmw);
                                                         }
                                                      },
                                                      1,
@@ -428,8 +431,8 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<std::unique_ptr<PulseBatch>> pulseChunk;
-            if (outputDataQueue_.TryPop(pulseChunk))
+            std::vector<std::unique_ptr<BatchAnalyzer::OutputType>> outputChunk;
+            if (outputDataQueue_.TryPop(outputChunk))
             {
                 currentZmwIndex_ = 0;
                 Profiler::Mode mode = Profiler::Mode::REPORT;
@@ -437,7 +440,7 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
                 (void)writeChunkProfile;
-                WritePulseChunk(pulseChunk);
+                WriteOutputChunk(outputChunk);
                 numChunksWritten_++;
             }
             else
@@ -538,7 +541,7 @@ private:
     // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<PulseBatch>>> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>> outputDataQueue_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
