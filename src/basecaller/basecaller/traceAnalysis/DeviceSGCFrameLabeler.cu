@@ -27,6 +27,7 @@
 #include "DeviceSGCFrameLabeler.h"
 
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
+#include <dataTypes/MovieConfig.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -37,35 +38,21 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void DeviceSGCFrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
+void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig, int lanesPerPool, int framesPerChunk)
 {
     const auto hostExecution = false;
     InitAllocationPools(hostExecution, ViterbiStitchLookback);
 
-    // TODO need to plumb through configurations for this somehow
-    std::array<Subframe::AnalogMeta, 4> meta{};
+    std::array<Subframe::AnalogMeta, 4> meta;
+    for (size_t i = 0; i < meta.size(); i++)
     {
-        int frameRate = 100;
-        meta[0].ipdSSRatio = 0;
-        meta[1].ipdSSRatio = 0;
-        meta[2].ipdSSRatio = 0;
-        meta[3].ipdSSRatio = 0;
+        meta[i].ipdSSRatio = movieConfig.analogs[i].ipd2SlowStepRatio;
+        meta[i].ipd = movieConfig.frameRate * movieConfig.analogs[i].interPulseDistance;
+        meta[i].pw = movieConfig.frameRate * movieConfig.analogs[i].pulseWidth;
+        meta[i].pwSSRatio = movieConfig.analogs[i].pw2SlowStepRatio;
 
-        meta[0].ipd = frameRate * .308;
-        meta[1].ipd = frameRate * .234;
-        meta[2].ipd = frameRate * .234;
-        meta[3].ipd = frameRate * .188;
-
-        meta[0].pw = frameRate * .232;
-        meta[1].pw = frameRate * .185;
-        meta[2].pw = frameRate * .181;
-        meta[3].pw = frameRate * .214;
-
-        meta[0].pwSSRatio = 3.2;
-        meta[1].pwSSRatio = 3.2;
-        meta[2].pwSSRatio = 3.2;
-        meta[3].pwSSRatio = 3.2;
     }
+
     Cuda::FrameLabeler::Configure(meta, lanesPerPool, framesPerChunk);
 }
 

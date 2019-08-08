@@ -16,6 +16,7 @@ class BasecallerDmeConfig;
 class BasecallerInitConfig;
 class PrimaryConfig;
 class MovieConfig;
+class StaticDetModelConfig;
 
 }}}     // namespace PacBio::Mongo::Data
 

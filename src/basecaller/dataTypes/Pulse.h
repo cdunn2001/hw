@@ -36,6 +36,7 @@
 #include <cmath>
 #include <limits>
 #include <stdint.h>
+#include <sstream>
 
 #include <common/cuda/CudaFunctionDecorators.h>
 
@@ -234,6 +235,29 @@ private:    // Data
     NucleotideLabel label_;
     bool isReject_;
 };
+
+/// \brief Maps a plain char to a NucleotideLabel.
+/// \detail
+/// For example, \c mapToNucleotideLabel('A') returns \c NucleotideLabel::A.
+/// \exception std::invalid_argument if \a c is not found in \c nucleotideChar[].
+inline Pulse::NucleotideLabel mapToNucleotideLabel(char c)
+{
+    /// Plain chars used to represent NucleotideLabel values in strings.
+    const char nucleotideChar[] = {'A', 'C', 'G', 'T', 'N', '-'};
+    /// The number of NucleotideLabel values.
+    const int numNucleotideLabels = sizeof(nucleotideChar);
+
+    int inc = 0;
+    while (inc < numNucleotideLabels && nucleotideChar[inc] != c) ++inc;
+
+    if (inc == numNucleotideLabels)
+    {
+        std::ostringstream msg;
+        msg << "Bad argument in mapToNucleotideLabel(char): '" << c << "\'.";
+        throw std::invalid_argument(msg.str());
+    }
+    return Pulse::NucleotideLabel(inc);
+}
 
 }}}  // PacBio::Mongo::Data
 

@@ -44,6 +44,8 @@ public:  // types
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
 
 public:     // Static functions
+    static void Configure(int lanesPerPool, int framesPerChunk);
+    static void Finalize();
 
     static void InitAllocationPools(bool hostExecution, size_t latentFrames);
     static void DestroyAllocationPools();
@@ -71,7 +73,7 @@ private:    // Data
 
 private:    // Customizable implementation
     virtual Data::LabelsBatch Process(Data::CameraTraceBatch trace,
-                                      const PoolModelParameters& models) = 0;
+                                      const PoolModelParameters& models); //= 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

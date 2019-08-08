@@ -8,6 +8,7 @@
 
 #include "AnalogMode.h"
 #include "PrimaryConfig.h"
+#include "StaticDetModelConfig.h"
 
 // TODO: After some mongo dust has settled, purge unused configuration properties.
 
@@ -58,19 +59,13 @@ namespace Data {
         ADD_PARAMETER(float, FallBackBaselineSigma, 10.0f);
     };
 
-    class SpiderFixedDmeConfig : public PacBio::Process::ConfigurationObject
+    class FixedDmeConfig : public PacBio::Process::ConfigurationObject
     {
         // Configuration parameters for a (temporary) fixed model DME, until we
         // can get a true model estimation filter in place.
-        ADD_PARAMETER(float, RefSNR, 60);
-        ADD_PARAMETER(float, TAmp, 1.0f / 4.4f);
-        ADD_PARAMETER(float, GAmp, 1.7f / 4.4f);
-        ADD_PARAMETER(float, CAmp, 1.0f);
-        ADD_PARAMETER(float, AAmp, 2.9f / 4.4f);
+        ADD_PARAMETER(bool, useFixedBaselineParams, false);
         ADD_PARAMETER(float, baselineMean, 200.0f);
         ADD_PARAMETER(float, baselineVar, 33.0f);
-        ADD_PARAMETER(float, pulseCV, 0.1);
-        ADD_PARAMETER(float, shotCoeff, 1.37);
     };
 
 
@@ -81,7 +76,7 @@ namespace Data {
         ADD_ENUM(MethodName, Method, MethodName::Fixed);
 
         // Parameters for the SpiderFixed model, when in use
-        ADD_OBJECT(SpiderFixedDmeConfig, SpiderSimModel);
+        ADD_OBJECT(FixedDmeConfig, SimModel);
 
         // Threshold for mixing fractions of analog modes in detection model fit.
         // Associated confidence factor is defined using this threshold.
@@ -291,6 +286,7 @@ namespace Data {
         ADD_OBJECT(BasecallerMetricsConfig, Metrics);
         ADD_OBJECT(SimulatedFaults, simulatedFaults);
 
+        ADD_OBJECT(StaticDetModelConfig, staticDetModelConfig);
         ADD_PARAMETER(bool, staticAnalysis, true);
 
     public:

@@ -42,6 +42,8 @@ set(CPP_LIST
     PulseBatch.h
     PulseBatch.cpp
     TraceAnalysisMetrics.h
+    StaticDetModelConfig.h
+    StaticDetModelConfig.cpp
     TraceBatch.h
     TraceBatch.cpp
     TrainedCartParams.h

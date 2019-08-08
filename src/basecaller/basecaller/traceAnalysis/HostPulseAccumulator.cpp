@@ -1,3 +1,4 @@
+#include <dataTypes/MovieConfig.h>
 #include "HostPulseAccumulator.h"
 #include "SubframeLabelManager.h"
 
@@ -9,17 +10,18 @@ template <typename LabelManager>
 std::unique_ptr<LabelManager> HostPulseAccumulator<LabelManager>::manager_;
 
 template <typename LabelManager>
-void HostPulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)
+void HostPulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
 {
     const auto hostExecution = true;
     PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
 
     Cuda::Utility::CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
-    // TODO once ready, this needs to be plumbed in from the movie configuration.
-    analogMap[0] = Data::Pulse::NucleotideLabel::A;
-    analogMap[1] = Data::Pulse::NucleotideLabel::C;
-    analogMap[2] = Data::Pulse::NucleotideLabel::G;
-    analogMap[3] = Data::Pulse::NucleotideLabel::T;
+
+    for(size_t i = 0; i < analogMap.size(); i++)
+    {
+        analogMap[i] = Data::mapToNucleotideLabel(movieConfig.analogs[i].baseLabel);
+    }
+
     manager_ = std::make_unique<LabelManager>(analogMap);
 }
 

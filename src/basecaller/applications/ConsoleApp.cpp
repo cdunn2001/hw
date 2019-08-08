@@ -8,6 +8,7 @@
 
 #include <pacbio/primary/BazWriter.h>
 #include <pacbio/primary/FileHeaderBuilder.h>
+#include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/primary/ZmwResultBuffer.h>
 
 #include <pacbio/PBException.h>
@@ -81,6 +82,8 @@ public:
         {
             PBLOG_INFO << "Input Target: " << inputTargetFile_;
             batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
+            MetaDataFromTraceFileSource(inputTargetFile_);
+            GroundTruthFromTraceFileSource(inputTargetFile_);
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -112,6 +115,92 @@ public:
     { return basecallerConfig_; }
 
 private:
+    void MetaDataFromTraceFileSource(const std::string& traceFileName)
+    {
+        const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+
+        traceFile.FrameRate >> movieConfig_.frameRate;
+        traceFile.AduGain >> movieConfig_.photoelectronSensitivity;
+        traceFile.AnalogRefSnr >> movieConfig_.refSnr;
+
+        // Analog information
+        size_t numAnalogs;
+        std::string baseMap;
+        std::vector<float> relativeAmpl;
+        std::vector<float> excessNoiseCV;
+        std::vector<float> interPulseDistance;
+        std::vector<float> pulseWidth;
+        std::vector<float> ipd2SlowStepRatio;
+        std::vector<float> pw2SlowStepRatio;
+
+        traceFile.NumAnalog >> numAnalogs;
+        traceFile.BaseMap >> baseMap;
+        traceFile.RelativeAmp >> relativeAmpl;
+        traceFile.ExcessNoiseCV >> excessNoiseCV;
+        traceFile.IpdMean >> interPulseDistance;
+        traceFile.PulseWidthMean >> pulseWidth;
+        traceFile.Ipd2SlowStepRatio >> ipd2SlowStepRatio;
+        traceFile.Pw2SlowStepRatio >> pw2SlowStepRatio;
+
+        // Check relative amplitude is sorted decreasing.
+        if (!std::is_sorted(relativeAmpl.rbegin(), relativeAmpl.rend()))
+        {
+            throw PBException("Analogs in trace file not sorted by decreasing relative amplitude!");
+        }
+
+        for (size_t i = 0; i < numAnalogs; i++)
+        {
+            auto& analog = movieConfig_.analogs[i];
+            analog.baseLabel = baseMap[i];
+            analog.relAmplitude = relativeAmpl[i];
+            analog.excessNoiseCV = excessNoiseCV[i];
+            analog.interPulseDistance = interPulseDistance[i];
+            analog.pulseWidth = pulseWidth[i];
+            analog.ipd2SlowStepRatio = ipd2SlowStepRatio[i];
+            analog.pw2SlowStepRatio = pw2SlowStepRatio[i];
+        }
+    }
+
+    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
+    {
+        auto setBlMeanAndCovar = [](const std::string& traceFileName,
+                                    ConfigurationObject::ConfigurationPod<float>& blMean,
+                                    ConfigurationObject::ConfigurationPod<float>& blCovar,
+                                    const std::string& exceptMsg)
+        {
+            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+            if (traceFile.simulated)
+            {
+                boost::multi_array<float,2> stateMean;
+                boost::multi_array<float,2> stateCovar;
+                traceFile.StateMean >> stateMean;
+                traceFile.StateCovariance >> stateCovar;
+                blMean = stateMean[0][0];
+                blCovar = stateCovar[0][0];
+            }
+            else
+            {
+                throw PBException(exceptMsg);
+            }
+        };
+
+        if (basecallerConfig_.algorithm.staticAnalysis == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
+                              "Requested static pipeline analysis but input trace file is not simulated!");
+        }
+        else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useFixedBaselineParams == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineVar,
+                              "Requested fixed DME with baseline params but input trace file is not simulated!");
+        }
+    }
+
     void RunAnalyzer()
     {
         size_t numChunksAnalyzed = 0;
@@ -169,8 +258,7 @@ private:
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating analyzer with num pools = "
                    << batchGenerator_->NumBatches();
 
-        MovieConfig movConfig;
-        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movConfig);
+        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movieConfig_);
 
         PreloadInputQueue();
 
@@ -395,6 +483,7 @@ private:
 private:
     // Configuration objects
     BasecallerConfig basecallerConfig_;
+    MovieConfig movieConfig_;
 
     // Main analyzer
     std::unique_ptr<ITraceAnalyzer> analyzer_;

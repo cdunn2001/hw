@@ -48,7 +48,7 @@ class HostPulseAccumulator : public PulseAccumulator
     using ConstSignalBlockView = Data::BlockView<const Data::CameraTraceBatch::ElementType>;
 
 public:     // Static functions
-    static void Configure(size_t maxCallsPerZmw);
+    static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
     static void Finalize();
 
 public:
