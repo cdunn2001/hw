@@ -71,9 +71,10 @@ private:
         }
     }
 public:
-    SmartHostAllocation(size_t size = 0, bool pinned = true)
+    SmartHostAllocation(size_t size = 0, bool pinned = true, size_t hash = 0)
         : data_(AllocateHelper(size, pinned))
         , size_(size)
+        , hash_(hash)
     {
         if (size_ > 0)
         {
@@ -87,6 +88,7 @@ public:
     SmartHostAllocation(SmartHostAllocation&& other)
         : data_(std::move(other.data_))
         , size_(other.size_)
+        , hash_(other.hash_)
     {
         other.size_ = 0;
     }
@@ -96,6 +98,7 @@ public:
     {
         data_ = std::move(other.data_);
         size_ = other.size_;
+        hash_ = other.hash_;
         other.size_ = 0;
         return *this;
     }
@@ -109,6 +112,8 @@ public:
             bytesAllocated_ -= size_;
         }
     }
+
+    size_t Hash() const { return hash_; }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
@@ -130,6 +135,7 @@ public:
 private:
     Storage data_;
     size_t size_;
+    size_t hash_;
 
     static std::atomic<size_t> bytesAllocated_;
     static std::atomic<size_t> peakBytesAllocated_;
