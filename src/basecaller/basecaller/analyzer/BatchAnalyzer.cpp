@@ -203,7 +203,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }
 
-    auto callPulses = [&ctb, this]() {
+    auto pulses = [&ctb, this]() {
         // When detection model is available, ...
         if (isModelInitialized_)
         {
@@ -223,9 +223,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         {
             return pulseAccumulator_->EmptyPulseBatch(ctb.Metadata());
         }
-    };
+    }();
 
-    auto pulses = callPulses();
     auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
