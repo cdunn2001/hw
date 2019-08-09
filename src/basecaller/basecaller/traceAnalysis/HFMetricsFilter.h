@@ -50,7 +50,7 @@ public:     // Types
     using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
     using BasecallingMetricsAccumulatorT = Data::BasecallingMetricsAccumulator<laneSize>;
-    using BasecallingMetricsBatchAccumulatorT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsAccumulatorT>;
+    using BasecallingMetricsAccumulatorBatchT = std::array<BasecallingMetricsAccumulatorT, laneSize>;
     using ModelsT = Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>;
 
 public: // Static functions
@@ -66,7 +66,6 @@ public: // Static functions
 
 protected: // Static members
     static std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> metricsFactory_;
-    static std::unique_ptr<Data::BasecallingMetricsAccumulatorFactory<laneSize>> metricsAccumulatorFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
@@ -119,13 +118,7 @@ class HostHFMetricsFilter : public HFMetricsFilter
 public:
     HostHFMetricsFilter(uint32_t poolId)
         : HFMetricsFilter(poolId)
-        , metrics_(metricsAccumulatorFactory_->NewBatch())
-    {
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            metrics_->GetHostView()[l].Initialize();
-        }
-    };
+    { };
     HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
     HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
     HostHFMetricsFilter& operator=(const HostHFMetricsFilter&) = delete;
@@ -147,7 +140,7 @@ private: // Block management
             const ModelsT& models) override;
 
 private: // members
-    std::unique_ptr<BasecallingMetricsBatchAccumulatorT> metrics_;
+    BasecallingMetricsAccumulatorBatchT metrics_;
 };
 
 

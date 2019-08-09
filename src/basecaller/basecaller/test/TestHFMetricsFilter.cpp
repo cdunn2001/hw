@@ -38,6 +38,7 @@
 
 #include <common/DataGenerators/BatchGenerator.h>
 #include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/MovieConfig.h>
@@ -156,8 +157,10 @@ GenerateBaselineStats(BaseSimConfig config)
             poolSize,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             true);
+    Data::BaselinerStatAccumulator<Data::BaselinedTraceElement> bsa{};
     for (size_t lane = 0; lane < poolSize; ++lane)
     {
+        ret.GetHostView()[lane] = bsa.GetState();
         auto& baselineStats = ret.GetHostView()[lane];
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
@@ -165,6 +168,12 @@ GenerateBaselineStats(BaseSimConfig config)
             baselineStats.baselineStats.moment0[zmw] = 98;
             baselineStats.baselineStats.moment1[zmw] = 10;
             baselineStats.baselineStats.moment2[zmw] = 100;
+            baselineStats.fullAutocorrState.moment1First[zmw] = 10;
+            baselineStats.fullAutocorrState.moment1First[zmw] = 20;
+            baselineStats.fullAutocorrState.moment2[zmw] = 120;
+            baselineStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
+            baselineStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
+            baselineStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
         }
     }
     return ret;
@@ -238,14 +247,13 @@ TEST(TestHFMetricsFilter, Populated)
     {
         auto pulses = GenerateBases(config, batchIdx);
         auto basecallingMetrics = hfMetrics(pulses, baselineStats, models);
-        // TODO: add a check that the following actually runs exactly once:
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
-                ASSERT_EQ(sizeof(mb), 8128);
+                ASSERT_EQ(sizeof(mb), 8192);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
@@ -318,7 +326,7 @@ TEST(TestHFMetricsFilter, Populated)
                     EXPECT_NEAR(0.0694064, mb.pkZvar[0][z], 0.001);
                     EXPECT_NEAR(0.0451073, mb.pkZvar[1][z], 0.001);
                     EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
-                    EXPECT_NEAR(0.0970992, mb.pkZvar[3][z], 0.001);
+                    EXPECT_NEAR(0.0960086, mb.pkZvar[3][z], 0.001);
                     ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
                               mb.pkMidNumFrames[0][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
@@ -339,7 +347,7 @@ TEST(TestHFMetricsFilter, Populated)
                     // be replaced when these metrics are expected to be
                     // correct. The values themselves may need to be helped
                     // with some simulation in the above functions
-                    EXPECT_EQ(0, mb.autocorrelation[z]);
+                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
                     EXPECT_EQ(0, mb.pulseDetectionScore[z]);
                     EXPECT_EQ(0, mb.pixelChecksum[z]);
                 }

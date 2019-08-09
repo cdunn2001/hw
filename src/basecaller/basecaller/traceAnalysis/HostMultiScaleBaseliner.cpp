@@ -8,7 +8,7 @@ namespace Mongo {
 namespace Basecaller {
 
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                  const Data::MovieConfig &movConfig)
+                                        const Data::MovieConfig &movConfig)
 {
     const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);

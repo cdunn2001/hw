@@ -34,6 +34,7 @@
 
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/LaneArray.h>
 
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/BaselinerStatAccumState.h>
@@ -99,7 +100,7 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleIntegerMetric pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics<laneSize>) == 127 * laneSize, "sizeof(BasecallingMetrics) is 127 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics<laneSize>) == 128 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
 
 
 template <unsigned int LaneWidth>
@@ -112,22 +113,27 @@ public: // types
 
     using UnsignedInt = uint16_t;
     using Flt = float;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt,
-                                                                 LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        numAnalogs>;
-    using AnalogFloatMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        numAnalogs>;
+    using SingleUnsignedIntegerMetric = LaneArray<UnsignedInt>;
+    using SingleFloatMetric = LaneArray<Flt>;
+    using AnalogUnsignedIntegerMetric = std::array<LaneArray<UnsignedInt>, numAnalogs>;
+    using AnalogFloatMetric = std::array<LaneArray<Flt>, numAnalogs>;
 
     using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
 
 public:
-    void Initialize();
+    BasecallingMetricsAccumulator()
+    {
+        // Instead of using the initializer list to value-initialize a
+        // bunch of lane arrays, we'll let them default initialize and set the
+        // values of all members in Reset. More than half of the members are
+        // std::arrays, and would still need to be filled anyway. This
+        // constructor shouldn't be called after initial HFMetricsFilter
+        // construction anwyay.
+        Reset();
+    };
 
+public:
     void Count(const InputPulses& pulses, uint32_t numFrames);
 
     void AddBaselineStats(const InputBaselineStats& baselineStats);
@@ -138,8 +144,7 @@ public:
 
     void PopulateBasecallingMetrics(BasecallingMetricsT& metrics);
 
-    void Reset()
-    { Initialize(); };
+    void Reset();
 
 private:
     void LabelBlock(float frameRate);
@@ -160,8 +165,7 @@ private: // metrics
     SingleUnsignedIntegerMetric numSandwiches_;
     SingleUnsignedIntegerMetric numHalfSandwiches_;
     SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    Cuda::Utility::CudaArray<HQRFPhysicalStates,
-                             LaneWidth> activityLabel_;
+    LaneArray<HQRFPhysicalStates> activityLabel_;
     AnalogFloatMetric pkMidSignal_;
     AnalogFloatMetric bpZvar_;
     AnalogFloatMetric pkZvar_;
@@ -176,46 +180,9 @@ private: // metrics
     TraceAnalysisMetrics<LaneWidth> traceMetrics_;
 
 private: // state trackers
-    Cuda::Utility::CudaArray<Pulse, LaneWidth> prevBasecallCache_;
-    Cuda::Utility::CudaArray<Pulse, LaneWidth> prevprevBasecallCache_;
+    std::array<Pulse, LaneWidth> prevBasecallCache_;
+    std::array<Pulse, LaneWidth> prevprevBasecallCache_;
 
-};
-
-template <unsigned int LaneWidth>
-class BasecallingMetricsAccumulatorFactory
-{
-    using Pools = Cuda::Memory::DualAllocationPools;
-    using AccumulatorT = BasecallingMetricsAccumulator<LaneWidth>;
-    using AccumulatorBatchT = Cuda::Memory::UnifiedCudaArray<AccumulatorT>;
-
-public:
-    BasecallingMetricsAccumulatorFactory(
-            const Data::BatchDimensions& batchDims,
-            Cuda::Memory::SyncDirection syncDir,
-            bool pinned)
-        : batchDims_(batchDims)
-        , syncDir_(syncDir)
-        , pinned_(pinned)
-        , accumulatorPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(AccumulatorT),
-                pinned))
-    {}
-
-    std::unique_ptr<AccumulatorBatchT> NewBatch()
-    {
-        return std::make_unique<AccumulatorBatchT>(
-            batchDims_.lanesPerBatch,
-            syncDir_,
-            pinned_,
-            accumulatorPool_);
-    }
-
-private:
-    Data::BatchDimensions batchDims_;
-    Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
-
-    std::shared_ptr<Pools> accumulatorPool_;
 };
 
 template <unsigned int LaneWidth>

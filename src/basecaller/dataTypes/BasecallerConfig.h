@@ -254,7 +254,6 @@ namespace Data {
                    DeviceMultiScale,
                    NoOp);
         ADD_ENUM(MethodName, Method, MethodName::DeviceMultiScale);
-        ADD_PARAMETER(uint16_t, AutocorrLagFrames, 4u);
     };
 
 

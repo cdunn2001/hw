@@ -14,16 +14,15 @@ namespace PacBio {
 namespace Mongo {
 
 template <typename T>
-AutocorrAccumulator<T>::AutocorrAccumulator(unsigned int lag, const T& offset)
+AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     : stats_ {offset}
-    , lagBuf_ {lag}
+    , lagBuf_ {AutocorrAccumState::lag}
     , m1First_ {0}
     , m1Last_ {0}
     , m2_ {0}
-    , lag_ {lag}
     , canAddSample_ {true}
 {
-    assert(lag > 0);
+    assert(AutocorrAccumState::lag > 0);
 }
 
 template <typename T>
@@ -97,7 +96,6 @@ template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
 {
-    assert(lag_ == that.lag_);
     stats_.Merge(that.stats_);
     // TODO: If CanAddSample(), could exactly merge m1First_.
     // TODO: If that.CanAddSample(), could exactly merge m1Last_.
@@ -116,7 +114,7 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
     const auto m = (Count() == T(0));
     // TODO: Handle the nonuniform SIMD case.
     using PacBio::Simd::all;
-    assert(all(m) || lag_ == that.lag_);
+    assert(all(m));
     if (all(m)) *this = that;
     else Merge(that);
     return *this;

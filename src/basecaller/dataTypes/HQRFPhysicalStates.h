@@ -32,7 +32,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-enum class HQRFPhysicalStates : std::uint8_t
+enum class HQRFPhysicalStates : std::uint16_t
 {
     EMPTY = 0,
     SINGLE,

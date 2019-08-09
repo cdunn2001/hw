@@ -42,7 +42,6 @@ uint32_t HFMetricsFilter::framesPerChunk_;
 uint32_t HFMetricsFilter::lanesPerBatch_;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
 std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
-std::unique_ptr<Data::BasecallingMetricsAccumulatorFactory<laneSize>> HFMetricsFilter::metricsAccumulatorFactory_;
 
 void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                 uint32_t framesPerHFMetricBlock,
@@ -90,23 +89,18 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
                                           : SyncDirection::HostReadDeviceWrite;
     metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
             dims, syncDir, true);
-    metricsAccumulatorFactory_ = std::make_unique<
-        Data::BasecallingMetricsAccumulatorFactory<laneSize>>(
-            dims, syncDir, true);
 }
 
 void HFMetricsFilter::DestroyAllocationPools()
 {
     metricsFactory_.release();
-    metricsAccumulatorFactory_.release();
 }
 
 void HostHFMetricsFilter::FinalizeBlock()
 {
     for (size_t l = 0; l < lanesPerBatch_; ++l)
     {
-        metrics_->GetHostView()[l].FinalizeMetrics(realtimeActivityLabels_,
-                                                   frameRate_);
+        metrics_[l].FinalizeMetrics(realtimeActivityLabels_, frameRate_);
     }
 }
 
@@ -118,8 +112,7 @@ void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
     for (size_t l = 0; l < lanesPerBatch_; l++)
     {
         const auto& laneCalls = basecalls.LaneView(l);
-        metrics_->GetHostView()[l].Count(laneCalls,
-                                         pulseBatch.Dims().framesPerBatch);
+        metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
     }
 }
 
@@ -128,7 +121,7 @@ void HostHFMetricsFilter::AddModels(const ModelsT& modelsBatch)
     for (size_t l = 0; l < lanesPerBatch_; l++)
     {
         const auto& models = modelsBatch.GetHostView()[l];
-        metrics_->GetHostView()[l].AddModels(models);
+        metrics_[l].AddModels(models);
     }
 }
 
@@ -137,7 +130,7 @@ void HostHFMetricsFilter::AddBaselineStats(const BaselineStatsT& baselineStats)
     for (size_t l = 0; l < lanesPerBatch_; l++)
     {
         const auto& laneStats = baselineStats.GetHostView()[l];
-        metrics_->GetHostView()[l].AddBaselineStats(laneStats);
+        metrics_[l].AddBaselineStats(laneStats);
     }
 }
 
@@ -151,7 +144,7 @@ HostHFMetricsFilter::Process(
     {
         for (size_t l = 0; l < lanesPerBatch_; ++l)
         {
-            metrics_->GetHostView()[l].Reset();
+            metrics_[l].Reset();
         }
     }
 
@@ -169,7 +162,7 @@ HostHFMetricsFilter::Process(
         auto ret = metricsFactory_->NewBatch();
         for (size_t l = 0; l < lanesPerBatch_; ++l)
         {
-            metrics_->GetHostView()[l].PopulateBasecallingMetrics(
+            metrics_[l].PopulateBasecallingMetrics(
                     ret->GetHostView()[l]);
         }
         return ret;

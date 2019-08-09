@@ -34,15 +34,16 @@
 #include <math.h>
 #include <numeric>
 
-#include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/LaneArray.h>
+
+#include "BaselinerStatAccumulator.h"
+#include "BasicTypes.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// TODO: This could benefit from the StatAccumulator and Accumulator/State
-// models demonstrated in BaselinerStatAccumulator
 template <uint32_t LaneWidth>
 class TraceAnalysisMetrics
 {
@@ -51,36 +52,36 @@ public:
     using UnsignedInt = uint32_t;
     using Int = int16_t;
     using Flt = float;
-    using SingleIntegerMetric = Cuda::Utility::CudaArray<Int, LaneWidth>;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using SingleBoolMetric = Cuda::Utility::CudaArray<bool, LaneWidth>;
+    using SingleIntegerMetric = LaneArray<Int>;
+    using SingleUnsignedIntegerMetric = LaneArray<UnsignedInt>;
+    using SingleFloatMetric = LaneArray<Flt>;
 
 public:
 
-    TraceAnalysisMetrics() = default;
-    TraceAnalysisMetrics(const TraceAnalysisMetrics&) = default;
-    TraceAnalysisMetrics& operator=(const TraceAnalysisMetrics&) = default;
+    TraceAnalysisMetrics()
+        : startFrame_(0)
+        , numFrames_(0)
+        , pixelChecksum_(0)
+        , pulseDetectionScore_(std::numeric_limits<Flt>::quiet_NaN())
+        , baselineStatAccum_()
+        , autocorrAccum_()
+    {};
+
+    TraceAnalysisMetrics(const TraceAnalysisMetrics&) = delete;
+    TraceAnalysisMetrics& operator=(const TraceAnalysisMetrics&) = delete;
     ~TraceAnalysisMetrics() = default;
 
-    void Initialize(size_t startFrame = 0, size_t numFrames = 0)
+    void Reset()
     {
-        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
-        {
-            startFrame_[zmw] = startFrame;
-            numFrames_[zmw] = numFrames;
-            autocorr_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
-            pulseDetectionScore_[zmw] = std::numeric_limits<Flt>::quiet_NaN();
-
-            frameBaselineM0DWS_[zmw] = 0;
-            frameBaselineM1DWS_[zmw] = 0;
-            frameBaselineM2DWS_[zmw] = 0;
-            autocorr_[zmw] = 0;
-            confidenceScore_[zmw] = 0;
-            pulseDetectionScore_[zmw] = 0;
-            fullEstimationAttempted_[zmw] = 0;
-            modelUpdated_[zmw] = 0;
-        }
+        baselineStatAccum_.Reset();
+        autocorrAccum_.Reset();
+        startFrame_ = 0;
+        numFrames_ = 0;
+        pulseDetectionScore_ = std::numeric_limits<Flt>::quiet_NaN();
+        pulseDetectionScore_ = 0;
+        //confidenceScore_ = 0;
+        //fullEstimationAttempted_ = 0;
+        //modelUpdated_ = 0;
     }
 
 
@@ -94,12 +95,7 @@ public:
 
     // First frame after end of trace metric block
     SingleUnsignedIntegerMetric StopFrame() const
-    {
-        SingleUnsignedIntegerMetric ret;
-        for (size_t i = 0; i < LaneWidth; ++i)
-            ret[i] = startFrame_[i] + numFrames_[i];
-        return ret;
-    }
+    { return startFrame_ + numFrames_; }
 
     // Number of frames used to compute trace metrics.
     // These don't need to be stored for each ZMW in a lane...
@@ -110,72 +106,29 @@ public:
     { return numFrames_; }
 
     /// Autocorrelation of baseline-subtracted traces.
-    const SingleFloatMetric& Autocorrelation() const
-    { return autocorr_; }
-
-    SingleFloatMetric& Autocorrelation()
-    { return autocorr_; }
+    SingleFloatMetric Autocorrelation() const
+    { return autocorrAccum_.Autocorrelation(); }
 
     /// The mean of the DWS baseline as computed by the pulse detection filter.
     SingleFloatMetric FrameBaselineDWS() const
-    {
-        SingleFloatMetric ret;
-        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
-            ret[zmw] = frameBaselineM1DWS_[zmw] / frameBaselineM0DWS_[zmw];
-        return ret;
-    }
+    { return baselineStatAccum_.Mean(); }
 
     /// The unbiased sample variance of the DWS baseline as computed by the pulse detection filter.
     SingleFloatMetric FrameBaselineVarianceDWS() const
-    {
-        SingleFloatMetric ret;
-        for (size_t zmw = 0; zmw < LaneWidth; ++zmw)
-        {
-            ret[zmw] = frameBaselineM1DWS_[zmw]
-                       * frameBaselineM1DWS_[zmw]
-                       / frameBaselineM0DWS_[zmw];
-            ret[zmw] = (frameBaselineM2DWS_[zmw] - ret[zmw])
-                       / (frameBaselineM0DWS_[zmw] - 1.0f);
-            ret[zmw] = std::max(ret[zmw], 0.0f);
-            ret[zmw] = frameBaselineM0DWS_[zmw] > 1.0f
-                       ? ret[zmw] : std::numeric_limits<Flt>::quiet_NaN();
-        }
-        return ret;
-    }
-
-    const SingleFloatMetric& FrameBaselineM0DWS() const
-    { return frameBaselineM0DWS_; }
-
-    SingleFloatMetric& FrameBaselineM0DWS()
-    { return frameBaselineM0DWS_; }
-
-    const SingleFloatMetric& FrameBaselineM1DWS() const
-    { return frameBaselineM1DWS_; }
-
-    SingleFloatMetric& FrameBaselineM1DWS()
-    { return frameBaselineM1DWS_; }
-
-    const SingleFloatMetric& FrameBaselineM2DWS() const
-    { return frameBaselineM2DWS_; }
-
-    SingleFloatMetric& FrameBaselineM2DWS()
-    { return frameBaselineM2DWS_; }
+    { return baselineStatAccum_.Variance(); }
 
     /// The sample standard deviation of the DWS baseline as computed by the pulse detection filter.
     SingleFloatMetric FrameBaselineSigmaDWS() const
-    {
-
-        SingleFloatMetric ret;
-        for (size_t i = 0; i < LaneWidth; ++i)
-            ret[i] = sqrtf(FrameBaselineVarianceDWS()[i]);
-        return ret;
-    }
+    { return sqrt(FrameBaselineVarianceDWS()); }
 
     /// The number of baseline frames used by the pulse detection filter to
     /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
     const SingleUnsignedIntegerMetric& NumFramesBaseline() const
-    { return frameBaselineM0DWS_; }
+    { return baselineStatAccum_.Count(); }
 
+    /* TODO: to reactivate these, if needed, they can't be one-bit bool
+     * LaneArrays
+     *
     // Indicates whether complete analysis for estimation of the current
     // detection model was tried for this ZMW. This will be identical
     // for all ZMWs for a given lane and in the current implementation
@@ -201,6 +154,7 @@ public:
 
     SingleFloatMetric& ConfidenceScore()
     { return confidenceScore_; }
+    */
 
     /// Returns pulse detection score.
     const SingleFloatMetric& PulseDetectionScore() const
@@ -216,22 +170,36 @@ public:
     SingleIntegerMetric& PixelChecksum()
     { return pixelChecksum_; }
 
+    /// Returns baseline stat accumulator
+    const StatAccumulator<LaneArray<float>>& BaselinerStatAccum() const
+    { return baselineStatAccum_; }
+
+    StatAccumulator<LaneArray<float>>& BaselinerStatAccum()
+    { return baselineStatAccum_; }
+
+    /// Returns autocorrelation accumulator
+    const AutocorrAccumulator<LaneArray<float>>& AutocorrAccum() const
+    { return autocorrAccum_; }
+
+     AutocorrAccumulator<LaneArray<float>>& AutocorrAccum()
+    { return autocorrAccum_; }
+
 private:
     SingleUnsignedIntegerMetric startFrame_;
     SingleUnsignedIntegerMetric numFrames_;
     SingleIntegerMetric pixelChecksum_;
+    SingleFloatMetric pulseDetectionScore_;
 
-private:
-    SingleFloatMetric frameBaselineM0DWS_;
-    SingleFloatMetric frameBaselineM1DWS_;
-    SingleFloatMetric frameBaselineM2DWS_;
+    // We're not hanging on to the entire BaselineStatAccumulator because it
+    // doesn't have a Reset or other niceties, and we don't need its extra
+    // members
+    StatAccumulator<LaneArray<float>> baselineStatAccum_;
+    AutocorrAccumulator<LaneArray<float>> autocorrAccum_;
 
     // None of these are used yet, perhaps some will never be used:
-    SingleFloatMetric autocorr_;
-    SingleFloatMetric confidenceScore_;
-    SingleFloatMetric pulseDetectionScore_;
-    SingleBoolMetric fullEstimationAttempted_;
-    SingleBoolMetric modelUpdated_;
+    //SingleFloatMetric confidenceScore_;
+    //SingleBoolMetric fullEstimationAttempted_;
+    //SingleBoolMetric modelUpdated_;
 };
 
 }}}     // namespace PacBio::Mongo::Data
