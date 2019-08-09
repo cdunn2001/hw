@@ -58,11 +58,10 @@ public:     // Structors and assignment
                 size_t latentFrames,
                 bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
+                const Cuda::Memory::AllocationMarker& marker)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, marker, pinned)
         , curTrace_(std::move(trace))
-        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, latPool, pinned)
+        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, marker, pinned)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -101,8 +100,6 @@ public:
         : latentFrames_(latentFrames)
         , syncDirection_(syncDirection)
         , pinned_(pinned)
-        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(latentFrames_* lanesPerPool * laneSize * sizeof(int16_t), pinned))
     {}
 
     LabelsBatch NewBatch(CameraTraceBatch trace)
@@ -111,15 +108,13 @@ public:
         auto dims = trace.StorageDims();
         return LabelsBatch(meta, dims, std::move(trace),
                            latentFrames_, pinned_,
-                           syncDirection_, tracePool_, latPool_);
+                           syncDirection_, SOURCE_MARKER());
     }
 
 private:
     size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
     bool pinned_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool_;
 };
 
 // Define overloads for this function, so that we can track kernel invocations, and

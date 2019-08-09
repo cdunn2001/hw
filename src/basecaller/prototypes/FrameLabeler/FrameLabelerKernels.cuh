@@ -27,6 +27,8 @@
 #ifndef PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 #define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 
+#include <pacbio/ipc/ThreadSafeQueue.h>
+
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>

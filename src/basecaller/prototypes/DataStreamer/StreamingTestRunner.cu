@@ -68,7 +68,7 @@ void RunTest(const Data::DataManagerParams& params, size_t simulKernels)
     ZmwDataManager<short> manager(params, std::make_unique<TemplateGenerator>(params));
 
     auto func = [&manager, &params](size_t tid) {
-        Memory::UnifiedCudaArray<size_t> ret(params.kernelLanes, Memory::SyncDirection::HostReadDeviceWrite);
+        Memory::UnifiedCudaArray<size_t> ret(params.kernelLanes, Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
         while (manager.MoreData())
         {
             try {

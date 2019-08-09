@@ -58,8 +58,8 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     {
         const Data::BatchMetadata bmd(i, 0, dims.framesPerBatch);
         bmdVec.push_back(bmd);
-        // Construct batches with neither allocation pooling nor memory pinning enabled
-        chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, nullptr, false);
+        // Construct batches with memory pinning disabled
+        chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER(), false);
     }
 
     // The function under test.

@@ -47,11 +47,10 @@ public:     // Structors & assignment operators
                const BatchMetadata& batchMetadata,
                Cuda::Memory::SyncDirection syncDir,
                bool pinned,
-               std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-               std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
+               const Cuda::Memory::AllocationMarker& marker)
         : dims_ (batchDims)
         , metaData_(batchMetadata)
-        , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
+        , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, marker)
     {}
 
     PulseBatch(const PulseBatch&) = delete;
@@ -80,7 +79,6 @@ private:    // Data
 
 class PulseBatchFactory
 {
-    using Pools = Cuda::Memory::DualAllocationPools;
 public:
     PulseBatchFactory(const size_t maxCallsPerZmw,
                       const BatchDimensions& batchDims,
@@ -90,8 +88,6 @@ public:
         , batchDims_(batchDims)
         , syncDir_(syncDir)
         , pinned_(pinned)
-        , callsPool_(std::make_shared<Pools>(maxCallsPerZmw*batchDims.ZmwsPerBatch()*sizeof(Pulse), pinned))
-        , lenPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(uint32_t), pinned))
     {}
 
     PulseBatch NewBatch(const BatchMetadata& batchMetadata) const
@@ -102,8 +98,7 @@ public:
                 batchMetadata,
                 syncDir_,
                 pinned_,
-                callsPool_,
-                lenPool_);
+                SOURCE_MARKER());
     }
 
 private:
@@ -111,9 +106,6 @@ private:
     BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
     bool pinned_;
-
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

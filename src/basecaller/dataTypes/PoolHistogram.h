@@ -52,21 +52,14 @@ struct PoolHistogram
 {
     static constexpr auto cudaSyncMode = Cuda::Memory::SyncDirection::Symmetric;
 
-    // TODO: Where will this come from?
-    static std::shared_ptr<Cuda::Memory::DualAllocationPools> poolHistPool;
-
     Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> data;
     uint32_t poolId;
 
     PoolHistogram(uint32_t aPoolId, unsigned int numLanes, bool pinnedAlloc)
-        : data (numLanes, cudaSyncMode, pinnedAlloc)
+        : data (numLanes, cudaSyncMode, SOURCE_MARKER(), pinnedAlloc)
         , poolId (aPoolId)
     { }
 };
-
-template <typename DataT, typename CountT>
-std::shared_ptr<Cuda::Memory::DualAllocationPools>
-PoolHistogram<DataT, CountT>::poolHistPool;
 
 }}}     // namespace PacBio::Mongo::Data
 

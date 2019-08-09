@@ -135,7 +135,7 @@ TEST(BaselineFilterTest, SharedMemory)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {
@@ -212,9 +212,9 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {

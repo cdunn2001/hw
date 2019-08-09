@@ -102,10 +102,14 @@ public:
 
     void Run()
     {
+        EnablePooling();
+
         Setup();
         RunAnalyzer();
         Join();
         Teardown();
+
+        DisablePooling();
     }
 
     MongoBasecallerConsole& Config(const BasecallerConfig& basecallerConfig)

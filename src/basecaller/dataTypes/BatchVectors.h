@@ -144,12 +144,11 @@ public:
                  uint32_t maxLen,
                  Cuda::Memory::SyncDirection syncDir,
                  bool pinned,
-                 std::shared_ptr<Cuda::Memory::DualAllocationPools> dataPool,
-                 std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
+                 const Cuda::Memory::AllocationMarker& marker)
         : zmwPerBatch_(zmwPerBatch)
         , maxLen_(maxLen)
-        , data_(zmwPerBatch * maxLen, syncDir, pinned, dataPool)
-        , lens_(zmwPerBatch, syncDir, pinned, lenPool)
+        , data_(zmwPerBatch * maxLen, syncDir, marker, pinned)
+        , lens_(zmwPerBatch, syncDir, marker, pinned)
     {}
 
     LaneVectorView<T> LaneView(uint32_t laneId)

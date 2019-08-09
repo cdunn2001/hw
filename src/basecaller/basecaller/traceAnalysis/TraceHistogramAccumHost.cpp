@@ -39,7 +39,7 @@ TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  bool pinnedAlloc)
     : TraceHistogramAccumulator(poolId, poolSize)
     , poolHist_ (poolId, poolSize, pinnedAlloc)
-    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, pinnedAlloc)
+    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER(), pinnedAlloc)
 { }
 
 

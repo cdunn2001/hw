@@ -35,7 +35,7 @@
 
 #include "AllocationViews.h"
 #include "DataManagerKey.h"
-#include "AllocationPool.h"
+#include "ManagedAllocations.h"
 #include "SmartDeviceAllocation.h"
 #include "SmartHostAllocation.h"
 
@@ -66,13 +66,13 @@ public:
 
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
-                     bool pinnedHost = true,
-                     std::shared_ptr<DualAllocationPools> pools = nullptr)
+                     const AllocationMarker& marker,
+                     bool pinnedHost = true)
         : activeOnHost_(true)
-        , hostData_{}
+        , hostData_{GetManagedHostAllocation(count*sizeof(HostType), pinnedHost, marker)}
         , gpuData_{}
         , syncDir_(dir)
-        , pools_(pools)
+        , marker_(marker)
     {
         static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
 
@@ -93,25 +93,17 @@ public:
             // last gpu element will walk off the array
             throw PBException("Invalid array length.");
         }
-        // get host allocation from pool if we can. Gpu allocations are always deferred
-        // until necessary
-        if (pools)
-        {
-            hostData_ = pools->hostPool.PopAlloc(count*sizeof(HostType));
-        } else {
-            hostData_ = SmartHostAllocation(count*sizeof(HostType), pinnedHost);
-        }
-
-        if (pools && pools->gpuPool.AllocSize() != count * sizeof(HostType))
-        {
-            throw PBException("Inconsistent gpu allocation pool and allocation size");
-        }
 
         // default construct all elements on host.  Gpu memory is initialized via memcpy only
-        auto* ptr = hostData_.get<HostType>(DataKey());
-        for (size_t i = 0; i < count; ++i)
+        // In theory this loop should be optimized away, but see notes on dtor as to why
+        // I'm manually disabling it.
+        if (!std::is_trivially_default_constructible<HostType>::value)
         {
-            new(ptr+i) HostType;
+            auto* ptr = hostData_.get<HostType>(DataKey());
+            for (size_t i = 0; i < count; ++i)
+            {
+                new(ptr+i) HostType;
+            }
         }
 
         if (!std::is_trivially_default_constructible<HostType>::value && dir == SyncDirection::HostReadDeviceWrite)
@@ -140,27 +132,36 @@ public:
         // Need to formally call destructors on host data.
         // Device side memory is just a bitwise memcpy mirror,
         // so no destructor invocations necessary on device
-        auto * ptr = hostData_.get<HostType>(DataKey());
-        for (size_t i = 0; i < hostData_.size(); ++i)
+        //
+        // Semi-interesting note: One would think the below loop
+        // would completely optimize away for trivially destructible
+        // types, and indeed it did for a long time.  Until an
+        // unrelated change somehow caused it to not.  At one point
+        // I profiled it and the application was spending a ton of
+        // time executing an empty loop.  In looking at the assembly
+        // it was clearly doing nothing but counting from 0 to count,
+        // checking each time if the loop should terminate.  After
+        // that experience I took matters into my own hand and
+        // manually disabled this loop if it should be a noop.
+        if (!std::is_trivially_destructible<HostType>::value)
         {
-            ptr[i].~HostType();
+            auto * ptr = hostData_.get<HostType>(DataKey());
+            const size_t count = hostData_.size() / sizeof(HostType);
+            for (size_t i = 0; i < count; ++i)
+            {
+                ptr[i].~HostType();
+            }
         }
 
-        // If there is a pool for host data, recycle our allocation
-        if (auto pools = pools_.lock()) pools->hostPool.PushAlloc(std::move(hostData_));
-    }
-
-    // Can be null if no pools in use
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
-    {
-        return pools_.lock();
+        //recycle our allocation
+        // TODO build this into an RAII type?
+        ReturnManagedHostAllocation(std::move(hostData_));
     }
 
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
-    // Marks the gpu memory as "inactive".  If the gpu side is using pooled allocations, this means it can
-    // now be stolen and used to back a different UnifiedCudaArray.
+    // Retires the gpu memory, so it can be used again elsewhere
     //
     // This is a blocking operation, and will not complete until all kernels run by this thread have
     // completed (to make sure no kernel that could know the gpu side address is still running). It
@@ -184,7 +185,7 @@ public:
             checker_ = SingleStreamMonitor();
         }
 
-        if (auto pools = pools_.lock()) pools->gpuPool.PushAlloc(std::move(gpuData_));
+        ReturnManagedDeviceAllocation(std::move(gpuData_));
     }
 
     // Calling these functions may cause
@@ -227,20 +228,13 @@ public:
 
 private:
 
-    // Makes sure that if we are using pooled gpu allocations, we actually
-    // have an active allocation to use.  If we don't, try and check one
-    // out of the memory pool.  If the memory pool is empty (or we just
-    // don't have one) then allocate a new swath of memory.
+    // Used for just-in-time gpu allocations, to minimize our memory utilization
+    // on the device
     void ActivateGpuMem() const
     {
         if (gpuData_) return;
 
-        if (auto pools = pools_.lock())
-        {
-            gpuData_ = pools->gpuPool.PopAlloc(hostData_.size());
-        }
-        if (!gpuData_)
-            gpuData_ = SmartDeviceAllocation(hostData_.size());
+        gpuData_ = GetManagedDeviceAllocation(hostData_.size(), marker_);
     }
 
     void CopyImpl(bool toHost, bool manual) const
@@ -284,7 +278,7 @@ private:
     mutable SmartHostAllocation hostData_;
     mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
-    std::weak_ptr<DualAllocationPools> pools_;
+    AllocationMarker marker_;
     mutable SingleStreamMonitor checker_;
 };
 

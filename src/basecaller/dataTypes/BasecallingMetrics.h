@@ -184,7 +184,6 @@ private: // state trackers
 template <unsigned int LaneWidth>
 class BasecallingMetricsAccumulatorFactory
 {
-    using Pools = Cuda::Memory::DualAllocationPools;
     using AccumulatorT = BasecallingMetricsAccumulator<LaneWidth>;
     using AccumulatorBatchT = Cuda::Memory::UnifiedCudaArray<AccumulatorT>;
 
@@ -196,9 +195,6 @@ public:
         : batchDims_(batchDims)
         , syncDir_(syncDir)
         , pinned_(pinned)
-        , accumulatorPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(AccumulatorT),
-                pinned))
     {}
 
     std::unique_ptr<AccumulatorBatchT> NewBatch()
@@ -206,23 +202,20 @@ public:
         return std::make_unique<AccumulatorBatchT>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            pinned_,
-            accumulatorPool_);
+            SOURCE_MARKER(),
+            pinned_);
     }
 
 private:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
     bool pinned_;
-
-    std::shared_ptr<Pools> accumulatorPool_;
 };
 
 template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
 {
 public: // types
-    using Pools = Cuda::Memory::DualAllocationPools;
     using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
 
@@ -233,9 +226,6 @@ public: // methods:
         : batchDims_(batchDims)
         , syncDir_(syncDir)
         , pinned_(pinned)
-        , metricsPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(BasecallingMetricsT),
-                pinned))
     {}
 
     std::unique_ptr<BasecallingMetricsBatchT> NewBatch()
@@ -243,15 +233,14 @@ public: // methods:
         return std::make_unique<BasecallingMetricsBatchT>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            pinned_,
-            metricsPool_);
+            SOURCE_MARKER(),
+            pinned_);
     }
 
 private: // members:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
     bool pinned_;
-    std::shared_ptr<Pools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

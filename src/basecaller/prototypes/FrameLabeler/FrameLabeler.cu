@@ -65,14 +65,14 @@ void run(const Data::DataManagerParams& dataParams,
     for (size_t i = 0; i < numBatches; ++i)
     {
 
-        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
+        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)
         {
             modelView[j] = referenceModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER(), true);
     }
 
     auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](

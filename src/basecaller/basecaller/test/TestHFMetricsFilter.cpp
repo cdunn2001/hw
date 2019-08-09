@@ -155,6 +155,7 @@ GenerateBaselineStats(BaseSimConfig config)
     Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState> ret(
             poolSize,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+            SOURCE_MARKER(),
             true);
     for (size_t lane = 0; lane < poolSize; ++lane)
     {
@@ -177,6 +178,7 @@ GenerateModels(BaseSimConfig config)
                                                              laneSize>> models(
         Data::GetPrimaryConfig().lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
+        SOURCE_MARKER(),
         true);
     Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
     model.AnalogMode(0).SetAllMeans(227.13);
@@ -367,6 +369,7 @@ TEST(TestHFMetricsFilter, Noop)
                                                              laneSize>> models(
         Data::GetPrimaryConfig().lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
+        SOURCE_MARKER(),
         true);
 
 

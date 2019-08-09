@@ -12,8 +12,8 @@ set(CPP_LIST
     # PBCudaRuntimeNoCuda.cpp
     memory/AllocationViews.h
     memory/DataManagerKey.h
-    memory/AllocationPool.h
-    memory/AllocationPool.cpp
+    memory/ManagedAllocations.h
+    memory/ManagedAllocations.cpp
     memory/SmartHostAllocation.h
     memory/SmartHostAllocation.cpp
     memory/SmartDeviceAllocation.h

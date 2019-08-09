@@ -26,9 +26,7 @@ public:
         , numChunks_(NumBlocks())
         , numTraceChunks_(0)
         , chunkIndex_(0)
-    {
-        tracePool_ = std::make_shared<Memory::DualAllocationPools>(laneWidth * blockLen * kernelLanes*sizeof(int16_t));
-    }
+    {}
 
     std::vector<uint32_t> UnitCellIds()
     {
@@ -65,7 +63,7 @@ public:
                                                           (chunkIndex_ * BlockLen()) + BlockLen()),
                                batchDims,
                                Memory::SyncDirection::HostWriteDeviceRead,
-                               tracePool_);
+                               SOURCE_MARKER());
             PopulateBatch(b, chunk.back());
         }
         chunkIndex_++;
@@ -123,7 +121,6 @@ private:
     size_t numChunks_;
     size_t numTraceChunks_;
     size_t chunkIndex_;
-    std::shared_ptr<Memory::DualAllocationPools> tracePool_;
     std::unique_ptr<TraceFileReader> traceFileReader_;
 };
 

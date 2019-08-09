@@ -45,9 +45,9 @@ public:
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,
-               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
+               const Cuda::Memory::AllocationMarker& marker,
                bool pinnedHost = true)
-        : BatchData<T>(dims, syncDirection, pool, pinnedHost)
+        : BatchData<T>(dims, syncDirection, marker, pinnedHost)
         , meta_(meta)
     {}
 

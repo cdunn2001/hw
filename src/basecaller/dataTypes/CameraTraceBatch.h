@@ -25,10 +25,9 @@ public:     // Structors and assignment
                      const BatchDimensions& dims,
                      bool pinned,
                      Cuda::Memory::SyncDirection syncDirection,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
-        , stats_ (dims.lanesPerBatch, syncDirection, pinned, statsPool)
+                     const Cuda::Memory::AllocationMarker& marker)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, marker, pinned)
+        , stats_ (dims.lanesPerBatch, syncDirection, marker, pinned)
     { }
 
     CameraTraceBatch(const CameraTraceBatch&) = delete;
@@ -63,8 +62,6 @@ public:
                        bool pinned = true)
         : syncDirection_(syncDirection)
         , pinned_(pinned)
-        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselinerStatAccumState), pinned))
     {
         dims_.laneWidth = laneSize;
         dims_.framesPerBatch = framesPerChunk;
@@ -73,16 +70,13 @@ public:
 
     CameraTraceBatch NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_,
-                                tracePool_, statsPool_);
+        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_, SOURCE_MARKER());
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
     bool pinned_;
     BatchDimensions dims_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
 
 // Define overloads for this function, so that we can track kernel invocations, and
