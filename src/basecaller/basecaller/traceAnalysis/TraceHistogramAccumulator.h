@@ -29,7 +29,6 @@
 //  Description:
 //  Defines abstract class TraceHistogramAccumulator.
 
-#include <dataTypes/BaselineStats.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/PoolHistogram.h>
@@ -48,7 +47,7 @@ public:     // Types
     using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
-    using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>;
+    using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     // TODO: Switch from BaselineStats to BaselinerStatAccumState.
 
 public:     // Static functions
@@ -71,11 +70,15 @@ public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
 
 public:     // Const functions
-    /// Total pool frames added.
-    /// Total of counts in each zmw histogram will typically be somewhat
-    /// smaller due to filtering of edge frames.
+    /// Total pool frames added via AddBatch.
     size_t FramesAdded() const
     { return frameCount_; }
+
+    /// Number of frames added to histograms.
+    /// Total of counts in each zmw histogram will typically be somewhat
+    /// smaller due to filtering of edge frames.
+    size_t HistogramFrameCount() const
+    { return histFrameCount_; }
 
     /// The accumulated histogram.
     /// \note Calls to AddBatch will modify the referenced value.
@@ -105,9 +108,13 @@ public:     // Non-const functions
     void AddBatch(const Data::CameraTraceBatch& ctb)
     {
         assert (ctb.GetMeta().PoolId() == poolId_);
-        frameCount_ += ctb.NumFrames();
         AddBatchImpl(ctb);
+        frameCount_ += ctb.NumFrames();
     }
+
+protected:  // Data
+    // Number of frames added to histograms.
+    size_t histFrameCount_ = 0;
 
 private:    // Static data
     // Number of frames to accumulate baseliner statistics before initializing
@@ -118,9 +125,9 @@ private:    // Static data
     static float fallBackBaselineSigma_;
 
 private:    // Data
-    size_t frameCount_ = 0;
+    size_t frameCount_ = 0;  // Total number of frames added via AddBatch.
     uint32_t poolId_;
-    unsigned int poolSize_;
+    unsigned int poolSize_;  // Number of lanes in this pool.
 
 private:    // Customizable implementation.
     // Bins frames in ctb and updates poolHist_.

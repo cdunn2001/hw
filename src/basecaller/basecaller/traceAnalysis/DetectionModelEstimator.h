@@ -33,11 +33,12 @@
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/PBCudaSimd.h>
+#include <common/LaneArray.h>
 
 #include <dataTypes/AnalogMode.h>
-#include <dataTypes/BaselineStats.h>
+#include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/ConfigForward.h>
-#include <dataTypes/PoolDetectionModel.h>
+#include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 
 namespace PacBio {
@@ -50,45 +51,75 @@ class DetectionModelEstimator
 {
 public:     // Types
     using DetModelElementType = Cuda::PBHalf;
-    using PoolDetModel = Data::PoolDetectionModel<DetModelElementType>;
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
+    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
+    using PoolHist = Data::PoolHistogram<float, unsigned short>;
+    using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
                           const Data::MovieConfig& movConfig);
 
+    static const Data::AnalogMode& Analog(unsigned int i)
+    { return analogs_[i]; }
+
+    /// Minimum number of frames added to trace histograms before we estimate
+    /// model parameters.
+    static uint32_t MinFramesForEstimate()
+    { return minFramesForEstimate_; }
+
+    /// The variance for \analog signal based on model including Poisson and
+    /// "excess" noise.
+    static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
+                                             const ConstLaneArrayRef<float>& signalMean,
+                                             const ConstLaneArrayRef<float>& baselineVar);
+
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);
 
-    PoolDetModel operator()(const Data::PoolHistogram<float, unsigned short>& hist,
-                            const Cuda::Memory::UnifiedCudaArray<Data::BaselineStats<laneSize>>& blStats)
+public:     // Functions
+    /// Initialize detection models based soley on baseline variance and
+    /// reference SNR.
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const;
+
+    /// Estimate detection model parameters based on existing values and
+    /// trace histogram.
+    void Estimate(const PoolHist& hist, PoolDetModel* detModel) const
     {
-        assert (hist.poolId == poolId_);
-
-        PoolDetModel pdm (poolId_, poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead);
-
-        auto pdmHost = pdm.laneModels.GetHostView();
-        const auto& blStatsHost = blStats.GetHostView();
-        for (unsigned int lane = 0; lane < poolSize_; ++lane)
-        {
-            InitDetModel(blStatsHost[lane], pdmHost[lane]);
-        }
-
-        // TODO
-
-        return pdm;
+        assert(detModel);
+        assert(hist.data.Size() == poolSize_);
+        assert(detModel->Size() == poolSize_);
+        EstimateImpl(hist, detModel);
     }
+
+    unsigned int PoolSize() const
+    { return poolSize_; }
+
+protected:
+    static PacBio::Logging::PBLogger logger_;
 
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
+    static uint32_t minFramesForEstimate_;
+    static bool fixedBaselineParams_;
+    static float fixedBaselineMean_;
+    static float fixedBaselineVar_;
 
 private:
     uint32_t poolId_;
     unsigned int poolSize_;
 
+private:    // Customization functions
+    virtual void EstimateImpl(const PoolHist& hist, PoolDetModel* detModel) const
+    {
+        // Do nothing.
+        // Derived implementation class should update detModel.
+    }
+
 private:    // Functions
-    void InitDetModel(const Data::BaselineStats<laneSize>& blStats, LaneDetModel& ldm);
+    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

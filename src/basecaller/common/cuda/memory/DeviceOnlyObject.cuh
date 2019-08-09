@@ -43,6 +43,8 @@ public:
 
     __device__ T* operator->() { return data_.Data(); }
     __device__ const T* operator->() const { return data_.Data(); }
+    __device__ T& operator*() { return *data_.Data();}
+    __device__ const T& operator*() const { return *data_.Data();}
 
     // Implicit conversion to DevicePtr<const T> needs to be disabled if we're already
     // templated on a const T

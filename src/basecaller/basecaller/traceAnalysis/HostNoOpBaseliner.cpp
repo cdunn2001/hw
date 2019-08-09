@@ -26,20 +26,21 @@ Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeI
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
-        auto frameData = rawTrace.GetBlockView(laneIdx);
+        auto traceData = rawTrace.GetBlockView(laneIdx);
+        auto cameraTraceData = out.GetBlockView(laneIdx);
         auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
-
         auto statsView = out.Stats().GetHostView();
-        for (size_t frame = 0; frame < frameData.NumFrames(); ++frame)
+        for (size_t frame = 0; frame < traceData.NumFrames(); ++frame)
         {
-            ElementTypeIn* f = frameData.Data() + (frame * frameData.LaneWidth());
-            LaneArray rawData;
-            std::memcpy(rawData.Data(), f, sizeof(ElementTypeIn) * frameData.LaneWidth());
+            ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
+            ElementTypeOut* dest = cameraTraceData.Data() + (frame * cameraTraceData.LaneWidth());
+            std::memcpy(dest, src, sizeof(ElementTypeIn) * traceData.LaneWidth());
+            LaneArray rawTrace(dest, dest + cameraTraceData.LaneWidth());
             Mask isBaseline { false };
-            baselinerStats.AddSample(rawData, rawData, isBaseline);
+            baselinerStats.AddSample(rawTrace, rawTrace, isBaseline);
         }
 
-        statsView[laneIdx] = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.GetState();
     }
 
     return out;

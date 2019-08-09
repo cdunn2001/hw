@@ -3,34 +3,35 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
     AnalogMode.h
-    BasecallBatch.h
-    BasecallBatch.cpp
     BasecallerConfig.h
+    BasecallingMetrics.h
+    BasecallingMetrics.cpp
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
     BaselinerStatAccumState.h
-    BaselineStats.h
-    BaselineStats.cpp
     BasicTypes.h
     BatchData.h
     BatchData.cpp
     BatchMetadata.h
     BatchMetadata.cpp
+    BatchResult.h
+    BatchResult.cpp
     BatchVectors.h
     BatchVectors.cpp
     BatchVectors.cuh
     BatchVectors.cu
+    HQRFPhysicalStates.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
     ConfigForward.h
+    DetectionModelHost.h
+    DetectionModelHost.cpp
     LaneDetectionModel.h
     LaneDetectionModel.cpp
     LabelsBatch.h
     LabelsBatch.cpp
     MovieConfig.h
     MovieConfig.cpp
-    PoolDetectionModel.h
-    PoolDetectionModel.cpp
     PoolHistogram.h
     PoolHistogram.cpp
     PrimaryConfig.h
@@ -38,8 +39,13 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    StaticDetModelConfig.h
+    StaticDetModelConfig.cpp
+    TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp
+    TrainedCartParams.h
+    TrainedCartParams.cpp
     UHistogramSimd.h
     UHistogramSimd.cpp
 )

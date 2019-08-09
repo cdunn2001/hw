@@ -29,18 +29,32 @@
 //  Description:
 //  Defines class MovieConfig.
 
+#include <array>
+#include <common/MongoConstants.h>
+#include <dataTypes/AnalogMode.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-/// A serializable type that represents various configuration properties of the
-/// instrument, chemistry, and data collection.
-/// Similar to Sequel's Acquisition::Setup.
-class MovieConfig
+/// Represents configuration of the instrument, chemistry, and data collection
+/// for a particular movie.
+struct MovieConfig
 {
 public:
-    MovieConfig();
+    float frameRate;
+    float photoelectronSensitivity;
+    float refSnr;
+
+    /// Convention is to order analogs by decreasing relative amplitude.
+    std::array<AnalogMode, numAnalogs> analogs;
+
+    // TODO: Will likely need additional members.
 };
+
+/// Creates an instance with somewhat arbitrary value.
+/// Convenient for some unit tests.
+MovieConfig MockMovieConfig();
 
 }}}     // namespace PacBio::Mongo::Data
 

@@ -1,6 +1,8 @@
 
 #include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
+#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/MovieConfig.h>
 
 #include "DetectionModelEstimator.h"
 
@@ -12,89 +14,98 @@ namespace Basecaller {
 Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
 DetectionModelEstimator::analogs_;
 
+PacBio::Logging::PBLogger DetectionModelEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
+
 float DetectionModelEstimator::refSnr_;
+uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
+bool DetectionModelEstimator::fixedBaselineParams_ = false;
+float DetectionModelEstimator::fixedBaselineMean_ = 0;
+float DetectionModelEstimator::fixedBaselineVar_ = 0;
 
 // static
 void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig,
                                         const Data::MovieConfig& movConfig)
 {
-    // TODO
+    minFramesForEstimate_ = dmeConfig.MinFramesForEstimate;
 
-    // TODO: These values are bogus. They should be extracted from movConfig.
-    refSnr_ = 20.0f;
+    refSnr_ = movConfig.refSnr;
+    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    {
+        analogs_[i] = movConfig.analogs[i];
+    }
 
-    analogs_[0].baseLabel = 'G';
-    analogs_[0].relAmplitude = 0.20f;
-    analogs_[0].excessNoiseCV = 0.10f;
-    analogs_[0].interPulseDistance = 0.1f;
-    analogs_[0].pulseWidth = 0.1f;
-    analogs_[0].pw2SlowStepRatio = 0.1f;
-    analogs_[0].ipd2SlowStepRatio = 0.0f;
+    if (dmeConfig.Method() == Data::BasecallerDmeConfig::MethodName::Fixed &&
+        dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    {
+        fixedBaselineParams_ = true;
+        fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
+        fixedBaselineVar_ = dmeConfig.SimModel.baselineVar;
+    }
+}
 
-    analogs_[1].baseLabel = 'T';
-    analogs_[1].relAmplitude = 0.40f;
-    analogs_[1].excessNoiseCV = 0.10f;
-    analogs_[1].interPulseDistance = 0.1f;
-    analogs_[1].pulseWidth = 0.1f;
-    analogs_[1].pw2SlowStepRatio = 0.1f;
-    analogs_[1].ipd2SlowStepRatio = 0.0f;
-
-    analogs_[2].baseLabel = 'A';
-    analogs_[2].relAmplitude = 0.70f;
-    analogs_[2].excessNoiseCV = 0.10f;
-    analogs_[2].interPulseDistance = 0.1f;
-    analogs_[2].pulseWidth = 0.1f;
-    analogs_[2].pw2SlowStepRatio = 0.1f;
-    analogs_[2].ipd2SlowStepRatio = 0.0f;
-
-    analogs_[3].baseLabel = 'C';
-    analogs_[3].relAmplitude = 1.00f;
-    analogs_[3].excessNoiseCV = 0.10f;
-    analogs_[3].interPulseDistance = 0.1f;
-    analogs_[3].pulseWidth = 0.1f;
-    analogs_[3].pw2SlowStepRatio = 0.1f;
-    analogs_[3].ipd2SlowStepRatio = 0.0f;
+// static
+LaneArray<float> DetectionModelEstimator::ModelSignalCovar(
+        const Data::AnalogMode& analog,
+        const ConstLaneArrayRef<float>& signalMean,
+        const ConstLaneArrayRef<float>& baselineVar)
+{
+    LaneArray<float> r {baselineVar};
+    r += signalMean;
+    r += pow2(analog.excessNoiseCV * signalMean);
+    return r;
 }
 
 DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
     , poolSize_ (poolSize)
 {
-    // TODO
 }
 
-void DetectionModelEstimator::InitDetModel(const Data::BaselineStats<laneSize>& blStats,
-                                           LaneDetModel& ldm)
+
+DetectionModelEstimator::PoolDetModel
+DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
-    using ElementType = typename Data::BaselineStats<laneSize>::ElementType;
+    // TODO: Use allocation pool.
+    PoolDetModel pdm (poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead);
+
+    auto pdmHost = pdm.GetHostView();
+    const auto& blStatsHost = blStats.GetHostView();
+    for (unsigned int lane = 0; lane < poolSize_; ++lane)
+    {
+        InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
+    }
+
+    return pdm;
+}
+
+
+void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+                                               LaneDetModel& ldm) const
+{
+    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
     using LaneArr = LaneArray<ElementType>;
-    using Clar = ConstLaneArrayRef<ElementType>;
+    using CLanArrRef = ConstLaneArrayRef<ElementType>;
+    using LanArrRef = LaneArrayRef<DetModelElementType>;
 
-    Clar mom0 (blStats.m0_.data());
-    Clar mom1 (blStats.m1_.data());
-    Clar mom2 (blStats.m2_.data());
+    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
 
-    StatAccumulator<LaneArr> bStats (LaneArr{mom0}, LaneArr{mom1}, LaneArr{mom2});
+    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
 
-    using std::copy;
-    const auto& blMean = bStats.Mean();
-    std::copy(blMean.begin(), blMean.end(), ldm.BaselineMode().means.data());
-    const auto& blVar = bStats.Variance();
-    const auto& blSigma = sqrt(blVar);
-    std::copy(blVar.begin(), blVar.end(), ldm.BaselineMode().vars.data());
+    LanArrRef(ldm.BaselineMode().means.data()) = blMean;
+    LanArrRef(ldm.BaselineMode().vars.data()) = blVar;
     assert(numAnalogs <= analogs_.size());
-    const auto refSignal = refSnr_ * blSigma;
+    const auto refSignal = refSnr_ * sqrt(blVar);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
-        copy(aMean.begin(), aMean.end(), ldm.AnalogMode(a).means.data());
+        auto& aMode = ldm.AnalogMode(a);
+        LanArrRef(aMode.means.data()) = aMean;
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
-        const auto aVar = blVar + aMean + analogs_[a].excessNoiseCV * pow2(aMean);
-        copy(aVar.begin(), aVar.end(), ldm.AnalogMode(a).vars.data());
+        LanArrRef(aMode.vars.data()) = ModelSignalCovar(Analog(a), aMean, blVar);
     }
 }
-
 
 }}}     // namespace PacBio::Mongo::Basecaller

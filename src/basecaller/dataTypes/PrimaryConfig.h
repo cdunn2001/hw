@@ -55,6 +55,10 @@ class PrimaryConfig :  public PacBio::Process::ConfigurationObject
     // Maxmimum polymerization rate supported.
     ADD_PARAMETER(float, maxPolRate, 1.5f);
 
+    // Metrics/BazWriter
+    ADD_PARAMETER(uint32_t, framesPerHFMetricBlock, 4096);
+    ADD_PARAMETER(bool, realtimeActivityLabels, true);
+
 public:
     void StreamOut(std::ostream& os)
     {

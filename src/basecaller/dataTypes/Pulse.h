@@ -36,6 +36,7 @@
 #include <cmath>
 #include <limits>
 #include <stdint.h>
+#include <sstream>
 
 #include <common/cuda/CudaFunctionDecorators.h>
 
@@ -81,6 +82,7 @@ public:     // Equality
         if (this->maxSignal_ != that.maxSignal_) return false;
         if (this->signalM2_ != that.signalM2_) return false;
         if (this->label_ != that.label_) return false;
+        if (this->isReject_ != that.isReject_) return false;
         return true;
     }
 
@@ -129,6 +131,10 @@ public:     // Property accessors
     ///          pulses in any other manner (no "no-call" pulses).
     CUDA_ENABLED NucleotideLabel Label() const
     { return label_; }
+
+    /// \brief Whether or not the pulse call was excluded as incredible.
+    CUDA_ENABLED bool IsReject() const
+    { return isReject_; }
 
 public:     // Property modifiers
     /// Sets the start frame value.
@@ -190,10 +196,18 @@ public:     // Property modifiers
         return *this;
     }
 
+    /// \brief Sets the rejected flag.
+    /// \returns Reference to \code *this.
+    CUDA_ENABLED Pulse& IsReject(bool value)
+    {
+        isReject_ = value;
+        return *this;
+    }
+
 private:    // Static data
     // Scale factor used for fixed-point representation of signal levels.
     // The representation has this precision in DN or e-.
-    CUDA_ENABLED static constexpr float repScaleSignal_ = .1f;
+    static constexpr float repScaleSignal_ = .1f;
 
     CUDA_ENABLED static constexpr uint16_t ToFixedPrecision(float val)
     {
@@ -219,7 +233,31 @@ private:    // Data
     float signalM2_;
 
     NucleotideLabel label_;
+    bool isReject_;
 };
+
+/// \brief Maps a plain char to a NucleotideLabel.
+/// \detail
+/// For example, \c mapToNucleotideLabel('A') returns \c NucleotideLabel::A.
+/// \exception std::invalid_argument if \a c is not found in \c nucleotideChar[].
+inline Pulse::NucleotideLabel mapToNucleotideLabel(char c)
+{
+    /// Plain chars used to represent NucleotideLabel values in strings.
+    const char nucleotideChar[] = {'A', 'C', 'G', 'T', 'N', '-'};
+    /// The number of NucleotideLabel values.
+    const int numNucleotideLabels = sizeof(nucleotideChar);
+
+    int inc = 0;
+    while (inc < numNucleotideLabels && nucleotideChar[inc] != c) ++inc;
+
+    if (inc == numNucleotideLabels)
+    {
+        std::ostringstream msg;
+        msg << "Bad argument in mapToNucleotideLabel(char): '" << c << "\'.";
+        throw std::invalid_argument(msg.str());
+    }
+    return Pulse::NucleotideLabel(inc);
+}
 
 }}}  // PacBio::Mongo::Data
 

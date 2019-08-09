@@ -30,7 +30,10 @@
 //  Defines class templates LaneArrayRef and ConstLaneArrayRef.
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
+
+#include <common/cuda/utility/CudaArray.h>
 
 #include "LaneMask.h"
 #include "MongoConstants.h"
@@ -73,7 +76,12 @@ public:     // Structors and assignment
     ConstLaneArrayRef() = delete;
 
     /// Create wrapper referring to \a data.
-    ConstLaneArrayRef(ConstPointer data) : data_ (data) { }
+    explicit ConstLaneArrayRef(ConstPointer data) : data_ (data) { }
+
+    /// Wraps a const CudaArray.
+    explicit ConstLaneArrayRef(const Cuda::Utility::CudaArray<ElementType, N>& ca)
+        : ConstLaneArrayRef(ca.data())
+    { }
 
     /// Create a wrapper referring to the same data as \a that.
     ConstLaneArrayRef(const ConstLaneArrayRef& that) = default;
@@ -108,7 +116,37 @@ public:     // Element-wise comparison operators
         return ret;
     }
 
+    friend LaneMask<N> operator==(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] == rhs;
+        }
+        return ret;
+    }
+
+    friend LaneMask<N> operator==(const ElementType& lhs, const ConstLaneArrayRef& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs == rhs[i];
+        }
+        return ret;
+    }
+
     friend LaneMask<N> operator!=(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    friend LaneMask<N> operator!=(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        return !(lhs == rhs);
+    }
+
+    friend LaneMask<N> operator!=(const ElementType& lhs, const ConstLaneArrayRef& rhs)
     {
         return !(lhs == rhs);
     }
@@ -123,7 +161,37 @@ public:     // Element-wise comparison operators
         return ret;
     }
 
+    friend LaneMask<N> operator<(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] < rhs;
+        }
+        return ret;
+    }
+
+    friend LaneMask<N> operator<(const ElementType& lhs, const ConstLaneArrayRef& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs < rhs[i];
+        }
+        return ret;
+    }
+
     friend LaneMask<N> operator<=(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
+    {
+        return !(lhs > rhs);
+    }
+
+    friend LaneMask<N> operator<=(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        return !(lhs > rhs);
+    }
+
+    friend LaneMask<N> operator<=(const ElementType& lhs, const ConstLaneArrayRef& rhs)
     {
         return !(lhs > rhs);
     }
@@ -138,7 +206,37 @@ public:     // Element-wise comparison operators
         return ret;
     }
 
+    friend LaneMask<N> operator>(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs[i] > rhs;
+        }
+        return ret;
+    }
+
+    friend LaneMask<N> operator>(const ElementType& lhs, const ConstLaneArrayRef& rhs)
+    {
+        LaneMask<N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = lhs > rhs[i];
+        }
+        return ret;
+    }
+
     friend LaneMask<N> operator>=(const ConstLaneArrayRef& lhs, const ConstLaneArrayRef& rhs)
+    {
+        return !(lhs < rhs);
+    }
+
+    friend LaneMask<N> operator>=(const ConstLaneArrayRef& lhs, const ElementType& rhs)
+    {
+        return !(lhs < rhs);
+    }
+
+    friend LaneMask<N> operator>=(const ElementType& lhs, const ConstLaneArrayRef& rhs)
     {
         return !(lhs < rhs);
     }
@@ -156,6 +254,16 @@ public:     // Miscellaneous friend functions.
             }
         }
         return ret;
+    }
+
+    friend LaneMask<N> isfinite(const ConstLaneArrayRef& a)
+    {
+        LaneMask<N> r (true);
+        if (std::is_floating_point<T>::value)
+        {
+            for (unsigned int i = 0; i < N; ++i) r[i] = std::isfinite(a[i]);
+        }
+        return r;
     }
 
     friend ElementType reduceMin(const ConstLaneArrayRef& a)
@@ -220,7 +328,12 @@ public:     // Structors and assignment
     /// located at \a data.
     // Note that this is where the Pointer is stored as ConstPointer in the
     // super object. We use Super:MutableData to get non-const access.
-    LaneArrayRef(Pointer data) : BaseConstRef(data) { }
+    explicit LaneArrayRef(Pointer data) : BaseConstRef(data) { }
+
+    /// Wraps a CudaArray.
+    explicit LaneArrayRef(Cuda::Utility::CudaArray<ElementType, N>& ca)
+        : LaneArrayRef(ca.data())
+    { }
 
     /// Create a wrapper referring to the same data as \a that.
     /// \note Cannot create a LaneArrayRef from a ConstLaneArrayRef.
@@ -236,7 +349,8 @@ public:     // Structors and assignment
     }
 
     /// Assign contained elements.
-    LaneArrayRef& operator=(const BaseConstRef& that)
+    template <typename U>
+    LaneArrayRef& operator=(const ConstLaneArrayRef<U, N>& that)
     {
         std::copy(that.begin(), that.end(), begin());
         return *this;
@@ -336,6 +450,13 @@ public:     // Compound assigment
         {
             BaseConstRef::MutableData()[i] /= a[i];
         }
+        return *this;
+    }
+
+    LaneArrayRef& operator|=(const BaseConstRef& a)
+    {
+        auto* p = BaseConstRef::MutableData();
+        for (unsigned int i = 0; i < N; ++i) p[i] |= a[i];
         return *this;
     }
 };

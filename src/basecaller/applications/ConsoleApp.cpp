@@ -3,11 +3,14 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/Pulse.h>
+#include <dataTypes/PulseBatch.h>
 #include <common/DataGenerators/BatchGenerator.h>
 #include <common/MongoConstants.h>
 
 #include <pacbio/primary/BazWriter.h>
 #include <pacbio/primary/FileHeaderBuilder.h>
+#include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/primary/ZmwResultBuffer.h>
 
 #include <pacbio/PBException.h>
@@ -15,6 +18,7 @@
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
+#include <pacbio/smrtdata/NucleotideLabel.h>
 
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
@@ -30,7 +34,8 @@ class MongoBasecallerConsole : public ThreadedProcessBase
     SMART_ENUM(
         ProfileSpots,
         ANALYZE_CHUNK,
-        WRITE_CHUNK
+        WRITE_CHUNK,
+        READ_CHUNK
     );
 
     using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
@@ -80,6 +85,8 @@ public:
         {
             PBLOG_INFO << "Input Target: " << inputTargetFile_;
             batchGenerator_->SetTraceFileSource(inputTargetFile_, options.get("cache"));
+            MetaDataFromTraceFileSource(inputTargetFile_);
+            GroundTruthFromTraceFileSource(inputTargetFile_);
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -111,6 +118,92 @@ public:
     { return basecallerConfig_; }
 
 private:
+    void MetaDataFromTraceFileSource(const std::string& traceFileName)
+    {
+        const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+
+        traceFile.FrameRate >> movieConfig_.frameRate;
+        traceFile.AduGain >> movieConfig_.photoelectronSensitivity;
+        traceFile.AnalogRefSnr >> movieConfig_.refSnr;
+
+        // Analog information
+        size_t numAnalogs;
+        std::string baseMap;
+        std::vector<float> relativeAmpl;
+        std::vector<float> excessNoiseCV;
+        std::vector<float> interPulseDistance;
+        std::vector<float> pulseWidth;
+        std::vector<float> ipd2SlowStepRatio;
+        std::vector<float> pw2SlowStepRatio;
+
+        traceFile.NumAnalog >> numAnalogs;
+        traceFile.BaseMap >> baseMap;
+        traceFile.RelativeAmp >> relativeAmpl;
+        traceFile.ExcessNoiseCV >> excessNoiseCV;
+        traceFile.IpdMean >> interPulseDistance;
+        traceFile.PulseWidthMean >> pulseWidth;
+        traceFile.Ipd2SlowStepRatio >> ipd2SlowStepRatio;
+        traceFile.Pw2SlowStepRatio >> pw2SlowStepRatio;
+
+        // Check relative amplitude is sorted decreasing.
+        if (!std::is_sorted(relativeAmpl.rbegin(), relativeAmpl.rend()))
+        {
+            throw PBException("Analogs in trace file not sorted by decreasing relative amplitude!");
+        }
+
+        for (size_t i = 0; i < numAnalogs; i++)
+        {
+            auto& analog = movieConfig_.analogs[i];
+            analog.baseLabel = baseMap[i];
+            analog.relAmplitude = relativeAmpl[i];
+            analog.excessNoiseCV = excessNoiseCV[i];
+            analog.interPulseDistance = interPulseDistance[i];
+            analog.pulseWidth = pulseWidth[i];
+            analog.ipd2SlowStepRatio = ipd2SlowStepRatio[i];
+            analog.pw2SlowStepRatio = pw2SlowStepRatio[i];
+        }
+    }
+
+    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
+    {
+        auto setBlMeanAndCovar = [](const std::string& traceFileName,
+                                    ConfigurationObject::ConfigurationPod<float>& blMean,
+                                    ConfigurationObject::ConfigurationPod<float>& blCovar,
+                                    const std::string& exceptMsg)
+        {
+            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+            if (traceFile.simulated)
+            {
+                boost::multi_array<float,2> stateMean;
+                boost::multi_array<float,2> stateCovar;
+                traceFile.StateMean >> stateMean;
+                traceFile.StateCovariance >> stateCovar;
+                blMean = stateMean[0][0];
+                blCovar = stateCovar[0][0];
+            }
+            else
+            {
+                throw PBException(exceptMsg);
+            }
+        };
+
+        if (basecallerConfig_.algorithm.staticAnalysis == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
+                              basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
+                              "Requested static pipeline analysis but input trace file is not simulated!");
+        }
+        else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+        {
+            setBlMeanAndCovar(inputTargetFile_,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
+                              basecallerConfig_.algorithm.dmeConfig.SimModel.baselineVar,
+                              "Requested fixed DME with baseline params but input trace file is not simulated!");
+        }
+    }
+
     void RunAnalyzer()
     {
         size_t numChunksAnalyzed = 0;
@@ -125,12 +218,13 @@ private:
                               + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
                 Profiler::Mode mode = Profiler::Mode::REPORT;
                 if (numChunksAnalyzed < 15) mode = Profiler::Mode::OBSERVE;
+                if (numChunksAnalyzed < 3) mode = Profiler::Mode::IGNORE;
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
-                auto baseCalls = (*analyzer_)(std::move(chunk));
+                auto output = (*analyzer_)(std::move(chunk));
                 numChunksAnalyzed++;
-                outputDataQueue_.Push(std::move(baseCalls));
+                outputDataQueue_.Push(std::move(output));
             }
             else
             {
@@ -167,8 +261,7 @@ private:
         PBLOG_INFO << "MongoBasecallerConsole::Setup() - Creating analyzer with num pools = "
                    << batchGenerator_->NumBatches();
 
-        MovieConfig movConfig;
-        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movConfig);
+        analyzer_ = ITraceAnalyzer::Create(batchGenerator_->NumBatches(), basecallerConfig_, movieConfig_);
 
         PreloadInputQueue();
 
@@ -221,40 +314,96 @@ private:
         }
     }
 
-    void ConvertMetric(const PacBio::Mongo::Data::BasecallingMetrics& bm, SpiderMetricBlock& sm)
+    void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
+                       SpiderMetricBlock& sm,
+                       size_t laneIndex,
+                       size_t zmwIndex)
     {
-        sm.numBasesA_ = bm.NumBasesByAnalog()[0];
-        sm.numBasesC_ = bm.NumBasesByAnalog()[1];
-        sm.numBasesG_ = bm.NumBasesByAnalog()[2];
-        sm.numBasesT_ = bm.NumBasesByAnalog()[3];
+        if (metricsPtr)
+        {
+            const auto& metrics = metricsPtr->GetHostView()[laneIndex];
+            sm.numBasesA_ = metrics.numBasesByAnalog[0][zmwIndex];
+            sm.numBasesC_ = metrics.numBasesByAnalog[1][zmwIndex];
+            sm.numBasesG_ = metrics.numBasesByAnalog[2][zmwIndex];
+            sm.numBasesT_ = metrics.numBasesByAnalog[3][zmwIndex];
 
-        sm.numPulses_ = bm.NumPulses();
+            sm.numPulses_ = metrics.numBases[zmwIndex];
+        }
     }
 
-    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BasecallBatch>>& basecallChunk)
+    auto ConvertMongoPulsesToSequelBasecalls(const Pulse* pulses, uint32_t numPulses)
+    {
+        auto LabelConv = [](Data::Pulse::NucleotideLabel label) {
+            switch (label)
+            {
+                case Data::Pulse::NucleotideLabel::A:
+                    return PacBio::SmrtData::NucleotideLabel::A;
+                case Data::Pulse::NucleotideLabel::C:
+                    return PacBio::SmrtData::NucleotideLabel::C;
+                case Data::Pulse::NucleotideLabel::G:
+                    return PacBio::SmrtData::NucleotideLabel::G;
+                case Data::Pulse::NucleotideLabel::T:
+                    return PacBio::SmrtData::NucleotideLabel::T;
+                case Data::Pulse::NucleotideLabel::N:
+                    return PacBio::SmrtData::NucleotideLabel::N;
+                default:
+                    assert(label == Data::Pulse::NucleotideLabel::NONE);
+                    return PacBio::SmrtData::NucleotideLabel::NONE;
+            }
+        };
+
+        std::vector<Basecall> baseCalls(numPulses);
+        for (size_t pulseNum = 0; pulseNum < numPulses; ++pulseNum)
+        {
+            const auto& pulse = pulses[pulseNum];
+            auto& bc = baseCalls[pulseNum];
+
+            static constexpr int8_t qvDefault_ = 0;
+
+            auto label = LabelConv(pulse.Label());
+
+            // Populate pulse data
+            bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
+            bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
+            bc.GetPulse().Label(label).LabelQV(qvDefault_);
+            bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
+            bc.GetPulse().MergeQV(qvDefault_);
+
+            // Populate base data.
+            bc.Base(label).InsertionQV(qvDefault_);
+            bc.DeletionTag(PacBio::SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
+            bc.SubstitutionTag(PacBio::SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
+        }
+        return baseCalls;
+    }
+
+    void WriteOutputChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& outputChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
         if (!bazWriter_) return; // NoOp if we're not doing output
 
-        for (const auto& basecallBatchPtr : basecallChunk)
+        for (const auto& outputBatchPtr : outputChunk)
         {
-            const auto& basecallBatch = *basecallBatchPtr;
-            const auto& metrics = basecallBatch.Metrics().GetHostView();
-            for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
+            const auto& pulseBatch = outputBatchPtr->pulses;
+            const auto& metricsPtr = outputBatchPtr->metrics;
+            for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
             {
-                const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
+                const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
+
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
-                                                     laneCalls.size(zmw),
+                        const auto& baseCalls = ConvertMongoPulsesToSequelBasecalls(lanePulses.ZmwData(zmw),
+                                                                                    lanePulses.size(zmw));
+                        if (!bazWriter_->AddZmwSlice(baseCalls.data(),
+                                                     baseCalls.size(),
                                                      [&](MemoryBufferView<SpiderMetricBlock>& dest)
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
                                                         {
-                                                            ConvertMetric(metrics[lane*laneSize + zmw], dest[i]);
+                                                            ConvertMetric(metricsPtr, dest[i], lane, zmw);
                                                         }
                                                      },
                                                      1,
@@ -284,8 +433,8 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<std::unique_ptr<BasecallBatch>> basecallChunk;
-            if (outputDataQueue_.TryPop(basecallChunk))
+            std::vector<std::unique_ptr<BatchAnalyzer::OutputType>> outputChunk;
+            if (outputDataQueue_.TryPop(outputChunk))
             {
                 currentZmwIndex_ = 0;
                 Profiler::Mode mode = Profiler::Mode::REPORT;
@@ -293,7 +442,7 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
                 (void)writeChunkProfile;
-                WriteBasecallsChunk(basecallChunk);
+                WriteOutputChunk(outputChunk);
                 numChunksWritten_++;
             }
             else
@@ -321,15 +470,18 @@ private:
 
     void PreloadInputQueue()
     {
-        size_t numPreload = std::min(numChunksPreloadInputQueue_, batchGenerator_->NumTraceChunks());
+        size_t numPreload = std::min(numChunksPreloadInputQueue_, batchGenerator_->NumChunks());
 
         if (numPreload > 0)
         {
             PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
             for (size_t numChunk = 0; numChunk < numPreload; numChunk++)
             {
-                PBLOG_INFO << "Preloaded chunk = " << numChunk;
-                inputDataQueue_.Push(batchGenerator_->PopulateChunk());
+                auto chunk = batchGenerator_->PopulateChunk();
+                PBLOG_INFO << "Read in chunk frames = ["
+                              + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                              + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                inputDataQueue_.Push(std::move(chunk));
             }
             PBLOG_INFO << "Done preloading input queue.";
         }
@@ -337,15 +489,30 @@ private:
 
     void RunReader()
     {
-        size_t numChunksRead = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
+        size_t numChunksRead = 0;
         while (!ExitRequested())
         {
             if (!batchGenerator_->Finished())
             {
-
-                auto chunk = batchGenerator_->PopulateChunk();
+                auto readChunk = [&numChunksRead, this]() {
+                    Profiler::Mode mode = Profiler::Mode::REPORT;
+                    if (numChunksRead < 15) mode = Profiler::Mode::OBSERVE;
+                    Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
+                    auto readChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::READ_CHUNK);
+                    (void)readChunkProfile;
+                    auto chunk = batchGenerator_->PopulateChunk();
+                    PBLOG_INFO << "Read in chunk frames = ["
+                                  + std::to_string(chunk.front().GetMeta().FirstFrame()) + ","
+                                  + std::to_string(chunk.front().GetMeta().LastFrame()) + ")";
+                    return chunk;
+                };
+                auto chunk = readChunk();
                 numChunksRead++;
+                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_)
+                {
+                    usleep(1000);
+                }
                 inputDataQueue_.Push(std::move(chunk));
             }
             else
@@ -367,6 +534,7 @@ private:
 private:
     // Configuration objects
     BasecallerConfig basecallerConfig_;
+    MovieConfig movieConfig_;
 
     // Main analyzer
     std::unique_ptr<ITraceAnalyzer> analyzer_;
@@ -375,7 +543,7 @@ private:
     // Data generator, input and output queues
     std::unique_ptr<BatchGenerator> batchGenerator_;
     PacBio::ThreadSafeQueue<std::vector<TraceBatch<int16_t>>> inputDataQueue_;
-    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BasecallBatch>>> outputDataQueue_;
+    PacBio::ThreadSafeQueue<std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>> outputDataQueue_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
@@ -437,9 +605,9 @@ int main(int argc, char* argv[])
             return 0;
         }
 
-        if (options.get("numWorkerThreads"))
+        if (options.is_set_by_user("numWorkerThreads"))
         {
-            basecallerConfig.init.numWorkerThreads = options.is_set_by_user("numWorkerThreads");
+            basecallerConfig.init.numWorkerThreads = options.get("numWorkerThreads");
         }
 
         auto bc = std::unique_ptr<MongoBasecallerConsole>(new MongoBasecallerConsole());

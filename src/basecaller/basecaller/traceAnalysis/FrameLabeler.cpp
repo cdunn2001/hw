@@ -36,6 +36,17 @@ namespace Basecaller {
 std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
 
 // static
+void FrameLabeler::Configure(int lanesPerPool, int framesPerChunk)
+{
+    const auto hostExecution = true;
+    InitAllocationPools(hostExecution, 0);
+}
+
+void FrameLabeler::Finalize()
+{
+    DestroyAllocationPools();
+}
+
 void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
 {
     using Cuda::Memory::SyncDirection;
@@ -60,6 +71,18 @@ FrameLabeler::FrameLabeler(uint32_t poolId)
     : poolId_ (poolId)
 {
 
+}
+
+Data::LabelsBatch FrameLabeler::Process(Data::CameraTraceBatch trace,
+                                        const PoolModelParameters& models)
+{
+    auto ret = batchFactory_->NewBatch(std::move(trace));
+    for (size_t laneIdx = 0; laneIdx < ret.LanesPerBatch(); laneIdx++)
+    {
+        std::memset(ret.GetBlockView(laneIdx).Data(), 0,
+                    ret.GetBlockView(laneIdx).Size() * sizeof(Data::LabelsBatch::ElementType));
+    }
+    return ret;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -48,7 +48,9 @@ public:     // Types
     using TraceElementType = Data::CameraTraceBatch::ElementType;
 
 public:     // Structors and assignment.
-    TraceHistogramAccumHost(unsigned int poolId, unsigned int poolSize);
+    TraceHistogramAccumHost(unsigned int poolId,
+                            unsigned int poolSize,
+                            bool pinnedAlloc = true);
 
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;
@@ -58,7 +60,7 @@ private:    // TraceHistogramAccumulator implementation.
     const PoolTraceStatsType& TraceStatsImpl() const override;
 
 private:    // Data
-    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>>> hist_;
+    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
     mutable PoolHistType poolHist_;
     mutable PoolTraceStatsType poolTraceStats_;

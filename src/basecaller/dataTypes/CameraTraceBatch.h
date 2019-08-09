@@ -6,8 +6,8 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
 
+#include "BaselinerStatAccumState.h"
 #include "BasicTypes.h"
-#include "BaselineStats.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -38,16 +38,16 @@ public:     // Structors and assignment
     CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
 
 public:     // Access to statistics
-    const Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>>& Stats() const
+    const Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats() const
     { return stats_; }
 
-    Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>>& Stats()
+    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats()
     { return stats_; }
 
 private:    // Data
     // Statistics for each ZMW in the batch, one element per lane.
     // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
-    Cuda::Memory::UnifiedCudaArray<BaselineStats<laneSize>> stats_;
+    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> stats_;
 };
 
 // Factory class, to simplify the construction of CameraTraceBatch instances.
@@ -64,16 +64,17 @@ public:
         : syncDirection_(syncDirection)
         , pinned_(pinned)
         , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselineStats<laneSize>), pinned))
+        , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselinerStatAccumState), pinned))
     {
         dims_.laneWidth = laneSize;
         dims_.framesPerBatch = framesPerChunk;
         dims_.lanesPerBatch = lanesPerPool;
     }
 
-    CameraTraceBatch NewBatch(const BatchMetadata& meta)
+    CameraTraceBatch NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_, tracePool_, statsPool_);
+        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_,
+                                tracePool_, statsPool_);
     }
 
 private:

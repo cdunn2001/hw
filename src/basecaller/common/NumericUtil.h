@@ -201,8 +201,8 @@ FP chi2CdfComp(FP x, int dof)
     const auto maskNaN = isnan(x);
     const auto maskFinite = isfinite(x);
     x = Blend(maskFinite, x, FP(0));
-    const auto y = MakeUnion(x);
-    Simd::ArrayUnion<FP> p;
+    const auto y = Simd::MakeUnion(x);
+    Simd::UnionConv<FP> p;
     for (unsigned int i = 0; i < Simd::SimdTypeTraits<FP>::width; ++i)
     {
         p[i] = cdf(complement(csd, y[i]));

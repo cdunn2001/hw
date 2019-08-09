@@ -34,10 +34,11 @@
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
-#include <dataTypes/BasecallBatch.h>
+#include <dataTypes/BatchResult.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/ConfigForward.h>
+#include <dataTypes/PulseBatch.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -49,7 +50,7 @@ class BatchAnalyzer
 {
 public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
-    using OutputType = PacBio::Mongo::Data::BasecallBatch;
+    using OutputType = PacBio::Mongo::Data::BatchResult;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -59,15 +60,16 @@ public:     // Static functions
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
     static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                          const Data::MovieConfig& movConfig);
+                          const Data::MovieConfig& movConfig)
+    {}
 
     static void Finalize()
-    {
-        batchFactory_.release();
-    }
+    {}
+
+    static void ReportPerformance();
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&);
@@ -80,13 +82,13 @@ public:     // Structors & assignment operators
 public:
     /// Call operator is non-reentrant and will throw if a trace batch is
     /// received for the wrong ZMW batch or is out of chronological order.
-    PacBio::Mongo::Data::BasecallBatch
-    operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
 
-    PacBio::Mongo::Data::BasecallBatch
-    StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
-    PacBio::Mongo::Data::BasecallBatch
-    StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+
+    void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
+                          const Data::MovieConfig& movieConfig);
 
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
@@ -96,6 +98,7 @@ private:
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
     std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
+    std::unique_ptr<HFMetricsFilter> hfMetrics_;
 
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
@@ -106,9 +109,6 @@ private:
     // even implemented, but may remain desirable in the future when tweaking/profiling
     // steady-state basecalling performance
     bool staticAnalysis_;
-
-    static std::unique_ptr<Data::BasecallBatchFactory> batchFactory_;
-    static uint16_t maxCallsPerZmwChunk_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -22,43 +22,49 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//  Description:
-//  Defines members of class BasecallBatch.
 
-#include "BasecallBatch.h"
+#ifndef mongo_datatypes_StaticDetectionModel_h
+#define mongo_datatypes_StaticDetectionModel_h
+
+#include <common/MongoConstants.h>
+#include "MovieConfig.h"
+
+#include <pacbio/process/ConfigurationBase.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-BasecallingMetrics& BasecallingMetrics::Count(const PacBio::Mongo::Data::BasecallingMetrics::Basecall& base)
+class StaticDetModelConfig : public PacBio::Process::ConfigurationObject
 {
-    uint8_t pulseLabel = static_cast<uint8_t>(base.GetPulse().Label());
-    numPulsesByAnalog_[pulseLabel]++;
+public:
+    ADD_PARAMETER(float, baselineMean, 0);
+    ADD_PARAMETER(float, baselineVariance, 33.0f);
 
-    if (!base.IsNoCall())
+public:
+    struct AnalogMode
     {
-        uint8_t baseLabel = static_cast<uint8_t>(base.Base());
-        numBasesByAnalog_[baseLabel]++;
+        float mean;
+        float var;
+    };
+
+    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
+    {
+        std::array<AnalogMode, numAnalogs> analogs;
+        const auto refSignal = movieConfig.refSnr * sqrt(baselineVariance);
+        for (size_t i = 0; i < analogs.size(); i++)
+        {
+            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
+            const auto var = baselineVariance + mean + pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
+
+            analogs[i].mean = mean;
+            analogs[i].var = var;
+        }
+
+        return analogs;
     }
+};
 
-    return *this;
-}
+}}} // PacBio::Mongo::Data
 
-BasecallBatch::BasecallBatch(
-        const size_t maxCallsPerZmwChunk,
-        const BatchDimensions& batchDims,
-        const BatchMetadata& batchMetadata,
-        Cuda::Memory::SyncDirection syncDir,
-        bool pinned,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool,
-        std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
-    : dims_ (batchDims)
-    , metaData_(batchMetadata)
-    , basecalls_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
-    , metrics_(batchDims.ZmwsPerBatch(), syncDir, pinned, metricsPool)
-{}
-
-}}}     // namespace PacBio::Mongo::Data
+#endif // mongo_datatypes_StaticDetectionModel_h

@@ -25,6 +25,9 @@ public:     // Types
     using BaseConstRef = typename BaseRef::BaseConstRef;
     using ElementType = T;
 
+public:     // Static constants
+    static constexpr unsigned int size = N;
+
 public:     // Structors and assignment
     LaneArray() : BaseRef(nullptr)
     { BaseRef::SetBasePointer(data_); }
@@ -73,9 +76,10 @@ public:     // Structors and assignment
         return *this;
     }
 
-    LaneArray& operator=(const BaseConstRef& that)
+    template <typename U>
+    LaneArray& operator=(const ConstLaneArrayRef<U, N>& that)
     {
-        BaseRef::operator=(that);
+        BaseRef::template operator=<U>(that);
         return *this;
     }
 
@@ -106,48 +110,8 @@ public:     // Export
         return ret;
     }
 
-public:     // Comparison operators
-    friend LaneMask<N> operator==(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] == rhs[i];
-        }
-        return ret;
-    }
-
-    friend LaneMask<N> operator<(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] < rhs[i];
-        }
-        return ret;
-    }
-
-    friend LaneMask<N> operator<=(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        return !(lhs > rhs);
-    }
-
-    friend LaneMask<N> operator>(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        LaneMask<N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = lhs[i] > rhs[i];
-        }
-        return ret;
-    }
-
-    friend LaneMask<N> operator>=(const LaneArray& lhs, const LaneArray& rhs)
-    {
-        return !(lhs < rhs);
-    }
-
 public:     // Named unary operators
+    /// Square root
     friend LaneArray sqrt(const BaseConstRef& x)
     {
         LaneArray ret;
@@ -155,6 +119,60 @@ public:     // Named unary operators
         {
             ret[i] = std::sqrt(x[i]);
         }
+        return ret;
+    }
+
+    /// Absolute value
+    friend LaneArray abs(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = std::abs(x[i]);
+        }
+        return ret;
+    }
+
+    /// Natural exponential
+    friend LaneArray exp(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i) ret[i] = std::exp(x[i]);
+        return ret;
+    }
+
+    /// Base-2 exponential
+    friend LaneArray exp2(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = std::exp2(x[i]);
+        }
+        return ret;
+    }
+
+    /// Natural logarithm
+    friend LaneArray log(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i) ret[i] = std::log(x[i]);
+        return ret;
+    }
+
+    /// Base-2 logarithm
+    friend LaneArray log2(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i) ret[i] = std::log2(x[i]);
+        return ret;
+    }
+
+    /// Complementary error function
+    friend LaneArray erfc(const BaseConstRef& x)
+    {
+        LaneArray ret;
+        for (unsigned int i = 0; i < N; ++i) ret[i] = std::erfc(x[i]);
         return ret;
     }
 
@@ -210,6 +228,15 @@ private:
     T data_[N];
 };
 
+
+/// Unary negation.
+template <typename T, unsigned int N>
+LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& a)
+{
+    LaneArray<T, N> nrv;
+    for (unsigned int i = 0; i < N; ++i) nrv[i] = -a[i];
+    return nrv;
+}
 
 // Binary operators with uniform element type.
 // TODO: Enable nonuniform types.
@@ -306,6 +333,14 @@ LaneArray<T, N> operator/(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArr
 {
     LaneArray<T, N> nrv (lhs);
     nrv /= rhs;
+    return nrv;
+}
+
+template <typename T, unsigned int N>
+LaneArray<T, N> operator|(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
+{
+    LaneArray<T, N> nrv (lhs);
+    nrv |= rhs;
     return nrv;
 }
 

@@ -63,7 +63,8 @@ Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<Eleme
 
     filter_->RunBaselineFilter(rawTrace, out, out.Stats(), work1, work2);
 
-    return std::move(out);
+    Cuda::CudaSynchronizeDefaultStream();
+    return out;
 }
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool)

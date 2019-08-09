@@ -45,7 +45,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
     const unsigned int numPools = 8;
     Data::BasecallerConfig bcConfig;
-    Data::MovieConfig movConfig;
+    Data::MovieConfig movConfig = Data::MockMovieConfig();
     auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
 
     ASSERT_EQ(numPools, traceAnalyzer->NumZmwPools());
@@ -68,7 +68,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     ASSERT_EQ(bmdVec.size(), bcBatch.size());
     for (unsigned int i = 0; i < bcBatch.size(); ++i)
     {
-        EXPECT_EQ(bmdVec[i], bcBatch[i]->GetMeta());
+        EXPECT_EQ(bmdVec[i], bcBatch[i]->pulses.GetMeta());
     }
 }
 

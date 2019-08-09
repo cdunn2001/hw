@@ -9,12 +9,14 @@ class BasecallerConfig;
 class BasecallerAlgorithmConfig;
 class BasecallerBaselinerConfig;
 class BasecallerFrameLabelerConfig;
+class BasecallerMetricsConfig;
 class BasecallerPulseAccumConfig;
 class BasecallerTraceHistogramConfig;
 class BasecallerDmeConfig;
 class BasecallerInitConfig;
 class PrimaryConfig;
 class MovieConfig;
+class StaticDetModelConfig;
 
 }}}     // namespace PacBio::Mongo::Data
 

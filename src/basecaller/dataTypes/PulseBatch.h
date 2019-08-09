@@ -94,7 +94,7 @@ public:
         , lenPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(uint32_t), pinned))
     {}
 
-    PulseBatch NewBatch(const BatchMetadata& batchMetadata)
+    PulseBatch NewBatch(const BatchMetadata& batchMetadata) const
     {
         return PulseBatch(
                 maxCallsPerZmw_,

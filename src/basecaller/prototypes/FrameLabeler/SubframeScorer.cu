@@ -142,9 +142,9 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
 
     for (int i = 0; i < numAnalogs; ++i)
     {
-        const auto full = FullState(i);
-        const auto up = UpState(i);
-        const auto down = DownState(i);
+        const auto full = SubframeLabelManager::FullState(i);
+        const auto up = SubframeLabelManager::UpState(i);
+        const auto down = SubframeLabelManager::DownState(i);
 
         // probabilities of 1,2 and 3 frame pulses for this analog
         const auto& analogLenProbs = computeLenProbs(meta[i].pw, meta[i].pwSSRatio);
@@ -193,7 +193,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
         // Handle the dense section of u->u' and d->u' transitions
         for (int j = 0; j < numAnalogs; j++)
         {
-            auto upPrime = UpState(j);
+            auto upPrime = SubframeLabelManager::UpState(j);
 
             // Alpha already defined as 1 or 2 frame ipd event
             // (no full baseline frame)

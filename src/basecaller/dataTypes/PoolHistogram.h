@@ -9,9 +9,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// TODO: Members of LaneHistogram should use CudaArray
-// instead of LaneArray.
-
 /// A pure data type that represents a histogram for each ZMW in a lane.
 /// For a particular ZMW, the bin size is constant.
 /// The number of bins is the same for each ZMW.
@@ -20,6 +17,9 @@ struct LaneHistogram
 {
     template <typename T>
     using Array = Cuda::Utility::CudaArray<T, laneSize>;
+
+    using DataType = DataT;
+    using CountType = CountT;
 
     // This constant must be large enough to accomodate high SNR data.
     // Ideally, it would be a function of BinSizeCoeff and the SNR and excess-
@@ -58,8 +58,8 @@ struct PoolHistogram
     Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> data;
     uint32_t poolId;
 
-    PoolHistogram(uint32_t aPoolId, unsigned int numLanes)
-        : data (numLanes, cudaSyncMode)
+    PoolHistogram(uint32_t aPoolId, unsigned int numLanes, bool pinnedAlloc)
+        : data (numLanes, cudaSyncMode, pinnedAlloc)
         , poolId (aPoolId)
     { }
 };

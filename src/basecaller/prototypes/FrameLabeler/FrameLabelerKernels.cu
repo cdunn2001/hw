@@ -270,6 +270,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
                                                         latOut,
                                                         output);
 
+    Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }

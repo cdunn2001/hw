@@ -1,5 +1,5 @@
-#ifndef mongo_dataTypes_PoolDetectionModel_H_
-#define mongo_dataTypes_PoolDetectionModel_H_
+#ifndef mongo_dataTypes_BatchResult_H_
+#define mongo_dataTypes_BatchResult_H_
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -27,43 +27,36 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines types PoolDetectionModel and LaneDetectionModel.
+//  Defines class BatchResult, a light wrapper around a finished PulseBatch and
+//  an accumulated BasecallingMetrics object
 
-#include <common/cuda/memory/UnifiedCudaArray.h>
-#include <common/MongoConstants.h>
-#include "LaneDetectionModel.h"
+#include <dataTypes/PulseBatch.h>
+#include <dataTypes/BasecallingMetrics.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-/// A bundle of model parameters for a normal mixture representing the
-/// baselined trace data for a lane of ZMWs.
-/// \tparam T is the elemental data type (e.g., float).
-template <typename T>
-using LaneDetectionModel = LaneModelParameters<T, laneSize>;
-
-
-/// A bundle of model parameters for a normal mixture representing the
-/// baselined trace data for a pool of ZMWs.
-/// \tparam T is the elemental data type (e.g., float).
-template <typename T>
-struct PoolDetectionModel
+struct BatchResult
 {
-    using ElementType = T;
 
-    Cuda::Memory::UnifiedCudaArray<LaneDetectionModel<T>> laneModels;
-    uint32_t poolId;
+    using PulseBatchT = PulseBatch;
+    using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>;
 
-    PoolDetectionModel(uint32_t aPoolId,
-                       unsigned int lanesPerPool,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
-        : laneModels (lanesPerPool, syncDirection, pinned, nullptr)
-        , poolId (aPoolId)
-    {}
+    BatchResult(PulseBatchT&& pulsesIn)
+        : pulses(std::move(pulsesIn))
+    {};
+
+    BatchResult(PulseBatchT&& pulsesIn, std::unique_ptr<MetricsT> metricsPtr)
+        : pulses(std::move(pulsesIn))
+        , metrics(std::move(metricsPtr))
+    {};
+
+    PulseBatchT pulses;
+    std::unique_ptr<MetricsT> metrics;
 };
 
-}}}     // namespace PacBio::Mongo::Data
 
-#endif  // mongo_dataTypes_PoolDetectionModel_H_
+}}}    // namespace PacBio::Mongo::Data
+
+#endif // mongo_dataTypes_BatchResult_H_

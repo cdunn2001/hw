@@ -26,7 +26,10 @@
 #ifndef PACBIO_CUDA_MEMORY_SMART_DEVICE_ALLOCATION_H
 #define PACBIO_CUDA_MEMORY_SMART_DEVICE_ALLOCATION_H
 
+#include <atomic>
+#include <cassert>
 #include <memory>
+#include <mutex>
 
 #include <common/cuda/PBCudaRuntime.h>
 
@@ -51,7 +54,14 @@ public:
     SmartDeviceAllocation(size_t size = 0)
         : data_(size ? CudaRawMalloc(size) : nullptr)
         , size_(size)
-    {}
+    {
+        if (size_ > 0)
+        {
+            std::lock_guard<std::mutex> lm(m_);
+            bytesAllocated_ += size;
+            peakBytesAllocated_ = std::max(peakBytesAllocated_.load(), bytesAllocated_.load());
+        }
+    }
 
     SmartDeviceAllocation(const SmartDeviceAllocation&) = delete;
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
@@ -70,7 +80,15 @@ public:
         return *this;
     }
 
-    ~SmartDeviceAllocation() = default;
+    ~SmartDeviceAllocation()
+    {
+        if (size_ != 0)
+        {
+            std::lock_guard<std::mutex> lm(m_);
+            assert(bytesAllocated_ >= size_);
+            bytesAllocated_ -= size_;
+        }
+    }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
@@ -79,6 +97,16 @@ public:
     size_t size() const { return size_; }
     operator bool() const { return static_cast<bool>(data_); }
 
+    static size_t CurrentAllocatedBytes()
+    {
+        return bytesAllocated_;
+    }
+
+    static size_t PeekAllocatedBytes()
+    {
+        return peakBytesAllocated_;
+    }
+
 private:
     struct Deleter
     {
@@ -86,6 +114,10 @@ private:
     };
     std::unique_ptr<void, Deleter> data_;
     size_t size_;
+
+    static std::atomic<size_t> bytesAllocated_;
+    static std::atomic<size_t> peakBytesAllocated_;
+    static std::mutex m_;
 };
 
 

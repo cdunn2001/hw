@@ -42,7 +42,7 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
                                                          upperBuffer.GetBlockView(laneIdx),
                                                          baselineSubtracted);
 
-        statsView[laneIdx] = baselinerStats.ToBaselineStats();
+        statsView[laneIdx] = baselinerStats.GetState();
     }
 
     return std::move(out);
@@ -154,7 +154,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
     thrLow_ = FloatArray{sigmaThrL} * newSigma;
     thrHigh_ = FloatArray{sigmaThrH} * newSigma;
 
-    prevSigma_ = sigma;
+    prevSigma_ = newSigma;
 
     return newSigma;
 }

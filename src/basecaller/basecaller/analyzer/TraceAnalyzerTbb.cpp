@@ -67,7 +67,12 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
     const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
     for (unsigned int poolId = 0; poolId < numPools; ++poolId)
     {
-        bAnalyzer_.emplace_back(poolId, algoFactory_, staticAnalysis);
+        auto batchAnalyzer = BatchAnalyzer(poolId, algoFactory_);
+        if (staticAnalysis)
+        {
+            batchAnalyzer.SetupStaticModel(bcConfig.algorithm.staticDetModelConfig, movConfig);
+        }
+        bAnalyzer_.push_back(std::move(batchAnalyzer));
     }
 }
 
@@ -95,23 +100,40 @@ unsigned int TraceAnalyzerTbb::NumZmwPools() const
 }
 
 
-vector<std::unique_ptr<Data::BasecallBatch>>
+vector<std::unique_ptr<BatchAnalyzer::OutputType>>
 TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
 {
     const size_t n = input.size();
     assert(input.size() <= bAnalyzer_.size());
 
-    vector<std::unique_ptr<Data::BasecallBatch>> output(n);
+    vector<std::unique_ptr<BatchAnalyzer::OutputType>> output(n);
 
     tbb::task_scheduler_init init(NumWorkerThreads());
     // TODO: Customize optional parameters of parallel_for.
     tbb::parallel_for(size_t(0), n, [&](size_t i)
     {
         const auto pid = input[i].GetMeta().PoolId();
-        output[i] = std::make_unique<Data::BasecallBatch>(bAnalyzer_[pid](std::move(input[i])));
+        output[i] = std::make_unique<BatchAnalyzer::OutputType>(bAnalyzer_[pid](std::move(input[i])));
     });
 
     return output;
+}
+
+TraceAnalyzerTbb::~TraceAnalyzerTbb()
+{
+    if (NumWorkerThreads() != 1)
+    {
+        Logging::LogStream msg(PacBio::Logging::LogLevel::WARN);
+        msg << "\nNote: The following detailed report really only makes sense if \n"
+            "there is only a single worker thread.  Otherwise the time reported in a \n"
+            "given filter stage also includes the time waiting for other threads \n"
+            "that are already utilizing the gpu\n";
+    }
+    BatchAnalyzer::ReportPerformance();
+    PBLOG_INFO << "Peak GPU memory usage: " << Cuda::Memory::SmartDeviceAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+    PBLOG_INFO << "Peak (Managed) Host memory usage: " << Cuda::Memory::SmartHostAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+
+    BatchAnalyzer::Finalize();
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
