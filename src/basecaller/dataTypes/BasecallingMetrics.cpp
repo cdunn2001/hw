@@ -320,9 +320,11 @@ void BasecallingMetricsAccumulator<LaneWidth>::AddBaselineStats(
 {
     for (size_t zi = 0; zi < LaneWidth; ++zi)
     {
-        traceMetrics_.FrameBaselineM0DWS()[zi] += baselineStats.baselineStats.moment0[zi];
-        traceMetrics_.FrameBaselineM1DWS()[zi] += baselineStats.baselineStats.moment1[zi];
-        traceMetrics_.FrameBaselineM2DWS()[zi] += baselineStats.baselineStats.moment2[zi];
+        // FIXME: These were causing a segfault and mdsmith said he was refactoring
+        // this part of the code anyway so these are commented out for now.
+        //traceMetrics_.FrameBaselineM0DWS()[zi] += baselineStats.baselineStats.moment0[zi];
+        //traceMetrics_.FrameBaselineM1DWS()[zi] += baselineStats.baselineStats.moment1[zi];
+        //traceMetrics_.FrameBaselineM2DWS()[zi] += baselineStats.baselineStats.moment2[zi];
     }
 }
 

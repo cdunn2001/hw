@@ -3,6 +3,8 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/Pulse.h>
+#include <dataTypes/PulseBatch.h>
 #include <common/DataGenerators/BatchGenerator.h>
 #include <common/MongoConstants.h>
 
@@ -16,6 +18,7 @@
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
+#include <pacbio/smrtdata/NucleotideLabel.h>
 
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
@@ -192,7 +195,7 @@ private:
                               "Requested static pipeline analysis but input trace file is not simulated!");
         }
         else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
-                 basecallerConfig_.algorithm.dmeConfig.SimModel.useFixedBaselineParams == true)
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
         {
             setBlMeanAndCovar(inputTargetFile_,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
@@ -219,9 +222,9 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
-                auto baseCalls = (*analyzer_)(std::move(chunk));
+                auto output = (*analyzer_)(std::move(chunk));
                 numChunksAnalyzed++;
-                outputDataQueue_.Push(std::move(baseCalls));
+                outputDataQueue_.Push(std::move(output));
             }
             else
             {
@@ -328,26 +331,74 @@ private:
         }
     }
 
-    void WriteBasecallsChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& basecallChunk)
+    auto ConvertMongoPulsesToSequelBasecalls(const Pulse* pulses, uint32_t numPulses)
+    {
+        auto LabelConv = [](Data::Pulse::NucleotideLabel label) {
+            switch (label)
+            {
+                case Data::Pulse::NucleotideLabel::A:
+                    return PacBio::SmrtData::NucleotideLabel::A;
+                case Data::Pulse::NucleotideLabel::C:
+                    return PacBio::SmrtData::NucleotideLabel::C;
+                case Data::Pulse::NucleotideLabel::G:
+                    return PacBio::SmrtData::NucleotideLabel::G;
+                case Data::Pulse::NucleotideLabel::T:
+                    return PacBio::SmrtData::NucleotideLabel::T;
+                case Data::Pulse::NucleotideLabel::N:
+                    return PacBio::SmrtData::NucleotideLabel::N;
+                default:
+                    assert(label == Data::Pulse::NucleotideLabel::NONE);
+                    return PacBio::SmrtData::NucleotideLabel::NONE;
+            }
+        };
+
+        std::vector<Basecall> baseCalls(numPulses);
+        for (size_t pulseNum = 0; pulseNum < numPulses; ++pulseNum)
+        {
+            const auto& pulse = pulses[pulseNum];
+            auto& bc = baseCalls[pulseNum];
+
+            static constexpr int8_t qvDefault_ = 0;
+
+            auto label = LabelConv(pulse.Label());
+
+            // Populate pulse data
+            bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
+            bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
+            bc.GetPulse().Label(label).LabelQV(qvDefault_);
+            bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
+            bc.GetPulse().MergeQV(qvDefault_);
+
+            // Populate base data.
+            bc.Base(label).InsertionQV(qvDefault_);
+            bc.DeletionTag(PacBio::SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
+            bc.SubstitutionTag(PacBio::SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
+        }
+        return baseCalls;
+    }
+
+    void WriteOutputChunk(const std::vector<std::unique_ptr<BatchAnalyzer::OutputType>>& outputChunk)
     {
         static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
 
         if (!bazWriter_) return; // NoOp if we're not doing output
 
-        for (const auto& basecallBatchPtr : basecallChunk)
+        for (const auto& outputBatchPtr : outputChunk)
         {
-            const auto& basecallBatch = basecallBatchPtr->pulses;
-            const auto& metricsPtr = basecallBatchPtr->metrics;
-            for (uint32_t lane = 0; lane < basecallBatch.Dims().lanesPerBatch; ++lane)
+            const auto& pulseBatch = outputBatchPtr->pulses;
+            const auto& metricsPtr = outputBatchPtr->metrics;
+            for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
             {
-                const auto& laneCalls = basecallBatch.Basecalls().LaneView(lane);
+                const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
 
                 for (uint32_t zmw = 0; zmw < laneSize; zmw++)
                 {
                     if (currentZmwIndex_ % zmwOutputStrideFactor_ == 0)
                     {
-                        if (!bazWriter_->AddZmwSlice(laneCalls.ZmwData(zmw),
-                                                     laneCalls.size(zmw),
+                        const auto& baseCalls = ConvertMongoPulsesToSequelBasecalls(lanePulses.ZmwData(zmw),
+                                                                                    lanePulses.size(zmw));
+                        if (!bazWriter_->AddZmwSlice(baseCalls.data(),
+                                                     baseCalls.size(),
                                                      [&](MemoryBufferView<SpiderMetricBlock>& dest)
                                                      {
                                                         for (size_t i = 0; i < dest.size(); i++)
@@ -382,8 +433,8 @@ private:
         PacBio::Dev::QuietAutoTimer timer(0);
         while (!ExitRequested())
         {
-            std::vector<std::unique_ptr<BatchAnalyzer::OutputType>> basecallChunk;
-            if (outputDataQueue_.TryPop(basecallChunk))
+            std::vector<std::unique_ptr<BatchAnalyzer::OutputType>> outputChunk;
+            if (outputDataQueue_.TryPop(outputChunk))
             {
                 currentZmwIndex_ = 0;
                 Profiler::Mode mode = Profiler::Mode::REPORT;
@@ -391,7 +442,7 @@ private:
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                 auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
                 (void)writeChunkProfile;
-                WriteBasecallsChunk(basecallChunk);
+                WriteOutputChunk(outputChunk);
                 numChunksWritten_++;
             }
             else

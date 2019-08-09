@@ -204,7 +204,8 @@ GenerateModels(BaseSimConfig config)
 
 } // anonymous namespace
 
-TEST(TestHFMetricsFilter, Populated)
+// FIXME: This test disabled and will be reenabled after mdsmith's changes.
+TEST(TestHFMetricsFilter, DISABLED_Populated)
 {
     {
         Data::BasecallerAlgorithmConfig bcConfig{};

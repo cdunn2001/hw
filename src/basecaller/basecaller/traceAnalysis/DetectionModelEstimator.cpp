@@ -35,7 +35,7 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
     }
 
     if (dmeConfig.Method() == Data::BasecallerDmeConfig::MethodName::Fixed &&
-        dmeConfig.SimModel.useFixedBaselineParams == true)
+        dmeConfig.SimModel.useSimulatedBaselineParams == true)
     {
         fixedBaselineParams_ = true;
         fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;

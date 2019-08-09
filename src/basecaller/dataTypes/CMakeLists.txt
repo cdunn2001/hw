@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
     AnalogMode.h
-    BasecallBatch.h
-    BasecallBatch.cpp
     BasecallerConfig.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp
@@ -41,9 +39,9 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
-    TraceAnalysisMetrics.h
     StaticDetModelConfig.h
     StaticDetModelConfig.cpp
+    TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp
     TrainedCartParams.h
