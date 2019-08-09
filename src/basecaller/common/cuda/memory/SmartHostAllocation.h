@@ -114,6 +114,7 @@ public:
     }
 
     size_t Hash() const { return hash_; }
+    void Hash(size_t val) { hash_ = val; }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }

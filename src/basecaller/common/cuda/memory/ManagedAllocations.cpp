@@ -71,64 +71,129 @@ struct Manager
     {
         bool done = false;
         SmartHostAllocation ptr;
-        if (enabled_)
+        if (auto lock = AccessLock(accessState_, AccessLock::Weak))
         {
-            activeThreads++;
             auto& queue = hostAllocs_[size];
             done = queue.TryPop(ptr);
-            activeThreads--;
         }
-        if (done) return ptr;
-        else return SmartHostAllocation(size);
+        if (done)
+        {
+            ptr.Hash(marker.AsHash());
+            return ptr;
+        }
+        else return SmartHostAllocation(size, pinned, marker.AsHash());
     }
 
     SmartDeviceAllocation GetDeviceAlloc(size_t size, const AllocationMarker& marker)
     {
         bool done = false;
         SmartDeviceAllocation ptr;
-        if (enabled_)
+        if (auto lock = AccessLock(accessState_, AccessLock::Weak))
         {
-            activeThreads++;
             auto& queue = devAllocs_[size];
             done = queue.TryPop(ptr);
-            activeThreads--;
         }
-        if (done) return ptr;
-        else return SmartDeviceAllocation(size);
+        if (done)
+        {
+            ptr.Hash(marker.AsHash());
+            return ptr;
+        }
+        else return SmartDeviceAllocation(size, marker.AsHash());
     }
 
     void ReturnHost(SmartHostAllocation alloc)
     {
-        if (enabled_)
+        if (auto lock = AccessLock(accessState_, AccessLock::Weak))
         {
-            activeThreads++;
             auto& queue = hostAllocs_[alloc.size()];
             queue.Push(std::move(alloc));
-            activeThreads--;
         }
     }
 
     void ReturnDev(SmartDeviceAllocation alloc)
     {
-        if (enabled_)
+        if (auto lock = AccessLock(accessState_, AccessLock::Weak))
         {
-            activeThreads++;
             auto& queue = devAllocs_[alloc.size()];
             queue.Push(std::move(alloc));
-            activeThreads--;
         }
     }
 
-    void Enable() { enabled_ = true; }
+    void Enable() { accessState_.enabled_ = true; }
     void Disable()
     {
-        enabled_ = false;
-        while(activeThreads > 0) {}
+        auto lock = AccessLock(accessState_, AccessLock::Strong);
+        assert(lock);
+
         hostAllocs_.clear();
         devAllocs_.clear();
         hostStats_.clear();
         devStats_.clear();
     }
+
+    struct AccessState
+    {
+        std::atomic<size_t> activeThreads_{0};
+        std::atomic<bool> enabled_{false};
+    } accessState_;
+
+    class AccessLock
+    {
+    public:
+        enum Mode
+        {
+            Weak,
+            Strong
+        };
+        AccessLock(AccessState& state, Mode mode)
+            : state_(state)
+            , mode_(mode)
+        {
+            if (mode == Weak)
+            {
+                if (state_.enabled_)
+                {
+                    state_.activeThreads_++;
+                    // Another thread may have toggled enabled_ after we checked it
+                    // but before we published our activeThreads increment. If it
+                    // now reads as disabled, remove the effects of our increment.
+                    // The other thread will either have seen it be incremented and
+                    // is waiting for it to decrement, or it hasn't and is currently
+                    // we need decrement and get out of here so as to not clobber any
+                    // data.
+                    //
+                    // However if we get to this point and enabled is still true, then
+                    // we are guaranteed that when any other thread toggles enabled off
+                    // then it will have already seen our activeThreads update, and will
+                    // wait for that to return to zero before doing anything
+                    if (!state_.enabled_)
+                    {
+                        state_.activeThreads_--;
+                    } else {
+                        granted_ = true;
+                    }
+                }
+            } else {
+                state_.enabled_ = false;
+                while (state_.activeThreads_ > 0) {}
+                granted_ = true;
+            }
+        }
+
+        operator bool() { return granted_; }
+
+        ~AccessLock()
+        {
+            if (mode_ == Weak)
+              state_.activeThreads_--;
+        }
+
+    private:
+
+        AccessState& state_;
+        bool granted_ = false;
+        Mode mode_;
+    };
 
     ThreadSafeMap<size_t, ThreadSafeQueue<SmartHostAllocation>> hostAllocs_;
     ThreadSafeMap<size_t, ThreadSafeQueue<SmartDeviceAllocation>> devAllocs_;
@@ -136,8 +201,6 @@ struct Manager
     ThreadSafeMap<size_t, AllocStat> hostStats_;
     ThreadSafeMap<size_t, AllocStat> devStats_;
 
-    std::atomic<size_t> activeThreads{0};
-    std::atomic<bool> enabled_{false};
 };
 
 Manager& GetManager()
