@@ -63,7 +63,7 @@ namespace Data {
     {
         // Configuration parameters for a (temporary) fixed model DME, until we
         // can get a true model estimation filter in place.
-        ADD_PARAMETER(bool, useFixedBaselineParams, false);
+        ADD_PARAMETER(bool, useSimulatedBaselineParams, false);
         ADD_PARAMETER(float, baselineMean, 200.0f);
         ADD_PARAMETER(float, baselineVar, 33.0f);
     };

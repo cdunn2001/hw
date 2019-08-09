@@ -195,7 +195,7 @@ private:
                               "Requested static pipeline analysis but input trace file is not simulated!");
         }
         else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
-                 basecallerConfig_.algorithm.dmeConfig.SimModel.useFixedBaselineParams == true)
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
         {
             setBlMeanAndCovar(inputTargetFile_,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
