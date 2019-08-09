@@ -66,7 +66,7 @@ TEST(MaxFilterTest, GlobalMemoryMax)
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -110,7 +110,7 @@ TEST(MaxFilterTest, SharedMemoryMax)
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -154,7 +154,7 @@ TEST(MaxFilterTest, LocalMemoryMax)
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);

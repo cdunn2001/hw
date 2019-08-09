@@ -150,7 +150,7 @@ TEST_F(StreamMonitor, DeviceOnlyArray_ConcurrentAccess)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<int>, 1, 1)(1000000000ull, *arr);
@@ -171,7 +171,7 @@ TEST_F(StreamMonitor, DeviceOnlyArray_ConstConcurrentAccess)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<const int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<const int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<const int>, 1, 1)(1000000000ull, *arr);
@@ -192,7 +192,7 @@ TEST_F(StreamMonitor, DeviceOnlyArray_ConcurrentDelete)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<const int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<const int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<const int>, 1, 1)(1000000000ull, *arr);

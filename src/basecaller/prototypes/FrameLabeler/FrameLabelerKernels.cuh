@@ -96,7 +96,7 @@ template <typename T, size_t laneWidth>
 struct ViterbiDataHost
 {
     ViterbiDataHost(size_t numFrames, size_t numLanes, T val = T{})
-        : data_(numFrames*numLanes*laneWidth*Subframe::numStates, val)
+        : data_(SOURCE_MARKER(), numFrames*numLanes*laneWidth*Subframe::numStates, val)
         , numFrames_(numFrames)
     {}
 

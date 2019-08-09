@@ -32,6 +32,7 @@
 
 #include <pacbio/PBException.h>
 
+#include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
 #include <common/cuda/PBCudaRuntime.h>
@@ -107,8 +108,8 @@ class DeviceOnlyArray : private detail::DataManager
     }
 public:
     template <typename... Args>
-    DeviceOnlyArray(size_t count, Args&&... args)
-        : data_(count*sizeof(T))
+    DeviceOnlyArray(const AllocationMarker& marker, size_t count, Args&&... args)
+        : data_(GetManagedDeviceAllocation(count*sizeof(T), marker, false))
         , count_(count)
     {
         // Even if we are an array of const types, we need to be non-const during construction

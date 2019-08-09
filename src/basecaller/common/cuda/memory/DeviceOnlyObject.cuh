@@ -66,8 +66,8 @@ class DeviceOnlyObj : private detail::DataManager
 {
 public:
     template <typename... Args>
-    DeviceOnlyObj(Args&&... args)
-        : data_(1, std::forward<Args>(args)...)
+    DeviceOnlyObj(const AllocationMarker& marker, Args&&... args)
+        : data_(marker, 1, std::forward<Args>(args)...)
     {}
 
     DevicePtr<T> GetDevicePtr(const KernelLaunchInfo& info)

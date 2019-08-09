@@ -44,7 +44,7 @@ TEST(BaselineFilterTest, GlobalMemory)
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -123,8 +123,8 @@ TEST(BaselineFilterTest, SharedMemory)
     std::vector<DeviceOnlyArray<Filter>> filterRefData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -200,8 +200,8 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     std::vector<Filter> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,

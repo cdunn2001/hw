@@ -70,6 +70,7 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t l
     : Baseliner(poolId)
 {
     filter_ = std::make_unique<Filter>(
+        SOURCE_MARKER(),
         lanesPerPool,
         initVal);
 }

@@ -70,6 +70,7 @@ void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
     if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
 
     trans_ = std::make_unique<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>>(
+            SOURCE_MARKER(),
             CudaArray<Subframe::AnalogMeta, 4>{meta});
 
     framesPerChunk_ = framesPerChunk;
@@ -115,7 +116,7 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 }
 
 FrameLabeler::FrameLabeler()
-    : latent_(lanesPerPool_)
+    : latent_(SOURCE_MARKER(), lanesPerPool_)
     , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER(), true)
 {
     if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
