@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
     AnalogMode.h
-    BasecallBatch.h
-    BasecallBatch.cpp
     BasecallerConfig.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp

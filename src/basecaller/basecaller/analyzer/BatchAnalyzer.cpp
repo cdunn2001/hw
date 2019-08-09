@@ -44,7 +44,6 @@
 
 #include <common/cuda/PBCudaRuntime.h>
 
-#include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
