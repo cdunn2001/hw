@@ -286,10 +286,10 @@ BasecallingMetricsAccumulator<LaneWidth>::PkmidMean() const
 }
 
 template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::AddBaselineStats(
-        const InputBaselineStats& baselineStats)
+void BasecallingMetricsAccumulator<LaneWidth>::AddBaselinerStats(
+        const InputBaselineStats& baselinerStats)
 {
-    BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselineStats);
+    BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselinerStats);
     traceMetrics_.BaselinerStatAccum().Merge(reconstitutedStats.BaselineFramesStats());
     traceMetrics_.AutocorrAccum().Merge(reconstitutedStats.BaselineSubtractedStats());
 }

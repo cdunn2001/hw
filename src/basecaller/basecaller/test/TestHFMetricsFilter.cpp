@@ -160,19 +160,19 @@ GenerateBaselineStats(BaseSimConfig config)
     for (size_t lane = 0; lane < poolSize; ++lane)
     {
         ret.GetHostView()[lane] = bsa.GetState();
-        auto& baselineStats = ret.GetHostView()[lane];
+        auto& baselinerStats = ret.GetHostView()[lane];
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
-            baselineStats.rawBaselineSum[zmw] = 100;
-            baselineStats.baselineStats.moment0[zmw] = 98;
-            baselineStats.baselineStats.moment1[zmw] = 10;
-            baselineStats.baselineStats.moment2[zmw] = 100;
-            baselineStats.fullAutocorrState.moment1First[zmw] = 10;
-            baselineStats.fullAutocorrState.moment1First[zmw] = 20;
-            baselineStats.fullAutocorrState.moment2[zmw] = 120;
-            baselineStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
-            baselineStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
-            baselineStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
+            baselinerStats.rawBaselineSum[zmw] = 100;
+            baselinerStats.baselineStats.moment0[zmw] = 98;
+            baselinerStats.baselineStats.moment1[zmw] = 10;
+            baselinerStats.baselineStats.moment2[zmw] = 100;
+            baselinerStats.fullAutocorrState.moment1First[zmw] = 10;
+            baselinerStats.fullAutocorrState.moment1First[zmw] = 20;
+            baselinerStats.fullAutocorrState.moment2[zmw] = 120;
+            baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
+            baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
+            baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
         }
     }
     return ret;
@@ -237,7 +237,7 @@ TEST(TestHFMetricsFilter, Populated)
     BaseSimConfig config;
     config.pattern = "ACGTGG";
     config.ipd = 0;
-    const auto& baselineStats = GenerateBaselineStats(config);
+    const auto& baselinerStats = GenerateBaselineStats(config);
     const auto& models = GenerateModels(config);
 
     int blocks_tested = 0;
@@ -245,7 +245,8 @@ TEST(TestHFMetricsFilter, Populated)
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(config, batchIdx);
-        auto basecallingMetrics = hfMetrics(pulses, baselineStats, models);
+        hfMetrics.ProcessBaselinerStats(baselinerStats);
+        auto basecallingMetrics = hfMetrics.ProcessPulses(pulses, models);
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
@@ -383,12 +384,13 @@ TEST(TestHFMetricsFilter, Noop)
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
     BaseSimConfig config;
     config.ipd = 0;
-    const auto& baselineStats = GenerateBaselineStats(config);
+    const auto& baselinerStats = GenerateBaselineStats(config);
 
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(config, batchIdx);
-        auto basecallingMetrics = hfMetrics(pulses, baselineStats, models);
+        hfMetrics.ProcessBaselinerStats(baselinerStats);
+        auto basecallingMetrics = hfMetrics.ProcessPulses(pulses, models);
         ASSERT_FALSE(basecallingMetrics);
     }
     hfMetrics.Finalize();

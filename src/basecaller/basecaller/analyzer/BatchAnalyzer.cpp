@@ -147,6 +147,10 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     (void)baselineProfile;
     auto ctb = (*baseliner_)(std::move(tbatch));
 
+    // Process some HFMetrics before the container is moved away
+    // TODO: capture in profiler
+    (*hfMetrics_).ProcessBaselinerStats(ctb.Stats());
+
     auto frameProfile = profiler.CreateScopedProfiler(ProfileStages::FrameLabeling);
     (void) frameProfile;
     auto labels = (*frameLabeler_)(std::move(ctb), models_);
@@ -161,7 +165,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
 
     auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
     (void) metricsProfile;
-    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+    // Process the rest of the HFMetrics
+    auto basecallingMetrics = (*hfMetrics_).ProcessPulses(pulses, models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
@@ -177,6 +182,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
     // Includes computing baseline moments.
     assert(baseliner_);
     CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
+    (*hfMetrics_).ProcessBaselinerStats(ctb.Stats());
 
     if (!isModelInitialized_)
     {
@@ -224,7 +230,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }();
 
-    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+    auto basecallingMetrics = (*hfMetrics_).ProcessPulses(pulses, models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

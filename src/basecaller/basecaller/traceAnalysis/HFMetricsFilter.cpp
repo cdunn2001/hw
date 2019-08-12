@@ -125,21 +125,21 @@ void HostHFMetricsFilter::AddModels(const ModelsT& modelsBatch)
     }
 }
 
-void HostHFMetricsFilter::AddBaselineStats(const BaselineStatsT& baselineStats)
+void HostHFMetricsFilter::AddBaselinerStats(const BaselinerStatsT& baselineStats)
 {
     for (size_t l = 0; l < lanesPerBatch_; l++)
     {
         const auto& laneStats = baselineStats.GetHostView()[l];
-        metrics_[l].AddBaselineStats(laneStats);
+        metrics_[l].AddBaselinerStats(laneStats);
     }
 }
 
-std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
-HostHFMetricsFilter::Process(
-        const PulseBatchT& pulseBatch,
-        const BaselineStatsT& baselineStats,
-        const ModelsT& models)
+
+void HostHFMetricsFilter::ProcessBaselinerStats(
+        const BaselinerStatsT& baselinerStats)
 {
+    // Do setup if necessary. This block should be kept in the first
+    // HFMetrics.Process* method or even pulled out on its own.
     if (framesSeen_ == 0)
     {
         for (size_t l = 0; l < lanesPerBatch_; ++l)
@@ -147,9 +147,15 @@ HostHFMetricsFilter::Process(
             metrics_[l].Reset();
         }
     }
-
+    AddBaselinerStats(baselinerStats);
+}
+std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
+HostHFMetricsFilter::ProcessPulses(
+        const PulseBatchT& pulseBatch,
+        const ModelsT& models)
+{
+    assert(pulseBatch.GetMeta().PoolId() == poolId_);
     AddPulses(pulseBatch);
-    AddBaselineStats(baselineStats);
     AddModels(models);
     // TODO: AddPulseDetectionScore/Confidence
     // TODO: AddAutocorrelation

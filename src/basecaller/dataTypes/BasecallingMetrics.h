@@ -136,7 +136,7 @@ public:
 public:
     void Count(const InputPulses& pulses, uint32_t numFrames);
 
-    void AddBaselineStats(const InputBaselineStats& baselineStats);
+    void AddBaselinerStats(const InputBaselineStats& baselinerStats);
 
     void AddModels(const InputModelsT& models);
 

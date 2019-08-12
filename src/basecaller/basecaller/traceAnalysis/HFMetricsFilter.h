@@ -46,7 +46,7 @@ class HFMetricsFilter
 {
 public:     // Types
     using PulseBatchT = Data::PulseBatch;
-    using BaselineStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
+    using BaselinerStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
     using BasecallingMetricsAccumulatorT = Data::BasecallingMetricsAccumulator<laneSize>;
@@ -87,25 +87,15 @@ public: // Structors
     virtual ~HFMetricsFilter() = default;
 
 public: // Filter API
-    std::unique_ptr<BasecallingMetricsBatchT> operator()(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models)
-    {
-        assert(basecallBatch.GetMeta().PoolId() == poolId_);
-        return Process(basecallBatch, baselineStats, models);
-    }
+    virtual void ProcessBaselinerStats(const BaselinerStatsT& baselinerStats) = 0;
+    virtual std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+            const PulseBatchT& pulses,
+            const ModelsT& models) = 0;
 
 protected:    // Block management
     virtual void FinalizeBlock() = 0;
 
-private:    // Block management
-    virtual std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models) = 0;
-
-private: // State
+protected: // State
     uint32_t poolId_;
 
 protected: // State
@@ -125,19 +115,21 @@ public:
     HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
     ~HostHFMetricsFilter() override;
 
+public: // Filter API. All Process functions must be called!
+    void ProcessBaselinerStats(const BaselinerStatsT& baselineStats) override;
+
+    std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+            const PulseBatchT& pulseBatch,
+            const ModelsT& models) override;
+
 private: // Block management
     void FinalizeBlock() override;
 
     void AddPulses(const PulseBatchT& batch);
 
-    void AddBaselineStats(const BaselineStatsT& baselineStats);
+    void AddBaselinerStats(const BaselinerStatsT& baselinerStats);
 
     void AddModels(const ModelsT& models);
-
-    std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models) override;
 
 private: // members
     BasecallingMetricsAccumulatorBatchT metrics_;
@@ -155,16 +147,16 @@ public:
     NoHFMetricsFilter(NoHFMetricsFilter&&) = default;
     ~NoHFMetricsFilter() override;
 
-private:
-    uint32_t poolId_;
+public: // Filter API. All Process functions must be called!
+    void ProcessBaselinerStats(const BaselinerStatsT& baselinerStats) override
+    { (void)baselinerStats; };
 
-private:    // Block management
-    std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
+    std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+            const PulseBatchT& pulseBatch,
             const ModelsT& models) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 
+private:    // Block management
     void FinalizeBlock() override
     { };
 };
