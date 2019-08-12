@@ -33,16 +33,27 @@ namespace PacBio {
 namespace Cuda {
 namespace Memory {
 
+// Class used to give some sort of identity to an
+// allocation, for the purpose of allocation tracking.
+// It can be any string, though below a SOURCE_MARKER
+// macro is provided for convenience, which will
+// automatically create a marker of the form `file:line`
+//
+// Using the same marker for multiple allocations is fine
+// as long as they make sense to bundle together in reported
+// statistics
 class AllocationMarker
 {
 public:
-    explicit AllocationMarker(const std::string& mark)
+    AllocationMarker(const std::string& mark)
         : mark_(mark)
-    {
-        assert(AsHash() != 0);
-    }
+    {}
 
+    // Retrieve string representation
     const std::string& AsString() const { return mark_; }
+    // Retrieve hash representation.  Hash collisions are
+    // technically possible, though hopefully unlikely, so
+    // consumers of this function need to be aware of that
     size_t AsHash() const { return std::hash<std::string>{}(mark_); }
 
 private:
@@ -50,6 +61,12 @@ private:
 };
 
 #define SOURCE_MARKER() PacBio::Cuda::Memory::AllocationMarker(__FILE__  ":" + std::to_string(__LINE__))
+
+// These functions define the memory management API.  One might be tempted to bundle them together as
+// static functions in a class.  However there is obviously state associated with these routines,
+// and having static member variables opens us up to initialization ordering issues.  Instead these
+// are left as free functions, with the associated state handled by a singleton class in the
+// implementation file.
 
 SmartHostAllocation GetManagedHostAllocation(size_t size, bool pinned, const AllocationMarker& marker);
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle = false);

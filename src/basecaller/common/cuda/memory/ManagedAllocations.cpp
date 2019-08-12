@@ -47,257 +47,71 @@ namespace Memory {
 
 namespace {
 
-// This is not meant to be a very robust structure, and probably shouldn't be made
-// more public than this file.  In particular only the structure of the map itself
-// is thread safe.  Mutating references of the contained type is *not* thread safe
-// unless Val is itself a thread safe type.
-template <typename Key, typename Val>
-struct ThreadSafeMap
-{
-    Val& operator[] (const Key& key)
-    {
-        std::lock_guard<std::mutex> l(m_);
-        return data_[key];
-    }
-    void clear()
-    {
-        std::lock_guard<std::mutex> l(m_);
-        data_.clear();
-    }
-
-    auto begin()
-    {
-        std::lock_guard<std::mutex> l(m_);
-        return data_.begin();
-    }
-
-    auto end()
-    {
-        std::lock_guard<std::mutex> l(m_);
-        return data_.end();
-    }
-private:
-    std::map<Key, Val> data_;
-    std::mutex m_;
-};
-
-class AtomicString
-{
-public:
-    AtomicString(const std::string& dat = "")
-        : dat_(dat)
-    {}
-
-    AtomicString& operator=(const std::string& s)
-    {
-        std::lock_guard<std::mutex> l(m_);
-        dat_ = s;
-        return *this;
-    }
-
-    operator std::string() const
-    {
-        std::lock_guard<std::mutex> l(m_);
-        std::string ret = dat_;
-        return ret;
-    }
-private:
-    std::string dat_;
-    mutable std::mutex m_;
-};
-
+// Helper class to keep track of memory high water marks
 class AllocStat
 {
 public:
-    void Take(size_t size)
+    void AllocationSize(size_t size)
     {
-        std::lock_guard<std::mutex> l(m_);
-        current += size;
-        high = std::max(current.load(), high.load());
+        currentBytes_ += size;
+        peakBytes_ = std::max(currentBytes_, peakBytes_);
     }
-    void Return(size_t size)
+    void DeallocationSize(size_t size)
     {
-        std::lock_guard<std::mutex> l(m_);
-        current -= size;
+        currentBytes_ -= size;
     }
 
-    size_t High() const { return high; }
+    size_t PeakMemUsage() const { return peakBytes_; }
 private:
-    std::atomic<size_t> current{0};
-    std::atomic<size_t> high{0};
-    std::mutex m_;
+    size_t currentBytes_{0};
+    size_t peakBytes_{0};
 };
 
-template <typename T>
-struct Locker
+// Memory management class that allows re-use of memory allocations.
+// Really only suitable for regular allocations of a small variety of
+// sizes.  If you need frequent allocations of unpredictable size,
+// this class will probably behave poorly and you should use a real
+// general purpose allocator, which this class definitely is not!
+//
+// Note: This entire data structure is guarded by a single mutex,
+//       which obviously is not scalable if you increase the number
+//       of threads or the frequency of allocations.  With current
+//       mongo usage patterns this really isn't an issue, as
+//       individual batches take 10s of milli-seconds to complete,
+//       and individual allocations only take 10s of micro-seconds
+//       to be satisfied.  However if usage patterns change, this
+//       may have to be migrated to something that either does more
+//       fine grained locking, or is lock-free altogether.
+struct AllocationManager
 {
-    template <typename U>
-    friend class AccessLock;
-
-    using Payload = T;
-
-    void Enable() { enabled_ = true; }
-private:
-
-    operator T&() { return data_; }
-    T data_;
-    std::atomic<size_t> activeThreads_{0};
-    std::atomic<bool> enabled_{false};
-};
-
-template <typename T>
-class AccessLock
-{
-public:
-    enum Mode
+    // After calling this, calls to the `Return` functions will always
+    // store memory for future use.  Beware no memory is ever freed
+    // unless you call `EnablePooling`.  For certain usage patterns
+    // (e.g. irregular and unpredictable allocation sizes), use of
+    // AllocationManager will effectively look like a memory leak
+    void EnablePooling()
     {
-        Weak,
-        Strong
-    };
-    AccessLock(Locker<T>& lock, Mode mode)
-        : lock_(lock)
-        , payload_(lock)
-        , mode_(mode)
-    {
-        if (mode == Weak)
-        {
-            if (lock.enabled_)
-            {
-                lock.activeThreads_++;
-                // Another thread may have toggled enabled_ after we checked it
-                // but before we published our activeThreads increment. If it
-                // now reads as disabled, remove the effects of our increment.
-                // The other thread will either have seen it be incremented and
-                // is waiting for it to decrement, or it hasn't and is currently
-                // we need decrement and get out of here so as to not clobber any
-                // data.
-                //
-                // However if we get to this point and enabled is still true, then
-                // we are guaranteed that when any other thread toggles enabled off
-                // then it will have already seen our activeThreads update, and will
-                // wait for that to return to zero before doing anything
-                if (!lock.enabled_)
-                {
-                    lock.activeThreads_--;
-                } else {
-                    granted_ = true;
-                }
-            }
-        } else {
-            lock.enabled_ = false;
-            while (lock.activeThreads_ > 0) {}
-            granted_ = true;
-        }
+        std::lock_guard<std::mutex> lm(m_);
+        enabled_ = true;
     }
 
-    operator bool() { return granted_; }
-
-    ~AccessLock()
+    // After calling this you can still call the `Return` functions
+    // to give it memory, but the allocations will be immediately
+    // destroyed rather than stored.
+    void DisablePooling()
     {
-        if (mode_ == Weak)
-          lock_.activeThreads_--;
-    }
+        std::lock_guard<std::mutex> lm(m_);
+        enabled_ = false;
 
-    T* operator->() { assert(granted_); return &payload_; }
-
-private:
-
-    Locker<T>& lock_;
-    T& payload_;
-    bool granted_ = false;
-    Mode mode_;
-};
-
-
-struct Manager
-{
-    SmartHostAllocation GetHostAlloc(size_t size, bool pinned, const AllocationMarker& marker)
-    {
-        bool success = false;
-        SmartHostAllocation ptr;
-        if (size == 0) return ptr;
-        if (auto lock = AccessLock<Maps>(locker_, AccessLock<Maps>::Weak))
-        {
-            auto& queue = lock->hostAllocs_[size];
-            success = queue.TryPop(ptr);
-
-#ifndef NDEBUG
-            std::string loc = lock->allocMarkers_[marker.AsHash()];
-            // Nothing *really* breaks if we actually have a hash collision, except
-            // that the reports will lie to you (to some extent).  If this assert
-            // presents a burdon it can be re-evaluated
-            assert(loc == "" || loc == marker.AsString());
-#endif
-            lock->allocMarkers_[marker.AsHash()] = marker.AsString();
-            lock->hostStats_[marker.AsHash()].Take(size);
-        }
-        if (success)
-            ptr.Hash(marker.AsHash());
-        else
-            ptr = SmartHostAllocation(size, pinned, marker.AsHash());
-
-        return ptr;
-    }
-
-    SmartDeviceAllocation GetDeviceAlloc(size_t size, const AllocationMarker& marker)
-    {
-        bool success = false;
-        SmartDeviceAllocation ptr;
-        if (size == 0) return ptr;
-        if (auto lock = AccessLock<Maps>(locker_, AccessLock<Maps>::Weak))
-        {
-            auto& queue = lock->devAllocs_[size];
-            success = queue.TryPop(ptr);
-
-#ifndef NDEBUG
-            std::string loc = lock->allocMarkers_[marker.AsHash()];
-            // Nothing *really* breaks if we actually have a hash collision, except
-            // that the reports will lie to you (to some extent).  If this assert
-            // presents a burden it can be re-evaluated
-            assert(loc == "" || loc == marker.AsString());
-#endif
-            lock->allocMarkers_[marker.AsHash()] = marker.AsString();
-            lock->devStats_[marker.AsHash()].Take(size);
-        }
-        if (success)
-            ptr.Hash(marker.AsHash());
-        else
-            ptr = SmartDeviceAllocation(size, marker.AsHash());
-
-
-        return ptr;
-    }
-
-    void ReturnHost(SmartHostAllocation alloc)
-    {
-        if (auto lock = AccessLock<Maps>(locker_, AccessLock<Maps>::Weak))
-        {
-            lock->hostStats_[alloc.Hash()].Return(alloc.size());
-            lock->hostAllocs_[alloc.size()].Push(std::move(alloc));
-        }
-    }
-
-    void ReturnDev(SmartDeviceAllocation alloc)
-    {
-        if (auto lock = AccessLock<Maps>(locker_, AccessLock<Maps>::Weak))
-        {
-            lock->devStats_[alloc.Hash()].Return(alloc.size());
-            lock->devAllocs_[alloc.size()].Push(std::move(alloc));
-        }
-    }
-
-    void Enable() { locker_.Enable(); }
-    void Disable()
-    {
-        auto lock = AccessLock<Maps>(locker_, AccessLock<Maps>::Strong);
-        assert(lock);
-
+        // Generate reports, to see what sections of code are allocating
+        // the most memory
         auto Report = [&](auto& stats) {
+
             std::vector<std::pair<std::string, size_t>> highWaters;
             for (auto& kv : stats)
             {
-                const auto& name = std::string(lock->allocMarkers_[kv.first]);
-                const auto value = kv.second.High();
+                const auto& name = std::string(allocMarkers_[kv.first]);
+                const auto value = kv.second.PeakMemUsage();
                 highWaters.emplace_back(std::make_pair(name, value));
             }
 
@@ -327,43 +141,122 @@ struct Manager
         };
 
         PBLOG_INFO << "----GPU Memory high water mark report-----";
-        Report(lock->devStats_);
+        Report(devStats_);
         PBLOG_INFO << "------------------------------------------";
         PBLOG_INFO << "----Host Memory high water mark report----";
-        Report(lock->hostStats_);
+        Report(hostStats_);
         PBLOG_INFO << "------------------------------------------";
         PBLOG_INFO << "Note: Different filter stages consume memory at different times.  "
                    << "The sum of high water marks for individual high watermarks won't "
                    << "be quite the same as the high watermark for the application as a whole";
 
-        lock->hostAllocs_.clear();
-        lock->devAllocs_.clear();
-        lock->hostStats_.clear();
-        lock->devStats_.clear();
-        lock->allocMarkers_.clear();
+        // Delete all allocations (and statistics) we're currently holding on to.
+        hostAllocs_.clear();
+        devAllocs_.clear();
+        hostStats_.clear();
+        devStats_.clear();
+        allocMarkers_.clear();
     }
 
-    struct Maps
+    // TODO cleanup pinned
+    SmartHostAllocation GetHostAlloc(size_t size, bool pinned, const AllocationMarker& marker)
     {
-        ThreadSafeMap<size_t, ThreadSafeQueue<SmartHostAllocation>> hostAllocs_;
-        ThreadSafeMap<size_t, ThreadSafeQueue<SmartDeviceAllocation>> devAllocs_;
+        SmartHostAllocation ptr;
+        if (size == 0) return ptr;
 
-        ThreadSafeMap<size_t, AllocStat> hostStats_;
-        ThreadSafeMap<size_t, AllocStat> devStats_;
+        std::lock_guard<std::mutex> lm(m_);
+        auto& queue = hostAllocs_[size];
+        if (queue.size() > 0)
+        {
+            ptr = std::move(queue.front());
+            queue.pop_front();
+            ptr.Hash(marker.AsHash());
+        } else {
+            ptr = SmartHostAllocation(size, pinned, marker.AsHash());
+        }
 
-        ThreadSafeMap<size_t, AtomicString> allocMarkers_;
-    };
+#ifndef NDEBUG
+        std::string loc = allocMarkers_[marker.AsHash()];
+        // Nothing *really* breaks if we actually have a hash collision, except
+        // that the reports will lie to you (to some extent).  If this assert
+        // presents a burden it can be re-evaluated
+        assert(loc == "" || loc == marker.AsString());
+#endif
+        allocMarkers_[marker.AsHash()] = marker.AsString();
+        hostStats_[marker.AsHash()].AllocationSize(size);
 
-    Locker<Maps> locker_;
+        return ptr;
+    }
 
+    SmartDeviceAllocation GetDeviceAlloc(size_t size, const AllocationMarker& marker)
+    {
+        SmartDeviceAllocation ptr;
+        if (size == 0) return ptr;
+
+        std::lock_guard<std::mutex> lm(m_);
+        auto& queue = devAllocs_[size];
+        if (queue.size() > 0)
+        {
+            ptr = std::move(queue.front());
+            queue.pop_front();
+            ptr.Hash(marker.AsHash());
+        } else {
+            ptr = SmartDeviceAllocation(size, pinned, marker.AsHash());
+        }
+
+#ifndef NDEBUG
+        std::string loc = allocMarkers_[marker.AsHash()];
+        // Nothing *really* breaks if we actually have a hash collision, except
+        // that the reports will lie to you (to some extent).  If this assert
+        // presents a burden it can be re-evaluated
+        assert(loc == "" || loc == marker.AsString());
+#endif
+        allocMarkers_[marker.AsHash()] = marker.AsString();
+        devStats_[marker.AsHash()].AllocationSize(size);
+
+        return ptr;
+    }
+
+    void ReturnHost(SmartHostAllocation alloc)
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        if (!enabled_) return;
+        hostStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        hostAllocs_[alloc.size()].push_front(std::move(alloc));
+    }
+
+    void ReturnDev(SmartDeviceAllocation alloc)
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        if (!enabled_) return;
+        devStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        devAllocs_[alloc.size()].push_front(std::move(alloc));
+    }
+private:
+
+    std::map<size_t, std::deque<SmartHostAllocation>> hostAllocs_;
+    std::map<size_t, std::deque<SmartDeviceAllocation>> devAllocs_;
+
+    std::map<size_t, AllocStat> hostStats_;
+    std::map<size_t, AllocStat> devStats_;
+
+    std::map<size_t, std::string> allocMarkers_;
+
+    std::mutex m_;
+    bool enabled_ = false;
 };
 
-Manager& GetManager()
+// Singleton access function.  Static variables in a function have
+// a well defined and sane initialization guarantee, while actual
+// global variables do not (since the ordering of initialization
+// between different translation units is indeterminate)
+AllocationManager& GetManager()
 {
-    static Manager manager;
+    static AllocationManager manager;
     return manager;
 };
-
 
 }
 
@@ -399,13 +292,19 @@ void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
 
 void EnablePooling()
 {
-    GetManager().Enable();
+    GetManager().EnablePooling();
 }
 
 void DisablePooling()
 {
+    // I don't think this report has much value for normal runs,
+    // but may be useful if profiling or diagnosing performance
+    // issues, in which case we're probably using RelWithDebInfo
+    // and this will turn on.
+#ifdnef NDEBUG
     Profiler::FinalReport();
-    GetManager().Disable();
+#endif
+    GetManager().DisablePooling();
 }
 
 }}} // ::PacBio::Cuda::Memory
