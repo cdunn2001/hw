@@ -31,6 +31,5 @@ namespace Memory {
 
 std::atomic<size_t> SmartDeviceAllocation::bytesAllocated_{0};
 std::atomic<size_t> SmartDeviceAllocation::peakBytesAllocated_{0};
-std::mutex SmartDeviceAllocation::m_;
 
 }}}
