@@ -36,6 +36,11 @@
 #include <pacbio/ipc/ThreadSafeQueue.h>
 #include <pacbio/logging/Logger.h>
 
+#include <pacbio/dev/profile/ScopedProfilerChain.h>
+
+SMART_ENUM(Spots, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
+using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<Spots>;
+
 namespace PacBio {
 namespace Cuda {
 namespace Memory {
@@ -364,23 +369,31 @@ Manager& GetManager()
 
 SmartHostAllocation GetManagedHostAllocation(size_t size, bool pinned, const AllocationMarker& marker)
 {
+    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    auto tmp = prof.CreateScopedProfiler(Spots::HostAllocate);
     return GetManager().GetHostAlloc(size, pinned, marker);
 }
 
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle)
 {
+    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    auto tmp = prof.CreateScopedProfiler(Spots::GpuAllocate);
     return GetManager().GetDeviceAlloc(size, marker);
 }
 
 void ReturnManagedHostAllocation(SmartHostAllocation alloc)
 {
     if (alloc.size() == 0) return;
+    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    auto tmp = prof.CreateScopedProfiler(Spots::HostDeallocate);
     GetManager().ReturnHost(std::move(alloc));
 }
 
 void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
 {
     if (alloc.size() == 0) return;
+    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    auto tmp = prof.CreateScopedProfiler(Spots::GpuDeallocate);
     GetManager().ReturnDev(std::move(alloc));
 }
 
@@ -391,6 +404,7 @@ void EnablePooling()
 
 void DisablePooling()
 {
+    Profiler::FinalReport();
     GetManager().Disable();
 }
 
