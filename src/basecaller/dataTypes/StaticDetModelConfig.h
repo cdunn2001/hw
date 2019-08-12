@@ -22,34 +22,49 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_
-#define PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_
+#ifndef mongo_datatypes_StaticDetectionModel_h
+#define mongo_datatypes_StaticDetectionModel_h
 
-#include "FrameLabeler.h"
+#include <common/MongoConstants.h>
+#include "MovieConfig.h"
+
+#include <pacbio/process/ConfigurationBase.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostNoOpFrameLabeler : public FrameLabeler
+class StaticDetModelConfig : public PacBio::Process::ConfigurationObject
 {
-    using Parent = FrameLabeler;
 public:
-    static void Configure(int lanesPerPool, int framesPerChunk);
-    static void Finalize();
+    ADD_PARAMETER(float, baselineMean, 0);
+    ADD_PARAMETER(float, baselineVariance, 33.0f);
 
 public:
-    HostNoOpFrameLabeler(uint32_t poolId);
-    ~HostNoOpFrameLabeler() override;
+    struct AnalogMode
+    {
+        float mean;
+        float var;
+    };
 
-private:    // Customizable implementation
-    Data::LabelsBatch Process(Data::CameraTraceBatch trace,
-                              const PoolModelParameters& models) override;
+    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
+    {
+        std::array<AnalogMode, numAnalogs> analogs;
+        const auto refSignal = movieConfig.refSnr * sqrt(baselineVariance);
+        for (size_t i = 0; i < analogs.size(); i++)
+        {
+            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
+            const auto var = baselineVariance + mean + pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
+
+            analogs[i].mean = mean;
+            analogs[i].var = var;
+        }
+
+        return analogs;
+    }
 };
 
+}}} // PacBio::Mongo::Data
 
-}}} // PacBio::Mongo::Basecaller
-
-#endif // PACBIO_MONGO_BASECALLER_HOST_NOOP_FRAME_LABELER_H_
+#endif // mongo_datatypes_StaticDetectionModel_h

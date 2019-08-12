@@ -44,7 +44,6 @@
 
 #include <common/cuda/PBCudaRuntime.h>
 
-#include <dataTypes/BasecallBatch.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
@@ -66,14 +65,10 @@ SMART_ENUM(
     Baseline,
     FrameLabeling,
     PulseAccumulating,
-    SequelConv,
     Metrics
 );
 
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
-
-std::unique_ptr<Data::BasecallBatchFactory> BatchAnalyzer::batchFactory_;
-uint16_t BatchAnalyzer::maxCallsPerZmwChunk_;
 
 void BatchAnalyzer::ReportPerformance()
 {
@@ -84,29 +79,9 @@ BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 
-// static
-void BatchAnalyzer::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                              const Data::MovieConfig& movConfig)
-{
-    BatchDimensions dims;
-    dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
-    dims.laneWidth = laneSize;
-    dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
-
-    batchFactory_ = std::make_unique<BasecallBatchFactory>(
-        bcConfig.pulseAccumConfig.maxCallsPerZmw,
-        dims,
-        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-        true);
-
-    maxCallsPerZmwChunk_ = bcConfig.pulseAccumConfig.maxCallsPerZmw;
-}
-
-
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis)
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
     , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, true)
-    , staticAnalysis_(staticAnalysis)
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
@@ -115,31 +90,30 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool s
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
     hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
     // TODO: Create other algorithm components.
+}
+
+void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,
+                                     const PacBio::Mongo::Data::MovieConfig& movieConfig)
+{
+    staticAnalysis_ = true;
 
     // Not running DME, need to fake our model
-    if (staticAnalysis_)
+    Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
+
+    model.BaselineMode().SetAllMeans(staticDetModelConfig.baselineMean);
+    model.BaselineMode().SetAllVars(staticDetModelConfig.baselineVariance);
+
+    auto analogs = staticDetModelConfig.SetupAnalogs(movieConfig);
+    for (size_t i = 0; i < analogs.size(); i++)
     {
-        Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
-        model.AnalogMode(0).SetAllMeans(227.13);
-        model.AnalogMode(1).SetAllMeans(154.45);
-        model.AnalogMode(2).SetAllMeans(97.67);
-        model.AnalogMode(3).SetAllMeans(61.32);
+        model.AnalogMode(i).SetAllMeans(analogs[i].mean);
+        model.AnalogMode(i).SetAllVars(analogs[i].var);
+    }
 
-        model.AnalogMode(0).SetAllVars(776);
-        model.AnalogMode(1).SetAllVars(426);
-        model.AnalogMode(2).SetAllVars(226);
-        model.AnalogMode(3).SetAllVars(132);
-
-        // Need a new trace file to target, these values come from a file with
-        // zero baseline mean
-        model.BaselineMode().SetAllMeans(0);
-        model.BaselineMode().SetAllVars(33);
-
-        auto view = models_.GetHostView();
-        for (size_t i = 0; i < view.Size(); ++i)
-        {
-            view[i] = model;
-        }
+    auto view = models_.GetHostView();
+    for (size_t i = 0; i < view.Size(); ++i)
+    {
+        view[i] = model;
     }
 }
 
@@ -153,71 +127,6 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
         return StandardPipeline(std::move(tbatch));
     }
 }
-
-namespace {
-
-// Temporary helper function for converting from the mongo Pulse data type to the old Sequel
-// Base data type.  Will eventually be replaed by a proper pulse-to-base stage, (and presumably
-// Conversion will be done to a new mongo-specific Base type
-void ConvertPulsesToBases(const Data::PulseBatch& pulses, Data::BasecallBatch& bases)
-{
-    auto LabelConv = [](Data::Pulse::NucleotideLabel label) {
-        switch (label)
-        {
-        case Data::Pulse::NucleotideLabel::A:
-            return SmrtData::NucleotideLabel::A;
-        case Data::Pulse::NucleotideLabel::C:
-            return SmrtData::NucleotideLabel::C;
-        case Data::Pulse::NucleotideLabel::G:
-            return SmrtData::NucleotideLabel::G;
-        case Data::Pulse::NucleotideLabel::T:
-            return SmrtData::NucleotideLabel::T;
-        case Data::Pulse::NucleotideLabel::N:
-            return SmrtData::NucleotideLabel::N;
-        default:
-            assert(label == Data::Pulse::NucleotideLabel::NONE);
-            return SmrtData::NucleotideLabel::NONE;
-        }
-    };
-    for (size_t lane = 0; lane < pulses.Dims().lanesPerBatch; ++lane)
-    {
-        auto baseView = bases.Basecalls().LaneView(lane);
-        auto pulsesView = pulses.Pulses().LaneView(lane);
-
-        baseView.Reset();
-        for (size_t zmw = 0; zmw < laneSize; ++zmw)
-        {
-            auto numBases = pulsesView.size(zmw);
-            for (size_t b = 0; b < numBases; ++b)
-            {
-                const auto& pulse = pulsesView(zmw, b);
-                PacBio::SmrtData::Basecall bc;
-
-                static constexpr int8_t qvDefault_ = 0;
-
-                auto label = LabelConv(pulse.Label());
-
-                // Populate pulse data
-                bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
-                bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
-                bc.GetPulse().Label(label).LabelQV(qvDefault_);
-                bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
-                bc.GetPulse().MergeQV(qvDefault_);
-
-                // Populate base data.
-                bc.Base(label).InsertionQV(qvDefault_);
-                bc.DeletionTag(SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
-                bc.SubstitutionTag(SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
-
-                baseView.push_back(zmw, bc);
-            }
-        }
-    }
-
-}
-
-}   // anonymous namespace
-
 
 BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -250,20 +159,14 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     (void)download;
     pulses.Pulses().LaneView(0);
 
-    auto convProfile = profiler.CreateScopedProfiler(ProfileStages::SequelConv);
-    (void) convProfile;
-    auto bases = batchFactory_->NewBatch(tbatch.Metadata());
-    ConvertPulsesToBases(pulses, bases);
-
-    nextFrameId_ = tbatch.Metadata().LastFrame();
-
     auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
     (void) metricsProfile;
     auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
 
-    return BatchResult(std::move(bases), std::move(basecallingMetrics));
-}
+    nextFrameId_ = tbatch.Metadata().LastFrame();
 
+    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
+}
 
 BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
 {
@@ -299,33 +202,33 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }
 
-    assert(batchFactory_);
-    auto basecalls = batchFactory_->NewBatch(tbatch.Metadata());
+    auto pulses = [&ctb, this]() {
+        // When detection model is available, ...
+        if (isModelInitialized_)
+        {
+            // Classify frames.
+            assert(frameLabeler_);
+            auto labels = (*frameLabeler_)(std::move(ctb), models_);
 
-    // When detection model is available, ...
-    if (isModelInitialized_)
-    {
-        // Classify frames.
-        assert(frameLabeler_);
-        auto labels = (*frameLabeler_)(std::move(ctb), models_);
+            // Generate pulses with metrics.
+            assert(pulseAccumulator_);
+            auto pulses = (*pulseAccumulator_)(std::move(labels));
 
-        // Generate pulses with metrics.
-        assert(pulseAccumulator_);
-        auto pulses = (*pulseAccumulator_)(std::move(labels));
+            // TODO: Compute block-level metrics.
 
-        // TODO: Use a pulse-to-base strategy when it's available.
-        ConvertPulsesToBases(pulses, basecalls);
+            return pulses;
+        }
+        else
+        {
+            return pulseAccumulator_->EmptyPulseBatch(ctb.Metadata());
+        }
+    }();
 
-        // TODO: Compute block-level metrics.
-    }
+    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
-    // TODO (mds 20190724) uncomment when pulseBatch is produced in this pipeline
-    //auto basecallingMetrics = (*hfMetrics_)(pulsecallsBatch, ctb.Stats(), models_);
-
-    // TODO (mds 20190802) uncomment when metrics are uncommented above
-    return BatchResult(std::move(basecalls)/*, std::move(basecallingMetrics)*/);
+    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

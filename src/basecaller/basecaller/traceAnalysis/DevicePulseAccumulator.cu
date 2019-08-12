@@ -31,6 +31,7 @@
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchVectors.cuh>
+#include <dataTypes/MovieConfig.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
@@ -281,17 +282,18 @@ template <typename LabelManager>
 std::unique_ptr<DeviceOnlyObj<LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
-void DevicePulseAccumulator<LabelManager>::Configure(size_t maxCallsPerZmw)
+void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
 {
     constexpr bool hostExecution = false;
     PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
 
     CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
-    // TODO once ready, this needs to be plumbed in from the movie configuration.
-    analogMap[0] = Data::Pulse::NucleotideLabel::A;
-    analogMap[1] = Data::Pulse::NucleotideLabel::C;
-    analogMap[2] = Data::Pulse::NucleotideLabel::G;
-    analogMap[3] = Data::Pulse::NucleotideLabel::T;
+
+    for(size_t i = 0; i < analogMap.size(); i++)
+    {
+        analogMap[i] = Data::mapToNucleotideLabel(movieConfig.analogs[i].baseLabel);
+    }
+
     AccumImpl::Configure(analogMap);
 }
 

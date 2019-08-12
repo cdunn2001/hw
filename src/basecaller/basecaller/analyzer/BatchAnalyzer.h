@@ -60,17 +60,16 @@ public:     // Static functions
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
     static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                          const Data::MovieConfig& movConfig);
+                          const Data::MovieConfig& movConfig)
+    {}
 
     static void Finalize()
-    {
-        batchFactory_.release();
-    }
+    {}
 
     static void ReportPerformance();
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac, bool staticAnalysis);
+    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&);
@@ -87,6 +86,9 @@ public:
 
     OutputType StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
     OutputType StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+
+    void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
+                          const Data::MovieConfig& movieConfig);
 
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
@@ -107,9 +109,6 @@ private:
     // even implemented, but may remain desirable in the future when tweaking/profiling
     // steady-state basecalling performance
     bool staticAnalysis_;
-
-    static std::unique_ptr<Data::BasecallBatchFactory> batchFactory_;
-    static uint16_t maxCallsPerZmwChunk_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -75,7 +75,6 @@ struct BaseSimConfig
 
 Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
 {
-    // TODO: replace with PulseBatch
     Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
                                               Data::GetPrimaryConfig().zmwsPerLane,
                                               Data::GetPrimaryConfig().lanesPerPool,
@@ -343,11 +342,11 @@ TEST(TestHFMetricsFilter, Populated)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
+                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
                     // TODO: These aren't expected to be "correct", and should
                     // be replaced when these metrics are expected to be
                     // correct. The values themselves may need to be helped
                     // with some simulation in the above functions
-                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
                     EXPECT_EQ(0, mb.pulseDetectionScore[z]);
                     EXPECT_EQ(0, mb.pixelChecksum[z]);
                 }

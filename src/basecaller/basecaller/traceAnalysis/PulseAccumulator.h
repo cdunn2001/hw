@@ -50,6 +50,7 @@ public:     // Static functions
 protected: // static members
     static std::unique_ptr<Data::PulseBatchFactory> batchFactory_;
 
+
 public:
     PulseAccumulator(uint32_t poolId);
     virtual ~PulseAccumulator() = default;
@@ -62,6 +63,19 @@ public:
         // TODO
         assert(labels.GetMeta().PoolId() == poolId_);
         return Process(std::move(labels));
+    }
+
+    auto EmptyPulseBatch(const Data::BatchMetadata& metadata)
+    {
+        auto ret = batchFactory_->NewBatch(metadata);
+
+        for (size_t laneIdx = 0; laneIdx < ret.Dims().lanesPerBatch; ++laneIdx)
+        {
+            auto lanePulses = ret.Pulses().LaneView(laneIdx);
+            lanePulses.Reset();
+        }
+
+        return ret;
     }
 
 private:    // Data
