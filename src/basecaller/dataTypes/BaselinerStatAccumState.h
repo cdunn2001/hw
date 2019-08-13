@@ -28,6 +28,16 @@ struct BaselinerStatAccumState
 
     // Sum of raw baseline frames (i.e., prior to baseline subtraction).
     IntArray rawBaselineSum;
+
+    StatAccumState::FloatArray NumBaselineFrames() const
+    {
+        return baselineStats.moment0;
+    }
+
+    StatAccumState::FloatArray TotalFrames() const
+    {
+        return fullAutocorrState.basicStats.moment0;
+    }
 };
 
 }}}     // namesapce PacBio::Mongo::Data

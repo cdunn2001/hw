@@ -83,6 +83,7 @@ struct __align__(128) LaneModelParameters
 #ifdef __CUDA_ARCH__
     __device__ LaneModelParameters& ParallelAssign(const LaneModelParameters& other)
     {
+        //baselineWeight_.ParallelAssign(other.baselineWeight_);
         baseline_.ParallelAssign(other.baseline_);
         for (int i = 0; i < numAnalogs; ++i)
         {
@@ -103,6 +104,16 @@ struct __align__(128) LaneModelParameters
         return baseline_;
     }
 
+    CUDA_ENABLED const Cuda::Utility::CudaArray<T, laneWidth>& BaselineWeight() const
+    {
+        return baselineWeight_;
+    }
+
+    CUDA_ENABLED Cuda::Utility::CudaArray<T, laneWidth>& BaselineWeight()
+    {
+        return baselineWeight_;
+    }
+
     CUDA_ENABLED const LaneAnalogMode<T, laneWidth>& AnalogMode(unsigned i) const
     {
         return analogs_[i];
@@ -114,11 +125,12 @@ struct __align__(128) LaneModelParameters
 
  private:
     Cuda::Utility::CudaArray<LaneAnalogMode<T, laneWidth>, numAnalogs> analogs_;
+    Cuda::Utility::CudaArray<T, laneWidth> baselineWeight_;
     LaneAnalogMode<T, laneWidth> baseline_;
 };
 
-static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*10, "Unexpected size");
-static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*10, "Unexpected size");
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*(10+1), "Unexpected size");
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*(10+1), "Unexpected size");
 
 /// A bundle of model parameters for a normal mixture representing the
 /// baselined trace data for a lane of ZMWs.
