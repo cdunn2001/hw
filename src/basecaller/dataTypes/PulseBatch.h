@@ -46,11 +46,10 @@ public:     // Structors & assignment operators
                const BatchDimensions& batchDims,
                const BatchMetadata& batchMetadata,
                Cuda::Memory::SyncDirection syncDir,
-               bool pinned,
                const Cuda::Memory::AllocationMarker& marker)
         : dims_ (batchDims)
         , metaData_(batchMetadata)
-        , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, marker)
+        , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, marker)
     {}
 
     PulseBatch(const PulseBatch&) = delete;
@@ -82,12 +81,10 @@ class PulseBatchFactory
 public:
     PulseBatchFactory(const size_t maxCallsPerZmw,
                       const BatchDimensions& batchDims,
-                      Cuda::Memory::SyncDirection syncDir,
-                      bool pinned)
+                      Cuda::Memory::SyncDirection syncDir)
         : maxCallsPerZmw_(maxCallsPerZmw)
         , batchDims_(batchDims)
         , syncDir_(syncDir)
-        , pinned_(pinned)
     {}
 
     PulseBatch NewBatch(const BatchMetadata& batchMetadata) const
@@ -97,7 +94,6 @@ public:
                 batchDims_,
                 batchMetadata,
                 syncDir_,
-                pinned_,
                 SOURCE_MARKER());
     }
 
@@ -105,7 +101,6 @@ private:
     size_t maxCallsPerZmw_;
     BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

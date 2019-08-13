@@ -84,25 +84,137 @@ private:
 //       fine grained locking, or is lock-free altogether.
 struct AllocationManager
 {
+    AllocationManager() = default;
+
+    AllocationManager(const AllocationManager&) = delete;
+    AllocationManager(AllocationManager&&) = delete;
+    AllocationManager& operator=(const AllocationManager&) = delete;
+    AllocationManager& operator=(AllocationManager&&) = delete;
+
+    ~AllocationManager()
+    {
+        if (enabled_)
+        {
+            PBLOG_ERROR << "Destroying AllocationManager while allocations are active.  "
+                        << "This indicates not all memory was freed before static teardown "
+                        << "which usually causes an error, as the cuda runtime may no longer "
+                        << "exit.  We're probably about to die gracelessly and now you know why!";
+
+            FlushPools();
+        }
+    }
+
     // After calling this, calls to the `Return` functions will always
-    // store memory for future use.  Beware no memory is ever freed
-    // unless you call `EnablePooling`.  For certain usage patterns
+    // store memory for future use, and host allocations will use
+    // pinned memory.  Beware no memory is ever freed unless
+    // you call `EnablePooling`.  For certain usage patterns
     // (e.g. irregular and unpredictable allocation sizes), use of
     // AllocationManager will effectively look like a memory leak
-    void EnablePooling()
+    void EnablePerformanceMode()
     {
         std::lock_guard<std::mutex> lm(m_);
         enabled_ = true;
+        pinned_ = true;
     }
 
-    // After calling this you can still call the `Return` functions
-    // to give it memory, but the allocations will be immediately
-    // destroyed rather than stored.
-    void DisablePooling()
+    // After calling this, calls to the `Return` functions
+    // will immediately destroy all allocations it receives
+    void DisablePerformanceMode()
     {
         std::lock_guard<std::mutex> lm(m_);
         enabled_ = false;
+        pinned_ = false;
+        FlushPoolsImpl();
+    }
 
+    SmartHostAllocation GetHostAlloc(size_t size, const AllocationMarker& marker)
+    {
+        SmartHostAllocation ptr;
+        if (size == 0) return ptr;
+
+        std::lock_guard<std::mutex> lm(m_);
+        auto& queue = hostAllocs_[size];
+        if (queue.size() > 0)
+        {
+            ptr = std::move(queue.front());
+            queue.pop_front();
+            ptr.Hash(marker.AsHash());
+        } else {
+            ptr = SmartHostAllocation(size, pinned_, marker.AsHash());
+        }
+
+#ifndef NDEBUG
+        std::string loc = allocMarkers_[marker.AsHash()];
+        // Nothing *really* breaks if we actually have a hash collision, except
+        // that the reports will lie to you (to some extent).  If this assert
+        // presents a burden it can be re-evaluated
+        assert(loc == "" || loc == marker.AsString());
+#endif
+        allocMarkers_[marker.AsHash()] = marker.AsString();
+        hostStats_[marker.AsHash()].AllocationSize(size);
+
+        return ptr;
+    }
+
+    SmartDeviceAllocation GetDeviceAlloc(size_t size, const AllocationMarker& marker)
+    {
+        SmartDeviceAllocation ptr;
+        if (size == 0) return ptr;
+
+        std::lock_guard<std::mutex> lm(m_);
+        auto& queue = devAllocs_[size];
+        if (queue.size() > 0)
+        {
+            ptr = std::move(queue.front());
+            queue.pop_front();
+            ptr.Hash(marker.AsHash());
+        } else {
+            ptr = SmartDeviceAllocation(size, marker.AsHash());
+        }
+
+#ifndef NDEBUG
+        std::string loc = allocMarkers_[marker.AsHash()];
+        // Nothing *really* breaks if we actually have a hash collision, except
+        // that the reports will lie to you (to some extent).  If this assert
+        // presents a burden it can be re-evaluated
+        assert(loc == "" || loc == marker.AsString());
+#endif
+        allocMarkers_[marker.AsHash()] = marker.AsString();
+        devStats_[marker.AsHash()].AllocationSize(size);
+
+        return ptr;
+    }
+
+    void ReturnHost(SmartHostAllocation alloc)
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        if (!enabled_ || alloc.Pinned() != pinned_) return;
+        if (alloc.Hash() != 0)
+            hostStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        hostAllocs_[alloc.size()].push_front(std::move(alloc));
+    }
+
+    void ReturnDev(SmartDeviceAllocation alloc)
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        if (!enabled_) return;
+        devStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        devAllocs_[alloc.size()].push_front(std::move(alloc));
+    }
+
+    void FlushPools()
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        FlushPoolsImpl();
+    }
+
+private:
+    // Clears out all allocation pools (and generates a usage report)
+    void FlushPoolsImpl()
+    {
         // Generate reports, to see what sections of code are allocating
         // the most memory
         auto Report = [&](auto& stats) {
@@ -158,83 +270,6 @@ struct AllocationManager
         allocMarkers_.clear();
     }
 
-    // TODO cleanup pinned
-    SmartHostAllocation GetHostAlloc(size_t size, bool pinned, const AllocationMarker& marker)
-    {
-        SmartHostAllocation ptr;
-        if (size == 0) return ptr;
-
-        std::lock_guard<std::mutex> lm(m_);
-        auto& queue = hostAllocs_[size];
-        if (queue.size() > 0)
-        {
-            ptr = std::move(queue.front());
-            queue.pop_front();
-            ptr.Hash(marker.AsHash());
-        } else {
-            ptr = SmartHostAllocation(size, pinned, marker.AsHash());
-        }
-
-#ifndef NDEBUG
-        std::string loc = allocMarkers_[marker.AsHash()];
-        // Nothing *really* breaks if we actually have a hash collision, except
-        // that the reports will lie to you (to some extent).  If this assert
-        // presents a burden it can be re-evaluated
-        assert(loc == "" || loc == marker.AsString());
-#endif
-        allocMarkers_[marker.AsHash()] = marker.AsString();
-        hostStats_[marker.AsHash()].AllocationSize(size);
-
-        return ptr;
-    }
-
-    SmartDeviceAllocation GetDeviceAlloc(size_t size, const AllocationMarker& marker)
-    {
-        SmartDeviceAllocation ptr;
-        if (size == 0) return ptr;
-
-        std::lock_guard<std::mutex> lm(m_);
-        auto& queue = devAllocs_[size];
-        if (queue.size() > 0)
-        {
-            ptr = std::move(queue.front());
-            queue.pop_front();
-            ptr.Hash(marker.AsHash());
-        } else {
-            ptr = SmartDeviceAllocation(size, pinned, marker.AsHash());
-        }
-
-#ifndef NDEBUG
-        std::string loc = allocMarkers_[marker.AsHash()];
-        // Nothing *really* breaks if we actually have a hash collision, except
-        // that the reports will lie to you (to some extent).  If this assert
-        // presents a burden it can be re-evaluated
-        assert(loc == "" || loc == marker.AsString());
-#endif
-        allocMarkers_[marker.AsHash()] = marker.AsString();
-        devStats_[marker.AsHash()].AllocationSize(size);
-
-        return ptr;
-    }
-
-    void ReturnHost(SmartHostAllocation alloc)
-    {
-        std::lock_guard<std::mutex> lm(m_);
-
-        if (!enabled_) return;
-        hostStats_[alloc.Hash()].DeallocationSize(alloc.size());
-        hostAllocs_[alloc.size()].push_front(std::move(alloc));
-    }
-
-    void ReturnDev(SmartDeviceAllocation alloc)
-    {
-        std::lock_guard<std::mutex> lm(m_);
-
-        if (!enabled_) return;
-        devStats_[alloc.Hash()].DeallocationSize(alloc.size());
-        devAllocs_[alloc.size()].push_front(std::move(alloc));
-    }
-private:
 
     std::map<size_t, std::deque<SmartHostAllocation>> hostAllocs_;
     std::map<size_t, std::deque<SmartDeviceAllocation>> devAllocs_;
@@ -246,6 +281,7 @@ private:
 
     std::mutex m_;
     bool enabled_ = false;
+    bool pinned_ = false;
 };
 
 // Singleton access function.  Static variables in a function have
@@ -260,16 +296,22 @@ AllocationManager& GetManager()
 
 }
 
-SmartHostAllocation GetManagedHostAllocation(size_t size, bool pinned, const AllocationMarker& marker)
+SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker)
 {
-    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    static thread_local size_t counter = 0;
+    counter++;
+    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(Spots::HostAllocate);
-    return GetManager().GetHostAlloc(size, pinned, marker);
+    return GetManager().GetHostAlloc(size, marker);
 }
 
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle)
 {
-    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    static thread_local size_t counter = 0;
+    counter++;
+    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(Spots::GpuAllocate);
     return GetManager().GetDeviceAlloc(size, marker);
 }
@@ -277,7 +319,10 @@ SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMa
 void ReturnManagedHostAllocation(SmartHostAllocation alloc)
 {
     if (alloc.size() == 0) return;
-    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    static thread_local size_t counter = 0;
+    counter++;
+    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(Spots::HostDeallocate);
     GetManager().ReturnHost(std::move(alloc));
 }
@@ -285,26 +330,29 @@ void ReturnManagedHostAllocation(SmartHostAllocation alloc)
 void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
 {
     if (alloc.size() == 0) return;
-    Profiler prof(Profiler::Mode::OBSERVE, 6.0f, std::numeric_limits<float>::max());
+    static thread_local size_t counter = 0;
+    counter++;
+    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(Spots::GpuDeallocate);
     GetManager().ReturnDev(std::move(alloc));
 }
 
-void EnablePooling()
+void EnablePerformanceMode()
 {
-    GetManager().EnablePooling();
+    GetManager().EnablePerformanceMode();
 }
 
-void DisablePooling()
+void DisablePerformanceMode()
 {
     // I don't think this report has much value for normal runs,
     // but may be useful if profiling or diagnosing performance
     // issues, in which case we're probably using RelWithDebInfo
     // and this will turn on.
-#ifdnef NDEBUG
+#ifndef NDEBUG
     Profiler::FinalReport();
 #endif
-    GetManager().DisablePooling();
+    GetManager().DisablePerformanceMode();
 }
 
 }}} // ::PacBio::Cuda::Memory

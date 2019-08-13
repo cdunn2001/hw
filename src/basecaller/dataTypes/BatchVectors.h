@@ -143,12 +143,11 @@ public:
     BatchVectors(uint32_t zmwPerBatch,
                  uint32_t maxLen,
                  Cuda::Memory::SyncDirection syncDir,
-                 bool pinned,
                  const Cuda::Memory::AllocationMarker& marker)
         : zmwPerBatch_(zmwPerBatch)
         , maxLen_(maxLen)
-        , data_(zmwPerBatch * maxLen, syncDir, marker, pinned)
-        , lens_(zmwPerBatch, syncDir, marker, pinned)
+        , data_(zmwPerBatch * maxLen, syncDir, marker)
+        , lens_(zmwPerBatch, syncDir, marker)
     {}
 
     LaneVectorView<T> LaneView(uint32_t laneId)

@@ -190,11 +190,9 @@ class BasecallingMetricsAccumulatorFactory
 public:
     BasecallingMetricsAccumulatorFactory(
             const Data::BatchDimensions& batchDims,
-            Cuda::Memory::SyncDirection syncDir,
-            bool pinned)
+            Cuda::Memory::SyncDirection syncDir)
         : batchDims_(batchDims)
         , syncDir_(syncDir)
-        , pinned_(pinned)
     {}
 
     std::unique_ptr<AccumulatorBatchT> NewBatch()
@@ -202,14 +200,12 @@ public:
         return std::make_unique<AccumulatorBatchT>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            SOURCE_MARKER(),
-            pinned_);
+            SOURCE_MARKER());
     }
 
 private:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
 };
 
 template <unsigned int LaneWidth>
@@ -221,11 +217,9 @@ public: // types
 
 public: // methods:
     BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
-                              Cuda::Memory::SyncDirection syncDir,
-                              bool pinned)
+                              Cuda::Memory::SyncDirection syncDir)
         : batchDims_(batchDims)
         , syncDir_(syncDir)
-        , pinned_(pinned)
     {}
 
     std::unique_ptr<BasecallingMetricsBatchT> NewBatch()
@@ -233,14 +227,12 @@ public: // methods:
         return std::make_unique<BasecallingMetricsBatchT>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            SOURCE_MARKER(),
-            pinned_);
+            SOURCE_MARKER());
     }
 
 private: // members:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

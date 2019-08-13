@@ -24,7 +24,7 @@ void Baseliner::InitAllocationPools(bool hostExecution)
     const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
+    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir);
 }
 
 void Baseliner::DestroyAllocationPools()

@@ -66,10 +66,9 @@ public:
 
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
-                     const AllocationMarker& marker,
-                     bool pinnedHost = true)
+                     const AllocationMarker& marker)
         : activeOnHost_(true)
-        , hostData_{GetManagedHostAllocation(count*sizeof(HostType), pinnedHost, marker)}
+        , hostData_{GetManagedHostAllocation(count*sizeof(HostType), marker)}
         , gpuData_{}
         , syncDir_(dir)
         , marker_(marker)

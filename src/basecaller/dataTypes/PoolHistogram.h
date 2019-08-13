@@ -55,8 +55,8 @@ struct PoolHistogram
     Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> data;
     uint32_t poolId;
 
-    PoolHistogram(uint32_t aPoolId, unsigned int numLanes, bool pinnedAlloc)
-        : data (numLanes, cudaSyncMode, SOURCE_MARKER(), pinnedAlloc)
+    PoolHistogram(uint32_t aPoolId, unsigned int numLanes)
+        : data (numLanes, cudaSyncMode, SOURCE_MARKER())
         , poolId (aPoolId)
     { }
 };

@@ -117,7 +117,7 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 
 FrameLabeler::FrameLabeler()
     : latent_(SOURCE_MARKER(), lanesPerPool_)
-    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER(), true)
+    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
 {
     if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
     {

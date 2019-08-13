@@ -23,11 +23,10 @@ public:     // Types
 public:     // Structors and assignment
     CameraTraceBatch(const BatchMetadata& meta,
                      const BatchDimensions& dims,
-                     bool pinned,
                      Cuda::Memory::SyncDirection syncDirection,
                      const Cuda::Memory::AllocationMarker& marker)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, marker, pinned)
-        , stats_ (dims.lanesPerBatch, syncDirection, marker, pinned)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, marker)
+        , stats_ (dims.lanesPerBatch, syncDirection, marker)
     { }
 
     CameraTraceBatch(const CameraTraceBatch&) = delete;
@@ -58,10 +57,8 @@ class CameraBatchFactory
 public:
     CameraBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
+                       Cuda::Memory::SyncDirection syncDirection)
         : syncDirection_(syncDirection)
-        , pinned_(pinned)
     {
         dims_.laneWidth = laneSize;
         dims_.framesPerBatch = framesPerChunk;
@@ -70,12 +67,11 @@ public:
 
     CameraTraceBatch NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_, SOURCE_MARKER());
+        return CameraTraceBatch(meta, dims_, syncDirection_, SOURCE_MARKER());
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
-    bool pinned_;
     BatchDimensions dims_;
 };
 

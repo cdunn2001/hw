@@ -35,11 +35,10 @@ namespace Mongo {
 namespace Basecaller {
 
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
-                                                 unsigned int poolSize,
-                                                 bool pinnedAlloc)
+                                                 unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
-    , poolHist_ (poolId, poolSize, pinnedAlloc)
-    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER(), pinnedAlloc)
+    , poolHist_ (poolId, poolSize)
+    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 { }
 
 

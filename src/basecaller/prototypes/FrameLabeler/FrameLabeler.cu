@@ -72,7 +72,7 @@ void run(const Data::DataManagerParams& dataParams,
             modelView[j] = referenceModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER(), true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](

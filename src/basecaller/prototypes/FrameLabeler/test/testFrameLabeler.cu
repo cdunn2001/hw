@@ -117,7 +117,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
             hostModels[j] = refModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER(), true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     int mismatches = 0;

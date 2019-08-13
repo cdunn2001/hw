@@ -102,14 +102,17 @@ public:
 
     void Run()
     {
-        EnablePooling();
+        EnablePerformanceMode();
 
         Setup();
         RunAnalyzer();
         Join();
         Teardown();
 
-        DisablePooling();
+        // Need to free up our allocations that are pooled. If that happens
+        // during static teardown, we'll likely try to free cuda allocations
+        // after the cuda runtime is already gone, which causes a crash
+        DisablePerformanceMode();
     }
 
     MongoBasecallerConsole& Config(const BasecallerConfig& basecallerConfig)

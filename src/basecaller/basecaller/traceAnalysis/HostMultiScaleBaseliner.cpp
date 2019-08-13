@@ -25,9 +25,9 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
     Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER(), true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER(), true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto statsView = out.Stats().GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)

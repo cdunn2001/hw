@@ -57,6 +57,7 @@ private:
             if (pinned_) CudaFreeHost(ptr);
             else free(ptr);
         }
+        bool Pinned() const { return pinned_; }
     private:
         bool pinned_;
     };
@@ -119,6 +120,12 @@ public:
             assert(bytesAllocated_ >= size_);
             bytesAllocated_ -= size_;
         }
+    }
+
+    bool Pinned() const
+    {
+        if (data_) return data_.get_deleter().Pinned();
+        else return false;
     }
 
     size_t Hash() const { return hash_; }

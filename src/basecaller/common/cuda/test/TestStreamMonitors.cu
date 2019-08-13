@@ -70,12 +70,12 @@ struct StreamMonitor : public ::testing::Test
 {
     void SetUp() override
     {
-        EnablePooling();
+        EnablePerformanceMode();
     }
 
     void TearDown() override
     {
-        DisablePooling();
+        DisablePerformanceMode();
     }
 };
 

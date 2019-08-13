@@ -57,15 +57,13 @@ TEST(TestNoOpPulseAccumulator, Run)
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
             lanesPerPool,
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
             framesPerChunk,
             lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
@@ -100,15 +98,13 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
             lanesPerPool,
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
             framesPerChunk,
             lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
@@ -161,15 +157,13 @@ TEST(TestHostPulseAccumulator, Run)
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
             lanesPerPool,
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
             framesPerChunk,
             lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));

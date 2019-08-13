@@ -68,15 +68,20 @@ private:
 // are left as free functions, with the associated state handled by a singleton class in the
 // implementation file.
 
-SmartHostAllocation GetManagedHostAllocation(size_t size, bool pinned, const AllocationMarker& marker);
+SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker);
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle = false);
 
 void ReturnManagedHostAllocation(SmartHostAllocation alloc);
 void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc);
 
-void EnablePooling();
-void DisablePooling();
-
+// Enable performance mode to use pinned memory on the host
+// (which is necessary for efficient data transfers) and re-use
+// memory allocations when possible (which is necessary as cuda
+// malloc functions seem surprisingly slow).  The only reason this
+// is configurable is to support limited use of this software on
+// machines that may not have gpu hardware
+void EnablePerformanceMode();
+void DisablePerformanceMode();
 
 }}} // ::PacBio::Cuda::Memory
 

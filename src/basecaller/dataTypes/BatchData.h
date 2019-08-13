@@ -338,12 +338,11 @@ class BatchData : private Cuda::Memory::detail::DataManager
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              const Cuda::Memory::AllocationMarker& marker,
-              bool pinnedHost = true)
+              const Cuda::Memory::AllocationMarker& marker)
         : dims_(dims)
         , availableFrames_(dims.framesPerBatch)
         , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
-                syncDirection, marker, pinnedHost)
+                syncDirection, marker)
     {}
 
     BatchData(const BatchData&) = delete;

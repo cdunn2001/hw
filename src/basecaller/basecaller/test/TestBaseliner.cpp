@@ -132,16 +132,22 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
                                                                           Data::GetPrimaryConfig().lanesPerPool));
     }
 
-    Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
-                                              Data::GetPrimaryConfig().zmwsPerLane,
-                                              Data::GetPrimaryConfig().lanesPerPool,
-                                              128,
-                                              numZmwLanes);
+    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
+    const auto zmwsPerLane = Data::GetPrimaryConfig().zmwsPerLane;
+    Cuda::Data::BatchGenerator batchGenerator(framesPerChunk, zmwsPerLane,
+                                              lanesPerPool, 128, numZmwLanes);
     while (!batchGenerator.Finished())
     {
         auto chunk = batchGenerator.PopulateChunk();
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
+            // This test was relying on a BatchGenerator with no trace file returning a
+            // batch of all zeros.  I'm unsure if this was (or even should be) an
+            // intentional feature of BatchGenerator, but even if it's intentional it
+            // only works when the raw allocation itself comes pre-zeroed out, which
+            // isn't necessarily true.
+            std::memset(chunk[batchNum].GetBlockView(0).Data(), 0,
+                        framesPerChunk * zmwsPerLane * lanesPerPool * sizeof(int16_t));
             Data::CameraTraceBatch cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
             const auto& baselineStats = cameraBatch.Stats().GetHostView()[0].baselineStats;
             EXPECT_TRUE(std::all_of(baselineStats.moment0.data(),
