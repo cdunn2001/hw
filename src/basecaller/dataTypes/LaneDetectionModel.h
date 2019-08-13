@@ -83,12 +83,12 @@ struct __align__(128) LaneModelParameters
 #ifdef __CUDA_ARCH__
     __device__ LaneModelParameters& ParallelAssign(const LaneModelParameters& other)
     {
-        //baselineWeight_.ParallelAssign(other.baselineWeight_);
         baseline_.ParallelAssign(other.baseline_);
         for (int i = 0; i < numAnalogs; ++i)
         {
             analogs_[i].ParallelAssign(other.analogs_[i]);
         }
+        baselineWeight_[threadIdx.x] = other.baselineWeight_[threadIdx.x];
         return *this;
     }
 #endif
