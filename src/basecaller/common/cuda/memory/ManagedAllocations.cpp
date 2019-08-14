@@ -38,8 +38,8 @@
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
 
-SMART_ENUM(Spots, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
-using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<Spots>;
+SMART_ENUM(ManagedAllocations, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
+using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ManagedAllocations>;
 
 namespace PacBio {
 namespace Cuda {
@@ -302,7 +302,7 @@ SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(Spots::HostAllocate);
+    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
     return GetManager().GetHostAlloc(size, marker);
 }
 
@@ -312,7 +312,7 @@ SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMa
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(Spots::GpuAllocate);
+    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
     return GetManager().GetDeviceAlloc(size, marker);
 }
 
@@ -323,7 +323,7 @@ void ReturnManagedHostAllocation(SmartHostAllocation alloc)
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(Spots::HostDeallocate);
+    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
     GetManager().ReturnHost(std::move(alloc));
 }
 
@@ -334,7 +334,7 @@ void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(Spots::GpuDeallocate);
+    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
     GetManager().ReturnDev(std::move(alloc));
 }
 
