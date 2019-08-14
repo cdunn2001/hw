@@ -26,6 +26,8 @@
 #ifndef PACBIO_CUDA_MEMORY_MANAGED_ALLOCATIONS
 #define PACBIO_CUDA_MEMORY_MANAGED_ALLOCATIONS
 
+#include <mongo-config.h>
+
 #include <common/cuda/memory/SmartHostAllocation.h>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
 
@@ -60,7 +62,12 @@ private:
     std::string mark_;
 };
 
-#define SOURCE_MARKER() PacBio::Cuda::Memory::AllocationMarker(__FILE__  ":" + std::to_string(__LINE__))
+// Creates an AllocationMarker tied to the source code file and line number.
+// Automatically strips out portions of the path outside of the repository
+#define SOURCE_MARKER()                                                        \
+        PacBio::Cuda::Memory::AllocationMarker(                                \
+                std::string(__FILE__  ":" + std::to_string(__LINE__))          \
+                .substr(strlen(PacBio::Primary::MongoConfig::workspaceDir)+1))
 
 // These functions define the memory management API.  One might be tempted to bundle them together as
 // static functions in a class.  However there is obviously state associated with these routines,
