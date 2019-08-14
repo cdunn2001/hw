@@ -183,6 +183,12 @@ public:
     UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) { return lens_; }
     const UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) const { return lens_; }
 
+    void DeactivateGpuMem()
+    {
+        data_.DeactivateGpuMem();
+        lens_.DeactivateGpuMem();
+    }
+
 private:
     uint32_t zmwPerBatch_;
     uint32_t maxLen_;
