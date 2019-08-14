@@ -251,6 +251,8 @@ void run(const Data::DataManagerParams& dataParams,
          size_t simulKernels,
          BaselineFilterMode mode)
 {
+    Memory::EnablePerformanceMode();
+
     if (mode == BaselineFilterMode::GlobalFull)
     {
         switch (dataParams.laneWidth)
@@ -396,6 +398,8 @@ void run(const Data::DataManagerParams& dataParams,
         }
         }
     }
+
+    Memory::DisablePerformanceMode();
 }
 
 }}

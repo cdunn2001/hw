@@ -39,6 +39,8 @@ void run(const Data::DataManagerParams& dataParams,
          const Subframe::AnalogMeta& baselineMeta,
          size_t simulKernels)
 {
+    Memory::EnablePerformanceMode();
+
     static constexpr size_t gpuBlockThreads = 32;
     static constexpr size_t laneWidth = 64;
 
@@ -89,6 +91,8 @@ void run(const Data::DataManagerParams& dataParams,
     RunThreads(simulKernels, manager, tmp);
 
     FrameLabeler::Finalize();
+
+    Memory::DisablePerformanceMode();
 }
 
 }}
