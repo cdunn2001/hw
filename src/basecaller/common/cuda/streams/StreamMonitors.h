@@ -99,20 +99,28 @@ public:
         lastThread_ = info.ThreadId();
     }
 
-    // Makes sure that all outstanding work is completed
     ~SingleStreamMonitor()
+    {
+        Reset();
+    }
+
+    // Makes sure that all outstanding work is completed
+    void Reset()
     {
         if (latestEvent_)
         {
             if (!latestEvent_->IsCompleted())
             {
-                PBLOG_WARN << "Unexpectedly trying to destroy data while currently in use "
+                PBLOG_WARN << "Unexpectedly trying to reset stream monitor while currently in use "
                            << "on the gpu.  We'll automatically synchronize to avoid segmentation "
                            << "violations, but this may indicate a developer bug.";
                 latestEvent_->WaitForCompletion();
                 AddStreamError();
             }
         }
+
+        lastThread_ = KernelLaunchInfo::NoThreadId;
+        latestEvent_ = nullptr;
     }
 private:
     uint32_t lastThread_;

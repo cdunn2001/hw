@@ -174,14 +174,6 @@ public:
         if (!activeOnHost_)
         {
             GetHostView();
-            // We need to destroy the old checker (and replace it
-            // with a new one) to be sure no active kernels are
-            // using our gpu memory.  It feels like a bit of a hack
-            // to put this here, but in the long run this entire
-            // function can probably be retired, as it only supports
-            // the prototypes.  Mongo took a different route for
-            // preventing excesive gpu memory usage
-            checker_ = SingleStreamMonitor();
         }
 
         ReturnManagedDeviceAllocation(std::move(gpuData_));
@@ -195,6 +187,9 @@ public:
     HostView<HostType> GetHostView()
     {
         if (!activeOnHost_) CopyImpl(true, false);
+
+        // Force a check, to catch if the wrong thread tried to download the data
+        checker_.Reset();
         return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
     HostView<const HostType> GetHostView() const
