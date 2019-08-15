@@ -147,7 +147,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     (void)baselineProfile;
     auto ctb = (*baseliner_)(std::move(tbatch));
 
-    // Process some HFMetrics before the container is moved away
+    // Process Autocorrelation before the container is moved away
     // TODO: capture in profiler
     (*hfMetrics_).ProcessBaselinerStats(ctb.Stats());
 
@@ -165,6 +165,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
 
     auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
     (void) metricsProfile;
+
     // Process the rest of the HFMetrics
     auto basecallingMetrics = (*hfMetrics_).ProcessPulses(pulses, models_);
 

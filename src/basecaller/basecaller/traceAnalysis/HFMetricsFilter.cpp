@@ -108,11 +108,12 @@ HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 
 void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 {
-    const auto& basecalls = pulseBatch.Pulses();
+    const auto& pulses = pulseBatch.Pulses();
     for (size_t l = 0; l < lanesPerBatch_; l++)
     {
-        const auto& laneCalls = basecalls.LaneView(l);
+        const auto& laneCalls = pulses.LaneView(l);
         metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
+        metrics_[l].AddPulseDetectionMetrics(pulseBatch.PdMetrics().GetHostView()[l]);
     }
 }
 

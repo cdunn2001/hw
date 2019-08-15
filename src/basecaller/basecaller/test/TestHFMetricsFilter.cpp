@@ -43,6 +43,7 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
+#include <dataTypes/PulseDetectionMetrics.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 
@@ -97,7 +98,12 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
         Cuda::Memory::SyncDirection::HostWriteDeviceRead,
         true);
 
-    auto pulses = batchFactory.NewBatch(chunk.front().Metadata());
+    Cuda::Memory::UnifiedCudaArray<Data::PulseDetectionMetrics> pdMetrics(
+            dims.lanesPerBatch,
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+            true);
+
+    auto pulses = batchFactory.NewBatch(chunk.front().Metadata(), std::move(pdMetrics));
 
     auto LabelConv = [&](size_t index) {
         switch (config.pattern[index % config.pattern.size()])
@@ -143,6 +149,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                                * (pulse.Width() - 2) * m2modifier);
                 pulseView.push_back(zmw, pulse);
             }
+            pulses.PdMetrics().GetHostView()[lane].viterbiScore[zmw] = 1.09;
         }
     }
     return pulses;
@@ -344,11 +351,11 @@ TEST(TestHFMetricsFilter, Populated)
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
                     EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
+                    EXPECT_NEAR(0.008516, mb.pulseDetectionScore[z], 0.0001);
                     // TODO: These aren't expected to be "correct", and should
                     // be replaced when these metrics are expected to be
                     // correct. The values themselves may need to be helped
                     // with some simulation in the above functions
-                    EXPECT_EQ(0, mb.pulseDetectionScore[z]);
                     EXPECT_EQ(0, mb.pixelChecksum[z]);
                 }
             }

@@ -33,6 +33,8 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
 
+#include "PulseDetectionMetrics.h"
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -59,10 +61,12 @@ public:     // Structors and assignment
                 bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
                 std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
+                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool,
+                std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
         : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
         , curTrace_(std::move(trace))
         , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, latPool, pinned)
+        , pdMetrics_(dims.lanesPerBatch, syncDirection, pinned, metricsPool)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -71,11 +75,17 @@ public:     // Structors and assignment
     LabelsBatch& operator=(const LabelsBatch&) = delete;
     LabelsBatch& operator=(LabelsBatch&&) = default;
 
-    const CameraTraceBatch& TraceData() const { return curTrace_; }
-    CameraTraceBatch& TraceData() { return curTrace_; }
+    const BatchData& TraceData() const { return curTrace_; }
+    BatchData& TraceData() { return curTrace_; }
 
     const BatchData& LatentTrace() const { return latTrace_; }
     BatchData& LatentTrace() { return latTrace_; }
+
+    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics()
+    { return pdMetrics_; }
+
+    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> TakePdMetrics()
+    { return std::move(pdMetrics_); }
 
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
@@ -84,6 +94,9 @@ private:    // Data
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;
+
+    // Viterbi score from FrameLabeler and baseline stats from PulseAccumulator
+    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics_;
 };
 
 // Factory class, to simplify the construction of LabelsBatch instances.
@@ -103,6 +116,7 @@ public:
         , pinned_(pinned)
         , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
         , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(latentFrames_* lanesPerPool * laneSize * sizeof(int16_t), pinned))
+        , metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool * sizeof(PulseDetectionMetrics), pinned))
     {}
 
     LabelsBatch NewBatch(CameraTraceBatch trace)
@@ -111,7 +125,7 @@ public:
         auto dims = trace.StorageDims();
         return LabelsBatch(meta, dims, std::move(trace),
                            latentFrames_, pinned_,
-                           syncDirection_, tracePool_, latPool_);
+                           syncDirection_, tracePool_, latPool_, metricsPool_);
     }
 
 private:
@@ -120,6 +134,7 @@ private:
     bool pinned_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

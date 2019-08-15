@@ -36,15 +36,15 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray.h>
 
-#include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/BaselinerStatAccumState.h>
-
-#include "HQRFPhysicalStates.h"
+#include "BaselinerStatAccumState.h"
 #include "BatchMetadata.h"
 #include "BatchData.h"
 #include "BatchVectors.h"
-#include "TraceAnalysisMetrics.h"
+#include "HQRFPhysicalStates.h"
+#include "LaneDetectionModel.h"
 #include "Pulse.h"
+#include "PulseDetectionMetrics.h"
+#include "TraceAnalysisMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -135,6 +135,8 @@ public:
 
 public:
     void Count(const InputPulses& pulses, uint32_t numFrames);
+
+    void AddPulseDetectionMetrics(const PulseDetectionMetrics& pdMetrics);
 
     void AddBaselinerStats(const InputBaselineStats& baselinerStats);
 

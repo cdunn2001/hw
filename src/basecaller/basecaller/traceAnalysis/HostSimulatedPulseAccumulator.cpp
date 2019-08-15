@@ -23,7 +23,8 @@ HostSimulatedPulseAccumulator::~HostSimulatedPulseAccumulator() = default;
 
 Data::PulseBatch HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
 {
-    auto ret = batchFactory_->NewBatch(labels.Metadata());
+    auto ret = batchFactory_->NewBatch(labels.Metadata(),
+                                       std::move(labels.TakePdMetrics()));
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {

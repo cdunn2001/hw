@@ -62,7 +62,7 @@ public:
         : startFrame_(0)
         , numFrames_(0)
         , pixelChecksum_(0)
-        , pulseDetectionScore_(std::numeric_limits<Flt>::quiet_NaN())
+        , pulseDetectionScore_(0)
         , baselineStatAccum_()
         , autocorrAccum_()
     {};

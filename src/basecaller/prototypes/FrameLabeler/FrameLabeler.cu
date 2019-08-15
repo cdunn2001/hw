@@ -75,13 +75,16 @@ void run(const Data::DataManagerParams& dataParams,
         latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
     }
 
-    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](
+    UnifiedCudaArray<PulseDetectionMetrics> pdMetrics(
+            dataParams.kernelLanes, SyncDirection::HostReadDeviceWrite, true);
+
+    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace, &pdMetrics](
         const TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
         if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret, pdMetrics);
         (void)latTrace[batchIdx].GetBlockView(0);
     };
 

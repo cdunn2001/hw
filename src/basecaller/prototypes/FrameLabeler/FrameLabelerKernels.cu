@@ -134,7 +134,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                                    ViterbiData<PBShort2, 32> labels,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
-                                   Mongo::Data::GpuBatchData<PBShort2> output)
+                                   Mongo::Data::GpuBatchData<PBShort2> output,
+                                   Memory::DeviceView<PulseDetectionMetrics> pdMetrics)
 {
     using namespace Subframe;
 
@@ -230,6 +231,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         maxProb = Blend(cond, maxProb, prob[i]);
         anchorState = Blend(cond, anchorState, PBShort2(i));
     }
+    pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x] = maxProb.FloatX();
+    pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x + 1] = maxProb.FloatY();
 
     // Traceback
     auto traceState = anchorState;
@@ -257,7 +260,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
-                                Mongo::Data::BatchData<int16_t>& output)
+                                Mongo::Data::BatchData<int16_t>& output,
+                                Memory::UnifiedCudaArray<Mongo::Data::PulseDetectionMetrics>& metricsOutput)
 {
     auto labels = BorrowScratch();
 
@@ -268,7 +272,8 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
                                                         *labels,
                                                         prevLat_,
                                                         latOut,
-                                                        output);
+                                                        output,
+                                                        metricsOutput.GetDeviceHandle());
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);

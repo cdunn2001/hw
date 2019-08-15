@@ -39,6 +39,7 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    PulseDetectionMetrics.h
     StaticDetModelConfig.h
     StaticDetModelConfig.cpp
     TraceAnalysisMetrics.h

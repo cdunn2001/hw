@@ -119,6 +119,8 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
 
         latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
     }
+    UnifiedCudaArray<PulseDetectionMetrics> pdMetrics(
+            dataParams.kernelLanes, SyncDirection::HostReadDeviceWrite, true);
 
     int mismatches = 0;
     int matches = 0;
@@ -136,7 +138,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         auto batchIdx = data.Batch();
         const auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out, pdMetrics);
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {

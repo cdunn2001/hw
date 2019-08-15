@@ -310,6 +310,16 @@ void BasecallingMetricsAccumulator<LaneWidth>::AddModels(
 }
 
 template <unsigned int LaneWidth>
+void BasecallingMetricsAccumulator<LaneWidth>::AddPulseDetectionMetrics(
+        const PulseDetectionMetrics& pdMetrics)
+{
+    traceMetrics_.PulseDetectionScore() += LaneArray<float>(pdMetrics.viterbiScore);
+
+    // TODO: collect PulseAccumulator BaselineStats, replace
+    // 'BasecallingMetricsAccumulator::AddBaselinerStats'
+}
+
+template <unsigned int LaneWidth>
 void BasecallingMetricsAccumulator<LaneWidth>::Count(
         const InputPulses& pulses,
         uint32_t numFrames)

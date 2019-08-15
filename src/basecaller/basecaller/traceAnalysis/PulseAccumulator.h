@@ -67,7 +67,7 @@ public:
 
     auto EmptyPulseBatch(const Data::BatchMetadata& metadata)
     {
-        auto ret = batchFactory_->NewBatch(metadata);
+        auto ret = batchFactory_->NewEmptyBatch(metadata);
 
         for (size_t laneIdx = 0; laneIdx < ret.Dims().lanesPerBatch; ++laneIdx)
         {

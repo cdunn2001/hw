@@ -249,7 +249,8 @@ public:
     {
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
-        auto ret = factory.NewBatch(labels.Metadata());
+        auto ret = factory.NewBatch(labels.Metadata(),
+                                    std::move(labels.TakePdMetrics()));
         ProcessLabels<LabelManager, threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
                 labels,
                 labels.TraceData(),

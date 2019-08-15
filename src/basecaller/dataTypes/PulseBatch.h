@@ -33,6 +33,7 @@
 #include "BatchData.h"
 #include "BatchVectors.h"
 #include "Pulse.h"
+#include "PulseDetectionMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -45,6 +46,7 @@ public:     // Structors & assignment operators
     PulseBatch(const size_t maxCallsPerZmwChunk,
                const BatchDimensions& batchDims,
                const BatchMetadata& batchMetadata,
+               Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics,
                Cuda::Memory::SyncDirection syncDir,
                bool pinned,
                std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool,
@@ -52,6 +54,7 @@ public:     // Structors & assignment operators
         : dims_ (batchDims)
         , metaData_(batchMetadata)
         , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, pinned, callsPool, lenPool)
+        , pdMetrics_(std::move(pdMetrics))
     {}
 
     PulseBatch(const PulseBatch&) = delete;
@@ -72,10 +75,17 @@ public:     // Functions
     BatchVectors<Pulse>& Pulses() { return pulses_; }
     const BatchVectors<Pulse>& Pulses() const { return pulses_; }
 
+    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics()
+    { return pdMetrics_; }
+    const Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics() const
+    { return pdMetrics_; }
+
 private:    // Data
     BatchDimensions dims_;
     BatchMetadata   metaData_;
     BatchVectors<Pulse> pulses_;
+
+    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics_;
 };
 
 class PulseBatchFactory
@@ -92,14 +102,31 @@ public:
         , pinned_(pinned)
         , callsPool_(std::make_shared<Pools>(maxCallsPerZmw*batchDims.ZmwsPerBatch()*sizeof(Pulse), pinned))
         , lenPool_(std::make_shared<Pools>(batchDims.ZmwsPerBatch()*sizeof(uint32_t), pinned))
+        , metricsPool_(std::make_shared<Pools>(batchDims.lanesPerBatch*sizeof(PulseDetectionMetrics), pinned))
     {}
 
-    PulseBatch NewBatch(const BatchMetadata& batchMetadata) const
+    PulseBatch NewEmptyBatch(const BatchMetadata& batchMetadata) const
     {
         return PulseBatch(
                 maxCallsPerZmw_,
                 batchDims_,
                 batchMetadata,
+                Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>(
+                    batchDims_.lanesPerBatch, syncDir_, pinned_, metricsPool_),
+                syncDir_,
+                pinned_,
+                callsPool_,
+                lenPool_);
+    }
+
+    PulseBatch NewBatch(const BatchMetadata& batchMetadata,
+                        Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics) const
+    {
+        return PulseBatch(
+                maxCallsPerZmw_,
+                batchDims_,
+                batchMetadata,
+                std::move(pdMetrics),
                 syncDir_,
                 pinned_,
                 callsPool_,
@@ -114,6 +141,7 @@ private:
 
     std::shared_ptr<Cuda::Memory::DualAllocationPools> callsPool_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool_;
+    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data
