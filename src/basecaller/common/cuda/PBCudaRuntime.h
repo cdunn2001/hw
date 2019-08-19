@@ -34,6 +34,8 @@ void  CudaRawCopyHost(void* src, void* dest, size_t size);
 void  CudaRawCopyDevice(void* src, void* dest, size_t size);
 void  CudaSynchronizeDefaultStream();
 
+void ThrowIfCudaError();
+
 template <typename T>
 T* CudaMalloc(size_t count) { return static_cast<T*>(CudaRawMalloc(count*sizeof(T))); }
 template <typename T>
