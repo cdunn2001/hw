@@ -19,7 +19,9 @@ void HostMultiScaleBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
+          Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
     auto pools = rawTrace.GetAllocationPools();
@@ -30,11 +32,11 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
 
-    auto statsView = out.Stats().GetHostView();
+    auto statsView = out.second.GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);
-        auto baselineSubtracted = out.GetBlockView(laneIdx);
+        auto baselineSubtracted = out.first.GetBlockView(laneIdx);
         auto& baseliner = baselinerByLane_[laneIdx];
 
         auto baselinerStats = baseliner.EstimateBaseline(traceData,

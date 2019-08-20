@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include "TraceHistogramAccumHost.h"
+//#include "dataTypes/BaselinerStatAccumState.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -43,7 +44,9 @@ TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
 { }
 
 
-void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
+void TraceHistogramAccumHost::AddBatchImpl(
+        const Data::TraceBatch<TraceElementType>& ctb,
+        const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
 {
     // TODO: Can some of this logic be lifted into the base class's AddBatch
     // method (template method pattern)?
@@ -70,7 +73,7 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::CameraTraceBatch& ctb)
             && FramesAdded() + ctb.NumFrames() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
-    const auto& statsView = ctb.Stats().GetHostView();
+    const auto& statsView = stats.GetHostView();
     for (unsigned int lane = 0; lane < numLanes; ++lane)
     {
         // Accumulate baseliner stats.
@@ -117,7 +120,7 @@ void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
 }
 
 
-void TraceHistogramAccumHost::AddBlock(const Data::CameraTraceBatch& ctb,
+void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& ctb,
                                        unsigned int lane)
 {
     assert(lane < hist_.size());

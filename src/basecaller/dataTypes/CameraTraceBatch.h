@@ -7,13 +7,13 @@
 #include <common/MongoConstants.h>
 
 #include "BaselinerStatAccumState.h"
-#include "BasicTypes.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
 
+/*
 /// Baseline-subtracted trace data with statistics
 class CameraTraceBatch : public TraceBatch<BaselinedTraceElement>
 {
@@ -49,6 +49,7 @@ private:    // Data
     // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> stats_;
 };
+*/
 
 // Factory class, to simplify the construction of CameraTraceBatch instances.
 // This class will handle the small collection of constructor arguments that
@@ -57,6 +58,8 @@ private:    // Data
 class CameraBatchFactory
 {
 public:
+    using ElementType = BaselinedTraceElement;
+
     CameraBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
                        Cuda::Memory::SyncDirection syncDirection,
@@ -71,10 +74,11 @@ public:
         dims_.lanesPerBatch = lanesPerPool;
     }
 
-    CameraTraceBatch NewBatch(const BatchMetadata& meta) const
+    std::pair<TraceBatch<ElementType>, Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>> NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, pinned_, syncDirection_,
-                                tracePool_, statsPool_);
+        return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, tracePool_, pinned_),
+                              Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>(
+                                  dims_.lanesPerBatch, syncDirection_, pinned_, statsPool_));
     }
 
 private:

@@ -87,9 +87,19 @@ public: // Structors
     virtual ~HFMetricsFilter() = default;
 
 public: // Filter API
-    virtual void ProcessBaselinerStats(const BaselinerStatsT& baselinerStats) = 0;
-    virtual std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+    std::unique_ptr<BasecallingMetricsBatchT> operator()(
+            const PulseBatchT& basecallBatch,
+            const BaselinerStatsT& baselinerStats,
+            const ModelsT& models)
+    {
+        assert(basecallBatch.GetMeta().PoolId() == poolId_);
+        return Process(basecallBatch, baselinerStats, models);
+    }
+
+private:
+    virtual std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& pulses,
+            const BaselinerStatsT& baselinerStats,
             const ModelsT& models) = 0;
 
 protected:    // Block management
@@ -115,11 +125,10 @@ public:
     HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
     ~HostHFMetricsFilter() override;
 
-public: // Filter API. All Process functions must be called!
-    void ProcessBaselinerStats(const BaselinerStatsT& baselineStats) override;
-
-    std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+private:
+    std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& pulseBatch,
+            const BaselinerStatsT& baselineStats,
             const ModelsT& models) override;
 
 private: // Block management
@@ -147,12 +156,10 @@ public:
     NoHFMetricsFilter(NoHFMetricsFilter&&) = default;
     ~NoHFMetricsFilter() override;
 
-public: // Filter API. All Process functions must be called!
-    void ProcessBaselinerStats(const BaselinerStatsT& baselinerStats) override
-    { (void)baselinerStats; };
-
-    std::unique_ptr<BasecallingMetricsBatchT> ProcessPulses(
+private:
+    std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& pulseBatch,
+            const BaselinerStatsT& baselinerStats,
             const ModelsT& models) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 

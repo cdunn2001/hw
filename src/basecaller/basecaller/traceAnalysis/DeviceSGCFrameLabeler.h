@@ -28,6 +28,7 @@
 #define PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
 
 #include "FrameLabeler.h"
+#include "dataTypes/BasicTypes.h"
 
 namespace PacBio {
 namespace Cuda {
@@ -59,7 +60,7 @@ public:
     ~DeviceSGCFrameLabeler() override;
 
 private:    // Customizable implementation
-    Data::LabelsBatch Process(Data::CameraTraceBatch trace,
+    Data::LabelsBatch Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
                               const PoolModelParameters& models) override;
 
     std::unique_ptr<Cuda::FrameLabeler> labeler_;

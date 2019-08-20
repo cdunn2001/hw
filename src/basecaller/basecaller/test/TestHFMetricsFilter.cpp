@@ -252,8 +252,8 @@ TEST(TestHFMetricsFilter, Populated)
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(config, batchIdx);
-        hfMetrics.ProcessBaselinerStats(baselinerStats);
-        auto basecallingMetrics = hfMetrics.ProcessPulses(pulses, models);
+        auto basecallingMetrics = hfMetrics(
+                pulses, baselinerStats, models);
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
@@ -396,8 +396,7 @@ TEST(TestHFMetricsFilter, Noop)
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(config, batchIdx);
-        hfMetrics.ProcessBaselinerStats(baselinerStats);
-        auto basecallingMetrics = hfMetrics.ProcessPulses(pulses, models);
+        auto basecallingMetrics = hfMetrics(pulses, baselinerStats, models);
         ASSERT_FALSE(basecallingMetrics);
     }
     hfMetrics.Finalize();

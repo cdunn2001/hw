@@ -45,7 +45,7 @@ namespace Basecaller {
 class TraceHistogramAccumHost : public TraceHistogramAccumulator
 {
 public:     // Types
-    using TraceElementType = Data::CameraTraceBatch::ElementType;
+    using TraceElementType = Data::BaselinedTraceElement;
 
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
@@ -53,7 +53,9 @@ public:     // Structors and assignment.
                             bool pinnedAlloc = true);
 
 private:    // TraceHistogramAccumulator implementation.
-    void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;
+    void AddBatchImpl(
+            const Data::TraceBatch<TraceElementType>& ctb,
+            const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) override;
 
     const PoolHistType& HistogramImpl() const override;
 
@@ -76,7 +78,7 @@ private:    // Functions
     void InitStats(unsigned int numLanes);
 
     // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
-    void AddBlock(const Data::CameraTraceBatch& ctb, unsigned int lane);
+    void AddBlock(const Data::TraceBatch<TraceElementType>& ctb, unsigned int lane);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

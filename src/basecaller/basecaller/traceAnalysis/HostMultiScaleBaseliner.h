@@ -47,7 +47,9 @@ public:
 
 private:
 
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<ElementTypeOut>,
+              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
 private:
 

@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 
+#include <dataTypes/BasicTypes.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
@@ -42,6 +43,7 @@ class FrameLabeler
 public:  // types
     using LaneModelParameters = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
+    using ElementType = Data::BaselinedTraceElement;
 
 public:     // Static functions
     static void Configure(int lanesPerPool, int framesPerChunk);
@@ -60,7 +62,7 @@ public:
 public:
     /// \returns LabelsBatch with estimated labels for each frame, along with the associated
     ///          baseline subtracted trace
-    Data::LabelsBatch operator()(Data::CameraTraceBatch trace,
+    Data::LabelsBatch operator()(Data::TraceBatch<ElementType> trace,
                                  const PoolModelParameters& models)
     {
         // TODO
@@ -72,7 +74,7 @@ private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::LabelsBatch Process(Data::CameraTraceBatch trace,
+    virtual Data::LabelsBatch Process(Data::TraceBatch<ElementType> trace,
                                       const PoolModelParameters& models); //= 0;
 };
 

@@ -231,6 +231,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         maxProb = Blend(cond, maxProb, prob[i]);
         anchorState = Blend(cond, anchorState, PBShort2(i));
     }
+    // TODO: This doesn't really match the Sequel definition exactly.
     pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x] = maxProb.FloatX();
     pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x + 1] = maxProb.FloatY();
 

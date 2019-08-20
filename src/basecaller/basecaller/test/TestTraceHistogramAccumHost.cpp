@@ -30,6 +30,7 @@
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/CameraTraceBatch.h>
 
 #include <gtest/gtest.h>
 
@@ -41,7 +42,7 @@ namespace Basecaller {
 
 struct TestTraceHistogramAccumHost : public ::testing::Test
 {
-    using TraceElementType = Data::CameraTraceBatch::ElementType;
+    using TraceElementType = Data::BaselinedTraceElement;
 
     const float blMean = 0.42f;         // baseline mean
     const float blVar = 4.0f;           // baseline variance
@@ -64,7 +65,9 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
 
     // Produces a trace batch with fixed baseliner stats and all trace frames
     // set to x.
-    Data::CameraTraceBatch GenerateCamTraceBatch(TraceElementType x)
+    std::pair<Data::TraceBatch<TraceElementType>,
+              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+    GenerateCamTraceBatch(TraceElementType x)
     {
         auto ctb = ctbFactory.NewBatch(bmd);
 
@@ -72,7 +75,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             // Mock up some baseliner statistics.
-            Data::BaselinerStatAccumState& bls = ctb.Stats().GetHostView()[l];
+            Data::BaselinerStatAccumState& bls = ctb.second.GetHostView()[l];
             LaneArrayRef<float>(bls.fullAutocorrState.moment2) = 0;
             bls.fullAutocorrState.moment1First = bls.fullAutocorrState.moment1Last = bls.fullAutocorrState.moment2;
             LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
@@ -80,7 +83,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
             LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
 
             // Fill in the trace data.
-            auto bvl = ctb.GetBlockView(l);
+            auto bvl = ctb.first.GetBlockView(l);
             for (auto lfi = bvl.Begin(); lfi != bvl.End(); ++lfi)
             {
                 *lfi = x;
@@ -117,7 +120,8 @@ TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
 
     // TODO: Blocked by incompleteness of BaselineStats. See BEN-896.
 
-    tha.AddBatch(GenerateCamTraceBatch(blMean));
+    auto baselinedTracesAndStats = GenerateCamTraceBatch(blMean);
+    tha.AddBatch(baselinedTracesAndStats.first, baselinedTracesAndStats.second);
     EXPECT_EQ(chunkSize, tha.FramesAdded());
     EXPECT_EQ(0, tha.HistogramFrameCount());
 

@@ -70,7 +70,7 @@ DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId)
 DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;
 
 LabelsBatch
-DeviceSGCFrameLabeler::Process(CameraTraceBatch trace,
+DeviceSGCFrameLabeler::Process(TraceBatch<Data::BaselinedTraceElement> trace,
                                const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));

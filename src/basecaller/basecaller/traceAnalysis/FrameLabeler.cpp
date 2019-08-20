@@ -73,7 +73,7 @@ FrameLabeler::FrameLabeler(uint32_t poolId)
 
 }
 
-Data::LabelsBatch FrameLabeler::Process(Data::CameraTraceBatch trace,
+Data::LabelsBatch FrameLabeler::Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
                                         const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));

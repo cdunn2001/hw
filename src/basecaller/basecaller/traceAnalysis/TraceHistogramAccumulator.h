@@ -29,9 +29,11 @@
 //  Description:
 //  Defines abstract class TraceHistogramAccumulator.
 
-#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/PoolHistogram.h>
+#include <dataTypes/BasicTypes.h>
+#include <dataTypes/BaselinerStatAccumState.h>
+#include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -42,13 +44,12 @@ namespace Basecaller {
 class TraceHistogramAccumulator
 {
 public:     // Types
-    using DataType = Data::CameraTraceBatch::ElementType;
+    using DataType = Data::BaselinedTraceElement;
     using HistDataType = float;
     using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
     using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
-    // TODO: Switch from BaselineStats to BaselinerStatAccumState.
 
 public:     // Static functions
     static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
@@ -105,10 +106,12 @@ public:     // Const functions
 public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
-    void AddBatch(const Data::CameraTraceBatch& ctb)
+    void AddBatch(
+            const Data::TraceBatch<DataType>& ctb,
+            const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
     {
         assert (ctb.GetMeta().PoolId() == poolId_);
-        AddBatchImpl(ctb);
+        AddBatchImpl(ctb, stats);
         frameCount_ += ctb.NumFrames();
     }
 
@@ -131,7 +134,9 @@ private:    // Data
 
 private:    // Customizable implementation.
     // Bins frames in ctb and updates poolHist_.
-    virtual void AddBatchImpl(const Data::CameraTraceBatch& ctb) = 0;
+    virtual void AddBatchImpl(
+        const Data::TraceBatch<DataType>& ctb,
+        const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) = 0;
 
     virtual const PoolHistType& HistogramImpl() const = 0;
 

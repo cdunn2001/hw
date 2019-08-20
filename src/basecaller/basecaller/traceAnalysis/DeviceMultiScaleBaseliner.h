@@ -33,7 +33,6 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/ConfigForward.h>
-#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <basecaller/traceAnalysis/Baseliner.h>
 
@@ -86,7 +85,9 @@ public:
     ~DeviceMultiScaleBaseliner() override;
 
 private:    // Customizable implementation
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
+              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2>;
     std::unique_ptr<Filter> filter_;

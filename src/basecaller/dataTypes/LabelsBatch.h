@@ -28,7 +28,6 @@
 #define PACBIO_MONGO_DATA_LABELS_BATCH_H_
 
 #include "TraceBatch.h"
-#include "CameraTraceBatch.h"
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
@@ -56,7 +55,7 @@ public:     // Types
 public:     // Structors and assignment
     LabelsBatch(const BatchMetadata& meta,
                 const BatchDimensions& dims,
-                CameraTraceBatch trace,
+                TraceBatch<ElementType> trace,
                 size_t latentFrames,
                 bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
@@ -90,7 +89,7 @@ public:     // Structors and assignment
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
     // viterbi stitching, so this class will prevent access to those
-    CameraTraceBatch curTrace_;
+    TraceBatch<ElementType> curTrace_;
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;
@@ -119,7 +118,7 @@ public:
         , metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool * sizeof(PulseDetectionMetrics), pinned))
     {}
 
-    LabelsBatch NewBatch(CameraTraceBatch trace)
+    LabelsBatch NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
     {
         auto meta = trace.Metadata();
         auto dims = trace.StorageDims();

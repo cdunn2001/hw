@@ -52,110 +52,141 @@ float evaluatePolynomial(const std::array<float, size>& coeff, float x)
         y = y * x + coeff[i];
     return y;
 }
+
+template <size_t size>
+LaneArray<float> evaluatePolynomial(const std::array<float, size>& coeff, LaneArray<float> x)
+{
+    static_assert(size > 0);
+    LaneArray<float> y(coeff[0]);
+    for (unsigned int i = 1; i < size; ++i)
+        y = y * x + LaneArray<float>(coeff[i]);
+    return y;
+}
 }
 
 template <unsigned int LaneWidth>
 void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
 {
     // Calculated in the accessor, so caching here:
-    const auto& stdDevAll = traceMetrics_.FrameBaselineSigmaDWS();
-    const auto& numBases = NumBases();
-    const auto& numPulses = NumPulses();
+    const auto& stdDev = traceMetrics_.FrameBaselineSigmaDWS();
+    const auto& numBases = NumBases().AsFloat();
+    const auto& numPulses = NumPulses().AsFloat();
     const auto& pulseWidth = PulseWidth();
     const auto& pkmid = PkmidMean();
-    for (size_t zmw = 0; zmw < laneSize; ++zmw)
+    LaneArray<float> zeros(0);
+
+    std::array<LaneArray<float>, ActivityLabeler::NUM_FEATURES> features;
+    for (auto& analog : features)
     {
-        std::vector<float> features;
-        features.resize(ActivityLabeler::NUM_FEATURES, 0.0f);
-        const float seconds = traceMetrics_.NumFrames()[zmw] / frameRate;
+        analog = zeros;
+    }
 
-        features[ActivityLabeler::PULSERATE] = numPulses[zmw] / seconds;
-        features[ActivityLabeler::SANDWICHRATE] = numPulses[zmw] > 0 ?
-            static_cast<float>(numSandwiches_[zmw]) / numPulses[zmw] : 0.0f;
+    const auto& seconds = traceMetrics_.NumFrames().AsFloat() / LaneArray<float>(frameRate);
 
-        const float hswr = (numPulses[zmw] > 0) ?
-            static_cast<float>(numHalfSandwiches_[zmw]) / numPulses[zmw] : 0.0f;
-        const float hswrExp = std::min(
-                ActivityLabeler::TrainedCart::maxAcceptableHalfsandwichRate,
-                evaluatePolynomial(ActivityLabeler::TrainedCart::hswCurve,
-                                   features[ActivityLabeler::PULSERATE]));
-        features[ActivityLabeler::LOCALHSWRATENORM] = hswr - hswrExp;
+    features[ActivityLabeler::PULSERATE] = numPulses / seconds;
 
-        features[ActivityLabeler::VITERBISCORE] = traceMetrics_.PulseDetectionScore()[zmw];
-        features[ActivityLabeler::MEANPULSEWIDTH] = pulseWidth[zmw];
-        features[ActivityLabeler::LABELSTUTTERRATE] = (numPulses[zmw] > 0) ?
-            static_cast<float>(numPulseLabelStutters_[zmw]) / numPulses[zmw] : 0.0f;
+    features[ActivityLabeler::SANDWICHRATE] = numSandwiches_.AsFloat() / numPulses;
+    features[ActivityLabeler::SANDWICHRATE] = Blend(
+            isnan(features[ActivityLabeler::SANDWICHRATE]),
+            zeros,
+            features[ActivityLabeler::SANDWICHRATE]);
 
-        const float stdDev = stdDevAll[zmw];
+    auto hswr = numHalfSandwiches_.AsFloat() / numPulses;
+    hswr = Blend(isnan(hswr), zeros, hswr);
+    auto hswrExp = evaluatePolynomial(ActivityLabeler::TrainedCart::hswCurve,
+                                      features[ActivityLabeler::PULSERATE]);
+    hswrExp = Blend(hswrExp > ActivityLabeler::TrainedCart::maxAcceptableHalfsandwichRate,
+                    LaneArray<float>(ActivityLabeler::TrainedCart::maxAcceptableHalfsandwichRate),
+                    hswrExp);
 
-        const auto& pkbases = numBasesByAnalog_;
-        const float totBases = static_cast<float>(numBases[zmw]);
+    features[ActivityLabeler::LOCALHSWRATENORM] = hswr - hswrExp;
 
-        std::vector<float> relamps;
-        // these amps aren't relative, and therefore could be misleading. Scoping
-        // maxamp to prevent misuse
-        {
-            std::vector<float> amps = {
-                modelMean_[0][zmw],
-                modelMean_[1][zmw],
-                modelMean_[2][zmw],
-                modelMean_[3][zmw]};
+    features[ActivityLabeler::VITERBISCORE] = traceMetrics_.PulseDetectionScore();
+    features[ActivityLabeler::MEANPULSEWIDTH] = pulseWidth;
+    features[ActivityLabeler::LABELSTUTTERRATE] = numPulseLabelStutters_.AsFloat() / numPulses;
+    features[ActivityLabeler::LABELSTUTTERRATE] = Blend(
+            isnan(features[ActivityLabeler::LABELSTUTTERRATE]),
+            zeros,
+            features[ActivityLabeler::LABELSTUTTERRATE]);
 
-            const float maxamp = *std::max_element(amps.begin(), amps.end());
-            std::transform(amps.begin(), amps.end(), std::back_inserter(relamps),
-                           [maxamp](float amp) { return amp/maxamp; });
-        }
-        // This never changes, could be a member or at least not recomputed...
-        const float minamp = *std::min_element(relamps.begin(), relamps.end());
+    const auto& pkbases = numBasesByAnalog_;
 
-        for (size_t i = 0; i < numAnalogs; ++i)
-        {
-            if (!std::isnan(pkmid[i][zmw]) && pkbases[i][zmw] > 0 && stdDev > 0
-                    && relamps[i] > 0 && totBases > 0)
-            {
-                features[ActivityLabeler::BLOCKLOWSNR] += pkmid[i][zmw] / stdDev * pkbases[i][zmw]
-                                         / totBases * minamp / relamps[i];
-            }
-        }
+    // make a copy of modelMean_, probably won't work this way:
+    AnalogFloatMetric relamps(modelMean_);
 
-        for (size_t aI = 0; aI < numAnalogs && stdDev > 0; ++aI)
-        {
-            features[ActivityLabeler::MAXPKMAXNORM] = std::fmax(
-                features[ActivityLabeler::MAXPKMAXNORM],
-                (pkMax_[aI][zmw] - pkmid[aI][zmw]) / stdDev);
-        }
+    LaneArray<float> maxamp = relamps[0];
+    for (size_t i = 1; i < numAnalogs; ++i)
+    {
+        maxamp = max(relamps[i], maxamp);
+    }
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        relamps[i] /= maxamp;
+    }
 
-        features[ActivityLabeler::AUTOCORRELATION] = traceMetrics_.Autocorrelation()[zmw];
+    LaneArray<unsigned int> lowAmpIndex(0);
+    LaneArray<float> minamp(relamps[0]);
+    for (size_t i = 1; i < numAnalogs; ++i)
+    {
+        static_assert(sizeof(unsigned int) == 4u);
+        const auto& ila = LaneArray<unsigned int>(i);
+        lowAmpIndex = Blend(relamps[i] < minamp, ila, lowAmpIndex);
+        minamp = min(relamps[i], minamp);
+    }
 
-        int lowAnalogIndex = std::distance(
-            relamps.begin(),
-            std::min_element(relamps.begin(), relamps.end()));
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        features[ActivityLabeler::BLOCKLOWSNR] += pkmid[i] / stdDev
+                                                * pkbases[i].AsFloat() / numBases
+                                                * minamp / relamps[i];
+    }
+    features[ActivityLabeler::BLOCKLOWSNR] = Blend(
+            isnan(features[ActivityLabeler::BLOCKLOWSNR]),
+            zeros,
+            features[ActivityLabeler::BLOCKLOWSNR]);
 
-        for (const auto& val : bpZvar_)
-        {
-            features[ActivityLabeler::BPZVARNORM] += std::isnan(val[zmw]) ? 0.0f : val[zmw];
-        }
-        const auto& lowbp = bpZvar_[lowAnalogIndex][zmw];
-        features[ActivityLabeler::BPZVARNORM] -=  std::isnan(lowbp) ? 0.0f : lowbp;
-        features[ActivityLabeler::BPZVARNORM] /= 3.0f;
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        features[ActivityLabeler::MAXPKMAXNORM] = max(
+            features[ActivityLabeler::MAXPKMAXNORM],
+            (pkMax_[i] - pkmid[i]) / stdDev);
+    }
+    features[ActivityLabeler::MAXPKMAXNORM] = Blend(
+            isnan(features[ActivityLabeler::MAXPKMAXNORM]),
+            zeros,
+            features[ActivityLabeler::MAXPKMAXNORM]);
 
-        for (const auto& val : pkZvar_)
-        {
-            features[ActivityLabeler::PKZVARNORM] += std::isnan(val[zmw]) ? 0.0f : val[zmw];
-        }
-        const auto& lowpk = pkZvar_[lowAnalogIndex][zmw];
-        features[ActivityLabeler::PKZVARNORM] -=  std::isnan(lowpk) ? 0.0f : lowpk;
-        features[ActivityLabeler::PKZVARNORM] /= 3.0f;
+    features[ActivityLabeler::AUTOCORRELATION] = traceMetrics_.Autocorrelation();
 
-        for (size_t i = 0; i < features.size(); ++i)
-        {
-            assert(!std::isnan(features[i]));
-        }
+    LaneArray<float> lowbp(0);
+    LaneArray<float> lowpk(0);
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        // Can we avoid this Blend?
+        features[ActivityLabeler::BPZVARNORM] += Blend(isnan(bpZvar_[i]), zeros, bpZvar_[i]);
+        lowbp = Blend(lowAmpIndex == LaneArray<unsigned int>(i) & !isnan(bpZvar_[i]), bpZvar_[i], lowbp);
 
+        features[ActivityLabeler::PKZVARNORM] += Blend(isnan(pkZvar_[i]), zeros, pkZvar_[i]);
+        lowpk = Blend(lowAmpIndex == LaneArray<unsigned int>(i) & !isnan(pkZvar_[i]), pkZvar_[i], lowpk);
+    }
+    features[ActivityLabeler::BPZVARNORM] -=  lowbp;
+    features[ActivityLabeler::BPZVARNORM] /= LaneArray<float>(3.0f);
+    features[ActivityLabeler::PKZVARNORM] -=  lowpk;
+    features[ActivityLabeler::PKZVARNORM] /= LaneArray<float>(3.0f);
+
+    for (size_t i = 0; i < features.size(); ++i)
+    {
+        assert(none(isnan(features[i])));
+    }
+
+    // I don't think parallel array accessions are possible at the moment, so
+    // this still loops overt the lane:
+    for (size_t z = 0; z < laneSize; ++z)
+    {
         size_t current = 0;
         while (ActivityLabeler::TrainedCart::feature[current] >= 0)
         {
-            if (features[ActivityLabeler::TrainedCart::feature[current]]
+            if (features[ActivityLabeler::TrainedCart::feature[current]][z]
                     <= ActivityLabeler::TrainedCart::threshold[current])
             {
                 current = ActivityLabeler::TrainedCart::childrenLeft[current];
@@ -165,7 +196,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
                 current = ActivityLabeler::TrainedCart::childrenRight[current];
             }
         }
-        activityLabel_[zmw] = static_cast<HQRFPhysicalStates>(ActivityLabeler::TrainedCart::value[current]);
+        activityLabel_[z] = static_cast<HQRFPhysicalStates>(ActivityLabeler::TrainedCart::value[current]);
     }
 }
 

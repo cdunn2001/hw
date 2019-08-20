@@ -20,16 +20,18 @@ void HostNoOpBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch HostNoOpBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
+          Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+HostNoOpBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         auto traceData = rawTrace.GetBlockView(laneIdx);
-        auto cameraTraceData = out.GetBlockView(laneIdx);
+        auto cameraTraceData = out.first.GetBlockView(laneIdx);
         auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
-        auto statsView = out.Stats().GetHostView();
+        auto statsView = out.second.GetHostView();
         for (size_t frame = 0; frame < traceData.NumFrames(); ++frame)
         {
             ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
