@@ -237,7 +237,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     }
 
     PBHalf2 maxProb = prob[0];
-    PBShort2 anchorState = {0,0};
+    PBShort2 anchorState(0);
     #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
