@@ -86,7 +86,6 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
     using LaneArr = LaneArray<ElementType>;
     using CLanArrRef = ConstLaneArrayRef<ElementType>;
     using LanArrRef = LaneArrayRef<DetModelElementType>;
-    using FLaneArrRef = LaneArrayRef<float>;
 
     StatAccumulator<LaneArr> blsa (blStats.baselineStats);
 
@@ -95,8 +94,8 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
     // TODO: We want to pull the total number of frames from the blStats object but the
     // fullAutocorrState is not yet populated by the GPU baseliner. For now, we just use the
     // minimum frames for estimating.
-    //const auto& blWeight = FLaneArrRef(blStats.NumBaselineFrames().data()) / FLaneArrRef(blStats.TotalFrames().data());
-    const auto& blWeight = FLaneArrRef(blStats.NumBaselineFrames().data()) / LaneArray<float>(minFramesForEstimate_);
+    //const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / CLanArrRef(blStats.TotalFrames());
+    const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / LaneArr(minFramesForEstimate_);
 
     LanArrRef(ldm.BaselineMode().means.data()) = blMean;
     LanArrRef(ldm.BaselineMode().vars.data()) = blVar;
