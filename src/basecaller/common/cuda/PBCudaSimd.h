@@ -142,8 +142,13 @@ public:
     CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
     CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
                                                                       b2 ? 1.0f : 0.0f)} {}
-    CUDA_ENABLED bool X() const { return __half2float(data_.x) != 0.0f; }
-    CUDA_ENABLED bool Y() const { return __half2float(data_.y) != 0.0f; }
+#ifdef __CUDA_ARCH__
+    __device__ bool X() const { return data_.x != __short_as_half(0); }
+    __device__ bool Y() const { return data_.y != __short_as_half(0); }
+#else
+    bool X() const { return __half2float(data_.x) != 0.0f; }
+    bool Y() const { return __half2float(data_.y) != 0.0f; }
+#endif
 
     CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
     half2 CUDA_ENABLED data() const { return data_; }

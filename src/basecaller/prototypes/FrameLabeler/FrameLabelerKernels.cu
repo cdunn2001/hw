@@ -168,17 +168,18 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         {
             auto score = scorer.StateScores(dat, nextState);
             auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
-            auto maxIdx = PBShort2(0);
+            short2 maxIdx = make_short2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
                 auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
 
-                auto cond = maxVal > val;
-                maxVal = Blend(cond, maxVal, val);
-                maxIdx = Blend(cond, maxIdx, PBShort2(prevState));
+                auto cond = val >= maxVal;
+                maxVal = Blend(cond, val, maxVal);
+                if (cond.X()) maxIdx.x = prevState;
+                if (cond.Y()) maxIdx.y = prevState;
             }
             logAccum[nextState] = maxVal;
-            labels(idx, nextState) = maxIdx;
+            labels(idx, nextState) = PBShort2(maxIdx.x, maxIdx.y);
         }
         logLike = logAccum;
     };
