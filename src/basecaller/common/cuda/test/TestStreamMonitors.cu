@@ -52,7 +52,7 @@ __global__ void SpinKernel(uint64_t duration, DeviceView<T>)
 
 // Note: These tests are testing the behaviour of UnifiedCudaArray
 //       and DeviceOnlyArray.  Preferrably they'd be testing the
-//       SingleStreammonitor and MultiStreamMonitor implementations
+//       SingleStreamMonitor and MultiStreamMonitor implementations
 //       directly, but that is currently difficult.  They rely on
 //       consuming KernelLaunchInfo objects, which are quite
 //       intentionally impossible for anyone outside the launcher

@@ -75,6 +75,8 @@ private:
     BatchMetadata meta_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 auto KernelArgConvert(TraceBatch<T>& obj, const Cuda::KernelLaunchInfo& info)
 {

@@ -85,6 +85,8 @@ private:
     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 inline auto KernelArgConvert(CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);

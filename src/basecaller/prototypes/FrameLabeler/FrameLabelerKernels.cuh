@@ -129,6 +129,8 @@ struct ViterbiData : private Memory::detail::DataManager
     int numFrames_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T, size_t laneWidth>
 ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
 

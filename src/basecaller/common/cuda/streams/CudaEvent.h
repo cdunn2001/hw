@@ -83,7 +83,7 @@ public:
     // an event but not yet updated `completed_`, so
     // another thread might return true from `IsCompleted`.
     // That said, it's only a tiny exacerbation on an
-    // already present race conditino you'd have if different
+    // already present race condition you'd have if different
     // threads were recording and checking events using the
     // underlying CUDA API.  Just don't do that.
     void RecordEvent()

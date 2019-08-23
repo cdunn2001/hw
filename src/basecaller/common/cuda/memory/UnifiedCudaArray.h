@@ -288,6 +288,8 @@ private:
     mutable SingleStreamMonitor checker_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T, bool allow_expensive_types = false>
 auto KernelArgConvert(UnifiedCudaArray<T, allow_expensive_types>& obj,
                       const KernelLaunchInfo& info)

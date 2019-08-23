@@ -143,7 +143,7 @@ public:
         if (data_)
         {
             // Even if we are an array of const types, we need to be non-const during destruction
-            using U = typename std::remove_const<T>::type;
+            using U = std::remove_const_t<T>;
             auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
             detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
                     data_.get<U>(DataKey()),
@@ -169,6 +169,8 @@ private:
 template <typename T>
 constexpr size_t DeviceOnlyArray<T>::maxThreadsPerBlock;
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 DeviceView<T> KernelArgConvert(DeviceOnlyArray<T>& obj, const KernelLaunchInfo& info)
 {

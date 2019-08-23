@@ -418,6 +418,8 @@ private:
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 auto KernelArgConvert(BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
