@@ -76,7 +76,7 @@ private:
 // implementation file.
 
 SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker);
-SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle = false);
+SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker);
 
 void ReturnManagedHostAllocation(SmartHostAllocation alloc);
 void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc);

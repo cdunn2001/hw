@@ -306,7 +306,7 @@ SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker
     return GetManager().GetHostAlloc(size, marker);
 }
 
-SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker, bool throttle)
+SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker)
 {
     static thread_local size_t counter = 0;
     counter++;

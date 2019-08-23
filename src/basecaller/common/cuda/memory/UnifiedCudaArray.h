@@ -153,7 +153,6 @@ public:
         }
 
         //recycle our allocation
-        // TODO build this into an RAII type?
         ReturnManagedHostAllocation(std::move(hostData_));
     }
 

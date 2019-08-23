@@ -34,6 +34,10 @@ void  CudaRawCopyHost(void* src, void* dest, size_t size);
 void  CudaRawCopyDevice(void* src, void* dest, size_t size);
 void  CudaSynchronizeDefaultStream();
 
+// Manually check if an error has occured.  Will capture
+// asynchronous errors that have not yet happened since
+// the last CUDA API call.  This also might be the only
+// way to catch cuda kernel launch errors.
 void ThrowIfCudaError();
 
 template <typename T>

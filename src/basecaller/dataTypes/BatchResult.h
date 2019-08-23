@@ -50,11 +50,9 @@ struct BatchResult
         // We have fully analyzed results now.
         // Force data downloads to host, and release
         // any gpu memory we may have
-        pulses.Pulses().LaneView(0);
         pulses.Pulses().DeactivateGpuMem();
         if (metrics)
         {
-            metrics->GetHostView();
             metrics->DeactivateGpuMem();
         }
     };

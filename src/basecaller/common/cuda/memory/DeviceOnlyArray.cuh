@@ -109,7 +109,7 @@ class DeviceOnlyArray : private detail::DataManager
 public:
     template <typename... Args>
     DeviceOnlyArray(const AllocationMarker& marker, size_t count, Args&&... args)
-        : data_(GetManagedDeviceAllocation(count*sizeof(T), marker, false))
+        : data_(GetManagedDeviceAllocation(count*sizeof(T), marker))
         , count_(count)
     {
         // Even if we are an array of const types, we need to be non-const during construction
