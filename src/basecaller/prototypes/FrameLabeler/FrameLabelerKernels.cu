@@ -59,7 +59,7 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 
 int32_t FrameLabeler::framesPerChunk_ = 0;
 int32_t FrameLabeler::lanesPerPool_ = 0;
-ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
+ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
 std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> FrameLabeler::trans_;
 
 
@@ -83,19 +83,19 @@ void FrameLabeler::Finalize()
     trans_.release();
 }
 
-std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
+std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
 {
-    std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> ret;
+    std::unique_ptr<ViterbiDataHost<BlockThreads>> ret;
     bool success = scratchData_.TryPop(ret);
     if (! success)
     {
-        ret = std::make_unique<ViterbiDataHost<PBShort2, BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
+        ret = std::make_unique<ViterbiDataHost<BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
     }
     assert(ret);
     return ret;
 }
 
-void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> data)
+void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> data)
 {
     scratchData_.Push(std::move(data));
 }
@@ -135,12 +135,15 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                                    const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
                                    Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
-                                   ViterbiData<PBShort2, blockThreads> labels,
+                                   ViterbiData<blockThreads> labels,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
                                    Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
 {
+    // When/if this changes, some of the bit twiddle logic below is going to have to be udpated or generalized
+    static_assert(Subframe::numStates == 13,
+                  "FrameLabelerKernel currently hard coded to only handle 13 states");
     using namespace Subframe;
 
     assert(blockDim.x == blockThreads);
@@ -162,13 +165,13 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     {
         CudaArray<PBHalf2, numStates> logAccum;
 
-        //auto scores = scorer.StateScores(PBHalf2(data));
         const auto dat = PBHalf2(data);
+        uint32_t packedLabels = 0;
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
             auto score = scorer.StateScores(dat, nextState);
             auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
-            short2 maxIdx = make_short2(0,0);
+            ushort2 maxIdx = make_ushort2(0,0);
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
                 auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
@@ -178,9 +181,24 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                 if (cond.X()) maxIdx.x = prevState;
                 if (cond.Y()) maxIdx.y = prevState;
             }
+            // Always slot new entries into the most significant bits, and
+            // before that always shift things to the right by a slot. This
+            // makes all bit operations happen with compile time arguments,
+            // which has proven faster than calculating on the fly what shifts
+            // are necessary to populate the correct slot for each iteration.
             logAccum[nextState] = maxVal;
-            labels(idx, nextState) = PBShort2(maxIdx.x, maxIdx.y);
+            packedLabels  = packedLabels >> 8;
+            packedLabels |= (maxIdx.x << 24);
+            packedLabels |= (maxIdx.y << 28);
+            if ((nextState & 3) == 3)
+            {
+                labels(idx, nextState / 4) = packedLabels;
+            }
         }
+        // Every time we handled a 4th state we wrote the result to
+        // labels, but the 13th state is the odd man out.  Need to
+        // manually shift things into the correct location and store it.
+        labels(idx, 3) = (packedLabels >> 24);
         logLike = logAccum;
     };
 
@@ -228,11 +246,22 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         {
             newProb[state] = PBHalf2(0.0f);
         }
+        auto packedLabels = labels(i, 0);
         for (short state = 0; state < numStates; ++state)
         {
-            auto prev = labels(i, state);
-            newProb[prev.X()] += Blend(PBBool2(true,false), prob[state], zero);
-            newProb[prev.Y()] += Blend(PBBool2(false,true), prob[state], zero);
+            // We're accessing labels in order, so we can always strip off
+            // the low bits to get the current labels, and then shift everything
+            // to the right to prepare for the next iteration
+            short prevx = (packedLabels & 0xF);
+            short prevy = ((packedLabels >> 4) & 0xF);
+            if ((state & 3) == 3)
+            {
+                packedLabels = labels(i, state / 4 + 1);
+            } else {
+                packedLabels = packedLabels >> 8;
+            }
+            newProb[prevx] += Blend(PBBool2(true,false), prob[state], zero);
+            newProb[prevy] += Blend(PBBool2(false,true), prob[state], zero);
         }
         prob = newProb;
     }
@@ -257,8 +286,13 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
-        traceState = PBShort2(labels(frame, traceState.X()).X(),
-                              labels(frame, traceState.Y()).Y());
+        uint32_t x = labels(frame, traceState.X() / 4);
+        x = x >> (8 * (traceState.X() % 4));
+        x &= 0xF;
+        uint32_t y = labels(frame, traceState.Y() / 4);
+        y = y >> (8 * (traceState.Y() % 4) + 4);
+        y &= 0xF;
+        traceState = PBShort2(x,y);
     }
 
     // Update latent data
