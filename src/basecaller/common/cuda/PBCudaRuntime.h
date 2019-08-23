@@ -1,6 +1,8 @@
 #ifndef PACBIO_CUDA_PB_CUDA_RUNTIME_H
 #define PACBIO_CUDA_PB_CUDA_RUNTIME_H
 
+#include <driver_types.h>
+
 #include <cstdlib>
 
 // This file serves two purposes.  The first is to be a firewall between the
@@ -14,6 +16,12 @@ namespace Cuda {
 
 size_t RequiredRegisterCount(const void* func);
 size_t AvailableRegistersPerBlock();
+
+cudaEvent_t InitializeEvent();
+void DestroyEvent(cudaEvent_t event);
+void RecordEvent(cudaEvent_t event);
+bool CompletedEvent(cudaEvent_t event);
+void SyncEvent(cudaEvent_t event);
 
 void* CudaRawMalloc(size_t size);
 void* CudaRawMallocHost(size_t size);

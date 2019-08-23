@@ -136,6 +136,15 @@ private:
     std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
+inline auto KernelArgConvert(LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+inline auto KernelArgConvert(const LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+
 }}}     // namespace PacBio::Mongo::Data
 
 #endif // PACBIO_MONGO_DATA_LABELS_BATCH_H_

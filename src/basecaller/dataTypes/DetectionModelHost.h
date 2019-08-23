@@ -271,7 +271,11 @@ public:     // Structors
     { }
 
     template <typename VF2>
-    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam);
+    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam, const Cuda::Utility::CudaArray<VF2, laneSize>& weight);
+
+    template <typename VF2>
+    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam, const FloatVec& weight);
+
 
     ~SignalModeHost() = default;
 

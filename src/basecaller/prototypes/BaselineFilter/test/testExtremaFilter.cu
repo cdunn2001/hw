@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SawtoothGenerator.h>
@@ -77,10 +78,11 @@ TEST(MaxFilterTest, GlobalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxGlobalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxGlobalFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 
@@ -120,10 +122,11 @@ TEST(MaxFilterTest, SharedMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxSharedFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxSharedFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 
@@ -163,10 +166,11 @@ TEST(MaxFilterTest, LocalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxLocalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxLocalFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 

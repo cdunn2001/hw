@@ -30,7 +30,7 @@
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
-#include <dataTypes/TraceBatch.h>
+#include <dataTypes/BatchData.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -107,40 +107,10 @@ public:
     GpuBatchData(const GpuBatchDataHandle<T>& handle)
         : GpuBatchDataHandle<T>(handle)
     {}
-    template <typename U>
-    GpuBatchData(BatchData<U>& data)
-        : GpuBatchDataHandle<T>(data.StorageDims(),
-                                data.NumFrames(),
-                                data.GetRawData(DataKey()).GetDeviceHandle(),
-                                DataKey())
-    {
-        // We support using things like int16_t on the host but PBShort2 on
-        // the device.  To enable that, we may need to tweak our apparent
-        // lane width
-        if (sizeof(U) != sizeof(T))
-        {
-            static_assert(sizeof(T) % sizeof(U) == 0, "Invalid types");
-            this->dims_.laneWidth /= 2;
-        }
-    }
-    // Need to SFINAE away this functino if we're not a GpuBatchData of const
-    // T, else we'd violate the const of the incoming `BatchData`
-    template <typename U, typename U2 = T, std::enable_if_t<std::is_const<U2>::value, int> = 0>
-    GpuBatchData(const BatchData<U>& data)
-        : GpuBatchDataHandle<T>(data.StorageDims(),
-                                data.NumFrames(),
-                                data.GetRawData(DataKey()).GetDeviceHandle(),
-                                DataKey())
-    {
-        // We support using things like int16_t on the host but PBShort2 on
-        // the device.  To enable that, we may need to tweak our apparent
-        // lane width
-        if (sizeof(U) != sizeof(T))
-        {
-            static_assert(sizeof(T) % sizeof(U) == 0, "Invalid types");
-            this->dims_.laneWidth /= 2;
-        }
-    }
+    template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
+    GpuBatchData(const GpuBatchDataHandle<typename std::remove_const<T>::type>& handle)
+        : GpuBatchDataHandle<T>(handle.Dimensions(), handle.NumFrames(), handle.Data(DataKey()), DataKey())
+    {}
 
     __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
     {

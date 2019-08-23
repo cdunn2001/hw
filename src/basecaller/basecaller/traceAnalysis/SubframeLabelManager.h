@@ -94,7 +94,7 @@ public:
         if (IsPulseDownState(label)) label -= 2*numAnalogs;
         if (IsPulseUpState(label)) label -= numAnalogs;
 
-        assert(label > 0 && label < numAnalogs);
+        assert(label > 0 && label <= numAnalogs);
         return analogMap_[label-1];
     }
 private:
