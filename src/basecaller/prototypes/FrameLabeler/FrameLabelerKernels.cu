@@ -26,6 +26,8 @@
 
 #include "FrameLabelerKernels.cuh"
 
+#include <common/cuda/streams/LaunchManager.cuh>
+
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
 using namespace PacBio::Mongo::Data;
@@ -58,7 +60,7 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 int32_t FrameLabeler::framesPerChunk_ = 0;
 int32_t FrameLabeler::lanesPerPool_ = 0;
 ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
-std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> FrameLabeler::trans_;
+std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> FrameLabeler::trans_;
 
 
 void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
@@ -67,7 +69,7 @@ void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
     if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
     if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
 
-    trans_ = std::make_unique<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>>(
+    trans_ = std::make_unique<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>>(
             CudaArray<Subframe::AnalogMeta, 4>{meta});
 
     framesPerChunk_ = framesPerChunk;
@@ -121,7 +123,7 @@ FrameLabeler::FrameLabeler()
         throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
     }
 
-    InitLatent<<<lanesPerPool_, BlockThreads>>>(prevLat_);
+    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
     CudaSynchronizeDefaultStream();
 }
 
@@ -261,18 +263,21 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
 {
     auto labels = BorrowScratch();
 
-    FrameLabelerKernel<<<lanesPerPool_, BlockThreads>>>(trans_->GetDevicePtr(),
-                                                        models.GetDeviceHandle(),
-                                                        input,
-                                                        latent_.GetDeviceView(),
-                                                        *labels,
-                                                        prevLat_,
-                                                        latOut,
-                                                        output);
+    const auto& launcher = PBLauncher(FrameLabelerKernel, lanesPerPool_, BlockThreads);
+    launcher(*trans_,
+             models,
+             input,
+             latent_,
+             *labels,
+             prevLat_,
+             latOut,
+             output);
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
+
+constexpr size_t FrameLabeler::BlockThreads;
 
 }}

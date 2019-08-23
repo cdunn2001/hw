@@ -30,11 +30,13 @@
 #include <cmath>
 #include <utility>
 
-#include <common/cuda/PBCudaRuntime.h>
+#include <pacbio/PBException.h>
+
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
-
-#include <pacbio/PBException.h>
+#include <common/cuda/PBCudaRuntime.h>
+#include <common/cuda/streams/KernelLaunchInfo.h>
+#include <common/cuda/streams/StreamMonitors.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -109,9 +111,11 @@ public:
         : data_(count*sizeof(T))
         , count_(count)
     {
-        auto launchParams = ComputeBlocksThreads(count, (void*)&detail::InitFilters<T, Args...>);
+        // Even if we are an array of const types, we need to be non-const during construction
+        using U = typename std::remove_const<T>::type;
+        auto launchParams = ComputeBlocksThreads(count, (void*)&detail::InitFilters<U, Args...>);
         detail::InitFilters<<<launchParams.first, launchParams.second>>>(
-                data_.get<T>(DataKey()),
+                data_.get<U>(DataKey()),
                 count_,
                 std::forward<Args>(args)...);
         CudaSynchronizeDefaultStream();
@@ -123,12 +127,14 @@ public:
     DeviceOnlyArray& operator=(const DeviceOnlyArray&) = delete;
     DeviceOnlyArray& operator=(DeviceOnlyArray&& other) = default;
 
-    DeviceView<T> GetDeviceView()
+    DeviceView<T> GetDeviceView(const KernelLaunchInfo& info)
     {
+        checker_.Update(info);
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
-    DeviceView<const T> GetDeviceView() const
+    DeviceView<const T> GetDeviceView(const KernelLaunchInfo& info) const
     {
+        checker_.Update(info);
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
 
@@ -136,9 +142,11 @@ public:
     {
         if (data_)
         {
-            auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<T>);
+            // Even if we are an array of const types, we need to be non-const during destruction
+            using U = typename std::remove_const<T>::type;
+            auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
             detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
-                    data_.get<T>(DataKey()),
+                    data_.get<U>(DataKey()),
                     count_);
             CudaSynchronizeDefaultStream();
         }
@@ -148,10 +156,29 @@ private:
 
     SmartDeviceAllocation data_;
     size_t count_;
+
+    // It's only safe for us to allow concurrent access among different streams
+    // if we are storing a const type, and know that no stream is capable
+    // of mutating the data.
+    using CheckerType = typename std::conditional<std::is_const<T>::value,
+                                                  MultiStreamMonitor,
+                                                  SingleStreamMonitor>::type;
+    CheckerType checker_;
 };
 
 template <typename T>
 constexpr size_t DeviceOnlyArray<T>::maxThreadsPerBlock;
+
+template <typename T>
+DeviceView<T> KernelArgConvert(DeviceOnlyArray<T>& obj, const KernelLaunchInfo& info)
+{
+    return obj.GetDeviceView(info);
+}
+template <typename T>
+DeviceView<T> KernelArgConvert(const DeviceOnlyArray<T>& obj, const KernelLaunchInfo& info)
+{
+    return obj.GetDeviceView(info);
+}
 
 }}}
 

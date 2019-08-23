@@ -36,6 +36,7 @@
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/MongoConstants.h>
 
 using namespace PacBio::Cuda;
@@ -250,14 +251,18 @@ public:
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
-        ProcessLabels<LabelManager, threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
-                labels,
-                labels.TraceData(),
-                labels.LatentTrace(),
-                labels.Metadata().FirstFrame(),
-                workingSegments_.GetDeviceView(),
-                manager_->GetDevicePtr(),
-                ret.Pulses());
+
+        const auto& launcher = PBLauncher(
+            ProcessLabels<LabelManager, threadsPerBlock>,
+            labels.LanesPerBatch(),
+            threadsPerBlock);
+        launcher(labels,
+                 labels.TraceData(),
+                 labels.LatentTrace(),
+                 labels.Metadata().FirstFrame(),
+                 workingSegments_,
+                 *manager_,
+                 ret.Pulses());
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;
@@ -265,7 +270,7 @@ public:
 
     static void Configure(CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
     {
-        manager_ = std::make_unique<DeviceOnlyObj<LabelManager>>(analogMap);
+        manager_ = std::make_unique<DeviceOnlyObj<const LabelManager>>(analogMap);
     }
 
     static void Finalize()
@@ -275,11 +280,11 @@ public:
 
 private:
     DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
-    static std::unique_ptr<DeviceOnlyObj<LabelManager>> manager_;
+    static std::unique_ptr<DeviceOnlyObj<const LabelManager>> manager_;
 };
 
 template <typename LabelManager>
-std::unique_ptr<DeviceOnlyObj<LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
+std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)

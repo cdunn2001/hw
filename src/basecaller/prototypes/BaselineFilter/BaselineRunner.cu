@@ -51,10 +51,12 @@ void RunGlobalBaselineFilter(
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
-        GlobalBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
-                batch,
-                filterData[batchIdx].GetDeviceView(),
-                ret);
+        const auto& launcher = PBLauncher(GlobalBaselineFilter<Filter>,
+                                        dataParams.kernelLanes,
+                                        dataParams.laneWidth/2);
+        launcher(batch,
+                 filterData[batchIdx],
+                 ret);
         auto view = ret.GetBlockView(0);
     };
 
@@ -77,10 +79,12 @@ void RunSharedBaselineFilter(
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
-        SharedBaselineFilter<<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
-                batch,
-                filterData[batchIdx].GetDeviceView(),
-                ret);
+        const auto& launcher = PBLauncher(SharedBaselineFilter<Filter>,
+                                        dataParams.kernelLanes,
+                                        dataParams.laneWidth/2);
+        launcher(batch,
+                 filterData[batchIdx],
+                 ret);
         auto view = ret.GetBlockView(0);
     };
 
@@ -127,15 +131,17 @@ void RunCompressedBaselineFilter(
 
     auto tmp = [dataParams, &upper1, &upper2, &lower1, &lower2, &work1, &work2]
         (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
-        CompressedBaselineFilter<laneWidth, 9, 31, 2, 8><<<dataParams.kernelLanes, dataParams.laneWidth/2>>>(
-                batch,
-                lower1[batchIdx].GetDeviceView(),
-                lower2[batchIdx].GetDeviceView(),
-                upper1[batchIdx].GetDeviceView(),
-                upper2[batchIdx].GetDeviceView(),
-                work1[batchIdx],
-                work2[batchIdx],
-                ret);
+        const auto& launcher = PBLauncher(CompressedBaselineFilter<laneWidth, 9, 31, 2, 8>,
+                                        dataParams.kernelLanes,
+                                        dataParams.laneWidth/2);
+        launcher(batch,
+                 lower1[batchIdx],
+                 lower2[batchIdx],
+                 upper1[batchIdx],
+                 upper2[batchIdx],
+                 work1[batchIdx],
+                 work2[batchIdx],
+                 ret);
         auto view = ret.GetBlockView(0);
     };
 
@@ -199,26 +205,32 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
         {
         case BaselineFilterMode::GlobalMax:
         {
-            MaxGlobalFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
-                    batch,
-                    filterData[batchIdx].GetDeviceView(),
-                    ret);
+            const auto& launcher = PBLauncher(MaxGlobalFilter<laneWidth,FilterWidth>,
+                                            params.kernelLanes,
+                                            params.laneWidth/2);
+            launcher(batch,
+                     filterData[batchIdx],
+                     ret);
             break;
         }
         case BaselineFilterMode::SharedMax:
         {
-            MaxSharedFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
-                    batch,
-                    filterData[batchIdx].GetDeviceView(),
-                    ret);
+            const auto& launcher = PBLauncher(MaxSharedFilter<laneWidth,FilterWidth>,
+                                            params.kernelLanes,
+                                            params.laneWidth/2);
+            launcher(batch,
+                     filterData[batchIdx],
+                     ret);
             break;
         }
         case BaselineFilterMode::LocalMax:
         {
-            MaxLocalFilter<laneWidth,FilterWidth><<<params.kernelLanes, params.laneWidth/2>>>(
-                    batch,
-                    filterData[batchIdx].GetDeviceView(),
-                    ret);
+            const auto& launcher = PBLauncher(MaxLocalFilter<laneWidth,FilterWidth>,
+                                            params.kernelLanes,
+                                            params.laneWidth/2);
+            launcher(batch,
+                     filterData[batchIdx],
+                     ret);
             break;
         }
         default:

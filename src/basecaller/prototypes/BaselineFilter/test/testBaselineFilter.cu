@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/PicketFenceGenerator.h>
 
@@ -58,10 +59,12 @@ TEST(BaselineFilterTest, GlobalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& baseliner = PBLauncher(GlobalBaselineFilter<Filter>,
+                                         dataParams.kernelLanes,
+                                         gpuBlockThreads);
+        baseliner(in,
+                  filterData[batchIdx],
+                  out);
 
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
@@ -141,15 +144,19 @@ TEST(BaselineFilterTest, SharedMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        SharedBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& shared = PBLauncher(SharedBaselineFilter<Filter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        shared(in,
+               filterData[batchIdx],
+               out);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterRefData[batchIdx].GetDeviceView(),
-            truth);
+        const auto& global = PBLauncher(GlobalBaselineFilter<Filter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        global(in,
+               filterRefData[batchIdx],
+               truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)
         {
@@ -218,10 +225,12 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
         filterData[batchIdx].RunComposedFilter(in, out, work1, work2);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterRefData[batchIdx].GetDeviceView(),
-            truth);
+        const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        global(in,
+               filterRefData[batchIdx],
+               truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)
         {
