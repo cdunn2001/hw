@@ -14,6 +14,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     FrameLabeler.cpp
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
+    DeviceHFMetricsFilter.h
+    DeviceHFMetricsFilter.cu
     DeviceMultiScaleBaseliner.h
     DeviceMultiScaleBaseliner.cu
     DevicePulseAccumulator.h
@@ -26,6 +28,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DmeEmHost.cpp
     HFMetricsFilter.h
     HFMetricsFilter.cpp
+    HostHFMetricsFilter.h
+    HostHFMetricsFilter.cpp
     HostMultiScaleBaseliner.h
     HostMultiScaleBaseliner.cpp
     HostNoOpBaseliner.h

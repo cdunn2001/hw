@@ -6,6 +6,8 @@ set(CPP_LIST
     BasecallerConfig.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp
+    BasecallingMetricsAccumulator.h
+    BasecallingMetricsAccumulator.cpp
     BaselinerStatAccumulator.h
     BaselinerStatAccumulator.cpp
     BaselinerStatAccumState.h

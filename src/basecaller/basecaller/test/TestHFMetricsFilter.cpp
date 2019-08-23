@@ -28,12 +28,14 @@
 //  baseline and estimation of associated statistics.
 
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
+#include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
 #include <basecaller/analyzer/BatchAnalyzer.h>
 
 #include <common/DataGenerators/BatchGenerator.h>

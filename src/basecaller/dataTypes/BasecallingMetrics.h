@@ -27,24 +27,18 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class BasecallingMetrics
+//  Defines class BasecallingMetrics, a simple POD class for conveying
+//  basecalling metrics.
 
 #include <numeric>
 #include <pacbio/logging/Logger.h>
 
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
-#include <common/LaneArray.h>
 
 #include "BaselinerStatAccumState.h"
-#include "BatchMetadata.h"
 #include "BatchData.h"
-#include "BatchVectors.h"
 #include "HQRFPhysicalStates.h"
-#include "LaneDetectionModel.h"
-#include "Pulse.h"
-#include "PulseDetectionMetrics.h"
-#include "TraceAnalysisMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -102,90 +96,6 @@ public: // metrics retained from accumulator (more can be pulled through if nece
 
 static_assert(sizeof(BasecallingMetrics<laneSize>) == 128 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
 
-
-template <unsigned int LaneWidth>
-class BasecallingMetricsAccumulator
-{
-public: // types
-    using InputPulses = LaneVectorView<const Pulse>;
-    using InputBaselineStats = Data::BaselinerStatAccumState;
-    using InputModelsT = LaneModelParameters<Cuda::PBHalf, LaneWidth>;
-
-    using UnsignedInt = uint16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = LaneArray<UnsignedInt>;
-    using SingleFloatMetric = LaneArray<Flt>;
-    using AnalogUnsignedIntegerMetric = std::array<LaneArray<UnsignedInt>, numAnalogs>;
-    using AnalogFloatMetric = std::array<LaneArray<Flt>, numAnalogs>;
-
-    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
-
-public:
-    BasecallingMetricsAccumulator()
-    {
-        // Instead of using the initializer list to value-initialize a
-        // bunch of lane arrays, we'll let them default initialize and set the
-        // values of all members in Reset. More than half of the members are
-        // std::arrays, and would still need to be filled anyway. This
-        // constructor shouldn't be called after initial HFMetricsFilter
-        // construction anwyay.
-        Reset();
-    };
-
-public:
-    void Count(const InputPulses& pulses, uint32_t numFrames);
-
-    void AddPulseDetectionMetrics(const PulseDetectionMetrics& pdMetrics);
-
-    void AddBaselinerStats(const InputBaselineStats& baselinerStats);
-
-    void AddModels(const InputModelsT& models);
-
-    void FinalizeMetrics(bool realtimeActivityLabels, float frameRate);
-
-    void PopulateBasecallingMetrics(BasecallingMetricsT& metrics);
-
-    void Reset();
-
-private:
-    void LabelBlock(float frameRate);
-
-public: // complex accessors
-
-    AnalogFloatMetric PkmidMean() const;
-
-    SingleUnsignedIntegerMetric NumBases() const;
-
-    SingleUnsignedIntegerMetric NumPulses() const;
-
-    SingleFloatMetric PulseWidth() const;
-
-private: // metrics
-    SingleUnsignedIntegerMetric numPulseFrames_;
-    SingleUnsignedIntegerMetric numBaseFrames_;
-    SingleUnsignedIntegerMetric numSandwiches_;
-    SingleUnsignedIntegerMetric numHalfSandwiches_;
-    SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    LaneArray<HQRFPhysicalStates> activityLabel_;
-    AnalogFloatMetric pkMidSignal_;
-    AnalogFloatMetric bpZvar_;
-    AnalogFloatMetric pkZvar_;
-    AnalogFloatMetric pkMax_;
-    AnalogFloatMetric modelVariance_;
-    AnalogFloatMetric modelMean_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog_;
-
-    TraceAnalysisMetrics<LaneWidth> traceMetrics_;
-
-private: // state trackers
-    std::array<Pulse, LaneWidth> prevBasecallCache_;
-    std::array<Pulse, LaneWidth> prevprevBasecallCache_;
-
-};
 
 template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
