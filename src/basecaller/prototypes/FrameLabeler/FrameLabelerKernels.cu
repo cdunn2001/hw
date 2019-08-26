@@ -135,7 +135,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                                    const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
                                    Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
-                                   ViterbiData<blockThreads> labels,
+                                   ViterbiData<blockThreads> batchViterbiData,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
@@ -160,6 +160,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     {
         logLike[i] = Blend(bc == i, zero, ninf);
     }
+
+    auto labels = batchViterbiData.BlockData();
 
     auto Recursion = [&labels, &trans, &logLike](PBShort2 data, int idx)
     {

@@ -112,8 +112,6 @@ struct ViterbiDataHost
     int numFrames_;
 };
 
-// TODO I don't like this API...  Should have a separate ViterbiData object, either
-// per thread or per block.
 template <size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
@@ -123,11 +121,24 @@ struct ViterbiData : private Memory::detail::DataManager
         , numFrames_(hostData.NumFrames())
     {}
 
-    __device__ T& operator()(int frame, int state)
+    class ViterbiBlockData
     {
-        return data_[numFrames_*laneWidth*4*blockIdx.x
-                     + frame*laneWidth*4
-                     + state*laneWidth +  threadIdx.x];
+    public:
+        __device__ ViterbiBlockData(T* data)
+            : data_(data)
+        {}
+
+        __device__ T& operator()(int frame, int state)
+        {
+            return data_[frame*laneWidth*4 + state*laneWidth];
+        }
+    private:
+        T* data_;
+    };
+    __device__ ViterbiBlockData BlockData()
+    {
+        return ViterbiBlockData(&data_[numFrames_ * laneWidth * 4 * blockIdx.x
+                                       + threadIdx.x]);
     }
  private:
     Memory::DeviceView<T> data_;
