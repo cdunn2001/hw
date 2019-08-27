@@ -174,9 +174,14 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
             auto score = scorer.StateScores(dat, nextState);
             auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
             ushort2 maxIdx = make_ushort2(0,0);
+
+            #pragma unroll(numStates)
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
-                auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
+                auto transScore = trans->Entry(nextState, prevState);
+                if (__hisinf(transScore)) continue;
+
+                auto val = score + PBHalf2(transScore + logLike[prevState]);
 
                 auto cond = val >= maxVal;
                 maxVal = Blend(cond, val, maxVal);

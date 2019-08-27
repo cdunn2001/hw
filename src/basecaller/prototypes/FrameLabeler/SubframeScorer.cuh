@@ -176,8 +176,6 @@ struct __align__(128) BlockStateSubframeScorer
     __device__ PBHalf2 StateScores(PBHalf2 data, int state) const
     {
         const PBHalf2 nhalfVal = PBHalf2(-0.5f);
-        const PBHalf2 one = PBHalf2(1.0f);
-        const PBHalf2 zero = PBHalf2(0.0f);
 
         switch (state)
         {
@@ -218,6 +216,8 @@ struct __align__(128) BlockStateSubframeScorer
 
                 // xmu > mumu means that the Euclidean projection of x onto mu is
                 // greater than the norm of mu.
+                const PBHalf2 one = PBHalf2(1.0f);
+                const PBHalf2 zero = PBHalf2(0.0f);
                 score = Blend(xmu > mumu,
                               min(min(score, fScore - one), zero),
                               score);
