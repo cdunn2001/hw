@@ -107,12 +107,12 @@ public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
     void AddBatch(
-            const Data::TraceBatch<DataType>& ctb,
+            const Data::TraceBatch<DataType>& traces,
             const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
     {
-        assert (ctb.GetMeta().PoolId() == poolId_);
-        AddBatchImpl(ctb, stats);
-        frameCount_ += ctb.NumFrames();
+        assert (traces.GetMeta().PoolId() == poolId_);
+        AddBatchImpl(traces, stats);
+        frameCount_ += traces.NumFrames();
     }
 
 protected:  // Data
@@ -133,9 +133,9 @@ private:    // Data
     unsigned int poolSize_;  // Number of lanes in this pool.
 
 private:    // Customizable implementation.
-    // Bins frames in ctb and updates poolHist_.
+    // Bins frames in traces and updates poolHist_.
     virtual void AddBatchImpl(
-        const Data::TraceBatch<DataType>& ctb,
+        const Data::TraceBatch<DataType>& traces,
         const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) = 0;
 
     virtual const PoolHistType& HistogramImpl() const = 0;

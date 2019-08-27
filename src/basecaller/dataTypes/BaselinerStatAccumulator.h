@@ -25,8 +25,7 @@ public:     // Types
     using Mask = PacBio::Mongo::LaneMask<>;
 
 public:     // Structors
-    BaselinerStatAccumulator()
-    { }
+    BaselinerStatAccumulator() = default;
 
     BaselinerStatAccumulator(const BaselinerStatAccumState& state)
         : baselineSubtractedStats_ {state.fullAutocorrState}

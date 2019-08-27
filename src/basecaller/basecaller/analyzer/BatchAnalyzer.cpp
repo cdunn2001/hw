@@ -147,10 +147,12 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     auto baselineProfile = profiler.CreateScopedProfiler(ProfileStages::Baseline);
     (void)baselineProfile;
     auto baselinedTracesAndStats = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndStats.first);
+    auto baselinerStats = std::move(baselinedTracesAndStats.second);
 
     auto frameProfile = profiler.CreateScopedProfiler(ProfileStages::FrameLabeling);
     (void) frameProfile;
-    auto labels = (*frameLabeler_)(std::move(baselinedTracesAndStats.first), models_);
+    auto labels = (*frameLabeler_)(std::move(baselinedTraces), models_);
 
     auto pulseProfile = profiler.CreateScopedProfiler(ProfileStages::PulseAccumulating);
     (void)pulseProfile;
@@ -163,9 +165,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
     (void) metricsProfile;
 
-    // Process the rest of the HFMetrics
     auto basecallingMetrics = (*hfMetrics_)(
-            pulses, baselinedTracesAndStats.second, models_);
+            pulses, baselinerStats, models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
@@ -181,6 +182,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
     // Includes computing baseline moments.
     assert(baseliner_);
     auto baselinedTracesAndStats = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndStats.first);
+    auto baselinerStats = std::move(baselinedTracesAndStats.second);
 
     if (!isModelInitialized_)
     {
@@ -189,8 +192,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         // Accumulate histogram of baseline-subtracted trace data.
         // This operation also accumulates baseliner statistics.
         assert(traceHistAccum_);
-        traceHistAccum_->AddBatch(baselinedTracesAndStats.first,
-                                  baselinedTracesAndStats.second);
+        traceHistAccum_->AddBatch(baselinedTraces,
+                                  baselinerStats);
 
         // When sufficient trace data have been histogrammed,
         // estimate detection model.
@@ -207,13 +210,13 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }
 
-    auto pulses = [&baselinedTracesAndStats, this]() {
+    auto pulses = [&baselinedTraces, this]() {
         // When detection model is available, ...
         if (isModelInitialized_)
         {
             // Classify frames.
             assert(frameLabeler_);
-            auto labels = (*frameLabeler_)(std::move(baselinedTracesAndStats.first),
+            auto labels = (*frameLabeler_)(std::move(baselinedTraces),
                                            models_);
 
             // Generate pulses with metrics.
@@ -226,12 +229,12 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
         else
         {
-            return pulseAccumulator_->EmptyPulseBatch(baselinedTracesAndStats.first.Metadata());
+            return pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata());
         }
     }();
 
     auto basecallingMetrics = (*hfMetrics_)(
-            pulses, baselinedTracesAndStats.second, models_);
+            pulses, baselinerStats, models_);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

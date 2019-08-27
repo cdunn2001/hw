@@ -59,7 +59,7 @@ private:
             const ModelsBatchT& models) override;
 
 private: // Block management
-    void FinalizeBlock() override;
+    void FinalizeBlock();
 
     void AddPulses(const PulseBatchT& batch);
 

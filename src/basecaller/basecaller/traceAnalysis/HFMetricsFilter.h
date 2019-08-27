@@ -102,9 +102,6 @@ private:
             const BaselinerStatsBatchT& baselinerStats,
             const ModelsBatchT& models) = 0;
 
-protected:    // Block management
-    virtual void FinalizeBlock() = 0;
-
 protected: // State
     uint32_t poolId_;
 
@@ -131,9 +128,6 @@ private:
             const ModelsBatchT& models) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 
-private:    // Block management
-    void FinalizeBlock() override
-    { };
 };
 
 }}} // PacBio::Mongo::Basecaller

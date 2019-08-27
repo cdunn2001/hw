@@ -87,14 +87,6 @@ public:
         , lanesPerBatch_(lanesPerPool)
     { };
 
-    void FinalizeBlock()
-    {
-        const auto& launcher = Cuda::PBLauncher(FinalizeMetrics,
-                                          lanesPerBatch_,
-                                          threadsPerBlock_);
-        launcher(realtimeActivityLabels_, frameRate_, metrics_);
-    }
-
     std::unique_ptr<DeviceHFMetricsFilter::BasecallingMetricsBatchT>
     Process(const Data::PulseBatch& pulseBatch,
             const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& baselinerStats,
@@ -119,7 +111,11 @@ public:
 
         if (framesSeen_ >= framesPerHFMetricBlock_)
         {
-            FinalizeBlock();
+            const auto& finalizeLauncher = Cuda::PBLauncher(
+                    FinalizeMetrics,
+                    lanesPerBatch_,
+                    threadsPerBlock_);
+            finalizeLauncher(realtimeActivityLabels_, frameRate_, metrics_);
             framesSeen_ = 0;
             auto ret = metricsFactory_->NewBatch();
             const auto& outputLauncher = Cuda::PBLauncher(PopulateBasecallingMetrics,
@@ -149,11 +145,6 @@ DeviceHFMetricsFilter::DeviceHFMetricsFilter(uint32_t poolId,
     : HFMetricsFilter(poolId)
     , impl_(std::make_unique<AccumImpl>(lanesPerPool))
 { };
-
-void DeviceHFMetricsFilter::FinalizeBlock()
-{
-    impl_->FinalizeBlock();
-}
 
 std::unique_ptr<DeviceHFMetricsFilter::BasecallingMetricsBatchT>
 DeviceHFMetricsFilter::Process(

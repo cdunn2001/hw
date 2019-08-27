@@ -91,7 +91,8 @@ private: // metrics
     SingleUnsignedIntegerMetric numFrames_;
     SingleIntegerMetric pixelChecksum_;
     SingleFloatMetric pulseDetectionScore_;
-    // TODO: replace use of these with states
+    // TODO: These changed from accumulators to states for the Device, the
+    // kernels will differ from their host for this reason (among others).
     StatAccumState baselineStatAccum_;
     AutocorrAccumState autocorrAccum_;
 
@@ -120,9 +121,6 @@ private:
             const PulseBatchT& pulseBatch,
             const BaselinerStatsBatchT& baselineStats,
             const ModelsBatchT& models) override;
-
-private: // Block management
-    void FinalizeBlock() override;
 
 private: // members
     std::unique_ptr<AccumImpl> impl_;

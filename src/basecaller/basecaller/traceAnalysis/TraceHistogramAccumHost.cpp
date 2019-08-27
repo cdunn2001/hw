@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include "TraceHistogramAccumHost.h"
-//#include "dataTypes/BaselinerStatAccumState.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -45,13 +44,13 @@ TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
 
 
 void TraceHistogramAccumHost::AddBatchImpl(
-        const Data::TraceBatch<TraceElementType>& ctb,
+        const Data::TraceBatch<TraceElementType>& traces,
         const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
 {
     // TODO: Can some of this logic be lifted into the base class's AddBatch
     // method (template method pattern)?
 
-    const auto numLanes = ctb.LanesPerBatch();
+    const auto numLanes = traces.LanesPerBatch();
 
     if (FramesAdded() == 0)
     {
@@ -59,7 +58,7 @@ void TraceHistogramAccumHost::AddBatchImpl(
 
         // Reset all the histograms.
         hist_.clear();
-        hist_.reserve(ctb.LanesPerBatch());
+        hist_.reserve(traces.LanesPerBatch());
         isHistInitialized_ = false;
         histFrameCount_ = 0;
 
@@ -70,7 +69,7 @@ void TraceHistogramAccumHost::AddBatchImpl(
     // Have we accumulated enough data for baseline statistics, which are
     // needed to initialize the histograms?
     const bool doInitHist = !isHistInitialized_
-            && FramesAdded() + ctb.NumFrames() >= NumFramesPreAccumStats();
+            && FramesAdded() + traces.NumFrames() >= NumFramesPreAccumStats();
 
     // For each lane/block in the batch ...
     const auto& statsView = stats.GetHostView();
@@ -86,7 +85,7 @@ void TraceHistogramAccumHost::AddBatchImpl(
             isHistInitialized_ = true;
         }
 
-        if (isHistInitialized_) AddBlock(ctb, lane);
+        if (isHistInitialized_) AddBlock(traces, lane);
     }
 }
 
@@ -120,7 +119,7 @@ void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
 }
 
 
-void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& ctb,
+void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& traces,
                                        unsigned int lane)
 {
     assert(lane < hist_.size());
@@ -128,7 +127,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     auto& h = hist_[lane];
 
     // Get view to the trace data of lane i.
-    const auto traceBlock = ctb.GetBlockView(lane);
+    const auto traceBlock = traces.GetBlockView(lane);
 
     // Iterate over lane-frames.
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)

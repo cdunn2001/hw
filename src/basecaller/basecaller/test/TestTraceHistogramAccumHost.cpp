@@ -70,12 +70,14 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     GenerateCamTraceBatch(TraceElementType x)
     {
         auto ctb = ctbFactory.NewBatch(bmd);
+        auto traces = std::move(ctb.first);
+        auto stats = std::move(ctb.second);
 
         const auto n0 = chunkSize/2;  // Number of mock baseline frames.
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             // Mock up some baseliner statistics.
-            Data::BaselinerStatAccumState& bls = ctb.second.GetHostView()[l];
+            Data::BaselinerStatAccumState& bls = stats.GetHostView()[l];
             LaneArrayRef<float>(bls.fullAutocorrState.moment2) = 0;
             bls.fullAutocorrState.moment1First = bls.fullAutocorrState.moment1Last = bls.fullAutocorrState.moment2;
             LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
@@ -83,7 +85,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
             LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
 
             // Fill in the trace data.
-            auto bvl = ctb.first.GetBlockView(l);
+            auto bvl = traces.GetBlockView(l);
             for (auto lfi = bvl.Begin(); lfi != bvl.End(); ++lfi)
             {
                 *lfi = x;
