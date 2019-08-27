@@ -12,46 +12,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-
-/*
-/// Baseline-subtracted trace data with statistics
-class CameraTraceBatch : public TraceBatch<BaselinedTraceElement>
-{
-public:     // Types
-    using ElementType = BaselinedTraceElement;
-
-public:     // Structors and assignment
-    CameraTraceBatch(const BatchMetadata& meta,
-                     const BatchDimensions& dims,
-                     bool pinned,
-                     Cuda::Memory::SyncDirection syncDirection,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
-        , stats_ (dims.lanesPerBatch, syncDirection, pinned, statsPool)
-    { }
-
-    CameraTraceBatch(const CameraTraceBatch&) = delete;
-    CameraTraceBatch(CameraTraceBatch&&) = default;
-
-    CameraTraceBatch& operator=(const CameraTraceBatch&) = delete;
-    CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
-
-public:     // Access to statistics
-    const Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats() const
-    { return stats_; }
-
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats()
-    { return stats_; }
-
-private:    // Data
-    // Statistics for each ZMW in the batch, one element per lane.
-    // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> stats_;
-};
-*/
-
-// Factory class, to simplify the construction of CameraTraceBatch instances.
+// Factory class, to simplify the construction of
+// baselineSubtractedTraces+Stats pair instances.
 // This class will handle the small collection of constructor arguments that
 // need to change depending on the pipeline configuration, but otherwise are
 // generally constant between different batches
@@ -88,15 +50,6 @@ private:
     std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
     std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
-
-inline auto KernelArgConvert(CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
-{
-    return obj.GetDeviceHandle(info);
-}
-inline auto KernelArgConvert(const CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
-{
-    return obj.GetDeviceHandle(info);
-}
 
 }}}     // namespace PacBio::Mongo::Data
 

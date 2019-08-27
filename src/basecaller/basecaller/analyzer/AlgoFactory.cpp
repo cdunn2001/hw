@@ -359,7 +359,7 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
         return std::make_unique<HostHFMetricsFilter>(poolId);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        return std::make_unique<DeviceHFMetricsFilter>(poolId);
+        return std::make_unique<DeviceHFMetricsFilter>(poolId, poolSize_);
         break;
     default:
         ostringstream msg;

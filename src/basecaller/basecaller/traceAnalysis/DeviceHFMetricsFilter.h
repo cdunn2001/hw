@@ -38,7 +38,6 @@
 #include <dataTypes/PulseDetectionMetrics.h>
 #include <common/StatAccumState.h>
 #include <common/AutocorrAccumState.h>
-#include <common/cuda/memory/DeviceOnlyArray.cuh>
 
 namespace PacBio {
 namespace Mongo {
@@ -92,7 +91,7 @@ private: // metrics
     SingleUnsignedIntegerMetric numFrames_;
     SingleIntegerMetric pixelChecksum_;
     SingleFloatMetric pulseDetectionScore_;
-    // TODO: replace these with states:
+    // TODO: replace use of these with states
     StatAccumState baselineStatAccum_;
     AutocorrAccumState autocorrAccum_;
 
@@ -106,16 +105,10 @@ class DeviceHFMetricsFilter : public HFMetricsFilter
 {
 public:
     using BasecallingMetricsAccumulatorT = BasecallingMetricsAccumulatorDevice<laneSize>;
-    using BasecallingMetricsAccumulatorBatchT = Cuda::Memory::DeviceOnlyArray<BasecallingMetricsAccumulatorT>;
+    class AccumImpl;
 
 public:
-    static size_t threadsPerBlock_;
-
-public:
-    DeviceHFMetricsFilter(uint32_t poolId)
-        : HFMetricsFilter(poolId)
-        , metrics_(lanesPerBatch_)
-    { };
+    DeviceHFMetricsFilter(uint32_t poolId, uint32_t lanesPerPool);
     DeviceHFMetricsFilter(const DeviceHFMetricsFilter&) = delete;
     DeviceHFMetricsFilter(DeviceHFMetricsFilter&&) = default;
     DeviceHFMetricsFilter& operator=(const DeviceHFMetricsFilter&) = delete;
@@ -132,7 +125,7 @@ private: // Block management
     void FinalizeBlock() override;
 
 private: // members
-    BasecallingMetricsAccumulatorBatchT metrics_;
+    std::unique_ptr<AccumImpl> impl_;
 };
 
 }}} // PacBio::Mongo::Basecaller
