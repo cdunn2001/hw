@@ -2,6 +2,7 @@
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
 #include "BaselineFilter.cuh"
+#include "CircularBuffer.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
@@ -193,7 +194,6 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2>
     }
 }
 
-// TODO support autocorrelation
 template <size_t blockThreads>
 class StatAccumulator
 {
@@ -202,56 +202,103 @@ public:
     {
         auto largest = std::numeric_limits<int16_t>::max();
         auto lowest = std::numeric_limits<int16_t>::min();
-        min_[threadIdx.x] = PBShort2(largest);
-        max_[threadIdx.x] = PBShort2(lowest);
+        minB_[threadIdx.x] = PBShort2(largest);
+        maxB_[threadIdx.x] = PBShort2(lowest);
 
-        rawSum_[threadIdx.x] = 0.0f;
+        rawSumB_[threadIdx.x] = 0.0f;
+        m0B_[threadIdx.x] = 0.0f;
+        m1B_[threadIdx.x] = 0.0f;
+        m2B_[threadIdx.x] = 0.0f;
+
         m0_[threadIdx.x] = 0.0f;
         m1_[threadIdx.x] = 0.0f;
         m2_[threadIdx.x] = 0.0f;
+        m1LagFirst_[threadIdx.x] = 0.0f;
+        m1LagLast_[threadIdx.x] = 0.0f;
+        m2Lag_[threadIdx.x] = 0.0f;
     }
 
-    __device__ void AddData(PBHalf2 raw,
-                            PBHalf2 bs, //baseline subtracted
-                            PBBool2 baselineMask)
+    __device__ void AddBaselineData(PBHalf2 raw,
+                                    PBHalf2 bs, //baseline subtracted
+                                    PBBool2 baselineMask)
     {
         PBHalf2 zero(0.0f);
         PBHalf2 one(1.0f);
 
-        min_[threadIdx.x] = min(bs, min_[threadIdx.x]);
-        max_[threadIdx.x] = max(bs, max_[threadIdx.x]);
-        rawSum_[threadIdx.x] += Blend(baselineMask, raw, zero);
+        minB_[threadIdx.x] = min(bs, minB_[threadIdx.x]);
+        maxB_[threadIdx.x] = max(bs, maxB_[threadIdx.x]);
+        rawSumB_[threadIdx.x] += Blend(baselineMask, raw, zero);
 
-        m0_[threadIdx.x] += Blend(baselineMask, one, zero);
-        m1_[threadIdx.x] += Blend(baselineMask, bs, zero);
-        m2_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);
+        m0B_[threadIdx.x] += Blend(baselineMask, one, zero);
+        m1B_[threadIdx.x] += Blend(baselineMask, bs, zero);
+        m2B_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);
+    }
+
+    __device__ void AddAutoCorrData(PBHalf2 bs,
+                                    PBHalf2 lagVal)
+    {
+        PBHalf2 one(1.0f);
+
+        m0_[threadIdx.x] += one;
+        m1_[threadIdx.x] += bs;
+        m2_[threadIdx.x] += bs*bs;
+
+        m1LagFirst_[threadIdx.x] += lagVal;
+        m1LagLast_[threadIdx.x] += bs;
+        m2Lag_[threadIdx.x] += bs * lagVal;
     }
 
     __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
     {
-        stats.baselineStats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
-        stats.baselineStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
-        stats.baselineStats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
-        stats.baselineStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
-        stats.baselineStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
-        stats.baselineStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+        // Baseline stats
+        stats.baselineStats.moment0[2*threadIdx.x] = m0B_[threadIdx.x].FloatX();
+        stats.baselineStats.moment0[2*threadIdx.x+1] = m0B_[threadIdx.x].FloatY();
+        stats.baselineStats.moment1[2*threadIdx.x] = m1B_[threadIdx.x].FloatX();
+        stats.baselineStats.moment1[2*threadIdx.x+1] = m1B_[threadIdx.x].FloatY();
+        stats.baselineStats.moment2[2*threadIdx.x] = m2B_[threadIdx.x].FloatX();
+        stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].FloatY();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
-        stats.rawBaselineSum[2*threadIdx.x] = rawSum_[threadIdx.x].FloatX();
-        stats.rawBaselineSum[2*threadIdx.x+1] = rawSum_[threadIdx.x].FloatY();
-        stats.traceMin[2*threadIdx.x] = min_[threadIdx.x].FloatX();
-        stats.traceMin[2*threadIdx.x+1] = min_[threadIdx.x].FloatY();
-        stats.traceMax[2*threadIdx.x] = max_[threadIdx.x].FloatX();
-        stats.traceMax[2*threadIdx.x+1] = max_[threadIdx.x].FloatY();
+        stats.rawBaselineSum[2*threadIdx.x] = rawSumB_[threadIdx.x].FloatX();
+        stats.rawBaselineSum[2*threadIdx.x+1] = rawSumB_[threadIdx.x].FloatY();
+        stats.traceMin[2*threadIdx.x] = minB_[threadIdx.x].FloatX();
+        stats.traceMin[2*threadIdx.x+1] = minB_[threadIdx.x].FloatY();
+        stats.traceMax[2*threadIdx.x] = maxB_[threadIdx.x].FloatX();
+        stats.traceMax[2*threadIdx.x+1] = maxB_[threadIdx.x].FloatY();
+
+        // Auto-correlation stats
+        stats.fullAutocorrState.moment1First[2*threadIdx.x] = m1LagFirst_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.moment1First[2*threadIdx.x+1] = m1LagFirst_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.moment1Last[2*threadIdx.x] = m1LagLast_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.moment1Last[2*threadIdx.x+1] = m1LagLast_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.moment2[2*threadIdx.x] = m2Lag_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.moment2[2*threadIdx.x+1] = m2Lag_[threadIdx.x].FloatY();
+
+        stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+
+        stats.fullAutocorrState.lag = Capacity;
     }
 
 private:
-    Utility::CudaArray<PBHalf2, blockThreads> min_;
-    Utility::CudaArray<PBHalf2, blockThreads> max_;
-    Utility::CudaArray<PBHalf2, blockThreads> rawSum_;
+    // Baseline stats computed only from baseline frames
+    Utility::CudaArray<PBHalf2, blockThreads> minB_;
+    Utility::CudaArray<PBHalf2, blockThreads> maxB_;
+    Utility::CudaArray<PBHalf2, blockThreads> rawSumB_;
+    Utility::CudaArray<PBHalf2, blockThreads> m0B_;
+    Utility::CudaArray<PBHalf2, blockThreads> m1B_;
+    Utility::CudaArray<PBHalf2, blockThreads> m2B_;
+    // Auto-correlation stats computed from all frames
     Utility::CudaArray<PBHalf2, blockThreads> m0_;
     Utility::CudaArray<PBHalf2, blockThreads> m1_;
     Utility::CudaArray<PBHalf2, blockThreads> m2_;
+    Utility::CudaArray<PBHalf2, blockThreads> m1LagFirst_;
+    Utility::CudaArray<PBHalf2, blockThreads> m1LagLast_;
+    Utility::CudaArray<PBHalf2, blockThreads> m2Lag_;
 };
 
 template <size_t blockThreads>
@@ -307,7 +354,7 @@ struct LatentBaselineData
             latHMask2 = latHMask1;
             latHMask1 = maskHp1;
 
-            stats.AddData(latRawData, latData, mask);
+            stats.AddBaselineData(latRawData, latData, mask);
 
             latRawData = raw;
             latData = subtracted;
@@ -350,6 +397,7 @@ private:
 template <size_t blockThreads, size_t stride>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
                                  Memory::DeviceView<LatentBaselineData<blockThreads>> latent,
+                                 Memory::DeviceView<CircularBuffer<blockThreads>> circularBuffers,
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
                                  Mongo::Data::GpuBatchData<PBShort2> out,
@@ -359,6 +407,9 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     stats.Reset();
 
     auto localLatent = latent[blockIdx.x].GetLocal();
+
+    __shared__ CircularBuffer<blockThreads> circularBuffer;
+    circularBuffer = circularBuffers[blockIdx.x];
 
     // For bias estimate
     // TODO: these need to be set consistent with filter widths
@@ -389,12 +440,17 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
             auto val = raw - baseline - frameBiasEstimate;
             localLatent.ProcessFrame(raw, val, stats);
 
+            auto lagVal = circularBuffer.Front();
+            circularBuffer.PushBack(val);
+            stats.AddAutoCorrData(val, lagVal);
+
             outZmw[j] = ToShort(val);
         }
     }
 
     stats.FillOutputStats(outputStats[blockIdx.x]);
     latent[blockIdx.x].StoreLocal(localLatent);
+    circularBuffers[blockIdx.x] =  circularBuffer;
 }
 
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
@@ -410,6 +466,7 @@ class ComposedFilter
     Memory::DeviceOnlyArray<Upper1> upper1;
     Memory::DeviceOnlyArray<Upper2> upper2;
     Memory::DeviceOnlyArray<LatentBaselineData<blockThreads>> latent;
+    Memory::DeviceOnlyArray<CircularBuffer<blockThreads>> circularBuffers;
     size_t numLanes_;
 
 public:
@@ -420,6 +477,7 @@ public:
         , upper2(numLanes, val)
         , numLanes_(numLanes)
         , latent(numLanes, 0.0f)
+       , circularBuffers(numLanes, val)
     {}
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
@@ -506,6 +564,7 @@ public:
         const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, 16>, numLanes_, blockThreads);
         Subtract(input,
                  latent,
+                 circularBuffers,
                  workspace1,
                  workspace2,
                  output,

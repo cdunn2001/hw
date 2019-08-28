@@ -8,7 +8,7 @@
 namespace PacBio {
 namespace Cuda {
 
-static constexpr short Capacity = 4;
+static constexpr unsigned int Capacity = 4u;
 
 template <size_t blockThreads>
 struct __align__(128) CircularBuffer
