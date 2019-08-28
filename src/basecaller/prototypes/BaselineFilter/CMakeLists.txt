@@ -8,6 +8,8 @@ add_library(libBaselineFilter STATIC
     BaselineFilter.cuh
     BaselineFilterKernels.cu
     BaselineFilterKernels.cuh
+    CircularBuffer.cu
+    CircularBuffer.cuh
     ExtremaFilter.cuh
     ExtremaFilter.cu
     ExtremaFilterKernels.cuh
@@ -39,6 +41,7 @@ include(pacbio-cplusplus-gtest)
 add_executable(BaselineTests
     test/testExtremaFilter.cu
     test/testBaselineFilter.cu
+    test/testCircularBuffer.cu
 )
 
 target_link_libraries(BaselineTests
