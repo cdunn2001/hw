@@ -48,18 +48,23 @@ namespace Memory {
 // allows a unified representation of gpu memory, while letting
 // individual implementations choose their own initialization
 // scheme.
+//
+// The class supports an
+// optional allocation identification parameter.  External
+// code can set this parameter however it desires, with the
+// sole caveate that the value 0 is reserved to mean "no id"
 class SmartDeviceAllocation
 {
 public:
-    SmartDeviceAllocation(size_t size = 0, size_t hash = 0)
+    SmartDeviceAllocation(size_t size = 0, size_t allocID = 0)
         : data_(size ? CudaRawMalloc(size) : nullptr)
         , size_(size)
-        , hash_(hash)
+        , allocID_(allocID)
     {
         if (size_ > 0)
         {
             // Update total allocation, maintaining a snapshot of the result at this point in time
-            // Rememer that other threads can update the value of bytesAllocated_ at any time.
+            // Remember that other threads can update the value of bytesAllocated_ at any time.
             size_t curAlloc = bytesAllocated_ += size;
             // Also extract a snapshot of the current max.
             size_t curMax = peakBytesAllocated_;
@@ -77,7 +82,7 @@ public:
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
         : data_(std::move(other.data_))
         , size_(other.size_)
-        , hash_(other.hash_)
+        , allocID_(other.allocID_)
     {
         other.size_ = 0;
     }
@@ -87,7 +92,7 @@ public:
     {
         data_ = std::move(other.data_);
         size_ = other.size_;
-        hash_ = other.hash_;
+        allocID_ = other.allocID_;
         other.size_ = 0;
         return *this;
     }
@@ -101,8 +106,8 @@ public:
         }
     }
 
-    size_t Hash() const { return hash_; }
-    void Hash(size_t val) { hash_ = val; }
+    size_t AllocID() const { return allocID_; }
+    void AllocID(size_t val) { allocID_ = val; }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
@@ -128,7 +133,7 @@ private:
     };
     std::unique_ptr<void, Deleter> data_;
     size_t size_;
-    size_t hash_;
+    size_t allocID_;
 
     static std::atomic<size_t> bytesAllocated_;
     static std::atomic<size_t> peakBytesAllocated_;

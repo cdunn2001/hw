@@ -58,6 +58,7 @@ public:
     }
     void DeallocationSize(size_t size)
     {
+        assert(size <- currentBytes_);
         currentBytes_ -= size;
     }
 
@@ -84,12 +85,24 @@ private:
 //       fine grained locking, or is lock-free altogether.
 struct AllocationManager
 {
+private:
     AllocationManager() = default;
 
     AllocationManager(const AllocationManager&) = delete;
     AllocationManager(AllocationManager&&) = delete;
     AllocationManager& operator=(const AllocationManager&) = delete;
     AllocationManager& operator=(AllocationManager&&) = delete;
+public:
+
+    // Singleton access function.  Static variables in a function have
+    // a well defined and sane initialization guarantee, while actual
+    // global variables do not (since the ordering of initialization
+    // between different translation units is indeterminate)
+    static AllocationManager& GetManager()
+    {
+        static AllocationManager manager;
+        return manager;
+    };
 
     ~AllocationManager()
     {
@@ -138,7 +151,7 @@ struct AllocationManager
         {
             ptr = std::move(queue.front());
             queue.pop_front();
-            ptr.Hash(marker.AsHash());
+            ptr.AllocID(marker.AsHash());
         } else {
             ptr = SmartHostAllocation(size, pinned_, marker.AsHash());
         }
@@ -150,7 +163,7 @@ struct AllocationManager
         // presents a burden it can be re-evaluated
         assert(loc == "" || loc == marker.AsString());
 #endif
-        allocMarkers_[marker.AsHash()] = marker.AsString();
+        allocMarkers_.emplace(marker.AsHash(), marker);
         hostStats_[marker.AsHash()].AllocationSize(size);
 
         return ptr;
@@ -167,7 +180,7 @@ struct AllocationManager
         {
             ptr = std::move(queue.front());
             queue.pop_front();
-            ptr.Hash(marker.AsHash());
+            ptr.AllocID(marker.AsHash());
         } else {
             ptr = SmartDeviceAllocation(size, marker.AsHash());
         }
@@ -179,28 +192,28 @@ struct AllocationManager
         // presents a burden it can be re-evaluated
         assert(loc == "" || loc == marker.AsString());
 #endif
-        allocMarkers_[marker.AsHash()] = marker.AsString();
+        allocMarkers_.emplace(marker.AsHash(), marker);
         devStats_[marker.AsHash()].AllocationSize(size);
 
         return ptr;
     }
 
-    void ReturnHost(SmartHostAllocation alloc)
+    void ReturnHostAlloc(SmartHostAllocation alloc)
     {
         std::lock_guard<std::mutex> lm(m_);
 
         if (!enabled_ || alloc.Pinned() != pinned_) return;
-        if (alloc.Hash() != 0)
-            hostStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        if (alloc.AllocID() != 0)
+            hostStats_[alloc.AllocID()].DeallocationSize(alloc.size());
         hostAllocs_[alloc.size()].push_front(std::move(alloc));
     }
 
-    void ReturnDev(SmartDeviceAllocation alloc)
+    void ReturnDevAlloc(SmartDeviceAllocation alloc)
     {
         std::lock_guard<std::mutex> lm(m_);
 
         if (!enabled_) return;
-        devStats_[alloc.Hash()].DeallocationSize(alloc.size());
+        devStats_[alloc.AllocID()].DeallocationSize(alloc.size());
         devAllocs_[alloc.size()].push_front(std::move(alloc));
     }
 
@@ -222,19 +235,19 @@ private:
             std::vector<std::pair<std::string, size_t>> highWaters;
             for (auto& kv : stats)
             {
-                const auto& name = std::string(allocMarkers_[kv.first]);
+                const auto& name = allocMarkers_.at(kv.first).AsString();
                 const auto value = kv.second.PeakMemUsage();
                 highWaters.emplace_back(std::make_pair(name, value));
             }
 
             std::sort(highWaters.begin(),
                       highWaters.end(),
-                      [&](const auto& l, const auto& r) {return l.second > r.second; });
+                      [](const auto& l, const auto& r) {return l.second > r.second; });
             size_t sum = 0;
             sum = std::accumulate(highWaters.begin(),
                                   highWaters.end(),
                                   sum,
-                                  [&](const auto& a, const auto& b) { return a+b.second; });
+                                  [](const auto& a, const auto& b) { return a+b.second; });
 
             std::stringstream msg;
             const float mb = static_cast<float>(1<<20);
@@ -277,21 +290,11 @@ private:
     std::map<size_t, AllocStat> hostStats_;
     std::map<size_t, AllocStat> devStats_;
 
-    std::map<size_t, std::string> allocMarkers_;
+    std::map<size_t, AllocationMarker> allocMarkers_;
 
     std::mutex m_;
     bool enabled_ = false;
     bool pinned_ = false;
-};
-
-// Singleton access function.  Static variables in a function have
-// a well defined and sane initialization guarantee, while actual
-// global variables do not (since the ordering of initialization
-// between different translation units is indeterminate)
-AllocationManager& GetManager()
-{
-    static AllocationManager manager;
-    return manager;
 };
 
 }
@@ -303,7 +306,7 @@ SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
-    return GetManager().GetHostAlloc(size, marker);
+    return AllocationManager::GetManager().GetHostAlloc(size, marker);
 }
 
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker)
@@ -313,7 +316,7 @@ SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMa
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
-    return GetManager().GetDeviceAlloc(size, marker);
+    return AllocationManager::GetManager().GetDeviceAlloc(size, marker);
 }
 
 void ReturnManagedHostAllocation(SmartHostAllocation alloc)
@@ -324,7 +327,7 @@ void ReturnManagedHostAllocation(SmartHostAllocation alloc)
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
-    GetManager().ReturnHost(std::move(alloc));
+    AllocationManager::GetManager().ReturnHostAlloc(std::move(alloc));
 }
 
 void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
@@ -335,12 +338,12 @@ void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc)
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
-    GetManager().ReturnDev(std::move(alloc));
+    AllocationManager::GetManager().ReturnDevAlloc(std::move(alloc));
 }
 
 void EnablePerformanceMode()
 {
-    GetManager().EnablePerformanceMode();
+    AllocationManager::GetManager().EnablePerformanceMode();
 }
 
 void DisablePerformanceMode()
@@ -352,7 +355,7 @@ void DisablePerformanceMode()
 #ifndef NDEBUG
     Profiler::FinalReport();
 #endif
-    GetManager().DisablePerformanceMode();
+    AllocationManager::GetManager().DisablePerformanceMode();
 }
 
 }}} // ::PacBio::Cuda::Memory

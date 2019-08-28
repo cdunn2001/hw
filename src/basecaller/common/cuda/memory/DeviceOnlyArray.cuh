@@ -178,7 +178,7 @@ DeviceView<T> KernelArgConvert(DeviceOnlyArray<T>& obj, const KernelLaunchInfo& 
     return obj.GetDeviceView(info);
 }
 template <typename T>
-DeviceView<T> KernelArgConvert(const DeviceOnlyArray<T>& obj, const KernelLaunchInfo& info)
+DeviceView<const T> KernelArgConvert(const DeviceOnlyArray<T>& obj, const KernelLaunchInfo& info)
 {
     return obj.GetDeviceView(info);
 }

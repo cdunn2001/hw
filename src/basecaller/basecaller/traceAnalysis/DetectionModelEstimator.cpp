@@ -65,7 +65,6 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int p
 DetectionModelEstimator::PoolDetModel
 DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
-    // TODO: Use allocation pool.
     PoolDetModel pdm (poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto pdmHost = pdm.GetHostView();
