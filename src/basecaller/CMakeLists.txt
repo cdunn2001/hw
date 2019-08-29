@@ -29,6 +29,9 @@ set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 include(pacbio-cplusplus-api)
 include(pacbio-primary-common)
+include(primary-config)
+
+create_config_header(mongo-config.h MongoConfig)
 
 add_subdirectory(common)
 add_subdirectory(applications)

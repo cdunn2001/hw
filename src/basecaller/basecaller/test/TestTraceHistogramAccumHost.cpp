@@ -47,14 +47,12 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     const float blVar = 4.0f;           // baseline variance
     const unsigned int chunkSize = 64;  // frames per chunk
     const unsigned int poolSize = 6;    // lanes per pool
-    const bool ucaPinnedAlloc = false;
 
     Data::BatchMetadata bmd {7, 0, chunkSize};
     Data::BasecallerTraceHistogramConfig histConfig;
     Data::MovieConfig movConfig;
     Data::CameraBatchFactory ctbFactory {chunkSize, poolSize,
-                                         Cuda::Memory::SyncDirection::Symmetric,
-                                         ucaPinnedAlloc};
+                                         Cuda::Memory::SyncDirection::Symmetric};
 
     void SetUp()
     {
@@ -110,8 +108,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
 
 TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
 {
-    const bool pinnedAlloc = false;
-    TraceHistogramAccumHost tha (bmd.PoolId(), poolSize, pinnedAlloc);
+    TraceHistogramAccumHost tha (bmd.PoolId(), poolSize);
     EXPECT_EQ(0, tha.FramesAdded());
     EXPECT_EQ(0, tha.HistogramFrameCount());
 

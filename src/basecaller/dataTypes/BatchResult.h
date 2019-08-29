@@ -43,14 +43,19 @@ struct BatchResult
     using PulseBatchT = PulseBatch;
     using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>;
 
-    BatchResult(PulseBatchT&& pulsesIn)
-        : pulses(std::move(pulsesIn))
-    {};
-
     BatchResult(PulseBatchT&& pulsesIn, std::unique_ptr<MetricsT> metricsPtr)
         : pulses(std::move(pulsesIn))
         , metrics(std::move(metricsPtr))
-    {};
+    {
+        // We have fully analyzed results now.
+        // Force data downloads to host, and release
+        // any gpu memory we may have
+        pulses.Pulses().DeactivateGpuMem();
+        if (metrics)
+        {
+            metrics->DeactivateGpuMem();
+        }
+    };
 
     PulseBatchT pulses;
     std::unique_ptr<MetricsT> metrics;

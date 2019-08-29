@@ -110,14 +110,14 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     models.reserve(poolsPerChip);
     for (int i = 0; i < poolsPerChip; ++i)
     {
-        models.emplace_back(lanesPerPool,SyncDirection::Symmetric);
+        models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
         for (int j = 0; j < lanesPerPool; ++j)
         {
             hostModels[j] = refModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     int mismatches = 0;

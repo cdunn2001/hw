@@ -94,8 +94,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
     Data::PulseBatchFactory batchFactory(
         basecallerConfig.pulseAccumConfig.maxCallsPerZmw,
         dims,
-        Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-        true);
+        Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto pulses = batchFactory.NewBatch(chunk.front().Metadata());
 
@@ -155,7 +154,7 @@ GenerateBaselineStats(BaseSimConfig config)
     Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState> ret(
             poolSize,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
+            SOURCE_MARKER());
     for (size_t lane = 0; lane < poolSize; ++lane)
     {
         auto& baselineStats = ret.GetHostView()[lane];
@@ -177,7 +176,7 @@ GenerateModels(BaseSimConfig config)
                                                              laneSize>> models(
         Data::GetPrimaryConfig().lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
-        true);
+        SOURCE_MARKER());
     Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
     model.AnalogMode(0).SetAllMeans(227.13);
     model.AnalogMode(1).SetAllMeans(154.45);
@@ -367,7 +366,7 @@ TEST(TestHFMetricsFilter, Noop)
                                                              laneSize>> models(
         Data::GetPrimaryConfig().lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
-        true);
+        SOURCE_MARKER());
 
 
     int poolId = 0;

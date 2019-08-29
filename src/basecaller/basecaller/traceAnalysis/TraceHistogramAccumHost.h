@@ -49,8 +49,7 @@ public:     // Types
 
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
-                            unsigned int poolSize,
-                            bool pinnedAlloc = true);
+                            unsigned int poolSize);
 
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(const Data::CameraTraceBatch& ctb) override;

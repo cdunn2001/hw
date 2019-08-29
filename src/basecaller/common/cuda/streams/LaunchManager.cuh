@@ -78,6 +78,7 @@ public:
         auto event = std::make_shared<CudaEvent>();
         KernelLaunchInfo info(event);
         Invoke(std::make_index_sequence<sizeof...(LaunchParams)>{}, KernelArgConvert(std::forward<Args>(args), info)...);
+        ThrowIfCudaError();
         event->RecordEvent();
     }
 
