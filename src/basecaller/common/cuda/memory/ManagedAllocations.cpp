@@ -156,6 +156,8 @@ public:
             ptr = SmartHostAllocation(size, pinned_, marker.AsHash());
         }
 
+        assert(allocMarkers_.count(marker.AsHash()) == 0
+               || allocMarkers_.at(marker.AsHash()) == marker);
         allocMarkers_.emplace(marker.AsHash(), marker);
         hostStats_[marker.AsHash()].AllocationSize(size);
 
@@ -178,6 +180,8 @@ public:
             ptr = SmartDeviceAllocation(size, marker.AsHash());
         }
 
+        assert(allocMarkers_.count(marker.AsHash()) == 0
+               || allocMarkers_.at(marker.AsHash()) == marker);
         allocMarkers_.emplace(marker.AsHash(), marker);
         devStats_[marker.AsHash()].AllocationSize(size);
 

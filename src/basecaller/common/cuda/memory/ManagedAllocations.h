@@ -51,6 +51,11 @@ public:
         : mark_(mark)
     {}
 
+    bool operator==(const AllocationMarker& o) const
+    {
+        return mark_ == o.mark_;
+    }
+
     // Retrieve string representation
     const std::string& AsString() const { return mark_; }
     // Retrieve hash representation.  Hash collisions are
@@ -69,7 +74,7 @@ private:
                 std::string(__FILE__  ":" + std::to_string(__LINE__))          \
                 .substr(strlen(PacBio::Primary::MongoConfig::workspaceDir)+1))
 
-// These functions define the memory management API.  One might be tempted to bundle them together as
+// These functions define the memory management API.  One might be tempted to bundle them together aas
 // static functions in a class.  However there is obviously state associated with these routines,
 // and having static member variables opens us up to initialization ordering issues.  Instead these
 // are left as free functions, with the associated state handled by a singleton class in the
