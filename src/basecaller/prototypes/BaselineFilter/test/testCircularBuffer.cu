@@ -57,7 +57,7 @@ TEST(CircularBuffer, GlobalMemory)
     std::vector<DeviceOnlyArray<CircularBuffer<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -85,7 +85,7 @@ TEST(CircularBuffer, SharedMemory)
     std::vector<DeviceOnlyArray<CircularBuffer<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -113,7 +113,7 @@ TEST(CircularBuffer, LocalMemory)
     std::vector<DeviceOnlyArray<CircularBuffer<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -141,7 +141,7 @@ TEST(CircularBufferShift, GlobalMemory)
     std::vector<DeviceOnlyArray<CircularBufferShift<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -169,7 +169,7 @@ TEST(CircularBufferShift, SharedMemory)
     std::vector<DeviceOnlyArray<CircularBufferShift<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -197,7 +197,7 @@ TEST(CircularBufferShift, LocalMemory)
     std::vector<DeviceOnlyArray<CircularBufferShift<gpuBlockThreads>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
-        circularBuffers.emplace_back(params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
