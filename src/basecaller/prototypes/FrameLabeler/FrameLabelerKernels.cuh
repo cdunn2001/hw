@@ -27,6 +27,8 @@
 #ifndef PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 #define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 
+#include <pacbio/ipc/ThreadSafeQueue.h>
+
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
@@ -94,7 +96,7 @@ template <typename T, size_t laneWidth>
 struct ViterbiDataHost
 {
     ViterbiDataHost(size_t numFrames, size_t numLanes, T val = T{})
-        : data_(numFrames*numLanes*laneWidth*Subframe::numStates, val)
+        : data_(SOURCE_MARKER(), numFrames*numLanes*laneWidth*Subframe::numStates, val)
         , numFrames_(numFrames)
     {}
 
@@ -129,6 +131,8 @@ struct ViterbiData : private Memory::detail::DataManager
     int numFrames_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T, size_t laneWidth>
 ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
 

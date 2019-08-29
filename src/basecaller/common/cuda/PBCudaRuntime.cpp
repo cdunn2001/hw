@@ -51,6 +51,11 @@ void cudaCheckErrors(T&& result)
 
 }
 
+void ThrowIfCudaError()
+{
+    cudaCheckErrors(cudaGetLastError());
+}
+
 size_t RequiredRegisterCount(const void* func)
 {
     cudaFuncAttributes funcAttrib;

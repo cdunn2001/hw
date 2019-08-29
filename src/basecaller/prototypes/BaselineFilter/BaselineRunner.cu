@@ -47,7 +47,7 @@ void RunGlobalBaselineFilter(
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
@@ -75,7 +75,7 @@ void RunSharedBaselineFilter(
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     auto tmp = [dataParams,&filterData](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
@@ -111,10 +111,10 @@ void RunCompressedBaselineFilter(
     std::vector<DeviceOnlyArray<Upper2>> upper2;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        lower1.emplace_back(dataParams.kernelLanes, 0);
-        lower2.emplace_back(dataParams.kernelLanes, 0);
-        upper1.emplace_back(dataParams.kernelLanes, 0);
-        upper2.emplace_back(dataParams.kernelLanes, 0);
+        lower1.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        lower2.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        upper1.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        upper2.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     BatchDimensions dims;
@@ -125,8 +125,8 @@ void RunCompressedBaselineFilter(
     std::vector<BatchData<int16_t>> work2;
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     auto tmp = [dataParams, &upper1, &upper2, &lower1, &lower2, &work1, &work2]
@@ -159,7 +159,7 @@ void RunMultipleBaselineFilter(
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
     using Filter2 = ComposedFilter<laneWidth, 9, 31, 2, 8>;
 
-    DeviceOnlyArray<Filter> full(dataParams.numZmwLanes, 0);
+    DeviceOnlyArray<Filter> full(SOURCE_MARKER(), dataParams.numZmwLanes, 0);
 
     BatchDimensions dims;
     dims.laneWidth = dataParams.laneWidth;
@@ -172,9 +172,9 @@ void RunMultipleBaselineFilter(
     filters.reserve(dataParams.numZmwLanes / dataParams.kernelLanes);
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-        filters.emplace_back(dataParams.kernelLanes, 0);
+        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+        filters.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     auto tmp = [dataParams, &work1, &work2, &filters, &full]
@@ -197,7 +197,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     auto tmp = [params,&filterData, mode](const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret){
@@ -251,6 +251,8 @@ void run(const Data::DataManagerParams& dataParams,
          size_t simulKernels,
          BaselineFilterMode mode)
 {
+    Memory::EnablePerformanceMode();
+
     if (mode == BaselineFilterMode::GlobalFull)
     {
         switch (dataParams.laneWidth)
@@ -396,6 +398,8 @@ void run(const Data::DataManagerParams& dataParams,
         }
         }
     }
+
+    Memory::DisablePerformanceMode();
 }
 
 }}
