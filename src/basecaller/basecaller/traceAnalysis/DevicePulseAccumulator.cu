@@ -242,7 +242,7 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
     static constexpr size_t blockThreads = laneSize / 2;
 public:
     AccumImpl(size_t lanesPerPool)
-        : workingSegments_(lanesPerPool, LabelManager::BaselineLabel())
+        : workingSegments_(SOURCE_MARKER(), lanesPerPool, LabelManager::BaselineLabel())
     {
     }
 
@@ -271,7 +271,7 @@ public:
 
     static void Configure(CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
     {
-        manager_ = std::make_unique<DeviceOnlyObj<const LabelManager>>(analogMap);
+        manager_ = std::make_unique<DeviceOnlyObj<const LabelManager>>(SOURCE_MARKER(), analogMap);
     }
 
     static void Finalize()

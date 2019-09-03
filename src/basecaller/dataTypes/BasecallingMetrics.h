@@ -96,25 +96,18 @@ public: // metrics retained from accumulator (more can be pulled through if nece
 
 static_assert(sizeof(BasecallingMetrics<laneSize>) == 128 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
 
-
 template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
 {
 public: // types
-    using Pools = Cuda::Memory::DualAllocationPools;
     using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
     using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
 
 public: // methods:
     BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
-                              Cuda::Memory::SyncDirection syncDir,
-                              bool pinned)
+                              Cuda::Memory::SyncDirection syncDir)
         : batchDims_(batchDims)
         , syncDir_(syncDir)
-        , pinned_(pinned)
-        , metricsPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(BasecallingMetricsT),
-                pinned))
     {}
 
     std::unique_ptr<BasecallingMetricsBatchT> NewBatch()
@@ -122,15 +115,12 @@ public: // methods:
         return std::make_unique<BasecallingMetricsBatchT>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            pinned_,
-            metricsPool_);
+            SOURCE_MARKER());
     }
 
 private: // members:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
-    std::shared_ptr<Pools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

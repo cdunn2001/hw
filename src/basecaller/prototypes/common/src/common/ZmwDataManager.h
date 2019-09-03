@@ -138,9 +138,6 @@ private:
     std::atomic<size_t> computeBlock_;
     std::thread thread_;
 
-    std::shared_ptr<Memory::DualAllocationPools> poolIn_;
-    std::shared_ptr<Memory::DualAllocationPools> poolOut_;
-
     std::vector<Mongo::Data::TraceBatch<TIn>> bank0;
     std::vector<Mongo::Data::TraceBatch<TIn>> bank1;
     std::vector<Mongo::Data::TraceBatch<TOut>> output;

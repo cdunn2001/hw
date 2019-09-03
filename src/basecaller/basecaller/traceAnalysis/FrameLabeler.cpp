@@ -58,8 +58,7 @@ void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
             framesPerChunk,
             lanesPerPool,
             latentFrames,
-            syncDir,
-            true);
+            syncDir);
 }
 
 void FrameLabeler::DestroyAllocationPools()

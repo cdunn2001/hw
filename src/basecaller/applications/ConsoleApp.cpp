@@ -32,14 +32,14 @@ using namespace PacBio::Primary;
 class MongoBasecallerConsole : public ThreadedProcessBase
 {
     SMART_ENUM(
-        ProfileSpots,
+        ChunkProfiler,
         ANALYZE_CHUNK,
         WRITE_CHUNK,
         READ_CHUNK
     );
 
     using BazWriter = PacBio::Primary::BazWriter<SpiderMetricBlock>;
-    using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileSpots>;
+    using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ChunkProfiler>;
 public:
     MongoBasecallerConsole()
     {}
@@ -102,10 +102,17 @@ public:
 
     void Run()
     {
+        EnablePerformanceMode();
+
         Setup();
         RunAnalyzer();
         Join();
         Teardown();
+
+        // Need to free up our allocations that are pooled. If that happens
+        // during static teardown, we'll likely try to free cuda allocations
+        // after the cuda runtime is already gone, which causes a crash
+        DisablePerformanceMode();
     }
 
     MongoBasecallerConsole& Config(const BasecallerConfig& basecallerConfig)
@@ -220,7 +227,7 @@ private:
                 if (numChunksAnalyzed < 15) mode = Profiler::Mode::OBSERVE;
                 if (numChunksAnalyzed < 3) mode = Profiler::Mode::IGNORE;
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
-                auto analyzeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::ANALYZE_CHUNK);
+                auto analyzeChunkProfile = profiler.CreateScopedProfiler(ChunkProfiler::ANALYZE_CHUNK);
                 (void)analyzeChunkProfile;
                 auto output = (*analyzer_)(std::move(chunk));
                 numChunksAnalyzed++;
@@ -440,7 +447,7 @@ private:
                 Profiler::Mode mode = Profiler::Mode::REPORT;
                 if (numChunksWritten_ < 15) mode = Profiler::Mode::OBSERVE;
                 Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
-                auto writeChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::WRITE_CHUNK);
+                auto writeChunkProfile = profiler.CreateScopedProfiler(ChunkProfiler::WRITE_CHUNK);
                 (void)writeChunkProfile;
                 WriteOutputChunk(outputChunk);
                 numChunksWritten_++;
@@ -499,7 +506,7 @@ private:
                     Profiler::Mode mode = Profiler::Mode::REPORT;
                     if (numChunksRead < 15) mode = Profiler::Mode::OBSERVE;
                     Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
-                    auto readChunkProfile = profiler.CreateScopedProfiler(ProfileSpots::READ_CHUNK);
+                    auto readChunkProfile = profiler.CreateScopedProfiler(ChunkProfiler::READ_CHUNK);
                     (void)readChunkProfile;
                     auto chunk = batchGenerator_->PopulateChunk();
                     PBLOG_INFO << "Read in chunk frames = ["

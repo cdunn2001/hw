@@ -48,18 +48,33 @@ namespace Memory {
 // allows a unified representation of gpu memory, while letting
 // individual implementations choose their own initialization
 // scheme.
+//
+// The class supports an
+// optional allocation identification parameter.  External
+// code can set this parameter however it desires, with the
+// sole caveate that the value 0 is reserved to mean "no id"
 class SmartDeviceAllocation
 {
 public:
-    SmartDeviceAllocation(size_t size = 0)
+    SmartDeviceAllocation(size_t size = 0, size_t allocID = 0)
         : data_(size ? CudaRawMalloc(size) : nullptr)
         , size_(size)
+        , allocID_(allocID)
     {
         if (size_ > 0)
         {
-            std::lock_guard<std::mutex> lm(m_);
-            bytesAllocated_ += size;
-            peakBytesAllocated_ = std::max(peakBytesAllocated_.load(), bytesAllocated_.load());
+            // Update total allocation, maintaining a snapshot of the result at this point in time
+            // Remember that other threads can update the value of bytesAllocated_ at any time.
+            size_t curAlloc = bytesAllocated_ += size;
+            // Also extract a snapshot of the current max.
+            size_t curMax = peakBytesAllocated_;
+            // As long as our snapshot of the max is less than our snapshot of the current allocation,
+            // try to update the max.  Note that if compare_exchange_weak returns false (the update failed
+            // for whatever reason), it updates curMax with the latest value of peakBytesAllocated, meaning
+            // the next iteration of the loop will have the latest information, and can abort if another
+            // thread updated peakBytesAllocated to something larger than what we are trying to set.
+            while (curMax < curAlloc && !peakBytesAllocated_.compare_exchange_weak(curMax, curAlloc));
+            assert(curMax <= peakBytesAllocated_);
         }
     }
 
@@ -67,6 +82,7 @@ public:
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
         : data_(std::move(other.data_))
         , size_(other.size_)
+        , allocID_(other.allocID_)
     {
         other.size_ = 0;
     }
@@ -76,6 +92,7 @@ public:
     {
         data_ = std::move(other.data_);
         size_ = other.size_;
+        allocID_ = other.allocID_;
         other.size_ = 0;
         return *this;
     }
@@ -84,11 +101,13 @@ public:
     {
         if (size_ != 0)
         {
-            std::lock_guard<std::mutex> lm(m_);
             assert(bytesAllocated_ >= size_);
             bytesAllocated_ -= size_;
         }
     }
+
+    size_t AllocID() const { return allocID_; }
+    void AllocID(size_t val) { allocID_ = val; }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
@@ -114,10 +133,10 @@ private:
     };
     std::unique_ptr<void, Deleter> data_;
     size_t size_;
+    size_t allocID_;
 
     static std::atomic<size_t> bytesAllocated_;
     static std::atomic<size_t> peakBytesAllocated_;
-    static std::mutex m_;
 };
 
 

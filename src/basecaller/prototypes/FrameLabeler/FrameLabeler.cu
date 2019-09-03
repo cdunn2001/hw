@@ -39,6 +39,8 @@ void run(const Data::DataManagerParams& dataParams,
          const Subframe::AnalogMeta& baselineMeta,
          size_t simulKernels)
 {
+    Memory::EnablePerformanceMode();
+
     static constexpr size_t gpuBlockThreads = 32;
     static constexpr size_t laneWidth = 64;
 
@@ -65,14 +67,14 @@ void run(const Data::DataManagerParams& dataParams,
     for (size_t i = 0; i < numBatches; ++i)
     {
 
-        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
+        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)
         {
             modelView[j] = referenceModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     UnifiedCudaArray<PulseDetectionMetrics> pdMetrics(
@@ -92,6 +94,8 @@ void run(const Data::DataManagerParams& dataParams,
     RunThreads(simulKernels, manager, tmp);
 
     FrameLabeler::Finalize();
+
+    Memory::DisablePerformanceMode();
 }
 
 }}

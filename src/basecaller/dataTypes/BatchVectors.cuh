@@ -146,6 +146,8 @@ private:
     Cuda::Memory::DeviceView<idx_t> lens_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 auto KernelArgConvert(BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
 {

@@ -58,7 +58,7 @@ namespace Mongo {
 namespace Basecaller {
 
 SMART_ENUM(
-    ProfileStages,
+    FilterStages,
     Upload,
     Download,
     Baseline,
@@ -67,7 +67,7 @@ SMART_ENUM(
     Metrics
 );
 
-using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
+using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<FilterStages>;
 
 void BatchAnalyzer::ReportPerformance()
 {
@@ -80,7 +80,7 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
-    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, true)
+    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
@@ -139,30 +139,30 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     if (tbatch.Metadata().FirstFrame() < 257) mode = Profiler::Mode::IGNORE;
     Profiler profiler(mode, 3.0, 100.0);
 
-    auto upload = profiler.CreateScopedProfiler(ProfileStages::Upload);
+    auto upload = profiler.CreateScopedProfiler(FilterStages::Upload);
     (void)upload;
     tbatch.CopyToDevice();
     Cuda::CudaSynchronizeDefaultStream();
 
-    auto baselineProfile = profiler.CreateScopedProfiler(ProfileStages::Baseline);
+    auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
     (void)baselineProfile;
     auto baselinedTracesAndStats = (*baseliner_)(std::move(tbatch));
     auto baselinedTraces = std::move(baselinedTracesAndStats.first);
     auto baselinerStats = std::move(baselinedTracesAndStats.second);
 
-    auto frameProfile = profiler.CreateScopedProfiler(ProfileStages::FrameLabeling);
+    auto frameProfile = profiler.CreateScopedProfiler(FilterStages::FrameLabeling);
     (void) frameProfile;
     auto labels = (*frameLabeler_)(std::move(baselinedTraces), models_);
 
-    auto pulseProfile = profiler.CreateScopedProfiler(ProfileStages::PulseAccumulating);
+    auto pulseProfile = profiler.CreateScopedProfiler(FilterStages::PulseAccumulating);
     (void)pulseProfile;
     auto pulses = (*pulseAccumulator_)(std::move(labels));
 
-    auto download = profiler.CreateScopedProfiler(ProfileStages::Download);
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
     (void)download;
     pulses.Pulses().LaneView(0);
 
-    auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
+    auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
     (void) metricsProfile;
 
     auto basecallingMetrics = (*hfMetrics_)(

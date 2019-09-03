@@ -52,7 +52,7 @@ __global__ void SpinKernel(uint64_t duration, DeviceView<T>)
 
 // Note: These tests are testing the behaviour of UnifiedCudaArray
 //       and DeviceOnlyArray.  Preferrably they'd be testing the
-//       SingleStreammonitor and MultiStreamMonitor implementations
+//       SingleStreamMonitor and MultiStreamMonitor implementations
 //       directly, but that is currently difficult.  They rely on
 //       consuming KernelLaunchInfo objects, which are quite
 //       intentionally impossible for anyone outside the launcher
@@ -60,14 +60,33 @@ __global__ void SpinKernel(uint64_t duration, DeviceView<T>)
 //       testing hook to get at these classes more directly without
 //       compromising their integrety, but for now this tests their
 //       functionality robustly, if by proxy.
+//
+//       As an added unfortunate quirk, testing through things like
+//       UnifiedCudaArray means we need to jump through hoops to make
+//       sure memory allocations don't get in our way.  the cuda runtime
+//       seems to add synchronization points, which messes with what is
+//       orchestrated below
+struct StreamMonitor : public ::testing::Test
+{
+    void SetUp() override
+    {
+        EnablePerformanceMode();
+    }
+
+    void TearDown() override
+    {
+        DisablePerformanceMode();
+    }
+};
+
 
 // The SingleStreamMonitor can be moved between streams, as long
 // as it's not simultaneously used by two kernels.
-TEST(StreamMonitor, UnifiedCudaArray_Good)
+TEST_F(StreamMonitor, UnifiedCudaArray_Good)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead);
+    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<int>, 1, 1)(1000000, *arr);
@@ -88,11 +107,11 @@ TEST(StreamMonitor, UnifiedCudaArray_Good)
 }
 
 // Simultaneous use in two streams is an error
-TEST(StreamMonitor, UnifiedCudaArray_ConcurrentAccess)
+TEST_F(StreamMonitor, UnifiedCudaArray_ConcurrentAccess)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead);
+    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<int>, 1, 1)(1000000, *arr);
@@ -109,11 +128,11 @@ TEST(StreamMonitor, UnifiedCudaArray_ConcurrentAccess)
 
 // Also is an error to delete the object while used in
 // a live kernel
-TEST(StreamMonitor, UnifiedCudaArray_ConcurrentDelete)
+TEST_F(StreamMonitor, UnifiedCudaArray_ConcurrentDelete)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead);
+    auto arr = std::make_unique<UnifiedCudaArray<int>>(1, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<int>, 1, 1)(1000000, *arr);
@@ -127,11 +146,11 @@ TEST(StreamMonitor, UnifiedCudaArray_ConcurrentDelete)
 
 // A DeviceOnlyArray of *non* const data still cannot
 // be shared between different kernels
-TEST(StreamMonitor, DeviceOnlyArray_ConcurrentAccess)
+TEST_F(StreamMonitor, DeviceOnlyArray_ConcurrentAccess)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<int>, 1, 1)(1000000000ull, *arr);
@@ -148,11 +167,11 @@ TEST(StreamMonitor, DeviceOnlyArray_ConcurrentAccess)
 
 // A *const* DeviceOnlyArray *can* be shared between concurrent
 // kernels
-TEST(StreamMonitor, DeviceOnlyArray_ConstConcurrentAccess)
+TEST_F(StreamMonitor, DeviceOnlyArray_ConstConcurrentAccess)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<const int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<const int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<const int>, 1, 1)(1000000000ull, *arr);
@@ -169,11 +188,11 @@ TEST(StreamMonitor, DeviceOnlyArray_ConstConcurrentAccess)
 
 // Again make sure that we cannot delete the object while
 // a kernel is executing.
-TEST(StreamMonitor, DeviceOnlyArray_ConcurrentDelete)
+TEST_F(StreamMonitor, DeviceOnlyArray_ConcurrentDelete)
 {
     PBLogger::SetMinimumSeverityLevel(LogLevel::ULTIMATE);
     ResetStreamErrors();
-    auto arr = std::make_unique<DeviceOnlyArray<const int>>(1, 1);
+    auto arr = std::make_unique<DeviceOnlyArray<const int>>(SOURCE_MARKER(), 1, 1);
 
     std::thread t1([&](){
             PBLauncher(SpinKernel<const int>, 1, 1)(1000000000ull, *arr);

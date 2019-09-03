@@ -413,13 +413,13 @@ class ComposedFilter
     size_t numLanes_;
 
 public:
-    __host__ ComposedFilter(size_t numLanes, short val)
-        : lower1(numLanes, val)
-        , lower2(numLanes, val)
-        , upper1(numLanes, val)
-        , upper2(numLanes, val)
+    __host__ ComposedFilter(const Memory::AllocationMarker& marker, size_t numLanes, short val)
+        : lower1(marker, numLanes, val)
+        , lower2(marker, numLanes, val)
+        , upper1(marker, numLanes, val)
+        , upper2(marker, numLanes, val)
         , numLanes_(numLanes)
-        , latent(numLanes, 0.0f)
+        , latent(marker, numLanes, 0.0f)
     {}
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does

@@ -66,8 +66,8 @@ class DeviceOnlyObj : private detail::DataManager
 {
 public:
     template <typename... Args>
-    DeviceOnlyObj(Args&&... args)
-        : data_(1, std::forward<Args>(args)...)
+    DeviceOnlyObj(const AllocationMarker& marker, Args&&... args)
+        : data_(marker, 1, std::forward<Args>(args)...)
     {}
 
     DevicePtr<T> GetDevicePtr(const KernelLaunchInfo& info)
@@ -83,6 +83,8 @@ private:
     Memory::DeviceOnlyArray<T> data_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 DevicePtr<T> KernelArgConvert(DeviceOnlyObj<T>& obj, const KernelLaunchInfo& info)
 {

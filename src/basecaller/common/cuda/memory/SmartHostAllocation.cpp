@@ -31,6 +31,5 @@ namespace Memory {
 
 std::atomic<size_t> SmartHostAllocation::bytesAllocated_{0};
 std::atomic<size_t> SmartHostAllocation::peakBytesAllocated_{0};
-std::mutex SmartHostAllocation::m_;
 
 }}}

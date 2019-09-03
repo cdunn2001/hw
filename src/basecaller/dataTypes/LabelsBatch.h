@@ -57,15 +57,12 @@ public:     // Structors and assignment
                 const BatchDimensions& dims,
                 TraceBatch<ElementType> trace,
                 size_t latentFrames,
-                bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
+                const Cuda::Memory::AllocationMarker& marker)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, marker)
         , curTrace_(std::move(trace))
-        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, latPool, pinned)
-        , pdMetrics_(dims.lanesPerBatch, syncDirection, pinned, metricsPool)
+        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, marker)
+        , pdMetrics_(dims.lanesPerBatch, syncDirection, marker)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -108,14 +105,9 @@ public:
     LabelsBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
                        size_t latentFrames,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
+                       Cuda::Memory::SyncDirection syncDirection)
         : latentFrames_(latentFrames)
         , syncDirection_(syncDirection)
-        , pinned_(pinned)
-        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(latentFrames_* lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , metricsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool * sizeof(PulseDetectionMetrics), pinned))
     {}
 
     LabelsBatch NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
@@ -123,19 +115,16 @@ public:
         auto meta = trace.Metadata();
         auto dims = trace.StorageDims();
         return LabelsBatch(meta, dims, std::move(trace),
-                           latentFrames_, pinned_,
-                           syncDirection_, tracePool_, latPool_, metricsPool_);
+                           latentFrames_, syncDirection_, SOURCE_MARKER());
     }
 
 private:
     size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
-    bool pinned_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> metricsPool_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 inline auto KernelArgConvert(LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
 {
     return obj.GetDeviceHandle(info);

@@ -12,8 +12,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Factory class, to simplify the construction of
-// baselineSubtractedTraces+Stats pair instances.
 // This class will handle the small collection of constructor arguments that
 // need to change depending on the pipeline configuration, but otherwise are
 // generally constant between different batches
@@ -24,12 +22,8 @@ public:
 
     CameraBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
+                       Cuda::Memory::SyncDirection syncDirection)
         : syncDirection_(syncDirection)
-        , pinned_(pinned)
-        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , statsPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(lanesPerPool* sizeof(BaselinerStatAccumState), pinned))
     {
         dims_.laneWidth = laneSize;
         dims_.framesPerBatch = framesPerChunk;
@@ -38,17 +32,15 @@ public:
 
     std::pair<TraceBatch<ElementType>, Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>> NewBatch(const BatchMetadata& meta) const
     {
-        return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, tracePool_, pinned_),
+        const auto& marker = SOURCE_MARKER();
+        return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, marker),
                               Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>(
-                                  dims_.lanesPerBatch, syncDirection_, pinned_, statsPool_));
+                                  dims_.lanesPerBatch, syncDirection_, marker));
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
-    bool pinned_;
     BatchDimensions dims_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> statsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

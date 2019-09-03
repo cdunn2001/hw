@@ -59,8 +59,7 @@ void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPe
     batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
             maxCallsPerZmw,
             dims,
-            syncDir,
-            true);
+            syncDir);
 }
 
 Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)

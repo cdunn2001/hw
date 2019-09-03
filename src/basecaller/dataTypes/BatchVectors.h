@@ -143,13 +143,11 @@ public:
     BatchVectors(uint32_t zmwPerBatch,
                  uint32_t maxLen,
                  Cuda::Memory::SyncDirection syncDir,
-                 bool pinned,
-                 std::shared_ptr<Cuda::Memory::DualAllocationPools> dataPool,
-                 std::shared_ptr<Cuda::Memory::DualAllocationPools> lenPool)
+                 const Cuda::Memory::AllocationMarker& marker)
         : zmwPerBatch_(zmwPerBatch)
         , maxLen_(maxLen)
-        , data_(zmwPerBatch * maxLen, syncDir, pinned, dataPool)
-        , lens_(zmwPerBatch, syncDir, pinned, lenPool)
+        , data_(zmwPerBatch * maxLen, syncDir, marker)
+        , lens_(zmwPerBatch, syncDir, marker)
     {}
 
     LaneVectorView<T> LaneView(uint32_t laneId)
@@ -184,6 +182,12 @@ public:
 
     UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) { return lens_; }
     const UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<const T>>) const { return lens_; }
+
+    void DeactivateGpuMem()
+    {
+        data_.DeactivateGpuMem();
+        lens_.DeactivateGpuMem();
+    }
 
 private:
     uint32_t zmwPerBatch_;

@@ -329,14 +329,6 @@ protected:
 // is synchronous, though both of those rely on this oject being owned by the
 // same thread for the whole duration.  In order to move this object to another
 // thread you should explicitly cause a synchronization first.
-//
-// To avoid unecessary utilization of the relatively scarce gpu memory, this
-// class can be constructed with a GpuAllocationPool.  This is important as
-// the host will need at least an entire chip's worth of batches to place
-// data as it streams in, but only a small handful will be processed on the gpu
-// at one time.  By calling `DeactivateGpuMem` whenever gpu processing on a
-// batch is finished, the underlying gpu allocation can be placed back in
-// the memory pool for another batch to check out once it becomes active.
 template <typename T>
 class BatchData : private Cuda::Memory::detail::DataManager
 {
@@ -346,12 +338,11 @@ class BatchData : private Cuda::Memory::detail::DataManager
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
-              bool pinnedHost = true)
+              const Cuda::Memory::AllocationMarker& marker)
         : dims_(dims)
         , availableFrames_(dims.framesPerBatch)
         , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
-                syncDirection, pinnedHost, pool)
+                syncDirection, marker)
     {}
 
     BatchData(const BatchData&) = delete;
@@ -360,12 +351,6 @@ public:
     BatchData& operator=(BatchData&&) = default;
 
     ~BatchData() = default;
-
-    // Can be null, if there are no pools in use
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
-    {
-        return data_.GetAllocationPools();
-    }
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
     size_t NumFrames()     const { return availableFrames_; }
@@ -418,6 +403,8 @@ private:
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
 auto KernelArgConvert(BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
 {

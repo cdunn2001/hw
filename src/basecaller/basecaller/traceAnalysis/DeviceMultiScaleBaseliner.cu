@@ -58,10 +58,9 @@ std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
 DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
-    auto pools = rawTrace.GetAllocationPools();
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
-    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     filter_->RunBaselineFilter(rawTrace, out.first, out.second, work1, work2);
 
@@ -73,6 +72,7 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t l
     : Baseliner(poolId)
 {
     filter_ = std::make_unique<Filter>(
+        SOURCE_MARKER(),
         lanesPerPool,
         initVal);
 }

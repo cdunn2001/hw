@@ -88,7 +88,7 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
                                           : SyncDirection::HostReadDeviceWrite;
     metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
-            dims, syncDir, true);
+            dims, syncDir);
 }
 
 void HFMetricsFilter::DestroyAllocationPools()

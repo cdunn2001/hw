@@ -24,13 +24,12 @@ std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
 HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
-    auto pools = rawTrace.GetAllocationPools();
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
     Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, pools, true);
+                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto statsView = out.second.GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)

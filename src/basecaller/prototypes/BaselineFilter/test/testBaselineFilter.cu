@@ -44,7 +44,7 @@ TEST(BaselineFilterTest, GlobalMemory)
     std::vector<DeviceOnlyArray<Filter>> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -123,8 +123,8 @@ TEST(BaselineFilterTest, SharedMemory)
     std::vector<DeviceOnlyArray<Filter>> filterRefData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -135,7 +135,7 @@ TEST(BaselineFilterTest, SharedMemory)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {
@@ -200,8 +200,8 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     std::vector<Filter> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -212,9 +212,9 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {
