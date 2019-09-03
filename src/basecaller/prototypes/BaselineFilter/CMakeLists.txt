@@ -8,12 +8,16 @@ add_library(libBaselineFilter STATIC
     BaselineFilter.cuh
     BaselineFilterKernels.cu
     BaselineFilterKernels.cuh
-    CircularBuffer.cu
-    CircularBuffer.cuh
+    BlockCircularBuffer.cu
+    BlockCircularBuffer.cuh
+    CircularBufferKernels.cu
+    CircularBufferKernels.cuh
     ExtremaFilter.cuh
     ExtremaFilter.cu
     ExtremaFilterKernels.cuh
     ExtremaFilterKernels.cu
+    LocalCircularBuffer.cu
+    LocalCircularBuffer.cuh
 )
 
 target_include_directories(libBaselineFilter

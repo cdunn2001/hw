@@ -195,7 +195,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
 
     using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8>;
+    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
     for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)

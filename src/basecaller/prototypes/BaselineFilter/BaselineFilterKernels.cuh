@@ -2,7 +2,7 @@
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
 #include "BaselineFilter.cuh"
-#include "CircularBuffer.cuh"
+#include "LocalCircularBuffer.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
@@ -194,14 +194,14 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2>
     }
 }
 
-template <size_t blockThreads>
+template <size_t blockThreads, size_t lag>
 class StatAccumulator
 {
 public:
     __device__ void Reset()
     {
-        auto largest = std::numeric_limits<int16_t>::max();
-        auto lowest = std::numeric_limits<int16_t>::min();
+        constexpr auto largest = std::numeric_limits<int16_t>::max();
+        constexpr auto lowest = std::numeric_limits<int16_t>::min();
         minB_[threadIdx.x] = PBShort2(largest);
         maxB_[threadIdx.x] = PBShort2(lowest);
 
@@ -281,14 +281,16 @@ public:
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
 
-        stats.fullAutocorrState.lag = Capacity;
+        stats.fullAutocorrState.lag = lag;
     }
 
 private:
-    // Baseline stats computed only from baseline frames
+    // Min/max over all baseline-subtracted frames
     Utility::CudaArray<PBHalf2, blockThreads> minB_;
     Utility::CudaArray<PBHalf2, blockThreads> maxB_;
+    // Sum over all baseline frames before baseline subtraction
     Utility::CudaArray<PBHalf2, blockThreads> rawSumB_;
+    // Baseline stats computed from baseline-subtracted frames classified as baseline
     Utility::CudaArray<PBHalf2, blockThreads> m0B_;
     Utility::CudaArray<PBHalf2, blockThreads> m1B_;
     Utility::CudaArray<PBHalf2, blockThreads> m2B_;
@@ -301,7 +303,7 @@ private:
     Utility::CudaArray<PBHalf2, blockThreads> m2Lag_;
 };
 
-template <size_t blockThreads>
+template <size_t blockThreads, size_t lag>
 struct LatentBaselineData
 {
     __device__ LatentBaselineData(PBHalf2 sig)
@@ -325,6 +327,8 @@ struct LatentBaselineData
         PBHalf2 thrHigh;
         PBHalf2 thrLow;
 
+        LocalCircularBuffer<lag> circularBuffer;
+
         // TODO unify these somehow with the host multiscale implementation
         static constexpr float sigmaThrL = 4.5f;
         static constexpr float sigmaThrH = 4.5f;
@@ -342,10 +346,9 @@ struct LatentBaselineData
             return bgSigma;
         }
 
-        __device__ void ProcessFrame(
-                PBHalf2 raw,
-                PBHalf2 subtracted,
-                StatAccumulator<blockThreads>& stats)
+        __device__ void ProcessFrame(PBHalf2 raw,
+                                     PBHalf2 subtracted,
+                                     StatAccumulator<blockThreads, lag>& stats)
         {
             auto maskHp1 = subtracted < thrHigh;
             auto mask = latHMask1 && latLMask && maskHp1;
@@ -358,6 +361,10 @@ struct LatentBaselineData
 
             latRawData = raw;
             latData = subtracted;
+
+            auto lagVal = circularBuffer.Front();
+            circularBuffer.PushBack(subtracted);
+            stats.AddAutoCorrData(subtracted, lagVal);
         }
     };
 
@@ -365,24 +372,26 @@ struct LatentBaselineData
     {
         LocalLatent local;
 
-        local.bgSigma    = bgSigma[threadIdx.x];
-        local.latData    = latData[threadIdx.x];
-        local.latRawData = latRawData[threadIdx.x];
-        local.latLMask   = latLMask[threadIdx.x];
-        local.latHMask1  = latHMask1[threadIdx.x];
-        local.latHMask2  = latHMask2[threadIdx.x];
+        local.bgSigma        = bgSigma[threadIdx.x];
+        local.latData        = latData[threadIdx.x];
+        local.latRawData     = latRawData[threadIdx.x];
+        local.latLMask       = latLMask[threadIdx.x];
+        local.latHMask1      = latHMask1[threadIdx.x];
+        local.latHMask2      = latHMask2[threadIdx.x];
+        local.circularBuffer = circularBuffer[threadIdx.x];
 
         return local;
     }
 
     __device__ void StoreLocal(const LocalLatent& local)
     {
-        bgSigma[threadIdx.x]     = local.bgSigma;
-        latData[threadIdx.x]     = local.latData;
-        latRawData[threadIdx.x]  = local.latRawData;
-        latLMask[threadIdx.x]    = local.latLMask;
-        latHMask1[threadIdx.x]   = local.latHMask1;
-        latHMask2[threadIdx.x]   = local.latHMask2;
+        bgSigma[threadIdx.x]        = local.bgSigma;
+        latData[threadIdx.x]        = local.latData;
+        latRawData[threadIdx.x]     = local.latRawData;
+        latLMask[threadIdx.x]       = local.latLMask;
+        latHMask1[threadIdx.x]      = local.latHMask1;
+        latHMask2[threadIdx.x]      = local.latHMask2;
+        circularBuffer[threadIdx.x] = local.circularBuffer;
     }
 private:
     // TODO init
@@ -392,24 +401,21 @@ private:
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
     Utility::CudaArray<PBBool2, blockThreads> latHMask1;
     Utility::CudaArray<PBBool2, blockThreads> latHMask2;
+    Utility::CudaArray<LocalCircularBuffer<lag>, blockThreads> circularBuffer;
 };
 
-template <size_t blockThreads, size_t stride>
+template <size_t blockThreads, size_t stride, size_t lag>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                 Memory::DeviceView<LatentBaselineData<blockThreads>> latent,
-                                 Memory::DeviceView<CircularBuffer<blockThreads>> circularBuffers,
+                                 Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
                                  Mongo::Data::GpuBatchData<PBShort2> out,
                                  Memory::DeviceView<Mongo::Data::BaselinerStatAccumState> outputStats)
 {
-    __shared__ StatAccumulator<blockThreads> stats;
+    __shared__ StatAccumulator<blockThreads,lag> stats;
     stats.Reset();
 
     auto localLatent = latent[blockIdx.x].GetLocal();
-
-    __shared__ CircularBuffer<blockThreads> circularBuffer;
-    circularBuffer = circularBuffers[blockIdx.x];
 
     // For bias estimate
     // TODO: these need to be set consistent with filter widths
@@ -440,33 +446,28 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
             auto val = raw - baseline - frameBiasEstimate;
             localLatent.ProcessFrame(raw, val, stats);
 
-            auto lagVal = circularBuffer.Front();
-            circularBuffer.PushBack(val);
-            stats.AddAutoCorrData(val, lagVal);
-
             outZmw[j] = ToShort(val);
         }
     }
 
     stats.FillOutputStats(outputStats[blockIdx.x]);
     latent[blockIdx.x].StoreLocal(localLatent);
-    circularBuffers[blockIdx.x] =  circularBuffer;
 }
 
-template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
+template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2, size_t lag>
 class ComposedFilter
 {
     using Lower1 = ErodeDilate<blockThreads, width1>;
     using Lower2 = ErodeDilate<blockThreads, width2>;
     using Upper1 = DilateErode<blockThreads, width1>;
     using Upper2 = ErodeDilate<blockThreads, width2>;
+    using LatentBaselineData = LatentBaselineData<blockThreads, lag>;
 
     Memory::DeviceOnlyArray<Lower1> lower1;
     Memory::DeviceOnlyArray<Lower2> lower2;
     Memory::DeviceOnlyArray<Upper1> upper1;
     Memory::DeviceOnlyArray<Upper2> upper2;
-    Memory::DeviceOnlyArray<LatentBaselineData<blockThreads>> latent;
-    Memory::DeviceOnlyArray<CircularBuffer<blockThreads>> circularBuffers;
+    Memory::DeviceOnlyArray<LatentBaselineData> latent;
     size_t numLanes_;
 
 public:
@@ -477,7 +478,6 @@ public:
         , upper2(marker, numLanes, val)
         , numLanes_(numLanes)
         , latent(marker, numLanes, 0.0f)
-        , circularBuffers(marker, numLanes, val)
     {}
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
@@ -492,14 +492,14 @@ public:
         assert(input.LaneWidth() == 2*blockThreads);
         assert(input.LanesPerBatch() == numLanes_);
 
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, 2, Lower1>,
+        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>,
                                   numLanes_,
                                   blockThreads);
         L1(input,
            lower1,
            numFrames,
            workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, 8, Lower2>,
+        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>,
                                   numLanes_,
                                   blockThreads);
         L2(workspace1,
@@ -507,14 +507,14 @@ public:
            numFrames/2,
            workspace1);
 
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, 2, Upper1>,
+        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>,
                                   numLanes_,
                                   blockThreads);
         U1(input,
            upper1,
            numFrames,
            workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, 8, Upper2>,
+        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>,
                                   numLanes_,
                                   blockThreads);
         U2(workspace2,
@@ -522,7 +522,7 @@ public:
            numFrames/2,
            workspace2);
 
-        const auto& average = PBLauncher(AverageAndExpand<blockThreads, 16>,
+        const auto& average = PBLauncher(AverageAndExpand<blockThreads, stride1*stride2>,
                                        numLanes_,
                                        blockThreads);
         average(workspace1, workspace2, output);
@@ -539,32 +539,31 @@ public:
         assert(input.LaneWidth() == 2*blockThreads);
         assert(input.LanesPerBatch() == numLanes_);
 
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, 2, Lower1>, numLanes_, blockThreads);
+        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>, numLanes_, blockThreads);
         L1(input,
            lower1,
            numFrames,
            workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, 8, Lower2>, numLanes_, blockThreads);
+        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>, numLanes_, blockThreads);
         L2(workspace1,
            lower2,
            numFrames/2,
            workspace1);
 
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, 2, Upper1>, numLanes_, blockThreads);
+        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>, numLanes_, blockThreads);
         U1(input,
            upper1,
            numFrames,
            workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, 8, Upper2>, numLanes_, blockThreads);
+        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>, numLanes_, blockThreads);
         U2(workspace2,
            upper2,
            numFrames/2,
            workspace2);
 
-        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, 16>, numLanes_, blockThreads);
+        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, stride1*stride2, lag>, numLanes_, blockThreads);
         Subtract(input,
                  latent,
-                 circularBuffers,
                  workspace1,
                  workspace2,
                  output,
