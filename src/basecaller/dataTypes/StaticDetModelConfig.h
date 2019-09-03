@@ -38,7 +38,7 @@ namespace Data {
 class StaticDetModelConfig : public PacBio::Process::ConfigurationObject
 {
 public:
-    ADD_PARAMETER(float, baselineMean, 0);
+    ADD_PARAMETER(float, baselineMean, 0.0f);
     ADD_PARAMETER(float, baselineVariance, 33.0f);
 
 public:
@@ -51,14 +51,14 @@ public:
     auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
     {
         std::array<AnalogMode, numAnalogs> analogs;
-        const auto refSignal = movieConfig.refSnr * sqrt(baselineVariance);
+        const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
         for (size_t i = 0; i < analogs.size(); i++)
         {
             const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
-            const auto var = baselineVariance + mean + pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
+            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
 
             analogs[i].mean = mean;
-            analogs[i].var = var;
+            analogs[i].var = static_cast<float>(var);
         }
 
         return analogs;

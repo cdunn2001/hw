@@ -182,23 +182,25 @@ TEST(TestHostPulseAccumulator, Run)
     const short latTraceVal = 400;
     const short curTraceVal = 500;
 
-    size_t frameNum = 0;
-    size_t base = 0;
-    while (frameNum < framesPerChunk)
     {
-        simTrc.insert(simTrc.end(), ipd, 0);
-        simLabels.insert(simLabels.end(), ipd, 0);
-        frameNum += ipd;
+        size_t frameNum = 0;
+        size_t base = 0;
+        while (frameNum < framesPerChunk)
+        {
+            simTrc.insert(simTrc.end(), ipd, 0);
+            simLabels.insert(simLabels.end(), ipd, 0);
+            frameNum += ipd;
 
-        // Insert pulse down states and final pulse up state to complete pulse.
-        simLabels.insert(simLabels.end(), 1, (base % 4) + 5);
-        simLabels.insert(simLabels.end(), pw-1, (base % 4 ) + 9);
+            // Insert pulse down states and final pulse up state to complete pulse.
+            simLabels.insert(simLabels.end(), 1, (base % 4) + 5);
+            simLabels.insert(simLabels.end(), pw-1, (base % 4 ) + 9);
 
-        // Hardcode latency for now.
-        simTrc.insert(simTrc.end(), pw, frameNum < 16u ? latTraceVal : curTraceVal);
+            // Hardcode latency for now.
+            simTrc.insert(simTrc.end(), pw, frameNum < 16u ? latTraceVal : curTraceVal);
 
-        base++;
-        frameNum += pw;
+            base++;
+            frameNum += pw;
+        }
     }
 
     for (uint32_t laneIdx = 0; laneIdx < labelsBatch.LanesPerBatch(); ++laneIdx)

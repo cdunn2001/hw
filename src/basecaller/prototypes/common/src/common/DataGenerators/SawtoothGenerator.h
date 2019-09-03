@@ -27,7 +27,7 @@ public:
     {}
 
 private:
-    void PopulateBlock(size_t laneIdx,
+    void PopulateBlock(size_t /*laneIdx*/,
                        size_t blockIdx,
                        std::vector<int16_t>& v) override
     {

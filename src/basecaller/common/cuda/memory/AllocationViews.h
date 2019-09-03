@@ -77,7 +77,7 @@ template <typename T>
 class DeviceHandle : protected detail::DataManager
 {
 public:
-    CUDA_ENABLED DeviceHandle(T* data, size_t len, detail::DataManagerKey key)
+    CUDA_ENABLED DeviceHandle(T* data, size_t len, detail::DataManagerKey)
         : data_(data)
         , len_(len)
     {}

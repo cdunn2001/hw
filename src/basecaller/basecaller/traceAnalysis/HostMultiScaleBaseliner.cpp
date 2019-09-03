@@ -7,8 +7,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                        const Data::MovieConfig &movConfig)
+void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                                        const Data::MovieConfig&)
 {
     const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);

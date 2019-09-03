@@ -10,8 +10,8 @@ namespace Basecaller {
 std::unique_ptr<Data::CameraBatchFactory> Baseliner::batchFactory_;
 
 // static
-void Baseliner::Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig)
+void Baseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                          const Data::MovieConfig&)
 {
     const auto hostExecution = true;
     InitAllocationPools(hostExecution);

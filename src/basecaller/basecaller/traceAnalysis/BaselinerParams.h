@@ -14,20 +14,20 @@ namespace Basecaller {
 class BaselinerParams
 {
 public:
-    struct Strides
+    struct Strides_t
     {
-        Strides(std::initializer_list<size_t> list) : data(list) {}
+        Strides_t(std::initializer_list<size_t> list) : data(list) {}
         std::vector<size_t> data;
     };
 
-    struct Widths
+    struct Widths_t
     {
-        Widths(std::initializer_list<size_t> list) : data(list) {}
+        Widths_t(std::initializer_list<size_t> list) : data(list) {}
         std::vector<size_t> data;
     };
 
 public:
-    BaselinerParams(const Strides& s, const Widths& w, float sigma, float mean)
+    BaselinerParams(const Strides_t& s, const Widths_t& w, float sigma, float mean)
         : strides_(s.data)
         , widths_(w.data)
         , cSigmaBias_(sigma)

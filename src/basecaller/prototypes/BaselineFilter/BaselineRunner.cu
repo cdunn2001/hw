@@ -45,7 +45,7 @@ void RunGlobalBaselineFilter(
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
@@ -57,7 +57,7 @@ void RunGlobalBaselineFilter(
         launcher(batch,
                  filterData[batchIdx],
                  ret);
-        auto view = ret.GetBlockView(0);
+        ret.DeactivateGpuMem();
     };
 
     ZmwDataManager<int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
@@ -73,7 +73,7 @@ void RunSharedBaselineFilter(
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
@@ -85,7 +85,7 @@ void RunSharedBaselineFilter(
         launcher(batch,
                  filterData[batchIdx],
                  ret);
-        auto view = ret.GetBlockView(0);
+        ret.DeactivateGpuMem();
     };
 
     ZmwDataManager<int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
@@ -109,7 +109,7 @@ void RunCompressedBaselineFilter(
     std::vector<DeviceOnlyArray<Lower2>> lower2;
     std::vector<DeviceOnlyArray<Upper1>> upper1;
     std::vector<DeviceOnlyArray<Upper2>> upper2;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         lower1.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
         lower2.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
@@ -142,7 +142,7 @@ void RunCompressedBaselineFilter(
                  work1[batchIdx],
                  work2[batchIdx],
                  ret);
-        auto view = ret.GetBlockView(0);
+        ret.DeactivateGpuMem();
     };
 
     ZmwDataManager<int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
@@ -181,7 +181,7 @@ void RunMultipleBaselineFilter(
         (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
 
         filters[batchIdx].RunComposedFilter(batch, ret, work1[batchIdx], work2[batchIdx]);
-        auto view = ret.GetBlockView(0);
+        ret.DeactivateGpuMem();
     };
 
     ZmwDataManager<int16_t> manager(dataParams, MakeDataGenerator(dataParams, picketParams, traceParams));
@@ -195,7 +195,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
 
     using Filter = ExtremaFilter<laneWidth, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
@@ -238,7 +238,7 @@ void RunMaxFilter(const Data::DataManagerParams& params, size_t simulKernels, Ba
             throw PBException("Unexpected baseline filter mode");
         }
         }
-        auto view = ret.GetBlockView(0);
+        ret.DeactivateGpuMem();
     };
 
     ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params));

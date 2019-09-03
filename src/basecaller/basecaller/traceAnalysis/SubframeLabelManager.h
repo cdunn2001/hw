@@ -57,9 +57,9 @@ public:
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
     // Retrieves the up/down/full labels for each analog
-    CUDA_ENABLED constexpr static int FullState(int i) { return i+1; }
-    CUDA_ENABLED constexpr static int UpState(int i) { return i+1 + numAnalogs; }
-    CUDA_ENABLED constexpr static int DownState(int i) { return i+1 + 2*numAnalogs; }
+    CUDA_ENABLED static constexpr int FullState(int i) { return i+1; }
+    CUDA_ENABLED static constexpr int UpState(int i) { return i+1 + numAnalogs; }
+    CUDA_ENABLED static constexpr int DownState(int i) { return i+1 + 2*numAnalogs; }
 
     template <typename Label>
     CUDA_ENABLED static auto IsPulseUpState(const Label& label)

@@ -122,7 +122,7 @@ public:
                     FinalizeMetrics,
                     lanesPerBatch_,
                     threadsPerBlock_);
-            finalizeLauncher(realtimeActivityLabels_, frameRate_, metrics_);
+            finalizeLauncher(realtimeActivityLabels_, static_cast<float>(frameRate_), metrics_);
             framesSeen_ = 0;
             auto ret = metricsFactory_->NewBatch();
             const auto& outputLauncher = Cuda::PBLauncher(PopulateBasecallingMetrics,

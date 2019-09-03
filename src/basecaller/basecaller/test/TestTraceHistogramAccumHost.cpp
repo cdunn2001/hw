@@ -119,7 +119,7 @@ TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
 
     // TODO: Blocked by incompleteness of BaselineStats. See BEN-896.
 
-    auto baselinedTracesAndStats = GenerateCamTraceBatch(blMean);
+    auto baselinedTracesAndStats = GenerateCamTraceBatch(static_cast<uint16_t>(blMean));
     tha.AddBatch(baselinedTracesAndStats.first, baselinedTracesAndStats.second.baselinerStats);
     EXPECT_EQ(chunkSize, tha.FramesAdded());
     EXPECT_EQ(0, tha.HistogramFrameCount());

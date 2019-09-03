@@ -27,6 +27,8 @@
 #ifndef PACBIO_MONGO_BASECALLER_HOST_PULSE_ACCUMULATOR_H_
 #define PACBIO_MONGO_BASECALLER_HOST_PULSE_ACCUMULATOR_H_
 
+#include <vector>
+
 #include <common/LaneArray.h>
 #include <common/LaneArrayRef.h>
 #include <common/LaneMask.h>

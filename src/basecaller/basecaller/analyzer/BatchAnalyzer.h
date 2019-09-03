@@ -59,8 +59,8 @@ public:     // Static functions
     /// each BatchAnalyzer instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                          const Data::MovieConfig& movConfig)
+    static void Configure(const Data::BasecallerAlgorithmConfig&,
+                          const Data::MovieConfig&)
     {}
 
     static void Finalize()

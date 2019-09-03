@@ -45,7 +45,7 @@ class LabelsBatch : public TraceBatch<Label_t>
 {
     static BatchDimensions LatentDimensions(const BatchDimensions& traceDims, size_t latentFrames)
     {
-        BatchDimensions ret{traceDims};
+        BatchDimensions ret = traceDims;
         ret.framesPerBatch = latentFrames;
         return ret;
     }
@@ -92,11 +92,12 @@ private:    // Data
 class LabelsBatchFactory
 {
 public:
-    LabelsBatchFactory(size_t framesPerChunk,
-                       size_t lanesPerPool,
-                       size_t latentFrames,
+    LabelsBatchFactory(uint32_t framesPerChunk,
+                       uint32_t lanesPerPool,
+                       uint32_t latentFrames,
                        Cuda::Memory::SyncDirection syncDirection)
-        : latentFrames_(latentFrames)
+        : dims_{lanesPerPool, framesPerChunk, laneSize}
+        , latentFrames_(latentFrames)
         , syncDirection_(syncDirection)
     {}
 
@@ -117,6 +118,7 @@ public:
     }
 
 private:
+    BatchDimensions dims_;
     size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
 };

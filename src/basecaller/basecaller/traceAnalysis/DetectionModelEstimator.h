@@ -112,7 +112,7 @@ private:
     unsigned int poolSize_;
 
 private:    // Customization functions
-    virtual void EstimateImpl(const PoolHist& hist, PoolDetModel* detModel) const
+    virtual void EstimateImpl(const PoolHist&, PoolDetModel*) const
     {
         // Do nothing.
         // Derived implementation class should update detModel.

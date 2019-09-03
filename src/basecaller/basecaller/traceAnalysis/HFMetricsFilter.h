@@ -125,11 +125,11 @@ public:
 
 private:
     std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const Data::BaselinerMetrics& baselinerStats,
-            const ModelsBatchT& models,
-            const Data::FrameLabelerMetrics& flMetrics,
-            const Data::PulseDetectorMetrics& pdMetrics) override
+            const PulseBatchT&,
+            const Data::BaselinerMetrics&,
+            const ModelsBatchT&,
+            const Data::FrameLabelerMetrics&,
+            const Data::PulseDetectorMetrics&) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 
 };
