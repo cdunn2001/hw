@@ -47,13 +47,13 @@ __global__ void SharedMemCircularBuffer(const Mongo::Data::GpuBatchData<const PB
     circularBuffers[blockIdx.x] = circularBuffer;
 }
 
-template <size_t lag, template <size_t> class CircularBuffer>
+template <size_t blockThreads, size_t lag, template <size_t,size_t> class CircularBuffer>
 __global__ void LocalMemCircularBuffer(const Mongo::Data::GpuBatchData<const PBShort2> in,
-                                       Memory::DeviceView<CircularBuffer<lag>> circularBuffers,
+                                       Memory::DeviceView<CircularBuffer<blockThreads,lag>> circularBuffers,
                                        Mongo::Data::GpuBatchData<PBShort2> out)
 {
     const size_t numFrames = in.NumFrames();
-    CircularBuffer<lag> circularBuffer = circularBuffers[blockIdx.x];
+    CircularBuffer<blockThreads,lag> circularBuffer = circularBuffers[blockIdx.x];
     const auto& inZmw  = in.ZmwData(blockIdx.x, threadIdx.x);
     auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
 

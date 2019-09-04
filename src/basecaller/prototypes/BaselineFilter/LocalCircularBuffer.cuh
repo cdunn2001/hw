@@ -33,11 +33,14 @@
 namespace PacBio {
 namespace Cuda {
 
+template<size_t blockThreads, size_t Capacity>
+struct BlockCircularBuffer;
+
 // Implementation of circular buffer where the elements
 // are shifted to the front to make room for a newly
 // added element. This version is meant to be used in local
 // memory.
-template <size_t Capacity>
+template <size_t blockThreads, size_t Capacity>
 struct LocalCircularBuffer
 {
     LocalCircularBuffer() = default;
@@ -55,6 +58,27 @@ struct LocalCircularBuffer
             data[i-1] = data[i];
         }
         data[Capacity-1] = val;
+    }
+
+    __device__ void Init(const BlockCircularBuffer<blockThreads, Capacity>& cb)
+    {
+        #pragma unroll(Capacity)
+        for (size_t i = 0; i < Capacity; i++)
+        {
+            data[i] = cb.data[(i+cb.front[threadIdx.x]) % Capacity][threadIdx.x];
+        }
+        __syncthreads();
+    }
+
+    __device__ void ReplaceShared(BlockCircularBuffer<blockThreads, Capacity>& cb)
+    {
+        #pragma unroll(Capacity)
+        for (size_t i = 0; i < Capacity; i++)
+        {
+            cb.data[i][threadIdx.x] = data[i];
+        }
+        cb.front[threadIdx.x] = 0;
+        __syncthreads();
     }
 
 private:

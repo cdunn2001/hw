@@ -85,7 +85,6 @@ struct __align__(128) BlockCircularBuffer
         return *this;
     }
 
-private:
     using Row = PBHalf2[blockThreads];
     Row data[Capacity];
     short front[blockThreads];

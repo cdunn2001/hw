@@ -73,7 +73,7 @@ TEST(BlockCircularBuffer, GlobalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLauncher(GlobalMemCircularBuffer<gpuBlockThreads, lag, BlockCircularBuffer>,
+        const auto& launcher = PBLauncher(GlobalMemCircularBuffer<gpuBlockThreads,lag,BlockCircularBuffer>,
                                           params.kernelLanes, gpuBlockThreads);
 
         launcher(in, circularBuffers[batchIdx], out);
@@ -101,7 +101,7 @@ TEST(CircularBuffer, SharedMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLauncher(SharedMemCircularBuffer<gpuBlockThreads, lag, BlockCircularBuffer>,
+        const auto& launcher = PBLauncher(SharedMemCircularBuffer<gpuBlockThreads,lag,BlockCircularBuffer>,
                                           params.kernelLanes, gpuBlockThreads);
 
         launcher(in, circularBuffers[batchIdx], out);
@@ -114,7 +114,7 @@ TEST(CircularBuffer, SharedMemory)
 
 TEST(CircularBufferShift, LocalMemory)
 {
-    std::vector<DeviceOnlyArray<LocalCircularBuffer<lag>>> circularBuffers;
+    std::vector<DeviceOnlyArray<LocalCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
     for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
         circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes);
@@ -129,7 +129,7 @@ TEST(CircularBufferShift, LocalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        const auto& launcher = PBLauncher(LocalMemCircularBuffer<lag, LocalCircularBuffer>,
+        const auto& launcher = PBLauncher(LocalMemCircularBuffer<gpuBlockThreads,lag,LocalCircularBuffer>,
                                           params.kernelLanes, gpuBlockThreads);
 
         launcher(in, circularBuffers[batchIdx], out);

@@ -2,6 +2,7 @@
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
 #include "BaselineFilter.cuh"
+#include "BlockCircularBuffer.cuh"
 #include "LocalCircularBuffer.cuh"
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
@@ -327,7 +328,7 @@ struct LatentBaselineData
         PBHalf2 thrHigh;
         PBHalf2 thrLow;
 
-        LocalCircularBuffer<lag> circularBuffer;
+        LocalCircularBuffer<blockThreads, lag> circularBuffer;
 
         // TODO unify these somehow with the host multiscale implementation
         static constexpr float sigmaThrL = 4.5f;
@@ -378,12 +379,12 @@ struct LatentBaselineData
         local.latLMask       = latLMask[threadIdx.x];
         local.latHMask1      = latHMask1[threadIdx.x];
         local.latHMask2      = latHMask2[threadIdx.x];
-        local.circularBuffer = circularBuffer[threadIdx.x];
+        local.circularBuffer.Init(circularBuffer);
 
         return local;
     }
 
-    __device__ void StoreLocal(const LocalLatent& local)
+    __device__ void StoreLocal(LocalLatent& local)
     {
         bgSigma[threadIdx.x]        = local.bgSigma;
         latData[threadIdx.x]        = local.latData;
@@ -391,7 +392,7 @@ struct LatentBaselineData
         latLMask[threadIdx.x]       = local.latLMask;
         latHMask1[threadIdx.x]      = local.latHMask1;
         latHMask2[threadIdx.x]      = local.latHMask2;
-        circularBuffer[threadIdx.x] = local.circularBuffer;
+        local.circularBuffer.ReplaceShared(circularBuffer);
     }
 private:
     // TODO init
@@ -401,7 +402,7 @@ private:
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
     Utility::CudaArray<PBBool2, blockThreads> latHMask1;
     Utility::CudaArray<PBBool2, blockThreads> latHMask2;
-    Utility::CudaArray<LocalCircularBuffer<lag>, blockThreads> circularBuffer;
+    BlockCircularBuffer<blockThreads, lag> circularBuffer;
 };
 
 template <size_t blockThreads, size_t stride, size_t lag>
