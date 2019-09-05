@@ -93,6 +93,42 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     assert(blockDim.x == blockThreads);
     __shared__ BlockStateSubframeScorer<blockThreads> scorer;
 
+    // This optimization requires some notes, and may need to be revisited
+    // periodically.  The BlockStateSubframeScorer above uses 26 32 bit words
+    // of storage per thread.  In order to get 32 occupant blocks (the best we
+    // can do when our block size is 32 threads) then there really are only 24
+    // words available.  The best we can do with the above data structure is
+    // roughly 29 blocks.  However in an experiment where I pushed two members from
+    // `scorer` to local mem / registers, my throughput went down.  I did get the
+    // desired increase in occupancy, and overal there were the same number of
+    // memory requests so the new local variables were not causing new memory
+    // traffic, but our cache hit rate went down.  The improved occupancy helped
+    // us less than the new increase in memory latency hurt us.
+    //
+    // This is not entirely unexpected as more resident blocks means they effectively
+    // each get less L1 space to use.  So I did a subsequent experiement adding these two
+    // extra shared variables, to see if we could decrease our occpancy a little more
+    // and get even better L1 usage.
+    //
+    // The result was a 4% increase in throughput, which for a single change is good
+    // enough to want to keep.  However when profiling, things it did not appear that
+    // we were actually benefiting from an increase in cache hits.  Instead the delta
+    // between our theoretical occupancy (limited by our shared memory usage) and
+    // our actual achieved occupancy went down.  In other words the added shared
+    // memory usage decreased our maximum occupancy, but for whatever reason, the
+    // occpancy we actually got stayed the same.
+    //
+    // I'm not sure what all affects the delta between theoretical and achieved.  If
+    // other changes affect that balance, then this might become a less optimal choice,
+    // and these two should be moved back to being per-thread automatic variables in
+    // the `Recursion` lambda.
+    //
+    // As another note, these variables are obviously of a specific type.  If a need
+    // arises to re-use this storage for multiple types, then it can in principle be
+    // declared as a char array, and carved up manually via `reinterpret_casts`
+    __shared__ CudaArray<PBHalf2, blockThreads> sharedMaxVal;
+    __shared__ CudaArray<PBHalf2, blockThreads> sharedScore;
+
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
     auto& logLike = scratch;
@@ -109,14 +145,16 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
     auto Recursion = [&labels, &logLike](PBShort2 data, int idx)
     {
+        auto& score = sharedScore[threadIdx.x];
+        auto& maxVal = sharedMaxVal[threadIdx.x];
         CudaArray<PBHalf2, numStates> logAccum;
 
         const auto dat = PBHalf2(data);
         uint32_t packedLabels = 0;
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
-            auto score = scorer.StateScores(dat, nextState);
-            auto maxVal = score + PBHalf2(trans.Entry(nextState, 0)) + logLike[0];
+            score = scorer.StateScores(dat, nextState);
+            maxVal = score + PBHalf2(trans.Entry(nextState, 0)) + logLike[0];
             ushort2 maxIdx = make_ushort2(0,0);
 
             #pragma unroll(numStates)
