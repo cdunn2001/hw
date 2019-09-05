@@ -30,9 +30,10 @@ void* CudaRawMallocHostZero(size_t size);
 void* CudaRawHostGetDevicePtr(void* p);
 void  CudaFree(void* t);
 void  CudaFreeHost(void* t);
-void  CudaRawCopyHost(void* src, void* dest, size_t size);
-void  CudaRawCopyDevice(void* src, void* dest, size_t size);
+void  CudaRawCopyHost(void* dest, void* src, size_t size);
+void  CudaRawCopyDevice(void* dest, void* src, size_t size);
 void  CudaSynchronizeDefaultStream();
+void  CudaRawCopyToSymbol(const void* dest, void* src, size_t count);
 
 // Manually check if an error has occured.  Will capture
 // asynchronous errors that have not yet happened since
@@ -54,6 +55,8 @@ template <typename T>
 void CudaCopyHost(T* dest, T* src, size_t count) { CudaRawCopyHost(dest, src, count*sizeof(T)); }
 template <typename T>
 void CudaCopyDevice(T* dest, T* src, size_t count) { CudaRawCopyDevice(dest, src, count*sizeof(T)); }
+template <typename T>
+void CudaCopyToSymbol(const T& dest, T* src) { CudaRawCopyToSymbol(&dest, src, sizeof(T)); }
 
 }} // ::Pacbio::Cuda
 

@@ -64,9 +64,12 @@ struct __align__(128) TransitionMatrix
     using T = half;
     using Row = Utility::CudaArray<T, numStates>;
 
-    // Initializes the cuda matrix on the device.  Should be invoked by only
-    // a single thread.
-    __device__ TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
+    // Default constructor for use in device __constant__ memory.  Will
+    // remain uninitialized until the host coppies up the data
+    TransitionMatrix() = default;
+
+    // Ctor for host construction
+    TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
 
     __device__ T operator()(int row, int col) const { return data_[row][col]; }
     __device__ T Entry(int row, int col)      const { return data_[row][col]; }

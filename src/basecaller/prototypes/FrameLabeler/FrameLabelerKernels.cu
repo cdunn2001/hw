@@ -35,6 +35,17 @@ using namespace PacBio::Mongo::Data;
 namespace PacBio {
 namespace Cuda {
 
+namespace
+{
+
+// Make the transition matrix visible to all threads via constant memory,
+// which for this use case, has performance benefits over generic device
+// memory.
+//
+// Unfortunately __constant__ variables *have* to be global.  We will initialize
+// this during the FrameLabeler::Configure function.
+__constant__ Subframe::TransitionMatrix trans;
+
 __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 {
     auto maxVal = vec[0];
@@ -57,82 +68,15 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
     }
 }
 
-int32_t FrameLabeler::framesPerChunk_ = 0;
-int32_t FrameLabeler::lanesPerPool_ = 0;
-ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
-std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> FrameLabeler::trans_;
-
-
-void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
-                             int32_t lanesPerPool, int32_t framesPerChunk)
-{
-    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
-    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
-
-    trans_ = std::make_unique<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>>(
-            SOURCE_MARKER(),
-            CudaArray<Subframe::AnalogMeta, 4>{meta});
-
-    framesPerChunk_ = framesPerChunk;
-    lanesPerPool_ = lanesPerPool;
-}
-
-void FrameLabeler::Finalize()
-{
-    scratchData_.Clear();
-    trans_.release();
-}
-
-std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
-{
-    std::unique_ptr<ViterbiDataHost<BlockThreads>> ret;
-    bool success = scratchData_.TryPop(ret);
-    if (! success)
-    {
-        ret = std::make_unique<ViterbiDataHost<BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
-    }
-    assert(ret);
-    return ret;
-}
-
-void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> data)
-{
-    scratchData_.Push(std::move(data));
-}
-
-static BatchDimensions LatBatchDims(size_t lanesPerPool)
-{
-    BatchDimensions ret;
-    ret.framesPerBatch = ViterbiStitchLookback;
-    ret.laneWidth = laneSize;
-    ret.lanesPerBatch = lanesPerPool;
-    return ret;
-}
-
 __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 {
     auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
     for (auto val : zmwData) val = PBShort2(0);
 }
 
-FrameLabeler::FrameLabeler()
-    : latent_(SOURCE_MARKER(), lanesPerPool_)
-    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
-{
-    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
-    {
-        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
-    }
-
-    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
-    CudaSynchronizeDefaultStream();
-}
-
-
 template <size_t blockThreads>
 __launch_bounds__(blockThreads, 32)
-__global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
+__global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
                                    Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
                                    ViterbiData<blockThreads> batchViterbiData,
@@ -163,7 +107,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 
     auto labels = batchViterbiData.BlockData();
 
-    auto Recursion = [&labels, &trans, &logLike](PBShort2 data, int idx)
+    auto Recursion = [&labels, &logLike](PBShort2 data, int idx)
     {
         CudaArray<PBHalf2, numStates> logAccum;
 
@@ -172,13 +116,13 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         for (int nextState = 0; nextState < numStates; ++nextState)
         {
             auto score = scorer.StateScores(dat, nextState);
-            auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
+            auto maxVal = score + PBHalf2(trans.Entry(nextState, 0)) + logLike[0];
             ushort2 maxIdx = make_ushort2(0,0);
 
             #pragma unroll(numStates)
             for (int prevState = 1; prevState < numStates; ++prevState)
             {
-                auto transScore = trans->Entry(nextState, prevState);
+                auto transScore = trans.Entry(nextState, prevState);
                 if (__hisinf(transScore)) continue;
 
                 auto val = score + PBHalf2(transScore + logLike[prevState]);
@@ -315,6 +259,71 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     }
 }
 
+}
+
+constexpr size_t FrameLabeler::BlockThreads;
+
+int32_t FrameLabeler::framesPerChunk_ = 0;
+int32_t FrameLabeler::lanesPerPool_ = 0;
+ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
+
+void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
+                             int32_t lanesPerPool, int32_t framesPerChunk)
+{
+    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
+    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
+
+    Subframe::TransitionMatrix transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
+    CudaCopyToSymbol(trans, &transHost);
+
+    framesPerChunk_ = framesPerChunk;
+    lanesPerPool_ = lanesPerPool;
+}
+
+void FrameLabeler::Finalize()
+{
+    scratchData_.Clear();
+}
+
+std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
+{
+    std::unique_ptr<ViterbiDataHost<BlockThreads>> ret;
+    bool success = scratchData_.TryPop(ret);
+    if (! success)
+    {
+        ret = std::make_unique<ViterbiDataHost<BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
+    }
+    assert(ret);
+    return ret;
+}
+
+void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> data)
+{
+    scratchData_.Push(std::move(data));
+}
+
+static BatchDimensions LatBatchDims(size_t lanesPerPool)
+{
+    BatchDimensions ret;
+    ret.framesPerBatch = ViterbiStitchLookback;
+    ret.laneWidth = laneSize;
+    ret.lanesPerBatch = lanesPerPool;
+    return ret;
+}
+
+FrameLabeler::FrameLabeler()
+    : latent_(SOURCE_MARKER(), lanesPerPool_)
+    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
+{
+    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
+    {
+        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
+    }
+
+    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
+    CudaSynchronizeDefaultStream();
+}
+
 void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
@@ -324,8 +333,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
     auto labels = BorrowScratch();
 
     const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, lanesPerPool_, BlockThreads);
-    launcher(*trans_,
-             models,
+    launcher(models,
              input,
              latent_,
              *labels,
@@ -338,7 +346,5 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
-
-constexpr size_t FrameLabeler::BlockThreads;
 
 }}

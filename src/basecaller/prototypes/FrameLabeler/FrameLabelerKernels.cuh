@@ -191,7 +191,6 @@ private:
 
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
-    static std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> trans_;
     static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<BlockThreads>>> scratchData_;
 };
 

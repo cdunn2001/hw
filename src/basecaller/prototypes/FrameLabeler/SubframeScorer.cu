@@ -33,14 +33,16 @@ namespace Cuda {
 namespace Subframe {
 
 
-__device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
+TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
 {
-    half zero = __float2half(0.0f);
+    // We only have access to single precision math on the host, so populate data as float for now,
+    // and at the end we'll convert it and populate our actual half precision data member;
+    Utility::CudaArray<Utility::CudaArray<float, numStates>, numStates> dataFloat;
     for (int i = 0; i < numStates; ++i)
     {
         for (int j = 0; j < numStates; ++j)
         {
-            data_[i][j] = zero;
+            dataFloat[i][j] = 0.0f;
         }
     }
     // Algorithm courtesy Rob Grothe.
@@ -138,7 +140,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
     // that, given that we've passed through the full 0 state (e.g. meanIpd3m)
     const auto pulseStartProb = meanIpdLenProbs[2] / meanIpd3m;
 
-    data_[0][0] = 1.0f - pulseStartProb;
+    dataFloat[0][0] = 1.0f - pulseStartProb;
 
     for (uint32_t i = 0; i < numAnalogs; ++i)
     {
@@ -162,17 +164,17 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
         // from what one might expect!
 
         // Give each analog equal probability to start
-        data_[up][0] = 0.25f * pulseStartProb;
+        dataFloat[up][0] = 0.25f * pulseStartProb;
 
         // Record exactly 1 and 2 frame pulses.
-        data_[0][up] = gamma;
-        data_[down][up] = beta;
+        dataFloat[0][up] = gamma;
+        dataFloat[down][up] = beta;
 
         // Normalize by subtracting out all alternative paths:
         // gamma            -- u -> 0
         // gamma * alphaSum -- u->u' (summed over all u')
         // beta             -- u -> d
-        data_[full][up] = 1 - gamma - gamma * alphaSum - beta;
+        dataFloat[full][up] = 1 - gamma - gamma * alphaSum - beta;
 
         // Probability that pulse is 3 or more frames long.  Subsequently
         // also the probability that we at least pass through the full frame
@@ -181,14 +183,14 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
 
         // analogLenProbs[2] = u->T->d path.  The T->d transition is that
         // probability *given* we've passed through the T state (e.g. prob3sum)
-        data_[down][full] = analogLenProbs[2] / prob3ms;
+        dataFloat[down][full] = analogLenProbs[2] / prob3ms;
 
         // Normalize by subtracting out the (only) alternative path
-        data_[full][full] = __float2half(1.0f) - data_[down][full];
+        dataFloat[full][full] = 1.0f - dataFloat[down][full];
 
         // Again normalize by subtracting out the alternatives, which are
         // all the alpha terms that let us go from d->u'
-        data_[0][down] = 1 - alphaSum;
+        dataFloat[0][down] = 1 - alphaSum;
 
         // Handle the dense section of u->u' and d->u' transitions
         for (uint32_t j = 0; j < numAnalogs; j++)
@@ -197,11 +199,11 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
 
             // Alpha already defined as 1 or 2 frame ipd event
             // (no full baseline frame)
-            data_[upPrime][down] = alpha[j];
+            dataFloat[upPrime][down] = alpha[j];
 
             // To go handle u->u' we also need to include the probability
             // of a 1 frame pulse before the 1 or 2 frame ipd.
-            data_[upPrime][up] = gamma * alpha[j];
+            dataFloat[upPrime][up] = gamma * alpha[j];
         }
     }
 
@@ -210,7 +212,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
     {
         for (int j = 0; j < numStates; ++j)
         {
-            data_[i][j] = hlog(data_[i][j]);
+            data_[i][j] = std::log(dataFloat[i][j]);
         }
     }
 }

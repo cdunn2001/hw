@@ -164,4 +164,9 @@ void CudaRawCopyDevice(void* dest, void* src, size_t size)
     cudaCheckErrors(::cudaMemcpyAsync(dest, src, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
 }
 
+void CudaRawCopyToSymbol(const void* dest, void* src, size_t count)
+{
+    cudaCheckErrors(::cudaMemcpyToSymbol(dest, src, count));
+}
+
 }}
