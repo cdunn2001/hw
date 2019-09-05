@@ -157,7 +157,7 @@ void RunMultipleBaselineFilter(
         size_t simulKernels)
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter2 = ComposedFilter<laneWidth, 9, 31, 2, 8>;
+    using Filter2 = ComposedFilter<laneWidth, 9, 31, 2, 8, 4>;
 
     DeviceOnlyArray<Filter> full(SOURCE_MARKER(), dataParams.numZmwLanes, 0);
 
