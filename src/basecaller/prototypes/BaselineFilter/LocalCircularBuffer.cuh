@@ -27,14 +27,13 @@
 #ifndef LOCAL_CIRCULAR_BUFFER_H
 #define LOCAL_CIRCULAR_BUFFER_H
 
+#include "BlockCircularBuffer.cuh"
+
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
 
 namespace PacBio {
 namespace Cuda {
-
-template<size_t blockThreads, size_t Capacity>
-struct BlockCircularBuffer;
 
 // Implementation of circular buffer where the elements
 // are shifted to the front to make room for a newly
@@ -65,7 +64,7 @@ struct LocalCircularBuffer
         #pragma unroll(Capacity)
         for (size_t i = 0; i < Capacity; i++)
         {
-            data[i] = cb.data[(i+cb.front[threadIdx.x]) % Capacity][threadIdx.x];
+            data[i] = cb[(i+cb.FrontIdx()) % Capacity];
         }
         __syncthreads();
     }
@@ -75,9 +74,9 @@ struct LocalCircularBuffer
         #pragma unroll(Capacity)
         for (size_t i = 0; i < Capacity; i++)
         {
-            cb.data[i][threadIdx.x] = data[i];
+            cb[i] = data[i];
         }
-        cb.front[threadIdx.x] = 0;
+        cb.FrontIdx(0);
         __syncthreads();
     }
 

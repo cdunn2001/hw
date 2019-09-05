@@ -85,6 +85,28 @@ struct __align__(128) BlockCircularBuffer
         return *this;
     }
 
+    __device__ PBHalf2& operator[](size_t idx)
+    {
+        return data[idx][threadIdx.x];
+    }
+
+    __device__ const PBHalf2& operator[](size_t idx) const
+    {
+        return data[idx][threadIdx.x];
+    }
+
+    __device__ short FrontIdx() const
+    {
+        return front[threadIdx.x];
+    }
+
+    __device__ BlockCircularBuffer& FrontIdx(short val)
+    {
+        front[threadIdx.x] = val;
+        return *this;
+    }
+
+private:
     using Row = PBHalf2[blockThreads];
     Row data[Capacity];
     short front[blockThreads];
