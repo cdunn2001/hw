@@ -8,7 +8,7 @@ namespace Mongo {
 namespace Basecaller {
 
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                  const Data::MovieConfig &movConfig)
+                                        const Data::MovieConfig &movConfig)
 {
     const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);
@@ -19,7 +19,9 @@ void HostMultiScaleBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
+          Data::BaselinerMetrics>
+HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
@@ -29,11 +31,11 @@ Data::CameraTraceBatch HostMultiScaleBaseliner::Process(Data::TraceBatch <Elemen
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
-    auto statsView = out.Stats().GetHostView();
+    auto statsView = out.second.baselinerStats.GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);
-        auto baselineSubtracted = out.GetBlockView(laneIdx);
+        auto baselineSubtracted = out.first.GetBlockView(laneIdx);
         auto& baseliner = baselinerByLane_[laneIdx];
 
         auto baselinerStats = baseliner.EstimateBaseline(traceData,

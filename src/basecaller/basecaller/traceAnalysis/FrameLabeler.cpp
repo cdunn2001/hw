@@ -72,14 +72,15 @@ FrameLabeler::FrameLabeler(uint32_t poolId)
 
 }
 
-Data::LabelsBatch FrameLabeler::Process(Data::CameraTraceBatch trace,
-                                        const PoolModelParameters& models)
+std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
+FrameLabeler::Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
+                      const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
-    for (size_t laneIdx = 0; laneIdx < ret.LanesPerBatch(); laneIdx++)
+    for (size_t laneIdx = 0; laneIdx < ret.first.LanesPerBatch(); laneIdx++)
     {
-        std::memset(ret.GetBlockView(laneIdx).Data(), 0,
-                    ret.GetBlockView(laneIdx).Size() * sizeof(Data::LabelsBatch::ElementType));
+        std::memset(ret.first.GetBlockView(laneIdx).Data(), 0,
+                    ret.first.GetBlockView(laneIdx).Size() * sizeof(Data::LabelsBatch::ElementType));
     }
     return ret;
 }

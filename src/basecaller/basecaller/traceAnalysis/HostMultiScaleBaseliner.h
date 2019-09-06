@@ -47,7 +47,8 @@ public:
 
 private:
 
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
 private:
 

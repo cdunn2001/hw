@@ -36,6 +36,7 @@
 #include <common/MongoConstants.h>
 
 #include <dataTypes/BatchData.cuh>
+#include <dataTypes/BatchMetrics.h>
 
 #include "SubframeScorer.cuh"
 
@@ -168,7 +169,8 @@ public:
     void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
                       const Mongo::Data::BatchData<int16_t>& input,
                       Mongo::Data::BatchData<int16_t>& latOut,
-                      Mongo::Data::BatchData<int16_t>& output);
+                      Mongo::Data::BatchData<int16_t>& output,
+                      Mongo::Data::FrameLabelerMetrics& metricsOutput);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
     Mongo::Data::BatchData<int16_t> prevLat_;

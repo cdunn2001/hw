@@ -18,14 +18,14 @@ public:
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
     using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
-    
+
 public:
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
 
     static void Finalize();
-    
+
 public:
     HostNoOpBaseliner(uint32_t poolId)
         : Baseliner(poolId)
@@ -36,7 +36,8 @@ public:
     ~HostNoOpBaseliner() override;
 
 private:
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

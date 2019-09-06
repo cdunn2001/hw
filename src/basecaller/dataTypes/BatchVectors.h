@@ -178,10 +178,10 @@ public:
     // Semi-private functions.  `GpuBatchVectors` uses these to construct themselves,
     // but no one else should pay attention to these.
     UnifiedCudaArray<T>& Data(PassKey<GpuBatchVectors<T>>) { return data_; }
-    const UnifiedCudaArray<T>& Data(PassKey<GpuBatchVectors<T>>) const { return data_; }
+    const UnifiedCudaArray<T>& Data(PassKey<GpuBatchVectors<const T>>) const { return data_; }
 
     UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) { return lens_; }
-    const UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) const { return lens_; }
+    const UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<const T>>) const { return lens_; }
 
     void DeactivateGpuMem()
     {

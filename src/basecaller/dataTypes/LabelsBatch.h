@@ -28,10 +28,11 @@
 #define PACBIO_MONGO_DATA_LABELS_BATCH_H_
 
 #include "TraceBatch.h"
-#include "CameraTraceBatch.h"
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
+
+#include "BatchMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -54,7 +55,7 @@ public:     // Types
 public:     // Structors and assignment
     LabelsBatch(const BatchMetadata& meta,
                 const BatchDimensions& dims,
-                CameraTraceBatch trace,
+                TraceBatch<ElementType> trace,
                 size_t latentFrames,
                 Cuda::Memory::SyncDirection syncDirection,
                 const Cuda::Memory::AllocationMarker& marker)
@@ -78,7 +79,7 @@ public:     // Structors and assignment
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
     // viterbi stitching, so this class will prevent access to those
-    CameraTraceBatch curTrace_;
+    TraceBatch<ElementType> curTrace_;
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;
@@ -99,12 +100,20 @@ public:
         , syncDirection_(syncDirection)
     {}
 
-    LabelsBatch NewBatch(CameraTraceBatch trace)
+    std::pair<LabelsBatch, FrameLabelerMetrics>
+    NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
     {
         auto meta = trace.Metadata();
         auto dims = trace.StorageDims();
-        return LabelsBatch(meta, dims, std::move(trace),
-                           latentFrames_, syncDirection_, SOURCE_MARKER());
+        return std::make_pair(
+            LabelsBatch(
+                meta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER()),
+            FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER()));
+    }
+
+    FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims)
+    {
+        return FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER());
     }
 
 private:

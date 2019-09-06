@@ -31,6 +31,7 @@
 #include <common/LaneArrayRef.h>
 #include <common/LaneMask.h>
 #include <dataTypes/Pulse.h>
+#include <dataTypes/BasicTypes.h>
 
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
@@ -43,9 +44,9 @@ template <typename LabelManager>
 class HostPulseAccumulator : public PulseAccumulator
 {
     using ConstLabelArrayRef = ConstLaneArrayRef<Data::LabelsBatch::ElementType>;
-    using ConstSignalArrayRef = ConstLaneArrayRef<Data::CameraTraceBatch::ElementType>;
-    using SignalBlockView = Data::BlockView<Data::CameraTraceBatch::ElementType>;
-    using ConstSignalBlockView = Data::BlockView<const Data::CameraTraceBatch::ElementType>;
+    using ConstSignalArrayRef = ConstLaneArrayRef<Data::BaselinedTraceElement>;
+    using SignalBlockView = Data::BlockView<Data::BaselinedTraceElement>;
+    using ConstSignalBlockView = Data::BlockView<const Data::BaselinedTraceElement>;
 
 public:     // Static functions
     static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
@@ -61,7 +62,7 @@ public:
     public:
         using FrameArray = LaneArray<uint32_t>;
         using FloatArray = LaneArray<float>;
-        using SignalArray = LaneArray<Data::CameraTraceBatch::ElementType>;
+        using SignalArray = LaneArray<Data::BaselinedTraceElement>;
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
 
     public:
@@ -163,7 +164,8 @@ public:
     };
 
 private:
-    Data::PulseBatch Process(Data::LabelsBatch trace) override;
+    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    Process(Data::LabelsBatch trace) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
                          const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,

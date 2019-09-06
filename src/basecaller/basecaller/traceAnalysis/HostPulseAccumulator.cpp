@@ -42,7 +42,8 @@ template <typename LabelManager>
 HostPulseAccumulator<LabelManager>::~HostPulseAccumulator() = default;
 
 template <typename LabelManager>
-Data::PulseBatch HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata());
 
@@ -52,11 +53,12 @@ Data::PulseBatch HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch l
         const auto& blockLatTrace = labels.LatentTrace().GetBlockView(laneIdx);
         const auto& currTrace = labels.TraceData().GetBlockView(laneIdx);
 
-        auto lanePulses = ret.Pulses().LaneView(laneIdx);
+        auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
 
         LabelsSegment& currSegment = startSegmentByLane[laneIdx];
 
+        // TODO: popuate ret.second (PulseDetectorMetrics) with baseline stats
         auto blIter = blockLabels.CBegin();
         for (size_t relativeFrameIndex = 0;
              relativeFrameIndex < blockLabels.NumFrames() &&

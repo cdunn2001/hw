@@ -62,7 +62,8 @@ void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPe
             syncDir);
 }
 
-Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+PulseAccumulator::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata());
 
@@ -70,7 +71,7 @@ Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
     {
         auto view = labels.GetBlockView(laneIdx);
         (void)view;
-        auto lanePulses = ret.Pulses().LaneView(laneIdx);
+        auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
     }
 

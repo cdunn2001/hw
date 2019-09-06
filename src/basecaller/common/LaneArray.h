@@ -110,6 +110,16 @@ public:     // Export
         return ret;
     }
 
+    LaneArray<unsigned short, N> AsUnsignedShort() const
+    {
+        LaneArray<unsigned short, N> ret;
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ret[i] = static_cast<unsigned short>(data_[i]);
+        }
+        return ret;
+    }
+
 public:     // Named unary operators
     /// Square root
     friend LaneArray sqrt(const BaseConstRef& x)

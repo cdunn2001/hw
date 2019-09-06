@@ -14,16 +14,15 @@ namespace PacBio {
 namespace Mongo {
 
 template <typename T>
-AutocorrAccumulator<T>::AutocorrAccumulator(unsigned int lag, const T& offset)
+AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     : stats_ {offset}
-    , lagBuf_ {lag}
+    , lagBuf_ {AutocorrAccumState::lag}
     , m1First_ {0}
     , m1Last_ {0}
     , m2_ {0}
-    , lag_ {lag}
     , canAddSample_ {true}
 {
-    assert(lag > 0);
+    static_assert(AutocorrAccumState::lag > 0);
 }
 
 template <typename T>
@@ -46,7 +45,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
 {
     using U = Simd::ScalarType<T>;
     static const T nan {std::numeric_limits<U>::quiet_NaN()};
-    const auto nmk = stats_.Count() - boost::numeric_cast<U>(Lag());
+    const auto nmk = stats_.Count() - boost::numeric_cast<U>(AutocorrAccumState::lag);
 #if 1
     // If we define R(k) = \sum_{i=0}^{n-k-1} (x_i - m10_/(n-k)) (x_{i+k} - m1k_/(n-k)) / [(n-k)*Variance()]
     // As of 2017-09-12, this definition appears to be more accurate than the
@@ -97,7 +96,6 @@ template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
 {
-    assert(lag_ == that.lag_);
     stats_.Merge(that.stats_);
     // TODO: If CanAddSample(), could exactly merge m1First_.
     // TODO: If that.CanAddSample(), could exactly merge m1Last_.
@@ -116,7 +114,7 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
     const auto m = (Count() == T(0));
     // TODO: Handle the nonuniform SIMD case.
     using PacBio::Simd::all;
-    assert(all(m) || lag_ == that.lag_);
+    assert(all(m));
     if (all(m)) *this = that;
     else Merge(that);
     return *this;

@@ -53,14 +53,16 @@ void DeviceMultiScaleBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
+std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
+          Data::BaselinerMetrics>
+DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
     Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    filter_->RunBaselineFilter(rawTrace, out, out.Stats(), work1, work2);
+    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
 
     Cuda::CudaSynchronizeDefaultStream();
     return out;

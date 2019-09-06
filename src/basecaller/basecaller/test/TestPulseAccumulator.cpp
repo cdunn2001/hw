@@ -34,6 +34,7 @@
 #include <common/DataGenerators/BatchGenerator.h>
 
 #include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LabelsBatch.h>
 
 #include <gtest/gtest.h>
@@ -67,11 +68,11 @@ TEST(TestNoOpPulseAccumulator, Run)
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
-    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
+    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     PulseAccumulator pulseAccumulator(poolId);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
 
     for (uint32_t laneIdx = 0; laneIdx < pulseBatch.Dims().lanesPerBatch; ++laneIdx)
     {
@@ -108,11 +109,11 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
-    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
+    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     HostSimulatedPulseAccumulator pulseAccumulator(poolId);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
@@ -167,14 +168,15 @@ TEST(TestHostPulseAccumulator, Run)
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
-    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch));
+    // Discard metrics:
+    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first)).first;
 
     // Simulate out labels batch accordingly fixed pattern of baseline + pulse frames.
     const size_t ipd = 6;
     const size_t pw = 10;
     assert(framesPerChunk % (ipd + pw) == 0);
     std::vector<Data::LabelsBatch::ElementType> simLabels;
-    std::vector<Data::CameraTraceBatch::ElementType> simTrc;
+    std::vector<Data::BaselinedTraceElement> simTrc;
 
     // Fixed signal values for pulses.
     const short latTraceVal = 400;
@@ -210,23 +212,24 @@ TEST(TestHostPulseAccumulator, Run)
             std::memcpy(blockLabels.Data() + (frameNum * blockLabels.LaneWidth()),
                         simll.data(), sizeof(Data::LabelsBatch::ElementType) * simll.size());
 
-            std::vector<Data::CameraTraceBatch::ElementType> trcVal(curTrace.LaneWidth(), simTrc[frameNum]);
+            std::vector<Data::BaselinedTraceElement> trcVal(curTrace.LaneWidth(), simTrc[frameNum]);
             if (frameNum < latTrace.NumFrames())
             {
                 std::memcpy(latTrace.Data() + (frameNum * latTrace.LaneWidth()),
-                            trcVal.data(), sizeof(Data::CameraTraceBatch::ElementType) * trcVal.size());
+                            trcVal.data(), sizeof(Data::BaselinedTraceElement) * trcVal.size());
             }
             else
             {
                 std::memcpy(curTrace.Data() + ((frameNum - latTrace.NumFrames()) * curTrace.LaneWidth()),
-                            trcVal.data(), sizeof(Data::CameraTraceBatch::ElementType) * trcVal.size());
+                            trcVal.data(), sizeof(Data::BaselinedTraceElement) * trcVal.size());
             }
         }
     }
 
     HostAccumulator pulseAccumulator(poolId, lanesPerPool);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    // Ignore metrics:
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch)).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 

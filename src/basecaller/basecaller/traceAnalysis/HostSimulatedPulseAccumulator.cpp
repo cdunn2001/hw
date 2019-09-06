@@ -21,17 +21,18 @@ HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId)
 
 HostSimulatedPulseAccumulator::~HostSimulatedPulseAccumulator() = default;
 
-Data::PulseBatch HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata());
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {
-        auto lanePulses = ret.Pulses().LaneView(laneIdx);
+        auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
         for (size_t zmwIdx = 0; zmwIdx < labels.LaneWidth(); ++zmwIdx)
         {
-            for (uint32_t pulseNum = 0; pulseNum < ret.Pulses().MaxLen(); ++pulseNum)
+            for (uint32_t pulseNum = 0; pulseNum < ret.first.Pulses().MaxLen(); ++pulseNum)
             {
                 lanePulses.push_back(zmwIdx, GeneratePulse(pulseNum));
             }

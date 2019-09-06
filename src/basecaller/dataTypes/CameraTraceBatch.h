@@ -7,54 +7,20 @@
 #include <common/MongoConstants.h>
 
 #include "BaselinerStatAccumState.h"
-#include "BasicTypes.h"
+#include "BatchMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-
-/// Baseline-subtracted trace data with statistics
-class CameraTraceBatch : public TraceBatch<BaselinedTraceElement>
-{
-public:     // Types
-    using ElementType = BaselinedTraceElement;
-
-public:     // Structors and assignment
-    CameraTraceBatch(const BatchMetadata& meta,
-                     const BatchDimensions& dims,
-                     Cuda::Memory::SyncDirection syncDirection,
-                     const Cuda::Memory::AllocationMarker& marker)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, marker)
-        , stats_ (dims.lanesPerBatch, syncDirection, marker)
-    { }
-
-    CameraTraceBatch(const CameraTraceBatch&) = delete;
-    CameraTraceBatch(CameraTraceBatch&&) = default;
-
-    CameraTraceBatch& operator=(const CameraTraceBatch&) = delete;
-    CameraTraceBatch& operator=(CameraTraceBatch&&) = default;
-
-public:     // Access to statistics
-    const Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats() const
-    { return stats_; }
-
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>& Stats()
-    { return stats_; }
-
-private:    // Data
-    // Statistics for each ZMW in the batch, one element per lane.
-    // TODO: Use half-precision for floating-point members of BaselinerStatAccumulator.
-    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> stats_;
-};
-
-// Factory class, to simplify the construction of CameraTraceBatch instances.
 // This class will handle the small collection of constructor arguments that
 // need to change depending on the pipeline configuration, but otherwise are
 // generally constant between different batches
 class CameraBatchFactory
 {
 public:
+    using ElementType = BaselinedTraceElement;
+
     CameraBatchFactory(size_t framesPerChunk,
                        size_t lanesPerPool,
                        Cuda::Memory::SyncDirection syncDirection)
@@ -65,26 +31,18 @@ public:
         dims_.lanesPerBatch = lanesPerPool;
     }
 
-    CameraTraceBatch NewBatch(const BatchMetadata& meta) const
+    std::pair<TraceBatch<ElementType>, BaselinerMetrics>
+    NewBatch(const BatchMetadata& meta) const
     {
-        return CameraTraceBatch(meta, dims_, syncDirection_, SOURCE_MARKER());
+        const auto& marker = SOURCE_MARKER();
+        return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, marker),
+                              BaselinerMetrics(dims_, syncDirection_, marker));
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
     BatchDimensions dims_;
 };
-
-// Define overloads for this function, so that we can track kernel invocations, and
-// so that we can be converted to our gpu specific representation
-inline auto KernelArgConvert(CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
-{
-    return obj.GetDeviceHandle(info);
-}
-inline auto KernelArgConvert(const CameraTraceBatch& obj, const Cuda::KernelLaunchInfo& info)
-{
-    return obj.GetDeviceHandle(info);
-}
 
 }}}     // namespace PacBio::Mongo::Data
 

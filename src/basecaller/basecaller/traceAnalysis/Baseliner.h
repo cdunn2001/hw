@@ -4,9 +4,11 @@
 #include <stdint.h>
 
 #include <dataTypes/BasicTypes.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
+#include <dataTypes/BasicTypes.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -46,7 +48,9 @@ public:
 public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
-    Data::CameraTraceBatch operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
+    std::pair<Data::TraceBatch<ElementTypeOut>,
+              Data::BaselinerMetrics>
+    operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
         return Process(std::move(rawTrace));
@@ -55,7 +59,9 @@ public:
     float Scale() const { return scaler_; }
 
 private:    // Customizable implementation
-    virtual Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
+    virtual std::pair<Data::TraceBatch<ElementTypeOut>,
+                      Data::BaselinerMetrics>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;

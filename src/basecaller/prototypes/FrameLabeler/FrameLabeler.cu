@@ -77,13 +77,21 @@ void run(const Data::DataManagerParams& dataParams,
         latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
-    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](
+    std::vector<FrameLabelerMetrics> frameLabelerMetrics;
+    for (size_t i = 0; i < numBatches; ++i)
+    {
+        frameLabelerMetrics.emplace_back(
+                latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    }
+
+    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace, &frameLabelerMetrics](
         const TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
         if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret,
+                                             frameLabelerMetrics[batchIdx]);
         (void)latTrace[batchIdx].GetBlockView(0);
     };
 

@@ -29,8 +29,9 @@
 //  Description:
 //  Defines class PulseBatch.
 
-#include "BatchMetadata.h"
 #include "BatchData.h"
+#include "BatchMetadata.h"
+#include "BatchMetrics.h"
 #include "BatchVectors.h"
 #include "Pulse.h"
 
@@ -87,14 +88,14 @@ public:
         , syncDir_(syncDir)
     {}
 
-    PulseBatch NewBatch(const BatchMetadata& batchMetadata) const
+    std::pair<PulseBatch, PulseDetectorMetrics>
+    NewBatch(const BatchMetadata& batchMetadata) const
     {
-        return PulseBatch(
-                maxCallsPerZmw_,
-                batchDims_,
-                batchMetadata,
-                syncDir_,
-                SOURCE_MARKER());
+        return std::make_pair(
+            PulseBatch(
+                maxCallsPerZmw_, batchDims_, batchMetadata, syncDir_, SOURCE_MARKER()),
+            PulseDetectorMetrics(batchDims_, syncDir_, SOURCE_MARKER()));
+
     }
 
 private:

@@ -8,11 +8,13 @@
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
@@ -119,6 +121,9 @@ AlgoFactory::~AlgoFactory()
         break;
     case Data::BasecallerMetricsConfig::MethodName::Host:
         HostHFMetricsFilter::Finalize();
+        break;
+    case Data::BasecallerMetricsConfig::MethodName::Gpu:
+        DeviceHFMetricsFilter::Finalize();
         break;
     default:
         ostringstream msg;
@@ -352,6 +357,9 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
         break;
     case Data::BasecallerMetricsConfig::MethodName::Host:
         return std::make_unique<HostHFMetricsFilter>(poolId);
+        break;
+    case Data::BasecallerMetricsConfig::MethodName::Gpu:
+        return std::make_unique<DeviceHFMetricsFilter>(poolId, poolSize_);
         break;
     default:
         ostringstream msg;

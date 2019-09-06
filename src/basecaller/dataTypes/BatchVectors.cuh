@@ -111,6 +111,14 @@ public:
         , lens_(vecs.Lens({}).GetDeviceHandle(info))
     {}
 
+    template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
+    GpuBatchVectors(const BatchVectors<typename std::remove_const_t<T>>& vecs,
+                    const Cuda::KernelLaunchInfo& info)
+        : maxLen_(vecs.MaxLen())
+        , data_(vecs.Data({}).GetDeviceHandle(info))
+        , lens_(vecs.Lens({}).GetDeviceHandle(info))
+    {}
+
     __device__ VectorView<T> GetVector(int zmw)
     {
         assert(zmw < lens_.Size());
@@ -133,8 +141,9 @@ public:
 private:
     uint32_t maxLen_;
 
+    using idx_t = typename std::conditional<std::is_const<T>::value, const uint32_t, uint32_t>::type;
     Cuda::Memory::DeviceView<T> data_;
-    Cuda::Memory::DeviceView<uint32_t> lens_;
+    Cuda::Memory::DeviceView<idx_t> lens_;
 };
 
 // Define overloads for this function, so that we can track kernel invocations, and
