@@ -41,7 +41,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TEST(TestTraceAnalyzerTbb, DISABLE_CheckMetadata)
+TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
     const unsigned int numPools = 8;
     Data::BasecallerConfig bcConfig;
