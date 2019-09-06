@@ -29,11 +29,11 @@
 //  Description:
 //  Defines class PulseBatch.
 
-#include "BatchMetadata.h"
 #include "BatchData.h"
+#include "BatchMetadata.h"
+#include "BatchMetrics.h"
 #include "BatchVectors.h"
 #include "Pulse.h"
-#include "PulseDetectionMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -46,13 +46,11 @@ public:     // Structors & assignment operators
     PulseBatch(const size_t maxCallsPerZmwChunk,
                const BatchDimensions& batchDims,
                const BatchMetadata& batchMetadata,
-               Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics,
                Cuda::Memory::SyncDirection syncDir,
                const Cuda::Memory::AllocationMarker& marker)
         : dims_ (batchDims)
         , metaData_(batchMetadata)
         , pulses_(batchDims.ZmwsPerBatch(),  maxCallsPerZmwChunk, syncDir, marker)
-        , pdMetrics_(std::move(pdMetrics))
     {}
 
     PulseBatch(const PulseBatch&) = delete;
@@ -73,17 +71,10 @@ public:     // Functions
     BatchVectors<Pulse>& Pulses() { return pulses_; }
     const BatchVectors<Pulse>& Pulses() const { return pulses_; }
 
-    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics()
-    { return pdMetrics_; }
-    const Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics() const
-    { return pdMetrics_; }
-
 private:    // Data
     BatchDimensions dims_;
     BatchMetadata   metaData_;
     BatchVectors<Pulse> pulses_;
-
-    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics_;
 };
 
 class PulseBatchFactory
@@ -97,30 +88,14 @@ public:
         , syncDir_(syncDir)
     {}
 
-    PulseBatch NewEmptyBatch(const BatchMetadata& batchMetadata) const
+    std::pair<PulseBatch, PulseDetectorMetrics>
+    NewBatch(const BatchMetadata& batchMetadata) const
     {
-        return PulseBatch(
-                maxCallsPerZmw_,
-                batchDims_,
-                batchMetadata,
-                Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>(
-                    batchDims_.lanesPerBatch, syncDir_, pinned_, metricsPool_),
-                syncDir_,
-                pinned_,
-                callsPool_,
-                lenPool_);
-    }
+        return std::make_pair(
+            PulseBatch(
+                maxCallsPerZmw_, batchDims_, batchMetadata, syncDir_, SOURCE_MARKER()),
+            PulseDetectorMetrics(batchDims_, syncDir_, SOURCE_MARKER()));
 
-    PulseBatch NewBatch(const BatchMetadata& batchMetadata,
-                        Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics) const
-    {
-        return PulseBatch(
-                maxCallsPerZmw_,
-                batchDims_,
-                batchMetadata,
-                std::move(pdMetrics),
-                syncDir_,
-                SOURCE_MARKER());
     }
 
 private:

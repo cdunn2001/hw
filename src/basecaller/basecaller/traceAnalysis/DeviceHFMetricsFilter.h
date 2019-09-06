@@ -32,10 +32,10 @@
 
 #include "HFMetricsFilter.h"
 #include <dataTypes/BasecallingMetrics.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BatchVectors.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 #include <dataTypes/Pulse.h>
-#include <dataTypes/PulseDetectionMetrics.h>
 #include <common/StatAccumState.h>
 #include <common/AutocorrAccumState.h>
 
@@ -43,69 +43,54 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-template <unsigned int LaneWidth>
 struct alignas(64) BasecallingMetricsAccumulatorDevice
 {
 public: // types
     using InputPulses = Data::LaneVectorView<const Data::Pulse>;
     using InputBaselineStats = Data::BaselinerStatAccumState;
-    using InputModelsT = Data::LaneModelParameters<Cuda::PBHalf, LaneWidth>;
+    using InputModelsT = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
 
-    using UnsignedInt = int16_t;
-    using Int = uint16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        UnsignedInt, LaneWidth>;
-    using SingleIntegerMetric = Cuda::Utility::CudaArray<Int, LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>, numAnalogs>;
-    using AnalogFloatMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<Flt, LaneWidth>, numAnalogs>;
-
-    using BasecallingMetricsT = Data::BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<
-        BasecallingMetricsT>;
+    template <typename T>
+    using SingleMetric = Cuda::Utility::CudaArray<T, laneSize>;
+    template <typename T>
+    using AnalogMetric = Cuda::Utility::CudaArray<SingleMetric<T>,
+                                                  numAnalogs>;
 
 private: // metrics
-    SingleUnsignedIntegerMetric numPulseFrames_;
-    SingleUnsignedIntegerMetric numBaseFrames_;
-    SingleUnsignedIntegerMetric numSandwiches_;
-    SingleUnsignedIntegerMetric numHalfSandwiches_;
-    SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    Cuda::Utility::CudaArray<Data::HQRFPhysicalStates, LaneWidth> activityLabel_;
-    AnalogFloatMetric pkMidSignal_;
-    AnalogFloatMetric bpZvar_;
-    AnalogFloatMetric pkZvar_;
-    AnalogFloatMetric pkMax_;
-    AnalogFloatMetric modelVariance_;
-    AnalogFloatMetric modelMean_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog_;
-
-    // From TraceAnalysisMetrics.h:
-
-    SingleUnsignedIntegerMetric startFrame_;
-    SingleUnsignedIntegerMetric numFrames_;
-    SingleIntegerMetric pixelChecksum_;
-    SingleFloatMetric pulseDetectionScore_;
+    SingleMetric<uint16_t> numPulseFrames_;
+    SingleMetric<uint16_t> numBaseFrames_;
+    SingleMetric<uint16_t> numSandwiches_;
+    SingleMetric<uint16_t> numHalfSandwiches_;
+    SingleMetric<uint16_t> numPulseLabelStutters_;
+    Cuda::Utility::CudaArray<Data::HQRFPhysicalStates, laneSize> activityLabel_;
+    AnalogMetric<float> pkMidSignal_;
+    AnalogMetric<float> bpZvar_;
+    AnalogMetric<float> pkZvar_;
+    AnalogMetric<float> pkMax_;
+    AnalogMetric<float> modelVariance_;
+    AnalogMetric<float> modelMean_;
+    AnalogMetric<uint16_t> pkMidNumFrames_;
+    AnalogMetric<uint16_t> numPkMidBasesByAnalog_;
+    AnalogMetric<uint16_t> numBasesByAnalog_;
+    AnalogMetric<uint16_t> numPulsesByAnalog_;
+    SingleMetric<uint32_t> startFrame_;
+    SingleMetric<uint32_t> numFrames_;
+    SingleMetric<int16_t> pixelChecksum_;
+    SingleMetric<float> pulseDetectionScore_;
     // TODO: These changed from accumulators to states for the Device, the
     // kernels will differ from their host for this reason (among others).
     StatAccumState baselineStatAccum_;
     AutocorrAccumState autocorrAccum_;
 
 private: // state trackers
-    Cuda::Utility::CudaArray<Data::Pulse, LaneWidth> prevBasecallCache_;
-    Cuda::Utility::CudaArray<Data::Pulse, LaneWidth> prevprevBasecallCache_;
+    Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevBasecallCache_;
+    Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevprevBasecallCache_;
 
 };
 
 class DeviceHFMetricsFilter : public HFMetricsFilter
 {
 public:
-    using BasecallingMetricsAccumulatorT = BasecallingMetricsAccumulatorDevice<laneSize>;
     class AccumImpl;
 
 public:
@@ -117,10 +102,12 @@ public:
     ~DeviceHFMetricsFilter() override;
 
 private:
-    std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& pulseBatch,
-            const BaselinerStatsBatchT& baselineStats,
-            const ModelsBatchT& models) override;
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
+    Process(const Data::PulseBatch& basecallBatch,
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics) override;
 
 private: // members
     std::unique_ptr<AccumImpl> impl_;

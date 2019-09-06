@@ -7,6 +7,7 @@
 #include <common/MongoConstants.h>
 
 #include "BaselinerStatAccumState.h"
+#include "BatchMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -30,12 +31,12 @@ public:
         dims_.lanesPerBatch = lanesPerPool;
     }
 
-    std::pair<TraceBatch<ElementType>, Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>> NewBatch(const BatchMetadata& meta) const
+    std::pair<TraceBatch<ElementType>, BaselinerMetrics>
+    NewBatch(const BatchMetadata& meta) const
     {
         const auto& marker = SOURCE_MARKER();
         return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, marker),
-                              Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState>(
-                                  dims_.lanesPerBatch, syncDirection_, marker));
+                              BaselinerMetrics(dims_, syncDirection_, marker));
     }
 
 private:

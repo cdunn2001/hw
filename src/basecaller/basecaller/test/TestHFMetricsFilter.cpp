@@ -42,10 +42,10 @@
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumState.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/PrimaryConfig.h>
-#include <dataTypes/PulseDetectionMetrics.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 
@@ -60,6 +60,16 @@ namespace {
 // We simulate each base per zmw per block according to the following scheme:
 struct BaseSimConfig
 {
+    BaseSimConfig()
+    {
+        unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
+        unsigned int chunkSize = Data::GetPrimaryConfig().framesPerChunk;
+        dims.framesPerBatch = chunkSize;
+        dims.laneWidth = laneSize;
+        dims.lanesPerBatch = poolSize;
+    };
+
+    Data::BatchDimensions dims;
     unsigned int numBases = 10;
     unsigned int ipd = 1;
     unsigned int baseWidth = 4;
@@ -85,26 +95,13 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                                               Data::GetPrimaryConfig().lanesPerPool);
     auto chunk = batchGenerator.PopulateChunk();
 
-    unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
-    unsigned int chunkSize = Data::GetPrimaryConfig().framesPerChunk;
-
-    Data::BatchDimensions dims;
-    dims.framesPerBatch = chunkSize;
-    dims.laneWidth = laneSize;
-    dims.lanesPerBatch = poolSize;
-
     Data::BasecallerAlgorithmConfig basecallerConfig;
     Data::PulseBatchFactory batchFactory(
         basecallerConfig.pulseAccumConfig.maxCallsPerZmw,
-        dims,
+        config.dims,
         Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
-    Cuda::Memory::UnifiedCudaArray<Data::PulseDetectionMetrics> pdMetrics(
-            dims.lanesPerBatch,
-            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-            true);
-
-    auto pulses = batchFactory.NewBatch(chunk.front().Metadata(), std::move(pdMetrics));
+    auto pulses = batchFactory.NewBatch(chunk.front().Metadata()).first;
 
     auto LabelConv = [&](size_t index) {
         switch (config.pattern[index % config.pattern.size()])
@@ -139,7 +136,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                 // Populate pulse data
                 pulse.Label(label);
                 pulse.Start(b * config.baseWidth + b * config.ipd
-                                    + batchNo * chunkSize)
+                                    + batchNo * config.dims.framesPerBatch)
                      .Width(config.baseWidth);
                 pulse.MidSignal(config.midSignal[label] + b)
                      .MaxSignal(config.maxSignal[label]);
@@ -150,25 +147,22 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                                * (pulse.Width() - 2) * m2modifier);
                 pulseView.push_back(zmw, pulse);
             }
-            pulses.PdMetrics().GetHostView()[lane].viterbiScore[zmw] = 1.09;
         }
     }
     return pulses;
 }
 
-Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>
-GenerateBaselineStats(BaseSimConfig config)
+Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
 {
-    unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
-    Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState> ret(
-            poolSize,
+    Data::BaselinerMetrics ret(
+            config.dims,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             SOURCE_MARKER());
     Data::BaselinerStatAccumulator<Data::BaselinedTraceElement> bsa{};
-    for (size_t lane = 0; lane < poolSize; ++lane)
+    for (size_t lane = 0; lane < config.dims.lanesPerBatch; ++lane)
     {
-        ret.GetHostView()[lane] = bsa.GetState();
-        auto& baselinerStats = ret.GetHostView()[lane];
+        ret.baselinerStats.GetHostView()[lane] = bsa.GetState();
+        auto& baselinerStats = ret.baselinerStats.GetHostView()[lane];
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
             baselinerStats.rawBaselineSum[zmw] = 100;
@@ -176,11 +170,48 @@ GenerateBaselineStats(BaseSimConfig config)
             baselinerStats.baselineStats.moment1[zmw] = 10;
             baselinerStats.baselineStats.moment2[zmw] = 100;
             baselinerStats.fullAutocorrState.moment1First[zmw] = 10;
-            baselinerStats.fullAutocorrState.moment1First[zmw] = 20;
+            baselinerStats.fullAutocorrState.moment1Last[zmw] = 20;
             baselinerStats.fullAutocorrState.moment2[zmw] = 120;
             baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
             baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
             baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
+        }
+    }
+    return ret;
+}
+
+Data::FrameLabelerMetrics GenerateFrameLabelerMetrics(BaseSimConfig config)
+{
+    Data::FrameLabelerMetrics ret(
+            config.dims,
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+            SOURCE_MARKER());
+    for (size_t lane = 0; lane < config.dims.lanesPerBatch; ++lane)
+    {
+        for (size_t zmw = 0; zmw < laneSize; ++zmw)
+        {
+            ret.viterbiScore.GetHostView()[lane][zmw] = 1.09;
+        }
+    }
+    return ret;
+}
+
+Data::PulseDetectorMetrics GeneratePulseDetectorMetrics(BaseSimConfig config)
+{
+    Data::PulseDetectorMetrics ret(
+            config.dims,
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+            SOURCE_MARKER());
+    Data::BaselinerStatAccumulator<Data::BaselinedTraceElement> bsa{};
+    for (size_t lane = 0; lane < config.dims.lanesPerBatch; ++lane)
+    {
+        ret.baselineStats.GetHostView()[lane] = bsa.GetState().baselineStats;
+        auto& baselinerStats = ret.baselineStats.GetHostView()[lane];
+        for (size_t zmw = 0; zmw < laneSize; ++zmw)
+        {
+            baselinerStats.moment0[zmw] = 98;
+            baselinerStats.moment1[zmw] = 10;
+            baselinerStats.moment2[zmw] = 100;
         }
     }
     return ret;
@@ -245,8 +276,10 @@ TEST(TestHFMetricsFilter, Populated)
     BaseSimConfig config;
     config.pattern = "ACGTGG";
     config.ipd = 0;
-    const auto& baselinerStats = GenerateBaselineStats(config);
+    const auto& baselinerStats = GenerateBaselineMetrics(config);
     const auto& models = GenerateModels(config);
+    const auto& flMetrics = GenerateFrameLabelerMetrics(config);
+    const auto& pdMetrics = GeneratePulseDetectorMetrics(config);
 
     int blocks_tested = 0;
 
@@ -254,14 +287,14 @@ TEST(TestHFMetricsFilter, Populated)
     {
         auto pulses = GenerateBases(config, batchIdx);
         auto basecallingMetrics = hfMetrics(
-                pulses, baselinerStats, models);
+                pulses, baselinerStats, models, flMetrics, pdMetrics);
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
-                ASSERT_EQ(sizeof(mb), 8192);
+                ASSERT_EQ(sizeof(mb), 8320);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
@@ -312,7 +345,7 @@ TEST(TestHFMetricsFilter, Populated)
                     EXPECT_EQ(0,
                               mb.startFrame[z]);
                     EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
-                              mb.stopFrame[z]);
+                              mb.startFrame[z] + mb.numFrames[z]);
                     EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
                               mb.numFrames[z]);
                     // We've already checked that numpulsesbyanalog is correct,
@@ -336,13 +369,13 @@ TEST(TestHFMetricsFilter, Populated)
                     EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
                     EXPECT_NEAR(0.0960086, mb.pkZvar[3][z], 0.001);
                     ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
-                              mb.pkMidNumFrames[0][z]);
+                              mb.numPkMidFrames[0][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
-                              mb.pkMidNumFrames[1][z]);
+                              mb.numPkMidFrames[1][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 4 * (config.baseWidth - 2),
-                              mb.pkMidNumFrames[2][z]);
+                              mb.numPkMidFrames[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
-                              mb.pkMidNumFrames[3][z]);
+                              mb.numPkMidFrames[3][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[0][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
@@ -392,12 +425,14 @@ TEST(TestHFMetricsFilter, Noop)
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
     BaseSimConfig config;
     config.ipd = 0;
-    const auto& baselinerStats = GenerateBaselineStats(config);
+    const auto& baselinerStats = GenerateBaselineMetrics(config);
+    const auto& flMetrics = GenerateFrameLabelerMetrics(config);
+    const auto& pdMetrics = GeneratePulseDetectorMetrics(config);
 
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(config, batchIdx);
-        auto basecallingMetrics = hfMetrics(pulses, baselinerStats, models);
+        auto basecallingMetrics = hfMetrics(pulses, baselinerStats, models, flMetrics, pdMetrics);
         ASSERT_FALSE(basecallingMetrics);
     }
     hfMetrics.Finalize();

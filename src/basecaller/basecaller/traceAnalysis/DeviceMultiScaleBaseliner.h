@@ -86,7 +86,7 @@ public:
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
-              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+              Data::BaselinerMetrics>
     Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2>;

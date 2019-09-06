@@ -72,7 +72,7 @@ TEST(TestNoOpPulseAccumulator, Run)
 
     PulseAccumulator pulseAccumulator(poolId);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
 
     for (uint32_t laneIdx = 0; laneIdx < pulseBatch.Dims().lanesPerBatch; ++laneIdx)
     {
@@ -113,7 +113,7 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
 
     HostSimulatedPulseAccumulator pulseAccumulator(poolId);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
@@ -168,7 +168,8 @@ TEST(TestHostPulseAccumulator, Run)
 
     uint32_t poolId = 0;
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
-    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
+    // Discard metrics:
+    auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first)).first;
 
     // Simulate out labels batch accordingly fixed pattern of baseline + pulse frames.
     const size_t ipd = 6;
@@ -227,7 +228,8 @@ TEST(TestHostPulseAccumulator, Run)
 
     HostAccumulator pulseAccumulator(poolId, lanesPerPool);
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch));
+    // Ignore metrics:
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch)).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 

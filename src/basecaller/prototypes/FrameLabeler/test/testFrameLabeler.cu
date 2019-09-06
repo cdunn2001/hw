@@ -119,8 +119,13 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
 
         latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
-    UnifiedCudaArray<PulseDetectionMetrics> pdMetrics(
-            dataParams.kernelLanes, SyncDirection::HostReadDeviceWrite, true);
+
+    std::vector<FrameLabelerMetrics> frameLabelerMetrics;
+    for (size_t i = 0; i < poolsPerChip; ++i)
+    {
+        frameLabelerMetrics.emplace_back(
+                latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    }
 
     int mismatches = 0;
     int matches = 0;
@@ -138,7 +143,8 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         auto batchIdx = data.Batch();
         const auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out, pdMetrics);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out,
+                                             frameLabelerMetrics[batchIdx]);
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {

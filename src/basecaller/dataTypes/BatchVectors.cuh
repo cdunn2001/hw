@@ -112,7 +112,7 @@ public:
     {}
 
     template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
-    GpuBatchVectors(const BatchVectors<typename std::remove_const<T>::type>& vecs,
+    GpuBatchVectors(const BatchVectors<typename std::remove_const_t<T>>& vecs,
                     const Cuda::KernelLaunchInfo& info)
         : maxLen_(vecs.MaxLen())
         , data_(vecs.Data({}).GetDeviceHandle(info))

@@ -32,7 +32,7 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
 
-#include "PulseDetectionMetrics.h"
+#include "BatchMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -62,7 +62,6 @@ public:     // Structors and assignment
         : TraceBatch<ElementType>(meta, dims, syncDirection, marker)
         , curTrace_(std::move(trace))
         , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, marker)
-        , pdMetrics_(dims.lanesPerBatch, syncDirection, marker)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -77,12 +76,6 @@ public:     // Structors and assignment
     const BatchData& LatentTrace() const { return latTrace_; }
     BatchData& LatentTrace() { return latTrace_; }
 
-    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics>& PdMetrics()
-    { return pdMetrics_; }
-
-    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> TakePdMetrics()
-    { return std::move(pdMetrics_); }
-
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
     // viterbi stitching, so this class will prevent access to those
@@ -90,9 +83,6 @@ private:    // Data
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;
-
-    // Viterbi score from FrameLabeler and baseline stats from PulseAccumulator
-    Cuda::Memory::UnifiedCudaArray<PulseDetectionMetrics> pdMetrics_;
 };
 
 // Factory class, to simplify the construction of LabelsBatch instances.
@@ -110,12 +100,20 @@ public:
         , syncDirection_(syncDirection)
     {}
 
-    LabelsBatch NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
+    std::pair<LabelsBatch, FrameLabelerMetrics>
+    NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
     {
         auto meta = trace.Metadata();
         auto dims = trace.StorageDims();
-        return LabelsBatch(meta, dims, std::move(trace),
-                           latentFrames_, syncDirection_, SOURCE_MARKER());
+        return std::make_pair(
+            LabelsBatch(
+                meta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER()),
+            FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER()));
+    }
+
+    FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims)
+    {
+        return FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER());
     }
 
 private:

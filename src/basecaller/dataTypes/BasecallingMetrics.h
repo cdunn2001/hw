@@ -44,65 +44,48 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-template <unsigned int LaneWidth>
 class BasecallingMetrics
 {
 
 public: // types
-    using UnsignedInt = uint16_t;
-    using Int = int16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt,
-                                                                 LaneWidth>;
-    using SingleIntegerMetric = Cuda::Utility::CudaArray<Int,
-                                                                 LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        numAnalogs>;
-    using AnalogFloatMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        numAnalogs>;
+    template <typename T>
+    using SingleMetric = Cuda::Utility::CudaArray<T, laneSize>;
+    template <typename T>
+    using AnalogMetric = Cuda::Utility::CudaArray<SingleMetric<T>,
+                                                  numAnalogs>;
 
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
-    Cuda::Utility::CudaArray<HQRFPhysicalStates,
-                             LaneWidth> activityLabel;
-    SingleUnsignedIntegerMetric numPulseFrames;
-    SingleUnsignedIntegerMetric numBaseFrames;
-    SingleUnsignedIntegerMetric numSandwiches;
-    SingleUnsignedIntegerMetric numHalfSandwiches;
-    SingleUnsignedIntegerMetric numPulseLabelStutters;
-    AnalogFloatMetric pkMidSignal;
-    AnalogFloatMetric bpZvar;
-    AnalogFloatMetric pkZvar;
-    AnalogFloatMetric pkMax;
-    AnalogUnsignedIntegerMetric pkMidNumFrames;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog;
-    AnalogUnsignedIntegerMetric numBasesByAnalog;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog;
-    SingleUnsignedIntegerMetric numBases;
-    SingleUnsignedIntegerMetric numPulses;
+    SingleMetric<HQRFPhysicalStates> activityLabel;
+    SingleMetric<uint16_t> numPulseFrames;
+    SingleMetric<uint16_t> numBaseFrames;
+    SingleMetric<uint16_t> numSandwiches;
+    SingleMetric<uint16_t> numHalfSandwiches;
+    SingleMetric<uint16_t> numPulseLabelStutters;
+    SingleMetric<uint16_t> numBases;
+    SingleMetric<uint16_t> numPulses;
+    AnalogMetric<float> pkMidSignal;
+    AnalogMetric<float> bpZvar;
+    AnalogMetric<float> pkZvar;
+    AnalogMetric<float> pkMax;
+    AnalogMetric<uint16_t> numPkMidFrames;
+    AnalogMetric<uint16_t> numPkMidBasesByAnalog;
+    AnalogMetric<uint16_t> numBasesByAnalog;
+    AnalogMetric<uint16_t> numPulsesByAnalog;
 
     // TODO Add useful tracemetrics members here (there are others in the
     // accumulator member..., not sure if they are used):
-    SingleUnsignedIntegerMetric startFrame;
-    SingleUnsignedIntegerMetric stopFrame;
-    SingleUnsignedIntegerMetric numFrames;
-    SingleFloatMetric autocorrelation;
-    SingleFloatMetric pulseDetectionScore;
-    SingleIntegerMetric pixelChecksum;
+    SingleMetric<uint32_t> startFrame;
+    SingleMetric<uint32_t> numFrames;
+    SingleMetric<float> autocorrelation;
+    SingleMetric<float> pulseDetectionScore;
+    SingleMetric<int16_t> pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics<laneSize>) == 128 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
 
-template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
 {
-public: // types
-    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
-
 public: // methods:
     BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
                               Cuda::Memory::SyncDirection syncDir)
@@ -110,9 +93,9 @@ public: // methods:
         , syncDir_(syncDir)
     {}
 
-    std::unique_ptr<BasecallingMetricsBatchT> NewBatch()
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> NewBatch()
     {
-        return std::make_unique<BasecallingMetricsBatchT>(
+        return std::make_unique<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>>(
             batchDims_.lanesPerBatch,
             syncDir_,
             SOURCE_MARKER());

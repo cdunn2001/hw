@@ -28,10 +28,3 @@
 
 #include "BasecallingMetrics.h"
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-template class BasecallingMetrics<laneSize>;
-
-}}}     // namespace PacBio::Mongo::Data

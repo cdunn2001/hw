@@ -20,7 +20,7 @@ void HostMultiScaleBaseliner::Finalize()
 }
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
-          Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+          Data::BaselinerMetrics>
 HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
@@ -31,7 +31,7 @@ HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
     Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
-    auto statsView = out.second.GetHostView();
+    auto statsView = out.second.baselinerStats.GetHostView();
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);

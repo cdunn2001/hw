@@ -41,7 +41,7 @@ struct BatchResult
 {
 
     using PulseBatchT = PulseBatch;
-    using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics<laneSize>>;
+    using MetricsT = Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>;
 
     BatchResult(PulseBatchT&& pulsesIn, std::unique_ptr<MetricsT> metricsPtr)
         : pulses(std::move(pulsesIn))

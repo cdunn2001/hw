@@ -43,8 +43,10 @@ namespace Basecaller {
 
 DeviceHFMetricsFilter::~DeviceHFMetricsFilter() = default;
 
+namespace {
+
 __global__ void InitializeMetrics(
-        Cuda::Memory::DeviceView<DeviceHFMetricsFilter::BasecallingMetricsAccumulatorT> metrics)
+        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics)
 {
     // TODO
 }
@@ -52,45 +54,49 @@ __global__ void InitializeMetrics(
 __global__ void FinalizeMetrics(
         bool realtimeActivityLabels,
         float frameRate,
-        Cuda::Memory::DeviceView<DeviceHFMetricsFilter::BasecallingMetricsAccumulatorT> metrics)
+        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics)
 {
     // TODO
 }
 
+// TODO: figure out how many threads per block (as a function of laneSize...)
 __global__ void ProcessChunk(
         const Cuda::Memory::DeviceView<const DeviceHFMetricsFilter::BaselinerStatsT> baselinerStats,
         const Cuda::Memory::DeviceView<const Data::LaneModelParameters<Cuda::PBHalf2, 32>> models,
         const Data::GpuBatchVectors<const Data::Pulse> pulses,
-        const Cuda::Memory::DeviceView<const Data::PulseDetectionMetrics> pdMetrics,
-        Cuda::Memory::DeviceView<DeviceHFMetricsFilter::BasecallingMetricsAccumulatorT> metrics)
+        const Cuda::Memory::DeviceView<const PacBio::Cuda::Utility::CudaArray<float, laneSize>> flMetrics,
+        const Cuda::Memory::DeviceView<const PacBio::Mongo::StatAccumState> pdMetrics,
+        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics)
 {
     // TODO
 }
 
 __global__ void PopulateBasecallingMetrics(
-        const Cuda::Memory::DeviceView<DeviceHFMetricsFilter::BasecallingMetricsAccumulatorT> metrics,
-        Cuda::Memory::DeviceView<DeviceHFMetricsFilter::BasecallingMetricsT> outMetrics)
+        const
+        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
+        Cuda::Memory::DeviceView<Data::BasecallingMetrics> outMetrics)
 {
     // TODO
 }
 
+} // anonymous
+
 class DeviceHFMetricsFilter::AccumImpl
 {
 public:
-    using BasecallingMetricsAccumulatorBatchT = Cuda::Memory::DeviceOnlyArray<
-        DeviceHFMetricsFilter::BasecallingMetricsAccumulatorT>;
-
-public:
     AccumImpl(size_t lanesPerPool)
-        : metrics_(lanesPerPool)
+        : metrics_(SOURCE_MARKER(), lanesPerPool)
         , framesSeen_(0)
         , lanesPerBatch_(lanesPerPool)
     { };
 
-    std::unique_ptr<DeviceHFMetricsFilter::BasecallingMetricsBatchT>
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
     Process(const Data::PulseBatch& pulseBatch,
-            const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& baselinerStats,
-            const Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models)
+            const Data::BaselinerMetrics& baselinerMetrics,
+            const
+            Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics)
     {
         if (framesSeen_ == 0)
         {
@@ -102,10 +108,11 @@ public:
         const auto& processLauncher = Cuda::PBLauncher(ProcessChunk,
                                                        lanesPerBatch_,
                                                        threadsPerBlock_);
-        processLauncher(baselinerStats,
+        processLauncher(baselinerMetrics.baselinerStats,
                         models,
                         pulseBatch.Pulses(),
-                        pulseBatch.PdMetrics(),
+                        flMetrics.viterbiScore,
+                        pdMetrics.baselineStats,
                         metrics_);
         framesSeen_ += pulseBatch.Dims().framesPerBatch;
 
@@ -125,14 +132,14 @@ public:
                            *(ret.get()));
             return ret;
         }
-        return std::unique_ptr<BasecallingMetricsBatchT>();
+        return std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>();
     }
 
 private:
-    static constexpr size_t threadsPerBlock_ = 32;
+    static constexpr size_t threadsPerBlock_ = laneSize / 2;
 
 private:
-    BasecallingMetricsAccumulatorBatchT metrics_;
+    Cuda::Memory::DeviceOnlyArray<BasecallingMetricsAccumulatorDevice> metrics_;
     uint32_t framesSeen_;
     uint32_t lanesPerBatch_;
 
@@ -146,13 +153,16 @@ DeviceHFMetricsFilter::DeviceHFMetricsFilter(uint32_t poolId,
     , impl_(std::make_unique<AccumImpl>(lanesPerPool))
 { };
 
-std::unique_ptr<DeviceHFMetricsFilter::BasecallingMetricsBatchT>
+std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
 DeviceHFMetricsFilter::Process(
         const Data::PulseBatch& pulseBatch,
-        const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& baselinerStats,
-        const Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models)
+        const Data::BaselinerMetrics& baselinerMetrics,
+        const Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models,
+        const Data::FrameLabelerMetrics& flMetrics,
+        const Data::PulseDetectorMetrics& pdMetrics)
 {
-    return impl_->Process(pulseBatch, baselinerStats, models);
+    return impl_->Process(pulseBatch, baselinerMetrics, models, flMetrics,
+            pdMetrics);
 }
 
 

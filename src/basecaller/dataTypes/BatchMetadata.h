@@ -27,7 +27,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines classes BatchMetadata.
+//  Defines class BatchMetadata.
 
 #include <cassert>
 #include <cstdint>

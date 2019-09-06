@@ -36,8 +36,7 @@ public:
     ~HostNoOpBaseliner() override;
 
 private:
-    std::pair<Data::TraceBatch<ElementTypeOut>,
-              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+    std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
     Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 };
 

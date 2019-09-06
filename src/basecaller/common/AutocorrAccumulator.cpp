@@ -22,7 +22,7 @@ AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     , m2_ {0}
     , canAddSample_ {true}
 {
-    assert(AutocorrAccumState::lag > 0);
+    static_assert(AutocorrAccumState::lag > 0);
 }
 
 template <typename T>
@@ -45,7 +45,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
 {
     using U = Simd::ScalarType<T>;
     static const T nan {std::numeric_limits<U>::quiet_NaN()};
-    const auto nmk = stats_.Count() - boost::numeric_cast<U>(Lag());
+    const auto nmk = stats_.Count() - boost::numeric_cast<U>(AutocorrAccumState::lag);
 #if 1
     // If we define R(k) = \sum_{i=0}^{n-k-1} (x_i - m10_/(n-k)) (x_{i+k} - m1k_/(n-k)) / [(n-k)*Variance()]
     // As of 2017-09-12, this definition appears to be more accurate than the

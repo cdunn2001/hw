@@ -246,12 +246,12 @@ public:
     {
     }
 
-    PulseBatch Process(const PulseBatchFactory& factory, LabelsBatch labels)
+    std::pair<PulseBatch, PulseDetectorMetrics>
+    Process(const PulseBatchFactory& factory, LabelsBatch labels)
     {
         static constexpr size_t threadsPerBlock = 32;
         assert(threadsPerBlock*2 == labels.LaneWidth());
-        auto ret = factory.NewBatch(labels.Metadata(),
-                                    std::move(labels.TakePdMetrics()));
+        auto ret = factory.NewBatch(labels.Metadata());
 
         const auto& launcher = PBLauncher(
             ProcessLabels<LabelManager, threadsPerBlock>,
@@ -263,7 +263,7 @@ public:
                  labels.Metadata().FirstFrame(),
                  workingSegments_,
                  *manager_,
-                 ret.Pulses());
+                 ret.first.Pulses());
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;
@@ -322,7 +322,8 @@ template <typename LabelManager>
 DevicePulseAccumulator<LabelManager>::~DevicePulseAccumulator() = default;
 
 template <typename LabelManager>
-Data::PulseBatch DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     return impl_->Process(*batchFactory_, std::move(labels));
 }

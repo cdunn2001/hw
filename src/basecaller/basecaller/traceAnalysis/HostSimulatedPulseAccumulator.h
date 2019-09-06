@@ -45,7 +45,9 @@ public:
     ~HostSimulatedPulseAccumulator() override;
 
 private:
-    Data::PulseBatch Process(Data::LabelsBatch trace) override;
+    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    Process(Data::LabelsBatch trace) override;
+
     Data::Pulse GeneratePulse(uint32_t pulseNum);
 };
 

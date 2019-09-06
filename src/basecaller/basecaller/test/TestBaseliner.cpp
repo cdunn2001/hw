@@ -96,7 +96,7 @@ TEST(TestNoOpBaseliner, Run)
                                         cameraBlock.Data() + cameraBlock.Size(),
                                         [&laneIdx, &batchNum](short v) { return v == static_cast<short>(laneIdx * batchNum); }));
 
-                const auto& baselineStats = stats.GetHostView()[laneIdx].baselineStats;
+                const auto& baselineStats = stats.baselinerStats.GetHostView()[laneIdx].baselineStats;
                 EXPECT_TRUE(std::all_of(baselineStats.moment0.data(),
                                         baselineStats.moment0.data() + laneSize,
                                         [](float v) { return v == 0; }));
@@ -143,9 +143,6 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
         auto chunk = batchGenerator.PopulateChunk();
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
-            auto cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
-            auto stats = std::move(cameraBatch.second);
-            const auto& baselineStats = stats.GetHostView()[0].baselineStats;
             // This test was relying on a BatchGenerator with no trace file returning a
             // batch of all zeros.  I'm unsure if this was (or even should be) an
             // intentional feature of BatchGenerator, but even if it's intentional it
@@ -153,6 +150,9 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
             // isn't necessarily true.
             std::memset(chunk[batchNum].GetBlockView(0).Data(), 0,
                         framesPerChunk * zmwsPerLane * lanesPerPool * sizeof(int16_t));
+            auto cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
+            auto stats = std::move(cameraBatch.second);
+            const auto& baselineStats = stats.baselinerStats.GetHostView()[0].baselineStats;
             EXPECT_TRUE(std::all_of(baselineStats.moment0.data(),
                                     baselineStats.moment0.data() + laneSize,
                                     [](float v) { return v == 0; }));
@@ -235,7 +235,7 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
         {
             auto cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
             auto stats = std::move(cameraBatch.second);
-            const auto& baselinerStatAccumState = stats.GetHostView()[0];
+            const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[0];
             const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
             // Wait for baseliner to warm up before testing.
@@ -328,7 +328,7 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_OneSignalLevel)
         for (size_t batchNum = 0; batchNum < chunk.size(); batchNum++)
         {
             auto cameraBatch = (*baseliners[batchNum])(std::move(chunk[batchNum]));
-            const auto& baselinerStatAccumState = cameraBatch.second.GetHostView()[0];
+            const auto& baselinerStatAccumState = cameraBatch.second.baselinerStats.GetHostView()[0];
             const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
             // Wait for baseliner to warm up.

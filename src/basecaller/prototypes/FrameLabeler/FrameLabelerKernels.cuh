@@ -36,7 +36,7 @@
 #include <common/MongoConstants.h>
 
 #include <dataTypes/BatchData.cuh>
-#include <dataTypes/PulseDetectionMetrics.h>
+#include <dataTypes/BatchMetrics.h>
 
 #include "SubframeScorer.cuh"
 
@@ -170,7 +170,7 @@ public:
                       const Mongo::Data::BatchData<int16_t>& input,
                       Mongo::Data::BatchData<int16_t>& latOut,
                       Mongo::Data::BatchData<int16_t>& output,
-                      Memory::UnifiedCudaArray<Mongo::Data::PulseDetectionMetrics>& metricsOutput);
+                      Mongo::Data::FrameLabelerMetrics& metricsOutput);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
     Mongo::Data::BatchData<int16_t> prevLat_;

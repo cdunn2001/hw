@@ -64,18 +64,18 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     // Produces a trace batch with fixed baseliner stats and all trace frames
     // set to x.
     std::pair<Data::TraceBatch<TraceElementType>,
-              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+              Data::BaselinerMetrics>
     GenerateCamTraceBatch(TraceElementType x)
     {
         auto ctb = ctbFactory.NewBatch(bmd);
-        auto traces = std::move(ctb.first);
-        auto stats = std::move(ctb.second);
+        auto& traces = ctb.first;
+        auto& stats = ctb.second;
 
         const auto n0 = chunkSize/2;  // Number of mock baseline frames.
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             // Mock up some baseliner statistics.
-            Data::BaselinerStatAccumState& bls = stats.GetHostView()[l];
+            Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
             LaneArrayRef<float>(bls.fullAutocorrState.moment2) = 0;
             bls.fullAutocorrState.moment1First = bls.fullAutocorrState.moment1Last = bls.fullAutocorrState.moment2;
             LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
@@ -120,7 +120,7 @@ TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
     // TODO: Blocked by incompleteness of BaselineStats. See BEN-896.
 
     auto baselinedTracesAndStats = GenerateCamTraceBatch(blMean);
-    tha.AddBatch(baselinedTracesAndStats.first, baselinedTracesAndStats.second);
+    tha.AddBatch(baselinedTracesAndStats.first, baselinedTracesAndStats.second.baselinerStats);
     EXPECT_EQ(chunkSize, tha.FramesAdded());
     EXPECT_EQ(0, tha.HistogramFrameCount());
 

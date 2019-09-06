@@ -54,7 +54,7 @@ void DeviceMultiScaleBaseliner::Finalize()
 }
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
-          Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+          Data::BaselinerMetrics>
 DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
@@ -62,7 +62,7 @@ DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
     Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    filter_->RunBaselineFilter(rawTrace, out.first, out.second, work1, work2);
+    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
 
     Cuda::CudaSynchronizeDefaultStream();
     return out;

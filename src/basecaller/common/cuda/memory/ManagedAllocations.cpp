@@ -156,13 +156,6 @@ public:
             ptr = SmartHostAllocation(size, pinned_, marker.AsHash());
         }
 
-#ifndef NDEBUG
-        std::string loc = allocMarkers_[marker.AsHash()];
-        // Nothing *really* breaks if we actually have a hash collision, except
-        // that the reports will lie to you (to some extent).  If this assert
-        // presents a burden it can be re-evaluated
-        assert(loc == "" || loc == marker.AsString());
-#endif
         allocMarkers_.emplace(marker.AsHash(), marker);
         hostStats_[marker.AsHash()].AllocationSize(size);
 
@@ -185,13 +178,6 @@ public:
             ptr = SmartDeviceAllocation(size, marker.AsHash());
         }
 
-#ifndef NDEBUG
-        std::string loc = allocMarkers_[marker.AsHash()];
-        // Nothing *really* breaks if we actually have a hash collision, except
-        // that the reports will lie to you (to some extent).  If this assert
-        // presents a burden it can be re-evaluated
-        assert(loc == "" || loc == marker.AsString());
-#endif
         allocMarkers_.emplace(marker.AsHash(), marker);
         devStats_[marker.AsHash()].AllocationSize(size);
 

@@ -44,17 +44,13 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-template <uint32_t LaneWidth>
 class TraceAnalysisMetrics
 {
 public:
-    static constexpr unsigned int numAnalogs = 4;
-    using UnsignedInt = uint32_t;
-    using Int = int16_t;
-    using Flt = float;
-    using SingleIntegerMetric = LaneArray<Int>;
-    using SingleUnsignedIntegerMetric = LaneArray<UnsignedInt>;
-    using SingleFloatMetric = LaneArray<Flt>;
+    template <typename T>
+    using SingleMetric = LaneArray<T>;
+    template <typename T>
+    using AnalogMetric = std::array<LaneArray<T>, numAnalogs>;
 
 public:
 
@@ -77,7 +73,7 @@ public:
         autocorrAccum_.Reset();
         startFrame_ = 0;
         numFrames_ = 0;
-        pulseDetectionScore_ = std::numeric_limits<Flt>::quiet_NaN();
+        pulseDetectionScore_ = std::numeric_limits<float>::quiet_NaN();
         pulseDetectionScore_ = 0;
         //confidenceScore_ = 0;
         //fullEstimationAttempted_ = 0;
@@ -87,44 +83,44 @@ public:
 
 public:
     // Start frame of trace metric block
-    const SingleUnsignedIntegerMetric& StartFrame() const
+    const SingleMetric<uint32_t>& StartFrame() const
     { return startFrame_; }
 
-    SingleUnsignedIntegerMetric& StartFrame()
+    SingleMetric<uint32_t>& StartFrame()
     { return startFrame_; }
 
     // First frame after end of trace metric block
-    SingleUnsignedIntegerMetric StopFrame() const
+    SingleMetric<uint32_t> StopFrame() const
     { return startFrame_ + numFrames_; }
 
     // Number of frames used to compute trace metrics.
     // These don't need to be stored for each ZMW in a lane...
-    const SingleUnsignedIntegerMetric& NumFrames() const
+    const SingleMetric<uint32_t>& NumFrames() const
     { return numFrames_; }
 
-    SingleUnsignedIntegerMetric& NumFrames()
+    SingleMetric<uint32_t>& NumFrames()
     { return numFrames_; }
 
     /// Autocorrelation of baseline-subtracted traces.
-    SingleFloatMetric Autocorrelation() const
+    SingleMetric<float> Autocorrelation() const
     { return autocorrAccum_.Autocorrelation(); }
 
     /// The mean of the DWS baseline as computed by the pulse detection filter.
-    SingleFloatMetric FrameBaselineDWS() const
+    SingleMetric<float> FrameBaselineDWS() const
     { return baselineStatAccum_.Mean(); }
 
     /// The unbiased sample variance of the DWS baseline as computed by the pulse detection filter.
-    SingleFloatMetric FrameBaselineVarianceDWS() const
+    SingleMetric<float> FrameBaselineVarianceDWS() const
     { return baselineStatAccum_.Variance(); }
 
     /// The sample standard deviation of the DWS baseline as computed by the pulse detection filter.
-    SingleFloatMetric FrameBaselineSigmaDWS() const
+    SingleMetric<float> FrameBaselineSigmaDWS() const
     { return sqrt(FrameBaselineVarianceDWS()); }
 
     /// The number of baseline frames used by the pulse detection filter to
     /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
-    const SingleUnsignedIntegerMetric& NumFramesBaseline() const
-    { return baselineStatAccum_.Count(); }
+    const SingleMetric<uint16_t> NumFramesBaseline() const
+    { return baselineStatAccum_.Count().AsUnsignedShort(); }
 
     /* TODO: to reactivate these, if needed, they can't be one-bit bool
      * LaneArrays
@@ -157,17 +153,17 @@ public:
     */
 
     /// Returns pulse detection score.
-    const SingleFloatMetric& PulseDetectionScore() const
+    const SingleMetric<float>& PulseDetectionScore() const
     { return pulseDetectionScore_; }
 
-    SingleFloatMetric& PulseDetectionScore()
+    SingleMetric<float>& PulseDetectionScore()
     { return pulseDetectionScore_; }
 
     /// Returns pixel checksum
-    const SingleIntegerMetric& PixelChecksum() const
+    const SingleMetric<int16_t>& PixelChecksum() const
     { return pixelChecksum_; }
 
-    SingleIntegerMetric& PixelChecksum()
+    SingleMetric<int16_t>& PixelChecksum()
     { return pixelChecksum_; }
 
     /// Returns baseline stat accumulator
@@ -185,10 +181,10 @@ public:
     { return autocorrAccum_; }
 
 private:
-    SingleUnsignedIntegerMetric startFrame_;
-    SingleUnsignedIntegerMetric numFrames_;
-    SingleIntegerMetric pixelChecksum_;
-    SingleFloatMetric pulseDetectionScore_;
+    SingleMetric<uint32_t> startFrame_;
+    SingleMetric<uint32_t> numFrames_;
+    SingleMetric<int16_t> pixelChecksum_;
+    SingleMetric<float> pulseDetectionScore_;
 
     // We're not hanging on to the entire BaselineStatAccumulator because it
     // doesn't have a Reset or other niceties, and we don't need its extra
@@ -197,7 +193,7 @@ private:
     AutocorrAccumulator<LaneArray<float>> autocorrAccum_;
 
     // None of these are used yet, perhaps some will never be used:
-    //SingleFloatMetric confidenceScore_;
+    //SingleMetric<float> confidenceScore_;
     //SingleBoolMetric fullEstimationAttempted_;
     //SingleBoolMetric modelUpdated_;
 };

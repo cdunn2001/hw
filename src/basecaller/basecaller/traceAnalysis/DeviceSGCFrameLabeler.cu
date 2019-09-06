@@ -69,16 +69,16 @@ DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId)
 
 DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;
 
-LabelsBatch
+std::pair<LabelsBatch, FrameLabelerMetrics>
 DeviceSGCFrameLabeler::Process(TraceBatch<Data::BaselinedTraceElement> trace,
                                const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
-    labeler_->ProcessBatch(models, ret.TraceData(), ret.LatentTrace(), ret,
-                           ret.PdMetrics());
+    labeler_->ProcessBatch(
+            models, ret.first.TraceData(), ret.first.LatentTrace(), ret.first, ret.second);
 
     // Update the trace data so downstream filters can't see the held back portion
-    ret.TraceData().SetFrameLimit(ret.NumFrames() - ViterbiStitchLookback);
+    ret.first.TraceData().SetFrameLimit(ret.first.NumFrames() - ViterbiStitchLookback);
 
     return ret;
 }

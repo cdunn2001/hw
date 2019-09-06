@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <dataTypes/BasicTypes.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
@@ -48,7 +49,7 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
-              Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+              Data::BaselinerMetrics>
     operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
@@ -59,7 +60,7 @@ public:
 
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
-                      Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>>
+                      Data::BaselinerMetrics>
     Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
 
 private:    // Data

@@ -27,7 +27,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class BasecallingMetricsAccumulator
+//  Defines class BasecallingMetricsAccumulator, which is Host-only and should
+//  be named as such if a Device version is introduced. TODO
 
 #include <numeric>
 #include <pacbio/logging/Logger.h>
@@ -37,13 +38,13 @@
 #include <common/LaneArray.h>
 
 #include "BaselinerStatAccumState.h"
-#include "BatchMetadata.h"
 #include "BatchData.h"
+#include "BatchMetadata.h"
+#include "BatchMetrics.h"
 #include "BatchVectors.h"
 #include "HQRFPhysicalStates.h"
 #include "LaneDetectionModel.h"
 #include "Pulse.h"
-#include "PulseDetectionMetrics.h"
 #include "TraceAnalysisMetrics.h"
 #include "BasecallingMetrics.h"
 
@@ -51,23 +52,13 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-template <unsigned int LaneWidth>
 class BasecallingMetricsAccumulator
 {
 public: // types
-    using InputPulses = LaneVectorView<const Pulse>;
-    using InputBaselineStats = Data::BaselinerStatAccumState;
-    using InputModelsT = LaneModelParameters<Cuda::PBHalf, LaneWidth>;
-
-    using UnsignedInt = uint16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = LaneArray<UnsignedInt>;
-    using SingleFloatMetric = LaneArray<Flt>;
-    using AnalogUnsignedIntegerMetric = std::array<LaneArray<UnsignedInt>, numAnalogs>;
-    using AnalogFloatMetric = std::array<LaneArray<Flt>, numAnalogs>;
-
-    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
+    template <typename T>
+    using SingleMetric = LaneArray<T>;
+    template <typename T>
+    using AnalogMetric = std::array<LaneArray<T>, numAnalogs>;
 
 public:
     BasecallingMetricsAccumulator()
@@ -82,17 +73,18 @@ public:
     };
 
 public:
-    void Count(const InputPulses& pulses, uint32_t numFrames);
+    void Count(const LaneVectorView<const Pulse>& pulses, uint32_t numFrames);
 
-    void AddPulseDetectionMetrics(const PulseDetectionMetrics& pdMetrics);
+    void AddBatchMetrics(
+            const BaselinerStatAccumState& baselinerStats,
+            const Cuda::Utility::CudaArray<float, laneSize>& viterbiScore,
+            const StatAccumState& pdBaselineStats);
 
-    void AddBaselinerStats(const InputBaselineStats& baselinerStats);
-
-    void AddModels(const InputModelsT& models);
+    void AddModels(const LaneModelParameters<Cuda::PBHalf, laneSize>& models);
 
     void FinalizeMetrics(bool realtimeActivityLabels, float frameRate);
 
-    void PopulateBasecallingMetrics(BasecallingMetricsT& metrics);
+    void PopulateBasecallingMetrics(BasecallingMetrics& metrics);
 
     void Reset();
 
@@ -101,37 +93,37 @@ private:
 
 public: // complex accessors
 
-    AnalogFloatMetric PkmidMean() const;
+    AnalogMetric<float> PkmidMean() const;
 
-    SingleUnsignedIntegerMetric NumBases() const;
+    SingleMetric<uint16_t> NumBases() const;
 
-    SingleUnsignedIntegerMetric NumPulses() const;
+    SingleMetric<uint16_t> NumPulses() const;
 
-    SingleFloatMetric PulseWidth() const;
+    SingleMetric<float> PulseWidth() const;
 
 private: // metrics
-    SingleUnsignedIntegerMetric numPulseFrames_;
-    SingleUnsignedIntegerMetric numBaseFrames_;
-    SingleUnsignedIntegerMetric numSandwiches_;
-    SingleUnsignedIntegerMetric numHalfSandwiches_;
-    SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    LaneArray<HQRFPhysicalStates> activityLabel_;
-    AnalogFloatMetric pkMidSignal_;
-    AnalogFloatMetric bpZvar_;
-    AnalogFloatMetric pkZvar_;
-    AnalogFloatMetric pkMax_;
-    AnalogFloatMetric modelVariance_;
-    AnalogFloatMetric modelMean_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog_;
+    SingleMetric<uint16_t> numPulseFrames_;
+    SingleMetric<uint16_t> numBaseFrames_;
+    SingleMetric<uint16_t> numSandwiches_;
+    SingleMetric<uint16_t> numHalfSandwiches_;
+    SingleMetric<uint16_t> numPulseLabelStutters_;
+    SingleMetric<HQRFPhysicalStates> activityLabel_;
+    AnalogMetric<float> pkMidSignal_;
+    AnalogMetric<float> bpZvar_;
+    AnalogMetric<float> pkZvar_;
+    AnalogMetric<float> pkMax_;
+    AnalogMetric<float> modelVariance_;
+    AnalogMetric<float> modelMean_;
+    AnalogMetric<uint16_t> numPkMidFrames_;
+    AnalogMetric<uint16_t> numPkMidBasesByAnalog_;
+    AnalogMetric<uint16_t> numBasesByAnalog_;
+    AnalogMetric<uint16_t> numPulsesByAnalog_;
 
-    TraceAnalysisMetrics<LaneWidth> traceMetrics_;
+    TraceAnalysisMetrics traceMetrics_;
 
 private: // state trackers
-    std::array<Pulse, LaneWidth> prevBasecallCache_;
-    std::array<Pulse, LaneWidth> prevprevBasecallCache_;
+    std::array<Pulse, laneSize> prevBasecallCache_;
+    std::array<Pulse, laneSize> prevprevBasecallCache_;
 
 };
 

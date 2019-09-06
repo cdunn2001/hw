@@ -51,7 +51,20 @@ void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
     {
         const auto& laneCalls = pulses.LaneView(l);
         metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
-        metrics_[l].AddPulseDetectionMetrics(pulseBatch.PdMetrics().GetHostView()[l]);
+    }
+}
+
+void HostHFMetricsFilter::AddMetrics(
+        const Data::BaselinerMetrics& baselinerMetrics,
+        const Data::FrameLabelerMetrics& frameLabelerMetrics,
+        const Data::PulseDetectorMetrics& pdMetrics)
+{
+    for (size_t l = 0; l < lanesPerBatch_; l++)
+    {
+        metrics_[l].AddBatchMetrics(
+                baselinerMetrics.baselinerStats.GetHostView()[l],
+                frameLabelerMetrics.viterbiScore.GetHostView()[l],
+                pdMetrics.baselineStats.GetHostView()[l]);
     }
 }
 
@@ -64,20 +77,13 @@ void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
     }
 }
 
-void HostHFMetricsFilter::AddBaselinerStats(const BaselinerStatsBatchT& baselineStats)
-{
-    for (size_t l = 0; l < lanesPerBatch_; l++)
-    {
-        const auto& laneStats = baselineStats.GetHostView()[l];
-        metrics_[l].AddBaselinerStats(laneStats);
-    }
-}
-
 std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
 HostHFMetricsFilter::Process(
         const PulseBatchT& pulseBatch,
-        const BaselinerStatsBatchT& baselinerStats,
-        const ModelsBatchT& models)
+        const Data::BaselinerMetrics& baselinerMetrics,
+        const ModelsBatchT& models,
+        const Data::FrameLabelerMetrics& frameLabelerMetrics,
+        const Data::PulseDetectorMetrics& pdMetrics)
 {
     if (framesSeen_ == 0)
     {
@@ -86,9 +92,9 @@ HostHFMetricsFilter::Process(
             metrics_[l].Reset();
         }
     }
-    AddBaselinerStats(baselinerStats);
     AddPulses(pulseBatch);
     AddModels(models);
+    AddMetrics(baselinerMetrics, frameLabelerMetrics, pdMetrics);
     framesSeen_ += pulseBatch.Dims().framesPerBatch;
 
     if (framesSeen_ >= framesPerHFMetricBlock_)

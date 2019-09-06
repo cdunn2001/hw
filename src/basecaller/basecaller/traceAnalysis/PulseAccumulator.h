@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/PulseBatch.h>
@@ -58,7 +59,8 @@ public:
 public:
     /// \returns LabelsBatch with estimated labels for each frame, along with the associated
     ///          baseline subtracted trace
-    Data::PulseBatch operator()(Data::LabelsBatch labels)
+    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    operator()(Data::LabelsBatch labels)
     {
         // TODO
         assert(labels.GetMeta().PoolId() == poolId_);
@@ -67,11 +69,11 @@ public:
 
     auto EmptyPulseBatch(const Data::BatchMetadata& metadata)
     {
-        auto ret = batchFactory_->NewEmptyBatch(metadata);
+        auto ret = batchFactory_->NewBatch(metadata);
 
-        for (size_t laneIdx = 0; laneIdx < ret.Dims().lanesPerBatch; ++laneIdx)
+        for (size_t laneIdx = 0; laneIdx < ret.first.Dims().lanesPerBatch; ++laneIdx)
         {
-            auto lanePulses = ret.Pulses().LaneView(laneIdx);
+            auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
             lanePulses.Reset();
         }
 
@@ -82,7 +84,8 @@ private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::PulseBatch Process(Data::LabelsBatch trace); // = 0;
+    virtual std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    Process(Data::LabelsBatch trace); // = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

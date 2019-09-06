@@ -63,8 +63,7 @@ LaneArray<float> evaluatePolynomial(const std::array<float, size>& coeff, LaneAr
 }
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
+void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
 {
     // Calculated in the accessor, so caching here:
     const auto& stdDev = traceMetrics_.FrameBaselineSigmaDWS();
@@ -111,7 +110,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
     const auto& pkbases = numBasesByAnalog_;
 
     // make a copy of modelMean_, probably won't work this way:
-    AnalogFloatMetric relamps(modelMean_);
+    AnalogMetric<float> relamps(modelMean_);
 
     LaneArray<float> maxamp = relamps[0];
     for (size_t i = 1; i < numAnalogs; ++i)
@@ -163,10 +162,10 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
     {
         // Can we avoid this Blend?
         features[ActivityLabeler::BPZVARNORM] += Blend(isnan(bpZvar_[i]), zeros, bpZvar_[i]);
-        lowbp = Blend(lowAmpIndex == LaneArray<unsigned int>(i) & !isnan(bpZvar_[i]), bpZvar_[i], lowbp);
+        lowbp = Blend((lowAmpIndex == LaneArray<unsigned int>(i)) & !isnan(bpZvar_[i]), bpZvar_[i], lowbp);
 
         features[ActivityLabeler::PKZVARNORM] += Blend(isnan(pkZvar_[i]), zeros, pkZvar_[i]);
-        lowpk = Blend(lowAmpIndex == LaneArray<unsigned int>(i) & !isnan(pkZvar_[i]), pkZvar_[i], lowpk);
+        lowpk = Blend((lowAmpIndex == LaneArray<unsigned int>(i)) & !isnan(pkZvar_[i]), pkZvar_[i], lowpk);
     }
     features[ActivityLabeler::BPZVARNORM] -=  lowbp;
     features[ActivityLabeler::BPZVARNORM] /= LaneArray<float>(3.0f);
@@ -199,9 +198,8 @@ void BasecallingMetricsAccumulator<LaneWidth>::LabelBlock(float frameRate)
     }
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
-        BasecallingMetricsT& metrics)
+void BasecallingMetricsAccumulator::PopulateBasecallingMetrics(
+        BasecallingMetrics& metrics)
 {
     // Gather up the results of some non-trivial accessors, tweak those results
     // as necessary (which couldn't be tweaked in FinalizeMetrics() without
@@ -209,11 +207,10 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
     //
     const auto& numPulses = NumPulses();
     const auto& numBases = NumBases();
-    const auto& stopFrame = traceMetrics_.StopFrame();
     auto autocorr = traceMetrics_.Autocorrelation();
     autocorr = Blend(isnan(autocorr), LaneArray<float>(0), autocorr);
 
-    for (size_t z = 0; z < LaneWidth; ++z)
+    for (size_t z = 0; z < laneSize; ++z)
     {
         metrics.numPulseFrames[z] = numPulseFrames_[z];
         metrics.numBaseFrames[z] = numBaseFrames_[z];
@@ -224,7 +221,6 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
         metrics.numBases[z] = numBases[z];
         metrics.activityLabel[z] = activityLabel_[z];
         metrics.startFrame[z] = traceMetrics_.StartFrame()[z];
-        metrics.stopFrame[z] = stopFrame[z];
         metrics.numFrames[z] = traceMetrics_.NumFrames()[z];
         metrics.autocorrelation[z] = autocorr[z];
         metrics.pulseDetectionScore[z] = traceMetrics_.PulseDetectionScore()[z];
@@ -232,13 +228,13 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
     }
     for (size_t a = 0; a < numAnalogs; ++a)
     {
-        for (size_t z = 0; z < LaneWidth; ++z)
+        for (size_t z = 0; z < laneSize; ++z)
         {
             metrics.pkMidSignal[a][z] = pkMidSignal_[a][z];
             metrics.bpZvar[a][z] = bpZvar_[a][z];
             metrics.pkZvar[a][z] = pkZvar_[a][z];
             metrics.pkMax[a][z] = pkMax_[a][z];
-            metrics.pkMidNumFrames[a][z] = pkMidNumFrames_[a][z];
+            metrics.numPkMidFrames[a][z] = numPkMidFrames_[a][z];
             metrics.numPkMidBasesByAnalog[a][z] = numPkMidBasesByAnalog_[a][z];
             metrics.numBasesByAnalog[a][z] = numBasesByAnalog_[a][z];
             metrics.numPulsesByAnalog[a][z] = numPulsesByAnalog_[a][z];
@@ -246,8 +242,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::PopulateBasecallingMetrics(
     }
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::Reset()
+void BasecallingMetricsAccumulator::Reset()
 {
     numPulseFrames_ = 0;
     numBaseFrames_ = 0;
@@ -262,7 +257,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::Reset()
         bpZvar_[a] = 0;
         pkZvar_[a] = 0;
         pkMax_[a] = 0;
-        pkMidNumFrames_[a] = 0;
+        numPkMidFrames_[a] = 0;
         numPkMidBasesByAnalog_[a] = 0;
         numBasesByAnalog_[a] = 0;
         numPulsesByAnalog_[a] = 0;
@@ -270,11 +265,9 @@ void BasecallingMetricsAccumulator<LaneWidth>::Reset()
     traceMetrics_.Reset();
 }
 
-template <unsigned int LaneWidth>
-typename BasecallingMetricsAccumulator<LaneWidth>::SingleUnsignedIntegerMetric
-BasecallingMetricsAccumulator<LaneWidth>::NumBases() const
+auto BasecallingMetricsAccumulator::NumBases() const -> SingleMetric<uint16_t>
 {
-    SingleUnsignedIntegerMetric ret(0);
+    SingleMetric<uint16_t> ret(0);
     for (size_t a = 0; a < numAnalogs; ++a)
     {
         ret += numBasesByAnalog_[a];
@@ -282,11 +275,9 @@ BasecallingMetricsAccumulator<LaneWidth>::NumBases() const
     return ret;
 }
 
-template <unsigned int LaneWidth>
-typename BasecallingMetricsAccumulator<LaneWidth>::SingleUnsignedIntegerMetric
-BasecallingMetricsAccumulator<LaneWidth>::NumPulses() const
+auto BasecallingMetricsAccumulator::NumPulses() const -> SingleMetric<uint16_t>
 {
-    SingleUnsignedIntegerMetric ret(0);
+    SingleMetric<uint16_t> ret(0);
     for (size_t a = 0; a < numAnalogs; ++a)
     {
         ret += numPulsesByAnalog_[a];
@@ -294,44 +285,30 @@ BasecallingMetricsAccumulator<LaneWidth>::NumPulses() const
     return ret;
 }
 
-template <unsigned int LaneWidth>
-typename BasecallingMetricsAccumulator<LaneWidth>::SingleFloatMetric
-BasecallingMetricsAccumulator<LaneWidth>::PulseWidth() const
+auto BasecallingMetricsAccumulator::PulseWidth() const -> SingleMetric<float>
 {
-    SingleFloatMetric ret(NumPulses() / numPulseFrames_);
+    SingleMetric<float> ret(NumPulses() / numPulseFrames_);
     return Blend(isnan(ret), LaneArray<float>(0), ret);
 }
 
 
-template <unsigned int LaneWidth>
-typename BasecallingMetricsAccumulator<LaneWidth>::AnalogFloatMetric
-BasecallingMetricsAccumulator<LaneWidth>::PkmidMean() const
+auto BasecallingMetricsAccumulator::PkmidMean() const -> AnalogMetric<float>
 {
-    AnalogFloatMetric ret;
+    AnalogMetric<float> ret;
     for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
-        ret[ai] = pkMidSignal_[ai] / pkMidNumFrames_[ai].AsFloat();
+        ret[ai] = pkMidSignal_[ai] / numPkMidFrames_[ai].AsFloat();
     }
     return ret;
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::AddBaselinerStats(
-        const InputBaselineStats& baselinerStats)
-{
-    BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselinerStats);
-    traceMetrics_.BaselinerStatAccum().Merge(reconstitutedStats.BaselineFramesStats());
-    traceMetrics_.AutocorrAccum().Merge(reconstitutedStats.BaselineSubtractedStats());
-}
-
 // This only keeps the most recent model, which should be fine
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::AddModels(
-        const InputModelsT& models)
+void BasecallingMetricsAccumulator::AddModels(
+        const LaneModelParameters<Cuda::PBHalf, laneSize>& models)
 {
     for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
-        for (size_t zi = 0; zi < LaneWidth; ++zi)
+        for (size_t zi = 0; zi < laneSize; ++zi)
         {
             modelVariance_[ai][zi] = models.AnalogMode(ai).vars[zi];
             modelMean_[ai][zi] = models.AnalogMode(ai).means[zi];
@@ -339,23 +316,28 @@ void BasecallingMetricsAccumulator<LaneWidth>::AddModels(
     }
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::AddPulseDetectionMetrics(
-        const PulseDetectionMetrics& pdMetrics)
+void BasecallingMetricsAccumulator::AddBatchMetrics(
+        const BaselinerStatAccumState& baselinerStats,
+        const Cuda::Utility::CudaArray<float, laneSize>& viterbiScore,
+        const StatAccumState& pdBaselineStats)
 {
-    traceMetrics_.PulseDetectionScore() += LaneArray<float>(pdMetrics.viterbiScore);
+    BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselinerStats);
+    traceMetrics_.BaselinerStatAccum().Merge(reconstitutedStats.BaselineFramesStats());
+    traceMetrics_.AutocorrAccum().Merge(reconstitutedStats.BaselineSubtractedStats());
+
+    traceMetrics_.PulseDetectionScore() += LaneArray<float>(viterbiScore);
 
     // TODO: collect PulseAccumulator BaselineStats, replace
-    // 'BasecallingMetricsAccumulator::AddBaselinerStats'
+    // BaselinerStatAccum().Merge(... above
+    (void)pdBaselineStats;
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::Count(
-        const InputPulses& pulses,
+void BasecallingMetricsAccumulator::Count(
+        const LaneVectorView<const Pulse>& pulses,
         uint32_t numFrames)
 {
     traceMetrics_.NumFrames() += numFrames;
-    for (size_t zi = 0; zi < LaneWidth; ++zi)
+    for (size_t zi = 0; zi < laneSize; ++zi)
     {
         const Pulse* prevPulse = &prevBasecallCache_[zi];
         const Pulse* prevprevPulse = &prevprevBasecallCache_[zi];
@@ -410,7 +392,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::Count(
                     // Inter-pulse moments (in terms of frames)
                     const uint16_t midWidth = static_cast<uint16_t>(pulse->Width() - 2);
                     // count (M0)
-                    pkMidNumFrames_[pulseLabel][zi] += midWidth;
+                    numPkMidFrames_[pulseLabel][zi] += midWidth;
                     // sum of signals (M1)
                     pkMidSignal_[pulseLabel][zi] += pulse->MidSignal()
                                                     * midWidth;
@@ -433,31 +415,29 @@ void BasecallingMetricsAccumulator<LaneWidth>::Count(
     }
 }
 
-template <unsigned int LaneWidth>
-void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
+void BasecallingMetricsAccumulator::FinalizeMetrics(
         bool realtimeActivityLabels, float frameRate)
 {
-    using Flt = typename BasecallingMetrics<LaneWidth>::Flt;
-    LaneArray<float> nans(std::numeric_limits<Flt>::quiet_NaN());
+    LaneArray<float> nans(std::numeric_limits<float>::quiet_NaN());
 
     for (size_t pulseLabel = 0; pulseLabel < numAnalogs; pulseLabel++)
     {
         if (all(numPkMidBasesByAnalog_[pulseLabel] == 0))
         {
             // No bases called on channel.
-            pkMidSignal_[pulseLabel] = std::numeric_limits<Flt>::quiet_NaN();
-            bpZvar_[pulseLabel] = std::numeric_limits<Flt>::quiet_NaN();
-            pkZvar_[pulseLabel] = std::numeric_limits<Flt>::quiet_NaN();
+            pkMidSignal_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            bpZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            pkZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
         }
         else if (all(numPkMidBasesByAnalog_[pulseLabel] < 2)
-                || all(pkMidNumFrames_[pulseLabel] < 2))
+                || all(numPkMidFrames_[pulseLabel] < 2))
         {
-            bpZvar_[pulseLabel] = std::numeric_limits<Flt>::quiet_NaN();
-            pkZvar_[pulseLabel] = std::numeric_limits<Flt>::quiet_NaN();
+            bpZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            pkZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
         }
         else
         {
-            const auto& nf = pkMidNumFrames_[pulseLabel].AsFloat();
+            const auto& nf = numPkMidFrames_[pulseLabel].AsFloat();
             const auto& nb = numPkMidBasesByAnalog_[pulseLabel].AsFloat();
             // Convert moments to interpulse variance
             bpZvar_[pulseLabel] = (bpZvar_[pulseLabel]
@@ -505,7 +485,7 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
             pkMidSignal_[pulseLabel] = Blend(mask, nans, pkMidSignal_[pulseLabel]);
             // Not enough bases called on channel
             mask |= (numPkMidBasesByAnalog_[pulseLabel] < 2);
-            mask |= (pkMidNumFrames_[pulseLabel] < 2);
+            mask |= (numPkMidFrames_[pulseLabel] < 2);
             bpZvar_[pulseLabel] = Blend(mask, nans, bpZvar_[pulseLabel]);
             pkZvar_[pulseLabel] = Blend(mask, nans, pkZvar_[pulseLabel]);
         }
@@ -520,7 +500,5 @@ void BasecallingMetricsAccumulator<LaneWidth>::FinalizeMetrics(
         LabelBlock(frameRate);
     }
 }
-
-template class BasecallingMetricsAccumulator<laneSize>;
 
 }}}     // namespace PacBio::Mongo::Data

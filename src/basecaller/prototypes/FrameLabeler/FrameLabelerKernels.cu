@@ -138,7 +138,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
-                                   Memory::DeviceView<PulseDetectionMetrics> pdMetrics)
+                                   Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
 {
     using namespace Subframe;
 
@@ -235,8 +235,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         anchorState = Blend(cond, anchorState, PBShort2(i));
     }
     // TODO: This doesn't really match the Sequel definition exactly.
-    pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x] = maxProb.FloatX();
-    pdMetrics[blockIdx.x].viterbiScore[2 * threadIdx.x + 1] = maxProb.FloatY();
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x] = maxProb.FloatX();
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x + 1] = maxProb.FloatY();
 
     // Traceback
     auto traceState = anchorState;
@@ -265,7 +265,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
                                 Mongo::Data::BatchData<int16_t>& output,
-                                Memory::UnifiedCudaArray<Mongo::Data::PulseDetectionMetrics>& metricsOutput)
+                                Mongo::Data::FrameLabelerMetrics& metricsOutput)
 {
     auto labels = BorrowScratch();
 
@@ -278,7 +278,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
              prevLat_,
              latOut,
              output,
-             metricsOutput);
+             metricsOutput.viterbiScore);
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);

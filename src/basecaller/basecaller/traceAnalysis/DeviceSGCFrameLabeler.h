@@ -60,8 +60,9 @@ public:
     ~DeviceSGCFrameLabeler() override;
 
 private:    // Customizable implementation
-    Data::LabelsBatch Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
-                              const PoolModelParameters& models) override;
+    std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
+    Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
+            const PoolModelParameters& models) override;
 
     std::unique_ptr<Cuda::FrameLabeler> labeler_;
 };

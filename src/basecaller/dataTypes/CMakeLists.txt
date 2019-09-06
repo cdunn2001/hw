@@ -16,6 +16,7 @@ set(CPP_LIST
     BatchData.cpp
     BatchMetadata.h
     BatchMetadata.cpp
+    BatchMetrics.h
     BatchResult.h
     BatchResult.cpp
     BatchVectors.h
@@ -41,7 +42,6 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
-    PulseDetectionMetrics.h
     StaticDetModelConfig.h
     StaticDetModelConfig.cpp
     TraceAnalysisMetrics.h

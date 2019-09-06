@@ -27,22 +27,51 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class PulseDetectionMetrics, which carries the Viterbi score from
+//  Defines various small metrics containers for different stages of the
+//  pipelines, which ferry things like the Viterbi score from
 //  the frame labeler and the baseline stats from the Pulse Accumulator (not to
 //  be mistaken for the baseliner stats emitted by the Baseliner)
 
 #include <common/cuda/utility/CudaArray.h>
-
 #include <common/StatAccumState.h>
+#include "BaselinerStatAccumState.h"
+#include "BatchData.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-struct PulseDetectionMetrics
+struct BaselinerMetrics
 {
-    Cuda::Utility::CudaArray<float, laneSize> viterbiScore;
-    StatAccumState baselineStats;
+    BaselinerMetrics(const BatchDimensions& dims,
+                     Cuda::Memory::SyncDirection syncDir,
+                     const Cuda::Memory::AllocationMarker& marker)
+        : baselinerStats(dims.lanesPerBatch, syncDir, marker)
+    { };
+
+    Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> baselinerStats;
+};
+
+struct FrameLabelerMetrics
+{
+    FrameLabelerMetrics(const BatchDimensions& dims,
+                        Cuda::Memory::SyncDirection syncDir,
+                        const Cuda::Memory::AllocationMarker& marker)
+        : viterbiScore(dims.lanesPerBatch, syncDir, marker)
+    { };
+
+    Cuda::Memory::UnifiedCudaArray<Cuda::Utility::CudaArray<float, laneSize>> viterbiScore;
+};
+
+struct PulseDetectorMetrics
+{
+    PulseDetectorMetrics(const BatchDimensions& dims,
+                         Cuda::Memory::SyncDirection syncDir,
+                         const Cuda::Memory::AllocationMarker& marker)
+        : baselineStats(dims.lanesPerBatch, syncDir, marker)
+    { };
+
+    Cuda::Memory::UnifiedCudaArray<StatAccumState> baselineStats;
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -59,8 +59,7 @@ public:     // Types
     using BoolType = Simd::BoolConv<T>;
 
 public:     // Structors
-    /// Construct an instance with specified lag and offset.
-    /// \a lag must be greater than 0.
+    /// Construct an instance with specified offset.
     explicit AutocorrAccumulator(const T& offset = T(0));
 
     /// Copy constructor.
@@ -109,17 +108,14 @@ public:     // Const methods
     { return stats_.Variance(); }
 
     /// The autocorrelation coefficient of the accumulated samples at the
-    /// lag Lag().
-    /// NaN if Count() < Lag() + 1.
+    /// lag AutocorrAccumState::lag.
+    /// NaN if Count() < AutocorrAccumState::lag + 1.
     /// -1.0 <= Autocorrelation() <= 1.0.
     T Autocorrelation() const;
 
     /// The current offset.
     const T& Offset() const
     { return stats_.Offset(); }
-
-    unsigned int Lag() const
-    { return AutocorrAccumState::lag; }
 
     /// Returns a copy of *this with all moments scaled by \a s.
     AutocorrAccumulator operator*(float s) const;
@@ -181,9 +177,9 @@ private:    // Data
     // Replace with something based on something like boost::static_vector.
     AlignedCircularBuffer<T> lagBuf_;
 
-    T m1First_;     // First moment of the first Count() - Lag() samples.
-    T m1Last_;     // First moment of the last Count() - Lag() samples.
-    T m2_;      // Generalized second moment. Sum of x_i * x_i+Lag().
+    T m1First_;     // First moment of the first Count() - AutocorrAccumState::lag samples.
+    T m1Last_;     // First moment of the last Count() - AutocorrAccumState::lag samples.
+    T m2_;      // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
     bool canAddSample_;
 };
 

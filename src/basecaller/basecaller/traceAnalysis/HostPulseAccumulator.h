@@ -164,7 +164,8 @@ public:
     };
 
 private:
-    Data::PulseBatch Process(Data::LabelsBatch trace) override;
+    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    Process(Data::LabelsBatch trace) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
                          const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,

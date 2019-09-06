@@ -146,27 +146,31 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
 
     auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndStats = (*baseliner_)(std::move(tbatch));
-    auto baselinedTraces = std::move(baselinedTracesAndStats.first);
-    auto baselinerStats = std::move(baselinedTracesAndStats.second);
+    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
+    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
     auto frameProfile = profiler.CreateScopedProfiler(FilterStages::FrameLabeling);
-    (void) frameProfile;
-    auto labels = (*frameLabeler_)(std::move(baselinedTraces), models_);
+    (void)frameProfile;
+    auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces), models_);
+    auto labels = std::move(labelsAndMetrics.first);
+    auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
     auto pulseProfile = profiler.CreateScopedProfiler(FilterStages::PulseAccumulating);
     (void)pulseProfile;
-    auto pulses = (*pulseAccumulator_)(std::move(labels));
+    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+    auto pulses = std::move(pulsesAndMetrics.first);
+    auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
     auto download = profiler.CreateScopedProfiler(FilterStages::Download);
     (void)download;
     pulses.Pulses().LaneView(0);
 
     auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
-    (void) metricsProfile;
+    (void)metricsProfile;
 
     auto basecallingMetrics = (*hfMetrics_)(
-            pulses, baselinerStats, models_);
+            pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
@@ -181,9 +185,9 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
-    auto baselinedTracesAndStats = (*baseliner_)(std::move(tbatch));
-    auto baselinedTraces = std::move(baselinedTracesAndStats.first);
-    auto baselinerStats = std::move(baselinedTracesAndStats.second);
+    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
+    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
     if (!isModelInitialized_)
     {
@@ -193,7 +197,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         // This operation also accumulates baseliner statistics.
         assert(traceHistAccum_);
         traceHistAccum_->AddBatch(baselinedTraces,
-                                  baselinerStats);
+                                  baselinerMetrics.baselinerStats);
 
         // When sufficient trace data have been histogrammed,
         // estimate detection model.
@@ -210,31 +214,46 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }
 
-    auto pulses = [&baselinedTraces, this]() {
+    auto pulsesAndMetrics = [&baselinedTraces, this]() {
         // When detection model is available, ...
         if (isModelInitialized_)
         {
             // Classify frames.
             assert(frameLabeler_);
-            auto labels = (*frameLabeler_)(std::move(baselinedTraces),
-                                           models_);
+            auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces),
+                                                     models_);
+            auto labels = std::move(labelsAndMetrics.first);
+            auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
             // Generate pulses with metrics.
             assert(pulseAccumulator_);
-            auto pulses = (*pulseAccumulator_)(std::move(labels));
+            auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+            auto pulses = std::move(pulsesAndMetrics.first);
+            auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-            // TODO: Compute block-level metrics.
-
-            return pulses;
+            return std::make_tuple(std::move(pulses),
+                                   std::move(frameLabelerMetrics),
+                                   std::move(pulseDetectorMetrics));
         }
         else
         {
-            return pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata());
+            auto frameLabelerMetrics = frameLabeler_->EmptyMetrics(baselinedTraces.StorageDims());
+
+            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata());
+            auto pulses = std::move(pulsesAndMetrics.first);
+            auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
+            return std::make_tuple(std::move(pulses),
+                                   std::move(frameLabelerMetrics),
+                                   std::move(pulseDetectorMetrics));
         }
     }();
+    auto pulses = std::move(std::get<0>(pulsesAndMetrics));
+    auto frameLabelerMetrics = std::move(std::get<1>(pulsesAndMetrics));
+    auto pulseDetectorMetrics = std::move(std::get<2>(pulsesAndMetrics));
 
     auto basecallingMetrics = (*hfMetrics_)(
-            pulses, baselinerStats, models_);
+            pulses, baselinerMetrics, models_, frameLabelerMetrics,
+            pulseDetectorMetrics);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

@@ -47,9 +47,7 @@ class HFMetricsFilter
 public:     // Types
     using PulseBatchT = Data::PulseBatch;
     using BaselinerStatsT = Data::BaselinerStatAccumState;
-    using BaselinerStatsBatchT = Cuda::Memory::UnifiedCudaArray<BaselinerStatsT>;
-    using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
+    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>;
     using ModelsT = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
     using ModelsBatchT = Cuda::Memory::UnifiedCudaArray<ModelsT>;
 
@@ -65,7 +63,7 @@ public: // Static functions
     static void DestroyAllocationPools();
 
 protected: // Static members
-    static std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> metricsFactory_;
+    static std::unique_ptr<Data::BasecallingMetricsFactory> metricsFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
@@ -89,18 +87,22 @@ public: // Structors
 public: // Filter API
     std::unique_ptr<BasecallingMetricsBatchT> operator()(
             const PulseBatchT& basecallBatch,
-            const BaselinerStatsBatchT& baselinerStats,
-            const ModelsBatchT& models)
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics)
     {
         assert(basecallBatch.GetMeta().PoolId() == poolId_);
-        return Process(basecallBatch, baselinerStats, models);
+        return Process(basecallBatch, baselinerStats, models, flMetrics, pdMetrics);
     }
 
 private:
     virtual std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& pulses,
-            const BaselinerStatsBatchT& baselinerStats,
-            const ModelsBatchT& models) = 0;
+            const PulseBatchT& basecallBatch,
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics) = 0;
 
 protected: // State
     uint32_t poolId_;
@@ -123,9 +125,11 @@ public:
 
 private:
     std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& pulseBatch,
-            const BaselinerStatsBatchT& baselinerStats,
-            const ModelsBatchT& models) override
+            const PulseBatchT& basecallBatch,
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 
 };

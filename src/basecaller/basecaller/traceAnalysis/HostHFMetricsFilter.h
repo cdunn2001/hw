@@ -32,6 +32,7 @@
 
 #include "HFMetricsFilter.h"
 #include <dataTypes/BasecallingMetricsAccumulator.h>
+#include <dataTypes/BatchMetrics.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -39,9 +40,6 @@ namespace Basecaller {
 
 class HostHFMetricsFilter : public HFMetricsFilter
 {
-public:
-    using BasecallingMetricsAccumulatorT = Data::BasecallingMetricsAccumulator<laneSize>;
-    using BasecallingMetricsAccumulatorBatchT = std::array<BasecallingMetricsAccumulatorT, laneSize>;
 public:
     HostHFMetricsFilter(uint32_t poolId)
         : HFMetricsFilter(poolId)
@@ -55,20 +53,24 @@ public:
 private:
     std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& pulseBatch,
-            const BaselinerStatsBatchT& baselineStats,
-            const ModelsBatchT& models) override;
+            const Data::BaselinerMetrics& baselinerMetrics,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics) override;
 
 private: // Block management
     void FinalizeBlock();
 
     void AddPulses(const PulseBatchT& batch);
 
-    void AddBaselinerStats(const BaselinerStatsBatchT& baselinerStats);
-
     void AddModels(const ModelsBatchT& models);
 
+    void AddMetrics(const Data::BaselinerMetrics& baselinerMetrics,
+                    const Data::FrameLabelerMetrics& frameLabelerMetrics,
+                    const Data::PulseDetectorMetrics& pdMetrics);
+
 private: // members
-    BasecallingMetricsAccumulatorBatchT metrics_;
+    std::array<Data::BasecallingMetricsAccumulator, laneSize> metrics_;
 };
 
 }}} // PacBio::Mongo::Basecaller

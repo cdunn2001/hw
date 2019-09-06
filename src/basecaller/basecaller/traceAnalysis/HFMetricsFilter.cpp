@@ -41,7 +41,7 @@ bool HFMetricsFilter::realtimeActivityLabels_ = 0;
 uint32_t HFMetricsFilter::framesPerChunk_;
 uint32_t HFMetricsFilter::lanesPerBatch_;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
-std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
+std::unique_ptr<Data::BasecallingMetricsFactory> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                 uint32_t framesPerHFMetricBlock,
@@ -87,7 +87,7 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
                                           : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(
             dims, syncDir);
 }
 
