@@ -74,6 +74,69 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
     for (auto val : zmwData) val = PBShort2(0);
 }
 
+template <typename LL, typename LL2, typename Labels, size_t nextState, size_t firstIdx, typename Segment, typename...Segments>
+__device__ void AddRow(const LL& logLike, const PBHalf2& score, PBHalf2& maxVal, uint32_t& packedLabels,
+                       const half* rowData, LL2& logAccum, Labels& labels, int idx,
+                       SparseRow<nextState, firstIdx, Segment, Segments...>* /*dummy*/)
+{
+
+    maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
+    ushort2 maxIdx = make_ushort2(firstIdx,firstIdx);
+
+    uint32_t dataIndex = Segment::dataIndex;
+    static_assert(sizeof...(Segments) == 0, "");
+    #pragma unroll(numStates)
+    for (int prevState = Segment::firstCol; prevState < Segment::lastCol; ++prevState, dataIndex++)
+    {
+        auto val = score + PBHalf2(rowData[dataIndex]) + logLike[prevState];
+
+        auto cond = val >= maxVal;
+        maxVal = Blend(cond, val, maxVal);
+        if (cond.X()) maxIdx.x = prevState;
+        if (cond.Y()) maxIdx.y = prevState;
+    }
+    logAccum[nextState] = maxVal;
+    // Always slot new entries into the most significant bits, and
+    // before that always shift things to the right by a slot. This
+    // makes all bit operations happen with compile time arguments,
+    // which has proven faster than calculating on the fly what shifts
+    // are necessary to populate the correct slot for each iteration.
+    packedLabels  = packedLabels >> 8;
+    packedLabels |= (maxIdx.x << 24);
+    packedLabels |= (maxIdx.y << 28);
+    if ((nextState & 3) == 3)
+    {
+        labels(idx, nextState / 4) = packedLabels;
+    }
+}
+
+template <typename T2, typename Labels, typename LogLike, typename Scorer, class... Rows>
+__device__ void Recursion(T2& sharedMaxVal, Labels& labels, LogLike& logLike, const Scorer& scorer, const SparseMatrix<Rows...>& trans, PBShort2 data, int idx)
+{
+    auto& maxVal = sharedMaxVal[threadIdx.x];
+    CudaArray<PBHalf2, numStates> logAccum;
+
+    const auto dat = PBHalf2(data);
+    uint32_t packedLabels = 0;
+    auto loop = {(
+        AddRow(logLike,
+               scorer.StateScores(dat, Rows::rowIdx),
+               maxVal,
+               packedLabels,
+               trans.RowData(Rows::rowIdx),
+               logAccum,
+               labels,
+               idx,
+               (Rows*){nullptr}),0
+    )...};
+
+    // Every time we handled a 4th state we wrote the result to
+    // labels, but the 13th state is the odd man out.  Need to
+    // manually shift things into the correct location and store it.
+    labels(idx, 3) = (packedLabels >> 24);
+    logLike = logAccum;
+}
+
 template <size_t blockThreads>
 __launch_bounds__(blockThreads, 32)
 __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
@@ -106,8 +169,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     // us less than the new increase in memory latency hurt us.
     //
     // This is not entirely unexpected as more resident blocks means they effectively
-    // each get less L1 space to use.  So I did a subsequent experiement adding these two
-    // extra shared variables, to see if we could decrease our occpancy a little more
+    // each get less L1 space to use.  So I did a subsequent experiement adding this one
+    // extra shared variable, to see if we could decrease our occpancy a little more
     // and get even better L1 usage.
     //
     // The result was a 4% increase in throughput, which for a single change is good
@@ -121,13 +184,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     // I'm not sure what all affects the delta between theoretical and achieved.  If
     // other changes affect that balance, then this might become a less optimal choice,
     // and these two should be moved back to being per-thread automatic variables in
-    // the `Recursion` lambda.
-    //
-    // As another note, these variables are obviously of a specific type.  If a need
-    // arises to re-use this storage for multiple types, then it can in principle be
-    // declared as a char array, and carved up manually via `reinterpret_casts`
+    // the `Recursion` function
     __shared__ CudaArray<PBHalf2, blockThreads> sharedMaxVal;
-    __shared__ CudaArray<PBHalf2, blockThreads> sharedScore;
 
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
@@ -143,61 +201,13 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
     auto labels = batchViterbiData.BlockData();
 
-    auto Recursion = [&labels, &logLike](PBShort2 data, int idx)
-    {
-        auto& score = sharedScore[threadIdx.x];
-        auto& maxVal = sharedMaxVal[threadIdx.x];
-        CudaArray<PBHalf2, numStates> logAccum;
-
-        const auto dat = PBHalf2(data);
-        uint32_t packedLabels = 0;
-        for (int nextState = 0; nextState < numStates; ++nextState)
-        {
-            score = scorer.StateScores(dat, nextState);
-            maxVal = score + PBHalf2(trans.Entry(nextState, 0)) + logLike[0];
-            ushort2 maxIdx = make_ushort2(0,0);
-
-            #pragma unroll(numStates)
-            for (int prevState = 1; prevState < numStates; ++prevState)
-            {
-                auto transScore = trans.Entry(nextState, prevState);
-                if (__hisinf(transScore)) continue;
-
-                auto val = score + PBHalf2(transScore + logLike[prevState]);
-
-                auto cond = val >= maxVal;
-                maxVal = Blend(cond, val, maxVal);
-                if (cond.X()) maxIdx.x = prevState;
-                if (cond.Y()) maxIdx.y = prevState;
-            }
-            // Always slot new entries into the most significant bits, and
-            // before that always shift things to the right by a slot. This
-            // makes all bit operations happen with compile time arguments,
-            // which has proven faster than calculating on the fly what shifts
-            // are necessary to populate the correct slot for each iteration.
-            logAccum[nextState] = maxVal;
-            packedLabels  = packedLabels >> 8;
-            packedLabels |= (maxIdx.x << 24);
-            packedLabels |= (maxIdx.y << 28);
-            if ((nextState & 3) == 3)
-            {
-                labels(idx, nextState / 4) = packedLabels;
-            }
-        }
-        // Every time we handled a 4th state we wrote the result to
-        // labels, but the 13th state is the odd man out.  Need to
-        // manually shift things into the correct location and store it.
-        labels(idx, 3) = (packedLabels >> 24);
-        logLike = logAccum;
-    };
-
     // Forward recursion on latent data
     {
         auto latZmw = prevLat.ZmwData(blockIdx.x, threadIdx.x);
         scorer.Setup(latent.GetModel());
         for (int frame = 0; frame < ViterbiStitchLookback; ++frame)
         {
-            Recursion(latZmw[frame], frame);
+            Recursion(sharedMaxVal, labels, logLike, scorer, trans, latZmw[frame], frame);
         }
     }
 
@@ -208,7 +218,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     const int anchor = numFrames - ViterbiStitchLookback;
     for (int frame = 0; frame < anchor; ++frame)
     {
-        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
     }
 
     // Need to store the log likelihoods at the actual anchor point, so
@@ -218,7 +228,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
     for (int frame = anchor; frame < numFrames; ++frame)
     {
-        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
     }
 
     // Compute the probabilities of the possible end states.  Propagate

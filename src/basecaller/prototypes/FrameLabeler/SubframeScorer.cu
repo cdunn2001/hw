@@ -38,6 +38,7 @@ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> me
     // We only have access to single precision math on the host, so populate data as float for now,
     // and at the end we'll convert it and populate our actual half precision data member;
     Utility::CudaArray<Utility::CudaArray<float, numStates>, numStates> dataFloat;
+    auto map = this->InitMatrix();
     for (int i = 0; i < numStates; ++i)
     {
         for (int j = 0; j < numStates; ++j)
@@ -212,7 +213,8 @@ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> me
     {
         for (int j = 0; j < numStates; ++j)
         {
-            data_[i][j] = std::log(dataFloat[i][j]);
+            if (dataFloat[i][j] > 0.0f)
+                Entry(i,j, map) = std::log(dataFloat[i][j]);
         }
     }
 }

@@ -39,6 +39,8 @@
 
 #include "AnalogMeta.h"
 
+#include "SparseMatrix.cuh"
+
 namespace PacBio {
 
 // I normally wouldn't do `using namespace` in a header, but these
@@ -59,23 +61,14 @@ namespace Subframe {
 using Mongo::Basecaller::SubframeLabelManager;
 static constexpr int numStates = SubframeLabelManager::numStates;
 
-struct __align__(128) TransitionMatrix
+struct __align__(128) TransitionMatrix : public Transition_t
 {
-    using T = half;
-    using Row = Utility::CudaArray<T, numStates>;
-
     // Default constructor for use in device __constant__ memory.  Will
     // remain uninitialized until the host coppies up the data
     TransitionMatrix() = default;
 
     // Ctor for host construction
     TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
-
-    __device__ T operator()(int row, int col) const { return data_[row][col]; }
-    __device__ T Entry(int row, int col)      const { return data_[row][col]; }
-
-private:
-    Utility::CudaArray<Row, numStates> data_;
 };
 
 // Gaussian fallback for edge frame scoring.  This is a near unchanged transcription
