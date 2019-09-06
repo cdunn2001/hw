@@ -43,6 +43,7 @@ class HostHFMetricsFilter : public HFMetricsFilter
 public:
     HostHFMetricsFilter(uint32_t poolId)
         : HFMetricsFilter(poolId)
+        , metrics_(lanesPerBatch_)
     { };
     HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
     HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
@@ -70,7 +71,7 @@ private: // Block management
                     const Data::PulseDetectorMetrics& pdMetrics);
 
 private: // members
-    std::array<Data::BasecallingMetricsAccumulator, laneSize> metrics_;
+    std::vector<Data::BasecallingMetricsAccumulator> metrics_;
 };
 
 }}} // PacBio::Mongo::Basecaller
