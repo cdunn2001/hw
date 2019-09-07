@@ -281,8 +281,6 @@ public:
         stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
-
-        stats.fullAutocorrState.lag = lag;
     }
 
 private:
