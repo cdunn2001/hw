@@ -187,13 +187,23 @@ public:
     {
         if (!activeOnHost_) CopyImpl(true, false);
 
-        // Force a check, to catch if the wrong thread tried to download the data
+        // Force a check, to catch if the wrong thread tried to download the data,
+        // or if we are requesting mutable access to data that might have a pending
+        // upload.
         checker_.Reset();
         return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
     HostView<const HostType> GetHostView() const
     {
         if (!activeOnHost_) CopyImpl(true, false);
+
+        // Force a check, to catch if the wrong thread tried to download the data.
+        // Since we provide immutable access, this is really only an error if we're
+        // not set to upload only, as if there is no potential future download, then
+        // we don't have to worry about any live kernels (or data uploads) in this
+        // stream
+        if (syncDir_ != SyncDirection::HostWriteDeviceRead)
+            checker_.Reset();
         return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
 

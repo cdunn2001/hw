@@ -35,7 +35,7 @@ namespace
 
     static bool validateData = true;
 
-    void ValidateData(TraceBatch <int16_t>& input, TraceBatch <int16_t>& output)
+    void ValidateData(const TraceBatch <int16_t>& input, const TraceBatch <int16_t>& output)
     {
         if (!validateData) return;
 
