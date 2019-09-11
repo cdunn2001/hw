@@ -24,7 +24,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "" FORCE)
 # 3346 Dynamic exception specifications are deprecated
 # 82 Storage class is not first
 # 869 Parameter was never referenced
-#set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr --default-stream per-thread -DPBLOG_DONT_USE_BOOST --compiler-options=\"${CMAKE_CXX_FLAGS}\" --compiler-options=\"-wd2547 -wd177 -wd1419\"" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr --default-stream per-thread --compiler-options=\"${CMAKE_CXX_FLAGS}\" --compiler-options=\"-wd2547 -wd177 -wd1419 -wd3346 -wd82 -wd869\"" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_RELEASE        "-O3 -DNDEBUG -lineinfo" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_DEBUG          "-O0 -g -G" CACHE STRING "" FORCE)
