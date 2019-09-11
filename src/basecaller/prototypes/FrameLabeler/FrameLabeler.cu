@@ -41,12 +41,11 @@ void run(const Data::DataManagerParams& dataParams,
 {
     Memory::EnablePerformanceMode();
 
-    static constexpr size_t gpuBlockThreads = 32;
-    static constexpr size_t laneWidth = 64;
+    static constexpr size_t gpuBlockThreads = laneSize/2;
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneWidth>>> models;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
 
-    LaneModelParameters<PBHalf, laneWidth> referenceModel;
+    LaneModelParameters<PBHalf, laneSize> referenceModel;
     referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
     {
@@ -55,7 +54,7 @@ void run(const Data::DataManagerParams& dataParams,
 
     BatchDimensions latBatchDims;
     latBatchDims.framesPerBatch = dataParams.blockLength;
-    latBatchDims.laneWidth = laneWidth;
+    latBatchDims.laneWidth = laneSize;
     latBatchDims.lanesPerBatch = dataParams.kernelLanes;
     std::vector<Data::BatchData<int16_t>> latTrace;
 

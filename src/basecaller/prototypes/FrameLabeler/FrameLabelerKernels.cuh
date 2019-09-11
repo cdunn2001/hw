@@ -140,7 +140,7 @@ ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, con
 
 class FrameLabeler
 {
-    static constexpr size_t BlockThreads = 32;
+    static constexpr size_t BlockThreads = laneSize/2;
 public:
 
     // Helpers to provide scratch space data.  Used to pool allocations so we
@@ -166,7 +166,7 @@ public:
     FrameLabeler& operator=(FrameLabeler&&) = default;
 
 
-    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
+    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, laneSize>>& models,
                       const Mongo::Data::BatchData<int16_t>& input,
                       Mongo::Data::BatchData<int16_t>& latOut,
                       Mongo::Data::BatchData<int16_t>& output,

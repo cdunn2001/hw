@@ -174,7 +174,7 @@ private:
 };
 
 template <typename LabelManager, size_t blockThreads>
-__launch_bounds__(32, 32)
+__launch_bounds__(blockThreads, 32)
 __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               GpuBatchData<const PBShort2> signal,
                               GpuBatchData<const PBShort2> latSignal,
@@ -249,14 +249,13 @@ public:
     std::pair<PulseBatch, PulseDetectorMetrics>
     Process(const PulseBatchFactory& factory, LabelsBatch labels)
     {
-        static constexpr size_t threadsPerBlock = 32;
-        assert(threadsPerBlock*2 == labels.LaneWidth());
+        assert(blockThreads*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
 
         const auto& launcher = PBLauncher(
-            ProcessLabels<LabelManager, threadsPerBlock>,
+            ProcessLabels<LabelManager, blockThreads>,
             labels.LanesPerBatch(),
-            threadsPerBlock);
+            blockThreads);
         launcher(labels,
                  labels.TraceData(),
                  labels.LatentTrace(),
@@ -283,6 +282,9 @@ private:
     DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
     static std::unique_ptr<DeviceOnlyObj<const LabelManager>> manager_;
 };
+
+template <typename LabelManager>
+constexpr size_t DevicePulseAccumulator<LabelManager>::AccumImpl::blockThreads;
 
 template <typename LabelManager>
 std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;

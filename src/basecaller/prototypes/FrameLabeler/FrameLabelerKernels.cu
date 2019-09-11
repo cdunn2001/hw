@@ -129,12 +129,13 @@ FrameLabeler::FrameLabeler()
 }
 
 
-__launch_bounds__(32, 32)
+template <size_t blockThreads>
+__launch_bounds__(blockThreads, 32)
 __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, 32>> models,
+                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                   Memory::DeviceView<LatentViterbi<32>> latentData,
-                                   ViterbiData<PBShort2, 32> labels,
+                                   Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
+                                   ViterbiData<PBShort2, blockThreads> labels,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
@@ -142,9 +143,8 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 {
     using namespace Subframe;
 
-    static constexpr unsigned laneWidth = 32;
-    assert(blockDim.x == laneWidth);
-    __shared__ BlockStateSubframeScorer<laneWidth> scorer;
+    assert(blockDim.x == blockThreads);
+    __shared__ BlockStateSubframeScorer<blockThreads> scorer;
 
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
@@ -273,7 +273,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     }
 }
 
-void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
+void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
                                 Mongo::Data::BatchData<int16_t>& output,
@@ -281,7 +281,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
 {
     auto labels = BorrowScratch();
 
-    const auto& launcher = PBLauncher(FrameLabelerKernel, lanesPerPool_, BlockThreads);
+    const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, lanesPerPool_, BlockThreads);
     launcher(*trans_,
              models,
              input,
