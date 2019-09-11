@@ -197,7 +197,18 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     scorer.Setup(models[blockIdx.x]);
     const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    for (int frame = 0; frame < numFrames; ++frame)
+    const int anchor = numFrames - ViterbiStitchLookback;
+    for (int frame = 0; frame < anchor; ++frame)
+    {
+        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+    }
+
+    // Need to store the log likelihoods at the actual anchor point, so
+    // once we choose a terminus state, we can retrieve it's proper
+    // log likelihood
+    CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
+
+    for (int frame = anchor; frame < numFrames; ++frame)
     {
         Recursion(inZmw[frame], frame + ViterbiStitchLookback);
     }
@@ -234,9 +245,10 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         maxProb = Blend(cond, maxProb, prob[i]);
         anchorState = Blend(cond, anchorState, PBShort2(i));
     }
-    // TODO: This doesn't really match the Sequel definition exactly.
-    viterbiScoreCache[blockIdx.x][2 * threadIdx.x] = maxProb.FloatX();
-    viterbiScoreCache[blockIdx.x][2 * threadIdx.x + 1] = maxProb.FloatY();
+
+    // Now that we have an anchor state, save the associated viterbi score
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x]     = anchorLogLike[anchorState.X()].FloatX();
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x + 1] = anchorLogLike[anchorState.Y()].FloatY();
 
     // Traceback
     auto traceState = anchorState;
