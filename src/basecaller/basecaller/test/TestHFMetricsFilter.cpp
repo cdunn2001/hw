@@ -141,7 +141,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
                 pulse.MidSignal(config.midSignal[label] + b)
                      .MaxSignal(config.maxSignal[label]);
                 pulse.MeanSignal(pulse.MidSignal());
-                float m2modifier = (b % 2 == 0) ? 1.1 : 1.01;
+                float m2modifier = (b % 2 == 0) ? 1.1f : 1.01f;
                 pulse.SignalM2(pulse.MidSignal()
                                * pulse.MidSignal()
                                * (pulse.Width() - 2) * m2modifier);
@@ -218,7 +218,7 @@ Data::PulseDetectorMetrics GeneratePulseDetectorMetrics(BaseSimConfig config)
 }
 
 Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>
-GenerateModels(BaseSimConfig config)
+GenerateModels(BaseSimConfig)
 {
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
                                                              laneSize>> models(

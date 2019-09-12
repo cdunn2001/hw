@@ -42,7 +42,7 @@ TEST(BaselineFilterTest, GlobalMemory)
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
@@ -121,7 +121,7 @@ TEST(BaselineFilterTest, SharedMemory)
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
     std::vector<DeviceOnlyArray<Filter>> filterRefData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
         filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
@@ -198,7 +198,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
         filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);

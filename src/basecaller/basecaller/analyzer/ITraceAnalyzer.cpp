@@ -40,7 +40,7 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig& startupConfig)
+bool ITraceAnalyzer::Initialize(const PacBio::Mongo::Data::BasecallerInitConfig&)
 {
     return false;
 }

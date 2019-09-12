@@ -121,25 +121,25 @@ int main(int argc, char* argv[])
     meta[2].ipdSSRatio = 0;
     meta[3].ipdSSRatio = 0;
 
-    meta[0].ipd = frameRate * .308;
-    meta[1].ipd = frameRate * .234;
-    meta[2].ipd = frameRate * .234;
-    meta[3].ipd = frameRate * .188;
+    meta[0].ipd = frameRate * .308f;
+    meta[1].ipd = frameRate * .234f;
+    meta[2].ipd = frameRate * .234f;
+    meta[3].ipd = frameRate * .188f;
 
-    meta[0].pw = frameRate * .232;
-    meta[1].pw = frameRate * .185;
-    meta[2].pw = frameRate * .181;
-    meta[3].pw = frameRate * .214;
+    meta[0].pw = frameRate * .232f;
+    meta[1].pw = frameRate * .185f;
+    meta[2].pw = frameRate * .181f;
+    meta[3].pw = frameRate * .214f;
 
-    meta[0].pwSSRatio = 3.2;
-    meta[1].pwSSRatio = 3.2;
-    meta[2].pwSSRatio = 3.2;
-    meta[3].pwSSRatio = 3.2;
+    meta[0].pwSSRatio = 3.2f;
+    meta[1].pwSSRatio = 3.2f;
+    meta[2].pwSSRatio = 3.2f;
+    meta[3].pwSSRatio = 3.2f;
 
-    meta[0].mean = 227.13;
-    meta[1].mean = 154.45;
-    meta[2].mean = 97.67;
-    meta[3].mean = 61.32;
+    meta[0].mean = 227.13f;
+    meta[1].mean = 154.45f;
+    meta[2].mean = 97.67f;
+    meta[3].mean = 61.32f;
 
     meta[0].var = 776;
     meta[1].var = 426;

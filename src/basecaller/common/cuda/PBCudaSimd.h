@@ -47,8 +47,8 @@ public:
     PBShort2() = default;
 
     CUDA_ENABLED PBShort2(short s) : PBShort2(s,s) {}
-    CUDA_ENABLED PBShort2(short s1, short s2) : data_{ make_short2(s1, s2) } {}
-    CUDA_ENABLED PBShort2(short2 s) : data_{s} {}
+    CUDA_ENABLED PBShort2(short s1, short s2) : data_( make_short2(s1, s2) ) {}
+    CUDA_ENABLED PBShort2(short2 s) : data_(s) {}
 
     // Set/get individual elements
     CUDA_ENABLED void X(short s) {data_.x = s; }

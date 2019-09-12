@@ -134,7 +134,7 @@ private:
         traceFile.AnalogRefSnr >> movieConfig_.refSnr;
 
         // Analog information
-        size_t numAnalogs;
+        size_t traceNumAnalogs;
         std::string baseMap;
         std::vector<float> relativeAmpl;
         std::vector<float> excessNoiseCV;
@@ -143,7 +143,10 @@ private:
         std::vector<float> ipd2SlowStepRatio;
         std::vector<float> pw2SlowStepRatio;
 
-        traceFile.NumAnalog >> numAnalogs;
+        traceFile.NumAnalog >> traceNumAnalogs;
+        if (traceNumAnalogs != numAnalogs)
+            throw PBException("Trace file does not have 4 analogs!");
+
         traceFile.BaseMap >> baseMap;
         traceFile.RelativeAmp >> relativeAmpl;
         traceFile.ExcessNoiseCV >> excessNoiseCV;
@@ -196,7 +199,7 @@ private:
 
         if (basecallerConfig_.algorithm.staticAnalysis == true)
         {
-            setBlMeanAndCovar(inputTargetFile_,
+            setBlMeanAndCovar(traceFileName,
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
                               "Requested static pipeline analysis but input trace file is not simulated!");
@@ -204,7 +207,7 @@ private:
         else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
                  basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
         {
-            setBlMeanAndCovar(inputTargetFile_,
+            setBlMeanAndCovar(traceFileName,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineVar,
                               "Requested fixed DME with baseline params but input trace file is not simulated!");

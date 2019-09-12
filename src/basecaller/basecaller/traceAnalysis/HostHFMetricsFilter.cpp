@@ -38,7 +38,7 @@ void HostHFMetricsFilter::FinalizeBlock()
 {
     for (size_t l = 0; l < lanesPerBatch_; ++l)
     {
-        metrics_[l].FinalizeMetrics(realtimeActivityLabels_, frameRate_);
+        metrics_[l].FinalizeMetrics(realtimeActivityLabels_, static_cast<float>(frameRate_));
     }
 }
 

@@ -8,8 +8,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                  const Data::MovieConfig &movConfig)
+void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                                  const Data::MovieConfig&)
 {
     const auto hostExecution = true;
     Baseliner::InitAllocationPools(hostExecution);
@@ -37,9 +37,9 @@ HostNoOpBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
             ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
             ElementTypeOut* dest = cameraTraceData.Data() + (frame * cameraTraceData.LaneWidth());
             std::memcpy(dest, src, sizeof(ElementTypeIn) * traceData.LaneWidth());
-            LaneArray rawTrace(dest, dest + cameraTraceData.LaneWidth());
+            LaneArray data(dest, dest + cameraTraceData.LaneWidth());
             Mask isBaseline { false };
-            baselinerStats.AddSample(rawTrace, rawTrace, isBaseline);
+            baselinerStats.AddSample(data, data, isBaseline);
         }
 
         statsView[laneIdx] = baselinerStats.GetState();

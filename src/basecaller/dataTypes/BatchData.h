@@ -50,6 +50,12 @@ namespace Data {
 class BatchDimensions
 {
 public:     // Functions
+    BatchDimensions() = default;
+    BatchDimensions(const BatchDimensions&) = default;
+    BatchDimensions(BatchDimensions&&) = default;
+    BatchDimensions& operator=(const BatchDimensions&) = default;
+    BatchDimensions& operator=(BatchDimensions&&) = default;
+
     uint32_t ZmwsPerBatch() const
     {
         // TODO: Strictly speaking, there's an overflow risk here. Pretty sure,
@@ -256,7 +262,7 @@ public:
     { return ConstLaneIterator(data_ , numFrames_, laneWidth_, numFrames_); }
 
 public:
-    BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
+    BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey)
         : data_(data)
         , laneWidth_(laneWidth)
         , numFrames_(numFrames)
@@ -294,14 +300,14 @@ public:
     GpuBatchDataHandle(const BatchDimensions& dims,
                        uint32_t availableFrames,
                        Cuda::Memory::DeviceHandle<T> data,
-                       DataManagerKey key)
+                       DataManagerKey)
         : dims_(dims)
         , availableFrames_(availableFrames)
         , data_(data)
     {}
 
     const BatchDimensions& Dimensions() const { return dims_; }
-    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey key) const { return data_; }
+    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey) const { return data_; }
     uint32_t NumFrames() const { return availableFrames_; }
 
 protected:

@@ -22,7 +22,7 @@ void ValidateData(TraceBatch<int16_t>& batch,
                   size_t filterWidth,
                   size_t sawtoothHeight,
                   size_t startFrame,
-                  const DataManagerParams& params)
+                  const DataManagerParams&)
 {
     for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
     {
@@ -31,7 +31,7 @@ void ValidateData(TraceBatch<int16_t>& batch,
         {
             if (startFrame+frame < filterWidth) continue;
 
-            short expectedVal = (startFrame + frame - 1) % sawtoothHeight;
+            uint16_t expectedVal = (startFrame + frame - 1) % sawtoothHeight;
             if (expectedVal < filterWidth-1)
                 expectedVal = sawtoothHeight-1;
 
@@ -64,7 +64,7 @@ TEST(MaxFilterTest, GlobalMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
@@ -108,7 +108,7 @@ TEST(MaxFilterTest, SharedMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
@@ -152,7 +152,7 @@ TEST(MaxFilterTest, LocalMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
         filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }

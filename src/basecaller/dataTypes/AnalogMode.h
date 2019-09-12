@@ -39,26 +39,12 @@
 #include <cstdint>
 
 #include <pacbio/PBException.h>
-#include <pacbio/process/ConfigurationBase.h>
 
 #include <common/MongoConstants.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
-
-class AnalogConfigEx : public PacBio::Process::ConfigurationObject
-{
-    ADD_PARAMETER(std::string, base, "X");
-    ADD_PARAMETER(float, wavelength, 0.0f);
-    ADD_PARAMETER(float, relativeAmplitude, 1.0f);
-    ADD_PARAMETER(float, intraPulseXsnCV, 0.0f);
-    ADD_PARAMETER(float, ipdMeanSeconds, 0.0f);
-    ADD_PARAMETER(float, pulseWidthMeanSeconds, 0.0f);
-    ADD_PARAMETER(float, pw2SlowStepRatio, 0.0f);
-    ADD_PARAMETER(float, ipd2SlowStepRatio, 0.0f);
-};
-
 
 /// Input or calibration properties describing an analog detection mode.
 class AnalogMode
@@ -78,16 +64,6 @@ public: // Structors
     AnalogMode(const AnalogMode& a) = default;
 
     AnalogMode& operator=(const AnalogMode& a) = default;
-
-    AnalogMode(const AnalogConfigEx& config)
-            : baseLabel(config.base()[0])
-            , relAmplitude(config.relativeAmplitude())
-            , excessNoiseCV(config.intraPulseXsnCV())
-            , interPulseDistance(config.ipdMeanSeconds())
-            , pulseWidth(config.pulseWidthMeanSeconds())
-            , pw2SlowStepRatio(config.pw2SlowStepRatio())
-            , ipd2SlowStepRatio(config.ipd2SlowStepRatio())
-    { }
 
     /// support label,[spectrum],relAmplitude constructor, xsNoiseCV=0, ipd=0 and pw=0
     /// In general, I am not a fan of these long anonymous argument lists for constructors because

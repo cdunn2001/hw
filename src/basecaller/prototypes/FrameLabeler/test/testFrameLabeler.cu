@@ -60,25 +60,25 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         meta[2].ipdSSRatio = 0;
         meta[3].ipdSSRatio = 0;
 
-        meta[0].ipd = frameRate * .308;
-        meta[1].ipd = frameRate * .234;
-        meta[2].ipd = frameRate * .234;
-        meta[3].ipd = frameRate * .188;
+        meta[0].ipd = frameRate * .308f;
+        meta[1].ipd = frameRate * .234f;
+        meta[2].ipd = frameRate * .234f;
+        meta[3].ipd = frameRate * .188f;
 
-        meta[0].pw = frameRate * .232;
-        meta[1].pw = frameRate * .185;
-        meta[2].pw = frameRate * .181;
-        meta[3].pw = frameRate * .214;
+        meta[0].pw = frameRate * .232f;
+        meta[1].pw = frameRate * .185f;
+        meta[2].pw = frameRate * .181f;
+        meta[3].pw = frameRate * .214f;
 
-        meta[0].pwSSRatio = 3.2;
-        meta[1].pwSSRatio = 3.2;
-        meta[2].pwSSRatio = 3.2;
-        meta[3].pwSSRatio = 3.2;
+        meta[0].pwSSRatio = 3.2f;
+        meta[1].pwSSRatio = 3.2f;
+        meta[2].pwSSRatio = 3.2f;
+        meta[3].pwSSRatio = 3.2f;
 
-        meta[0].mean = 227.13;
-        meta[1].mean = 154.45;
-        meta[2].mean = 97.67;
-        meta[3].mean = 61.32;
+        meta[0].mean = 227.13f;
+        meta[1].mean = 154.45f;
+        meta[2].mean = 97.67f;
+        meta[3].mean = 61.32f;
 
         meta[0].var = 776;
         meta[1].var = 426;
@@ -107,11 +107,11 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     std::vector<BatchData<int16_t>> latTrace;
 
     models.reserve(poolsPerChip);
-    for (int i = 0; i < poolsPerChip; ++i)
+    for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
         models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
-        for (int j = 0; j < lanesPerPool; ++j)
+        for (uint32_t j = 0; j < lanesPerPool; ++j)
         {
             hostModels[j] = refModel;
         }
@@ -164,7 +164,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         manager.ReturnBatch(std::move(data));
     }
 
-    float total = matches + subframeMiss + mismatches;
+    float total = static_cast<float>(matches + subframeMiss + mismatches);
     EXPECT_GT(matches / total, 0.97);
     EXPECT_LT(subframeMiss / total, .020);
     EXPECT_LT(mismatches / total, .01);

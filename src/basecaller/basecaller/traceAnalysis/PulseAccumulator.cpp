@@ -69,11 +69,13 @@ PulseAccumulator::Process(Data::LabelsBatch labels)
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {
-        auto view = labels.GetBlockView(laneIdx);
-        (void)view;
         auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
     }
+
+    // Need to make sure any potential kernels populating `labels`
+    // finish before we destroy the object. 
+    Cuda::CudaSynchronizeDefaultStream();
 
     return ret;
 }

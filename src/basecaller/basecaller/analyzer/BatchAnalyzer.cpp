@@ -119,14 +119,17 @@ void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelCo
 
 BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
-    if(staticAnalysis_)
-    {
-        return StaticModelPipeline(std::move(tbatch));
-    } else {
-        return StandardPipeline(std::move(tbatch));
-    }
+    auto ret = [&]() {
+        if(staticAnalysis_)
+        {
+            return StaticModelPipeline(std::move(tbatch));
+        } else {
+            return StandardPipeline(std::move(tbatch));
+        }
+    }();
     if (Cuda::StreamErrorCount() > 0)
         throw PBException("Unexpected stream synchronization issues were detected");
+    return ret;
 }
 
 BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)

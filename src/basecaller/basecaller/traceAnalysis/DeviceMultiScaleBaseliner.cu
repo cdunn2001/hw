@@ -41,8 +41,8 @@ constexpr size_t DeviceMultiScaleBaseliner::stride1;
 constexpr size_t DeviceMultiScaleBaseliner::stride2;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
-void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                          const Data::MovieConfig &movConfig)
+void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                                          const Data::MovieConfig&)
 {
     const auto hostExecution = false;
     Baseliner::InitAllocationPools(hostExecution);

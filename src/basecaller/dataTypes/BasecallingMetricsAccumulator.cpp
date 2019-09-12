@@ -45,7 +45,7 @@ namespace {
 template <size_t size>
 float evaluatePolynomial(const std::array<float, size>& coeff, float x)
 {
-    static_assert(size > 0);
+    static_assert(size > 0, "Unexpected empty array");
     float y = coeff[0];
     for (unsigned int i = 1; i < size; ++i)
         y = y * x + coeff[i];
@@ -55,7 +55,7 @@ float evaluatePolynomial(const std::array<float, size>& coeff, float x)
 template <size_t size>
 LaneArray<float> evaluatePolynomial(const std::array<float, size>& coeff, LaneArray<float> x)
 {
-    static_assert(size > 0);
+    static_assert(size > 0, "Unexpected empty array");
     LaneArray<float> y(coeff[0]);
     for (unsigned int i = 1; i < size; ++i)
         y = y * x + LaneArray<float>(coeff[i]);
@@ -126,7 +126,7 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
     LaneArray<float> minamp(relamps[0]);
     for (size_t i = 1; i < numAnalogs; ++i)
     {
-        static_assert(sizeof(unsigned int) == 4u);
+        static_assert(sizeof(unsigned int) == 4u, "");
         const auto& ila = LaneArray<unsigned int>(i);
         lowAmpIndex = Blend(relamps[i] < minamp, ila, lowAmpIndex);
         minamp = min(relamps[i], minamp);
@@ -382,7 +382,6 @@ void BasecallingMetricsAccumulator::Count(
 
             if (!pulse->IsReject())
             {
-                uint8_t pulseLabel = static_cast<uint8_t>(pulse->Label());
                 numBaseFrames_[zi] += pulse->Width();
 
                 if (!isnan(pulse->MidSignal()))

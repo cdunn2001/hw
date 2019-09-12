@@ -22,7 +22,7 @@ AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     , m2_ {0}
     , canAddSample_ {true}
 {
-    static_assert(AutocorrAccumState::lag > 0);
+    static_assert(AutocorrAccumState::lag > 0, "Invalid lag value");
 }
 
 template <typename T>

@@ -51,6 +51,11 @@ public:
         : mark_(mark)
     {}
 
+    bool operator==(const AllocationMarker& o) const
+    {
+        return mark_ == o.mark_;
+    }
+
     // Retrieve string representation
     const std::string& AsString() const { return mark_; }
     // Retrieve hash representation.  Hash collisions are

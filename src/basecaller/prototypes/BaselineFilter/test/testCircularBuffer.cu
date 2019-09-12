@@ -35,7 +35,7 @@ namespace
 
     static bool validateData = true;
 
-    void ValidateData(TraceBatch <int16_t>& input, TraceBatch <int16_t>& output)
+    void ValidateData(const TraceBatch <int16_t>& input, const TraceBatch <int16_t>& output)
     {
         if (!validateData) return;
 
@@ -59,7 +59,7 @@ namespace
 TEST(BlockCircularBuffer, GlobalMemory)
 {
     std::vector<DeviceOnlyArray<BlockCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
         circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
@@ -87,7 +87,7 @@ TEST(BlockCircularBuffer, GlobalMemory)
 TEST(CircularBuffer, SharedMemory)
 {
     std::vector<DeviceOnlyArray<BlockCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
         circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
@@ -115,7 +115,7 @@ TEST(CircularBuffer, SharedMemory)
 TEST(CircularBufferShift, LocalMemory)
 {
     std::vector<DeviceOnlyArray<LocalCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
     {
         circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes);
     }

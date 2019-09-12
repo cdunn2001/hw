@@ -69,10 +69,10 @@ public:
     class LoanedData
     {
         friend class ZmwDataManager;
-        LoanedData(Mongo::Data::TraceBatch<TIn>&& input,
-                   Mongo::Data::TraceBatch<TOut>&& output)
-            : input_(std::move(input))
-            , output_(std::move(output))
+        LoanedData(Mongo::Data::TraceBatch<TIn>&& in,
+                   Mongo::Data::TraceBatch<TOut>&& out)
+            : input_(std::move(in))
+            , output_(std::move(out))
         {}
     public:
         LoanedData(const LoanedData&) = delete;

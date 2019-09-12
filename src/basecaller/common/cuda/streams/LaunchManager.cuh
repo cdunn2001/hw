@@ -35,7 +35,7 @@ namespace Cuda {
 // a gpu usable view class, provide an overload that is a more specific
 // match
 template <typename T>
-T&& KernelArgConvert(T&& t, const KernelLaunchInfo& info) { return std::forward<T>(t); }
+T&& KernelArgConvert(T&& t, const KernelLaunchInfo&) { return std::forward<T>(t); }
 
 // Need to disable handing raw pointers to the device, as that's almost certainly
 // not what you wanted to do.  Any pointers to gpu memory really need to be
