@@ -144,7 +144,9 @@ private:
         std::vector<float> pw2SlowStepRatio;
 
         traceFile.NumAnalog >> traceNumAnalogs;
-        assert(traceNumAnalogs == numAnalogs);
+        if (traceNumAnalogs != numAnalogs)
+            throw PBException("Trace file does not have 4 analogs!");
+
         traceFile.BaseMap >> baseMap;
         traceFile.RelativeAmp >> relativeAmpl;
         traceFile.ExcessNoiseCV >> excessNoiseCV;

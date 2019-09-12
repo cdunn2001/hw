@@ -31,7 +31,7 @@ void ValidateData(TraceBatch<int16_t>& batch,
         {
             if (startFrame+frame < filterWidth) continue;
 
-            unsigned short expectedVal = (startFrame + frame - 1) % sawtoothHeight;
+            uint16_t expectedVal = (startFrame + frame - 1) % sawtoothHeight;
             if (expectedVal < filterWidth-1)
                 expectedVal = sawtoothHeight-1;
 

@@ -55,10 +55,10 @@ public:
         for (size_t i = 0; i < analogs.size(); i++)
         {
             const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
-            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2);
+            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2.f);
 
             analogs[i].mean = mean;
-            analogs[i].var = static_cast<float>(var);
+            analogs[i].var = var;
         }
 
         return analogs;

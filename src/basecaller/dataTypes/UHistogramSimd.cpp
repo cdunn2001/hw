@@ -191,7 +191,7 @@ UHistogramSimd<DataT, CountT>::Fractile(FloatType frac) const
         i -= 1;     // Back up to the bin that pushed us over the target.
         auto x0 = MakeUnion(BinStart(i))[z];
         const auto niz = MakeUnion(BinCount(i))[z];
-        ScalarType<CountType> m = static_cast<uint16_t>(n - niz);
+        auto m = n - niz;
         assert(m < nfz || (m == 0 && nfz == 0));
         ret[z] = x0 + MakeUnion(BinSize())[z] * (nfz - m) / (niz + 1);
     }

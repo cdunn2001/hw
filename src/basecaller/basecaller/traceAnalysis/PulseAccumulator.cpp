@@ -74,9 +74,8 @@ PulseAccumulator::Process(Data::LabelsBatch labels)
     }
 
     // Need to make sure any potential kernels populating `labels`
-    // finish before we destroy the object.  Deactivating the
-    // GPU memory will ensure that.
-    labels.DeactivateGpuMem();
+    // finish before we destroy the object. 
+    Cuda::CudaSynchronizeDefaultStream();
 
     return ret;
 }
