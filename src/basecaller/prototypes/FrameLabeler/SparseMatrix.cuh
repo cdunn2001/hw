@@ -50,6 +50,14 @@ namespace Cuda {
 template <bool...> struct BoolList {};
 template <size_t... vals> struct IndexList {};
 
+template <typename T, typename... Ts>
+struct Head
+{
+    using type = T;
+};
+template <typename... Ts>
+using Head_t = typename Head<Ts...>::type;
+
 // Simple type to encode a compact segment in a sparse row.  The first
 // parameter indicates how many nonzero entries precede this segment in the
 // row (meaning it can be used as the index of the first column into a compactly
@@ -284,6 +292,42 @@ public:
     static std::vector<CompactSegment> SegmentVector()
     {
         return std::vector<CompactSegment>(segments.begin(), segments.end());
+    }
+
+    using Segment0 = Head_t<Segments...>;
+    static_assert(sizeof...(Segments) == 1,
+                  "Cuda implementation of compile time spars matrix "
+                  "currently only supports a single contiguous segment, "
+                  "(other than the first initial value)");
+
+    // Note: If the static assert above needs to be relaxed for a more complicated
+    // sparse matrix, this is a path forward.  Cuda seems to be better at
+    // optimizing away generic lambdas than template functions.  This means
+    // that the call site will probably have `auto * row` and not be able
+    // to directly deduce the template parameters for this `Row` like a
+    // template function could, so this static function is provided to help
+    // loop over all segments.  Due again to the optimizer prefering lambdas,
+    // this function returns a lambda rather than doing the loop itself.
+    //
+    // Note: This version comes with a mild performance penalty at the only usage
+    // site (FrameLabeler filter), which is why it's not used until/unless
+    // we start specifying a Row type with multiple segments.  A similar
+    // version that actually did the compile time loop in this function
+    // directly, rather than returning a lambda the call-site invokes, caused
+    // a relatively major performance degredation.
+    //
+    // This function returns a lambda that accepts a callable object, and invokes
+    // that object once per Segment type in this Row.  A Segment pointer is handed
+    // in to that function, but is only provided for type deduction, it will always
+    // be nullptr and should not be dereferenced.
+    __device__ static auto ForEach()
+    {
+        return [](auto&& f) {
+            auto loop = {(
+                          f((Segments*){nullptr})
+                          ,0)...};
+            (void) loop;
+        };
     }
 };
 

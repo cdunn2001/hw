@@ -26,6 +26,8 @@
 
 #include "FrameLabelerKernels.cuh"
 
+#include <type_traits>
+
 #include <common/cuda/streams/LaunchManager.cuh>
 
 using namespace PacBio::Cuda::Utility;
@@ -74,66 +76,93 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
     for (auto val : zmwData) val = PBShort2(0);
 }
 
-template <typename LL, typename LL2, typename Labels, size_t nextState, size_t firstIdx, typename Segment, typename...Segments>
-__device__ void AddRow(const LL& logLike, const PBHalf2& score, PBHalf2& maxVal, uint32_t& packedLabels,
-                       const half* rowData, LL2& logAccum, Labels& labels, int idx,
-                       SparseRow<nextState, firstIdx, Segment, Segments...>* /*dummy*/)
-{
-
-    maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
-    ushort2 maxIdx = make_ushort2(firstIdx,firstIdx);
-
-    uint32_t dataIndex = Segment::dataIndex;
-    static_assert(sizeof...(Segments) == 0, "");
-    #pragma unroll(numStates)
-    for (int prevState = Segment::firstCol; prevState < Segment::lastCol; ++prevState, dataIndex++)
-    {
-        auto val = score + PBHalf2(rowData[dataIndex]) + logLike[prevState];
-
-        auto cond = val >= maxVal;
-        maxVal = Blend(cond, val, maxVal);
-        if (cond.X()) maxIdx.x = prevState;
-        if (cond.Y()) maxIdx.y = prevState;
-    }
-    logAccum[nextState] = maxVal;
-    // Always slot new entries into the most significant bits, and
-    // before that always shift things to the right by a slot. This
-    // makes all bit operations happen with compile time arguments,
-    // which has proven faster than calculating on the fly what shifts
-    // are necessary to populate the correct slot for each iteration.
-    packedLabels  = packedLabels >> 8;
-    packedLabels |= (maxIdx.x << 24);
-    packedLabels |= (maxIdx.y << 28);
-    if ((nextState & 3) == 3)
-    {
-        labels(idx, nextState / 4) = packedLabels;
-    }
-}
-
 template <typename T2, typename Labels, typename LogLike, typename Scorer, class... Rows>
-__device__ void Recursion(T2& sharedMaxVal, Labels& labels, LogLike& logLike, const Scorer& scorer, const SparseMatrix<Rows...>& trans, PBShort2 data, int idx)
+__device__ void Recursion(T2& sharedMaxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
+                          const SparseMatrix<Rows...>& trans, PBShort2 data, int idx)
 {
-    auto& maxVal = sharedMaxVal[threadIdx.x];
     CudaArray<PBHalf2, numStates> logAccum;
+    PackedLabels packedLabels;
+    auto& maxVal = sharedMaxVal[threadIdx.x];
+
+    // Note: The cuda optimizer seems to be finicky about what gets placed
+    // inside a register and what gets pushed out to the stack in memory.
+    // The packedLabels variable used to be a raw uint32_t that various
+    // code sections did bit twiddles on.  Trying to encapsulate that into
+    // a small class caused this filter to slow down by almost 2x.  The
+    // combination of making it a struct, and the fact that AddRow used to
+    // be a template function that accepted packedLabels by reference, caused
+    // the variable to be pushed to global memory and the increased memory
+    // traffic killed performance.  For whatever reason, capturing this
+    // by reference in a lambda doesn't cause any issues, though one would
+    // think after inlining the two approaches would be identical.  One would
+    // also think that the wrapping a uint32_t inside a light struct with a
+    // few inline functions to handle the bit twiddles would also have no
+    // effect.
+    //
+    // Moral of the story is that we're pressed up against a performance cliff
+    // and subject to the whims of the optimizer.  If you tweak this lambda
+    // be sure to check the overal runtime for performance regressions, as they
+    // may be dramatic.
+    auto AddRow = [&](const PBHalf2& score,
+                      const half* rowData,
+                      auto* row)
+    {
+        // row parameter just used to extract the Row type.
+        // I wouldn't even give it a name save we need to use
+        // decltype to extract the type information within a lambda.
+        using Row = std::remove_pointer_t<decltype(row)>;
+        constexpr auto firstIdx = Row::firstIdx;
+
+        // Currently only handle Rows with a single Segment.  This can be
+        // generalized to handle an arbitrary number of Segments, but it
+        // came with a mild performance penalty, so not doing that unless/
+        // until necessary
+        using Segment = typename Row::Segment0;
+
+        maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
+        ushort2 maxIdx = make_ushort2(firstIdx,firstIdx);
+
+        uint32_t dataIndex = Segment::dataIndex;
+        #pragma unroll(numStates)
+        for (int prevState = Segment::firstCol; prevState < Segment::lastCol; ++prevState, dataIndex++)
+        {
+            auto val = score + PBHalf2(rowData[dataIndex]) + logLike[prevState];
+
+            auto cond = val >= maxVal;
+            maxVal = Blend(cond, val, maxVal);
+            if (cond.X()) maxIdx.x = prevState;
+            if (cond.Y()) maxIdx.y = prevState;
+        }
+        constexpr auto nextState = Row::rowIdx;
+        logAccum[nextState] = maxVal;
+
+        // Always slot new entries into the back, and after 4 inserts it will be fully populated
+        // and ready for storage.  This approach has empirically been observed to be faster than
+        // trying to slot data directly into it's desired final location, as the current version
+        // can be done without any runtime dependance on the value of nextState.
+        packedLabels.PushBack(maxIdx);
+        if ((nextState & 3) == 3)
+        {
+            labels(idx, nextState / 4) = packedLabels;
+        }
+    };
+
 
     const auto dat = PBHalf2(data);
-    uint32_t packedLabels = 0;
+    // Compile time loop, to loop over all the Rows in our sparse matrix (each of which have
+    // a different type)
     auto loop = {(
-        AddRow(logLike,
-               scorer.StateScores(dat, Rows::rowIdx),
-               maxVal,
-               packedLabels,
+        AddRow(scorer.StateScores(dat, Rows::rowIdx),
                trans.RowData(Rows::rowIdx),
-               logAccum,
-               labels,
-               idx,
                (Rows*){nullptr}),0
     )...};
 
     // Every time we handled a 4th state we wrote the result to
     // labels, but the 13th state is the odd man out.  Need to
     // manually shift things into the correct location and store it.
-    labels(idx, 3) = (packedLabels >> 24);
+    static_assert(Subframe::numStates == 13, "Expected 13 states");
+    packedLabels.PushBackZeroes<3>();
+    labels(idx, 3) = packedLabels;
     logLike = logAccum;
 }
 
@@ -148,7 +177,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
                                    Mongo::Data::GpuBatchData<PBShort2> output,
                                    Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
 {
-    // When/if this changes, some of the bit twiddle logic below is going to have to be udpated or generalized
+    // When/if this changes, some of this kernel is going to have to be udpated or generalized
     static_assert(Subframe::numStates == 13,
                   "FrameLabelerKernel currently hard coded to only handle 13 states");
     using namespace Subframe;
@@ -248,19 +277,13 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
         auto packedLabels = labels(i, 0);
         for (short state = 0; state < numStates; ++state)
         {
-            // We're accessing labels in order, so we can always strip off
-            // the low bits to get the current labels, and then shift everything
-            // to the right to prepare for the next iteration
-            short prevx = (packedLabels & 0xF);
-            short prevy = ((packedLabels >> 4) & 0xF);
-            if ((state & 3) == 3)
+            auto prev = packedLabels.PopFront();
+            if ((state % 4) == 3)
             {
                 packedLabels = labels(i, state / 4 + 1);
-            } else {
-                packedLabels = packedLabels >> 8;
             }
-            newProb[prevx] += Blend(PBBool2(true,false), prob[state], zero);
-            newProb[prevy] += Blend(PBBool2(false,true), prob[state], zero);
+            newProb[prev.x] += Blend(PBBool2(true,false), prob[state], zero);
+            newProb[prev.y] += Blend(PBBool2(false,true), prob[state], zero);
         }
         prob = newProb;
     }
@@ -285,12 +308,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
-        uint32_t x = labels(frame, traceState.X() / 4);
-        x = x >> (8 * (traceState.X() % 4));
-        x &= 0xF;
-        uint32_t y = labels(frame, traceState.Y() / 4);
-        y = y >> (8 * (traceState.Y() % 4) + 4);
-        y &= 0xF;
+        auto x = labels(frame, traceState.X() / 4).XAt(traceState.X() % 4);
+        auto y = labels(frame, traceState.Y() / 4).YAt(traceState.Y() % 4);
         traceState = PBShort2(x,y);
     }
 
