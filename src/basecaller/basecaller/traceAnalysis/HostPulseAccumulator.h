@@ -32,6 +32,7 @@
 #include <common/LaneArray.h>
 #include <common/LaneArrayRef.h>
 #include <common/LaneMask.h>
+#include <common/StatAccumulator.h>
 #include <dataTypes/Pulse.h>
 #include <dataTypes/BasicTypes.h>
 
@@ -49,6 +50,8 @@ class HostPulseAccumulator : public PulseAccumulator
     using ConstSignalArrayRef = ConstLaneArrayRef<Data::BaselinedTraceElement>;
     using SignalBlockView = Data::BlockView<Data::BaselinedTraceElement>;
     using ConstSignalBlockView = Data::BlockView<const Data::BaselinedTraceElement>;
+    using FloatArray = LaneArray<float>;
+    using BaselinerStats = StatAccumulator<FloatArray>;
 
 public:     // Static functions
     static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
@@ -170,6 +173,7 @@ private:
     Process(Data::LabelsBatch trace) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
+                         BaselinerStats& baselineStats,
                          const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
                          const SignalBlockView& currTrace, size_t relativeFrameIndex, uint32_t absFrameIndex);
 

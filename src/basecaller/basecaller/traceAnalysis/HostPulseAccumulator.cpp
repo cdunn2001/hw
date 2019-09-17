@@ -58,25 +58,32 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 
         LabelsSegment& currSegment = startSegmentByLane[laneIdx];
 
-        // TODO: popuate ret.second (PulseDetectorMetrics) with baseline stats
+        auto baselineStats = BaselinerStats{};
         auto blIter = blockLabels.CBegin();
         for (size_t relativeFrameIndex = 0;
              relativeFrameIndex < blockLabels.NumFrames() &&
              blIter != blockLabels.CEnd();
              ++relativeFrameIndex, ++blIter)
         {
-            EmitFrameLabels(currSegment, lanePulses, *blIter, blockLatTrace, currTrace,
+            EmitFrameLabels(currSegment, lanePulses, baselineStats,
+                            *blIter, blockLatTrace, currTrace,
                             relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
         }
+
+        ret.second.baselineStats.GetHostView()[laneIdx] = baselineStats.GetState();
     }
 
     return ret;
 }
 template <typename LabelManager>
-void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
-                                           const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
-                                           const SignalBlockView& currTrace, size_t relativeFrameIndex,
-                                           uint32_t absFrameIndex)
+void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegment,
+                                                         Data::LaneVectorView<Data::Pulse>& pulses,
+                                                         BaselinerStats& baselineStats,
+                                                         const ConstLabelArrayRef& label,
+                                                         const SignalBlockView& blockLatTrace,
+                                                         const SignalBlockView& currTrace,
+                                                         size_t relativeFrameIndex,
+                                                         uint32_t absFrameIndex)
 {
     auto signal = Signal(relativeFrameIndex, blockLatTrace, currTrace);
 
@@ -97,6 +104,8 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
 
     currSegment.ResetSegment(boundaryMask, absFrameIndex, label, signal);
     currSegment.AddSignal(!boundaryMask, signal);
+
+    baselineStats.AddSample(FloatArray{signal}, (!boundaryMask) & !(pulseMask));
 }
 
 template class HostPulseAccumulator<SubframeLabelManager>;
