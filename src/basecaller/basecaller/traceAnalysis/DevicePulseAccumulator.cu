@@ -38,7 +38,7 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/MongoConstants.h>
-#include "../../common/StatAccumState.h"
+#include <common/StatAccumState.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -251,15 +251,8 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
         segment.ResetSegment(boundaryMask, frame, label, signal);
         segment.AddSignal(!boundaryMask, signal);
 
-        auto baseline = !boundaryMask && !pulseMask;
-        if (baseline.X())
-        {
-            segment.AddBaseline(baseline, signal);
-        }
-        if (baseline.Y())
-        {
-            segment.AddBaseline(baseline, signal);
-        }
+        auto baseline = (!pulseMask) && (!boundaryMask);
+        segment.AddBaseline(baseline, signal);
     };
 
     const int latFrames = latSignal.NumFrames();

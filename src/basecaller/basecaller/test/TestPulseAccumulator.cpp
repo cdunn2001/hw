@@ -30,20 +30,21 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
+#include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 
 #include <common/DataGenerators/BatchGenerator.h>
+#include <common/StatAccumulator.h>
 
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LabelsBatch.h>
 
 #include <gtest/gtest.h>
+#include <random>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
-
-using HostAccumulator = HostPulseAccumulator<SubframeLabelManager>;
 
 TEST(TestNoOpPulseAccumulator, Run)
 {
@@ -140,7 +141,10 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     HostSimulatedPulseAccumulator::Finalize();
 }
 
-TEST(TestHostPulseAccumulator, Run)
+namespace {
+
+template <typename PulseAccumulatorToTest>
+void TestPulseAccumulator()
 {
     // Simulate a single lane of data.
     Data::GetPrimaryConfig().lanesPerPool = 1;
@@ -153,7 +157,7 @@ TEST(TestHostPulseAccumulator, Run)
     movieConfig.analogs[1].baseLabel = 'C';
     movieConfig.analogs[2].baseLabel = 'G';
     movieConfig.analogs[3].baseLabel = 'T';
-    HostAccumulator::Configure(movieConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+    PulseAccumulatorToTest::Configure(movieConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             framesPerChunk,
@@ -178,17 +182,32 @@ TEST(TestHostPulseAccumulator, Run)
     std::vector<Data::LabelsBatch::ElementType> simLabels;
     std::vector<Data::BaselinedTraceElement> simTrc;
 
+    // Generate normally distributed baseline with given mean and variance.
+    const short baselineMean = 200;
+    const short baselineStd = 20;
+    std::random_device rd{};
+    std::mt19937 gen{rd()};
+    std::normal_distribution<> d{baselineMean, baselineStd};
+
     // Fixed signal values for pulses.
     const short latTraceVal = 400;
     const short curTraceVal = 500;
 
+    size_t baselineFrames = 0;
     {
         size_t frameNum = 0;
         size_t base = 0;
         while (frameNum < framesPerChunk)
         {
-            simTrc.insert(simTrc.end(), ipd, 0);
+            for (size_t b = 0; b < ipd; b++)
+            {
+                simTrc.push_back(std::round(d(gen)));
+            }
             simLabels.insert(simLabels.end(), ipd, 0);
+            if (frameNum < framesPerChunk - 16u)
+            {
+                baselineFrames += ipd;
+            }
             frameNum += ipd;
 
             // Insert pulse down states and final pulse up state to complete pulse.
@@ -228,10 +247,11 @@ TEST(TestHostPulseAccumulator, Run)
         }
     }
 
-    HostAccumulator pulseAccumulator(poolId, lanesPerPool);
+    PulseAccumulatorToTest pulseAccumulator(poolId, lanesPerPool);
 
-    // Ignore metrics:
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch)).first;
+    const auto& pulseRet = pulseAccumulator(std::move(labelsBatch));
+    const auto& pulseBatch = pulseRet.first;
+    const auto& pulseMetrics = pulseRet.second;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
@@ -242,8 +262,16 @@ TEST(TestHostPulseAccumulator, Run)
     for (uint32_t laneIdx = 0; laneIdx < pulseBatch.Dims().lanesPerBatch; ++laneIdx)
     {
         const auto& lanePulses = pulseBatch.Pulses().LaneView(laneIdx);
+        const auto& lanePulsesMetrics = pulseMetrics.baselineStats.GetHostView()[laneIdx];
+        StatAccumulator<LaneArray<float>> stats{LaneArray<float>(lanePulsesMetrics.moment0),
+                                                LaneArray<float>(lanePulsesMetrics.moment1),
+                                                LaneArray<float>(lanePulsesMetrics.moment2)};
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
+            EXPECT_EQ(baselineFrames-1, stats.Count()[zmwIdx]);
+            EXPECT_NEAR(baselineMean, stats.Mean()[zmwIdx], 2*baselineStd);
+            // Variance of variance estimator for normally distributed random variable should be (2*sigma^4)/(n-1)
+            EXPECT_NEAR(baselineStd*baselineStd, stats.Variance()[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));
             for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
                 const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
@@ -252,10 +280,10 @@ TEST(TestHostPulseAccumulator, Run)
                 EXPECT_EQ(pw, pulse.Width());
                 if (pulse.Start() < 16u)
                 {
-                   EXPECT_EQ(latTraceVal, pulse.MidSignal());
-                   EXPECT_EQ(latTraceVal, pulse.MeanSignal());
-                   EXPECT_EQ(latTraceVal, pulse.MaxSignal());
-                   EXPECT_EQ((latTraceVal * latTraceVal) * (pw-2), pulse.SignalM2());
+                    EXPECT_EQ(latTraceVal, pulse.MidSignal());
+                    EXPECT_EQ(latTraceVal, pulse.MeanSignal());
+                    EXPECT_EQ(latTraceVal, pulse.MaxSignal());
+                    EXPECT_EQ((latTraceVal * latTraceVal) * (pw-2), pulse.SignalM2());
                 }
                 else
                 {
@@ -268,9 +296,22 @@ TEST(TestHostPulseAccumulator, Run)
         }
     }
 
-    HostAccumulator::Finalize();
+    PulseAccumulatorToTest::Finalize();
 }
 
+}
+
+TEST(TestHostPulseAccumulator, Run)
+{
+    using PulseAccumulator = HostPulseAccumulator<SubframeLabelManager>;
+    TestPulseAccumulator<PulseAccumulator>();
+}
+
+TEST(TestDevicePulseAccumulator, Run)
+{
+    using PulseAccumulator = DevicePulseAccumulator<SubframeLabelManager>;
+    TestPulseAccumulator<PulseAccumulator>();
+}
 
 }}} // namespace PacBio::Mongo::Basecaller
 

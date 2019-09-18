@@ -51,7 +51,7 @@ class HostPulseAccumulator : public PulseAccumulator
     using SignalBlockView = Data::BlockView<Data::BaselinedTraceElement>;
     using ConstSignalBlockView = Data::BlockView<const Data::BaselinedTraceElement>;
     using FloatArray = LaneArray<float>;
-    using BaselinerStats = StatAccumulator<FloatArray>;
+    using BaselineStats = StatAccumulator<FloatArray>;
 
 public:     // Static functions
     static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
@@ -173,7 +173,7 @@ private:
     Process(Data::LabelsBatch trace) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
-                         BaselinerStats& baselineStats,
+                         BaselineStats& baselineStats,
                          const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
                          const SignalBlockView& currTrace, size_t relativeFrameIndex, uint32_t absFrameIndex);
 

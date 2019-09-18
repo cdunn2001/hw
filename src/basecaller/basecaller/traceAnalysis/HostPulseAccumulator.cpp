@@ -58,7 +58,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 
         LabelsSegment& currSegment = startSegmentByLane[laneIdx];
 
-        auto baselineStats = BaselinerStats{};
+        auto baselineStats = BaselineStats{};
         auto blIter = blockLabels.CBegin();
         for (size_t relativeFrameIndex = 0;
              relativeFrameIndex < blockLabels.NumFrames() &&
@@ -78,7 +78,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 template <typename LabelManager>
 void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegment,
                                                          Data::LaneVectorView<Data::Pulse>& pulses,
-                                                         BaselinerStats& baselineStats,
+                                                         BaselineStats& baselineStats,
                                                          const ConstLabelArrayRef& label,
                                                          const SignalBlockView& blockLatTrace,
                                                          const SignalBlockView& currTrace,
@@ -105,7 +105,11 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
     currSegment.ResetSegment(boundaryMask, absFrameIndex, label, signal);
     currSegment.AddSignal(!boundaryMask, signal);
 
-    baselineStats.AddSample(FloatArray{signal}, (!boundaryMask) & !(pulseMask));
+    const auto& isBaseline = (!pulseMask) & (!boundaryMask);
+    if (any(isBaseline))
+    {
+        baselineStats.AddSample(FloatArray{signal}, isBaseline);
+    }
 }
 
 template class HostPulseAccumulator<SubframeLabelManager>;
