@@ -71,7 +71,7 @@ public:
     {
         baselineStatAccum_.Reset();
         autocorrAccum_.Reset();
-        startFrame_ = 0;
+        startFrame_ = startFrame_ + numFrames_;
         numFrames_ = 0;
         pulseDetectionScore_ = std::numeric_limits<float>::quiet_NaN();
         pulseDetectionScore_ = 0;

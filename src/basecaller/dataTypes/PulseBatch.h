@@ -94,7 +94,7 @@ public:
         return std::make_pair(
             PulseBatch(
                 maxCallsPerZmw_, batchDims_, batchMetadata, syncDir_, SOURCE_MARKER()),
-            PulseDetectorMetrics(batchDims_, syncDir_, SOURCE_MARKER()));
+            PulseDetectorMetrics(batchDims_, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER()));
 
     }
 

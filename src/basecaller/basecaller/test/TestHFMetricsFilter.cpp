@@ -251,6 +251,155 @@ GenerateModels(BaseSimConfig)
 
 } // anonymous namespace
 
+TEST(TestHFMetricsFilter, Populated_Device)
+{
+    {
+        Data::BasecallerAlgorithmConfig bcConfig{};
+        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                         Data::GetPrimaryConfig().framesPerChunk,
+                                         Data::GetPrimaryConfig().sensorFrameRate,
+                                         Data::GetPrimaryConfig().realtimeActivityLabels,
+                                         Data::GetPrimaryConfig().lanesPerPool);
+    }
+
+
+    BaseSimConfig config;
+    int poolId = 0;
+    DeviceHFMetricsFilter hfMetrics(poolId, config.dims.lanesPerBatch);
+
+    // TODO: test that the last block is finalized regardless of condition?
+
+    size_t numFramesPerBatch = 128;
+    size_t numBatchesPerHFMB = Data::GetPrimaryConfig().framesPerHFMetricBlock
+                             / numFramesPerBatch; // = 32, for 4096 frame HFMBs
+
+    config.pattern = "ACGTGG";
+    config.ipd = 0;
+    const auto& baselinerStats = GenerateBaselineMetrics(config);
+    const auto& models = GenerateModels(config);
+    const auto& flMetrics = GenerateFrameLabelerMetrics(config);
+    const auto& pdMetrics = GeneratePulseDetectorMetrics(config);
+
+    int blocks_tested = 0;
+
+    for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
+    {
+        auto pulses = GenerateBases(config, batchIdx);
+        auto basecallingMetrics = hfMetrics(
+                pulses, baselinerStats, models, flMetrics, pdMetrics);
+        if (basecallingMetrics)
+        {
+            ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
+            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
+            {
+                const auto& mb = basecallingMetrics->GetHostView()[l];
+                ASSERT_EQ(sizeof(mb), 8320);
+                for (uint32_t z = 0; z < laneSize; ++z)
+                {
+                    ASSERT_EQ(numBatchesPerHFMB
+                                * config.numBases
+                                * config.baseWidth,
+                              mb.numPulseFrames[z]);
+                    ASSERT_EQ(numBatchesPerHFMB
+                                * config.numBases
+                                * config.baseWidth,
+                              mb.numBaseFrames[z]);
+                    // The pulses don't run to the end of each block, so all
+                    // but one pulse is abutted. Plus we have the GG, which
+                    // doesn't count as a sandwich.
+                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 2),
+                              mb.numHalfSandwiches[z]);
+                    // Sandwiches are one per block, on the 'GTG'
+                    ASSERT_EQ(numBatchesPerHFMB,
+                              mb.numSandwiches[z]);
+                    // Stutters are one per block, on the 'GG'
+                    ASSERT_EQ(numBatchesPerHFMB,
+                              mb.numPulseLabelStutters[z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPulsesByAnalog[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPulsesByAnalog[1][z]);
+                    // G is over represented in the pattern above
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
+                              mb.numPulsesByAnalog[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPulsesByAnalog[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[1][z]);
+                    // G is over represented in the pattern above
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
+                              mb.numBasesByAnalog[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numBasesByAnalog[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                              mb.numPulses[z]);
+                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                              mb.numBases[z]);
+                    // This will always something random, doesn't matter at the
+                    // moment
+                    EXPECT_EQ(Data::HQRFPhysicalStates::MULTI,
+                              mb.activityLabel[z]);
+                    EXPECT_EQ(0,
+                              mb.startFrame[z]);
+                    EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
+                              mb.startFrame[z] + mb.numFrames[z]);
+                    EXPECT_EQ(numBatchesPerHFMB * numFramesPerBatch,
+                              mb.numFrames[z]);
+                    // We've already checked that numpulsesbyanalog is correct,
+                    // so we'll just use it here for readability:
+                    // Also note that we are subtracting out the partial frames
+                    // (thus -2).
+                    EXPECT_EQ(2944, mb.pkMidSignal[0][z]);
+                    EXPECT_EQ(5632, mb.pkMidSignal[1][z]);
+                    EXPECT_EQ(3776, mb.pkMidSignal[2][z]);
+                    EXPECT_EQ(4608, mb.pkMidSignal[3][z]);
+                    ASSERT_EQ(25, mb.pkMax[0][z]);
+                    ASSERT_EQ(45, mb.pkMax[1][z]);
+                    ASSERT_EQ(15, mb.pkMax[2][z]);
+                    ASSERT_EQ(35, mb.pkMax[3][z]);
+                    EXPECT_NEAR(0.0160583, mb.bpZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0043878, mb.bpZvar[1][z], 0.001);
+                    EXPECT_NEAR(0.0192236, mb.bpZvar[2][z], 0.001);
+                    EXPECT_NEAR(0.0065546, mb.bpZvar[3][z], 0.001);
+                    EXPECT_NEAR(0.0694064, mb.pkZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0451073, mb.pkZvar[1][z], 0.001);
+                    EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
+                    EXPECT_NEAR(0.0960086, mb.pkZvar[3][z], 0.001);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.numPkMidFrames[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.numPkMidFrames[1][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 4 * (config.baseWidth - 2),
+                              mb.numPkMidFrames[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                              mb.numPkMidFrames[3][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[0][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[1][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 4,
+                              mb.numPkMidBasesByAnalog[2][z]);
+                    ASSERT_EQ(numBatchesPerHFMB * 2,
+                              mb.numPkMidBasesByAnalog[3][z]);
+                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
+                    EXPECT_NEAR(0.008516, mb.pulseDetectionScore[z], 0.0001);
+                    // TODO: These aren't expected to be "correct", and should
+                    // be replaced when these metrics are expected to be
+                    // correct. The values themselves may need to be helped
+                    // with some simulation in the above functions
+                    EXPECT_EQ(0, mb.pixelChecksum[z]);
+                }
+            }
+            ++blocks_tested;
+        }
+    }
+    EXPECT_EQ(1, blocks_tested);
+    hfMetrics.Finalize();
+}
+
 TEST(TestHFMetricsFilter, Populated)
 {
     {

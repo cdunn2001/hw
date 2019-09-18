@@ -219,15 +219,27 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         throw PBException(msg.str());
         break;
     }
+    switch (hfMetricsOpt_)
+    {
+    case Data::BasecallerMetricsConfig::MethodName::Gpu:
+        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                         Data::GetPrimaryConfig().framesPerChunk,
+                                         Data::GetPrimaryConfig().sensorFrameRate,
+                                         Data::GetPrimaryConfig().realtimeActivityLabels,
+                                         Data::GetPrimaryConfig().lanesPerPool);
+        break;
+    default:
+        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                   Data::GetPrimaryConfig().framesPerChunk,
+                                   Data::GetPrimaryConfig().sensorFrameRate,
+                                   Data::GetPrimaryConfig().realtimeActivityLabels,
+                                   Data::GetPrimaryConfig().lanesPerPool);
+    }
 
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                               Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                               Data::GetPrimaryConfig().framesPerChunk,
-                               Data::GetPrimaryConfig().sensorFrameRate,
-                               Data::GetPrimaryConfig().realtimeActivityLabels,
-                               Data::GetPrimaryConfig().lanesPerPool);
 }
 
 

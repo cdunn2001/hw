@@ -44,6 +44,53 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+/*
+class HalfBasecallingMetrics
+{
+
+public: // types
+    template <typename T>
+    using SingleMetric = Cuda::Utility::CudaArray<T, laneSize/2>;
+    template <typename T>
+    using AnalogMetric = Cuda::Utility::CudaArray<SingleMetric<T>,
+                                                  numAnalogs>;
+
+public: // metrics retained from accumulator (more can be pulled through if necessary)
+    // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
+    SingleMetric<PBShort2> activityLabel;
+    SingleMetric<PBShort2> numPulseFrames;
+    SingleMetric<PBShort2> numBaseFrames;
+    SingleMetric<PBShort2> numSandwiches;
+    SingleMetric<PBShort2> numHalfSandwiches;
+    SingleMetric<PBShort2> numPulseLabelStutters;
+    SingleMetric<PBShort2> numBases;
+    SingleMetric<PBShort2> numPulses;
+    AnalogMetric<PBHalf2> pkMidSignal;
+    AnalogMetric<PBHalf2> bpZvar;
+    AnalogMetric<PBHalf2> pkZvar;
+    AnalogMetric<PBHalf2> pkMax;
+    AnalogMetric<PBShort2> numPkMidFrames;
+    AnalogMetric<PBShort2> numPkMidBasesByAnalog;
+    AnalogMetric<PBShort2> numBasesByAnalog;
+    AnalogMetric<PBShort2> numPulsesByAnalog;
+
+    // TODO Add useful tracemetrics members here (there are others in the
+    // accumulator member..., not sure if they are used):
+    SingleMetric<PBHalf2> autocorrelation;
+    SingleMetric<PBHalf2> pulseDetectionScore;
+    SingleMetric<PBShort2> pixelChecksum;
+
+    // These don't really match the Half pattern. They'll be a bit more
+    // expensive, but nothing major
+    SingleMetric<uint32_t> startFrame;
+    SingleMetric<uint32_t> numFrames;
+};
+
+static_assert(sizeof(HalfBasecallingMetrics) == 65 * laneSize, "sizeof(BasecallingMetrics) is 65 bytes per zmw");
+
+*/
+
+
 class BasecallingMetrics
 {
 
@@ -82,7 +129,7 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleMetric<int16_t> pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 130 bytes per zmw");
 
 class BasecallingMetricsFactory
 {
