@@ -47,7 +47,8 @@ public:
 
 private:
 
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
 private:
 
@@ -71,9 +72,9 @@ private:
         ~MultiScaleBaseliner() = default;
 
     public:
-        const size_t Stride() const { return stride_; }
+        size_t Stride() const { return stride_; }
 
-        const float Scale() const { return scaler_; }
+        float Scale() const { return scaler_; }
 
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,

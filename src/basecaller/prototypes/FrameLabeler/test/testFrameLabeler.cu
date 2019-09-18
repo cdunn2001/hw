@@ -22,7 +22,6 @@ using namespace PacBio::Primary;
 
 TEST(FrameLabelerTest, CompareVsGroundTruth)
 {
-    static constexpr size_t laneWidth = 64;
     static constexpr size_t lanesPerPool = 2;
     static constexpr size_t poolsPerChip = 2;
     static constexpr size_t numBlocks = 64;
@@ -36,7 +35,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     }();
 
     auto dataParams = DataManagerParams()
-            .LaneWidth(laneWidth)
+            .LaneWidth(laneSize)
             .ImmediateCopy(false)
             .FrameRate(10000)
             .NumZmwLanes(lanesPerPool*poolsPerChip)
@@ -61,25 +60,25 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         meta[2].ipdSSRatio = 0;
         meta[3].ipdSSRatio = 0;
 
-        meta[0].ipd = frameRate * .308;
-        meta[1].ipd = frameRate * .234;
-        meta[2].ipd = frameRate * .234;
-        meta[3].ipd = frameRate * .188;
+        meta[0].ipd = frameRate * .308f;
+        meta[1].ipd = frameRate * .234f;
+        meta[2].ipd = frameRate * .234f;
+        meta[3].ipd = frameRate * .188f;
 
-        meta[0].pw = frameRate * .232;
-        meta[1].pw = frameRate * .185;
-        meta[2].pw = frameRate * .181;
-        meta[3].pw = frameRate * .214;
+        meta[0].pw = frameRate * .232f;
+        meta[1].pw = frameRate * .185f;
+        meta[2].pw = frameRate * .181f;
+        meta[3].pw = frameRate * .214f;
 
-        meta[0].pwSSRatio = 3.2;
-        meta[1].pwSSRatio = 3.2;
-        meta[2].pwSSRatio = 3.2;
-        meta[3].pwSSRatio = 3.2;
+        meta[0].pwSSRatio = 3.2f;
+        meta[1].pwSSRatio = 3.2f;
+        meta[2].pwSSRatio = 3.2f;
+        meta[3].pwSSRatio = 3.2f;
 
-        meta[0].mean = 227.13;
-        meta[1].mean = 154.45;
-        meta[2].mean = 97.67;
-        meta[3].mean = 61.32;
+        meta[0].mean = 227.13f;
+        meta[1].mean = 154.45f;
+        meta[2].mean = 97.67f;
+        meta[3].mean = 61.32f;
 
         meta[0].var = 776;
         meta[1].var = 426;
@@ -90,34 +89,41 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         baselineMeta.var = 33;
     }
 
-    LaneModelParameters<PBHalf, laneWidth> refModel;
+    LaneModelParameters<PBHalf, laneSize> refModel;
     refModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
     {
         refModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
     }
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneWidth>>> models;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
     FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
     std::vector<FrameLabeler> frameLabelers(poolsPerChip);
 
     BatchDimensions latBatchDims;
     latBatchDims.framesPerBatch = dataParams.blockLength;
-    latBatchDims.laneWidth = laneWidth;
+    latBatchDims.laneWidth = laneSize;
     latBatchDims.lanesPerBatch = dataParams.kernelLanes;
     std::vector<BatchData<int16_t>> latTrace;
 
     models.reserve(poolsPerChip);
-    for (int i = 0; i < poolsPerChip; ++i)
+    for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
-        models.emplace_back(lanesPerPool,SyncDirection::Symmetric);
+        models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
-        for (int j = 0; j < lanesPerPool; ++j)
+        for (uint32_t j = 0; j < lanesPerPool; ++j)
         {
             hostModels[j] = refModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    }
+
+    std::vector<FrameLabelerMetrics> frameLabelerMetrics;
+    for (size_t i = 0; i < poolsPerChip; ++i)
+    {
+        frameLabelerMetrics.emplace_back(
+                latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     int mismatches = 0;
@@ -136,7 +142,8 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         auto batchIdx = data.Batch();
         const auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out,
+                                             frameLabelerMetrics[batchIdx]);
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
         {
@@ -145,7 +152,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
             {
                 for (size_t k = 0; k < block.LaneWidth(); ++k)
                 {
-                    int zmw = batchIdx * laneWidth * lanesPerPool + i * laneWidth + k;
+                    int zmw = batchIdx * laneSize * lanesPerPool + i * laneSize + k;
                     int frame = firstFrame + j - ViterbiStitchLookback;
                     if (frame < 0) continue;
                     LabelValidator(block(j,k), GroundTruth[zmw][frame]);
@@ -157,7 +164,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         manager.ReturnBatch(std::move(data));
     }
 
-    float total = matches + subframeMiss + mismatches;
+    float total = static_cast<float>(matches + subframeMiss + mismatches);
     EXPECT_GT(matches / total, 0.97);
     EXPECT_LT(subframeMiss / total, .020);
     EXPECT_LT(mismatches / total, .01);

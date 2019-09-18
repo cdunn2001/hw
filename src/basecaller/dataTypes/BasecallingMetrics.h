@@ -27,7 +27,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class BasecallingMetrics
+//  Defines class BasecallingMetrics, a simple POD class for conveying
+//  basecalling metrics.
 
 #include <numeric>
 #include <pacbio/logging/Logger.h>
@@ -35,223 +36,74 @@
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
-#include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/BaselinerStatAccumState.h>
-
-#include "HQRFPhysicalStates.h"
-#include "BatchMetadata.h"
+#include "BaselinerStatAccumState.h"
 #include "BatchData.h"
-#include "BatchVectors.h"
-#include "TraceAnalysisMetrics.h"
-#include "Pulse.h"
+#include "HQRFPhysicalStates.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-template <unsigned int LaneWidth>
 class BasecallingMetrics
 {
 
 public: // types
-    using UnsignedInt = uint16_t;
-    using Int = int16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt,
-                                                                 LaneWidth>;
-    using SingleIntegerMetric = Cuda::Utility::CudaArray<Int,
-                                                                 LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        numAnalogs>;
-    using AnalogFloatMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        numAnalogs>;
+    template <typename T>
+    using SingleMetric = Cuda::Utility::CudaArray<T, laneSize>;
+    template <typename T>
+    using AnalogMetric = Cuda::Utility::CudaArray<SingleMetric<T>,
+                                                  numAnalogs>;
 
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
-    Cuda::Utility::CudaArray<HQRFPhysicalStates,
-                             LaneWidth> activityLabel;
-    SingleUnsignedIntegerMetric numPulseFrames;
-    SingleUnsignedIntegerMetric numBaseFrames;
-    SingleUnsignedIntegerMetric numSandwiches;
-    SingleUnsignedIntegerMetric numHalfSandwiches;
-    SingleUnsignedIntegerMetric numPulseLabelStutters;
-    AnalogFloatMetric pkMidSignal;
-    AnalogFloatMetric bpZvar;
-    AnalogFloatMetric pkZvar;
-    AnalogFloatMetric pkMax;
-    AnalogUnsignedIntegerMetric pkMidNumFrames;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog;
-    AnalogUnsignedIntegerMetric numBasesByAnalog;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog;
-    SingleUnsignedIntegerMetric numBases;
-    SingleUnsignedIntegerMetric numPulses;
+    SingleMetric<HQRFPhysicalStates> activityLabel;
+    SingleMetric<uint16_t> numPulseFrames;
+    SingleMetric<uint16_t> numBaseFrames;
+    SingleMetric<uint16_t> numSandwiches;
+    SingleMetric<uint16_t> numHalfSandwiches;
+    SingleMetric<uint16_t> numPulseLabelStutters;
+    SingleMetric<uint16_t> numBases;
+    SingleMetric<uint16_t> numPulses;
+    AnalogMetric<float> pkMidSignal;
+    AnalogMetric<float> bpZvar;
+    AnalogMetric<float> pkZvar;
+    AnalogMetric<float> pkMax;
+    AnalogMetric<uint16_t> numPkMidFrames;
+    AnalogMetric<uint16_t> numPkMidBasesByAnalog;
+    AnalogMetric<uint16_t> numBasesByAnalog;
+    AnalogMetric<uint16_t> numPulsesByAnalog;
 
     // TODO Add useful tracemetrics members here (there are others in the
     // accumulator member..., not sure if they are used):
-    SingleUnsignedIntegerMetric startFrame;
-    SingleUnsignedIntegerMetric stopFrame;
-    SingleUnsignedIntegerMetric numFrames;
-    SingleFloatMetric autocorrelation;
-    SingleFloatMetric pulseDetectionScore;
-    SingleIntegerMetric pixelChecksum;
+    SingleMetric<uint32_t> startFrame;
+    SingleMetric<uint32_t> numFrames;
+    SingleMetric<float> autocorrelation;
+    SingleMetric<float> pulseDetectionScore;
+    SingleMetric<int16_t> pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics<laneSize>) == 127 * laneSize, "sizeof(BasecallingMetrics) is 127 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
 
-
-template <unsigned int LaneWidth>
-class BasecallingMetricsAccumulator
-{
-public: // types
-    using InputPulses = LaneVectorView<const Pulse>;
-    using InputBaselineStats = Data::BaselinerStatAccumState;
-    using InputModelsT = LaneModelParameters<Cuda::PBHalf, LaneWidth>;
-
-    using UnsignedInt = uint16_t;
-    using Flt = float;
-    using SingleUnsignedIntegerMetric = Cuda::Utility::CudaArray<UnsignedInt,
-                                                                 LaneWidth>;
-    using SingleFloatMetric = Cuda::Utility::CudaArray<Flt, LaneWidth>;
-    using AnalogUnsignedIntegerMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<UnsignedInt, LaneWidth>,
-        numAnalogs>;
-    using AnalogFloatMetric = Cuda::Utility::CudaArray<
-        Cuda::Utility::CudaArray<Flt, LaneWidth>,
-        numAnalogs>;
-
-    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
-
-public:
-    void Initialize();
-
-    void Count(const InputPulses& pulses, uint32_t numFrames);
-
-    void AddBaselineStats(const InputBaselineStats& baselineStats);
-
-    void AddModels(const InputModelsT& models);
-
-    void FinalizeMetrics(bool realtimeActivityLabels, float frameRate);
-
-    void PopulateBasecallingMetrics(BasecallingMetricsT& metrics);
-
-    void Reset()
-    { Initialize(); };
-
-private:
-    void LabelBlock(float frameRate);
-
-public: // complex accessors
-
-    AnalogFloatMetric PkmidMean() const;
-
-    SingleUnsignedIntegerMetric NumBases() const;
-
-    SingleUnsignedIntegerMetric NumPulses() const;
-
-    SingleFloatMetric PulseWidth() const;
-
-private: // metrics
-    SingleUnsignedIntegerMetric numPulseFrames_;
-    SingleUnsignedIntegerMetric numBaseFrames_;
-    SingleUnsignedIntegerMetric numSandwiches_;
-    SingleUnsignedIntegerMetric numHalfSandwiches_;
-    SingleUnsignedIntegerMetric numPulseLabelStutters_;
-    Cuda::Utility::CudaArray<HQRFPhysicalStates,
-                             LaneWidth> activityLabel_;
-    AnalogFloatMetric pkMidSignal_;
-    AnalogFloatMetric bpZvar_;
-    AnalogFloatMetric pkZvar_;
-    AnalogFloatMetric pkMax_;
-    AnalogFloatMetric modelVariance_;
-    AnalogFloatMetric modelMean_;
-    AnalogUnsignedIntegerMetric pkMidNumFrames_;
-    AnalogUnsignedIntegerMetric numPkMidBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numBasesByAnalog_;
-    AnalogUnsignedIntegerMetric numPulsesByAnalog_;
-
-    TraceAnalysisMetrics<LaneWidth> traceMetrics_;
-
-private: // state trackers
-    Cuda::Utility::CudaArray<Pulse, LaneWidth> prevBasecallCache_;
-    Cuda::Utility::CudaArray<Pulse, LaneWidth> prevprevBasecallCache_;
-
-};
-
-template <unsigned int LaneWidth>
-class BasecallingMetricsAccumulatorFactory
-{
-    using Pools = Cuda::Memory::DualAllocationPools;
-    using AccumulatorT = BasecallingMetricsAccumulator<LaneWidth>;
-    using AccumulatorBatchT = Cuda::Memory::UnifiedCudaArray<AccumulatorT>;
-
-public:
-    BasecallingMetricsAccumulatorFactory(
-            const Data::BatchDimensions& batchDims,
-            Cuda::Memory::SyncDirection syncDir,
-            bool pinned)
-        : batchDims_(batchDims)
-        , syncDir_(syncDir)
-        , pinned_(pinned)
-        , accumulatorPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(AccumulatorT),
-                pinned))
-    {}
-
-    std::unique_ptr<AccumulatorBatchT> NewBatch()
-    {
-        return std::make_unique<AccumulatorBatchT>(
-            batchDims_.lanesPerBatch,
-            syncDir_,
-            pinned_,
-            accumulatorPool_);
-    }
-
-private:
-    Data::BatchDimensions batchDims_;
-    Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
-
-    std::shared_ptr<Pools> accumulatorPool_;
-};
-
-template <unsigned int LaneWidth>
 class BasecallingMetricsFactory
 {
-public: // types
-    using Pools = Cuda::Memory::DualAllocationPools;
-    using BasecallingMetricsT = BasecallingMetrics<LaneWidth>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
-
 public: // methods:
     BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
-                              Cuda::Memory::SyncDirection syncDir,
-                              bool pinned)
+                              Cuda::Memory::SyncDirection syncDir)
         : batchDims_(batchDims)
         , syncDir_(syncDir)
-        , pinned_(pinned)
-        , metricsPool_(std::make_shared<Pools>(
-                batchDims.lanesPerBatch * sizeof(BasecallingMetricsT),
-                pinned))
     {}
 
-    std::unique_ptr<BasecallingMetricsBatchT> NewBatch()
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> NewBatch()
     {
-        return std::make_unique<BasecallingMetricsBatchT>(
+        return std::make_unique<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>>(
             batchDims_.lanesPerBatch,
             syncDir_,
-            pinned_,
-            metricsPool_);
+            SOURCE_MARKER());
     }
 
 private: // members:
     Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
-    bool pinned_;
-    std::shared_ptr<Pools> metricsPool_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

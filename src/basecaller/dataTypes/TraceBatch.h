@@ -45,9 +45,8 @@ public:
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,
-               std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
-               bool pinnedHost = true)
-        : BatchData<T>(dims, syncDirection, pool, pinnedHost)
+               const Cuda::Memory::AllocationMarker& marker)
+        : BatchData<T>(dims, syncDirection, marker)
         , meta_(meta)
     {}
 
@@ -74,6 +73,19 @@ public:
 private:
     BatchMetadata meta_;
 };
+
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
+template <typename T>
+auto KernelArgConvert(TraceBatch<T>& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+template <typename T>
+auto KernelArgConvert(const TraceBatch<T>& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
 
 }}}
 

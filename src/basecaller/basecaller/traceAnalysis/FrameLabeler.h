@@ -29,6 +29,8 @@
 
 #include <stdint.h>
 
+#include <dataTypes/BasicTypes.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
@@ -42,6 +44,7 @@ class FrameLabeler
 public:  // types
     using LaneModelParameters = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
+    using ElementType = Data::BaselinedTraceElement;
 
 public:     // Static functions
     static void Configure(int lanesPerPool, int framesPerChunk);
@@ -60,20 +63,38 @@ public:
 public:
     /// \returns LabelsBatch with estimated labels for each frame, along with the associated
     ///          baseline subtracted trace
-    Data::LabelsBatch operator()(Data::CameraTraceBatch trace,
-                                 const PoolModelParameters& models)
+    std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
+    operator()(Data::TraceBatch<ElementType> trace,
+               const PoolModelParameters& models)
     {
         // TODO
         assert(trace.GetMeta().PoolId() == poolId_);
         return Process(std::move(trace), models);
     }
 
+    auto EmptyMetrics(const Data::BatchDimensions& dims)
+    {
+        auto ret = batchFactory_->NewMetrics(dims);
+
+        for (size_t laneIdx = 0; laneIdx < dims.lanesPerBatch; ++laneIdx)
+        {
+            auto laneMetrics = ret.viterbiScore.GetHostView()[laneIdx];
+            for (size_t zi = 0; zi < laneSize; ++zi)
+            {
+                laneMetrics[zi] = 0.0f;
+            }
+        }
+
+        return ret;
+    }
+
 private:    // Data
     uint32_t poolId_;
 
 private:    // Customizable implementation
-    virtual Data::LabelsBatch Process(Data::CameraTraceBatch trace,
-                                      const PoolModelParameters& models); //= 0;
+    virtual std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
+    Process(Data::TraceBatch<ElementType> trace,
+            const PoolModelParameters& models); //= 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

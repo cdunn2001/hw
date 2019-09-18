@@ -1,6 +1,8 @@
 #ifndef PACBIO_CUDA_PB_CUDA_RUNTIME_H
 #define PACBIO_CUDA_PB_CUDA_RUNTIME_H
 
+#include <driver_types.h>
+
 #include <cstdlib>
 
 // This file serves two purposes.  The first is to be a firewall between the
@@ -15,6 +17,12 @@ namespace Cuda {
 size_t RequiredRegisterCount(const void* func);
 size_t AvailableRegistersPerBlock();
 
+cudaEvent_t InitializeEvent();
+void DestroyEvent(cudaEvent_t event);
+void RecordEvent(cudaEvent_t event);
+bool CompletedEvent(cudaEvent_t event);
+void SyncEvent(cudaEvent_t event);
+
 void* CudaRawMalloc(size_t size);
 void* CudaRawMallocHost(size_t size);
 void* CudaRawMallocManaged(size_t size);
@@ -25,6 +33,12 @@ void  CudaFreeHost(void* t);
 void  CudaRawCopyHost(void* src, void* dest, size_t size);
 void  CudaRawCopyDevice(void* src, void* dest, size_t size);
 void  CudaSynchronizeDefaultStream();
+
+// Manually check if an error has occured.  Will capture
+// asynchronous errors that have not yet happened since
+// the last CUDA API call.  This also might be the only
+// way to catch cuda kernel launch errors.
+void ThrowIfCudaError();
 
 template <typename T>
 T* CudaMalloc(size_t count) { return static_cast<T*>(CudaRawMalloc(count*sizeof(T))); }

@@ -1,1 +1,1 @@
-#include "ExtremaFilter.cuh" 
+#include "ExtremaFilter.cuh"

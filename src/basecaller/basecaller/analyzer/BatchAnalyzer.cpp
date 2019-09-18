@@ -44,7 +44,6 @@
 
 #include <common/cuda/PBCudaRuntime.h>
 
-#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
@@ -59,7 +58,7 @@ namespace Mongo {
 namespace Basecaller {
 
 SMART_ENUM(
-    ProfileStages,
+    FilterStages,
     Upload,
     Download,
     Baseline,
@@ -68,7 +67,7 @@ SMART_ENUM(
     Metrics
 );
 
-using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ProfileStages>;
+using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<FilterStages>;
 
 void BatchAnalyzer::ReportPerformance()
 {
@@ -81,7 +80,7 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
-    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, true)
+    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
@@ -120,12 +119,17 @@ void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelCo
 
 BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
 {
-    if(staticAnalysis_)
-    {
-        return StaticModelPipeline(std::move(tbatch));
-    } else {
-        return StandardPipeline(std::move(tbatch));
-    }
+    auto ret = [&]() {
+        if(staticAnalysis_)
+        {
+            return StaticModelPipeline(std::move(tbatch));
+        } else {
+            return StandardPipeline(std::move(tbatch));
+        }
+    }();
+    if (Cuda::StreamErrorCount() > 0)
+        throw PBException("Unexpected stream synchronization issues were detected");
+    return ret;
 }
 
 BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
@@ -138,30 +142,38 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     if (tbatch.Metadata().FirstFrame() < 257) mode = Profiler::Mode::IGNORE;
     Profiler profiler(mode, 3.0, 100.0);
 
-    auto upload = profiler.CreateScopedProfiler(ProfileStages::Upload);
+    auto upload = profiler.CreateScopedProfiler(FilterStages::Upload);
     (void)upload;
     tbatch.CopyToDevice();
     Cuda::CudaSynchronizeDefaultStream();
 
-    auto baselineProfile = profiler.CreateScopedProfiler(ProfileStages::Baseline);
+    auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
     (void)baselineProfile;
-    auto ctb = (*baseliner_)(std::move(tbatch));
+    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
+    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
-    auto frameProfile = profiler.CreateScopedProfiler(ProfileStages::FrameLabeling);
-    (void) frameProfile;
-    auto labels = (*frameLabeler_)(std::move(ctb), models_);
+    auto frameProfile = profiler.CreateScopedProfiler(FilterStages::FrameLabeling);
+    (void)frameProfile;
+    auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces), models_);
+    auto labels = std::move(labelsAndMetrics.first);
+    auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
-    auto pulseProfile = profiler.CreateScopedProfiler(ProfileStages::PulseAccumulating);
+    auto pulseProfile = profiler.CreateScopedProfiler(FilterStages::PulseAccumulating);
     (void)pulseProfile;
-    auto pulses = (*pulseAccumulator_)(std::move(labels));
+    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+    auto pulses = std::move(pulsesAndMetrics.first);
+    auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-    auto download = profiler.CreateScopedProfiler(ProfileStages::Download);
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
     (void)download;
     pulses.Pulses().LaneView(0);
 
-    auto metricsProfile = profiler.CreateScopedProfiler(ProfileStages::Metrics);
-    (void) metricsProfile;
-    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+    auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
+    (void)metricsProfile;
+
+    auto basecallingMetrics = (*hfMetrics_)(
+            pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
@@ -176,7 +188,9 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
-    CameraTraceBatch ctb = (*baseliner_)(std::move(tbatch));
+    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
+    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
     if (!isModelInitialized_)
     {
@@ -185,7 +199,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         // Accumulate histogram of baseline-subtracted trace data.
         // This operation also accumulates baseliner statistics.
         assert(traceHistAccum_);
-        traceHistAccum_->AddBatch(ctb);
+        traceHistAccum_->AddBatch(baselinedTraces,
+                                  baselinerMetrics.baselinerStats);
 
         // When sufficient trace data have been histogrammed,
         // estimate detection model.
@@ -202,29 +217,46 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
         }
     }
 
-    auto pulses = [&ctb, this]() {
+    auto pulsesAndMetrics = [&baselinedTraces, this]() {
         // When detection model is available, ...
         if (isModelInitialized_)
         {
             // Classify frames.
             assert(frameLabeler_);
-            auto labels = (*frameLabeler_)(std::move(ctb), models_);
+            auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces),
+                                                     models_);
+            auto labels = std::move(labelsAndMetrics.first);
+            auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
             // Generate pulses with metrics.
             assert(pulseAccumulator_);
-            auto pulses = (*pulseAccumulator_)(std::move(labels));
+            auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+            auto pulses = std::move(pulsesAndMetrics.first);
+            auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-            // TODO: Compute block-level metrics.
-
-            return pulses;
+            return std::make_tuple(std::move(pulses),
+                                   std::move(frameLabelerMetrics),
+                                   std::move(pulseDetectorMetrics));
         }
         else
         {
-            return pulseAccumulator_->EmptyPulseBatch(ctb.Metadata());
+            auto frameLabelerMetrics = frameLabeler_->EmptyMetrics(baselinedTraces.StorageDims());
+
+            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata());
+            auto pulses = std::move(pulsesAndMetrics.first);
+            auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
+            return std::make_tuple(std::move(pulses),
+                                   std::move(frameLabelerMetrics),
+                                   std::move(pulseDetectorMetrics));
         }
     }();
+    auto pulses = std::move(std::get<0>(pulsesAndMetrics));
+    auto frameLabelerMetrics = std::move(std::get<1>(pulsesAndMetrics));
+    auto pulseDetectorMetrics = std::move(std::get<2>(pulsesAndMetrics));
 
-    auto basecallingMetrics = (*hfMetrics_)(pulses, ctb.Stats(), models_);
+    auto basecallingMetrics = (*hfMetrics_)(
+            pulses, baselinerMetrics, models_, frameLabelerMetrics,
+            pulseDetectorMetrics);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

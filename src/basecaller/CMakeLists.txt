@@ -16,6 +16,19 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 
+# This is a bit of a hack.  Enabling cuda (above in the project command)
+# will already cause these includes to be added to the compilation
+# command.  PLUS nvcc automatically adds these paths when it forwards code
+# to the host compiler, so it's already redundant.  However both those
+# are done as regular includes, which causes a flood of warnings if strict
+# warnings are enabled.  This adds it as a system path, which overries the
+# non-system versions, though having the duplicate specifications may
+# cause a warning of it's own (which can be individually suppressed)
+include_directories(
+    SYSTEM
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+)
+
 # Find pacbio/common and primary/common cmake modules.
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_LIST_DIR}/../common/pacbio-cplusplus-api"
@@ -29,6 +42,9 @@ set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 include(pacbio-cplusplus-api)
 include(pacbio-primary-common)
+include(primary-config)
+
+create_config_header(mongo-config.h MongoConfig)
 
 add_subdirectory(common)
 add_subdirectory(applications)

@@ -59,8 +59,8 @@ public:     // Static functions
     /// each BatchAnalyzer instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                          const Data::MovieConfig& movConfig)
+    static void Configure(const Data::BasecallerAlgorithmConfig&,
+                          const Data::MovieConfig&)
     {}
 
     static void Finalize()
@@ -108,7 +108,7 @@ private:
     // dme and trace binning.  This is necessary for now because they are not
     // even implemented, but may remain desirable in the future when tweaking/profiling
     // steady-state basecalling performance
-    bool staticAnalysis_;
+    bool staticAnalysis_ {false};
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

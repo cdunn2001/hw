@@ -46,7 +46,7 @@ float TraceHistogramAccumulator::fallBackBaselineSigma_;
 // static
 void TraceHistogramAccumulator::Configure(
         const Data::BasecallerTraceHistogramConfig& histConfig,
-        const Data::MovieConfig& movConfig)
+        const Data::MovieConfig&)
 {
     numFramesPreAccumStats_ = histConfig.NumFramesPreAccumStats;
     PBLOG_INFO << "TraceHistogramAccumulator: NumFramesPreAccumStats = "

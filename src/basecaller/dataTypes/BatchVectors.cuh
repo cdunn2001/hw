@@ -105,10 +105,18 @@ template <typename T>
 class GpuBatchVectors : private Cuda::Memory::detail::DataManager
 {
 public:
-    GpuBatchVectors(BatchVectors<T>& vecs)
+    GpuBatchVectors(BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
         : maxLen_(vecs.MaxLen())
-        , data_(vecs.Data({}).GetDeviceHandle())
-        , lens_(vecs.Lens({}).GetDeviceHandle())
+        , data_(vecs.Data({}).GetDeviceHandle(info))
+        , lens_(vecs.Lens({}).GetDeviceHandle(info))
+    {}
+
+    template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
+    GpuBatchVectors(const BatchVectors<typename std::remove_const_t<T>>& vecs,
+                    const Cuda::KernelLaunchInfo& info)
+        : maxLen_(vecs.MaxLen())
+        , data_(vecs.Data({}).GetDeviceHandle(info))
+        , lens_(vecs.Lens({}).GetDeviceHandle(info))
     {}
 
     __device__ VectorView<T> GetVector(int zmw)
@@ -133,10 +141,24 @@ public:
 private:
     uint32_t maxLen_;
 
+    using idx_t = typename std::conditional<std::is_const<T>::value, const uint32_t, uint32_t>::type;
     Cuda::Memory::DeviceView<T> data_;
-    Cuda::Memory::DeviceView<uint32_t> lens_;
+    Cuda::Memory::DeviceView<idx_t> lens_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
+template <typename T>
+auto KernelArgConvert(BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
+{
+    return GpuBatchVectors<T>(vecs, info);
+}
+
+template <typename T>
+auto KernelArgConvert(const BatchVectors<T>& vecs, const Cuda::KernelLaunchInfo& info)
+{
+    return GpuBatchVectors<const T>(vecs, info);
+}
 
 }}}
 

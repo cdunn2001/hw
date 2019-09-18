@@ -51,7 +51,8 @@ public:
     ~DevicePulseAccumulator() override;
 
 private:    // Customizable implementation
-    Data::PulseBatch Process(Data::LabelsBatch labels) override;
+    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+    Process(Data::LabelsBatch labels) override;
 
     std::unique_ptr<AccumImpl> impl_;
 };

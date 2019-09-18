@@ -50,6 +50,12 @@ namespace Data {
 class BatchDimensions
 {
 public:     // Functions
+    BatchDimensions() = default;
+    BatchDimensions(const BatchDimensions&) = default;
+    BatchDimensions(BatchDimensions&&) = default;
+    BatchDimensions& operator=(const BatchDimensions&) = default;
+    BatchDimensions& operator=(BatchDimensions&&) = default;
+
     uint32_t ZmwsPerBatch() const
     {
         // TODO: Strictly speaking, there's an overflow risk here. Pretty sure,
@@ -256,7 +262,7 @@ public:
     { return ConstLaneIterator(data_ , numFrames_, laneWidth_, numFrames_); }
 
 public:
-    BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey key)
+    BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey)
         : data_(data)
         , laneWidth_(laneWidth)
         , numFrames_(numFrames)
@@ -280,6 +286,36 @@ private:
     size_t numFrames_;
 };
 
+// Non-owning host-side representation of a gpu batch.  Does not
+// grant access to the data and is meant primarily as a shim class
+// helping segregate vanilla c++ code from cuda code.  Actual
+// device functions can access the data by including TraceBatch.cuh.
+// which defines the GpuBatchData class and can interact with the
+// data while running on the device.
+template <typename T>
+class GpuBatchDataHandle
+{
+    using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
+public:
+    GpuBatchDataHandle(const BatchDimensions& dims,
+                       uint32_t availableFrames,
+                       Cuda::Memory::DeviceHandle<T> data,
+                       DataManagerKey)
+        : dims_(dims)
+        , availableFrames_(availableFrames)
+        , data_(data)
+    {}
+
+    const BatchDimensions& Dimensions() const { return dims_; }
+    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey) const { return data_; }
+    uint32_t NumFrames() const { return availableFrames_; }
+
+protected:
+    BatchDimensions dims_;
+    uint32_t availableFrames_;
+    Cuda::Memory::DeviceHandle<T> data_;
+};
+
 
 // BatchData defines a 3D layout of data designed for efficient usage on the GPU.
 // Data is conceptually laid out as [lane][frame][zmw], where this is standard C
@@ -299,26 +335,20 @@ private:
 // is synchronous, though both of those rely on this oject being owned by the
 // same thread for the whole duration.  In order to move this object to another
 // thread you should explicitly cause a synchronization first.
-//
-// To avoid unecessary utilization of the relatively scarce gpu memory, this
-// class can be constructed with a GpuAllocationPool.  This is important as
-// the host will need at least an entire chip's worth of batches to place
-// data as it streams in, but only a small handful will be processed on the gpu
-// at one time.  By calling `DeactivateGpuMem` whenever gpu processing on a
-// batch is finished, the underlying gpu allocation can be placed back in
-// the memory pool for another batch to check out once it becomes active.
 template <typename T>
 class BatchData : private Cuda::Memory::detail::DataManager
 {
+    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
+    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
+
 public:
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
-              std::shared_ptr<Cuda::Memory::DualAllocationPools> pool,
-              bool pinnedHost = true)
+              const Cuda::Memory::AllocationMarker& marker)
         : dims_(dims)
         , availableFrames_(dims.framesPerBatch)
         , data_(dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
-                syncDirection, pinnedHost, pool)
+                syncDirection, marker)
     {}
 
     BatchData(const BatchData&) = delete;
@@ -327,12 +357,6 @@ public:
     BatchData& operator=(BatchData&&) = default;
 
     ~BatchData() = default;
-
-    // Can be null, if there are no pools in use
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> GetAllocationPools() const
-    {
-        return data_.GetAllocationPools();
-    }
 
     size_t LaneWidth()     const { return dims_.laneWidth; }
     size_t NumFrames()     const { return availableFrames_; }
@@ -346,8 +370,18 @@ public:
 
     const BatchDimensions& StorageDims() const { return dims_; }
 
-    Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) { return data_; }
-    const Cuda::Memory::UnifiedCudaArray<T>& GetRawData(Cuda::Memory::detail::DataManagerKey) const { return data_; }
+    GpuBatchDataHandle<GpuType> GetDeviceHandle(const Cuda::KernelLaunchInfo& info)
+    {
+        auto gpuDims = dims_;
+        gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
+        return GpuBatchDataHandle<GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
+    }
+    GpuBatchDataHandle<const GpuType> GetDeviceHandle(const Cuda::KernelLaunchInfo& info) const
+    {
+        auto gpuDims = dims_;
+        gpuDims.laneWidth /= (sizeof(GpuType) / sizeof(HostType));
+        return GpuBatchDataHandle<const GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
+    }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     void CopyToDevice() { data_.CopyToDevice(); }
@@ -375,35 +409,18 @@ private:
     Cuda::Memory::UnifiedCudaArray<T> data_;
 };
 
-
-// Non-owning host-side representation of a gpu batch.  Does not
-// grant access to the data and is meant primarily as a shim class
-// helping segregate vanilla c++ code from cuda code.  Actual
-// device functions can access the data by including TraceBatch.cuh.
-// which defines the GpuBatchData class and can interact with the
-// data while running on the device.
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
 template <typename T>
-class GpuBatchDataHandle
+auto KernelArgConvert(BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
 {
-    using DataManagerKey = Cuda::Memory::detail::DataManagerKey;
-public:
-    GpuBatchDataHandle(const BatchDimensions& dims,
-                       uint32_t availableFrames,
-                       Cuda::Memory::DeviceHandle<T> data,
-                       DataManagerKey key)
-        : dims_(dims)
-        , availableFrames_(availableFrames)
-        , data_(data)
-    {}
-
-    const BatchDimensions& Dimensions() const { return dims_; }
-    const Cuda::Memory::DeviceHandle<T>& Data(DataManagerKey key) { return data_; }
-
-protected:
-    BatchDimensions dims_;
-    uint32_t availableFrames_;
-    Cuda::Memory::DeviceHandle<T> data_;
-};
+    return obj.GetDeviceHandle(info);
+}
+template <typename T>
+auto KernelArgConvert(const BatchData<T>& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
 
 }}}     // namespace PacBio::Mongo::Data
 

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SawtoothGenerator.h>
@@ -21,7 +22,7 @@ void ValidateData(TraceBatch<int16_t>& batch,
                   size_t filterWidth,
                   size_t sawtoothHeight,
                   size_t startFrame,
-                  const DataManagerParams& params)
+                  const DataManagerParams&)
 {
     for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
     {
@@ -30,7 +31,7 @@ void ValidateData(TraceBatch<int16_t>& batch,
         {
             if (startFrame+frame < filterWidth) continue;
 
-            short expectedVal = (startFrame + frame - 1) % sawtoothHeight;
+            uint16_t expectedVal = (startFrame + frame - 1) % sawtoothHeight;
             if (expectedVal < filterWidth-1)
                 expectedVal = sawtoothHeight-1;
 
@@ -63,9 +64,9 @@ TEST(MaxFilterTest, GlobalMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -77,10 +78,11 @@ TEST(MaxFilterTest, GlobalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxGlobalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxGlobalFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 
@@ -106,9 +108,9 @@ TEST(MaxFilterTest, SharedMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -120,10 +122,11 @@ TEST(MaxFilterTest, SharedMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxSharedFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxSharedFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 
@@ -149,9 +152,9 @@ TEST(MaxFilterTest, LocalMemoryMax)
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
     {
-        filterData.emplace_back(params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
@@ -163,10 +166,11 @@ TEST(MaxFilterTest, LocalMemoryMax)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        MaxLocalFilter<gpuBlockThreads, FilterWidth><<<params.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& launcher = PBLauncher(MaxLocalFilter<gpuBlockThreads, FilterWidth>,
+                                        params.kernelLanes, gpuBlockThreads);
+        launcher(in,
+                 filterData[batchIdx],
+                 out);
 
         ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
 

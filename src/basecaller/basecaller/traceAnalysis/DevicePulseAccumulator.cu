@@ -36,6 +36,7 @@
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/MongoConstants.h>
 
 using namespace PacBio::Cuda;
@@ -173,7 +174,7 @@ private:
 };
 
 template <typename LabelManager, size_t blockThreads>
-__launch_bounds__(32, 32)
+__launch_bounds__(blockThreads, 32)
 __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               GpuBatchData<const PBShort2> signal,
                               GpuBatchData<const PBShort2> latSignal,
@@ -241,23 +242,27 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
     static constexpr size_t blockThreads = laneSize / 2;
 public:
     AccumImpl(size_t lanesPerPool)
-        : workingSegments_(lanesPerPool, LabelManager::BaselineLabel())
+        : workingSegments_(SOURCE_MARKER(), lanesPerPool, LabelManager::BaselineLabel())
     {
     }
 
-    PulseBatch Process(const PulseBatchFactory& factory, LabelsBatch labels)
+    std::pair<PulseBatch, PulseDetectorMetrics>
+    Process(const PulseBatchFactory& factory, LabelsBatch labels)
     {
-        static constexpr size_t threadsPerBlock = 32;
-        assert(threadsPerBlock*2 == labels.LaneWidth());
+        assert(blockThreads*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata());
-        ProcessLabels<LabelManager, threadsPerBlock><<<labels.LanesPerBatch(),threadsPerBlock>>>(
-                labels,
-                labels.TraceData(),
-                labels.LatentTrace(),
-                labels.Metadata().FirstFrame(),
-                workingSegments_.GetDeviceView(),
-                manager_->GetDevicePtr(),
-                ret.Pulses());
+
+        const auto& launcher = PBLauncher(
+            ProcessLabels<LabelManager, blockThreads>,
+            labels.LanesPerBatch(),
+            blockThreads);
+        launcher(labels,
+                 labels.TraceData(),
+                 labels.LatentTrace(),
+                 labels.Metadata().FirstFrame(),
+                 workingSegments_,
+                 *manager_,
+                 ret.first.Pulses());
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;
@@ -265,7 +270,7 @@ public:
 
     static void Configure(CudaArray<Data::Pulse::NucleotideLabel, numAnalogs>& analogMap)
     {
-        manager_ = std::make_unique<DeviceOnlyObj<LabelManager>>(analogMap);
+        manager_ = std::make_unique<DeviceOnlyObj<const LabelManager>>(SOURCE_MARKER(), analogMap);
     }
 
     static void Finalize()
@@ -275,11 +280,14 @@ public:
 
 private:
     DeviceOnlyArray<Segment<LabelManager, blockThreads>> workingSegments_;
-    static std::unique_ptr<DeviceOnlyObj<LabelManager>> manager_;
+    static std::unique_ptr<DeviceOnlyObj<const LabelManager>> manager_;
 };
 
 template <typename LabelManager>
-std::unique_ptr<DeviceOnlyObj<LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
+constexpr size_t DevicePulseAccumulator<LabelManager>::AccumImpl::blockThreads;
+
+template <typename LabelManager>
+std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
@@ -316,7 +324,8 @@ template <typename LabelManager>
 DevicePulseAccumulator<LabelManager>::~DevicePulseAccumulator() = default;
 
 template <typename LabelManager>
-Data::PulseBatch DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     return impl_->Process(*batchFactory_, std::move(labels));
 }

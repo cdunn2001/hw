@@ -50,7 +50,7 @@ struct AutocorrAccumState
     FloatArray moment1Last;
     FloatArray moment2;
 
-    unsigned int lag;
+    static constexpr unsigned int lag = 4u;
 };
 
 }}      // namespace PacBio::Mongo

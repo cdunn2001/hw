@@ -26,6 +26,8 @@
 
 #include "FrameLabelerKernels.cuh"
 
+#include <common/cuda/streams/LaunchManager.cuh>
+
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
 using namespace PacBio::Mongo::Data;
@@ -58,7 +60,7 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 int32_t FrameLabeler::framesPerChunk_ = 0;
 int32_t FrameLabeler::lanesPerPool_ = 0;
 ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
-std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> FrameLabeler::trans_;
+std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> FrameLabeler::trans_;
 
 
 void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
@@ -67,7 +69,8 @@ void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
     if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
     if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
 
-    trans_ = std::make_unique<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>>(
+    trans_ = std::make_unique<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>>(
+            SOURCE_MARKER(),
             CudaArray<Subframe::AnalogMeta, 4>{meta});
 
     framesPerChunk_ = framesPerChunk;
@@ -113,34 +116,35 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 }
 
 FrameLabeler::FrameLabeler()
-    : latent_(lanesPerPool_)
-    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, nullptr, true)
+    : latent_(SOURCE_MARKER(), lanesPerPool_)
+    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
 {
     if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
     {
         throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
     }
 
-    InitLatent<<<lanesPerPool_, BlockThreads>>>(prevLat_);
+    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
     CudaSynchronizeDefaultStream();
 }
 
 
-__launch_bounds__(32, 32)
+template <size_t blockThreads>
+__launch_bounds__(blockThreads, 32)
 __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, 32>> models,
+                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                   Memory::DeviceView<LatentViterbi<32>> latentData,
-                                   ViterbiData<PBShort2, 32> labels,
+                                   Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
+                                   ViterbiData<PBShort2, blockThreads> labels,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
-                                   Mongo::Data::GpuBatchData<PBShort2> output)
+                                   Mongo::Data::GpuBatchData<PBShort2> output,
+                                   Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
 {
     using namespace Subframe;
 
-    static constexpr unsigned laneWidth = 32;
-    assert(blockDim.x == laneWidth);
-    __shared__ BlockStateSubframeScorer<laneWidth> scorer;
+    assert(blockDim.x == blockThreads);
+    __shared__ BlockStateSubframeScorer<blockThreads> scorer;
 
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
@@ -193,7 +197,18 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     scorer.Setup(models[blockIdx.x]);
     const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    for (int frame = 0; frame < numFrames; ++frame)
+    const int anchor = numFrames - ViterbiStitchLookback;
+    for (int frame = 0; frame < anchor; ++frame)
+    {
+        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+    }
+
+    // Need to store the log likelihoods at the actual anchor point, so
+    // once we choose a terminus state, we can retrieve it's proper
+    // log likelihood
+    CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
+
+    for (int frame = anchor; frame < numFrames; ++frame)
     {
         Recursion(inZmw[frame], frame + ViterbiStitchLookback);
     }
@@ -231,6 +246,10 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         anchorState = Blend(cond, anchorState, PBShort2(i));
     }
 
+    // Now that we have an anchor state, save the associated viterbi score
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x]     = anchorLogLike[anchorState.X()].FloatX();
+    viterbiScoreCache[blockIdx.x][2 * threadIdx.x + 1] = anchorLogLike[anchorState.Y()].FloatY();
+
     // Traceback
     auto traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
@@ -254,25 +273,30 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     }
 }
 
-void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, 64>>& models,
+void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
-                                Mongo::Data::BatchData<int16_t>& output)
+                                Mongo::Data::BatchData<int16_t>& output,
+                                Mongo::Data::FrameLabelerMetrics& metricsOutput)
 {
     auto labels = BorrowScratch();
 
-    FrameLabelerKernel<<<lanesPerPool_, BlockThreads>>>(trans_->GetDevicePtr(),
-                                                        models.GetDeviceHandle(),
-                                                        input,
-                                                        latent_.GetDeviceView(),
-                                                        *labels,
-                                                        prevLat_,
-                                                        latOut,
-                                                        output);
+    const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, lanesPerPool_, BlockThreads);
+    launcher(*trans_,
+             models,
+             input,
+             latent_,
+             *labels,
+             prevLat_,
+             latOut,
+             output,
+             metricsOutput.viterbiScore);
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
+
+constexpr size_t FrameLabeler::BlockThreads;
 
 }}

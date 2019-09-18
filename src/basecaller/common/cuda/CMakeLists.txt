@@ -12,13 +12,19 @@ set(CPP_LIST
     # PBCudaRuntimeNoCuda.cpp
     memory/AllocationViews.h
     memory/DataManagerKey.h
-    memory/AllocationPool.h
-    memory/AllocationPool.cpp
+    memory/ManagedAllocations.h
+    memory/ManagedAllocations.cpp
     memory/SmartHostAllocation.h
     memory/SmartHostAllocation.cpp
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
     memory/UnifiedCudaArray.h
+    streams/CudaEvent.h
+    streams/CudaEvent.cpp
+    streams/KernelLaunchInfo.h
+    streams/KernelLaunchInfo.cpp
+    streams/StreamMonitors.h
+    streams/StreamMonitors.cpp
 )
 
 set(CUDA_LIST
@@ -28,6 +34,7 @@ set(CUDA_LIST
     memory/DeviceOnlyArray.cu
     memory/DeviceOnlyObject.cuh
     memory/DeviceOnlyObject.cu
+    streams/LaunchManager.cuh
     utility/CudaArray.h
     utility/CudaArray.cu
     utility/CudaTuple.cuh
@@ -51,3 +58,6 @@ target_include_directories(libMongoCommonCuda
 )
 
 set_target_properties(libMongoCommonCuda PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+add_subdirectory(test)
+

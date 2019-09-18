@@ -27,12 +27,16 @@
 #ifndef PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 #define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 
+#include <pacbio/ipc/ThreadSafeQueue.h>
+
 #include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/MongoConstants.h>
 
 #include <dataTypes/BatchData.cuh>
+#include <dataTypes/BatchMetrics.h>
 
 #include "SubframeScorer.cuh"
 
@@ -93,13 +97,13 @@ template <typename T, size_t laneWidth>
 struct ViterbiDataHost
 {
     ViterbiDataHost(size_t numFrames, size_t numLanes, T val = T{})
-        : data_(numFrames*numLanes*laneWidth*Subframe::numStates, val)
+        : data_(SOURCE_MARKER(), numFrames*numLanes*laneWidth*Subframe::numStates, val)
         , numFrames_(numFrames)
     {}
 
-    Memory::DeviceView<T> Data(Memory::detail::DataManagerKey)
+    Memory::DeviceView<T> Data(const KernelLaunchInfo& info)
     {
-        return data_.GetDeviceView();
+        return data_.GetDeviceView(info);
     }
     int NumFrames() const { return numFrames_; }
  private:
@@ -112,8 +116,8 @@ struct ViterbiDataHost
 template <typename T, size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
-    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData)
-        : data_(hostData.Data(DataKey()))
+    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData, const KernelLaunchInfo& info)
+        : data_(hostData.Data(info))
         , numFrames_(hostData.NumFrames())
     {}
 
@@ -128,9 +132,15 @@ struct ViterbiData : private Memory::detail::DataManager
     int numFrames_;
 };
 
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
+template <typename T, size_t laneWidth>
+ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
+
+
 class FrameLabeler
 {
-    static constexpr size_t BlockThreads = 32;
+    static constexpr size_t BlockThreads = laneSize/2;
 public:
 
     // Helpers to provide scratch space data.  Used to pool allocations so we
@@ -156,17 +166,18 @@ public:
     FrameLabeler& operator=(FrameLabeler&&) = default;
 
 
-    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, 64>>& models,
+    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, laneSize>>& models,
                       const Mongo::Data::BatchData<int16_t>& input,
                       Mongo::Data::BatchData<int16_t>& latOut,
-                      Mongo::Data::BatchData<int16_t>& output);
+                      Mongo::Data::BatchData<int16_t>& output,
+                      Mongo::Data::FrameLabelerMetrics& metricsOutput);
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
     Mongo::Data::BatchData<int16_t> prevLat_;
 
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
-    static std::unique_ptr<Memory::DeviceOnlyObj<Subframe::TransitionMatrix>> trans_;
+    static std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> trans_;
     static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>>> scratchData_;
 };
 

@@ -3,6 +3,7 @@
 #include "StreamingTestRunner.h"
 
 #include <dataTypes/BatchData.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/DataGenerators/TemplateGenerator.h>
 
 #include <cuda_runtime.h>
@@ -67,12 +68,16 @@ void RunTest(const Data::DataManagerParams& params, size_t simulKernels)
     ZmwDataManager<short> manager(params, std::make_unique<TemplateGenerator>(params));
 
     auto func = [&manager, &params](size_t tid) {
-        Memory::UnifiedCudaArray<size_t> ret(params.kernelLanes, Memory::SyncDirection::HostReadDeviceWrite);
+        Memory::UnifiedCudaArray<size_t> ret(params.kernelLanes, Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
         while (manager.MoreData())
         {
             try {
                 auto batch = manager.NextBatch();
-                BasicSanity<<<params.kernelLanes, params.laneWidth/2>>>(batch.KernelInput(), tid, ret.GetDeviceHandle());
+                const auto& launcher = PBLauncher(BasicSanity,
+                                                params.kernelLanes,
+                                                params.laneWidth/2);
+                launcher(batch.KernelInput(), tid, ret);
+
                 auto view = ret.GetHostView();
                 bool valid = true;
                 for (size_t i = 0; i < params.kernelLanes; ++i)

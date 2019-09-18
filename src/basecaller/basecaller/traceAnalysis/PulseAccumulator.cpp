@@ -59,21 +59,23 @@ void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPe
     batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
             maxCallsPerZmw,
             dims,
-            syncDir,
-            true);
+            syncDir);
 }
 
-Data::PulseBatch PulseAccumulator::Process(Data::LabelsBatch labels)
+std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
+PulseAccumulator::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata());
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {
-        auto view = labels.GetBlockView(laneIdx);
-        (void)view;
-        auto lanePulses = ret.Pulses().LaneView(laneIdx);
+        auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
         lanePulses.Reset();
     }
+
+    // Need to make sure any potential kernels populating `labels`
+    // finish before we destroy the object. 
+    Cuda::CudaSynchronizeDefaultStream();
 
     return ret;
 }

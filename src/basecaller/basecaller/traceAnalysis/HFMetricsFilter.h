@@ -46,12 +46,10 @@ class HFMetricsFilter
 {
 public:     // Types
     using PulseBatchT = Data::PulseBatch;
-    using BaselineStatsT = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
-    using BasecallingMetricsT = Data::BasecallingMetrics<laneSize>;
-    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsT>;
-    using BasecallingMetricsAccumulatorT = Data::BasecallingMetricsAccumulator<laneSize>;
-    using BasecallingMetricsBatchAccumulatorT = Cuda::Memory::UnifiedCudaArray<BasecallingMetricsAccumulatorT>;
-    using ModelsT = Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>;
+    using BaselinerStatsT = Data::BaselinerStatAccumState;
+    using BasecallingMetricsBatchT = Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>;
+    using ModelsT = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
+    using ModelsBatchT = Cuda::Memory::UnifiedCudaArray<ModelsT>;
 
 public: // Static functions
     static void Configure(uint32_t sandwichTolerance,
@@ -65,8 +63,7 @@ public: // Static functions
     static void DestroyAllocationPools();
 
 protected: // Static members
-    static std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> metricsFactory_;
-    static std::unique_ptr<Data::BasecallingMetricsAccumulatorFactory<laneSize>> metricsAccumulatorFactory_;
+    static std::unique_ptr<Data::BasecallingMetricsFactory> metricsFactory_;
     static uint32_t sandwichTolerance_;
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
@@ -90,66 +87,30 @@ public: // Structors
 public: // Filter API
     std::unique_ptr<BasecallingMetricsBatchT> operator()(
             const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models)
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics)
     {
         assert(basecallBatch.GetMeta().PoolId() == poolId_);
-        return Process(basecallBatch, baselineStats, models);
+        return Process(basecallBatch, baselinerStats, models, flMetrics, pdMetrics);
     }
 
-protected:    // Block management
-    virtual void FinalizeBlock() = 0;
-
-private:    // Block management
+private:
     virtual std::unique_ptr<BasecallingMetricsBatchT> Process(
             const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models) = 0;
+            const Data::BaselinerMetrics& baselinerStats,
+            const ModelsBatchT& models,
+            const Data::FrameLabelerMetrics& flMetrics,
+            const Data::PulseDetectorMetrics& pdMetrics) = 0;
 
-private: // State
+protected: // State
     uint32_t poolId_;
 
 protected: // State
     uint32_t framesSeen_;
 
 };
-
-class HostHFMetricsFilter : public HFMetricsFilter
-{
-public:
-    HostHFMetricsFilter(uint32_t poolId)
-        : HFMetricsFilter(poolId)
-        , metrics_(metricsAccumulatorFactory_->NewBatch())
-    {
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            metrics_->GetHostView()[l].Initialize();
-        }
-    };
-    HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
-    HostHFMetricsFilter& operator=(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
-    ~HostHFMetricsFilter() override;
-
-private: // Block management
-    void FinalizeBlock() override;
-
-    void AddPulses(const PulseBatchT& batch);
-
-    void AddBaselineStats(const BaselineStatsT& baselineStats);
-
-    void AddModels(const ModelsT& models);
-
-    std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models) override;
-
-private: // members
-    std::unique_ptr<BasecallingMetricsBatchAccumulatorT> metrics_;
-};
-
 
 class NoHFMetricsFilter : public HFMetricsFilter
 {
@@ -163,17 +124,14 @@ public:
     ~NoHFMetricsFilter() override;
 
 private:
-    uint32_t poolId_;
-
-private:    // Block management
     std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& basecallBatch,
-            const BaselineStatsT& baselineStats,
-            const ModelsT& models) override
+            const PulseBatchT&,
+            const Data::BaselinerMetrics&,
+            const ModelsBatchT&,
+            const Data::FrameLabelerMetrics&,
+            const Data::PulseDetectorMetrics&) override
     { return std::unique_ptr<BasecallingMetricsBatchT>(); };
 
-    void FinalizeBlock() override
-    { };
 };
 
 }}} // PacBio::Mongo::Basecaller

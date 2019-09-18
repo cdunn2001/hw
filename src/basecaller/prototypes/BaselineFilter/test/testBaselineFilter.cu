@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
+#include <common/cuda/streams/LaunchManager.cuh>
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/PicketFenceGenerator.h>
 
@@ -41,9 +42,9 @@ TEST(BaselineFilterTest, GlobalMemory)
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -58,10 +59,12 @@ TEST(BaselineFilterTest, GlobalMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& baseliner = PBLauncher(GlobalBaselineFilter<Filter>,
+                                         dataParams.kernelLanes,
+                                         gpuBlockThreads);
+        baseliner(in,
+                  filterData[batchIdx],
+                  out);
 
 
         for (size_t i = 0; i < out.LanesPerBatch(); ++i)
@@ -118,10 +121,10 @@ TEST(BaselineFilterTest, SharedMemory)
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
     std::vector<DeviceOnlyArray<Filter>> filterRefData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -132,7 +135,7 @@ TEST(BaselineFilterTest, SharedMemory)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {
@@ -141,15 +144,19 @@ TEST(BaselineFilterTest, SharedMemory)
         auto& in = data.KernelInput();
         auto& out = data.KernelOutput();
 
-        SharedBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterData[batchIdx].GetDeviceView(),
-            out);
+        const auto& shared = PBLauncher(SharedBaselineFilter<Filter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        shared(in,
+               filterData[batchIdx],
+               out);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterRefData[batchIdx].GetDeviceView(),
-            truth);
+        const auto& global = PBLauncher(GlobalBaselineFilter<Filter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        global(in,
+               filterRefData[batchIdx],
+               truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)
         {
@@ -188,13 +195,13 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
 
     using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8>;
+    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
-    for (int i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     ZmwDataManager<int16_t> manager(dataParams,
@@ -205,9 +212,9 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     dims.laneWidth = dataParams.laneWidth;
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, nullptr);
-    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, nullptr);
+    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     while (manager.MoreData())
     {
@@ -218,10 +225,12 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
         filterData[batchIdx].RunComposedFilter(in, out, work1, work2);
 
-        GlobalBaselineFilter<<<dataParams.kernelLanes, gpuBlockThreads>>>(
-            in,
-            filterRefData[batchIdx].GetDeviceView(),
-            truth);
+        const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
+                                      dataParams.kernelLanes,
+                                      gpuBlockThreads);
+        global(in,
+               filterRefData[batchIdx],
+               truth);
 
         for (size_t i = 0; i < in.LanesPerBatch(); ++i)
         {

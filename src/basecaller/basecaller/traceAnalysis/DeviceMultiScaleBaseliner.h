@@ -33,7 +33,6 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/ConfigForward.h>
-#include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <basecaller/traceAnalysis/Baseliner.h>
 
@@ -42,7 +41,7 @@ namespace Cuda {
 
 // Forward declaring this for now, but really it should eventually be cleaned up and pulled
 // out of prototypes
-template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2>
+template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2, size_t lag>
 class ComposedFilter;
 
 }}
@@ -59,6 +58,7 @@ class DeviceMultiScaleBaseliner : public Baseliner
     static constexpr size_t width2 = 31;
     static constexpr size_t stride1 = 2;
     static constexpr size_t stride2 = 8;
+    static constexpr size_t lag = 4;
 
     // Used to initialze the morpholigical filters.  Really the first bunch of frames
     // out are garbage, but setting this value at least close to the expected baseline
@@ -86,9 +86,11 @@ public:
     ~DeviceMultiScaleBaseliner() override;
 
 private:    // Customizable implementation
-    Data::CameraTraceBatch Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
+              Data::BaselinerMetrics>
+    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
 
-    using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2>;
+    using Filter = Cuda::ComposedFilter<laneSize/2, width1, width2, stride1, stride2, lag>;
     std::unique_ptr<Filter> filter_;
 };
 

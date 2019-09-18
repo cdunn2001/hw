@@ -69,10 +69,10 @@ public:
     class LoanedData
     {
         friend class ZmwDataManager;
-        LoanedData(Mongo::Data::TraceBatch<TIn>&& input,
-                   Mongo::Data::TraceBatch<TOut>&& output)
-            : input_(std::move(input))
-            , output_(std::move(output))
+        LoanedData(Mongo::Data::TraceBatch<TIn>&& in,
+                   Mongo::Data::TraceBatch<TOut>&& out)
+            : input_(std::move(in))
+            , output_(std::move(out))
         {}
     public:
         LoanedData(const LoanedData&) = delete;
@@ -137,9 +137,6 @@ private:
     std::atomic<size_t> batchesLoaned_;
     std::atomic<size_t> computeBlock_;
     std::thread thread_;
-
-    std::shared_ptr<Memory::DualAllocationPools> poolIn_;
-    std::shared_ptr<Memory::DualAllocationPools> poolOut_;
 
     std::vector<Mongo::Data::TraceBatch<TIn>> bank0;
     std::vector<Mongo::Data::TraceBatch<TIn>> bank1;

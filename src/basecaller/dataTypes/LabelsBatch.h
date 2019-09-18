@@ -28,10 +28,11 @@
 #define PACBIO_MONGO_DATA_LABELS_BATCH_H_
 
 #include "TraceBatch.h"
-#include "CameraTraceBatch.h"
 
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
+
+#include "BatchMetrics.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -44,7 +45,7 @@ class LabelsBatch : public TraceBatch<Label_t>
 {
     static BatchDimensions LatentDimensions(const BatchDimensions& traceDims, size_t latentFrames)
     {
-        BatchDimensions ret{traceDims};
+        BatchDimensions ret = traceDims;
         ret.framesPerBatch = latentFrames;
         return ret;
     }
@@ -54,15 +55,13 @@ public:     // Types
 public:     // Structors and assignment
     LabelsBatch(const BatchMetadata& meta,
                 const BatchDimensions& dims,
-                CameraTraceBatch trace,
+                TraceBatch<ElementType> trace,
                 size_t latentFrames,
-                bool pinned,
                 Cuda::Memory::SyncDirection syncDirection,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool,
-                std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool)
-        : TraceBatch<ElementType>(meta, dims, syncDirection, tracePool, pinned)
+                const Cuda::Memory::AllocationMarker& marker)
+        : TraceBatch<ElementType>(meta, dims, syncDirection, marker)
         , curTrace_(std::move(trace))
-        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, latPool, pinned)
+        , latTrace_(LatentDimensions(dims, latentFrames), syncDirection, marker)
     { }
 
     LabelsBatch(const LabelsBatch&) = delete;
@@ -80,7 +79,7 @@ public:     // Structors and assignment
 private:    // Data
     // Full trace input to label filter, but the last few frames are held back for
     // viterbi stitching, so this class will prevent access to those
-    CameraTraceBatch curTrace_;
+    TraceBatch<ElementType> curTrace_;
 
     // Latent camera trace data held over by frame labeling from the previous block
     BatchData latTrace_;
@@ -93,34 +92,47 @@ private:    // Data
 class LabelsBatchFactory
 {
 public:
-    LabelsBatchFactory(size_t framesPerChunk,
-                       size_t lanesPerPool,
-                       size_t latentFrames,
-                       Cuda::Memory::SyncDirection syncDirection,
-                       bool pinned = true)
-        : latentFrames_(latentFrames)
+    LabelsBatchFactory(uint32_t framesPerChunk,
+                       uint32_t lanesPerPool,
+                       uint32_t latentFrames,
+                       Cuda::Memory::SyncDirection syncDirection)
+        : dims_{lanesPerPool, framesPerChunk, laneSize}
+        , latentFrames_(latentFrames)
         , syncDirection_(syncDirection)
-        , pinned_(pinned)
-        , tracePool_(std::make_shared<Cuda::Memory::DualAllocationPools>(framesPerChunk * lanesPerPool * laneSize * sizeof(int16_t), pinned))
-        , latPool_(std::make_shared<Cuda::Memory::DualAllocationPools>(latentFrames_* lanesPerPool * laneSize * sizeof(int16_t), pinned))
     {}
 
-    LabelsBatch NewBatch(CameraTraceBatch trace)
+    std::pair<LabelsBatch, FrameLabelerMetrics>
+    NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
     {
         auto meta = trace.Metadata();
         auto dims = trace.StorageDims();
-        return LabelsBatch(meta, dims, std::move(trace),
-                           latentFrames_, pinned_,
-                           syncDirection_, tracePool_, latPool_);
+        return std::make_pair(
+            LabelsBatch(
+                meta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER()),
+            FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER()));
+    }
+
+    FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims)
+    {
+        return FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER());
     }
 
 private:
+    BatchDimensions dims_;
     size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
-    bool pinned_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> tracePool_;
-    std::shared_ptr<Cuda::Memory::DualAllocationPools> latPool_;
 };
+
+// Define overloads for this function, so that we can track kernel invocations, and
+// so that we can be converted to our gpu specific representation
+inline auto KernelArgConvert(LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
+inline auto KernelArgConvert(const LabelsBatch& obj, const Cuda::KernelLaunchInfo& info)
+{
+    return obj.GetDeviceHandle(info);
+}
 
 }}}     // namespace PacBio::Mongo::Data
 

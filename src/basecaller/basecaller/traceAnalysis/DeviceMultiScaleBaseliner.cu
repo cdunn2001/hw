@@ -41,8 +41,8 @@ constexpr size_t DeviceMultiScaleBaseliner::stride1;
 constexpr size_t DeviceMultiScaleBaseliner::stride2;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
-void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig &baselinerConfig,
-                                          const Data::MovieConfig &movConfig)
+void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                                          const Data::MovieConfig&)
 {
     const auto hostExecution = false;
     Baseliner::InitAllocationPools(hostExecution);
@@ -53,15 +53,16 @@ void DeviceMultiScaleBaseliner::Finalize()
     Baseliner::DestroyAllocationPools();
 }
 
-Data::CameraTraceBatch DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
+std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
+          Data::BaselinerMetrics>
+DeviceMultiScaleBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
-    auto pools = rawTrace.GetAllocationPools();
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
-    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, pools, true);
+    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    filter_->RunBaselineFilter(rawTrace, out, out.Stats(), work1, work2);
+    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
 
     Cuda::CudaSynchronizeDefaultStream();
     return out;
@@ -71,6 +72,7 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t l
     : Baseliner(poolId)
 {
     filter_ = std::make_unique<Filter>(
+        SOURCE_MARKER(),
         lanesPerPool,
         initVal);
 }

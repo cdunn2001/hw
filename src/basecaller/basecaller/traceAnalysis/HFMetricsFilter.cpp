@@ -41,8 +41,7 @@ bool HFMetricsFilter::realtimeActivityLabels_ = 0;
 uint32_t HFMetricsFilter::framesPerChunk_;
 uint32_t HFMetricsFilter::lanesPerBatch_;
 uint32_t HFMetricsFilter::zmwsPerBatch_;
-std::unique_ptr<Data::BasecallingMetricsFactory<laneSize>> HFMetricsFilter::metricsFactory_;
-std::unique_ptr<Data::BasecallingMetricsAccumulatorFactory<laneSize>> HFMetricsFilter::metricsAccumulatorFactory_;
+std::unique_ptr<Data::BasecallingMetricsFactory> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                 uint32_t framesPerHFMetricBlock,
@@ -88,95 +87,14 @@ void HFMetricsFilter::InitAllocationPools(bool hostExecution)
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
                                           : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory<laneSize>>(
-            dims, syncDir, true);
-    metricsAccumulatorFactory_ = std::make_unique<
-        Data::BasecallingMetricsAccumulatorFactory<laneSize>>(
-            dims, syncDir, true);
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(
+            dims, syncDir);
 }
 
 void HFMetricsFilter::DestroyAllocationPools()
 {
     metricsFactory_.release();
-    metricsAccumulatorFactory_.release();
 }
-
-void HostHFMetricsFilter::FinalizeBlock()
-{
-    for (size_t l = 0; l < lanesPerBatch_; ++l)
-    {
-        metrics_->GetHostView()[l].FinalizeMetrics(realtimeActivityLabels_,
-                                                   frameRate_);
-    }
-}
-
-HostHFMetricsFilter::~HostHFMetricsFilter() = default;
-
-void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
-{
-    const auto& basecalls = pulseBatch.Pulses();
-    for (size_t l = 0; l < lanesPerBatch_; l++)
-    {
-        const auto& laneCalls = basecalls.LaneView(l);
-        metrics_->GetHostView()[l].Count(laneCalls,
-                                         pulseBatch.Dims().framesPerBatch);
-    }
-}
-
-void HostHFMetricsFilter::AddModels(const ModelsT& modelsBatch)
-{
-    for (size_t l = 0; l < lanesPerBatch_; l++)
-    {
-        const auto& models = modelsBatch.GetHostView()[l];
-        metrics_->GetHostView()[l].AddModels(models);
-    }
-}
-
-void HostHFMetricsFilter::AddBaselineStats(const BaselineStatsT& baselineStats)
-{
-    for (size_t l = 0; l < lanesPerBatch_; l++)
-    {
-        const auto& laneStats = baselineStats.GetHostView()[l];
-        metrics_->GetHostView()[l].AddBaselineStats(laneStats);
-    }
-}
-
-std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
-HostHFMetricsFilter::Process(
-        const PulseBatchT& pulseBatch,
-        const BaselineStatsT& baselineStats,
-        const ModelsT& models)
-{
-    if (framesSeen_ == 0)
-    {
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            metrics_->GetHostView()[l].Reset();
-        }
-    }
-
-    AddPulses(pulseBatch);
-    AddBaselineStats(baselineStats);
-    AddModels(models);
-    // TODO: AddPulseDetectionScore/Confidence
-    // TODO: AddAutocorrelation
-    framesSeen_ += pulseBatch.Dims().framesPerBatch;
-
-    if (framesSeen_ >= framesPerHFMetricBlock_)
-    {
-        FinalizeBlock();
-        framesSeen_ = 0;
-        auto ret = metricsFactory_->NewBatch();
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            metrics_->GetHostView()[l].PopulateBasecallingMetrics(
-                    ret->GetHostView()[l]);
-        }
-        return ret;
-    }
-    return std::unique_ptr<BasecallingMetricsBatchT>();
-}
-
 
 NoHFMetricsFilter::~NoHFMetricsFilter() = default;
 

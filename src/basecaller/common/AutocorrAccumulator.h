@@ -59,9 +59,8 @@ public:     // Types
     using BoolType = Simd::BoolConv<T>;
 
 public:     // Structors
-    /// Construct an instance with specified lag and offset.
-    /// \a lag must be greater than 0.
-    explicit AutocorrAccumulator(unsigned int lag = 1, const T& offset = T(0));
+    /// Construct an instance with specified offset.
+    explicit AutocorrAccumulator(const T& offset = T(0));
 
     /// Copy constructor.
     AutocorrAccumulator(const AutocorrAccumulator& that) = default;
@@ -71,7 +70,6 @@ public:     // Structors
         , m1First_ {state.moment1First}
         , m1Last_ {state.moment1Last}
         , m2_ {state.moment2}
-        , lag_ {state.lag}
         , canAddSample_ {false}
     { }
 
@@ -84,7 +82,6 @@ public:     // Const methods
             {m1First_.cbegin(), m1First_.cend()},
             {m1Last_.cbegin(), m1Last_.cend()},
             {m2_.cbegin(), m2_.cend()},
-            lag_
         };
     }
 
@@ -111,17 +108,14 @@ public:     // Const methods
     { return stats_.Variance(); }
 
     /// The autocorrelation coefficient of the accumulated samples at the
-    /// lag Lag().
-    /// NaN if Count() < Lag() + 1.
+    /// lag AutocorrAccumState::lag.
+    /// NaN if Count() < AutocorrAccumState::lag + 1.
     /// -1.0 <= Autocorrelation() <= 1.0.
     T Autocorrelation() const;
 
     /// The current offset.
     const T& Offset() const
     { return stats_.Offset(); }
-
-    unsigned int Lag() const
-    { return lag_; }
 
     /// Returns a copy of *this with all moments scaled by \a s.
     AutocorrAccumulator operator*(float s) const;
@@ -167,7 +161,7 @@ public:     // Mutating methods
     void Shift(const T& shift)
     { stats_.Shift(shift); }
 
-    /// Reset to initial state (conserve lag and offset).
+    /// Reset to initial state (conserve offset).
     void Reset()
     {
         stats_.Reset();
@@ -183,10 +177,9 @@ private:    // Data
     // Replace with something based on something like boost::static_vector.
     AlignedCircularBuffer<T> lagBuf_;
 
-    T m1First_;     // First moment of the first Count() - Lag() samples.
-    T m1Last_;     // First moment of the last Count() - Lag() samples.
-    T m2_;      // Generalized second moment. Sum of x_i * x_i+Lag().
-    unsigned int lag_;
+    T m1First_;     // First moment of the first Count() - AutocorrAccumState::lag samples.
+    T m1Last_;     // First moment of the last Count() - AutocorrAccumState::lag samples.
+    T m2_;      // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
     bool canAddSample_;
 };
 

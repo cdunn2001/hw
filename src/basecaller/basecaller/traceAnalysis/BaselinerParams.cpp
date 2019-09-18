@@ -21,8 +21,8 @@ BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::Method
         PBLOG_DEBUG << ss.str();
     };
     
-    using Strides = typename BaselinerParams::Strides;
-    using Widths = typename BaselinerParams::Widths;
+    using Strides = typename BaselinerParams::Strides_t;
+    using Widths = typename BaselinerParams::Widths_t;
 
     // Intentionally not placing a 'default' statement, so we can at least get
     // a compiler warning if this switch is ever incomplete.

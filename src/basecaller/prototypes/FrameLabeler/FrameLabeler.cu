@@ -39,12 +39,13 @@ void run(const Data::DataManagerParams& dataParams,
          const Subframe::AnalogMeta& baselineMeta,
          size_t simulKernels)
 {
-    static constexpr size_t gpuBlockThreads = 32;
-    static constexpr size_t laneWidth = 64;
+    Memory::EnablePerformanceMode();
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneWidth>>> models;
+    static constexpr size_t gpuBlockThreads = laneSize/2;
 
-    LaneModelParameters<PBHalf, laneWidth> referenceModel;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
+
+    LaneModelParameters<PBHalf, laneSize> referenceModel;
     referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
     for (int i = 0; i < 4; ++i)
     {
@@ -53,7 +54,7 @@ void run(const Data::DataManagerParams& dataParams,
 
     BatchDimensions latBatchDims;
     latBatchDims.framesPerBatch = dataParams.blockLength;
-    latBatchDims.laneWidth = laneWidth;
+    latBatchDims.laneWidth = laneSize;
     latBatchDims.lanesPerBatch = dataParams.kernelLanes;
     std::vector<Data::BatchData<int16_t>> latTrace;
 
@@ -65,23 +66,31 @@ void run(const Data::DataManagerParams& dataParams,
     for (size_t i = 0; i < numBatches; ++i)
     {
 
-        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead);
+        models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)
         {
             modelView[j] = referenceModel;
         }
 
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, nullptr, true);
+        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
-    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace](
+    std::vector<FrameLabelerMetrics> frameLabelerMetrics;
+    for (size_t i = 0; i < numBatches; ++i)
+    {
+        frameLabelerMetrics.emplace_back(
+                latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    }
+
+    auto tmp = [&models, &dataParams, &frameLabelers, &latTrace, &frameLabelerMetrics](
         const TraceBatch<int16_t>& batch,
         size_t batchIdx,
         TraceBatch<int16_t>& ret)
     {
         if (dataParams.laneWidth != 2*gpuBlockThreads) throw PBException("Lane width not currently configurable.  Must be 64 zmw");
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret);
+        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], batch, latTrace[batchIdx], ret,
+                                             frameLabelerMetrics[batchIdx]);
         (void)latTrace[batchIdx].GetBlockView(0);
     };
 
@@ -89,6 +98,8 @@ void run(const Data::DataManagerParams& dataParams,
     RunThreads(simulKernels, manager, tmp);
 
     FrameLabeler::Finalize();
+
+    Memory::DisablePerformanceMode();
 }
 
 }}

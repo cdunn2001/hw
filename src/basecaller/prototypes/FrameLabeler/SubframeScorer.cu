@@ -64,7 +64,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
     // Mean IPD for the input analog set.
     const float meanIpd = [&meta](){
         float sum = 0.0f;
-        for (int i = 0; i < numAnalogs; ++i) sum+=meta[i].ipd;
+        for (uint32_t i = 0; i < numAnalogs; ++i) sum+=meta[i].ipd;
         return sum/numAnalogs;
     }();
 
@@ -116,7 +116,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
     alpha[3] = alphaFactor * 0.25f * (ipdLenProbs[3][0] + ipdLenProbs[3][1]);
     const auto& alphaSum = [&]() {
         float sum = 0.0f;
-        for (int i = 0; i < numAnalogs; ++i)
+        for (uint32_t i = 0; i < numAnalogs; ++i)
         {
             sum += alpha[i];
         }
@@ -140,7 +140,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
 
     data_[0][0] = 1.0f - pulseStartProb;
 
-    for (int i = 0; i < numAnalogs; ++i)
+    for (uint32_t i = 0; i < numAnalogs; ++i)
     {
         const auto full = SubframeLabelManager::FullState(i);
         const auto up = SubframeLabelManager::UpState(i);
@@ -191,7 +191,7 @@ __device__ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, num
         data_[0][down] = 1 - alphaSum;
 
         // Handle the dense section of u->u' and d->u' transitions
-        for (int j = 0; j < numAnalogs; j++)
+        for (uint32_t j = 0; j < numAnalogs; j++)
         {
             auto upPrime = SubframeLabelManager::UpState(j);
 

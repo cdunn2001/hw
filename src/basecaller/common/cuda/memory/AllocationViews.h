@@ -77,7 +77,7 @@ template <typename T>
 class DeviceHandle : protected detail::DataManager
 {
 public:
-    CUDA_ENABLED DeviceHandle(T* data, size_t len, detail::DataManagerKey key)
+    CUDA_ENABLED DeviceHandle(T* data, size_t len, detail::DataManagerKey)
         : data_(data)
         , len_(len)
     {}
@@ -85,7 +85,7 @@ public:
     // Implicit conversion to DeviceHandle<const T> needs to be disabled if we're already
     // templated on a const T
     template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
-    CUDA_ENABLED operator DeviceHandle<const T>()
+    CUDA_ENABLED operator DeviceHandle<const T>() const
     {
         return DeviceHandle<const T>(data_, len_, DataKey());
     }

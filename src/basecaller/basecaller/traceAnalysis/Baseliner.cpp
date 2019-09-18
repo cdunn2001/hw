@@ -10,8 +10,8 @@ namespace Basecaller {
 std::unique_ptr<Data::CameraBatchFactory> Baseliner::batchFactory_;
 
 // static
-void Baseliner::Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig)
+void Baseliner::Configure(const Data::BasecallerBaselinerConfig&,
+                          const Data::MovieConfig&)
 {
     const auto hostExecution = true;
     InitAllocationPools(hostExecution);
@@ -24,7 +24,7 @@ void Baseliner::InitAllocationPools(bool hostExecution)
     const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
     const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir, true);
+    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir);
 }
 
 void Baseliner::DestroyAllocationPools()
