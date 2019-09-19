@@ -717,23 +717,6 @@ using SparseMatrixSpec = typename SparseMatrixGenerator<Rows...>::type;
 template <size_t row, size_t firstIdx, class...Segments>
 constexpr std::array<CompactSegment,sizeof...(Segments)> SparseRow<row, firstIdx, Segments...>::segments;
 
-    using Transition_t = SparseMatrixSpec<
-    //                    B  T  G  C  A  TU GU CU AU TD GD CD AD
-            SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // Baseline
-            SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T
-            SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G
-            SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C
-            SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>, // A
-            SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // T Up
-            SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // G Up
-            SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // C Up
-            SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // A Up
-            SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T Down
-            SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G Down
-            SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C Down
-            SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>  // A Down
-        >;
-
 }}
 
 #endif /* Sequel_Basecaller_Common_SparseMatrix_H_ */

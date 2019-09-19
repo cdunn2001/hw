@@ -30,8 +30,8 @@ void* CudaRawMallocHostZero(size_t size);
 void* CudaRawHostGetDevicePtr(void* p);
 void  CudaFree(void* t);
 void  CudaFreeHost(void* t);
-void  CudaRawCopyHost(void* dest, void* src, size_t size);
-void  CudaRawCopyDevice(void* dest, void* src, size_t size);
+void  CudaRawCopyHost(void* dest, void* src, size_t count);
+void  CudaRawCopyDevice(void* dest, void* src, size_t count);
 void  CudaSynchronizeDefaultStream();
 void  CudaRawCopyToSymbol(const void* dest, void* src, size_t count);
 

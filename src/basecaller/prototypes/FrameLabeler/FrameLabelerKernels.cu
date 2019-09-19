@@ -186,24 +186,24 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     __shared__ BlockStateSubframeScorer<blockThreads> scorer;
 
     // This optimization requires some notes, and may need to be revisited
-    // periodically.  The BlockStateSubframeScorer above uses 26 32 bit words
+    // periodically.  The BlockStateSubframeScorer above uses 26 32-bit words
     // of storage per thread.  In order to get 32 occupant blocks (the best we
     // can do when our block size is 32 threads) then there really are only 24
     // words available.  The best we can do with the above data structure is
     // roughly 29 blocks.  However in an experiment where I pushed two members from
     // `scorer` to local mem / registers, my throughput went down.  I did get the
-    // desired increase in occupancy, and overal there were the same number of
+    // desired increase in occupancy, and overall there were the same number of
     // memory requests so the new local variables were not causing new memory
     // traffic, but our cache hit rate went down.  The improved occupancy helped
     // us less than the new increase in memory latency hurt us.
     //
     // This is not entirely unexpected as more resident blocks means they effectively
-    // each get less L1 space to use.  So I did a subsequent experiement adding this one
+    // each get less L1 space to use.  So I did a subsequent experiment adding this one
     // extra shared variable, to see if we could decrease our occpancy a little more
     // and get even better L1 usage.
     //
     // The result was a 4% increase in throughput, which for a single change is good
-    // enough to want to keep.  However when profiling, things it did not appear that
+    // enough to want to keep.  However when profiling things, it did not appear that
     // we were actually benefiting from an increase in cache hits.  Instead the delta
     // between our theoretical occupancy (limited by our shared memory usage) and
     // our actual achieved occupancy went down.  In other words the added shared
@@ -278,6 +278,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
         for (short state = 0; state < numStates; ++state)
         {
             auto prev = packedLabels.PopFront();
+            // a PackedLabels fits four x/y pairs, so after every 4th state we have exhausted
+            // the current packedLabels and need to extract the next one.
             if ((state % 4) == 3)
             {
                 packedLabels = labels(i, state / 4 + 1);

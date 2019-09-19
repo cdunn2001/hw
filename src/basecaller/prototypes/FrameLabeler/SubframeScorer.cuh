@@ -61,7 +61,24 @@ namespace Subframe {
 using Mongo::Basecaller::SubframeLabelManager;
 static constexpr int numStates = SubframeLabelManager::numStates;
 
-struct __align__(128) TransitionMatrix : public Transition_t
+using SparseTransitionSpec = SparseMatrixSpec<
+//                B  T  G  C  A  TU GU CU AU TD GD CD AD
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // Baseline
+    SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T
+    SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G
+    SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C
+    SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>, // A
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // T Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // G Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // C Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // A Up
+    SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T Down
+    SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G Down
+    SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C Down
+    SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>  // A Down
+>;
+
+struct __align__(128) TransitionMatrix : public SparseTransitionSpec
 {
     // Default constructor for use in device __constant__ memory.  Will
     // remain uninitialized until the host coppies up the data
