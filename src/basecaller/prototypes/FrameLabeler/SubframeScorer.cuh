@@ -39,6 +39,8 @@
 
 #include "AnalogMeta.h"
 
+#include "SparseMatrix.cuh"
+
 namespace PacBio {
 
 // I normally wouldn't do `using namespace` in a header, but these
@@ -59,20 +61,31 @@ namespace Subframe {
 using Mongo::Basecaller::SubframeLabelManager;
 static constexpr int numStates = SubframeLabelManager::numStates;
 
-struct __align__(128) TransitionMatrix
+using SparseTransitionSpec = SparseMatrixSpec<
+//                B  T  G  C  A  TU GU CU AU TD GD CD AD
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // Baseline
+    SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T
+    SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G
+    SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C
+    SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>, // A
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // T Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // G Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // C Up
+    SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // A Up
+    SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T Down
+    SparseRowSpec<0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0>, // G Down
+    SparseRowSpec<0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0>, // C Down
+    SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>  // A Down
+>;
+
+struct __align__(128) TransitionMatrix : public SparseTransitionSpec
 {
-    using T = half;
-    using Row = Utility::CudaArray<T, numStates>;
+    // Default constructor for use in device __constant__ memory.  Will
+    // remain uninitialized until the host coppies up the data
+    TransitionMatrix() = default;
 
-    // Initializes the cuda matrix on the device.  Should be invoked by only
-    // a single thread.
-    __device__ TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
-
-    __device__ T operator()(int row, int col) const { return data_[row][col]; }
-    __device__ T Entry(int row, int col)      const { return data_[row][col]; }
-
-private:
-    Utility::CudaArray<Row, numStates> data_;
+    // Ctor for host construction
+    TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
 };
 
 // Gaussian fallback for edge frame scoring.  This is a near unchanged transcription
@@ -176,8 +189,6 @@ struct __align__(128) BlockStateSubframeScorer
     __device__ PBHalf2 StateScores(PBHalf2 data, int state) const
     {
         const PBHalf2 nhalfVal = PBHalf2(-0.5f);
-        const PBHalf2 one = PBHalf2(1.0f);
-        const PBHalf2 zero = PBHalf2(0.0f);
 
         switch (state)
         {
@@ -218,6 +229,8 @@ struct __align__(128) BlockStateSubframeScorer
 
                 // xmu > mumu means that the Euclidean projection of x onto mu is
                 // greater than the norm of mu.
+                const PBHalf2 one = PBHalf2(1.0f);
+                const PBHalf2 zero = PBHalf2(0.0f);
                 score = Blend(xmu > mumu,
                               min(min(score, fScore - one), zero),
                               score);

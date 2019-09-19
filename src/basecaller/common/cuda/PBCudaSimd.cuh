@@ -40,6 +40,29 @@ inline __device__ PBHalf2 Blend(PBBool2 cond, PBHalf2 l, PBHalf2 r)
     return PBHalf2(__halves2half2(low, high));
 }
 
+
+inline __device__ PBHalf2 Blend(PBShort2 cond, PBHalf2 l, PBHalf2 r)
+{
+    half zero = __float2half(0.0f);
+    half low  = cond.X() ? __low2half(l.data())  : __low2half(r.data());
+    half high = cond.Y() ? __high2half(l.data()) : __high2half(r.data());
+    return PBHalf2(__halves2half2(low, high));
+}
+
+inline __device__ PBShort2 Blend(PBShort2 cond, PBShort2 l, PBShort2 r)
+{
+    return PBShort2::FromRaw( (cond.data() & l.data()) | ((~cond.data()) & r.data()));
+}
+
+inline __device__ PBShort2 Blend(PBBool2 cond, PBShort2 l, PBShort2 r)
+{
+    half zero = __float2half(0.0f);
+    uint32_t mask = 0;
+    if (cond.X()) mask |= 0x0000FFFF;
+    if (cond.Y()) mask |= 0xFFFF0000;
+    return Blend(PBShort2::FromRaw(mask), l, r);
+}
+
 inline __device__ PBBool2 operator ||(PBBool2 first, PBBool2 second)
 {
     half zero = __float2half(0.0f);
@@ -56,12 +79,31 @@ inline __device__ PBBool2 operator &&(PBBool2 first, PBBool2 second)
     return PBBool2(low, high);
 }
 
+// Simd logical "or" and bitwise "or" are the same thing on boolean PBShort2 values,
+// as cuda represents true as 0xFFFF an false as 0x0;
+inline __device__ PBShort2 operator ||(PBShort2 first, PBShort2 second)
+{
+    return PBShort2::FromRaw(first.data() | second.data());
+}
+
+inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
+{
+    return PBShort2::FromRaw(first.data() & second.data());
+}
+
+
 // TODO we need to come to a concensus about things like && vs &.  These overloads are to unify
 // with host side code that does it this way
 inline __device__ PBBool2 operator |(PBBool2 first, PBBool2 second)
 { return first || second; }
 inline __device__ PBBool2 operator &(PBBool2 first, PBBool2 second)
 { return first && second; }
+
+inline __device__ PBShort2 operator |(PBShort2 first, PBShort2 second)
+{ return first || second; }
+inline __device__ PBShort2 operator &(PBShort2 first, PBShort2 second)
+{ return first && second; }
+
 
 
 inline __device__ PBBool2 operator!(PBBool2 b)
@@ -70,6 +112,10 @@ inline __device__ PBBool2 operator!(PBBool2 b)
     bool low  = (__low2half(b.data()) == zero);
     bool high = (__high2half(b.data()) == zero);
     return PBBool2(low, high);
+}
+inline __device__ PBShort2 operator!(PBShort2 b)
+{
+    return PBShort2::FromRaw(~b.data());
 }
 
 inline __device__ PBHalf2 operator + (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() + r.data()); }
@@ -110,53 +156,24 @@ inline __device__ PBShort2 ToShort(PBHalf2 h)
                     __half2short_rn(h.data().y));
 }
 
-// Note: Do not enable these functions unless necessary.
-
-// Rational: Right now PBShort2 is based on a short2 implementation.  A downside of this
-//           is that working with short2 requires twice as many 16 bit load/store/operations
-//           than if things were bit packed into a single 32 bit type.  The gpu has
-//           a word access size of 32 which makes this less than ideal, as we'll
-//           still end up fetching 32 bits even if we really only wanted 16.  Memory
-//           loads can be a significan bottleneck, and having 2x loads are potentially
-//           problematic, even if we can expect alternating loads to be cached.
+// Cuda integral intrinsics do not supply multiplication and division.  If they really
+// become necessary then operators can be added to emulate it, but that will be costly.
+// If that need arises we should consider maybe having separate PBShort2 and SimdPBShort2
 //
-//           Cuda does provide some SIMD intrinsics, but they seem better suited towards
-//           conditonals than arithmetic, as addition/subtraction seem limited to saturation
-//           rather than rollover, and mul/div are simply lacking.  Our current usages do actually
-//           function perfectly well without arithmetic, but I've not yet had a chance to confirm
-//           the 16 bit loads are signficantly impacting performance and I don't want to limit the
-//           API of this class until I know it serves a necessary purpose.
-//
-//           Having these functions here but disabled is just a way to walk the middle road.  We'll
-//           keep the short2 implementation until I can confirm there is benefit from a SIMD
-//           implementation, and until that time the use of the arithmetic operations is discouraged
-//           so that a switch to SIMD later will be less painful.  If you find yourself having real
-//           need to enable these functions then do so, but that also increases our need to evaluate
-//           a SIMD implementation sooner than later.
-
-inline __device__ PBShort2 operator + (PBShort2 l, PBShort2 r) { return PBShort2(l.X() + r.X(), l.Y() + r.Y()); }
-inline __device__ PBShort2 operator - (PBShort2 l, PBShort2 r) { return PBShort2(l.X() - r.X(), l.Y() - r.Y()); }
-//inline __device__ PBShort2 operator * (PBShort2 l, PBShort2 r) { return PBShort2(l.X() * r.X(), l.Y() * r.Y()); }
-//inline __device__ PBShort2 operator / (PBShort2 l, PBShort2 r) { return PBShort2(l.X() / r.X(), l.Y() / r.Y()); }
+// Be aware that CUDA integral intrinsic arithmetic saturates instead of over/underflow
+inline __device__ PBShort2 operator + (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vaddss2(l.data(), r.data())); }
+inline __device__ PBShort2 operator - (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vsubss2(l.data(), r.data())); }
 
 inline __device__ PBShort2& operator +=(PBShort2& l, const PBShort2 r) { l = l + r; return l;}
 inline __device__ PBShort2& operator -=(PBShort2& l, const PBShort2 r) { l = l - r; return l;}
-//inline __device__ PBShort2& operator *=(PBShort2& l, const PBShort2 r) { l = l * r; return l;}
-//inline __device__ PBShort2& operator /=(PBShort2& l, const PBShort2 r) { l = l / r; return l;}
 
-inline __device__ PBBool2 operator <  (PBShort2 l, PBShort2 r) { return PBBool2(l.X() <  r.X(), l.Y() <  r.Y()); }
-inline __device__ PBBool2 operator <= (PBShort2 l, PBShort2 r) { return PBBool2(l.X() <= r.X(), l.Y() <= r.Y()); }
-inline __device__ PBBool2 operator >  (PBShort2 l, PBShort2 r) { return PBBool2(l.X() >  r.X(), l.Y() >  r.Y()); }
-inline __device__ PBBool2 operator >= (PBShort2 l, PBShort2 r) { return PBBool2(l.X() >= r.X(), l.Y() >= r.Y()); }
-inline __device__ PBBool2 operator == (PBShort2 l, PBShort2 r) { return PBBool2(l.X() == r.X(), l.Y() == r.Y()); }
-inline __device__ PBBool2 operator != (PBShort2 l, PBShort2 r) { return PBBool2(l.X() != r.X(), l.Y() != r.Y()); }
-
-inline __device__ PBShort2 Blend(PBBool2 cond, PBShort2 l, PBShort2 r)
-{
-    half zero = __float2half(0.0f);
-    return PBShort2((__low2half(cond.data())  == zero) ? r.X()  : l.X(),
-                    (__high2half(cond.data())  == zero) ? r.Y()  : l.Y());
-}
+// For each 16 bit slot, 0xFFFF represents true and 0x0000 represents false;
+inline __device__ PBShort2 operator <  (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmplts2(l.data(), r.data())); }
+inline __device__ PBShort2 operator <= (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmples2(l.data(), r.data())); }
+inline __device__ PBShort2 operator >  (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmpgts2(l.data(), r.data())); }
+inline __device__ PBShort2 operator >= (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmpges2(l.data(), r.data())); }
+inline __device__ PBShort2 operator == (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmpeq2(l.data(), r.data())); }
+inline __device__ PBShort2 operator != (PBShort2 l, PBShort2 r) { return PBShort2::FromRaw(__vcmpne2(l.data(), r.data())); }
 
 inline __device__ PBShort2 min(PBShort2 l, PBShort2 r)
 {
