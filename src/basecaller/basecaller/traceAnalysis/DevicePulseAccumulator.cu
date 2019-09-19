@@ -55,7 +55,7 @@ namespace {
 // I don't know if we want a full PBUInt2 type added, or if using raw uint2 is
 // preferrable, or if using a pair of ints is just an implementation quirk of this
 // particular file
-inline __device__ uint2 Blend(PBBool2 cond, uint l, uint2 r) {
+inline __device__ uint2 Blend(PBShort2 cond, uint l, uint2 r) {
     uint2 ret;
     ret.x = cond.X() ? l : r.x;
     ret.y = cond.Y() ? l : r.y;
@@ -101,12 +101,12 @@ public:
         m2_[threadIdx.x] = other.m2_[threadIdx.x];
     }
 
-    __device__ PBBool2 IsNewSegment(PBShort2 label) const
+    __device__ PBShort2 IsNewSegment(PBShort2 label) const
     {
         return LabelManager::IsNewSegment(label_[threadIdx.x], label);
     }
 
-    __device__ PBBool2 IsPulse() const
+    __device__ PBShort2 IsPulse() const
     {
         return LabelManager::BaselineLabel() != label_[threadIdx.x];
     }
@@ -143,7 +143,7 @@ public:
             .IsReject(false);
     }
 
-    __device__ void ResetSegment(PBBool2 boundaryMask, uint32_t frameIndex,
+    __device__ void ResetSegment(PBShort2 boundaryMask, uint32_t frameIndex,
                                  PBShort2 label, PBShort2 signal)
     {
         startFrame_[threadIdx.x] = Blend(boundaryMask, frameIndex, startFrame_[threadIdx.x]);
@@ -155,7 +155,7 @@ public:
         label_[threadIdx.x] = Blend(boundaryMask, label, label_[threadIdx.x]);
     }
 
-    __device__ void AddSignal(PBBool2 update, PBShort2 signal)
+    __device__ void AddSignal(PBShort2 update, PBShort2 signal)
     {
         signalTotal_[threadIdx.x] = Blend(update,
                                           signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x],

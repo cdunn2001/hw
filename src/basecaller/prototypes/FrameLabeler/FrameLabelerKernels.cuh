@@ -92,12 +92,71 @@ private:
     Utility::CudaArray<PBShort2, laneWidth> boundary_;
 };
 
-// TODO this needs cleanup.  If numLanes doesn't match what is actually used on the gpu, we're dead
-template <typename T, size_t laneWidth>
+// This class represents compressed frame labels, where
+// each label only takes up four bits.  It works with
+// paired 'x' and 'y' values to correspond with the
+// ushort2 type used to produce/consume non-packed labels.
+//
+// The class has a very 'circular buffer'-esque interface,
+// as the bit operations for always dealing with the front
+// and back proved cheaper than trying to insert/extract
+// items in the middle.
+class PackedLabels
+{
+public:
+    static constexpr int bitsPerValue = 4;
+    static constexpr int numValues = 32 / bitsPerValue;
+    static constexpr int numPairs = numValues/2;
+
+    // Push back an x,y pair into the back two slots.
+    // The first two slots will roll off
+    __device__ void PushBack(const ushort2& val)
+    {
+        assert(val.x < (1 << bitsPerValue));
+        assert(val.y < (1 << bitsPerValue));
+
+        data_  = data_ >> 2*bitsPerValue;
+        data_ |= (val.x << ((numValues - 2) * bitsPerValue));
+        data_ |= (val.y << ((numValues - 1) * bitsPerValue));
+    }
+
+    // Push back the number of zero pairs specified by count
+    template <int count>
+    __device__ void PushBackZeroes()
+    {
+        data_ = data_ >> (2*bitsPerValue*count);
+    }
+
+    // extracts the front x,y pair, effectively pushes
+    // zeroes into the back two slots.
+    __device__ ushort2 PopFront()
+    {
+        auto ret = make_ushort2(data_ & 0xF, (data_ >> bitsPerValue) & 0xF);
+        data_ = data_ >> 2*bitsPerValue;
+        return ret;
+    }
+
+    // Access an x value of an x,y pair by index
+    __device__ short XAt(ushort idx) const
+    {
+        return (data_ >> (2*bitsPerValue * idx)) & 0xF;
+    }
+    // Access a y value of an x,y pair by index
+    __device__ short YAt(ushort idx) const
+    {
+        return (data_ >> (2*bitsPerValue * idx + bitsPerValue)) & 0xF;
+    }
+private:
+    uint32_t data_;
+};
+
+template <size_t laneWidth>
 struct ViterbiDataHost
 {
-    ViterbiDataHost(size_t numFrames, size_t numLanes, T val = T{})
-        : data_(SOURCE_MARKER(), numFrames*numLanes*laneWidth*Subframe::numStates, val)
+    using T = PackedLabels;
+    static constexpr int numPackedLabels = (Subframe::numStates + PackedLabels::numPairs - 1) / PackedLabels::numPairs;
+    ViterbiDataHost(size_t numFrames, size_t numLanes)
+        : data_(SOURCE_MARKER(), numFrames * numLanes * laneWidth * numPackedLabels)
         , numFrames_(numFrames)
     {}
 
@@ -111,21 +170,34 @@ struct ViterbiDataHost
     int numFrames_;
 };
 
-// TODO I don't like this API...  Should have a separate ViterbiData object, either
-// per thread or per block.
-template <typename T, size_t laneWidth>
+template <size_t laneWidth>
 struct ViterbiData : private Memory::detail::DataManager
 {
-    ViterbiData(ViterbiDataHost<T, laneWidth>& hostData, const KernelLaunchInfo& info)
+    using T = PackedLabels;
+    static constexpr int numPackedLabels = ViterbiDataHost<laneWidth>::numPackedLabels;
+    ViterbiData(ViterbiDataHost<laneWidth>& hostData, const KernelLaunchInfo& info)
         : data_(hostData.Data(info))
         , numFrames_(hostData.NumFrames())
     {}
 
-    __device__ T& operator()(int frame, int state)
+    class ViterbiBlockData
     {
-        return data_[numFrames_*laneWidth*Subframe::numStates*blockIdx.x
-                     + frame*laneWidth*Subframe::numStates
-                     + state*laneWidth +  threadIdx.x];
+    public:
+        __device__ ViterbiBlockData(T* data)
+            : data_(data)
+        {}
+
+        __device__ T& operator()(int frame, int state)
+        {
+            return data_[frame * laneWidth * numPackedLabels + state * laneWidth];
+        }
+    private:
+        T* data_;
+    };
+    __device__ ViterbiBlockData BlockData()
+    {
+        return ViterbiBlockData(&data_[numFrames_ * laneWidth * numPackedLabels * blockIdx.x
+                                       + threadIdx.x]);
     }
  private:
     Memory::DeviceView<T> data_;
@@ -134,8 +206,9 @@ struct ViterbiData : private Memory::detail::DataManager
 
 // Define overloads for this function, so that we can track kernel invocations, and
 // so that we can be converted to our gpu specific representation
-template <typename T, size_t laneWidth>
-ViterbiData<T, laneWidth> KernelArgConvert(ViterbiDataHost<T, laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<T, laneWidth>(v, info); }
+template <size_t laneWidth>
+ViterbiData<laneWidth> KernelArgConvert(ViterbiDataHost<laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<laneWidth>(v, info); }
+
 
 
 class FrameLabeler
@@ -149,8 +222,8 @@ public:
     static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
                           int32_t lanesPerPool, int32_t framesPerChunk);
 private:
-    static std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> BorrowScratch();
-    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> data);
+    static std::unique_ptr<ViterbiDataHost<BlockThreads>> BorrowScratch();
+    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<BlockThreads>> data);
 
 public:
     // This is necessary to call, if we wait until the C++ runtime is tearing down, the static scratch data
@@ -177,8 +250,7 @@ private:
 
     static int32_t lanesPerPool_;
     static int32_t framesPerChunk_;
-    static std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> trans_;
-    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>>> scratchData_;
+    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<BlockThreads>>> scratchData_;
 };
 
 }}
