@@ -183,15 +183,15 @@ void TestPulseAccumulator()
     std::vector<Data::BaselinedTraceElement> simTrc;
 
     // Generate normally distributed baseline with given mean and variance.
-    const short baselineMean = 200;
-    const short baselineStd = 20;
+    const short baselineMean = 0;
+    const short baselineStd = 10;
     std::random_device rd{};
     std::mt19937 gen{rd()};
     std::normal_distribution<> d{baselineMean, baselineStd};
 
     // Fixed signal values for pulses.
-    const short latTraceVal = 400;
-    const short curTraceVal = 500;
+    const short latTraceVal = 40;
+    const short curTraceVal = 50;
 
     size_t baselineFrames = 0;
     {
@@ -247,6 +247,10 @@ void TestPulseAccumulator()
         }
     }
 
+    labelsBatch.TraceData().SetFrameLimit(labelsBatch.NumFrames() - labelsBatch.LatentTrace().NumFrames());
+
+    assert(labelsBatch.NumFrames() == labelsBatch.TraceData().NumFrames() + labelsBatch.LatentTrace().NumFrames());
+
     PulseAccumulatorToTest pulseAccumulator(poolId, lanesPerPool);
 
     const auto& pulseRet = pulseAccumulator(std::move(labelsBatch));
@@ -270,7 +274,7 @@ void TestPulseAccumulator()
         {
             EXPECT_EQ(baselineFrames-1, stats.Count()[zmwIdx]);
             EXPECT_NEAR(baselineMean, stats.Mean()[zmwIdx], 2*baselineStd);
-            // Variance of variance estimator for normally distributed random variable should be (2*sigma^4)/(n-1)
+            // Variance of sample variance for normally distributed random variable should be (2*sigma^4)/(n-1)
             EXPECT_NEAR(baselineStd*baselineStd, stats.Variance()[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));
             for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
@@ -283,14 +287,14 @@ void TestPulseAccumulator()
                     EXPECT_EQ(latTraceVal, pulse.MidSignal());
                     EXPECT_EQ(latTraceVal, pulse.MeanSignal());
                     EXPECT_EQ(latTraceVal, pulse.MaxSignal());
-                    EXPECT_EQ((latTraceVal * latTraceVal) * (pw-2), pulse.SignalM2());
+                    EXPECT_NEAR((latTraceVal * latTraceVal) * (pw-2), pulse.SignalM2(), latTraceVal);
                 }
                 else
                 {
                     EXPECT_EQ(curTraceVal, pulse.MidSignal());
                     EXPECT_EQ(curTraceVal, pulse.MeanSignal());
                     EXPECT_EQ(curTraceVal, pulse.MaxSignal());
-                    EXPECT_EQ((curTraceVal * curTraceVal) * (pw-2), pulse.SignalM2());
+                    EXPECT_NEAR((curTraceVal * curTraceVal) * (pw-2), pulse.SignalM2(), curTraceVal);
                 }
             }
         }

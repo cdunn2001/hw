@@ -80,9 +80,9 @@ public:
             signalTotal_[i] = PBShort2(0);
             signalM2_[i] = PBHalf2(0.0f);
             label_[i] = PBShort2(initialState);
-            m0_[i] = 0.0f;
-            m1_[i] = 0.0f;
-            m2_[i] = 0.0f;
+            m0_[i] = PBHalf2(0.0f);
+            m1_[i] = PBHalf2(0.0f);
+            m2_[i] = PBHalf2(0.0f);
         }
     }
 
@@ -167,14 +167,14 @@ public:
         signalMax_[threadIdx.x] = Blend(update, max(signal, signalMax_[threadIdx.x]), signalMax_[threadIdx.x]);
     }
 
-    __device__ void AddBaseline(PBBool2 baselineMask, PBShort2 signal)
+    __device__ void AddBaseline(PBShort2 baselineMask, PBShort2 signal)
     {
         PBHalf2 zero(0.0f);
         PBHalf2 one(1.0f);
 
         m0_[threadIdx.x] += Blend(baselineMask, one, zero);
         m1_[threadIdx.x] += Blend(baselineMask, signal, zero);
-        m2_[threadIdx.x] += Blend(baselineMask, signal*signal, zero);
+        m2_[threadIdx.x] += Blend(baselineMask, pow2(signal), zero);
     }
 
     __device__ void FillBaselineStats(Mongo::StatAccumState& stats)
