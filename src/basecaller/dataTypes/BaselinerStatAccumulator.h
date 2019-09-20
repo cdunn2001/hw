@@ -11,7 +11,8 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// TODO: Add declaration decorators to enable use on CUDA device.
+// TODO: Don't assume that the element types of the raw and baseline-subtracted
+// traces are the same.
 // TODO: Add another template parameter to control the precision used for floating-point members.
 
 /// Statistics computed by the baseliner for one lane of ZMWs.
@@ -21,6 +22,7 @@ class BaselinerStatAccumulator
 {
 public:     // Types
     using LaneArray = PacBio::Mongo::LaneArray<T>;
+    using ConstLaneArrayRef = PacBio::Mongo::ConstLaneArrayRef<T>;
     using FloatArray = PacBio::Mongo::LaneArray<float>;
     using Mask = PacBio::Mongo::LaneMask<>;
 
@@ -40,8 +42,8 @@ public:     // Mutating functions
     /// \a x contains raw trace values.
     /// \a y contains baseline-subtracted trace values.
     /// Only add to baseline statistics where \a isBaseline is true.
-    void AddSample(const LaneArray& rawTrace,
-                   const LaneArray& baselineSubtracted,
+    void AddSample(const ConstLaneArrayRef& rawTrace,
+                   const ConstLaneArrayRef& baselineSubtracted,
                    const Mask& isBaseline);
 
 public:     // Const functions
