@@ -28,6 +28,14 @@
 //  Defines unit tests for class TraceHistogramAccumHost.
 
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+
+#include <algorithm>
+#include <map>
+#include <vector>
+#include <boost/numeric/conversion/cast.hpp>
+
+#include <pacbio/logging/Logger.h>
+
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/CameraTraceBatch.h>
@@ -35,6 +43,7 @@
 #include <gtest/gtest.h>
 
 using std::numeric_limits;
+using boost::numeric_cast;
 
 namespace PacBio {
 namespace Mongo {
@@ -44,8 +53,6 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
 {
     using TraceElementType = Data::BaselinedTraceElement;
 
-    const float blMean = 0.42f;         // baseline mean
-    const float blVar = 4.0f;           // baseline variance
     const unsigned int chunkSize = 64;  // frames per chunk
     const unsigned int poolSize = 6;    // lanes per pool
 
@@ -54,18 +61,20 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     Data::MovieConfig movConfig;
     Data::CameraBatchFactory ctbFactory {chunkSize, poolSize,
                                          Cuda::Memory::SyncDirection::Symmetric};
+    PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
     void SetUp()
     {
+        histConfig.NumFramesPreAccumStats = 100;
         movConfig = Data::MockMovieConfig();
         TraceHistogramAccumulator::Configure(histConfig, movConfig);
     }
 
-    // Produces a trace batch with fixed baseliner stats and all trace frames
-    // set to x.
+    // Produces a trace batch with all trace frames set to x
+    // and baseliner states defined by blMean and blVar.
     std::pair<Data::TraceBatch<TraceElementType>,
               Data::BaselinerMetrics>
-    GenerateCamTraceBatch(TraceElementType x)
+    GenerateCamTraceBatch(TraceElementType x, float blMean, float blVar)
     {
         auto ctb = ctbFactory.NewBatch(bmd);
         auto& traces = ctb.first;
@@ -74,22 +83,23 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
         const auto n0 = chunkSize/2;  // Number of mock baseline frames.
         for (unsigned int l = 0; l < poolSize; ++l)
         {
-            // Mock up some baseliner statistics.
-            Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
-            LaneArrayRef<float>(bls.fullAutocorrState.moment2) = 0;
-            bls.fullAutocorrState.moment1First = bls.fullAutocorrState.moment1Last = bls.fullAutocorrState.moment2;
-            LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
-            LaneArrayRef<float>(bls.baselineStats.moment1) = n0 * blMean;
-            LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
+            Data::BaselinerStatAccumulator<TraceElementType> bsa;
 
             // Fill in the trace data.
             auto bvl = traces.GetBlockView(l);
             for (auto lfi = bvl.Begin(); lfi != bvl.End(); ++lfi)
             {
                 *lfi = x;
+                bsa.AddSample(*lfi, *lfi, true);
             }
-            LaneArrayRef<TraceElementType>(bls.traceMin) = x;
-            LaneArrayRef<TraceElementType>(bls.traceMax) = x;
+
+            Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
+            bls = bsa.GetState();
+
+            // Hack the baseline statistics.
+            LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
+            LaneArrayRef<float>(bls.baselineStats.moment1) = n0 * blMean;
+            LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
         }
 
         // Prepare for the next call.
@@ -111,22 +121,81 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
 };
 
 
-TEST_F(TestTraceHistogramAccumHost, DISABLED_WIP_One)
+TEST_F(TestTraceHistogramAccumHost, UniformSimple)
 {
     TraceHistogramAccumHost tha (bmd.PoolId(), poolSize);
-    EXPECT_EQ(0, tha.FramesAdded());
-    EXPECT_EQ(0, tha.HistogramFrameCount());
+    ASSERT_EQ(0, tha.FramesAdded());
+    ASSERT_EQ(0, tha.HistogramFrameCount());
 
-    // TODO: Blocked by incompleteness of BaselineStats. See BEN-896.
+    const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
+    const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
+    const auto nChunks = mPar.size();
+    ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
 
-    auto baselinedTracesAndStats = GenerateCamTraceBatch(static_cast<uint16_t>(blMean));
-    tha.AddBatch(baselinedTracesAndStats.first, baselinedTracesAndStats.second.baselinerStats);
-    EXPECT_EQ(chunkSize, tha.FramesAdded());
-    EXPECT_EQ(0, tha.HistogramFrameCount());
+    // Count repeats. Skip first value because of NumFramesPreAccumStats logic.
+    std::map<float, unsigned int> nRepeat;
 
+    // Feed mock data to histogram accumulator under test.
+    for (unsigned int i = 0; i < nChunks; ++i)
+    {
+        const auto x = round_cast<TraceElementType>(mPar[i]);
+        if (i > 0) nRepeat[numeric_cast<float>(x)] += chunkSize;
+        auto baselinedTracesAndStats = GenerateCamTraceBatch(x, mPar[i], s2Par[i]);
+        tha.AddBatch(baselinedTracesAndStats.first,
+                     baselinedTracesAndStats.second.baselinerStats);
+        ASSERT_EQ((i+1)*chunkSize, tha.FramesAdded());
+        ASSERT_EQ(i*chunkSize, tha.HistogramFrameCount());
+    }
 
-//    const auto& h = tha.Histogram();
-    FAIL() << "Test under construction.";
+    // Expected accumulated baseline statistics.
+    const auto n0 = chunkSize/2;
+    const float mExpect = std::accumulate(mPar.begin(), mPar.end(), 0.0f) / nChunks;
+    float s2Expect = (n0 - 1) * std::accumulate(s2Par.begin(), s2Par.end(), 0.0f);
+    for (unsigned int i = 0; i < nChunks; ++i)
+    {
+        s2Expect += n0 * pow2(mPar[i] - mExpect);
+    }
+    s2Expect /= (nChunks*n0 - 1);
+
+    // Check the accumulated baseline statistics.
+    const auto& tsPool = tha.TraceStatsHost();
+    for (const auto& tsLane : tsPool)
+    {
+        const auto& bls = tsLane.BaselineFramesStats();
+        const auto n = bls.Count();
+        const auto m = bls.Mean();
+        const auto s2 = bls.Variance();
+        for (unsigned int i = 0; i < laneSize; ++i)
+        {
+            EXPECT_EQ(nChunks*n0, n[i]);
+            EXPECT_FLOAT_EQ(mExpect, m[i]);
+            EXPECT_FLOAT_EQ(s2Expect, s2[i]);
+        }
+    }
+
+    // Check the histogram bin counts.
+    const auto& hPool = tha.HistogramHost();
+    for (const auto& hLane : hPool)
+    {
+        ASSERT_GE(hLane.NumBins(), 0);
+        const unsigned int nBins = hLane.NumBins();
+        const auto& irc = hLane.InRangeCount();
+        for (const unsigned int n : irc) EXPECT_EQ((nChunks-1)*chunkSize, n);
+        for (unsigned int b = 0; b < nBins; ++b)
+        {
+            const auto& bStart = hLane.BinStart(b);
+            const auto& bStop = hLane.BinStart(b+1);
+            for (unsigned int z = 0; z < laneSize; ++z)
+            {
+                const auto i0 = nRepeat.lower_bound(bStart[z]);
+                const auto i1 = nRepeat.lower_bound(bStop[z]);
+                const unsigned int nExpect
+                        = std::accumulate(i0, i1, 0u,
+                                          [](unsigned int s, auto p){return s + p.second;});
+                EXPECT_EQ(nExpect, hLane.BinCount(b)[z]);
+            }
+        }
+    }
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

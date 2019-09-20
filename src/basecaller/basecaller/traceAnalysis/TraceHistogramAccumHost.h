@@ -51,6 +51,15 @@ public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
                             unsigned int poolSize);
 
+public:     // Const access that exte.
+    const AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>>&
+    HistogramHost() const
+    { return hist_; }
+
+    const AlignedVector<Data::BaselinerStatAccumulator<DataType>>&
+    TraceStatsHost() const
+    { return stats_; }
+
 private:    // TraceHistogramAccumulator implementation.
     void AddBatchImpl(
             const Data::TraceBatch<TraceElementType>& ctb,
