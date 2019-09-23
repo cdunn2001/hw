@@ -205,13 +205,16 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
-        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostSimulatedPulseAccumulator::Configure(
+            bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostPulseAccumulator<SubframeLabelManager>::Configure(
+            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        DevicePulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        DevicePulseAccumulator<SubframeLabelManager>::Configure(
+            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -219,6 +222,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         throw PBException(msg.str());
         break;
     }
+
     switch (hfMetricsOpt_)
     {
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
