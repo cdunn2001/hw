@@ -96,11 +96,6 @@ public:
         return data_[*len_-1];
     }
 
-    __device__ Len_t size()
-    {
-        return *len_;
-    }
-
     __device__ Len_t size() const
     {
         return *len_;

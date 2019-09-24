@@ -42,17 +42,20 @@ namespace Data {
 struct alignas(64) TrainedCartDevice
 {
     TrainedCartDevice() = default;
-    // The host needs to call this constructor, so we throw in a random arg to
-    // differentiate? Kinda stinks...
-    TrainedCartDevice(int)
-        : maxAcceptableHalfsandwichRate(ActivityLabeler::TrainedCart::maxAcceptableHalfsandwichRate)
-        , hswCurve(ActivityLabeler::TrainedCart::hswCurve)
-        , childrenLeft(ActivityLabeler::TrainedCart::childrenLeft)
-        , childrenRight(ActivityLabeler::TrainedCart::childrenRight)
-        , feature(ActivityLabeler::TrainedCart::feature)
-        , threshold(ActivityLabeler::TrainedCart::threshold)
-        , value(ActivityLabeler::TrainedCart::value)
-    { };
+
+    // Named constructor for the host that actually does the populating:
+    static TrainedCartDevice HostTrainedCartDevice()
+    {
+        TrainedCartDevice ret;
+        ret.maxAcceptableHalfsandwichRate = ActivityLabeler::TrainedCart::maxAcceptableHalfsandwichRate;
+        ret.hswCurve = ActivityLabeler::TrainedCart::hswCurve;
+        ret.childrenLeft = ActivityLabeler::TrainedCart::childrenLeft;
+        ret.childrenRight = ActivityLabeler::TrainedCart::childrenRight;
+        ret.feature = ActivityLabeler::TrainedCart::feature;
+        ret.threshold = ActivityLabeler::TrainedCart::threshold;
+        ret.value = ActivityLabeler::TrainedCart::value;
+        return ret;
+    };
 
     float maxAcceptableHalfsandwichRate;
     Cuda::Utility::CudaArray<float, ActivityLabeler::TrainedCart::hswCurve.size()> hswCurve;

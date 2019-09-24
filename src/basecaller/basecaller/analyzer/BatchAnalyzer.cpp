@@ -165,15 +165,12 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-
     auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
     (void)metricsProfile;
 
     auto basecallingMetrics = (*hfMetrics_)(
             pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
 
-    // TODO: this download hurts the device version of HFMetrics in
-    // the log profiler, and should probably be relocated
     auto download = profiler.CreateScopedProfiler(FilterStages::Download);
     (void)download;
     pulses.Pulses().LaneView(0);

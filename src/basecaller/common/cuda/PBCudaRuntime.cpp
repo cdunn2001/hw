@@ -169,9 +169,4 @@ void CudaRawCopyToSymbol(const void* dest, void* src, size_t count)
     cudaCheckErrors(::cudaMemcpyToSymbol(dest, src, count));
 }
 
-void CudaRawCopyToSymbol(const void* dest, void* src, size_t size)
-{
-    cudaCheckErrors(::cudaMemcpyToSymbol(dest, src, size));
-}
-
 }}

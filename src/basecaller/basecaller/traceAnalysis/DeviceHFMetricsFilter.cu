@@ -130,12 +130,20 @@ __device__ PBHalf2 variance(const PBHalf2 M0, const PBHalf2 M1, const float2 M2)
     return PBHalf2(variance(M0.FloatX(), M1.FloatX(), M2.x), variance(M0.FloatY(), M1.FloatY(), M2.y));
 }
 
-template <typename T>
-__device__ PBHalf2 getWideLoad(const T& load)
-{ return PBHalf2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
+__device__ uint2 getWideLoad(const Cuda::Utility::CudaArray<uint16_t, laneSize>& load)
+{ return make_uint2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
 
-__device__ PBHalf2 deNan(PBHalf2 vals)
+__device__ float2 getWideLoad(const Cuda::Utility::CudaArray<float, laneSize>& load)
+{ return make_float2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
+
+__device__ PBHalf2 replaceNans(PBHalf2 vals)
 { return Blend(vals == vals, vals, PBHalf2(0.0)); };
+
+__device__ PBHalf2 asPBHalf2(float2 val)
+{ return PBHalf2(val.x, val.y); }
+
+__device__ PBHalf2 asPBHalf2(uint2 val)
+{ return PBHalf2(val.x, val.y); }
 
 __device__ float2& operator+=(float2& l, const float2 r)
 {
@@ -144,10 +152,9 @@ __device__ float2& operator+=(float2& l, const float2 r)
     return l;
 }
 
-__device__ float2& operator+=(float2& l, const PBHalf2 r)
+__device__ PBHalf2& operator+=(PBHalf2& l, const float2 r)
 {
-    l.x += r.FloatX();
-    l.y += r.FloatY();
+    l += asPBHalf2(r);
     return l;
 }
 
@@ -165,12 +172,6 @@ __device__ float2 operator/(float2 l, float2 r)
 
 __device__ float2 asFloat2(PBHalf2 val)
 { return make_float2(val.FloatX(), val.FloatY()); }
-
-__device__ PBHalf2 asPBHalf2(float2 val)
-{ return PBHalf2(val.x, val.y); }
-
-__device__ PBHalf2 asPBHalf2(uint2 val)
-{ return PBHalf2(val.x, val.y); }
 
 template<int id>
 __device__ float2 blendFloat0(float val)
@@ -373,8 +374,11 @@ __device__ void processPulse(
     const auto& label = static_cast<uint8_t>(pulse->Label());
     blockMetrics.numPulseFrames[threadIdx.x] += blendShort0<id>(pulse->Width());
     blockMetrics.numPulsesByAnalog[label][threadIdx.x] += blendShort0<id>(1);
-    blockMetrics.pkMax[label][threadIdx.x] = blendHalf0<id>(
-            max(blockMetrics.pkMax[label][threadIdx.x].Get<id>(), pulse->MaxSignal()));
+    blockMetrics.pkMax[label][threadIdx.x] = Blend(
+            blendShort0<id>(1),
+            max(blockMetrics.pkMax[label][threadIdx.x].Get<id>(),
+                pulse->MaxSignal()),
+            blockMetrics.pkMax[label][threadIdx.x]);
     stutterSandwich<id>(pulse, prevPulse, prevprevPulse, blockMetrics);
     goodBaseMetrics<id>(pulse, blockMetrics);
 };
@@ -404,52 +408,16 @@ __global__ void ProcessChunk(
     const auto& pulsesX = pulses.GetVector(blockIdx.x*2*blockDim.x + threadIdx.x*2);
     const auto& pulsesY = pulses.GetVector(blockIdx.x*2*blockDim.x + threadIdx.x*2+1);
 
-    const PBShort2 incX(1, 0);
-    const PBShort2 incY(0, 1);
-    const PBShort2 inc(1, 1);
-
     uint32_t numPulsesX = pulsesX.size();
     uint32_t numPulsesY = pulsesY.size();
-    auto iterCount = min(numPulsesX, numPulsesY);
-    // Iterate over both as long as possible:
-    for (uint32_t pIdx = 0; pIdx < iterCount; ++pIdx)
-    {
-        const Pulse* pulseX = &pulsesX[pIdx];
-        const Pulse* pulseY = &pulsesY[pIdx];
-        const uint8_t labelX = static_cast<uint8_t>(pulseX->Label());
-        const uint8_t labelY = static_cast<uint8_t>(pulseY->Label());
-
-        blockMetrics.numPulseFrames[threadIdx.x] += PBShort2(pulseX->Width(), pulseY->Width());
-        blockMetrics.numPulsesByAnalog[labelX][threadIdx.x] += incX;
-        blockMetrics.numPulsesByAnalog[labelY][threadIdx.x] += incY;
-
-        const PBShort2 thatPkMax(blockMetrics.pkMax[labelX][threadIdx.x].X(),
-                                 blockMetrics.pkMax[labelY][threadIdx.x].Y());
-        const PBShort2 thisPkMax(pulseX->MaxSignal(), pulseY->MaxSignal());
-        const PBShort2 pkMax = max(thatPkMax, thisPkMax);
-        blockMetrics.pkMax[labelX][threadIdx.x].X(pkMax.X());
-        blockMetrics.pkMax[labelY][threadIdx.x].Y(pkMax.Y());
-
-        stutterSandwich<0>(pulseX, prevPulseX, prevprevPulseX, blockMetrics);
-        stutterSandwich<1>(pulseY, prevPulseY, prevprevPulseY, blockMetrics);
-
-        goodBaseMetrics<0>(pulseX, blockMetrics);
-        goodBaseMetrics<1>(pulseY, blockMetrics);
-
-        prevprevPulseX = prevPulseX;
-        prevPulseX = pulseX;
-        prevprevPulseY = prevPulseY;
-        prevPulseY = pulseY;
-    }
-    // Only one of the two loops below will happen:
-    for (uint32_t pIdx = iterCount; pIdx < numPulsesX; ++pIdx)
+    for (uint32_t pIdx = 0; pIdx < numPulsesX; ++pIdx)
     {
         const Pulse* pulseX = &pulsesX[pIdx];
         processPulse<0>(pulseX, prevPulseX, prevprevPulseX, blockMetrics);
         prevprevPulseX = prevPulseX;
         prevPulseX = pulseX;
     }
-    for (uint32_t pIdx = iterCount; pIdx < numPulsesY; ++pIdx)
+    for (uint32_t pIdx = 0; pIdx < numPulsesY; ++pIdx)
     {
         const Pulse* pulseY = &pulsesY[pIdx];
         processPulse<1>(pulseY, prevPulseY, prevprevPulseY, blockMetrics);
@@ -518,16 +486,17 @@ __device__ PBShort2 labelBlock(
     const auto& stdDev = sqrt(variance(blockMetrics.baselineM0[threadIdx.x],
                                        blockMetrics.baselineM1[threadIdx.x],
                                        blockMetrics.baselineM2[threadIdx.x]));
-    const PBHalf2& numBases = getWideLoad(outMetrics.numBases);
-    const PBHalf2& numPulses = getWideLoad(outMetrics.numPulses);
-    const PBHalf2& pulseWidth = deNan(numPulses / blockMetrics.numPulseFrames[threadIdx.x]);
+    const PBHalf2& numBases = asPBHalf2(getWideLoad(outMetrics.numBases));
+    const PBHalf2& numPulses = asPBHalf2(getWideLoad(outMetrics.numPulses));
+    const PBHalf2& pulseWidth = replaceNans(
+        numPulses / blockMetrics.numPulseFrames[threadIdx.x]);
     const AnalogVals& pkmid = [&blockMetrics]()
     {
         AnalogVals ret;
         for (size_t ai = 0; ai < numAnalogs; ++ai)
         {
-            ret[ai] = deNan(blockMetrics.pkMidSignal[ai][threadIdx.x]
-                            / blockMetrics.numPkMidFrames[ai][threadIdx.x]);
+            ret[ai] = replaceNans(blockMetrics.pkMidSignal[ai][threadIdx.x]
+                                  / blockMetrics.numPkMidFrames[ai][threadIdx.x]);
         }
         return ret;
     }();
@@ -541,9 +510,10 @@ __device__ PBShort2 labelBlock(
     const PBHalf2& seconds = asPBHalf2(blockMetrics.numFrames[threadIdx.x]) / frameRate;
 
     features[ActivityLabeler::PULSERATE] = numPulses / seconds;
-    features[ActivityLabeler::SANDWICHRATE] = deNan(blockMetrics.numSandwiches[threadIdx.x] / numPulses);
+    features[ActivityLabeler::SANDWICHRATE] = replaceNans(
+        blockMetrics.numSandwiches[threadIdx.x] / numPulses);
 
-    const PBHalf2& hswr = deNan(blockMetrics.numHalfSandwiches[threadIdx.x] / numPulses);
+    const PBHalf2& hswr = replaceNans(blockMetrics.numHalfSandwiches[threadIdx.x] / numPulses);
     auto hswrExp = evaluatePolynomial(trainedCartParams.hswCurve,
                                       features[ActivityLabeler::PULSERATE]);
     hswrExp = Blend(hswrExp > trainedCartParams.maxAcceptableHalfsandwichRate,
@@ -553,7 +523,8 @@ __device__ PBShort2 labelBlock(
 
     features[ActivityLabeler::VITERBISCORE] = blockMetrics.pulseDetectionScore[threadIdx.x];
     features[ActivityLabeler::MEANPULSEWIDTH] = pulseWidth;
-    features[ActivityLabeler::LABELSTUTTERRATE] = deNan(blockMetrics.numPulseLabelStutters[threadIdx.x] / numPulses);
+    features[ActivityLabeler::LABELSTUTTERRATE] = replaceNans(
+        blockMetrics.numPulseLabelStutters[threadIdx.x] / numPulses);
 
     PBShort2 lowAmpIndex(0);
     PBHalf2 minamp(1.0f); // min relative amp, therefore 1.0 is the maximum amplitude
@@ -583,19 +554,22 @@ __device__ PBShort2 labelBlock(
             features[ActivityLabeler::MAXPKMAXNORM],
             (blockMetrics.pkMax[i][threadIdx.x] - pkmid[i]) / stdDev);
     }
-    features[ActivityLabeler::BLOCKLOWSNR] = deNan(features[ActivityLabeler::BLOCKLOWSNR]);
-    features[ActivityLabeler::MAXPKMAXNORM] = deNan(features[ActivityLabeler::MAXPKMAXNORM]);
-    features[ActivityLabeler::AUTOCORRELATION] = getWideLoad(outMetrics.autocorrelation);
+    features[ActivityLabeler::BLOCKLOWSNR] =
+        replaceNans(features[ActivityLabeler::BLOCKLOWSNR]);
+    features[ActivityLabeler::MAXPKMAXNORM] =
+        replaceNans(features[ActivityLabeler::MAXPKMAXNORM]);
+    features[ActivityLabeler::AUTOCORRELATION] =
+        asPBHalf2(getWideLoad(outMetrics.autocorrelation));
 
     PBHalf2 lowbp(0);
     PBHalf2 lowpk(0);
     for (size_t i = 0; i < numAnalogs; ++i)
     {
-        const auto& bpZvar = deNan(blockMetrics.bpZvar[i][threadIdx.x]);
+        const auto& bpZvar = replaceNans(blockMetrics.bpZvar[i][threadIdx.x]);
         features[ActivityLabeler::BPZVARNORM] += bpZvar;
         lowbp = Blend(lowAmpIndex == i, bpZvar, lowbp);
 
-        const auto& pkZvar = deNan(blockMetrics.pkZvar[i][threadIdx.x]);
+        const auto& pkZvar = replaceNans(blockMetrics.pkZvar[i][threadIdx.x]);
         features[ActivityLabeler::PKZVARNORM] += pkZvar;
         lowpk = Blend(lowAmpIndex == i, pkZvar, lowpk);
     }
@@ -865,7 +839,7 @@ void DeviceHFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                realtimeActivityLabels,
                                lanesPerBatch,
                                false);
-    TrainedCartDevice trainedCartHost(42);
+    auto trainedCartHost = TrainedCartDevice::HostTrainedCartDevice();
     CudaCopyToSymbol(trainedCartParams, &trainedCartHost);
 }
 
