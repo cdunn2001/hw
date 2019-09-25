@@ -139,22 +139,10 @@ __device__ float2 getWideLoad(const Cuda::Utility::CudaArray<float, laneSize>& l
 __device__ PBHalf2 replaceNans(PBHalf2 vals)
 { return Blend(vals == vals, vals, PBHalf2(0.0)); };
 
-__device__ PBHalf2 asPBHalf2(float2 val)
-{ return PBHalf2(val.x, val.y); }
-
-__device__ PBHalf2 asPBHalf2(uint2 val)
-{ return PBHalf2(val.x, val.y); }
-
 __device__ float2& operator+=(float2& l, const float2 r)
 {
     l.x += r.x;
     l.y += r.y;
-    return l;
-}
-
-__device__ PBHalf2& operator+=(PBHalf2& l, const float2 r)
-{
-    l += asPBHalf2(r);
     return l;
 }
 
@@ -212,7 +200,7 @@ __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& bl
              / (nmk * asFloat2(variance(blockMetrics.traceM0[threadIdx.x],
                                         blockMetrics.traceM1[threadIdx.x],
                                         blockMetrics.traceM2[threadIdx.x])));
-        return asPBHalf2(ac);
+        return ac;
     }(asFloat2(nmk));
     const PBBool2 nanMask = !(ac == ac);
     ac = max(ac, -1.0f);
@@ -486,8 +474,8 @@ __device__ PBShort2 labelBlock(
     const auto& stdDev = sqrt(variance(blockMetrics.baselineM0[threadIdx.x],
                                        blockMetrics.baselineM1[threadIdx.x],
                                        blockMetrics.baselineM2[threadIdx.x]));
-    const PBHalf2& numBases = asPBHalf2(getWideLoad(outMetrics.numBases));
-    const PBHalf2& numPulses = asPBHalf2(getWideLoad(outMetrics.numPulses));
+    const PBHalf2& numBases = getWideLoad(outMetrics.numBases);
+    const PBHalf2& numPulses = getWideLoad(outMetrics.numPulses);
     const PBHalf2& pulseWidth = replaceNans(
         numPulses / blockMetrics.numPulseFrames[threadIdx.x]);
     const AnalogVals& pkmid = [&blockMetrics]()
@@ -507,7 +495,7 @@ __device__ PBShort2 labelBlock(
         val = zeros;
     }
 
-    const PBHalf2& seconds = asPBHalf2(blockMetrics.numFrames[threadIdx.x]) / frameRate;
+    const PBHalf2& seconds = PBHalf2(blockMetrics.numFrames[threadIdx.x]) / frameRate;
 
     features[ActivityLabeler::PULSERATE] = numPulses / seconds;
     features[ActivityLabeler::SANDWICHRATE] = replaceNans(
@@ -559,7 +547,7 @@ __device__ PBShort2 labelBlock(
     features[ActivityLabeler::MAXPKMAXNORM] =
         replaceNans(features[ActivityLabeler::MAXPKMAXNORM]);
     features[ActivityLabeler::AUTOCORRELATION] =
-        asPBHalf2(getWideLoad(outMetrics.autocorrelation));
+        getWideLoad(outMetrics.autocorrelation);
 
     PBHalf2 lowbp(0);
     PBHalf2 lowpk(0);
@@ -612,19 +600,19 @@ __global__ void FinalizeMetrics(
 
         { // Convert moments to interpulse variance
             const PBHalf2& nb = blockMetrics.numPkMidBasesByAnalog[pulseLabel][threadIdx.x];
-            blockMetrics.bpZvar[pulseLabel][threadIdx.x] = asPBHalf2(
+            blockMetrics.bpZvar[pulseLabel][threadIdx.x] =
                 (blockMetrics.bpZvarAcc[pulseLabel][threadIdx.x]
                  - pkMidSignalSqr / nff)
-                / nff);
+                / nff;
 
             // Bessel's correction with num bases, not frames
             blockMetrics.bpZvar[pulseLabel][threadIdx.x] *= nb / (nb - 1.0f);
 
             blockMetrics.bpZvar[pulseLabel][threadIdx.x] -= baselineVariance / (nf / nb);
 
-            blockMetrics.pkZvar[pulseLabel][threadIdx.x] = asPBHalf2(
+            blockMetrics.pkZvar[pulseLabel][threadIdx.x] =
                 (blockMetrics.pkZvarAcc[pulseLabel][threadIdx.x] - (pkMidSignalSqr / nff))
-                 / (nff - make_float2(1.0f, 1.0f)));
+                 / (nff - make_float2(1.0f, 1.0f));
         }
 
         // pkzvar up to this point contains total signal variance. We
@@ -839,7 +827,7 @@ void DeviceHFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                realtimeActivityLabels,
                                lanesPerBatch,
                                false);
-    auto trainedCartHost = TrainedCartDevice::HostTrainedCartDevice();
+    auto trainedCartHost = TrainedCartDevice::PopulatedModel();
     CudaCopyToSymbol(trainedCartParams, &trainedCartHost);
 }
 

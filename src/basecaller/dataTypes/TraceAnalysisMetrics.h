@@ -67,6 +67,8 @@ public:
     TraceAnalysisMetrics& operator=(const TraceAnalysisMetrics&) = delete;
     ~TraceAnalysisMetrics() = default;
 
+    // Resets most fields to 0, except startFrame which is set to the start of
+    // the next block (assumed to be the previous startFrame + numFrames)
     void Reset()
     {
         baselineStatAccum_.Reset();
@@ -75,6 +77,7 @@ public:
         numFrames_ = 0;
         pulseDetectionScore_ = std::numeric_limits<float>::quiet_NaN();
         pulseDetectionScore_ = 0;
+        // These aren't currently used:
         //confidenceScore_ = 0;
         //fullEstimationAttempted_ = 0;
         //modelUpdated_ = 0;
