@@ -777,8 +777,10 @@ public:
                              metrics_,
                              *(ret.get()));
             framesSeen_ = 0;
+            Cuda::CudaSynchronizeDefaultStream();
             return ret;
         }
+        Cuda::CudaSynchronizeDefaultStream();
         return std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>();
     }
 
