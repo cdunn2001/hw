@@ -48,7 +48,8 @@ void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                 uint32_t framesPerChunk,
                                 double frameRate,
                                 bool realtimeActivityLabels,
-                                uint32_t lanesPerBatch)
+                                uint32_t lanesPerBatch,
+                                bool hostExecution)
 {
     framesPerHFMetricBlock_ = framesPerHFMetricBlock;
     framesPerChunk_ = framesPerChunk;
@@ -66,29 +67,15 @@ void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
     lanesPerBatch_ = lanesPerBatch;
     zmwsPerBatch_ = dims.ZmwsPerBatch();
 
-    constexpr bool hostExecution = true;
-
-    InitAllocationPools(hostExecution);
+    using Cuda::Memory::SyncDirection;
+    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
+                                           : SyncDirection::HostReadDeviceWrite;
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(dims, syncDir);
 }
 
 void HFMetricsFilter::Finalize()
 {
     DestroyAllocationPools();
-}
-
-void HFMetricsFilter::InitAllocationPools(bool hostExecution)
-{
-    using Cuda::Memory::SyncDirection;
-
-    Data::BatchDimensions dims;
-    dims.framesPerBatch = framesPerChunk_;
-    dims.lanesPerBatch = lanesPerBatch_;
-    dims.laneWidth = laneSize;
-
-    SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
-                                          : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(
-            dims, syncDir);
 }
 
 void HFMetricsFilter::DestroyAllocationPools()

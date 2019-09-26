@@ -165,15 +165,15 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
-    (void)download;
-    pulses.Pulses().LaneView(0);
-
     auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
     (void)metricsProfile;
 
     auto basecallingMetrics = (*hfMetrics_)(
             pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
+
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
+    (void)download;
+    pulses.Pulses().LaneView(0);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

@@ -54,6 +54,15 @@ void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
     }
 }
 
+void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
+{
+    for (size_t l = 0; l < lanesPerBatch_; l++)
+    {
+        const auto& models = modelsBatch.GetHostView()[l];
+        metrics_[l].AddModels(models);
+    }
+}
+
 void HostHFMetricsFilter::AddMetrics(
         const Data::BaselinerMetrics& baselinerMetrics,
         const Data::FrameLabelerMetrics& frameLabelerMetrics,
@@ -65,15 +74,6 @@ void HostHFMetricsFilter::AddMetrics(
                 baselinerMetrics.baselinerStats.GetHostView()[l],
                 frameLabelerMetrics.viterbiScore.GetHostView()[l],
                 pdMetrics.baselineStats.GetHostView()[l]);
-    }
-}
-
-void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
-{
-    for (size_t l = 0; l < lanesPerBatch_; l++)
-    {
-        const auto& models = modelsBatch.GetHostView()[l];
-        metrics_[l].AddModels(models);
     }
 }
 
@@ -89,6 +89,7 @@ HostHFMetricsFilter::Process(
     {
         for (size_t l = 0; l < lanesPerBatch_; ++l)
         {
+            // Prepares for the next block, including pre-populating startFrame
             metrics_[l].Reset();
         }
     }
