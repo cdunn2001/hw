@@ -38,6 +38,7 @@ deploy_basecaller(){
       exit 0
       ;;
   esac
+  set -x
   mkdir -p /mnt/software/m/mongo-basecaller/develop-$moduleVersion/bin-{gcc,intel}
   cp -a build/x86_64/Release_gcc/applications/mongo-basecaller \
     /mnt/software/m/mongo-basecaller/develop-$moduleVersion/bin-gcc
@@ -56,6 +57,9 @@ if {[file executable /mnt/software/log/log_usage]} {
 setenv smoke_cmd "mongo-basecaller --version"
 #setenv BASECALLER_VERSION ${moduleVersion}
 EOF
+  if [[ $bamboo_planRepository_branchName == develop ]]; then
+    ln -sfn ${moduleVersion} develop
+  fi
 }
 
 build_basecaller
