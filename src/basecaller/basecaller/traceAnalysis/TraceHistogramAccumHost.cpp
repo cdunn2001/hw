@@ -86,6 +86,8 @@ void TraceHistogramAccumHost::AddBatchImpl(
 
         if (isHistInitialized_) AddBlock(traces, lane);
     }
+
+    if (isHistInitialized_) histFrameCount_ += traces.NumFrames();
 }
 
 
@@ -136,7 +138,6 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
         // Note that there is a possible elemental type conversion here.
         const LaneArray<HistDataType> x {*lfi};
         h.AddDatum(x);
-        ++histFrameCount_;
     }
 }
 

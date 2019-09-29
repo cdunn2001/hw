@@ -47,7 +47,7 @@ struct BaselinerMetrics
                      Cuda::Memory::SyncDirection syncDir,
                      const Cuda::Memory::AllocationMarker& marker)
         : baselinerStats(dims.lanesPerBatch, syncDir, marker)
-    { };
+    { }
 
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> baselinerStats;
 };
@@ -58,7 +58,7 @@ struct FrameLabelerMetrics
                         Cuda::Memory::SyncDirection syncDir,
                         const Cuda::Memory::AllocationMarker& marker)
         : viterbiScore(dims.lanesPerBatch, syncDir, marker)
-    { };
+    { }
 
     Cuda::Memory::UnifiedCudaArray<Cuda::Utility::CudaArray<float, laneSize>> viterbiScore;
 };
@@ -69,7 +69,7 @@ struct PulseDetectorMetrics
                          Cuda::Memory::SyncDirection syncDir,
                          const Cuda::Memory::AllocationMarker& marker)
         : baselineStats(dims.lanesPerBatch, syncDir, marker)
-    { };
+    { }
 
     Cuda::Memory::UnifiedCudaArray<StatAccumState> baselineStats;
 };
