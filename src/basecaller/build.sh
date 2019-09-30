@@ -58,7 +58,7 @@ setenv smoke_cmd "mongo-basecaller --version"
 #setenv BASECALLER_VERSION ${moduleVersion}
 EOF
   if [[ $bamboo_planRepository_branchName == develop ]]; then
-    ln -sfn ${moduleVersion} develop
+    ln -sfn ${moduleVersion} /mnt/software/modulefiles/mongo-basecaller/develop
   fi
 }
 
