@@ -39,11 +39,11 @@ deploy_basecaller(){
       ;;
   esac
   set -x
-  mkdir -p /mnt/software/m/mongo-basecaller/develop-$moduleVersion/bin-{gcc,intel}
+  mkdir -p /mnt/software/m/mongo-basecaller/$moduleVersion/bin-{gcc,intel}
   cp -a build/x86_64/Release_gcc/applications/mongo-basecaller \
-    /mnt/software/m/mongo-basecaller/develop-$moduleVersion/bin-gcc
+    /mnt/software/m/mongo-basecaller/$moduleVersion/bin-gcc
   cp -a build/x86_64/Release/applications/mongo-basecaller \
-    /mnt/software/m/mongo-basecaller/develop-$moduleVersion/bin-intel
+    /mnt/software/m/mongo-basecaller/$moduleVersion/bin-intel
   cat > /mnt/software/modulefiles/mongo-basecaller/${moduleVersion} << EOF
 #%Module
 module load ppa/$bamboo_planRepository_branchName
