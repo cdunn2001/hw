@@ -48,7 +48,7 @@ deploy_basecaller(){
 #%Module
 module load ppa/$bamboo_planRepository_branchName
 
-prepend-path PATH /mnt/software/m/mongo-basecaller/${moduleVersion}/
+prepend-path PATH /mnt/software/m/mongo-basecaller/${moduleVersion}/bin-gcc
 prepend-path LD_LIBRARY_PATH /mnt/software/m/mongo-basecaller/lib
 
 if {[file executable /mnt/software/log/log_usage]} {
