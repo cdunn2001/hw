@@ -31,6 +31,7 @@
 
 #include <boost/numeric/conversion/cast.hpp>
 #include <tbb/parallel_for.h>
+#include <tbb/flow_graph.h>
 
 #include <pacbio/PBException.h>
 
@@ -109,12 +110,47 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     vector<std::unique_ptr<BatchAnalyzer::OutputType>> output(n);
 
     tbb::task_scheduler_init init(NumWorkerThreads());
-    // TODO: Customize optional parameters of parallel_for.
-    tbb::parallel_for(size_t(0), n, [&](size_t i)
-    {
-        const auto pid = input[i].GetMeta().PoolId();
-        output[i] = std::make_unique<BatchAnalyzer::OutputType>(bAnalyzer_[pid](std::move(input[i])));
+
+    // This is what is desirable for cuda.  3 Threads is minimum,
+    // so that one thread can upload while another does compute while
+    // the last does download.  One extra thread seems to be beneficial
+    // to smooth out scheduling issues.  Anything beyond that had
+    // no significant impact on performance, so we'll save any other
+    // available host threads for nested parallelism in host filter stages
+    static constexpr size_t numTopLevelThreads=4;
+    tbb::flow::graph g;
+    tbb::flow::function_node<size_t> filter(g, numTopLevelThreads, [&](size_t i){
+            const auto pid = input[i].GetMeta().PoolId();
+            output[i] = std::make_unique<BatchAnalyzer::OutputType>(
+                bAnalyzer_[pid](std::move(input[i])));
     });
+
+    // All this graph buisiness is to try and limit concurrency at this top level loop,
+    // while not limiting concurrency on any nested loops in individual filter stages.
+    // Maybe I missed an easy way to do this, so here are the rejected approaches and why:
+    //
+    // - Limiting the grain size so that each item of work the scheduler sees is 1/4 of the data:
+    //     While this will probably work, it potentially has issues with load balancing.  For
+    //     a homogenous set of zmws then each "grain" will probably process in the same time, but
+    //     if there happen to be differences then we won't be able to even things out at all.
+    // - Limiting parallelism via `task_arena`:
+    //     Unless I'm misreading the documentation, this will constrain *both* the outter *and*
+    //     inner loops.  I can't tell the outter to use 4 threads and let the inner use 40.
+    // - Using parallel_pipeline:
+    //     This one would work, but has more infrastructure for setting up.  The overall pipeline
+    //     needs to accept and return void, meaning one would have to write source and sink filters
+    //     to manage iterating over the data.
+    //
+    //  With openmp this would be a very simple task, though openmp does come with a couple minor
+    //  quirks that prevent me from lobying for it just yet.  But right here it would be a simple
+    //  pragma as follows...
+    //
+    //  #pragma omp parallel_for num_threads(4)
+    for (size_t i = 0; i < n; ++i)
+    {
+        filter.try_put(i);
+    }
+    g.wait_for_all();
 
     return output;
 }

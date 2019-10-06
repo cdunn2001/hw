@@ -11,6 +11,7 @@ target_link_libraries(mongo-basecaller
         libMongoBasecallerAnalyzer
         libProtoCommon
         libBazio
+        libTbb
 )
 
 add_subdirectory(test)
