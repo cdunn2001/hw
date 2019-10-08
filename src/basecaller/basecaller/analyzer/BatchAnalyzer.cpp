@@ -80,7 +80,7 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
-    , models_(GetPrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
+    , models_(Data::GetPrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
