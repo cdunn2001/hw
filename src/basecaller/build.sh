@@ -48,14 +48,14 @@ deploy_basecaller(){
 #%Module
 module load ppa/$bamboo_planRepository_branchName
 
-prepend-path PATH /mnt/software/m/mongo-basecaller/${moduleVersion}/bin-gcc
 prepend-path LD_LIBRARY_PATH /mnt/software/m/mongo-basecaller/lib
+set-alias mongo-basecaller-gcc   "/mnt/software/m/mongo-basecaller/${moduleVersion}/bin-gcc/mongo-basecaller"
+set-alias mongo-basecaller-intel "/mnt/software/m/mongo-basecaller/${moduleVersion}/bin-intel/mongo-basecaller"
+setenv smoke_cmd "mongo-basecaller-gcc --version"
 
 if {[file executable /mnt/software/log/log_usage]} {
     exec /mnt/software/log/log_usage bascaller ${moduleVersion}
 }
-setenv smoke_cmd "mongo-basecaller --version"
-#setenv BASECALLER_VERSION ${moduleVersion}
 EOF
   if [[ $bamboo_planRepository_branchName == develop ]]; then
     ln -sfn ${moduleVersion} /mnt/software/modulefiles/mongo-basecaller/develop
