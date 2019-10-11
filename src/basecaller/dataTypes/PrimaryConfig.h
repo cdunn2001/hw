@@ -78,13 +78,13 @@ inline std::ostream& operator<<(std::ostream& o, PrimaryConfig& config)
     return o;
 }
 
+// This should referenced as Data::GetPrimaryConfig() to avoid confusion with the other
+// GetPrimaryConfig() from PacBio::Primary::GetPrimaryConfig()
 inline PrimaryConfig& GetPrimaryConfig()
 {
    static PrimaryConfig config;
    return config;
 }
-
-#define primaryConfig GetPrimaryConfig()
 
 }}}     // namespace PacBio::Mongo::Data
 
