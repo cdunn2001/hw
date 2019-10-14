@@ -205,13 +205,16 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
-        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostSimulatedPulseAccumulator::Configure(
+            bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        HostPulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostPulseAccumulator<SubframeLabelManager>::Configure(
+            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        DevicePulseAccumulator<SubframeLabelManager>::Configure(movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        DevicePulseAccumulator<SubframeLabelManager>::Configure(
+            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
         break;
     default:
         ostringstream msg;
@@ -220,14 +223,27 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
+    switch (hfMetricsOpt_)
+    {
+    case Data::BasecallerMetricsConfig::MethodName::Gpu:
+        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                         Data::GetPrimaryConfig().framesPerChunk,
+                                         Data::GetPrimaryConfig().sensorFrameRate,
+                                         Data::GetPrimaryConfig().realtimeActivityLabels,
+                                         Data::GetPrimaryConfig().lanesPerPool);
+        break;
+    default:
+        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                   Data::GetPrimaryConfig().framesPerChunk,
+                                   Data::GetPrimaryConfig().sensorFrameRate,
+                                   Data::GetPrimaryConfig().realtimeActivityLabels,
+                                   Data::GetPrimaryConfig().lanesPerPool);
+    }
+
     // TODO: Configure other algorithms according to options.
     TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
-    HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                               Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                               Data::GetPrimaryConfig().framesPerChunk,
-                               Data::GetPrimaryConfig().sensorFrameRate,
-                               Data::GetPrimaryConfig().realtimeActivityLabels,
-                               Data::GetPrimaryConfig().lanesPerPool);
 }
 
 

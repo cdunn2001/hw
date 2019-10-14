@@ -49,6 +49,7 @@ set(CPP_LIST
     TraceBatch.cpp
     TrainedCartParams.h
     TrainedCartParams.cpp
+    TrainedCartDevice.h
     UHistogramSimd.h
     UHistogramSimd.cpp
 )

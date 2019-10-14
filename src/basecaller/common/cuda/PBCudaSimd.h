@@ -106,8 +106,14 @@ public:
     CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
     CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
     CUDA_ENABLED PBHalf2(PBShort2 f) : PBHalf2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
+    CUDA_ENABLED PBHalf2(uint2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
+#if defined(__CUDA_ARCH__)
+    __device__ PBHalf2(float2 f) : data_{__float22half2_rn(f)} {}
+#else
+    PBHalf2(float2 f) : data_{__floats2half2_rn(f.x, f.y)} {}
+#endif
 
     // Set/get individual elements
     CUDA_ENABLED void X(half f) {data_.x = f; }

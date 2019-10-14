@@ -109,7 +109,7 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
 
     const auto& pkbases = numBasesByAnalog_;
 
-    // make a copy of modelMean_, probably won't work this way:
+    // make a copy of modelMean_
     AnalogMetric<float> relamps(modelMean_);
 
     LaneArray<float> maxamp = relamps[0];
@@ -251,6 +251,7 @@ void BasecallingMetricsAccumulator::Reset()
     numPulseLabelStutters_ = 0;
     prevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
     prevprevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
+    activityLabel_ = HQRFPhysicalStates::EMPTY;
     for (size_t a = 0; a < numAnalogs; ++a)
     {
         pkMidSignal_[a] = 0;
@@ -308,6 +309,7 @@ void BasecallingMetricsAccumulator::AddModels(
 {
     for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
+        // This also casts from int to float, LaneArray(CudaArray) doesn't like that.
         for (size_t zi = 0; zi < laneSize; ++zi)
         {
             modelVariance_[ai][zi] = models.AnalogMode(ai).vars[zi];
@@ -383,6 +385,7 @@ void BasecallingMetricsAccumulator::Count(
             if (!pulse->IsReject())
             {
                 numBaseFrames_[zi] += pulse->Width();
+                numBasesByAnalog_[pulseLabel][zi]++;
 
                 if (!isnan(pulse->MidSignal()))
                 {
@@ -403,8 +406,6 @@ void BasecallingMetricsAccumulator::Count(
                     // Intra-pulse M2
                     pkZvar_[pulseLabel][zi] += pulse->SignalM2();
                 }
-
-                numBasesByAnalog_[pulseLabel][zi]++;
             }
             prevprevPulse = prevPulse;
             prevPulse = pulse;

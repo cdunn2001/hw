@@ -80,7 +80,7 @@ BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
-    , models_(PrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
+    , models_(Data::GetPrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
@@ -165,15 +165,15 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
-    (void)download;
-    pulses.Pulses().LaneView(0);
-
     auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
     (void)metricsProfile;
 
     auto basecallingMetrics = (*hfMetrics_)(
             pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
+
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
+    (void)download;
+    pulses.Pulses().LaneView(0);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 

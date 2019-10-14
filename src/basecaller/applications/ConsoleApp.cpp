@@ -520,7 +520,8 @@ private:
                 };
                 auto chunk = readChunk();
                 numChunksRead++;
-                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_)
+                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_
+                        && !ExitRequested())
                 {
                     usleep(1000);
                 }

@@ -82,7 +82,7 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleMetric<int16_t> pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 128 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 130 bytes per zmw");
 
 class BasecallingMetricsFactory
 {

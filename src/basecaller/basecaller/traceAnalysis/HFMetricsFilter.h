@@ -57,9 +57,9 @@ public: // Static functions
                           uint32_t framesPerChunk,
                           double frameRate,
                           bool realtimeActivityLabels,
-                          uint32_t lanesPerBatch);
+                          uint32_t lanesPerBatch,
+                          bool hostExecution=true);
     static void Finalize();
-    static void InitAllocationPools(bool hostExecution);
     static void DestroyAllocationPools();
 
 protected: // Static members
