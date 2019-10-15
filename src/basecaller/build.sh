@@ -26,9 +26,9 @@ build_basecaller(){
 
 deploy_basecaller(){
   case "$bamboo_planRepository_branchName" in
-    #master|release/*)
-    #  moduleVersion="${bamboo_release_version}-${bamboo_globalBuildNumber}"
-    #  ;;
+    master|release/*)
+      moduleVersion="${bamboo_release_version}-${bamboo_globalBuildNumber}"
+      ;;
     develop)
       moduleVersion="develop-${bamboo_globalBuildNumber}"
       ;;
@@ -57,8 +57,9 @@ if {[file executable /mnt/software/log/log_usage]} {
     exec /mnt/software/log/log_usage bascaller ${moduleVersion}
 }
 EOF
-  if [[ $bamboo_planRepository_branchName == develop ]]; then
-    ln -sfn ${moduleVersion} /mnt/software/modulefiles/mongo-basecaller/develop
+  if [[ $bamboo_planRepository_branchName == develop ]] \
+  || [[ $bamboo_planRepository_branchName == master ]]; then
+    ln -sfn ${moduleVersion} /mnt/software/modulefiles/mongo-basecaller/${bamboo_planRepository_branchName}
   fi
 }
 
