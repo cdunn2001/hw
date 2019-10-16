@@ -185,8 +185,7 @@ void TestPulseAccumulator()
     // Generate normally distributed baseline with given mean and variance.
     const short baselineMean = 0;
     const short baselineStd = 10;
-    std::random_device rd{};
-    std::mt19937 gen{rd()};
+    std::mt19937 gen;
     std::normal_distribution<> d{baselineMean, baselineStd};
 
     // Fixed signal values for pulses.
