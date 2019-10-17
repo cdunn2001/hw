@@ -30,6 +30,8 @@
 
 #include "HostHFMetricsFilter.h"
 
+#include <tbb/parallel_for.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -47,20 +49,20 @@ HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 {
     const auto& pulses = pulseBatch.Pulses();
-    for (size_t l = 0; l < lanesPerBatch_; l++)
+    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
     {
         const auto& laneCalls = pulses.LaneView(l);
         metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
-    }
+    });
 }
 
 void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
 {
-    for (size_t l = 0; l < lanesPerBatch_; l++)
+    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
     {
         const auto& models = modelsBatch.GetHostView()[l];
         metrics_[l].AddModels(models);
-    }
+    });
 }
 
 void HostHFMetricsFilter::AddMetrics(
@@ -68,13 +70,13 @@ void HostHFMetricsFilter::AddMetrics(
         const Data::FrameLabelerMetrics& frameLabelerMetrics,
         const Data::PulseDetectorMetrics& pdMetrics)
 {
-    for (size_t l = 0; l < lanesPerBatch_; l++)
+    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
     {
         metrics_[l].AddBatchMetrics(
                 baselinerMetrics.baselinerStats.GetHostView()[l],
                 frameLabelerMetrics.viterbiScore.GetHostView()[l],
                 pdMetrics.baselineStats.GetHostView()[l]);
-    }
+    });
 }
 
 std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
@@ -103,11 +105,11 @@ HostHFMetricsFilter::Process(
         FinalizeBlock();
         framesSeen_ = 0;
         auto ret = metricsFactory_->NewBatch();
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
+        tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
         {
             metrics_[l].PopulateBasecallingMetrics(
                     ret->GetHostView()[l]);
-        }
+        });
         return ret;
     }
     return std::unique_ptr<BasecallingMetricsBatchT>();

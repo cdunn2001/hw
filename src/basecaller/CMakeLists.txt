@@ -33,12 +33,25 @@ include_directories(
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_LIST_DIR}/../common/pacbio-cplusplus-api"
     "${CMAKE_CURRENT_LIST_DIR}/../Sequel/common/"
+    "${CMAKE_CURRENT_LIST_DIR}/"
     # "${CMAKE_CURRENT_LIST_DIR}/../../common/cmake-modules"
     # "${CMAKE_CURRENT_LIST_DIR}/../common/"
 )
 
 # Used to define include directories for targets defined in subdirectories.
 set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
+
+# need to load mongo-tbb first. pacbio-primary-common
+# is going to load primary-tbb, which currently has a
+# slight problem where it tries to make us use
+# /opt/intel/tbb, but we still actually take headers from
+# the actual compiler installation, which is a different
+# version of tbb.  Using this cmake file first will make
+# primary-tbb do essentially nothing, and we just use both
+# headers and libraries from the compiler installation.
+# once the build system gets fixed mongo-tbb.cmake can be
+# deleted
+include(mongo-tbb)
 
 include(pacbio-cplusplus-api)
 include(pacbio-primary-common)

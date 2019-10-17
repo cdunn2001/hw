@@ -72,6 +72,8 @@ public:
         , gpuData_{}
         , syncDir_(dir)
         , marker_(marker)
+        , checker_(std::make_unique<SingleStreamMonitor>())
+        , transferMutex_(std::make_unique<std::mutex>())
     {
         static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
 
@@ -185,37 +187,45 @@ public:
     // the device side is requested.
     HostView<HostType> GetHostView()
     {
-        if (!activeOnHost_) CopyImpl(true, false);
+        if (!activeOnHost_)
+        {
+            // Make sure any associated GPU kernels have completed
+            checker_->Reset();
 
-        // Force a check, to catch if the wrong thread tried to download the data,
-        // or if we are requesting mutable access to data that might have a pending
-        // upload.
-        checker_.Reset();
+            CopyImpl(true, false);
+
+        }
+
         return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
     HostView<const HostType> GetHostView() const
     {
-        if (!activeOnHost_) CopyImpl(true, false);
+        if (!activeOnHost_)
+        {
+            // If necesary, make sure any associated GPU kernels have completed.
+            // Since we provide immutable access, this is really only necessary if we're
+            // not set to upload only.  That means there won't be future downloads to
+            // alter the data we are seeing, and since we have retrieving a const view,
+            // we cannot corrupt any pending uploads to the GPU.
+            if (syncDir_ != SyncDirection::HostWriteDeviceRead)
+                checker_->Reset();
 
-        // Force a check, to catch if the wrong thread tried to download the data.
-        // Since we provide immutable access, this is really only an error if we're
-        // not set to upload only, as if there is no potential future download, then
-        // we don't have to worry about any live kernels (or data uploads) in this
-        // stream
-        if (syncDir_ != SyncDirection::HostWriteDeviceRead)
-            checker_.Reset();
+            CopyImpl(true, false);
+
+        }
+
         return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
     }
 
     DeviceHandle<GpuType> GetDeviceHandle(const KernelLaunchInfo& info)
     {
-        checker_.Update(info);
+        checker_->Update(info);
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
     DeviceHandle<const GpuType> GetDeviceHandle(const KernelLaunchInfo& info) const
     {
-        checker_.Update(info);
+        checker_->Update(info);
         if (activeOnHost_) CopyImpl(false, false);
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
@@ -242,8 +252,14 @@ private:
 
     void CopyImpl(bool toHost, bool manual) const
     {
+        // This is primarily to guard against a parallel host filter following
+        // a GPU filter.  If multiple threads are requesting the host data, we
+        // want to make sure only a single download is triggered.
+        std::lock_guard<std::mutex> lg(*transferMutex_);
         if (toHost)
         {
+            if (activeOnHost_) return; // Another thread performed the download.
+
             activeOnHost_ = true;
             if (manual || syncDir_ != SyncDirection::HostWriteDeviceRead)
             {
@@ -262,6 +278,8 @@ private:
                 CudaSynchronizeDefaultStream();
             }
         } else {
+            if (!activeOnHost_) return; // Another thread performed the upload
+
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
@@ -282,7 +300,8 @@ private:
     mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
     AllocationMarker marker_;
-    mutable SingleStreamMonitor checker_;
+    std::unique_ptr<SingleStreamMonitor> checker_;
+    std::unique_ptr<std::mutex> transferMutex_;
 };
 
 // Define overloads for this function, so that we can track kernel invocations, and

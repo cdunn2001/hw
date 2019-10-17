@@ -1,5 +1,8 @@
-#include <dataTypes/MovieConfig.h>
 #include "HostPulseAccumulator.h"
+
+#include <tbb/parallel_for.h>
+
+#include <dataTypes/MovieConfig.h>
 #include "SubframeLabelManager.h"
 
 namespace PacBio {
@@ -47,7 +50,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata());
 
-    for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
+    tbb::parallel_for(size_t{0}, labels.LanesPerBatch(), [&](size_t laneIdx)
     {
         const auto& blockLabels = labels.GetBlockView(laneIdx);
         const auto& blockLatTrace = labels.LatentTrace().GetBlockView(laneIdx);
@@ -71,7 +74,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
         }
 
         ret.second.baselineStats.GetHostView()[laneIdx] = baselineStats.GetState();
-    }
+    });
 
     return ret;
 }
