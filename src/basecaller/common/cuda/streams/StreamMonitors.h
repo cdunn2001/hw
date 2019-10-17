@@ -69,14 +69,15 @@ public:
     {}
 
     SingleStreamMonitor(const SingleStreamMonitor&) = delete;
-    SingleStreamMonitor(SingleStreamMonitor&& o) = default;
+    SingleStreamMonitor(SingleStreamMonitor&& o) = delete;
     SingleStreamMonitor& operator=(const SingleStreamMonitor&) = delete;
-    SingleStreamMonitor& operator=(SingleStreamMonitor&& o) = default;
+    SingleStreamMonitor& operator=(SingleStreamMonitor&& o) = delete;
 
     // Records the last seen cuda event.  It will throw if we are switching
     // streams while we are still being used on the previous stream
     void Update(const KernelLaunchInfo& info)
     {
+        std::lock_guard<std::mutex> lm(m_);
         // It's an error to use this type on two different streams concurrently
         // If someone merely forgot to add a synchronization point we will add
         // one now to be safe, but this may also indicate a wrong argument has
@@ -101,29 +102,48 @@ public:
 
     ~SingleStreamMonitor()
     {
-        Reset();
+        WaitForCompletion(false);
     }
 
-    // Makes sure that all outstanding work is completed
+    // Causes the current thread to wait until any and all associated GPU work is completed.
+    // This function can be called by any thread, not just the thread tied to the GPU stream
+    // we may be waiting on.
     void Reset()
     {
+        WaitForCompletion(true);
+    }
+
+private:
+
+    // Makes sure that all outstanding work is completed.  `waitExpected` is used to
+    // indicate if having to wait for work to complete is an error or not.  This function
+    // is called both by `Reset`, where we are just synchronizing and waiting for outstanding
+    // work is no issue, as well as by the destructor, where waiting indicates we are trying
+    // to delete data in use on the GPU, which probably was not intended.
+    void WaitForCompletion(bool waitExpected)
+    {
+        std::lock_guard<std::mutex> lm(m_);
         if (latestEvent_)
         {
             if (!latestEvent_->IsCompleted())
             {
-                PBLOG_WARN << "Unexpectedly trying to reset stream monitor while currently in use "
-                           << "on the gpu.  We'll automatically synchronize to avoid segmentation "
-                           << "violations, but this may indicate a developer bug.";
+                if (!waitExpected)
+                {
+                    PBLOG_WARN << "Unexpectedly trying to reset stream monitor while currently in use "
+                               << "on the gpu.  We'll automatically synchronize to avoid segmentation "
+                               << "violations, but this may indicate a developer bug.";
+                    AddStreamError();
+                }
                 latestEvent_->WaitForCompletion();
-                AddStreamError();
             }
         }
 
         lastThread_ = KernelLaunchInfo::NoThreadId;
         latestEvent_ = nullptr;
     }
-private:
-    uint32_t lastThread_;
+
+    mutable std::mutex m_;
+    std::atomic<uint32_t> lastThread_;
     std::shared_ptr<const CudaEvent> latestEvent_;
 };
 
@@ -139,20 +159,22 @@ public:
     MultiStreamMonitor() = default;
 
     MultiStreamMonitor(const MultiStreamMonitor&) = delete;
-    MultiStreamMonitor(MultiStreamMonitor&&) = default;
+    MultiStreamMonitor(MultiStreamMonitor&&) = delete;
     MultiStreamMonitor& operator=(const MultiStreamMonitor&) = delete;
-    MultiStreamMonitor& operator=(MultiStreamMonitor&&) = default;
+    MultiStreamMonitor& operator=(MultiStreamMonitor&&) = delete;
 
     // Any number of threads/streams are allowed to use this type
     // concurrently.  We're just going to keep track of the latest
     // operation in each thread that comes through.
     void Update(const KernelLaunchInfo& info)
     {
+        std::lock_guard<std::mutex> lm(m_);
         eventMap_[info.ThreadId()] = info.Event();
     }
 
     ~MultiStreamMonitor()
     {
+        std::lock_guard<std::mutex> lm(m_);
         for (auto& kv : eventMap_)
         {
             if (kv.second && !kv.second->IsCompleted())
@@ -167,6 +189,7 @@ public:
     }
 private:
     std::unordered_map<uint32_t, std::shared_ptr<const CudaEvent>> eventMap_;
+    std::mutex m_;
 };
 
 }} // ::PacBio::Cuda

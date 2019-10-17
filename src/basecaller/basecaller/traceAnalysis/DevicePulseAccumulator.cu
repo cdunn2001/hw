@@ -38,6 +38,7 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/MongoConstants.h>
+#include <common/StatAccumState.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -54,7 +55,7 @@ namespace {
 // I don't know if we want a full PBUInt2 type added, or if using raw uint2 is
 // preferrable, or if using a pair of ints is just an implementation quirk of this
 // particular file
-inline __device__ uint2 Blend(PBBool2 cond, uint l, uint2 r) {
+inline __device__ uint2 Blend(PBShort2 cond, uint l, uint2 r) {
     uint2 ret;
     ret.x = cond.X() ? l : r.x;
     ret.y = cond.Y() ? l : r.y;
@@ -79,6 +80,9 @@ public:
             signalTotal_[i] = PBShort2(0);
             signalM2_[i] = PBHalf2(0.0f);
             label_[i] = PBShort2(initialState);
+            m0_[i] = PBHalf2(0.0f);
+            m1_[i] = PBHalf2(0.0f);
+            m2_[i] = PBHalf2(0.0f);
         }
     }
 
@@ -92,14 +96,17 @@ public:
         signalTotal_[threadIdx.x] = other.signalTotal_[threadIdx.x];
         signalM2_[threadIdx.x] = other.signalM2_[threadIdx.x];
         label_[threadIdx.x] = other.label_[threadIdx.x];
+        m0_[threadIdx.x] = other.m0_[threadIdx.x];
+        m1_[threadIdx.x] = other.m1_[threadIdx.x];
+        m2_[threadIdx.x] = other.m2_[threadIdx.x];
     }
 
-    __device__ PBBool2 IsNewSegment(PBShort2 label) const
+    __device__ PBShort2 IsNewSegment(PBShort2 label) const
     {
         return LabelManager::IsNewSegment(label_[threadIdx.x], label);
     }
 
-    __device__ PBBool2 IsPulse() const
+    __device__ PBShort2 IsPulse() const
     {
         return LabelManager::BaselineLabel() != label_[threadIdx.x];
     }
@@ -136,7 +143,7 @@ public:
             .IsReject(false);
     }
 
-    __device__ void ResetSegment(PBBool2 boundaryMask, uint32_t frameIndex,
+    __device__ void ResetSegment(PBShort2 boundaryMask, uint32_t frameIndex,
                                  PBShort2 label, PBShort2 signal)
     {
         startFrame_[threadIdx.x] = Blend(boundaryMask, frameIndex, startFrame_[threadIdx.x]);
@@ -148,7 +155,7 @@ public:
         label_[threadIdx.x] = Blend(boundaryMask, label, label_[threadIdx.x]);
     }
 
-    __device__ void AddSignal(PBBool2 update, PBShort2 signal)
+    __device__ void AddSignal(PBShort2 update, PBShort2 signal)
     {
         signalTotal_[threadIdx.x] = Blend(update,
                                           signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x],
@@ -158,6 +165,26 @@ public:
                                        signalM2_[threadIdx.x]);
         signalLastFrame_[threadIdx.x] = Blend(update, signal, signalLastFrame_[threadIdx.x]);
         signalMax_[threadIdx.x] = Blend(update, max(signal, signalMax_[threadIdx.x]), signalMax_[threadIdx.x]);
+    }
+
+    __device__ void AddBaseline(PBShort2 baselineMask, PBShort2 signal)
+    {
+        PBHalf2 zero(0.0f);
+        PBHalf2 one(1.0f);
+
+        m0_[threadIdx.x] += Blend(baselineMask, one, zero);
+        m1_[threadIdx.x] += Blend(baselineMask, signal, zero);
+        m2_[threadIdx.x] += Blend(baselineMask, pow2(signal), zero);
+    }
+
+    __device__ void FillBaselineStats(Mongo::StatAccumState& stats)
+    {
+        stats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        stats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
+        stats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
+        stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
     }
 
 private:
@@ -171,6 +198,11 @@ private:
     CudaArray<PBHalf2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
 
     CudaArray<PBShort2, blockThreads> label_;             // // Internal label ID corresponding to detection modes
+
+    // Baseline stats computed from frames marked as baseline
+    CudaArray<PBHalf2, blockThreads> m0_;
+    CudaArray<PBHalf2, blockThreads> m1_;
+    CudaArray<PBHalf2, blockThreads> m2_;
 };
 
 template <typename LabelManager, size_t blockThreads>
@@ -181,7 +213,8 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               uint32_t firstFrameIdx,
                               DeviceView<Segment<LabelManager, blockThreads>> workingSegments,
                               DevicePtr<const LabelManager> manager,
-                              GpuBatchVectors<Data::Pulse> pulsesOut)
+                              GpuBatchVectors<Data::Pulse> pulsesOut,
+                              DeviceView<Mongo::StatAccumState> stats)
 {
     assert(labels.NumFrames() == signal.NumFrames() + latSignal.NumFrames());
 
@@ -217,6 +250,9 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
 
         segment.ResetSegment(boundaryMask, frame, label, signal);
         segment.AddSignal(!boundaryMask, signal);
+
+        auto baseline = (!pulseMask) && (!boundaryMask);
+        segment.AddBaseline(baseline, signal);
     };
 
     const int latFrames = latSignal.NumFrames();
@@ -232,6 +268,7 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     }
 
     workingSegments[blockIdx.x].SharedCopy(segment);
+    workingSegments[blockIdx.x].FillBaselineStats(stats[blockIdx.x]);
 }
 
 }
@@ -262,7 +299,8 @@ public:
                  labels.Metadata().FirstFrame(),
                  workingSegments_,
                  *manager_,
-                 ret.first.Pulses());
+                 ret.first.Pulses(),
+                 ret.second.baselineStats);
 
         Cuda::CudaSynchronizeDefaultStream();
         return ret;

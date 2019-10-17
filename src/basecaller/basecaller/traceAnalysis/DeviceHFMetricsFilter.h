@@ -36,6 +36,7 @@
 #include <dataTypes/BatchVectors.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 #include <dataTypes/Pulse.h>
+#include <dataTypes/TrainedCartDevice.h>
 #include <common/StatAccumState.h>
 #include <common/AutocorrAccumState.h>
 
@@ -43,53 +44,16 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-struct alignas(64) BasecallingMetricsAccumulatorDevice
-{
-public: // types
-    using InputPulses = Data::LaneVectorView<const Data::Pulse>;
-    using InputBaselineStats = Data::BaselinerStatAccumState;
-    using InputModelsT = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
-
-    template <typename T>
-    using SingleMetric = Cuda::Utility::CudaArray<T, laneSize>;
-    template <typename T>
-    using AnalogMetric = Cuda::Utility::CudaArray<SingleMetric<T>,
-                                                  numAnalogs>;
-
-private: // metrics
-    SingleMetric<uint16_t> numPulseFrames_;
-    SingleMetric<uint16_t> numBaseFrames_;
-    SingleMetric<uint16_t> numSandwiches_;
-    SingleMetric<uint16_t> numHalfSandwiches_;
-    SingleMetric<uint16_t> numPulseLabelStutters_;
-    Cuda::Utility::CudaArray<Data::HQRFPhysicalStates, laneSize> activityLabel_;
-    AnalogMetric<float> pkMidSignal_;
-    AnalogMetric<float> bpZvar_;
-    AnalogMetric<float> pkZvar_;
-    AnalogMetric<float> pkMax_;
-    AnalogMetric<float> modelVariance_;
-    AnalogMetric<float> modelMean_;
-    AnalogMetric<uint16_t> pkMidNumFrames_;
-    AnalogMetric<uint16_t> numPkMidBasesByAnalog_;
-    AnalogMetric<uint16_t> numBasesByAnalog_;
-    AnalogMetric<uint16_t> numPulsesByAnalog_;
-    SingleMetric<uint32_t> startFrame_;
-    SingleMetric<uint32_t> numFrames_;
-    SingleMetric<int16_t> pixelChecksum_;
-    SingleMetric<float> pulseDetectionScore_;
-    // TODO: These changed from accumulators to states for the Device, the
-    // kernels will differ from their host for this reason (among others).
-    StatAccumState baselineStatAccum_;
-    AutocorrAccumState autocorrAccum_;
-
-private: // state trackers
-    Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevBasecallCache_;
-    Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevprevBasecallCache_;
-
-};
-
 class DeviceHFMetricsFilter : public HFMetricsFilter
 {
+public: // static methods
+    static void Configure(uint32_t sandwichTolerance,
+                          uint32_t framesPerHFMetricBlock,
+                          uint32_t framesPerChunk,
+                          double frameRate,
+                          bool realtimeActivityLabels,
+                          uint32_t lanesPerBatch);
+
 public:
     class AccumImpl;
 

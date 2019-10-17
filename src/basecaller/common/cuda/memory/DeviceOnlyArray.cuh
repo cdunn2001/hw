@@ -111,6 +111,7 @@ public:
     DeviceOnlyArray(const AllocationMarker& marker, size_t count, Args&&... args)
         : data_(GetManagedDeviceAllocation(count*sizeof(T), marker))
         , count_(count)
+        , checker_(std::make_unique<CheckerType>())
     {
         // Even if we are an array of const types, we need to be non-const during construction
         using U = typename std::remove_const<T>::type;
@@ -130,12 +131,12 @@ public:
 
     DeviceView<T> GetDeviceView(const KernelLaunchInfo& info)
     {
-        checker_.Update(info);
+        checker_->Update(info);
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
     DeviceView<const T> GetDeviceView(const KernelLaunchInfo& info) const
     {
-        checker_.Update(info);
+        checker_->Update(info);
         return DeviceHandle<T>(data_.get<T>(DataKey()), count_, DataKey());
     }
 
@@ -164,7 +165,7 @@ private:
     using CheckerType = typename std::conditional<std::is_const<T>::value,
                                                   MultiStreamMonitor,
                                                   SingleStreamMonitor>::type;
-    CheckerType checker_;
+    std::unique_ptr<CheckerType> checker_;
 };
 
 template <typename T>

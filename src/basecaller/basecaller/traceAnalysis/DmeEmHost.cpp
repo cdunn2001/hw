@@ -33,6 +33,8 @@
 #include <boost/numeric/conversion/cast.hpp>
 #include <Eigen/Dense>
 
+#include <tbb/parallel_for.h>
+
 #include <common/LaneArray.h>
 #include <common/NumericUtil.h>
 #include <dataTypes/BasecallerConfig.h>
@@ -99,7 +101,7 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
 {
     const auto& hView = hist.data.GetHostView();
     auto dmView = detModel->GetHostView();
-    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    tbb::parallel_for((unsigned int){0}, PoolSize(), [&](unsigned int lane)
     {
         auto& dmLane = dmView[lane];
 
@@ -112,7 +114,7 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
 
         // Transcribe results back into *detModel.
         laneDetModel.ExportTo(&dmLane);
-    }
+    });
 }
 
 

@@ -27,8 +27,11 @@
 //  Description:
 //  Defines some members of class TraceHistogramAccumHost.
 
-#include <algorithm>
 #include "TraceHistogramAccumHost.h"
+
+#include <algorithm>
+
+#include <tbb/parallel_for.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -69,23 +72,25 @@ void TraceHistogramAccumHost::AddBatchImpl(
     // needed to initialize the histograms?
     const bool doInitHist = !isHistInitialized_
             && FramesAdded() + traces.NumFrames() >= NumFramesPreAccumStats();
+    if (doInitHist)
+    {
+        for(unsigned int lane = 0; lane < numLanes; lane++)
+        {
+            InitHistogram(lane);
+        }
+        isHistInitialized_ = true;
+    }
 
     // For each lane/block in the batch ...
     const auto& statsView = stats.GetHostView();
-    for (unsigned int lane = 0; lane < numLanes; ++lane)
+    tbb::parallel_for((size_t){0}, numLanes, [&](size_t lane)
     {
         // Accumulate baseliner stats.
         stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
-
-        if (doInitHist)
-        {
-            // Define histogram parameters and construct empty histogram.
-            InitHistogram(lane);
-            isHistInitialized_ = true;
-        }
-
         if (isHistInitialized_) AddBlock(traces, lane);
-    }
+    });
+
+    if (isHistInitialized_) histFrameCount_ += traces.NumFrames();
 }
 
 
@@ -136,7 +141,6 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
         // Note that there is a possible elemental type conversion here.
         const LaneArray<HistDataType> x {*lfi};
         h.AddDatum(x);
-        ++histFrameCount_;
     }
 }
 

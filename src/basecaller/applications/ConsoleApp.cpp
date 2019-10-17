@@ -508,6 +508,7 @@ private:
                 auto readChunk = [&numChunksRead, this]() {
                     Profiler::Mode mode = Profiler::Mode::REPORT;
                     if (numChunksRead < 15) mode = Profiler::Mode::OBSERVE;
+                    if (numChunksRead < 3) mode = Profiler::Mode::IGNORE;
                     Profiler profiler(mode, 3.0f, std::numeric_limits<float>::max());
                     auto readChunkProfile = profiler.CreateScopedProfiler(ChunkProfiler::READ_CHUNK);
                     (void)readChunkProfile;
@@ -519,7 +520,8 @@ private:
                 };
                 auto chunk = readChunk();
                 numChunksRead++;
-                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_)
+                while (inputDataQueue_.Size() > numChunksPreloadInputQueue_
+                        && !ExitRequested())
                 {
                     usleep(1000);
                 }

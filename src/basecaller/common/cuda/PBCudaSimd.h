@@ -27,6 +27,8 @@
 #ifndef PACBIO_CUDA_SIMD_H
 #define PACBIO_CUDA_SIMD_H
 
+#include <cstdint>
+
 #include <cuda_fp16.h>
 #include <common/cuda/CudaFunctionDecorators.h>
 
@@ -43,18 +45,44 @@ using PBHalf = half;
 
 class PBShort2
 {
+    // 16 least significant bits hold X, the
+    // 16 most significant hold Y
+    static constexpr uint32_t yshift = 0x10;
+    static constexpr uint32_t ymask = 0xFFFF0000;
+    static constexpr uint32_t xmask = 0x0000FFFF;
 public:
     PBShort2() = default;
 
     CUDA_ENABLED PBShort2(short s) : PBShort2(s,s) {}
-    CUDA_ENABLED PBShort2(short s1, short s2) : data_( make_short2(s1, s2) ) {}
-    CUDA_ENABLED PBShort2(short2 s) : data_(s) {}
+    CUDA_ENABLED PBShort2(short s1, short s2)
+        // We have to be careful about sign extension, as bit operations automatically promote
+        // operands to 32 bit.  So we have to make sure to mask out the unwanted bits in s1
+        // after the promotion to full width.
+        : data_{ (static_cast<uint32_t>(s1) & xmask ) | (static_cast<uint32_t>(s2) << yshift) }
+    {}
+
+private:
+    // We need to be able to construct from a raw uint32_t, to capture the return from various
+    // cuda intrinsics.  However adding a constructor that just takes that introduces confusion,
+    // whenever handing something like an integer literal in.  PBShort2(12) could potentially
+    // mean cast the 12 to a short, and construct a PBShort2 with both slots set to 12, or cast
+    // 12 to a uint32_t, which is effectively y=0,x=12.
+    // Making this ctor private and adding a Dummy type to disambiguate the signature.  Construction
+    // from a raw uint32_t must be done through the `FromRaw` static named constructor, though
+    // probably no one outside PBCudaSimd.cuh needs do this.
+    struct Dummy {};
+    CUDA_ENABLED PBShort2(uint32_t data, Dummy)
+        : data_{data}
+    {}
+
+public:
+    CUDA_ENABLED static PBShort2 FromRaw(uint32_t raw) { return PBShort2(raw, Dummy{}); }
 
     // Set/get individual elements
-    CUDA_ENABLED void X(short s) {data_.x = s; }
-    CUDA_ENABLED void Y(short s) {data_.y = s; }
-    CUDA_ENABLED short X() const {return data_.x; }
-    CUDA_ENABLED short Y() const {return data_.y; }
+    CUDA_ENABLED void X(short s) { data_ = (data_ & ymask) | (static_cast<uint32_t>(s) & xmask); }
+    CUDA_ENABLED void Y(short s) { data_ = (data_ & xmask) | (static_cast<uint32_t>(s) << yshift); }
+    CUDA_ENABLED short X() const {return static_cast<short>(data_ & xmask); }
+    CUDA_ENABLED short Y() const {return static_cast<short>((data_ & ymask) >> yshift); }
 
     template <int id>
     CUDA_ENABLED short Get() const
@@ -64,9 +92,10 @@ public:
         else return Y();
     }
 
-    short2 CUDA_ENABLED data() const { return data_; }
+    uint32_t CUDA_ENABLED data() const { return data_; }
+
 private:
-    short2 data_;
+    uint32_t data_;
 };
 
 class PBHalf2
@@ -77,8 +106,14 @@ public:
     CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
     CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
     CUDA_ENABLED PBHalf2(PBShort2 f) : PBHalf2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
+    CUDA_ENABLED PBHalf2(uint2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
+#if defined(__CUDA_ARCH__)
+    __device__ PBHalf2(float2 f) : data_{__float22half2_rn(f)} {}
+#else
+    PBHalf2(float2 f) : data_{__floats2half2_rn(f.x, f.y)} {}
+#endif
 
     // Set/get individual elements
     CUDA_ENABLED void X(half f) {data_.x = f; }
@@ -113,8 +148,13 @@ public:
     CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
     CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
                                                                       b2 ? 1.0f : 0.0f)} {}
-    CUDA_ENABLED bool X() const { return __half2float(data_.x) != 0.0f; }
-    CUDA_ENABLED bool Y() const { return __half2float(data_.y) != 0.0f; }
+#ifdef __CUDA_ARCH__
+    __device__ bool X() const { return data_.x != __short_as_half(0); }
+    __device__ bool Y() const { return data_.y != __short_as_half(0); }
+#else
+    bool X() const { return __half2float(data_.x) != 0.0f; }
+    bool Y() const { return __half2float(data_.y) != 0.0f; }
+#endif
 
     CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
     half2 CUDA_ENABLED data() const { return data_; }

@@ -26,6 +26,8 @@
 
 #include "FrameLabelerKernels.cuh"
 
+#include <type_traits>
+
 #include <common/cuda/streams/LaunchManager.cuh>
 
 using namespace PacBio::Cuda::Utility;
@@ -34,6 +36,17 @@ using namespace PacBio::Mongo::Data;
 
 namespace PacBio {
 namespace Cuda {
+
+namespace
+{
+
+// Make the transition matrix visible to all threads via constant memory,
+// which for this use case, has performance benefits over generic device
+// memory.
+//
+// Unfortunately __constant__ variables *have* to be global.  We will initialize
+// this during the FrameLabeler::Configure function.
+__constant__ Subframe::TransitionMatrix trans;
 
 __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 {
@@ -57,94 +70,151 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
     }
 }
 
-int32_t FrameLabeler::framesPerChunk_ = 0;
-int32_t FrameLabeler::lanesPerPool_ = 0;
-ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
-std::unique_ptr<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>> FrameLabeler::trans_;
-
-
-void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
-                             int32_t lanesPerPool, int32_t framesPerChunk)
-{
-    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
-    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
-
-    trans_ = std::make_unique<Memory::DeviceOnlyObj<const Subframe::TransitionMatrix>>(
-            SOURCE_MARKER(),
-            CudaArray<Subframe::AnalogMeta, 4>{meta});
-
-    framesPerChunk_ = framesPerChunk;
-    lanesPerPool_ = lanesPerPool;
-}
-
-void FrameLabeler::Finalize()
-{
-    scratchData_.Clear();
-    trans_.release();
-}
-
-std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
-{
-    std::unique_ptr<ViterbiDataHost<PBShort2, BlockThreads>> ret;
-    bool success = scratchData_.TryPop(ret);
-    if (! success)
-    {
-        ret = std::make_unique<ViterbiDataHost<PBShort2, BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
-    }
-    assert(ret);
-    return ret;
-}
-
-void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<PBShort2, FrameLabeler::BlockThreads>> data)
-{
-    scratchData_.Push(std::move(data));
-}
-
-static BatchDimensions LatBatchDims(size_t lanesPerPool)
-{
-    BatchDimensions ret;
-    ret.framesPerBatch = ViterbiStitchLookback;
-    ret.laneWidth = laneSize;
-    ret.lanesPerBatch = lanesPerPool;
-    return ret;
-}
-
 __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 {
     auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
     for (auto val : zmwData) val = PBShort2(0);
 }
 
-FrameLabeler::FrameLabeler()
-    : latent_(SOURCE_MARKER(), lanesPerPool_)
-    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
+template <typename T2, typename Labels, typename LogLike, typename Scorer, class... Rows>
+__device__ void Recursion(T2& sharedMaxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
+                          const SparseMatrix<Rows...>& trans, PBShort2 data, int idx)
 {
-    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
+    CudaArray<PBHalf2, numStates> logAccum;
+    PackedLabels packedLabels;
+    auto& maxVal = sharedMaxVal[threadIdx.x];
+
+    // Note: The cuda optimizer seems to be finicky about what gets placed
+    // inside a register and what gets pushed out to the stack in memory.
+    // The packedLabels variable used to be a raw uint32_t that various
+    // code sections did bit twiddles on.  Trying to encapsulate that into
+    // a small class caused this filter to slow down by almost 2x.  The
+    // combination of making it a struct, and the fact that AddRow used to
+    // be a template function that accepted packedLabels by reference, caused
+    // the variable to be pushed to global memory and the increased memory
+    // traffic killed performance.  For whatever reason, capturing this
+    // by reference in a lambda doesn't cause any issues, though one would
+    // think after inlining the two approaches would be identical.  One would
+    // also think that the wrapping a uint32_t inside a light struct with a
+    // few inline functions to handle the bit twiddles would also have no
+    // effect.
+    //
+    // Moral of the story is that we're pressed up against a performance cliff
+    // and subject to the whims of the optimizer.  If you tweak this lambda
+    // be sure to check the overal runtime for performance regressions, as they
+    // may be dramatic.
+    auto AddRow = [&](const PBHalf2& score,
+                      const half* rowData,
+                      auto* row)
     {
-        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
-    }
+        // row parameter just used to extract the Row type.
+        // I wouldn't even give it a name save we need to use
+        // decltype to extract the type information within a lambda.
+        using Row = std::remove_pointer_t<decltype(row)>;
+        constexpr auto firstIdx = Row::firstIdx;
 
-    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
-    CudaSynchronizeDefaultStream();
+        // Currently only handle Rows with a single Segment.  This can be
+        // generalized to handle an arbitrary number of Segments, but it
+        // came with a mild performance penalty, so not doing that unless/
+        // until necessary
+        using Segment = typename Row::Segment0;
+
+        maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
+        ushort2 maxIdx = make_ushort2(firstIdx,firstIdx);
+
+        uint32_t dataIndex = Segment::dataIndex;
+        #pragma unroll(numStates)
+        for (int prevState = Segment::firstCol; prevState < Segment::lastCol; ++prevState, dataIndex++)
+        {
+            auto val = score + PBHalf2(rowData[dataIndex]) + logLike[prevState];
+
+            auto cond = val >= maxVal;
+            maxVal = Blend(cond, val, maxVal);
+            if (cond.X()) maxIdx.x = prevState;
+            if (cond.Y()) maxIdx.y = prevState;
+        }
+        constexpr auto nextState = Row::rowIdx;
+        logAccum[nextState] = maxVal;
+
+        // Always slot new entries into the back, and after 4 inserts it will be fully populated
+        // and ready for storage.  This approach has empirically been observed to be faster than
+        // trying to slot data directly into it's desired final location, as the current version
+        // can be done without any runtime dependance on the value of nextState.
+        packedLabels.PushBack(maxIdx);
+        if ((nextState & 3) == 3)
+        {
+            labels(idx, nextState / 4) = packedLabels;
+        }
+    };
+
+
+    const auto dat = PBHalf2(data);
+    // Compile time loop, to loop over all the Rows in our sparse matrix (each of which have
+    // a different type)
+    auto loop = {(
+        AddRow(scorer.StateScores(dat, Rows::rowIdx),
+               trans.RowData(Rows::rowIdx),
+               (Rows*){nullptr}),0
+    )...};
+
+    // Every time we handled a 4th state we wrote the result to
+    // labels, but the 13th state is the odd man out.  Need to
+    // manually shift things into the correct location and store it.
+    static_assert(Subframe::numStates == 13, "Expected 13 states");
+    packedLabels.PushBackZeroes<3>();
+    labels(idx, 3) = packedLabels;
+    logLike = logAccum;
 }
-
 
 template <size_t blockThreads>
 __launch_bounds__(blockThreads, 32)
-__global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::TransitionMatrix> trans,
-                                   const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
+__global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
                                    Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
-                                   ViterbiData<PBShort2, blockThreads> labels,
+                                   ViterbiData<blockThreads> batchViterbiData,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
                                    Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
 {
+    // When/if this changes, some of this kernel is going to have to be udpated or generalized
+    static_assert(Subframe::numStates == 13,
+                  "FrameLabelerKernel currently hard coded to only handle 13 states");
     using namespace Subframe;
 
     assert(blockDim.x == blockThreads);
     __shared__ BlockStateSubframeScorer<blockThreads> scorer;
+
+    // This optimization requires some notes, and may need to be revisited
+    // periodically.  The BlockStateSubframeScorer above uses 26 32-bit words
+    // of storage per thread.  In order to get 32 occupant blocks (the best we
+    // can do when our block size is 32 threads) then there really are only 24
+    // words available.  The best we can do with the above data structure is
+    // roughly 29 blocks.  However in an experiment where I pushed two members from
+    // `scorer` to local mem / registers, my throughput went down.  I did get the
+    // desired increase in occupancy, and overall there were the same number of
+    // memory requests so the new local variables were not causing new memory
+    // traffic, but our cache hit rate went down.  The improved occupancy helped
+    // us less than the new increase in memory latency hurt us.
+    //
+    // This is not entirely unexpected as more resident blocks means they effectively
+    // each get less L1 space to use.  So I did a subsequent experiment adding this one
+    // extra shared variable, to see if we could decrease our occpancy a little more
+    // and get even better L1 usage.
+    //
+    // The result was a 4% increase in throughput, which for a single change is good
+    // enough to want to keep.  However when profiling things, it did not appear that
+    // we were actually benefiting from an increase in cache hits.  Instead the delta
+    // between our theoretical occupancy (limited by our shared memory usage) and
+    // our actual achieved occupancy went down.  In other words the added shared
+    // memory usage decreased our maximum occupancy, but for whatever reason, the
+    // occpancy we actually got stayed the same.
+    //
+    // I'm not sure what all affects the delta between theoretical and achieved.  If
+    // other changes affect that balance, then this might become a less optimal choice,
+    // and these two should be moved back to being per-thread automatic variables in
+    // the `Recursion` function
+    __shared__ CudaArray<PBHalf2, blockThreads> sharedMaxVal;
 
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
@@ -158,30 +228,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         logLike[i] = Blend(bc == i, zero, ninf);
     }
 
-    auto Recursion = [&labels, &trans, &logLike](PBShort2 data, int idx)
-    {
-        CudaArray<PBHalf2, numStates> logAccum;
-
-        //auto scores = scorer.StateScores(PBHalf2(data));
-        const auto dat = PBHalf2(data);
-        for (int nextState = 0; nextState < numStates; ++nextState)
-        {
-            auto score = scorer.StateScores(dat, nextState);
-            auto maxVal = score + PBHalf2(trans->Entry(nextState, 0)) + logLike[0];
-            auto maxIdx = PBShort2(0);
-            for (int prevState = 1; prevState < numStates; ++prevState)
-            {
-                auto val = score + PBHalf2(trans->Entry(nextState, prevState)) + logLike[prevState];
-
-                auto cond = maxVal > val;
-                maxVal = Blend(cond, maxVal, val);
-                maxIdx = Blend(cond, maxIdx, PBShort2(prevState));
-            }
-            logAccum[nextState] = maxVal;
-            labels(idx, nextState) = maxIdx;
-        }
-        logLike = logAccum;
-    };
+    auto labels = batchViterbiData.BlockData();
 
     // Forward recursion on latent data
     {
@@ -189,7 +236,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         scorer.Setup(latent.GetModel());
         for (int frame = 0; frame < ViterbiStitchLookback; ++frame)
         {
-            Recursion(latZmw[frame], frame);
+            Recursion(sharedMaxVal, labels, logLike, scorer, trans, latZmw[frame], frame);
         }
     }
 
@@ -200,7 +247,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     const int anchor = numFrames - ViterbiStitchLookback;
     for (int frame = 0; frame < anchor; ++frame)
     {
-        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
     }
 
     // Need to store the log likelihoods at the actual anchor point, so
@@ -210,7 +257,7 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
 
     for (int frame = anchor; frame < numFrames; ++frame)
     {
-        Recursion(inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
     }
 
     // Compute the probabilities of the possible end states.  Propagate
@@ -227,17 +274,24 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
         {
             newProb[state] = PBHalf2(0.0f);
         }
+        auto packedLabels = labels(i, 0);
         for (short state = 0; state < numStates; ++state)
         {
-            auto prev = labels(i, state);
-            newProb[prev.X()] += Blend(PBBool2(true,false), prob[state], zero);
-            newProb[prev.Y()] += Blend(PBBool2(false,true), prob[state], zero);
+            auto prev = packedLabels.PopFront();
+            // a PackedLabels fits four x/y pairs, so after every 4th state we have exhausted
+            // the current packedLabels and need to extract the next one.
+            if ((state % 4) == 3)
+            {
+                packedLabels = labels(i, state / 4 + 1);
+            }
+            newProb[prev.x] += Blend(PBBool2(true,false), prob[state], zero);
+            newProb[prev.y] += Blend(PBBool2(false,true), prob[state], zero);
         }
         prob = newProb;
     }
 
     PBHalf2 maxProb = prob[0];
-    PBShort2 anchorState = {0,0};
+    PBShort2 anchorState(0);
     #pragma unroll 1
     for (int i = 1; i < numStates; ++i)
     {
@@ -256,8 +310,9 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
-        traceState = PBShort2(labels(frame, traceState.X()).X(),
-                              labels(frame, traceState.Y()).Y());
+        auto x = labels(frame, traceState.X() / 4).XAt(traceState.X() % 4);
+        auto y = labels(frame, traceState.Y() / 4).YAt(traceState.Y() % 4);
+        traceState = PBShort2(x,y);
     }
 
     // Update latent data
@@ -273,6 +328,71 @@ __global__ void FrameLabelerKernel(const Memory::DevicePtr<const Subframe::Trans
     }
 }
 
+}
+
+constexpr size_t FrameLabeler::BlockThreads;
+
+int32_t FrameLabeler::framesPerChunk_ = 0;
+int32_t FrameLabeler::lanesPerPool_ = 0;
+ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
+
+void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
+                             int32_t lanesPerPool, int32_t framesPerChunk)
+{
+    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
+    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
+
+    Subframe::TransitionMatrix transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
+    CudaCopyToSymbol(trans, &transHost);
+
+    framesPerChunk_ = framesPerChunk;
+    lanesPerPool_ = lanesPerPool;
+}
+
+void FrameLabeler::Finalize()
+{
+    scratchData_.Clear();
+}
+
+std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
+{
+    std::unique_ptr<ViterbiDataHost<BlockThreads>> ret;
+    bool success = scratchData_.TryPop(ret);
+    if (! success)
+    {
+        ret = std::make_unique<ViterbiDataHost<BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
+    }
+    assert(ret);
+    return ret;
+}
+
+void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> data)
+{
+    scratchData_.Push(std::move(data));
+}
+
+static BatchDimensions LatBatchDims(size_t lanesPerPool)
+{
+    BatchDimensions ret;
+    ret.framesPerBatch = ViterbiStitchLookback;
+    ret.laneWidth = laneSize;
+    ret.lanesPerBatch = lanesPerPool;
+    return ret;
+}
+
+FrameLabeler::FrameLabeler()
+    : latent_(SOURCE_MARKER(), lanesPerPool_)
+    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
+{
+    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
+    {
+        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
+    }
+
+    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
+    CudaSynchronizeDefaultStream();
+}
+
 void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>& models,
                                 const Mongo::Data::BatchData<int16_t>& input,
                                 Mongo::Data::BatchData<int16_t>& latOut,
@@ -282,8 +402,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
     auto labels = BorrowScratch();
 
     const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, lanesPerPool_, BlockThreads);
-    launcher(*trans_,
-             models,
+    launcher(models,
              input,
              latent_,
              *labels,
@@ -296,7 +415,5 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
     std::swap(prevLat_, latOut);
     ReturnScratch(std::move(labels));
 }
-
-constexpr size_t FrameLabeler::BlockThreads;
 
 }}

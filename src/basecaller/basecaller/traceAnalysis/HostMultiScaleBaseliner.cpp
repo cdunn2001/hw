@@ -1,7 +1,10 @@
 #include "HostMultiScaleBaseliner.h"
 
+#include <tbb/parallel_for.h>
+
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
+
 
 namespace PacBio {
 namespace Mongo {
@@ -32,7 +35,7 @@ HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto statsView = out.second.baselinerStats.GetHostView();
-    for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
+    tbb::parallel_for(size_t{0}, rawTrace.LanesPerBatch(), [&](size_t laneIdx)
     {
         const auto& traceData = rawTrace.GetBlockView(laneIdx);
         auto baselineSubtracted = out.first.GetBlockView(laneIdx);
@@ -44,7 +47,7 @@ HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
                                                          baselineSubtracted);
 
         statsView[laneIdx] = baselinerStats.GetState();
-    }
+    });
 
     return std::move(out);
 }

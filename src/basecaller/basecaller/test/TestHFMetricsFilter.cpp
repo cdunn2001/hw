@@ -251,21 +251,9 @@ GenerateModels(BaseSimConfig)
 
 } // anonymous namespace
 
-TEST(TestHFMetricsFilter, Populated)
+template <typename HFT>
+void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
 {
-    {
-        Data::BasecallerAlgorithmConfig bcConfig{};
-        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                   Data::GetPrimaryConfig().framesPerChunk,
-                                   Data::GetPrimaryConfig().sensorFrameRate,
-                                   Data::GetPrimaryConfig().realtimeActivityLabels,
-                                   Data::GetPrimaryConfig().lanesPerPool);
-    }
-
-
-    int poolId = 0;
-    HostHFMetricsFilter hfMetrics(poolId);
 
     // TODO: test that the last block is finalized regardless of condition?
 
@@ -273,7 +261,6 @@ TEST(TestHFMetricsFilter, Populated)
     size_t numBatchesPerHFMB = Data::GetPrimaryConfig().framesPerHFMetricBlock
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
 
-    BaseSimConfig config;
     config.pattern = "ACGTGG";
     config.ipd = 0;
     const auto& baselinerStats = GenerateBaselineMetrics(config);
@@ -398,6 +385,44 @@ TEST(TestHFMetricsFilter, Populated)
     }
     EXPECT_EQ(1, blocks_tested);
     hfMetrics.Finalize();
+}
+
+TEST(TestHFMetricsFilter, Populated_Device)
+{
+    {
+        Data::BasecallerAlgorithmConfig bcConfig{};
+        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                         Data::GetPrimaryConfig().framesPerChunk,
+                                         Data::GetPrimaryConfig().sensorFrameRate,
+                                         Data::GetPrimaryConfig().realtimeActivityLabels,
+                                         Data::GetPrimaryConfig().lanesPerPool);
+    }
+
+
+    BaseSimConfig config;
+    int poolId = 0;
+    DeviceHFMetricsFilter hfMetrics(poolId, config.dims.lanesPerBatch);
+    testPopulated(hfMetrics, config);
+}
+
+TEST(TestHFMetricsFilter, Populated)
+{
+    {
+        Data::BasecallerAlgorithmConfig bcConfig{};
+        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
+                                   Data::GetPrimaryConfig().framesPerChunk,
+                                   Data::GetPrimaryConfig().sensorFrameRate,
+                                   Data::GetPrimaryConfig().realtimeActivityLabels,
+                                   Data::GetPrimaryConfig().lanesPerPool);
+    }
+
+
+    BaseSimConfig config;
+    int poolId = 0;
+    HostHFMetricsFilter hfMetrics(poolId);
+    testPopulated(hfMetrics, config);
 }
 
 TEST(TestHFMetricsFilter, Noop)

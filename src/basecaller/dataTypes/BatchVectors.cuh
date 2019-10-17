@@ -96,6 +96,11 @@ public:
         return data_[*len_-1];
     }
 
+    __device__ Len_t size() const
+    {
+        return *len_;
+    }
+
 private:
     Cuda::Memory::DeviceView<T> data_;
     Len_t* len_;

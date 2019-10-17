@@ -78,23 +78,23 @@ public:
         size_t stride_;
     };
 
-    __device__ StridedBlockView(T* start, T* end, size_t laneWidth, Cuda::Memory::detail::DataManagerKey key)
+    __device__ StridedBlockView(T* start, uint32_t count, uint32_t laneWidth, Cuda::Memory::detail::DataManagerKey key)
         : start_(start)
-        , end_(end)
+        , count_(count)
         , laneWidth_(laneWidth)
     {}
 
     __device__ StrideIterator<T> begin() { return StrideIterator<T>(start_, laneWidth_); }
-    __device__ StrideIterator<T> end()   { return StrideIterator<T>(end_,   laneWidth_); }
+    __device__ StrideIterator<T> end()   { return StrideIterator<T>(start_ + laneWidth_ * count_,   laneWidth_); }
     __device__ StrideIterator<const T> begin() const { return StrideIterator<const T>(start_, laneWidth_); }
-    __device__ StrideIterator<const T> end()   const { return StrideIterator<const T>(end_,   laneWidth_); }
-    __device__ int size() const { return (end_ - start_) / laneWidth_; }
+    __device__ StrideIterator<const T> end()   const { return StrideIterator<const T>(start_ + laneWidth_ * count_,   laneWidth_); }
+    __device__ int size() const { return count_; }
     __device__ T& operator[](unsigned int idx) { return start_[laneWidth_*idx]; }
     __device__ const T& operator[](unsigned int idx) const { return start_[laneWidth_*idx]; }
 private:
     T* start_;
-    T* end_;
-    size_t laneWidth_;
+    uint32_t count_;
+    uint32_t laneWidth_;
 };
 
 template <typename T>
@@ -112,11 +112,11 @@ public:
         : GpuBatchDataHandle<T>(handle.Dimensions(), handle.NumFrames(), handle.Data(DataKey()), DataKey())
     {}
 
-    __device__ StridedBlockView<T> ZmwData(size_t laneIdx, size_t zmwIdx)
+    __device__ StridedBlockView<T> ZmwData(uint32_t laneIdx, uint32_t zmwIdx)
     {
         return ZmwDataImpl<T>(laneIdx, zmwIdx);
     }
-    __device__ StridedBlockView<const T> ZmwData(size_t laneIdx, size_t zmwIdx) const
+    __device__ StridedBlockView<const T> ZmwData(uint32_t laneIdx, uint32_t zmwIdx) const
     {
         return ZmwDataImpl<const T>(laneIdx, zmwIdx);
     }
@@ -125,13 +125,12 @@ public:
 
 private:
     template <typename U>
-    __device__ StridedBlockView<U> ZmwDataImpl(size_t laneIdx, size_t zmwIdx) const
+    __device__ StridedBlockView<U> ZmwDataImpl(uint32_t laneIdx, uint32_t zmwIdx) const
     {
         Cuda::Memory::DeviceView<T> view(data_);
         auto startIdx = laneIdx * dims_.laneWidth * dims_.framesPerBatch + zmwIdx;
-        auto endIdx = startIdx + availableFrames_ * dims_.laneWidth;
         return StridedBlockView<U>(view.Data() + startIdx,
-                                   view.Data() + endIdx,
+                                   availableFrames_,
                                    dims_.laneWidth,
                                    DataKey());
     }
