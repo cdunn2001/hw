@@ -88,7 +88,6 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
     hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
-    // TODO: Create other algorithm components.
 }
 
 void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,

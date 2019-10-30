@@ -51,7 +51,7 @@ public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
                             unsigned int poolSize);
 
-public:     // Const access that exte.
+public:     // Const access (extensions to TraceHistogramAccumulator interface)
     const AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>>&
     HistogramHost() const
     { return hist_; }

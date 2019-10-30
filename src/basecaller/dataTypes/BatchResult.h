@@ -55,7 +55,7 @@ struct BatchResult
         {
             metrics->DeactivateGpuMem();
         }
-    };
+    }
 
     PulseBatchT pulses;
     std::unique_ptr<MetricsT> metrics;
