@@ -306,6 +306,7 @@ private:
                               ChipClass::Spider,
                               false,
                               true,
+                              true,
                               false);
             fh.BaseCallerVersion("0.1");
 
