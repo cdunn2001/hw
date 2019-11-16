@@ -35,6 +35,7 @@ public:     // Static functions
     /// \param numPools
     /// The total number of pools of ZMW lanes that the constructed analyzer
     /// will be asked to process.
+    /// Assumes that the pool ids will be [0, numPools).
     /// \param bcConfig
     /// Configuration object.
     /// \param movConfig
@@ -42,6 +43,12 @@ public:     // Static functions
     /// movie to be analyzed.
     static std::unique_ptr<ITraceAnalyzer>
     Create(unsigned int numPools,
+           const Data::BasecallerConfig& bcConfig,
+           const Data::MovieConfig& movConfig);
+
+    /// Creates a new analyzer for a specific set of poolIds.
+    static std::unique_ptr<ITraceAnalyzer>
+    Create(const std::vector<uint32_t>& poolIds,
            const Data::BasecallerConfig& bcConfig,
            const Data::MovieConfig& movConfig);
 
@@ -56,8 +63,11 @@ public:
     virtual unsigned int NumZmwPools() const = 0;
 
     /// The workhorse function. Not const because ZMW-specific state is updated.
-    /// GetMeta().PoolId() must be in [0, NumZmwPools) and unique for all
+    /// input.size() < NumPools().
+    /// GetMeta().PoolId() identifies a specific set of ZMWs for all
     /// elements of input.
+    /// For any two distinct elements of input, values of GetMeta().PoolId()
+    /// are not equal.
     /// GetMeta().FirstFrame() must be the same for all elements of input.
     /// GetMeta().LastFrame() must be the same for all elements of input.
     std::vector<std::unique_ptr<Data::BatchResult>>

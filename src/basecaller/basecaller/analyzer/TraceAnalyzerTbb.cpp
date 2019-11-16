@@ -47,7 +47,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
+TraceAnalyzerTbb::TraceAnalyzerTbb(const vector<uint32_t>& poolIds,
                                    const Data::BasecallerConfig& bcConfig,
                                    const Data::MovieConfig& movConfig)
     : algoFactory_ (bcConfig.algorithm)
@@ -63,19 +63,22 @@ TraceAnalyzerTbb::TraceAnalyzerTbb(unsigned int numPools,
     // BatchAnalyzer::Configure?
     BatchAnalyzer::Configure(bcConfig.algorithm, movConfig);
 
-    bAnalyzer_.reserve(numPools);
-    // TODO: Should be able to parallelize construction of batch analyzers.
     const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
-    for (unsigned int poolId = 0; poolId < numPools; ++poolId)
+    for (unsigned int poolId : poolIds)
     {
+        const auto it = bAnalyzer_.find(poolId);
+        if (it != bAnalyzer_.cend()) continue;  // Ignore duplicate ids.
+
         auto batchAnalyzer = BatchAnalyzer(poolId, algoFactory_);
         if (staticAnalysis)
         {
             batchAnalyzer.SetupStaticModel(bcConfig.algorithm.staticDetModelConfig, movConfig);
         }
-        bAnalyzer_.push_back(std::move(batchAnalyzer));
+
+        bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
     }
 }
+
 
 unsigned int TraceAnalyzerTbb::NumWorkerThreads() const
 {
@@ -122,7 +125,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     tbb::flow::function_node<size_t> filter(g, numTopLevelThreads, [&](size_t i){
             const auto pid = input[i].GetMeta().PoolId();
             output[i] = std::make_unique<BatchAnalyzer::OutputType>(
-                bAnalyzer_[pid](std::move(input[i])));
+                bAnalyzer_.at(pid)(std::move(input[i])));
     });
 
     // All this graph buisiness is to try and limit concurrency at this top level loop,

@@ -30,6 +30,8 @@
 //  Defines class TraceAnalyzerTbb, which implements the interface
 //  ITraceAnalyzer.
 
+#include <map>
+
 #include <tbb/task_scheduler_init.h>
 
 #include "AlgoFactory.h"
@@ -43,7 +45,8 @@ namespace Basecaller {
 class TraceAnalyzerTbb : public ITraceAnalyzer
 {
 public:     // Structors and assignment operators
-    TraceAnalyzerTbb(unsigned int numPools,
+    /// Constructs an analyzer for a specific set of pool ids.
+    TraceAnalyzerTbb(const std::vector<uint32_t>& poolIds,
                      const Data::BasecallerConfig& bcConfig,
                      const Data::MovieConfig& movConfig);
 
@@ -69,8 +72,8 @@ private:    // Data
     // component algorithms of each batch analyzer.
     AlgoFactory algoFactory_;
 
-    // One analyzer for each pool.
-    std::vector<BatchAnalyzer> bAnalyzer_;
+    // One analyzer for each pool. Key is pool id.
+    std::map<uint32_t, BatchAnalyzer> bAnalyzer_;
 
     unsigned int numWorkerThreads;
     tbb::task_scheduler_init init_;

@@ -43,20 +43,29 @@ namespace Basecaller {
 
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
-    const unsigned int numPools = 8;
-    Data::BasecallerConfig bcConfig;
-    Data::MovieConfig movConfig = Data::MockMovieConfig();
-    auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
+    const vector<uint32_t> poolIds {2u, 3u, 5u, 8u, 1u};
+    Cuda::Memory::DisablePerformanceMode();
 
-    ASSERT_EQ(numPools, traceAnalyzer->NumZmwPools());
+    Data::BasecallerConfig bcConfig;
+    bcConfig.algorithm.staticAnalysis = false;
+    bcConfig.algorithm.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
+    bcConfig.algorithm.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
+    bcConfig.algorithm.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
+    bcConfig.algorithm.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
+
+    Data::MovieConfig movConfig = Data::MockMovieConfig();
+
+    auto traceAnalyzer = ITraceAnalyzer::Create(poolIds, bcConfig, movConfig);
+
+    ASSERT_EQ(poolIds.size(), traceAnalyzer->NumZmwPools());
 
     const Data::BatchDimensions dims {64, 16, 4};
     vector<Data::TraceBatch<int16_t>> chunk;
     vector<Data::BatchMetadata> bmdVec;
-    // Notice that we skip some pool ids.
-    for (unsigned int i = 0; i < numPools; i += 2)
+
+    for (const auto pid : poolIds)
     {
-        const Data::BatchMetadata bmd(i, 0, dims.framesPerBatch);
+        const Data::BatchMetadata bmd(pid, 0, dims.framesPerBatch);
         bmdVec.push_back(bmd);
         chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
     }

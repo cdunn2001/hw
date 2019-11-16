@@ -51,7 +51,9 @@ public:
         assert(firstFrame <= lastFrame);
     }
 
+    /// An identifier for a specific pool of ZMWs.
     uint32_t PoolId() const { return poolId_; }
+
     uint32_t FirstFrame() const { return firstFrame_; }
     uint32_t LastFrame() const { return lastFrame_; }
 
