@@ -82,7 +82,7 @@ PulseAccumulator::Process(Data::LabelsBatch labels)
 
 void PulseAccumulator::DestroyAllocationPools()
 {
-    batchFactory_.release();
+    batchFactory_.reset();
 }
 
 PulseAccumulator::PulseAccumulator(uint32_t poolId)

@@ -80,7 +80,7 @@ void HFMetricsFilter::Finalize()
 
 void HFMetricsFilter::DestroyAllocationPools()
 {
-    metricsFactory_.release();
+    metricsFactory_.reset();
 }
 
 NoHFMetricsFilter::~NoHFMetricsFilter() = default;

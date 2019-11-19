@@ -29,7 +29,7 @@ void Baseliner::InitAllocationPools(bool hostExecution)
 
 void Baseliner::DestroyAllocationPools()
 {
-    batchFactory_.release();
+    batchFactory_.reset();
 }
 
 void Baseliner::Finalize()
