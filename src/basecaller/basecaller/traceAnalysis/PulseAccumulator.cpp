@@ -74,8 +74,10 @@ PulseAccumulator::Process(Data::LabelsBatch labels)
     }
 
     // Need to make sure any potential kernels populating `labels`
-    // finish before we destroy the object. 
-    Cuda::CudaSynchronizeDefaultStream();
+    // finish before we destroy the object.
+    // TODO: Would be nice if we could rely on the ~LabelsBatch to handle this.
+    assert(labels.LanesPerBatch() > 0);
+    labels.GetBlockView(0);
 
     return ret;
 }
