@@ -59,7 +59,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
 
     ASSERT_EQ(poolIds.size(), traceAnalyzer->NumZmwPools());
 
-    const Data::BatchDimensions dims {64, 16, 4};
+    const Data::BatchDimensions dims {64, 16};
     vector<Data::TraceBatch<int16_t>> chunk;
     vector<Data::BatchMetadata> bmdVec;
 

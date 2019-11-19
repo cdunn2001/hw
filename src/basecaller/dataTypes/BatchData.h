@@ -72,7 +72,9 @@ public:
     // in the sense of C-style indexing.
     uint32_t lanesPerBatch;
     uint32_t framesPerBatch;
-    uint32_t laneWidth;
+
+    // TODO: In many places we assume at compile time that laneWidth = laneSize. Eliminate the laneWidth field.
+    uint32_t laneWidth = laneSize;
 };
 
 
