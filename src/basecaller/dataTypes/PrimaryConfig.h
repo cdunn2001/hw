@@ -45,6 +45,8 @@ namespace Data {
 
 class PrimaryConfig :  public PacBio::Process::ConfigurationObject
 {
+    // TODO: zmwsPerLane should be deprecated and eventually removed.
+    // In many places we use the constexpr laneSize defined in MongoConstants.h.
     ADD_PARAMETER(uint32_t, zmwsPerLane, 64);
     ADD_PARAMETER(uint32_t, lanesPerPool, 4096);
     ADD_PARAMETER(uint32_t, framesPerChunk, 128);

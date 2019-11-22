@@ -43,8 +43,18 @@ namespace Basecaller {
 
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
-    const vector<uint32_t> poolIds {2u, 3u, 5u, 8u, 1u};
     Cuda::Memory::DisablePerformanceMode();
+
+    const Data::BatchDimensions bDims {8, 16};
+    {
+        // Ensure that PrimaryConfig is sufficient.
+        auto& pc = Data::GetPrimaryConfig();
+        ASSERT_EQ(64u, pc.zmwsPerLane());
+        pc.lanesPerPool = std::max(pc.lanesPerPool(), bDims.lanesPerBatch);
+        pc.framesPerChunk = std::max(pc.framesPerChunk(), bDims.framesPerBatch);
+    }
+
+    const vector<uint32_t> poolIds {2u, 3u, 5u, 8u, 1u};
 
     Data::BasecallerConfig bcConfig;
     bcConfig.algorithm.staticAnalysis = false;
@@ -52,6 +62,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     bcConfig.algorithm.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
     bcConfig.algorithm.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
     bcConfig.algorithm.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
+    bcConfig.init.numWorkerThreads = 6;
 
     Data::MovieConfig movConfig = Data::MockMovieConfig();
 
@@ -59,15 +70,13 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
 
     ASSERT_EQ(poolIds.size(), traceAnalyzer->NumZmwPools());
 
-    const Data::BatchDimensions dims {64, 16};
     vector<Data::TraceBatch<int16_t>> chunk;
     vector<Data::BatchMetadata> bmdVec;
-
     for (const auto pid : poolIds)
     {
-        const Data::BatchMetadata bmd(pid, 0, dims.framesPerBatch);
+        const Data::BatchMetadata bmd(pid, 0, bDims.framesPerBatch);
         bmdVec.push_back(bmd);
-        chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
+        chunk.emplace_back(bmd, bDims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
     }
 
     // The function under test.

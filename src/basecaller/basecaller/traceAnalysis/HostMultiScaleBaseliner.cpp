@@ -26,6 +26,8 @@ std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
 HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 {
+    assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
+
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
