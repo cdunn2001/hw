@@ -30,6 +30,8 @@
 #include <vector>
 #include <gtest/gtest.h>
 
+#include <pacbio/logging/Logger.h>
+
 #include <basecaller/analyzer/ITraceAnalyzer.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
@@ -43,6 +45,7 @@ namespace Basecaller {
 
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
+    Logging::LogSeverityContext logContext (Logging::LogLevel::WARN);
     Cuda::Memory::DisablePerformanceMode();
 
     const Data::BatchDimensions bDims {8, 16};
