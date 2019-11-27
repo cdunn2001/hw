@@ -35,7 +35,6 @@
 #include <pacbio/smrtdata/Basecall.h>
 
 #include "BasecallingMetrics.h"
-#include "TrancheSizes.h"
 #include "PrimaryConfig.h"
 
 using PacBio::SmrtData::Basecall;

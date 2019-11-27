@@ -40,7 +40,6 @@
 #include <algorithm>
 
 #include <json/json.h>
-#include <pacbio/primary/ChipClass.h>
 #include <pacbio/smrtdata/Readout.h>
 #include <pacbio/smrtdata/MetricsVerbosity.h>
 #include <pacbio/primary/PacketFieldName.h>
@@ -78,7 +77,6 @@ public:
                       const uint32_t hFMetricFrames,
                       const uint32_t mFMetricFrames,
                       const uint32_t sliceLengthFrames,
-                      const ChipClass& chip,
                       const bool spiderOnSequel,
                       const bool newBazFormat,
                       const bool useHalfFloat,

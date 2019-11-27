@@ -113,80 +113,29 @@ add_library( libSequelCommon1
     BasecallingMetrics.h
     BasecallingMetrics.cpp
     BazIOConfig.h
-    ChipClass.h
-    ChipLayout.h
-    ChipLayout.cpp
-    ChipLayoutSequel.h
-    ChipLayoutSequel.cpp
-    ChipLayoutBenchy.h
-    ChipLayoutBenchy.cpp
-    ChipLayoutBenchyDemo.h
-    ChipLayoutBenchyDemo.cpp
-    ChipLayoutRTO2.h
-    ChipLayoutRTO2.cpp
-    ChipLayoutRTO3.h
-    ChipLayoutRTO3.cpp
-    ChipLayoutSpider.h
-    ChipLayoutSpider.cpp
-    ChipLayoutSpider1.h
-    ChipLayoutSpider1.cpp
-    ChipLayoutSpider1p0NTO.h
-    ChipLayoutSpider1p0NTO.cpp
     DetectionMode.h
     DetectionModeScalar.h
     DetectionModeScalar.cpp
-    EventObject.h
-    EventObject.cpp
-    FrameClass.h
     HDF5_type_traits.h
     HDF5_type_traits.cpp
     HDF5cpp.h
     HDFMultiArrayIO.h
     HDFMultiArrayIO.cpp
-    IntInterval.h
-    ipc_config.h
-    ITrancheNew.h
-    LaserPowerChange.h
-    LaserPowerChange.cpp
     ManuallyBufferedFile.h
     ManuallyBufferedFile.cpp
     MemoryBuffer.h
     MemoryBuffer.cpp
-    Platform.h
     PrimaryConfig.h
     PulseLookback.h
     RTMetricsConfig.h
-    SequEl_4.0_RTO2.csv.gz.cpp
-    SequEl_4.0_RTO3.csv.gz.cpp
     SequelDefinitions.h
     SequelHDF5.h
     SequelHDF5.cpp
-    SequelMovie.h
-    SequelMovie.cpp
-    SequelMovieConfig.h
-    SequelMovieEventsHDF5.h
-    SequelMovieEventsHDF5.cpp
-    SequelMovieFrame.h
-    SequelMovieFrame.cpp
-    SequelMovieFileHDF5.h
-    SequelMovieFileHDF5.cpp
-    SequelROI.h
-    SequelROI.cpp
     SequelTraceFile.h
     SequelTraceFile.cpp
-    Sparse2DArray.h
-    Sparse2DArray.cpp
-    Spider_1p0_NTO.h
-    Spider_1p0_NTO.cpp
-    Tile.h
     TraceAnalysisMetrics.h
-    Tranche.h
-    Tranche.cpp
-    TrancheSizes.h
-    TrancheTitle.h
     UnitCell.h
     Util.h
-    WorkingFile.h
     ZmwResultBuffer.h
 )
 

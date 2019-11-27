@@ -51,19 +51,14 @@
 #include <boost/multi_array.hpp>
 #include <boost/filesystem/path.hpp>
 
+#include <json/json.h>
+
 #include <H5public.h>
 
-#include <pacbio/ipc/ThreadSafeQueue.h>
-#include <pacbio/utilities/SmartEnum.h>
 #include <pacbio/text/String.h>
 #include <pacbio/Utilities.h>
 #include <pacbio/utilities/ISO8601.h>
-#include <pacbio/utilities/PerforceUtil.h>
-#include <pacbio/HugePage.h>
 
-#include <pacbio/primary/Tile.h>
-#include <pacbio/primary/SequelROI.h>
-#include <pacbio/primary/SequelMovieFrame.h>
 #include <pacbio/primary/HDF5cpp.h>
 
 #include <pacbio/primary/SequelHDF5.h>

@@ -46,7 +46,6 @@
 #include <utility>
 #include <json/json.h>
 #include <json/reader.h>
-#include <pacbio/primary/ChipClass.h>
 #include <pacbio/smrtdata/MetricsVerbosity.h>
 #include <pacbio/smrtdata/Readout.h>
 #include <pacbio/logging/Logger.h>
@@ -83,7 +82,6 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
                                      const uint32_t hFMetricFrames,
                                      const uint32_t mFMetricFrames,
                                      const uint32_t sliceLengthFrames,
-                                     const ChipClass& chip,
                                      const bool spiderOnSequel,
                                      const bool newBazFormat,
                                      const bool useHalfFloat,
@@ -126,20 +124,7 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
 
     if (newBazFormat)
     {
-        switch (chip)
-        {
-            case ChipClass::Sequel:
-                if (!spiderOnSequel)
-                    DefaultMetricsSequel();
-                else
-                    DefaultMetricsSpider();
-                break;
-            case ChipClass::Spider:
-                DefaultMetricsSpider();
-                break;
-            default:
-                throw PBException("Unknown chip class specified");
-        }
+        DefaultMetricsSpider();
     }
     else
     {

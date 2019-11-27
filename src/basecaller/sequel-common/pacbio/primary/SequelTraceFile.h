@@ -50,13 +50,8 @@
 #include <pacbio/dev/AutoTimer.h>
 
 #include <pacbio/primary/AnalogMode.h>
-#include <pacbio/primary/SequelMovie.h>
-#include <pacbio/primary/ChipLayout.h>
-#include <pacbio/primary/Platform.h>
-#include <pacbio/primary/SequelMovieEventsHDF5.h>
+#include <pacbio/primary/SequelHDF5.h>
 #include <pacbio/primary/UnitCell.h>
-#include <pacbio/primary/WorkingFile.h>
-#include <pacbio/primary/SequelMovieConfig.h>
 
 extern unsigned int _home_UNIXHOME_mlakata_Matrices_Full_csv_gz_len;
 extern unsigned char _home_UNIXHOME_mlakata_Matrices_Full_csv_gz[];
@@ -69,22 +64,12 @@ namespace PacBio
  {
 
   class StatAccumulator;
-  class Tranche;
   class EventObject;
 
-  class SequelTraceFileHDF5 :
-          public SequelMovieFileBase
+  class SequelTraceFileHDF5
   {
   public:
-      enum PlatformId_e
-      {
-          PlatformId_Astro1       = 1,
-          PlatformId_Springfield2 = 2,
-          PlatformId_SequelPoC3   = 3,
-          PlatformId_SequelAlpha4 = 4,
-          PlatformId_Spider5      = 5,
-          PlatformId_Benchy6      = 6
-      };
+
       static const size_t SizeOfPixel = sizeof(int16_t);
 
   private:
@@ -121,7 +106,6 @@ namespace PacBio
       std::unique_ptr<StatAccumulator> redStat;
       std::unique_ptr<StatAccumulator> greenStat;
 #endif
-      mutable std::unique_ptr<SequelSparseROI> originalRoi_;
       mutable double frameRateCache_ = 0;
 
   public:
@@ -223,8 +207,6 @@ namespace PacBio
       H5::DataSet Pw2SlowStepRatio;
       H5::DataSet Ipd2SlowStepRatio;
 
-      SequelMovieEventsHDF5 events;
-
       // Only exists for simulated trace files.
       H5::Group GroundTruth;
       H5::DataSet StateCovariance;
@@ -232,7 +214,6 @@ namespace PacBio
 
   private:
       SequelHDF5MembersEnd _memberEnd_;
-      mutable std::unique_ptr<const ChipLayout> chipLayout_;
       mutable std::vector<UnitCell> holeXY_;
       mutable struct
       {
@@ -251,40 +232,15 @@ namespace PacBio
  public:
       static const uint32_t chunkSize = 1;
  public:
-     void SetChunking(const SequelMovieConfig::TraceChunking& chunking);
-     SequelMovieConfig::TraceChunking GetChunking() const;
      void SetGzipCompression(int level);
  private:
-     SequelMovieConfig config_;
 
   private:
-      SequelTraceFileHDF5(const std::string& filename, uint64_t nFrames, const SequelROI& roi0, bool fake,
-                       ChipClass chipClass);
+      SequelTraceFileHDF5(const std::string& filename, uint64_t nFrames, bool fake);
   public:
       SequelTraceFileHDF5(const std::string& filename);
-      SequelTraceFileHDF5(const SequelMovieConfig& config);
-      ~SequelTraceFileHDF5() override;
+      ~SequelTraceFileHDF5();
 
-#if 1
-      void SetAnalogs(const AnalogSet& analogs, const ChipLayout& layout);
-#else
-      void SetBaseMap(const std::string& baseMapExt, uint32_t numChannels, uint32_t numAnalogs, const double spectralAngle[], const double amplitudes[],const ChipLayout& layout);
-#endif
-
-     void PrepareChunkBuffers(int numChunkBuffers=2) override
-     {
-         movieBuffer.PrepareChunkBuffers(numChunkBuffers, true);
-     }
-
-     //overrides
-      uint64_t AddFrame(const SequelMovieFrame<int16_t>& frame) override;
-      uint64_t AddDarkFrame(float exposure, const SequelMovieFrame<int16_t>& frame) override;
-#ifdef OBSOLETE_EVENTS
-      void AddEvent(SequelMovieFileBase::EventType_e type, uint64_t timestamp) override;
-#endif
-      void SetMeasuredFrameRate(double rate) override;
-      void WriteChunkBuffer(const ChunkBuffer* bigBuffer, const uint32_t numFrames) override;
-      uint64_t ReadFrame(uint64_t n, SequelMovieFrame<int16_t>& frame) const override;
       enum {
           ReadFrame_NoOptions  = 0,
           ReadFrame_Condensed  = 1, ///! means to ignore ZMW coordinates, and just load every pixel of the frame with consecutive ZMWs
@@ -292,51 +248,12 @@ namespace PacBio
           ReadFrame_DontResize = 2, ///! means don't resize the frame, only load the frame that overlaps with the ZMW coordinates
           ReadFrame_Reserved   = 4  ///! this is a bit mask, so each value of the enum must be a power of 2
       };
-     /// Reads the n'th frame from a trace file into the frame parameter.  If `DontResize` option is used,
-     /// the size of the frame is not changed and just the data lying within the row/col size of the frame
-     /// is filled in. Otherwise, the frame is resized to the native size of the HDF5 file.
-     /// \param n - Load the frame n (zero based from start of movie)
-     /// \param frame - reference to the frame instance into which to load the data
-     /// \param options - a integer of bit masks to select certain options. See the definition of the enum above for
-     ///                  valid bit masks and their meaning.
-     /// \returns The value 1, although this value may change in the future.
-      uint64_t ReadFrame(uint64_t n, SequelMovieFrame <int16_t>& frame, int options) const;
-      void DumpSummary(std::ostream& s, uint32_t frames = 3, uint32_t rows = 3, uint32_t cols = 5) override;
-      Json::Value DumpJson(uint32_t /*frames*/, uint32_t /*rows*/, uint32_t /*cols*/) override;
-      uint32_t WriteChunkHeader(const PacBio::Primary::Tile* chunkHeader, uint32_t numFrames) override;
-      void AddTile(const PacBio::Primary::Tile* tile, uint32_t tileOffset) override;
-      SequelMovieType Type() const override
-      {
-          return SequelMovieType::Trace;
-      }
-
-      std::string TypeName() const override
-      {
-          return "Trace";
-      }
-      const SequelROI* GetROI() const override;
-      void SetFirstFrame(uint64_t frameIndex) override { events.laserPowerChanges.SetFirstFrame(frameIndex); }
-      void AddLaserPowerEvent(const EventObject& eo) override;
-      std::vector<EventObject> ReadAllEvents() override { return events.laserPowerChanges.ReadAllEvents(); }
 
       // non virtual
       void OpenFileForRead(const std::string& filename);
-      void CreateFileForWrite(const SequelMovieConfig& config);
 
-      void ReadDarkFrameStack(uint64_t n, SequelMovieFrame<int16_t>& frame, float& exposure);
-      void CreateTest(uint32_t nframes, uint32_t nDarkFrames, int bits);
-      void DetermineAntiZMWs(const SequelROI& roi, const ChipLayout& layout);
       void CalculateVariance();
-      uint32_t ReadTile(uint32_t zmwOffset, uint64_t frameOffset, Tile* tile);
-      uint32_t ReadTranche(uint32_t zmwOffset, uint64_t frameOffset, Tranche* tranche,uint32_t numFrames);
-      // Similar to ReadTranche, but the number of frames read is configurable.  
-      uint32_t ReadLaneSegment(uint32_t zmwOffset, uint64_t frameOffset, uint32_t maxReadLen, int16_t* dest);
       uint32_t Read1CZmwLaneSegment(uint32_t zmwOffset, uint32_t numZmws, uint64_t frameOffset, uint32_t numFrames, int16_t* dest) const;
-      uint32_t Read1CTrace(uint32_t zmwOffset, uint64_t frameOffset, std::vector<int16_t>& traceData) const;
-      uint32_t Read2CTrace(uint32_t zmwOffset, uint64_t frameOffset, std::vector<std::pair<int16_t,int16_t> >& traceData) const;
-      void Write1CTrace(uint32_t zmwOffset, uint64_t frameOffset, const std::vector<int16_t>& traceData);
-      void Write2CTrace(uint32_t zmwOffset, uint64_t frameOffset, const std::vector<std::pair<int16_t,int16_t> >& traceData);
-      const ChipLayout& GetChipLayout() const;
       const std::vector<UnitCell>& GetUnitCells() const;
 
       /// compare this trc file with b.
@@ -345,36 +262,6 @@ namespace PacBio
       int CompareTraces(const SequelTraceFileHDF5& b, bool subsetFlag = false);
 
       /// \returns a integer that represents the platform that was used to capture the data.
-      PlatformId_e GetPlatformId() const
-      {
-          int32_t p;
-          RI_PlatformId >> p;
-          return static_cast<PlatformId_e>(p);
-      }
-
-      /// \returns a Sequel Platform enum, based on the internal platform integer
-      Platform GetPlatform() const
-      {
-          switch (GetPlatformId())
-          {
-          case SequelTraceFileHDF5::PlatformId_Astro1:
-          case SequelTraceFileHDF5::PlatformId_Springfield2:
-              throw PBException("Ha ha very funny. This code base does not support Astro or Springfield. PlatformId="+ std::to_string(static_cast<int>(GetPlatformId())));
-          case SequelTraceFileHDF5::PlatformId_SequelPoC3:
-          case SequelTraceFileHDF5::PlatformId_SequelAlpha4:
-              return Platform::Sequel1PAC1;
-              break;
-          case SequelTraceFileHDF5::PlatformId_Spider5:
-              return Platform::Spider;
-              break;
-          case SequelTraceFileHDF5::PlatformId_Benchy6:
-              return Platform::Benchy;
-              break;
-          default:
-//              PBLOG_ERROR << "Unsupported PlatformId_e: " << static_cast<int>(GetPlatformId());
-              throw PBException("Unsupported PlatformId_e: " + std::to_string(static_cast<int>(GetPlatformId())));
-          }
-      }
 
  private:
 #if 1
@@ -382,10 +269,10 @@ namespace PacBio
 #else
             void SetSpectra(const std::string& baseMapExt, uint32_t numChannels, uint32_t numAnalogs, const double spectralAngle[], const double amplitudes[]);
 #endif
-      void UpdateLayout(const ChipLayout& layout);
+    public: 
+        size_t NFRAMES = 0;
   };
  }
 }
-
 
 #endif // _SEQUEL_TRACE_FILE_H_

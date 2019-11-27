@@ -31,13 +31,9 @@
 ///         may be changed at run time.
 
 #include <pacbio/utilities/Finally.h>
-#include <pacbio/ipc/PoolFactory.h>
 #include <pacbio/process/ConfigurationBase.h>
 #include <pacbio/utilities/CpuInfo.h>
 #include <pacbio/primary/SequelDefinitions.h>
-#include <pacbio/primary/ipc_config.h>
-#include <pacbio/primary/ChipClass.h>
-#include <pacbio/primary/Platform.h>
 
 #include <memory>
 
@@ -60,10 +56,6 @@ public:
     ADD_PARAMETER(float,    maxAverageBaseRatePerSecond, 12.0f);
     ADD_ARRAY(std::string,  partitions);
     ADD_PARAMETER(uint32_t, numReadBuffers, 3200 * 3);
-    ADD_OBJECT(PacBio::IPC::PoolFactory::PoolConfig, poolConfigAcq);
-    ADD_OBJECT(PacBio::IPC::PoolFactory::PoolConfig, poolConfigBw);
-    ADD_ENUM(PacBio::Primary::ChipClass, chipClass, PacBio::Primary::ChipClass::UNKNOWN);
-    ADD_ENUM(PacBio::Primary::Platform, platform, PacBio::Primary::Platform::UNKNOWN);
     ADD_ARRAY(std::string,  laserNames);
     ADD_PARAMETER(uint32_t, framesPerHFMetricBlock, 1024);
     ADD_PARAMETER(uint32_t, framesPerMFMetricBlock, 4096);
@@ -108,38 +100,6 @@ public:
         }
     } cache;
 
-    PacBio::IPC::PoolType GetPoolType() const
-    {
-        PacBio::IPC::PoolType poolType = PacBio::IPC::PoolType::UNKNOWN;
-
-        switch(platform())
-        {
-        case  Platform::Sequel1PAC1:
-            poolType = PacBio::IPC::PoolType::SCIF;
-            break;
-        case  Platform::Sequel1PAC2:
-            poolType = PacBio::IPC::PoolType::SHM_XSI;
-            break;
-        case Platform::Spider:
-            poolType  = PacBio::IPC::PoolType::SHM_XSI;
-            break;
-        case Platform::Benchy:
-            poolType  = PacBio::IPC::PoolType::SHM_XSI;
-            break;
-        case Platform::UNKNOWN:
-        default:
-            poolType  = PacBio::IPC::PoolType::UNKNOWN;
-            break;
-        }
-
-        return poolType;
-    }
-
-
-    void RefreshDefaultPoolTypes()
-    {
-        poolConfigBw.defaultPoolType = poolConfigAcq.defaultPoolType = GetPoolType();
-    }
 
 private:
     PrimaryConfig()
@@ -151,16 +111,6 @@ private:
             // fixme. partition monitoring should be done, or configured by pa-ws.
             partitions[0] = std::string("/data/pa");
             partitions[1] = std::string("/data/pb");
-
-            RefreshDefaultPoolTypes();
-
-            poolConfigAcq.node = PacBio::IPC::PoolSCIF_Interface::Node::Host;
-            poolConfigAcq.port = PORT_SCIF_ACQUISITION;
-            poolConfigAcq.poolName = "acq";
-
-            poolConfigBw.node = PacBio::IPC::PoolSCIF_Interface::Node::Host;
-            poolConfigBw.port = PORT_SCIF_BASEWRITER;
-            poolConfigBw.poolName = "basewrit"; // limited to 8 characters
 
             laserNames[0] = "topLaser";
             laserNames[1] = "bottomLaser";
@@ -176,47 +126,6 @@ protected:
         cache.chunksPerSuperchunk = chunksPerSuperchunk;
         cache.framesPerBlock = framesPerBlock;
         cache.realtimeActivityLabels = realtimeActivityLabels;
-
-        switch(platform())
-        {
-        case Platform::Sequel1PAC1:
-            if (chipClass() == ChipClass::UNKNOWN) chipClass = ChipClass::Sequel;
-            break;
-        case Platform::Sequel1PAC2:
-            if (chipClass() == ChipClass::UNKNOWN) chipClass = ChipClass::Sequel;
-            break;
-        case Platform::Spider:
-            if (chipClass() == ChipClass::UNKNOWN) chipClass = ChipClass::Spider;
-            break;
-        case Platform::Benchy:
-            if (chipClass() == ChipClass::UNKNOWN) chipClass = ChipClass::Spider;
-            break;
-        default:
-            // do nothing
-            break;
-        }
-
-        switch(chipClass())
-        {
-        case ChipClass::UNKNOWN:
-            // do nothing
-            break;
-        case ChipClass::Sequel:
-            cache.numColors = 2;
-            cache.numZMWSperPixelTranche = 16;
-            cache.frameRate = Sequel::defaultFrameRate;
-            break;
-        case ChipClass::Spider:
-            cache.numColors = 1;
-            cache.numZMWSperPixelTranche = 32;
-            cache.frameRate = Spider::defaultFrameRate;
-            break;
-        default:
-            PBLOG_WARN << chipClass().toString() << " not supported in PrimaryConfig::OnChanged()";
-            break;
-        }
-        RefreshDefaultPoolTypes();
-
 
         cache.framesPerTranche = framesPerTile * cache.tilesPerTranche;
         cache.blocksPerTranche = cache.framesPerTranche / cache.framesPerBlock;
@@ -255,62 +164,7 @@ public:
     {
         std::stringstream ss;
         bool ok = true;
-        if (chipClass() == ChipClass::UNKNOWN)
-        {
-            ok = false;
-            ss << "Configuration common.chipClass must be set to a valid chip class\n";
-        }
-        if (platform() == Platform::UNKNOWN)
-        {
-            ok = false;
-            ss << "Configuration common.platform must be set to a valid platform\n";
-        }
-        switch(platform())
-        {
-        case Platform::Sequel1PAC1:
-            if (chipClass() != ChipClass::Sequel)
-            {
-                ok = false;
-                ss << "Sequel1PAC1 only supports ChipClass::Sequel, not " << chipClass().toString();
-            }
-            break;
-        case Platform::Sequel1PAC2:
-            if (chipClass() != ChipClass::Sequel)
-            {
-                ok = false;
-                ss << "Platform::Sequel1PAC2 only supports ChipClass::Sequel, not " << chipClass().toString();
-            }
-            break;
-        case Platform::Spider:
-            if (chipClass() != ChipClass::Spider)
-            {
-                ok = false;
-                ss << "Platform::Spider only supports ChipClass::Spider, not " << chipClass().toString();
-            }
-            break;
-        case Platform::Benchy:
-            if (chipClass() != ChipClass::Spider)
-            {
-                ok = false;
-                ss << "Platform::Benchy only supports ChipClass::Spider, not " << chipClass().toString();
-            }
-            break;
-        case Platform::Mongo:
-            ss << "Platform::Mongo is not supported at this time \n";
-            if (chipClass() != ChipClass::Spider)
-            {
-                ok = false;
-                ss << "Platform::Mongo only supports ChipClass::Spider, not " << chipClass().toString();
-            }
-            else
-            {
-                // comment this line to unlock hybrid Mongo channel tests
-                ok = false;
-            }
-            break;
-        default:
-            throw PBException("Platform not supported! " + platform().toString());
-        }
+
         message = ss.str();
         return ok;
     }

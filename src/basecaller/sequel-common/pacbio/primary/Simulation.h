@@ -63,10 +63,8 @@
 #include <pacbio/primary/BazCore.h>
 #include <pacbio/primary/BazWriter.h>
 #include <pacbio/primary/PrimaryToBaz.h>
-#include <pacbio/primary/ChipLayoutRTO3.h>
 #include <pacbio/primary/Timing.h>
 #include <pacbio/primary/SimulationRNG.h>
-#include <pacbio/primary/ChipLayout.h>
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
@@ -76,7 +74,7 @@ using namespace PacBio::SmrtData;
 namespace PacBio {
 namespace Primary {
 
-std::string generateExperimentMetadata(const std::string& chipLayoutName=PacBio::Primary::ChipLayoutRTO3::ClassName(),
+std::string generateExperimentMetadata(const std::string& chipLayoutName="",
                                        const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
                                        const std::string& basemap="CTAG");
 
@@ -133,7 +131,6 @@ public:
     {
         std::vector<uint32_t> emptyList;
         double frameRate = 100.0;
-        const auto chipLayout = ChipLayout::Factory(chipLayoutName_);
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate,
                               frameRate * chunks_ * seconds_,
@@ -146,7 +143,6 @@ public:
                               1024, // hFMetricFrames
                               4096, // mFMetricFrames
                               16384, // sliceLengthFrames
-                              chipLayout->GetChipClass(),
                               false,  // spiderOnSequel
                               true, // newBazFormat
                               true, // half-float

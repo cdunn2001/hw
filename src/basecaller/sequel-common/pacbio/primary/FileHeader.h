@@ -208,9 +208,6 @@ public:
     const std::string& BasecallerConfig() const
     { return basecallerConfig_; }
 
-    const std::string ChipLayoutName() const
-    { return chipLayoutName_; }
-
     const std::vector<float> RelativeAmplitudes() const
     {
         std::vector<float> relamps;
@@ -316,9 +313,6 @@ public:
     void MovieLengthFrames(const uint32_t movieLengthFrames)
     { movieLengthFrames_ = movieLengthFrames; }
 
-    void ChipLayoutName(const std::string& chipLayoutName)
-    { chipLayoutName_ = chipLayoutName; }
-
 private:
     static const uint8_t MAGICNUMBER0 = 0x02;
     static const uint8_t MAGICNUMBER1 = 'B';
@@ -349,7 +343,6 @@ private:
     std::string bazWriterVersion_;
     std::string basecallerConfig_;
     Json::Value experimentMetadata_;
-    std::string chipLayoutName_;
 
     std::string movieName_;
 

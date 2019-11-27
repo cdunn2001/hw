@@ -35,6 +35,8 @@
 
  ************************************************************/
 
+#include <pacbio/primary/SequelHDF5.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -42,13 +44,9 @@
 #include <vector>
 #include <sstream>
 
+#include <pacbio/logging/Logger.h>
 #include <pacbio/text/String.h>
 #include <pacbio/process/ProcessBase.h>
-
-#include <pacbio/primary/EventObject.h>
-#include <pacbio/primary/SequelMovie.h>
-#include <pacbio/primary/SequelTraceFile.h>
-#include <pacbio/primary/SequelMovieFileHDF5.h>
 
 #ifdef WIN32
 #else
@@ -287,13 +285,6 @@ const H5::DataSet& operator>>(const H5::DataSet& ds, std::vector<std::string>& a
     return ds;
 }
 
-  const H5::DataSet& operator>>(const H5::DataSet& ds, SequelMovieFrame<float>& frame)
-  {
-      LOCK_HDF5();
-      ds.read(frame.data, H5::PredType::IEEE_F32LE);
-      return ds;
-  }
-
 
   H5::Attribute& operator<<(H5::Attribute& attr, float value)
   {
@@ -424,12 +415,6 @@ const H5::DataSet& operator>>(const H5::DataSet& ds, std::vector<std::string>& a
       return ds;
   }
 
-  H5::DataSet& operator<<(H5::DataSet& ds, const SequelMovieFrame<float>& frame)
-  {
-      LOCK_HDF5();
-      ds.write(frame.data, H5::PredType::IEEE_F32LE);
-      return ds;
-  }
 
   std::ostream& operator<<(std::ostream& s, const H5::Attribute& attr)
   {

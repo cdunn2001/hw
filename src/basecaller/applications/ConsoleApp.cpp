@@ -303,7 +303,6 @@ private:
                               PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
                               PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
                               PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-                              ChipClass::Spider,
                               false,
                               true,
                               true,

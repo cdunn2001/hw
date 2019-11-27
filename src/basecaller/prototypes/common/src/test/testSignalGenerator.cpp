@@ -28,8 +28,6 @@ TEST(SignalGeneratorTest, Construct)
 TEST(SignalGeneratorTest, CompareData)
 {
     using PacBio::Primary::SequelTraceFileHDF5;
-    using PacBio::Primary::Tile;
-    using PacBio::Primary::zmwsPerTranche;
 
     static constexpr size_t zmwLaneWidth = 64;
 

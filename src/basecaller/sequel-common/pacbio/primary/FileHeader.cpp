@@ -113,8 +113,6 @@ void FileHeader::Init(const char* header, const size_t length)
     experimentMetadata_ = parseExperimentMetadata(
             headerValue.get("EXPERIMENT_METADATA", Json::Value{""}).asString());
 
-    chipLayoutName_ = experimentMetadata_["ChipInfo"]["LayoutName"].asString();
-
     if (!headerValue.isMember("BASECALLER_CONFIG"))
     {
         PBLOG_WARN << "Missing BASECALLER_CONFIG in BAZ header";

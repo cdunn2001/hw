@@ -33,7 +33,6 @@
 #include <pacbio/process/ConfigurationBase.h>
 #include <pacbio/primary/SequelDefinitions.h>
 #include <pacbio/primary/PrimaryConfig.h>
-#include <pacbio/primary/ipc_config.h>
 
 namespace PacBio {
 

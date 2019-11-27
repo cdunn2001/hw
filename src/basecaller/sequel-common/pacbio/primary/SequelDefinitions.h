@@ -34,8 +34,6 @@
 #include <stdint.h>
 #include <cmath>
 #include <pacbio/primary/Tile.h>
-#include <pacbio/primary/ChipClass.h>
-#include <pacbio/primary/FrameClass.h>
 
 #ifndef ATT_UNUSED
 #  ifdef __INTEL_COMPILER
@@ -105,119 +103,6 @@ namespace Primary  {
 
     const float    defaultRefDwsSnr  ATT_UNUSED      { 11.0f }; ///< SNR of Dye Weighted Sum
     const float    defaultMinSnr     ATT_UNUSED      { 4.0f};   ///< SNR of basecall
-
-inline int NumChannels(const ChipClass chipClass)
-{
-        switch(chipClass)
-        {
-        case ChipClass::Sequel:
-        case ChipClass::DONT_CARE:
-            return 2;
-        case ChipClass::Spider:
-            return 1;
-        case ChipClass::UNKNOWN:
-        default:
-            throw PBException("chipClass " + chipClass.toString() + " not supported in NumChannels()");
-        }
-}
-
-    inline double DefaultFrameRate(ChipClass chipClass)
-    {
-        switch(chipClass)
-        {
-        case ChipClass::Sequel:
-        case ChipClass::DONT_CARE:
-            return Sequel::defaultFrameRate;
-            break;
-        case ChipClass::Spider:
-            return Spider::defaultFrameRate;
-            break;
-        case ChipClass::UNKNOWN:
-        default:
-            throw PBException("chipClass " + chipClass.toString() + " not supported in DefaultFrameRate()");
-        }
-    }
-
-
-inline double DefaultLineRate(ChipClass chipClass)
-{
-    switch(chipClass)
-    {
-    case ChipClass::Sequel:
-    case ChipClass::DONT_CARE:
-        return Sequel::defaultLineRate;
-        break;
-    case ChipClass::Spider:
-        return Spider::defaultLineRate;
-        break;
-    case ChipClass::UNKNOWN:
-    default:
-        throw PBException("chipClass " + chipClass.toString() + " not supported in DefaultLineRate()");
-    }
-}
-
-inline uint64_t DefaultZMWCHDF5hunking(ChipClass chipClass)
-{
-    switch(chipClass)
-    {
-    case ChipClass::Sequel:
-    case ChipClass::DONT_CARE:
-        return 16ULL;
-        break;
-    case ChipClass::Spider:
-        return 32ULL;
-        break;
-    case ChipClass::UNKNOWN:
-    default:
-        throw PBException("chipClass " + chipClass.toString() + " not supported in DefaultZMWCHDF5hunking()");
-    }
-}
-
-/// Returns the pixels of a single ZMW.
-/// \return a pair of dimensions: first dimension is number of pixel rows
-///                               second dimension is number of pixel columns
-inline std::pair<uint32_t,uint32_t> PixelsPerZmw(ChipClass chipClass)
-{
-    std::pair<uint32_t,uint32_t> x;
-
-    switch (chipClass)
-    {
-    case ChipClass::Sequel:
-    case ChipClass::DONT_CARE:
-        x.first = Sequel::numPixelRowsPerZmw;
-        x.second = Sequel::numPixelColsPerZmw;
-        break;
-    case ChipClass::Spider:
-        x.first = Spider::numPixelRowsPerZmw;
-        x.second = Spider::numPixelColsPerZmw;
-        break;
-    default:
-        throw PBException("Unsupported chip class " + chipClass.toString());
-    }
-
-    return x;
-}
-
-
-inline FrameClass DefaultFrameClass(ChipClass chipClass)
-{
-    switch (chipClass)
-    {
-    case ChipClass::Sequel:
-    case ChipClass::DONT_CARE:
-        return FrameClass::Format2C2A;
-    case ChipClass::Spider:
-        return FrameClass::Format1C4A;
-#if 0
-    case ChipClass::Benchy:
-        return FrameClass::Irrelevant;
-#endif
-    case ChipClass::UNKNOWN:
-        return FrameClass::UNKNOWN; // pass through ignorance
-    default:
-        throw PBException("Unsupported chip class " + chipClass.toString());
-    }
-}
 
 // Used internally to PA
 SMART_ENUM(CalType    ,none,dark,gain,spectral,loading);
