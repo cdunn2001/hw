@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-include(pacbio-cplusplus-gtest)
+include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonTest OBJECT
@@ -10,6 +10,7 @@ add_library(libMongoCommonTest OBJECT
 
 target_link_libraries(libMongoCommonTest
     libMongoCommon
+    gtest
 )
 
 # Define the test executable specific to mongo basecaller analyzer.

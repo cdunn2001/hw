@@ -32,14 +32,16 @@ target_link_libraries(FrameLabeler
 set_target_properties(FrameLabeler PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(FrameLabeler PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-include(pacbio-cplusplus-gtest)
+include(pacbio-gtest)
 
 add_executable(FrameLabelerTests
     test/testFrameLabeler.cu
 )
 
 target_link_libraries(FrameLabelerTests
-    libFrameLabeler)
+    libFrameLabeler
+    gtest
+)
 
 target_include_directories(FrameLabelerTests
     PUBLIC

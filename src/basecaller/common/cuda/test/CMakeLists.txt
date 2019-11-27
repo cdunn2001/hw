@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-include(pacbio-cplusplus-gtest)
+include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonCudaTest OBJECT
@@ -12,6 +12,7 @@ add_library(libMongoCommonCudaTest OBJECT
 target_link_libraries(libMongoCommonCudaTest
     libMongoCommon
     libMongoCommonCuda
+    gtest
 )
 
 # Define the test executable specific to cuda common

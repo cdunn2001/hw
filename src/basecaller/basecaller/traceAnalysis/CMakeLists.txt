@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.13)
 
-include(eigen)
+include(pacbio-eigen)
 
 add_library(libMongoBasecallerTraceAnalysis STATIC
     Baseliner.h

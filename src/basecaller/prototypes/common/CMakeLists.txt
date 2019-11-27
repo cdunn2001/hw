@@ -36,14 +36,16 @@ target_include_directories(libProtoCommon
         ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
         ${CMAKE_CURRENT_LIST_DIR}/src)
 
-include(pacbio-cplusplus-gtest)
+include(pacbio-gtest)
 
 add_executable(CommonTests
         src/test/testSignalGenerator.cpp
 )
 
 target_link_libraries(CommonTests
-    libProtoCommon)
+    libProtoCommon
+    gtest
+)
 
 target_include_directories(CommonTests
         PUBLIC
