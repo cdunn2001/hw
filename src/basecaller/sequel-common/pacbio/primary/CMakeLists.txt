@@ -210,3 +210,5 @@ add_custom_command(OUTPUT ZmwStats.rst
     COMMENT Making RST documentation for ZmwStats.h
 )
 
+add_subdirectory(bazviewer)
+
