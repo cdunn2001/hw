@@ -1,0 +1,12 @@
+all: SequEl_4.0_RTO2.csv.gz.cpp SequEl_4.0_RTO3.csv.gz.cpp
+
+%.csv.gz.cpp: %.csv.gz
+	xxd -i $< > $@
+
+%.csv.gz: %.csv
+	gzip $<
+
+# to make the csv file,
+# Open the design matrix (i.e. \\usmp-data2\DATA\NanoFabricationDATA\CAD\00000009-MegatronProject(Sequel)\20140415-IMEC-4.0-ALPHA\0049-PBI-RTO3-ActiveArea\Matrices_Full.xlsx)
+# File->Save As -> CSV.
+
