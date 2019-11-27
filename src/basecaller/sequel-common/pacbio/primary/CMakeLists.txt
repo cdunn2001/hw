@@ -58,9 +58,11 @@ add_library(libBazio STATIC
     FileFooterBuilder.h
     FileHeader.cpp
     FileHeader.h
+    FileHeaderBuilder.h
     FileHeaderBuilder.cpp
     FileHeaderValidator.h
     MetricBlock.h
+    MetricData.h
     MetricField.h
     MetricFieldMap.cpp
     MetricFieldMap.h
@@ -75,8 +77,9 @@ add_library(libBazio STATIC
     RegionLabel.h
     RegionLabelType.h
     Sanity.h
-    Simulation.cpp
     Simulation.h
+    Simulation.cpp
+    SimulationRNG.h
     SmartBazEnum.h
     SmartMemory.h
     SuperChunkMeta.h
@@ -91,7 +94,6 @@ target_include_directories(libBazio
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/../..
         ${CMAKE_CURRENT_BINARY_DIR}/generated
-#        ${half_INCLUDE_DIRS}
 )
 
 target_link_libraries(libBazio
@@ -107,24 +109,18 @@ target_link_libraries(libBazio
 
 add_library( libSequelCommon1
   STATIC
-#    Acquisition_Setup.h
-#    Acquisition_Setup.cpp
-#    AcquisitionProxy.h
-#    AcquisitionProxy.cpp
-#    AcquisitionRemoteControl.h
-#    Alarm.h
-#    Alarm.cpp
-#    AnalogMode.h
-#    BasecallerRemoteControl.h
-#    BasecallingMetrics.h
-#    BasecallingMetrics.cpp
-#    BasecallingMetricsGlue.h
-#    BazIOConfig.h
+    AnalogMode.h
+    BasecallingMetrics.h
+    BasecallingMetrics.cpp
+    BazIOConfig.h
+    ChipClass.h
     ChipLayout.h
     ChipLayout.cpp
     ChipLayoutSequel.h
     ChipLayoutSequel.cpp
+    ChipLayoutBenchy.h
     ChipLayoutBenchy.cpp
+    ChipLayoutBenchyDemo.h
     ChipLayoutBenchyDemo.cpp
     ChipLayoutRTO2.h
     ChipLayoutRTO2.cpp
@@ -136,98 +132,68 @@ add_library( libSequelCommon1
     ChipLayoutSpider1.cpp
     ChipLayoutSpider1p0NTO.h
     ChipLayoutSpider1p0NTO.cpp
-#    ChunkFileSink.h
-#    ChunkFileSource.h
-#    Chunking.h
-#    debug.cpp
-#    debug.h
-#    DetectionMode.h
-#    DetectionModeScalar.h
-#    DetectionModeScalar.cpp
-#    Event.h
-#    Event.cpp
+    DetectionMode.h
+    DetectionModeScalar.h
+    DetectionModeScalar.cpp
     EventObject.h
     EventObject.cpp
+    FrameClass.h
     HDF5_type_traits.h
     HDF5_type_traits.cpp
     HDF5cpp.h
     HDFMultiArrayIO.h
     HDFMultiArrayIO.cpp
-#    IntInterval.h
-#    ipc_config.h
-#    IPipelineHost.h
-#    ITrancheNew.h
-#    Kernel.h
-#    Kernel.cpp
-#    LaserPowerChange.h
-#    LaserPowerChange.cpp
-#    LiveViewFrame.h
-#    ManuallyBufferedFile.h
-#    ManuallyBufferedFile.cpp
-#    MemoryBuffer.h
-#    MemoryBuffer.cpp
-#    PrimaryConfig.h
-#    PulseLookback.h
+    IntInterval.h
+    ipc_config.h
+    ITrancheNew.h
+    LaserPowerChange.h
+    LaserPowerChange.cpp
+    ManuallyBufferedFile.h
+    ManuallyBufferedFile.cpp
+    MemoryBuffer.h
+    MemoryBuffer.cpp
+    Platform.h
+    PrimaryConfig.h
+    PulseLookback.h
+    RTMetricsConfig.h
     SequEl_4.0_RTO2.csv.gz.cpp
     SequEl_4.0_RTO3.csv.gz.cpp
-#    SequelCalibrationFile.h
-#    SequelCalibrationFile.cpp
-#    SequelDefinitions.h
+    SequelDefinitions.h
     SequelHDF5.h
     SequelHDF5.cpp
     SequelMovie.h
     SequelMovie.cpp
+    SequelMovieConfig.h
     SequelMovieEventsHDF5.h
     SequelMovieEventsHDF5.cpp
     SequelMovieFrame.h
     SequelMovieFrame.cpp
     SequelMovieFileHDF5.h
     SequelMovieFileHDF5.cpp
-#    SequelMovieFileCRC.h
-#    SequelMovieFileCRC.cpp
-    SequelMovieFactory.h
-    SequelMovieFactory.cpp
     SequelROI.h
     SequelROI.cpp
     SequelTraceFile.h
     SequelTraceFile.cpp
-#    SmrtSensor.h
-#    SmrtSensor.cpp
-#    Sparse2DArray.h
-#    Sparse2DArray.cpp
+    Sparse2DArray.h
+    Sparse2DArray.cpp
     Spider_1p0_NTO.h
     Spider_1p0_NTO.cpp
-#    Statistic.h
-#    TemporaryDirectory.h
-#    TemporaryDirectory.cpp
-#    Tile.h
-#    TraceAnalysisMetrics.h
-#    TraceFileSource.h
-#    TrainedCartParams.h
-#    TrainedCartParams.cpp
-#    Tranche.h
-#    Tranche.cpp
-#    TrancheSizes.h
-#    TrancheTitle.h
-#    UnitCell.h
-#    Util.h
-#    WorkingFile.h
-#    ZmwMetricsRecorder.h
-#    ZmwMetricsRecorder.cpp
-#    ZmwResultBuffer.h
-#    ZmwReducedStatsFile.h
-#    ZmwReducedStatsFile.cpp
-#    ZmwStatsFile.h
-#    ZmwStatsFile.cpp
-#    ZmwStatsFileDefinition.h
-#    ZmwStatsFileData.h
+    Tile.h
+    TraceAnalysisMetrics.h
+    Tranche.h
+    Tranche.cpp
+    TrancheSizes.h
+    TrancheTitle.h
+    UnitCell.h
+    Util.h
+    WorkingFile.h
+    ZmwResultBuffer.h
 )
 
 
 target_include_directories(libSequelCommon1
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/../..
-#        ${half_INCLUDE_DIRS}
 )
 
 target_include_directories(libSequelCommon1
@@ -261,6 +227,7 @@ target_link_libraries( libSequelCommon1
     libHdf5_cpp
     ${Boost_LIBRARIES}  # boost::iostreams required for ChipLayout which uses gzip streams
     libJsoncpp
+    libHalf
   INTERFACE
     libZlib
 )
@@ -294,9 +261,3 @@ add_custom_command(OUTPUT ZmwStats.rst
     COMMENT Making RST documentation for ZmwStats.h
 )
 
-if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_LIST_DIR} OR PA_build_test_sequel_common)
-    enable_testing()
-    add_subdirectory(test)
-endif()
-
-add_subdirectory(bazviewer)
