@@ -31,11 +31,7 @@ include_directories(
 
 # Find pacbio/common and primary/common cmake modules.
 list(APPEND CMAKE_MODULE_PATH
-#    "${CMAKE_CURRENT_LIST_DIR}/../common/pacbio-cplusplus-api"
-#    "${CMAKE_CURRENT_LIST_DIR}/../Sequel/common/"
     "${CMAKE_CURRENT_LIST_DIR}/"
-#    # "${CMAKE_CURRENT_LIST_DIR}/../../common/cmake-modules"
-#    # "${CMAKE_CURRENT_LIST_DIR}/../common/"
 )
 
 # Used to define include directories for targets defined in subdirectories.
