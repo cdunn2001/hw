@@ -63,7 +63,7 @@ void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
 
 void FrameLabeler::DestroyAllocationPools()
 {
-    batchFactory_.release();
+    batchFactory_.reset();
 }
 
 FrameLabeler::FrameLabeler(uint32_t poolId)

@@ -82,13 +82,16 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
     : poolId_ (poolId)
     , models_(Data::GetPrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
+    static const unsigned int dmeDelayStride = 2u;  // TODO: Make this configurable.
+    // TODO: Is poolId_ defined appropriately for this use?
+    poolDmeDelay_ = poolId_ / dmeDelayStride;       // TODO: What are the units--frames, chunks, ... ?
+
     baseliner_ = algoFac.CreateBaseliner(poolId);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
     dme_ = algoFac.CreateDetectionModelEstimator(poolId);
     frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
     pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
     hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
-    // TODO: Create other algorithm components.
 }
 
 void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,
@@ -259,6 +262,96 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tb
             pulseDetectorMetrics);
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
+
+    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
+}
+
+
+// WiP: Prototype for analysis that supports slowly varying detection
+// model parameters.
+BatchAnalyzer::OutputType
+BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
+{
+    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
+    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
+
+    // This constant depends on the baseliner implementation and configuration.
+    // It should be initialized by a call to a Baseliner member.
+    static const unsigned int nFramesBaselinerStartUp = 100;
+
+    // Minimum number of frames needed for estimating the detection model.
+    static const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
+
+    // Baseline estimation and subtraction.
+    // Includes computing baseline moments.
+    assert(baseliner_);
+    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
+    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
+
+    // Wait for the baseliner startup transients to pass.
+    // Then wait a while more to stagger DME executions of different pools.
+    // Then reset the trace histograms and start accumulating data for the first DME execution.
+    if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
+            && frameCount_ + baselinedTraces.NumFrames() >= nFramesBaselinerStartUp + poolDmeDelay_)
+    {
+        // TODO: Reset traceHistAccum_.
+
+        poolStatus_ = PoolStatus::STARTUP_DME_INIT;
+    }
+
+    // Accumulate histogram of baseline-subtracted trace data.
+    // This operation also accumulates baseliner statistics.
+    assert(traceHistAccum_);
+    traceHistAccum_->AddBatch(baselinedTraces,
+                              baselinerMetrics.baselinerStats);
+
+    // Don't bother trying DME during the initial startup phase.
+    const bool doDme = poolStatus_ != PoolStatus::STARTUP_DME_DELAY
+            && traceHistAccum_->HistogramFrameCount() >= minFramesForDme;
+
+    if (doDme && poolStatus_ == PoolStatus::STARTUP_DME_INIT)
+    {
+        // Initialize the detection model from baseliner statistics.
+        models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());
+        poolStatus_ = PoolStatus::SEQUENCING;
+    }
+
+    // When sufficient trace data have been histogrammed,
+    // estimate detection model.
+    if (doDme)
+    {
+        // Estimate/update model parameters from histogram.
+        assert(dme_);
+        dme_->Estimate(traceHistAccum_->Histogram(), &models_);
+    }
+
+    // This part simply mimics the StaticModelPipeline.
+    auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces), models_);
+    auto labels = std::move(labelsAndMetrics.first);
+    auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
+
+    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+    auto pulses = std::move(pulsesAndMetrics.first);
+    auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
+
+    auto basecallingMetrics = (*hfMetrics_)(pulses, baselinerMetrics, models_,
+                                            frameLabelerMetrics, pulseDetectorMetrics);
+
+    // TODO: Drop results if poolStatus_ != PoolStatus::SEQUENCING.
+
+    // TODO: What is the "schedule" pattern of producing metrics.
+    // Do not need to be aligned over pools (or lanes).
+
+    // TODO: When metrics are produced, use them to update detection models.
+
+    if (doDme)
+    {
+        // TODO: Reset histograms.
+    }
+
+    nextFrameId_ = tbatch.Metadata().LastFrame();
+    frameCount_ += tbatch.NumFrames();
 
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }

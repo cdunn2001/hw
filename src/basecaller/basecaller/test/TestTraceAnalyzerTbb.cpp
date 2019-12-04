@@ -30,6 +30,8 @@
 #include <vector>
 #include <gtest/gtest.h>
 
+#include <pacbio/logging/Logger.h>
+
 #include <basecaller/analyzer/ITraceAnalyzer.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
@@ -43,22 +45,41 @@ namespace Basecaller {
 
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
-    const unsigned int numPools = 8;
+    Logging::LogSeverityContext logContext (Logging::LogLevel::WARN);
+    Cuda::Memory::DisablePerformanceMode();
+
+    const Data::BatchDimensions bDims {8, 16};
+    {
+        // Ensure that PrimaryConfig is sufficient.
+        auto& pc = Data::GetPrimaryConfig();
+        ASSERT_EQ(64u, pc.zmwsPerLane());
+        pc.lanesPerPool = std::max(pc.lanesPerPool(), bDims.lanesPerBatch);
+        pc.framesPerChunk = std::max(pc.framesPerChunk(), bDims.framesPerBatch);
+    }
+
+    const vector<uint32_t> poolIds {2u, 3u, 5u, 8u, 1u};
+
     Data::BasecallerConfig bcConfig;
+    bcConfig.algorithm.staticAnalysis = false;
+    bcConfig.algorithm.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
+    bcConfig.algorithm.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
+    bcConfig.algorithm.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
+    bcConfig.algorithm.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
+    bcConfig.init.numWorkerThreads = 6;
+
     Data::MovieConfig movConfig = Data::MockMovieConfig();
-    auto traceAnalyzer = ITraceAnalyzer::Create(numPools, bcConfig, movConfig);
 
-    ASSERT_EQ(numPools, traceAnalyzer->NumZmwPools());
+    auto traceAnalyzer = ITraceAnalyzer::Create(poolIds, bcConfig, movConfig);
 
-    const Data::BatchDimensions dims {64, 16, 4};
+    ASSERT_EQ(poolIds.size(), traceAnalyzer->NumZmwPools());
+
     vector<Data::TraceBatch<int16_t>> chunk;
     vector<Data::BatchMetadata> bmdVec;
-    // Notice that we skip some pool ids.
-    for (unsigned int i = 0; i < numPools; i += 2)
+    for (const auto pid : poolIds)
     {
-        const Data::BatchMetadata bmd(i, 0, dims.framesPerBatch);
+        const Data::BatchMetadata bmd(pid, 0, bDims.framesPerBatch);
         bmdVec.push_back(bmd);
-        chunk.emplace_back(bmd, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
+        chunk.emplace_back(bmd, bDims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
     }
 
     // The function under test.

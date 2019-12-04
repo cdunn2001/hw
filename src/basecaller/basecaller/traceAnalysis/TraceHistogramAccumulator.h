@@ -69,6 +69,7 @@ public:     // Static functions
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
+    virtual ~TraceHistogramAccumulator() = default;
 
 public:     // Const functions
     /// Total pool frames added via AddBatch.

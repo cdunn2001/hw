@@ -71,7 +71,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     }
 
     // Produces a trace batch with all trace frames set to x
-    // and baseliner states defined by blMean and blVar.
+    // and baseliner stats defined by blMean and blVar.
     std::pair<Data::TraceBatch<TraceElementType>,
               Data::BaselinerMetrics>
     GenerateCamTraceBatch(TraceElementType x, float blMean, float blVar)

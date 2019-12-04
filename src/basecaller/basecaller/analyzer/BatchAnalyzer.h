@@ -52,6 +52,15 @@ public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
     using OutputType = PacBio::Mongo::Data::BatchResult;
 
+    enum class PoolStatus
+    {
+        STARTUP_DME_DELAY,  // Baseliner startup + DME delay
+        STARTUP_DME_INIT,   // Histogram trace + inital DME
+        SEQUENCING,         // Producing potentially useful results
+        STOPPED,            // Pool stopped for throughput limits.
+        ERROR               // Something went very wrong.
+    };
+
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
     /// Static because the config types keep a JSON representation and
@@ -90,9 +99,13 @@ public:
     void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
                           const Data::MovieConfig& movieConfig);
 
+    OutputType QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch);
+
 private:
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
     uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+    uint32_t frameCount_ = 0;   // Number of frames processed.
+    uint32_t poolDmeDelay_;
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<FrameLabeler> frameLabeler_;
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
@@ -103,6 +116,8 @@ private:
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
     bool isModelInitialized_ {false};
+
+    PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
 
     // runs the main compute phases with a static model, bypassing things like the
     // dme and trace binning.  This is necessary for now because they are not

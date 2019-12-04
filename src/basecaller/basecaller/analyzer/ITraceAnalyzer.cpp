@@ -30,10 +30,30 @@
 #include "ITraceAnalyzer.h"
 
 #include <algorithm>
+#include <map>
+#include <numeric>
+#include <type_traits>
 
 #include <dataTypes/MovieConfig.h>
 
 #include "TraceAnalyzerTbb.h"
+
+
+namespace {
+
+// Returns a vector containing a range of integers.
+template <typename IntType>
+std::vector<IntType> rangeVector(size_t size, IntType start = 0)
+{
+    static_assert(std::is_integral<IntType>::value,
+                  "Template argument must be integral type.");
+    std::vector<IntType> v(size);
+    std::iota(v.begin(), v.end(), start);
+    return v;   // NRVO
+}
+
+}   // anonymous namepsace
+
 
 namespace PacBio {
 namespace Mongo {
@@ -52,10 +72,18 @@ ITraceAnalyzer::Create(unsigned int numPools,
                        const Data::BasecallerConfig& bcConfig,
                        const Data::MovieConfig& movConfig)
 {
-    // TODO
-    // At this point, there is only one implementation, which uses TBB.
-    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{numPools, bcConfig, movConfig}};
+    const auto poolIds = rangeVector<uint32_t>(numPools);
+    return Create(poolIds, bcConfig, movConfig);
+}
 
+// static
+std::unique_ptr<ITraceAnalyzer>
+ITraceAnalyzer::Create(const std::vector<uint32_t> &poolIds,
+                       const Data::BasecallerConfig &bcConfig,
+                       const Data::MovieConfig &movConfig)
+{
+    // At this point, there is only one implementation, which uses TBB.
+    std::unique_ptr<ITraceAnalyzer> p {new TraceAnalyzerTbb{poolIds, bcConfig, movConfig}};
     return p;
 }
 
@@ -64,10 +92,11 @@ ITraceAnalyzer::Create(unsigned int numPools,
 bool ITraceAnalyzer::IsValid(const std::vector<Data::TraceBatch<int16_t>>& input)
 {
     if (input.size() > NumZmwPools()) return false;
-    assert(!input.empty());
+    if (input.empty()) return false;
     const auto first = input.front().GetMeta().FirstFrame();
     const auto last = input.front().GetMeta().LastFrame();
-    std::vector<unsigned short> pidCount (NumZmwPools(), 0);
+    using PidCountMap = std::map<uint32_t, unsigned short>;
+    PidCountMap pidCount;
     for (const auto& tb : input)
     {
         if (tb.GetMeta().FirstFrame() != first) return false;
@@ -75,7 +104,7 @@ bool ITraceAnalyzer::IsValid(const std::vector<Data::TraceBatch<int16_t>>& input
         ++pidCount[tb.GetMeta().PoolId()];
     }
     if (std::any_of(pidCount.begin(), pidCount.end(),
-                    [&](unsigned short n){return n > 1;}))
+                    [](const PidCountMap::value_type& kvp){return kvp.second > 1;}))
     {
         return false;
     }
