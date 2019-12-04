@@ -292,12 +292,12 @@ BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
     // Wait for the baseliner startup transients to pass.
     // Then wait a while more to stagger DME executions of different pools.
     // Then reset the trace histograms and start accumulating data for the first DME execution.
-    if (poolStatus_ == PoolStatus::STARTUP_0
+    if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
             && frameCount_ + baselinedTraces.NumFrames() >= nFramesBaselinerStartUp + poolDmeDelay_)
     {
         // TODO: Reset traceHistAccum_.
 
-        poolStatus_ = PoolStatus::STARTUP_1;
+        poolStatus_ = PoolStatus::STARTUP_DME_INIT;
     }
 
     // Accumulate histogram of baseline-subtracted trace data.
@@ -307,10 +307,10 @@ BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
                               baselinerMetrics.baselinerStats);
 
     // Don't bother trying DME during the initial startup phase.
-    const bool doDme = poolStatus_ != PoolStatus::STARTUP_0
+    const bool doDme = poolStatus_ != PoolStatus::STARTUP_DME_DELAY
             && traceHistAccum_->HistogramFrameCount() >= minFramesForDme;
 
-    if (doDme && poolStatus_ == PoolStatus::STARTUP_1)
+    if (doDme && poolStatus_ == PoolStatus::STARTUP_DME_INIT)
     {
         // Initialize the detection model from baseliner statistics.
         models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());

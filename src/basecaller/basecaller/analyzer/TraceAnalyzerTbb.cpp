@@ -123,9 +123,12 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
     static constexpr size_t numTopLevelThreads=4;
     tbb::flow::graph g;
     tbb::flow::function_node<size_t> filter(g, numTopLevelThreads, [&](size_t i){
-            const auto pid = input[i].GetMeta().PoolId();
+            // An analyzer for this pool should already exist in bAnalyzer_.
+            // Use std::map::at instead of operator[] to ensure that we don't
+            // inadvertently insert an element in a multithreaded context.
+            auto& analyzer = bAnalyzer_.at(input[i].GetMeta().PoolId());
             output[i] = std::make_unique<BatchAnalyzer::OutputType>(
-                bAnalyzer_.at(pid)(std::move(input[i])));
+                analyzer(std::move(input[i])));
     });
 
     // All this graph buisiness is to try and limit concurrency at this top level loop,

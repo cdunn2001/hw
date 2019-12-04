@@ -54,11 +54,11 @@ public:     // Types
 
     enum class PoolStatus
     {
-        STARTUP_0,  // Baseliner startup + DME delay
-        STARTUP_1,  // Histogram trace + inital DME
-        SEQUENCING, // Producing potentially useful results
-        STOPPED,    // Pool stopped for throughput limits.
-        ERROR       // Something went very wrong.
+        STARTUP_DME_DELAY,  // Baseliner startup + DME delay
+        STARTUP_DME_INIT,   // Histogram trace + inital DME
+        SEQUENCING,         // Producing potentially useful results
+        STOPPED,            // Pool stopped for throughput limits.
+        ERROR               // Something went very wrong.
     };
 
 public:     // Static functions
@@ -117,7 +117,7 @@ private:
 
     bool isModelInitialized_ {false};
 
-    PoolStatus poolStatus_ {PoolStatus::STARTUP_0};
+    PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
 
     // runs the main compute phases with a static model, bypassing things like the
     // dme and trace binning.  This is necessary for now because they are not
