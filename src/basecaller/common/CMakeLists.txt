@@ -22,8 +22,6 @@ add_library(libMongoCommon STATIC
     StatAccumState.h
 )
 
-find_package(Boost)
-
 target_include_directories(libMongoCommon
     PUBLIC
         ${MONGO_PROJECT_DIR}
@@ -33,6 +31,6 @@ target_link_libraries(libMongoCommon
     PUBLIC
         libMongoCommonSimd
         libPacbioCplusplusApi
-        Boost::boost
+        libBoost
         libTbb
 )
