@@ -31,11 +31,7 @@ include_directories(
 
 # Find pacbio/common and primary/common cmake modules.
 list(APPEND CMAKE_MODULE_PATH
-    "${CMAKE_CURRENT_LIST_DIR}/../common/pacbio-cplusplus-api"
-    "${CMAKE_CURRENT_LIST_DIR}/../Sequel/common/"
     "${CMAKE_CURRENT_LIST_DIR}/"
-    # "${CMAKE_CURRENT_LIST_DIR}/../../common/cmake-modules"
-    # "${CMAKE_CURRENT_LIST_DIR}/../common/"
 )
 
 # Used to define include directories for targets defined in subdirectories.
@@ -54,10 +50,11 @@ set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
 include(mongo-tbb)
 
 include(pacbio-cplusplus-api)
-include(pacbio-primary-common)
-include(primary-config)
+include(mongo-config)
 
 create_config_header(mongo-config.h MongoConfig)
+
+add_subdirectory(sequel-common/pacbio/primary sequel-common)
 
 add_subdirectory(common)
 add_subdirectory(applications)

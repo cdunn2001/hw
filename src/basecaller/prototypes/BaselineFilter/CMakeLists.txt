@@ -40,7 +40,7 @@ target_link_libraries(BaselineFilter
 set_target_properties(BaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-include(pacbio-cplusplus-gtest)
+include(pacbio-gtest)
 
 add_executable(BaselineTests
     test/testExtremaFilter.cu
@@ -49,7 +49,9 @@ add_executable(BaselineTests
 )
 
 target_link_libraries(BaselineTests
-    libProtoCommon)
+    libProtoCommon
+    gtest
+)
 
 target_include_directories(BaselineTests
     PUBLIC

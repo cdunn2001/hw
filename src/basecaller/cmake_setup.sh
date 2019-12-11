@@ -1,5 +1,3 @@
-#!/bin/bash -e
-
 distclean=${distclean:-0}  # set to 1 if you want to obliterate all previous build artifacts
 
 if [[ $distclean != 0 ]]
