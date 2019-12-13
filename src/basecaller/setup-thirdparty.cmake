@@ -1,4 +1,4 @@
-set (VERSION bid9)
+set (VERSION bid12)
 
 option(LOCAL_THIRD_PARTY_SCRIPTS "Use local version of third party scripts" off)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE string "Location of a local  pa-third-party repository")
@@ -69,3 +69,6 @@ else()
     message("Setting module path to: " ${CMAKE_MODULE_PATH})
 endif()
 endfunction(SetupProject)
+
+# TODO this doesn't need to be a function...
+SetupProject(mongo)
