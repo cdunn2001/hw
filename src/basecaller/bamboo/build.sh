@@ -12,15 +12,16 @@ esac
 
 build_basecaller(){
   (
+  cd ..
   source module_setup.sh
   ./cmake_setup.sh
   cd build/x86_64/Release_gcc
   make -j
-  ldd applications/mongo-basecaller
+  ldd mongo/applications/mongo-basecaller
   cd -
   cd build/x86_64/Release
   make -j
-  ldd applications/mongo-basecaller
+  ldd mongo/applications/mongo-basecaller
   )
 }
 
@@ -40,9 +41,9 @@ deploy_basecaller(){
   esac
   set -x
   mkdir -p /mnt/software/m/mongo-basecaller/$moduleVersion/bin-{gcc,intel}
-  cp -a build/x86_64/Release_gcc/applications/mongo-basecaller \
+  cp -a build/x86_64/Release_gcc/mongo/applications/mongo-basecaller \
     /mnt/software/m/mongo-basecaller/$moduleVersion/bin-gcc
-  cp -a build/x86_64/Release/applications/mongo-basecaller \
+  cp -a build/x86_64/Release/mongo/applications/mongo-basecaller \
     /mnt/software/m/mongo-basecaller/$moduleVersion/bin-intel
   cat > /mnt/software/modulefiles/mongo-basecaller/${moduleVersion} << EOF
 #%Module
@@ -64,4 +65,5 @@ EOF
 }
 
 build_basecaller
-deploy_basecaller
+echo "Deploying disabled!!!"
+#deploy_basecaller
