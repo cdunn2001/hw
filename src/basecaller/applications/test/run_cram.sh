@@ -14,7 +14,7 @@ if [[ ! -v NO_MODULE_LOAD ]]; then
     module load cram/0.7
     module load primary-toolkit/1.0.7
     unset WORKSPACE  # if this is set, then the following module will use it instead of the cwd
-    module load pacbio-pa-mongo/workspace
+    module load pacbio-pa-mongo-new/workspace
 fi
 
 echo "Using bazviewer: $(which bazviewer)."

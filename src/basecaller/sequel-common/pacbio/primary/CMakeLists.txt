@@ -3,10 +3,7 @@
 #  libSequelCommon - all library code and dependencies of that code
 #  libSequelCommon1 - just library code, no dependencies
 
-cmake_minimum_required (VERSION 2.8)
-cmake_policy(VERSION 2.8)
-cmake_policy(SET CMP0048 NEW)
-cmake_policy(SET CMP0022 OLD)
+cmake_minimum_required (VERSION 3.13)
 
 project (pacbio-sequel-common CXX)
 
