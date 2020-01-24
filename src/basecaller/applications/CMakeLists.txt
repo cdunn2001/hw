@@ -1,11 +1,6 @@
 
 cmake_minimum_required(VERSION 3.8)
 
-add_executable(mongo-basecaller
-    ConsoleApp.cpp
-)
-
-
 add_library(libSmrtBasecaller STATIC
     Basecaller.h
     Basecaller.cpp
@@ -37,13 +32,6 @@ add_executable(smrt-basecaller
     SmrtBasecaller.cpp
 )
 
-target_link_libraries(mongo-basecaller
-    PUBLIC
-        libMongoBasecallerAnalyzer
-        libProtoCommon
-        libBazio
-        libTbb
-)
 
 target_link_libraries(smrt-basecaller
     PUBLIC
