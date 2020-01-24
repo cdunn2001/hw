@@ -29,6 +29,8 @@
 //  Description:
 //  Defines classes BatchData, BatchDimensions, and BlockView.
 
+#include <pacbio/datasource/SensorPacket.h>
+
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
@@ -343,7 +345,37 @@ class BatchData : private Cuda::Memory::detail::DataManager
     using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
     using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
 
+
+    // Helper validation function, to make sure if we are constructing using
+    // data from a SensorPacket, that packet's dimensions are consistent
+    const BatchDimensions& ValidateDims(const BatchDimensions& dims,
+                                        const DataSource::PacketLayout& layout)
+    {
+        if (layout.Encoding() != DataSource::PacketLayout::INT16)
+            throw PBException("Cannot create batch from 12 bit SensorPacket");
+        if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
+            throw PBException("Cannot create batch from SensorPacket with frame data");
+
+        bool validDims = true;
+        if (dims.framesPerBatch != layout.NumFrames()) validDims = false;
+        if (dims.laneWidth != layout.BlockWidth()) validDims = false;
+        if (dims.lanesPerBatch != layout.NumBlocks()) validDims = false;
+        if (!validDims)
+            throw PBException("Cannot create a BatchData from a SourcePacket with inconsistent dimensions");
+
+        return dims;
+    }
 public:
+    BatchData(DataSource::SensorPacket packet,
+              const BatchDimensions& dims,
+              Cuda::Memory::SyncDirection syncDirection,
+              const Cuda::Memory::AllocationMarker& marker)
+        : dims_(ValidateDims(dims, packet.Layout()))
+        , availableFrames_(dims.framesPerBatch)
+        , data_(std::move(packet).RelinquishAllocation(), dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
+                syncDirection, marker)
+    {}
+
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
               const Cuda::Memory::AllocationMarker& marker)

@@ -121,7 +121,7 @@ public:
         return bytesAllocated_;
     }
 
-    static size_t PeekAllocatedBytes()
+    static size_t PeakAllocatedBytes()
     {
         return peakBytesAllocated_;
     }

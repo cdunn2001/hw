@@ -29,6 +29,8 @@
 #include <cassert>
 #include <memory>
 
+#include <pacbio/memory/SmartAllocation.h>
+
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/streams/StreamMonitors.h>
@@ -37,7 +39,6 @@
 #include "DataManagerKey.h"
 #include "ManagedAllocations.h"
 #include "SmartDeviceAllocation.h"
-#include "SmartHostAllocation.h"
 
 namespace PacBio {
 namespace Cuda {
@@ -63,6 +64,37 @@ public:
     using HostType = T;
     using GpuType = typename gpu_type<T>::type;
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
+
+    UnifiedCudaArray(PacBio::Memory::SmartAllocation alloc,
+                     size_t count,
+                     SyncDirection dir,
+                     const AllocationMarker& marker)
+        : activeOnHost_(true)
+        , hostData_{std::move(alloc)}
+        , gpuData_{}
+        , syncDir_(dir)
+        , marker_(marker)
+        , checker_(std::make_unique<SingleStreamMonitor>())
+        , transferMutex_(std::make_unique<std::mutex>())
+    {
+        // This is likely paranoia on my part, and this static assert can be relaxed if someone finds a need.
+        // This is here to make it impossible to hand in data that is technically uninitialized.  Fundamental
+        // types have trivial default construction, so their lifetime has effectively already begun before
+        // this function is called.
+        static_assert(std::is_fundamental<HostType>::value,
+                      "Cannot create UnifiedCudaArray of compound type with manual host allocation");
+        if (dir == SyncDirection::HostReadDeviceWrite)
+            throw PBException("Invalid SyncDirection for UnifiedCudaArray with manual host allocation");
+        if (count != hostData_.size() / sizeof(HostType))
+            throw PBException("Incorrectly sized host allocation");
+        if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
+        {
+            // If we're doing something special like using int16_t on the host and
+            // PBShort2 on the gpu, we need to make sure things tile evenly, else the
+            // last gpu element will walk off the array
+            throw PBException("Invalid array length.");
+        }
+    }
 
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
@@ -100,7 +132,7 @@ public:
         // I'm manually disabling it.
         if (!std::is_trivially_default_constructible<HostType>::value)
         {
-            auto* ptr = hostData_.get<HostType>(DataKey());
+            auto* ptr = hostData_.get<HostType>();
             for (size_t i = 0; i < count; ++i)
             {
                 new(ptr+i) HostType;
@@ -146,7 +178,7 @@ public:
         // manually disabled this loop if it should be a noop.
         if (!std::is_trivially_destructible<HostType>::value)
         {
-            auto * ptr = hostData_.get<HostType>(DataKey());
+            auto * ptr = hostData_.get<HostType>();
             const size_t count = hostData_.size() / sizeof(HostType);
             for (size_t i = 0; i < count; ++i)
             {
@@ -196,7 +228,7 @@ public:
 
         }
 
-        return HostView<HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
+        return HostView<HostType>(hostData_.get<HostType>(), Size(), DataKey());
     }
     HostView<const HostType> GetHostView() const
     {
@@ -214,7 +246,7 @@ public:
 
         }
 
-        return HostView<const HostType>(hostData_.get<HostType>(DataKey()), Size(), DataKey());
+        return HostView<const HostType>(hostData_.get<HostType>(), Size(), DataKey());
     }
 
     DeviceHandle<GpuType> GetDeviceHandle(const KernelLaunchInfo& info)
@@ -274,7 +306,7 @@ private:
                 //      This should not be necessary on normal (non-integrated) nvidia
                 //      systems, but I still need to do a quick experiment to prove that
                 CudaSynchronizeDefaultStream();
-                CudaCopyHost(hostData_.get<HostType>(DataKey()), gpuData_.get<HostType>(DataKey()), Size());
+                CudaCopyHost(hostData_.get<HostType>(), gpuData_.get<HostType>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
             }
         } else {
@@ -283,7 +315,7 @@ private:
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
-                CudaCopyDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(DataKey()), Size());
+                CudaCopyDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(), Size());
         }
     }
 
@@ -296,7 +328,7 @@ private:
     //       data to-from the GPU, but will only provide const accessors, so that the actual
     //       logical payload being represented cannot be altered.
     mutable bool activeOnHost_;
-    mutable SmartHostAllocation hostData_;
+    mutable PacBio::Memory::SmartAllocation hostData_;
     mutable SmartDeviceAllocation gpuData_;
     SyncDirection syncDir_;
     AllocationMarker marker_;
