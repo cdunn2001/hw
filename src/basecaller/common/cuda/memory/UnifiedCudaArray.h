@@ -230,11 +230,11 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
-    void CopyToDevice()
+    void CopyToDevice() const
     {
         CopyImpl(false, true);
     }
-    void CopyToHost()
+    void CopyToHost() const
     {
         CopyImpl(true, true);
     }

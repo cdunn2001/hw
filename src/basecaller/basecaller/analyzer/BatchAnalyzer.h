@@ -91,10 +91,11 @@ public:     // Structors & assignment operators
 public:
     /// Call operator is non-reentrant and will throw if a trace batch is
     /// received for the wrong ZMW batch or is out of chronological order.
-    OutputType operator()(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    // TODO clean this change to reference
+    OutputType operator()(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
 
-    OutputType StandardPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
-    OutputType StaticModelPipeline(PacBio::Mongo::Data::TraceBatch<int16_t> tbatch);
+    OutputType StandardPipeline(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
+    OutputType StaticModelPipeline(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
 
     void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
                           const Data::MovieConfig& movieConfig);

@@ -167,7 +167,7 @@ public:
     {
     public:
         using DiffType = std::ptrdiff_t;
-        using ValueType = LaneArray<T, laneSize>;
+        using ValueType = LaneArray<std::remove_const_t<T>, laneSize>;
     public:
         static DiffType distance(const ConstLaneIterator& first, const ConstLaneIterator& last)
         {
@@ -386,7 +386,7 @@ public:
     }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
-    void CopyToDevice() { data_.CopyToDevice(); }
+    void CopyToDevice() const { data_.CopyToDevice(); }
 
     BlockView<T> GetBlockView(size_t laneIdx)
     {
