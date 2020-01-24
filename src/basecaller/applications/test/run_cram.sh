@@ -18,5 +18,5 @@ if [[ ! -v NO_MODULE_LOAD ]]; then
 fi
 
 echo "Using bazviewer: $(which bazviewer)."
-echo "Using mongo-basecaller: $(which mongo-basecaller)."
+echo "Using smrt-basecaller: $(which smrt-basecaller)."
 cram -v *.t
