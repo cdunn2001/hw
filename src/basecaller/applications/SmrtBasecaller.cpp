@@ -279,7 +279,7 @@ private:
 
         const double chunkDurationMS = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk
                                      / PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate
-                                     * 1e3f;
+                                     * 1e3;
         while(source->IsActive())
         {
             SensorPacketsChunk chunk;

@@ -132,7 +132,7 @@ public:
         g.wait_for_all();
     }
     // Wait for all tasks to finish, and generate a performance report
-    void FlushAndReport(float expectedDurationMS)
+    void FlushAndReport(double expectedDurationMS)
     {
         Flush();
 
