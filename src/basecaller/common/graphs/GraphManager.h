@@ -31,6 +31,8 @@
 #include <vector>
 
 #include <tbb/flow_graph.h>
+#include <tbb/task_scheduler_init.h>
+
 
 #include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
@@ -103,7 +105,10 @@ template <typename PerfEnum>
 class GraphManager
 {
 public:
-    GraphManager() = default;
+    // 0 defaults to basically hardware threads
+    GraphManager(size_t threads = 0)
+        : init_(threads == 0 ? tbb::task_scheduler_init::automatic : threads)
+    {}
 
     // Do not enable the move constructors.  Graph nodes will retain
     // references to this object, and those references would be invalidated
@@ -131,38 +136,44 @@ public:
     {
         g.wait_for_all();
     }
+
     // Wait for all tasks to finish, and generate a performance report
-    void FlushAndReport(double expectedDurationMS)
+    struct Report
+    {
+        bool realtime;
+        float dutyCycle;
+        float totalTime;
+        float avgOccupancy;
+        float avgDuration;
+        float idlePercent;
+        PerfEnum stage;
+    };
+    std::vector<Report> FlushAndReport(double expectedDurationMS)
     {
         Flush();
 
-        std::stringstream ss;
-        ss << "Performance Update: Duty Cycle%, Exec Per Second, Avg Occupancy:\n";
+        std::vector<Report> reports;
+        reports.resize(graphNodes_.size());
 
-        for (auto& node : graphNodes_)
+        for (size_t i = 0; i < graphNodes_.size(); ++i)
         {
-            auto timings = node->Report();
-            auto dutyCycle = (timings.partTime + timings.fullTime) / expectedDurationMS;
-            auto total = timings.idleTime + timings.partTime + timings.fullTime;
-            auto avgOccupancy = timings.avgOccupancy / total;
+            auto& report = reports[i];
+            auto& node = graphNodes_[i];
 
-            if (dutyCycle > node->MaxDutyCycle())
-            {
-                errorCounts_[node->Stage()]++;
-                auto idlePercent = timings.idleTime / total * 100.0f;
-                PBLOG_WARN << node->Stage().toString() << " is not currently realtime:  Duty Cycle%, Idle %, Occupancy -- "
-                           << dutyCycle * 100 << "%, "
-                           << idlePercent << "%, "
-                           << avgOccupancy;
-            }
-            // TODO rename report to indicate a reset happens
-            // TODO clean formatting when time allows
-            ss << "\t\t" << node->Stage().toString() << ": "
-               << dutyCycle * 100 << "%, "
-               << timings.count / timings.avgDuration * 1e3 << ", "
-               << avgOccupancy << "\n";
+            const auto& timings = node->Timings();
+            report.stage = node->Stage();
+            report.dutyCycle = (timings.partTime + timings.fullTime) / expectedDurationMS;
+            report.totalTime = timings.idleTime + timings.partTime + timings.fullTime;
+            report.avgOccupancy = timings.avgOccupancy / report.totalTime;
+            report.idlePercent = timings.idleTime / report.totalTime * 100.0f;
+            report.avgDuration = timings.avgDuration / timings.count;
+
+            report.realtime = report.dutyCycle <= node->MaxDutyCycle();
+            if (!report.realtime)
+                errorCounts_[report.stage]++;
         }
-        PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+
+        return reports;
     }
 
     ~GraphManager()
@@ -224,6 +235,13 @@ private:
         return LeafNode<In, PerfEnum>::MakeUnique(this, std::move(ptr), stage);
     }
 
+    // Needs to be the first member.  Instantiating any other tbb object will
+    // implicitly create a scheduler that locks us in on the wrong number of
+    // threads.
+    // Note: This of course does not guard against someone externally creating
+    //       a separate scheduler first.  So far I've found no robust way to
+    //       guard against that.
+    tbb::task_scheduler_init init_;
     tbb::flow::graph g;
     std::vector<std::unique_ptr<INode<PerfEnum>>> graphNodes_;
     std::map<PerfEnum, uint32_t> errorCounts_;

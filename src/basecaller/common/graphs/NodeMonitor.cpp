@@ -31,7 +31,7 @@ namespace Graphs {
 
 namespace detail {
 
-NodeMonitor::Timings NodeMonitor::Report()
+NodeMonitor::TimingData NodeMonitor::Timings()
 {
     std::lock_guard<std::mutex> lm(m_);
 
@@ -39,7 +39,7 @@ NodeMonitor::Timings NodeMonitor::Report()
     timings_.idleTime += stateTimer_.GetElapsedMilliseconds();
     started_ = false;
 
-    Timings ret;
+    TimingData ret;
     std::swap(ret, timings_);
     stateTimer_ = FastTimer();
     return ret;

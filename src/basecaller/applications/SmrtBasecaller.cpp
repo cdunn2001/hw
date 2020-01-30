@@ -77,6 +77,8 @@ public:
             PBLOG_INFO << "Input Target: " << inputTargetFile_;
             MetaDataFromTraceFileSource(inputTargetFile_);
             GroundTruthFromTraceFileSource(inputTargetFile_);
+        } else {
+            throw PBException("No input file specified");
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -268,7 +270,7 @@ private:
 
         auto source = CreateSource();
 
-        GraphManager<GraphProfiler> graph;
+        GraphManager<GraphProfiler> graph(Config().init.numWorkerThreads);
         auto * repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
         auto * analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
@@ -290,8 +292,26 @@ private:
                     + std::to_string(chunk.EndFrame()) + ")";
                 for (auto& batch : chunk)
                     repacker->ProcessInput(std::move(batch));
-                graph.FlushAndReport(chunkDurationMS);
-                PBLOG_INFO << "Chunk analysis finished";
+                const auto& reports = graph.FlushAndReport(chunkDurationMS);
+
+                std::stringstream ss;
+                ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
+
+                for (auto& report: reports)
+                {
+                    if (!report.realtime)
+                    {
+                        PBLOG_WARN << report.stage.toString() << " is not currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                                   << report.dutyCycle * 100 << "%, "
+                                   << 1e3 / report.avgDuration << "ms, "
+                                   << report.idlePercent << "%, "
+                                   << report.avgOccupancy;
+                    }
+                    ss << "\t\t" << report.stage.toString() << ": "
+                       << report.dutyCycle * 100 << "%, "
+                       << report.avgOccupancy << "\n";
+                }
+                PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
 
                 numChunksAnalyzed++;
             }

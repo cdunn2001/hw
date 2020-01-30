@@ -45,10 +45,10 @@ struct NodeMonitor
     using FastTimer = PacBio::Dev::Profile::FastTimer;
     // Dumb data bundle struct, to keep track of how long
     // a node was in a given state
-    struct Timings
+    struct TimingData
     {
 
-        Timings& operator+=(const Timings& t)
+        TimingData& operator+=(const TimingData& t)
         {
             count += t.count;
             idleTime += t.idleTime;
@@ -106,7 +106,7 @@ struct NodeMonitor
 
     // Generate a report.  This should only be called
     // when the owning node is idle (no active threads)
-    Timings Report();
+    TimingData Timings();
 
     // Creates a Monitor instance to keep track of the current
     // invocation.
@@ -124,7 +124,7 @@ private:
     int threadCount_ = 0;
     int maxThreads_;
 
-    Timings timings_;
+    TimingData timings_;
 };
 
 }}}

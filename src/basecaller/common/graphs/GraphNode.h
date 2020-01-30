@@ -100,9 +100,9 @@ public:
     {}
     virtual ~INode() {}
 
-    auto Report()
+    auto Timings()
     {
-        return monitor_.Report();
+        return monitor_.Timings();
     }
     PerfEnum Stage() const { return stage_; }
     virtual float MaxDutyCycle() const = 0;
@@ -277,7 +277,8 @@ private:
         while (!deque.empty())
         {
             WrappedOut out;
-            out.val = std::make_shared<Out>(deque.PopBack());
+            out.val = std::make_shared<Out>(std::move(deque.back()));
+            deque.pop_back();
             std::get<0>(output).try_put(out);
         }
     }
