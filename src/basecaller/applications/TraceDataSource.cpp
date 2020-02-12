@@ -85,8 +85,8 @@ TraceDataSource::TraceDataSource(
     assert(config.layout.BlockWidth() == laneSize);
 
     // TODO this restriction should be lifted
-    assert(config.numZmw % config.layout.BlockWidth() == 0);
-    assert(config.numZmw / config.layout.BlockWidth() % config.layout.NumBlocks() == 0);
+    assert(numZmw % config.layout.BlockWidth() == 0);
+    assert(numZmw / config.layout.BlockWidth() % config.layout.NumBlocks() == 0);
 
     numZmwLanes_ = numZmw / (config.layout.BlockWidth());
     numChunks_ = (frames + BlockLen() - 1) / BlockLen();
@@ -99,7 +99,7 @@ TraceDataSource::TraceDataSource(
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
 }
 
-void TraceDataSource::EventLoop()
+void TraceDataSource::ContinueProcessing()
 {
     uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % traceFileReader_->NumZmwLanes();
     uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
@@ -164,7 +164,7 @@ void TraceDataSource::PreloadInputQueue(size_t chunks)
         {
             if (batchIndex_ == 0)
                 PBLOG_INFO << "Preloading chunk " << chunkIndex_;
-            EventLoop();
+            ContinueProcessing();
         }
         PBLOG_INFO << "Done preloading input queue.";
     }

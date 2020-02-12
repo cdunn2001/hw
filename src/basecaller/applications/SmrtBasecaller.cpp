@@ -16,7 +16,7 @@
 
 #include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/PBException.h>
-#include <pacbio/datasource/DataSource.h>
+#include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
@@ -285,7 +285,7 @@ private:
         while(source->IsActive())
         {
             SensorPacketsChunk chunk;
-            if (source->PopData(chunk))
+            if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
                     + std::to_string(chunk.StartFrame()) + ","

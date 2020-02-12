@@ -30,7 +30,7 @@
 #include <cstdint>
 #include <string>
 
-#include <pacbio/datasource/DataSource.h>
+#include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/SensorPacketsChunk.h>
 
 #include <common/DataGenerators/TraceFileReader.h>
@@ -60,7 +60,7 @@ public:
 
 public:
 
-    void EventLoop() override;
+    void ContinueProcessing() override;
 
 public:
 
