@@ -54,14 +54,18 @@ void NodeMonitor::IncrementThread()
     if(threadCount_ == 0)
     {
         if (started_ == true)
+        {
             timings_.idleTime += duration;
+        }
         else
+        {
             started_ = true;
+        }
     } else
     {
         timings_.partTime += duration;
     }
-    timings_.avgOccupancy += duration*threadCount_;
+    timings_.accumulatedOccupancy += duration*threadCount_;
 
     threadCount_++;
     if(threadCount_ > maxThreads_) throw PBException("Unexpected thread count in graph node");
@@ -79,9 +83,9 @@ void NodeMonitor::DecrementThread(float nodeDurationMS)
     {
         timings_.partTime += stateDuration;
     }
-    timings_.avgOccupancy += stateDuration*threadCount_;
+    timings_.accumulatedOccupancy += stateDuration*threadCount_;
     timings_.count++;
-    timings_.avgDuration += nodeDurationMS;
+    timings_.accumulatedDuration += nodeDurationMS;
 
     if(threadCount_ == 0) throw PBException("Unexpected thread count in graph node");
     threadCount_--;

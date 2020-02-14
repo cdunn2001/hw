@@ -76,9 +76,13 @@ public:
 
     bool SupportsAllFlags(uint32_t flags) const override
     {
-        if (flags | IAllocator::HUGEPAGES) throw PBException("Huge pages not supported by this Allocator");
 
-        return true;
+        // set up a bit flag of supported modes.  Currently only support one special mode
+        uint32_t supported = IAllocator::CUDA_MEMORY;
+
+        // Clear all the bits in `flags` that correspond to supported modes
+        auto unsupportedRequests = flags & ~supported;
+        return unsupportedRequests == 0;
     }
 };
 

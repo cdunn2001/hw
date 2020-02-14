@@ -135,6 +135,24 @@ public:
     // Adds a new child node to this node using body as an implementation.
     // Returns another graph node pointer (with input/output types matching body)
     // that can be used to add yet more children nodes (unless body is a leaf)
+    // T is going to be a type of "graph node body" (note the static_assert below ensuring that).
+    // In particular T will be a child of:
+    // * TransformBody<In, Out>
+    // * MultiTransformBody<In, Out>
+    // * LeafBody<In>
+    //
+    // The return type will be a pointer pointer to an actual GraphNode.
+    // That GraphNode will be the node that now owns the T handed in here and now
+    // The type of the GraphNode will correspond to the type of the "body" handed in
+    // (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>
+    //
+    // This is a non-owning pointer.  There are two reasons to keep it around:
+    // * The graph node types also have an AddNode function you can call,
+    //    when building up dependency chains in the graph
+    // * The graph nodes have a ProcessInput function you can call to drop
+    //   data into the graph for processing
+    // * If you don't want to do either of these things (e.g a leaf node),
+    //   or you are finished adding dependancies, you can just discard this pointer.
     template <typename T>
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {

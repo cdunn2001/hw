@@ -54,20 +54,19 @@ struct NodeMonitor
             idleTime += t.idleTime;
             partTime += t.partTime;
             fullTime += t.fullTime;
-            avgOccupancy += t.avgOccupancy;
-            avgDuration += t.avgDuration;
+            accumulatedOccupancy += t.accumulatedOccupancy;
+            accumulatedDuration += t.accumulatedDuration;
 
             return *this;
         }
 
         int count = 0;             // Invcation count
-        float idleTime = 0;        // Time spent idle
-        float partTime = 0;        // Time spent doing work, but at less than full occupancy
-        float fullTime = 0;        // Time spent at full occupancy
-        // running sums for average occpancy and average serial execution.  Note these
-        // are misnomers, and are not trutly average until properly normalized
-        float avgOccupancy = 0.0f;
-        float avgDuration = 0.0f;
+        double idleTime = 0;       // Time spent idle
+        double partTime = 0;       // Time spent doing work, but at less than full occupancy
+        double fullTime = 0;       // Time spent at full occupancy
+        // running sums for average occpancy and average serial execution.
+        double accumulatedOccupancy = 0.0;
+        double accumulatedDuration = 0.0;
     };
 
     // RAII class intended to be created automatically at the start of invocation
@@ -79,6 +78,9 @@ struct NodeMonitor
         Monitor(NodeMonitor* node)
             : node_(node)
         {
+            if (!node)
+                throw PBException("Invalid nullptr in Monitor construction");
+
             node_->IncrementThread();
         }
 

@@ -301,7 +301,7 @@ private:
                 {
                     if (!report.realtime)
                     {
-                        PBLOG_WARN << report.stage.toString() << " is not currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                        PBLOG_WARN << report.stage.toString() << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
                                    << report.dutyCycle * 100 << "%, "
                                    << 1e3 / report.avgDuration << "ms, "
                                    << report.idlePercent << "%, "

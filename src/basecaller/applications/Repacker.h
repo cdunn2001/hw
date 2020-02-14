@@ -51,14 +51,19 @@ public:
     void Process(DataSource::SensorPacket packet) override
     {
         // Make sure packet is valid
-        bool valid = true;
-        valid |= packet.Layout().Encoding() == DataSource::PacketLayout::INT16;
-        valid |= packet.Layout().Type() == DataSource::PacketLayout::BLOCK_LAYOUT_DENSE;
-        valid |= expectedDims_.lanesPerBatch == packet.Layout().NumBlocks();
-        valid |= expectedDims_.framesPerBatch == packet.Layout().NumFrames();
-        valid |= expectedDims_.laneWidth == packet.Layout().BlockWidth();
-        if (!valid)
-            throw PBException("Invalid SensorPacket sent to TrivialRepacker");
+        if (packet.Layout().Encoding() != DataSource::PacketLayout::INT16)
+            throw PBException("TrivialRepacker only supports INT16 encoding");
+        if (packet.Layout().Type() != DataSource::PacketLayout::BLOCK_LAYOUT_DENSE)
+            throw PBException("TrivialRepacker only supports BLOCK_LAYOUT_DENSE");
+        if (expectedDims_.lanesPerBatch != packet.Layout().NumBlocks())
+            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.lanesPerBatch) +
+                              " blocks but received " + std::to_string(packet.Layout().NumBlocks()));
+        if (expectedDims_.framesPerBatch != packet.Layout().NumFrames())
+            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.framesPerBatch) +
+                              " frames but received " + std::to_string(packet.Layout().NumFrames()));
+        if (expectedDims_.laneWidth != packet.Layout().BlockWidth())
+            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.laneWidth) +
+                              " blockWidth but received " + std::to_string(packet.Layout().BlockWidth()));
 
         Mongo::Data::BatchMetadata meta(packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
                            packet.StartFrame(),

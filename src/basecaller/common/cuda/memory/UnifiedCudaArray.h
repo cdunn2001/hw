@@ -81,8 +81,8 @@ public:
         // This is here to make it impossible to hand in data that is technically uninitialized.  Fundamental
         // types have trivial default construction, so their lifetime has effectively already begun before
         // this function is called.
-        static_assert(std::is_fundamental<HostType>::value,
-                      "Cannot create UnifiedCudaArray of compound type with manual host allocation");
+        static_assert(std::is_trivially_default_constructible<HostType>::value,
+                      "Cannot create UnifiedCudaArray from a manual host allocation when the type is not trivially default constructible");
         if (dir == SyncDirection::HostReadDeviceWrite)
             throw PBException("Invalid SyncDirection for UnifiedCudaArray with manual host allocation");
         if (count != hostData_.size() / sizeof(HostType))

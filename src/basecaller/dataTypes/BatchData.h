@@ -356,12 +356,15 @@ class BatchData : private Cuda::Memory::detail::DataManager
         if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
             throw PBException("Cannot create batch from SensorPacket with frame data");
 
-        bool validDims = true;
-        if (dims.framesPerBatch != layout.NumFrames()) validDims = false;
-        if (dims.laneWidth != layout.BlockWidth()) validDims = false;
-        if (dims.lanesPerBatch != layout.NumBlocks()) validDims = false;
-        if (!validDims)
-            throw PBException("Cannot create a BatchData from a SourcePacket with inconsistent dimensions");
+        if (dims.framesPerBatch != layout.NumFrames())
+            throw PBException("PacketLayout had " + std::to_string(layout.NumFrames()) +
+                              " frames, but " + std::to_string(dims.framesPerBatch) + " was expected");
+        if (dims.laneWidth != layout.BlockWidth())
+            throw PBException("PacketLayout had " + std::to_string(layout.BlockWidth()) +
+                              " lane width, but " + std::to_string(dims.laneWidth) + " was expected");
+        if (dims.lanesPerBatch != layout.NumBlocks())
+            throw PBException("PacketLayout had " + std::to_string(layout.NumBlocks()) +
+                              " num blocks, but " + std::to_string(dims.lanesPerBatch) + " was expected");
 
         return dims;
     }
@@ -418,6 +421,11 @@ public:
     }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
+    // Note: For this class (and UnifiedCudaArray) `const` implies that the contents of the data stays the same,
+    //       but not necessarily the location.  `mutable` has been applied in a few select places such that
+    //       we can copy data to (or from) the GPU even for a const object (On the gpu you'll only be able to
+    //       get a const view of the data, but we still have to technically modify things in order to get
+    //       the payload up there in the first place).
     void CopyToDevice() const { data_.CopyToDevice(); }
 
     BlockView<T> GetBlockView(size_t laneIdx)

@@ -178,26 +178,26 @@ TEST(GraphAPI, TransformNode)
 // minimum element subtracted away
 TEST(GraphAPI, MultiTransformNode)
 {
-    int sum = 0;
+    int result = 0;
 
     GraphManager<STAGES> graph;
     auto* inputNode = graph.AddNode(std::make_unique<SubtractMin>(8), STAGES::ONE);
     inputNode->AddNode(std::make_unique<QuadraticTransform>(), STAGES::TWO)
-             ->AddNode(std::make_unique<CountingLeaf>(&sum), STAGES::THREE);
+             ->AddNode(std::make_unique<CountingLeaf>(&result), STAGES::THREE);
 
     std::array<int, 8> vals {1,4,67,3,7,4,5,23};
     for (int i = 0; i < 7; ++i)
         inputNode->ProcessInput(vals[i]);
 
     graph.Flush();
-    EXPECT_EQ(0, sum);
+    EXPECT_EQ(0, result);
 
     inputNode->ProcessInput(vals[7]);
     graph.Flush();
 
     auto min = *std::min_element(vals.begin(), vals.end());
     auto equation = [min](int sum, int val) { val -= min; return sum += val*val; };
-    EXPECT_EQ(std::accumulate(vals.begin(), vals.end(), 0, equation), sum);
+    EXPECT_EQ(std::accumulate(vals.begin(), vals.end(), 0, equation), result);
 }
 
 // The graph manager assumes ownership of all nodes/bodies involved.
@@ -236,7 +236,12 @@ TEST(GraphAPI, MoveOnlyTypes)
         MoveOnly(const MoveOnly&) = delete;
         MoveOnly(MoveOnly&& other) { other.valid_ = false; }
         MoveOnly& operator=(const MoveOnly&) = delete;
-        MoveOnly& operator=(MoveOnly&& other) { other.valid_ = false; valid_ = true; return *this; }
+        MoveOnly& operator=(MoveOnly&& other)
+        {
+            valid_ = other.valid_;
+            other.valid_ = false;
+            return *this;
+        }
         ~MoveOnly() = default;
 
         operator bool() const { return valid_; }
@@ -323,23 +328,33 @@ TEST(GraphAPI, MoveOnlyTypes)
         }
     };
 
+    // Check a graph composed of move only types with no const arguments in the graph edges.
+    // Without const arguments, a given node cannot have multiple children, as once one
+    // child gets moved the result (copy is impossible), it's now invalid and can't be
+    // handed to sibling children
     {
         GraphManager<STAGES> graph;
         auto* input = graph.AddNode(std::make_unique<MoveMultiTransform>(), STAGES::ONE);
         auto* stage2 = input->AddNode(std::make_unique<MoveTransform>(), STAGES::TWO);
+        // Second child to input will cause an error
         EXPECT_ANY_THROW(input->AddNode(std::make_unique<MoveLeaf>(), STAGES::THREE));
         stage2->AddNode(std::make_unique<MoveLeaf>(), STAGES::THREE);
+        // Second child to stage2 will cause an error
         EXPECT_ANY_THROW(stage2->AddNode(std::make_unique<MoveLeaf>(), STAGES::THREE));
 
         input->ProcessInput(MoveOnly{});
     }
 
+    // Check a graph composed of move only types, now using const arguments for input/output.
+    // Now a node can safely have multiple children
     {
         GraphManager<STAGES> graph;
         auto* input = graph.AddNode(std::make_unique<MoveMultiTransformConst>(), STAGES::ONE);
         auto* stage2 = input->AddNode(std::make_unique<MoveTransformConst>(), STAGES::TWO);
+        // Second child of input is now valid
         EXPECT_NO_THROW(input->AddNode(std::make_unique<MoveLeafConst>(), STAGES::THREE));
         stage2->AddNode(std::make_unique<MoveLeafConst>(), STAGES::THREE);
+        // Second child of stage2 is now valid
         EXPECT_NO_THROW(stage2->AddNode(std::make_unique<MoveLeafConst>(), STAGES::THREE));
 
         input->ProcessInput(MoveOnly{});

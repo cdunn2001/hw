@@ -118,6 +118,27 @@ public:
     GraphManager& operator=(const GraphManager&) = delete;
     GraphManager& operator=(GraphManager&&) = delete;
 
+    // Adds a new child node to this node using body as an implementation.
+    // Returns another graph node pointer (with input/output types matching body)
+    // that can be used to add yet more children nodes (unless body is a leaf)
+    // T is going to be a type of "graph node body" (note the static_assert below ensuring that).
+    // In particular T will be a child of:
+    // * TransformBody<In, Out>
+    // * MultiTransformBody<In, Out>
+    // * LeafBody<In>
+    //
+    // The return type will be a pointer pointer to an actual GraphNode.
+    // That GraphNode will be the node that now owns the T handed in here and now
+    // The type of the GraphNode will correspond to the type of the "body" handed in
+    // (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>
+    //
+    // This is a non-owning pointer.  There are two reasons to keep it around:
+    // * The graph node types also have an AddNode function you can call,
+    //    when building up dependency chains in the graph
+    // * The graph nodes have a ProcessInput function you can call to drop
+    //   data into the graph for processing
+    // * If you don't want to do either of these things (e.g a leaf node),
+    //   or you are finished adding dependancies, you can just discard this pointer.
     template <typename T>
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {
@@ -125,6 +146,7 @@ public:
                       "Cannot generate a graph node from this type.  Must be an IBody child");
 
         T* dummy = nullptr;  //used for type deduction
+        // Unique pointer to a type of graph node
         auto node = GenerateNodeImpl(std::move(body), dummy, stage);
         auto * ret = node.get();
         graphNodes_.emplace_back(std::move(node));
@@ -164,9 +186,9 @@ public:
             report.stage = node->Stage();
             report.dutyCycle = (timings.partTime + timings.fullTime) / expectedDurationMS;
             report.totalTime = timings.idleTime + timings.partTime + timings.fullTime;
-            report.avgOccupancy = timings.avgOccupancy / report.totalTime;
+            report.avgOccupancy = timings.accumulatedOccupancy / report.totalTime;
             report.idlePercent = timings.idleTime / report.totalTime * 100.0f;
-            report.avgDuration = timings.avgDuration / timings.count;
+            report.avgDuration = timings.accumulatedDuration / timings.count;
 
             report.realtime = report.dutyCycle <= node->MaxDutyCycle();
             if (!report.realtime)
@@ -181,7 +203,8 @@ public:
         try
         {
             Flush();
-        } catch(std::exception& e)
+        }
+        catch(std::exception& e)
         {
             PBLOG_ERROR << "Swallowing (additional?) exceptions while deconstructing execution graph";
             PBLOG_ERROR << e.what();
@@ -195,7 +218,7 @@ public:
             // of realtime
             if (kv.second > errorThreshold)
                 PBLOG_ERROR << kv.first.toString() << " has " << kv.second << " duty cycle violations";
-            else
+            else if (kv.second > 0)
                 PBLOG_WARN << kv.first.toString() << " has " << kv.second << " duty cycle violations";
         }
     }
@@ -210,12 +233,12 @@ private:
     friend class LeafNode;
 
     template <typename T1, typename T2>
-    void MakeEdge(T1& left, T2& right)
+    void MakeEdge(T1& sender, T2& receiver)
     {
         static_assert(std::is_same<typename detail::SecondArg<T1>::type, typename detail::FirstArg<T2>::type>::value,
                       "Incompatible types for graph edge");
-        if (left.graph_ != right.graph_) throw PBException("Linking nodes not int he same graph");
-        tbb::flow::make_edge(GetPort0(left.node), right.node);
+        if (sender.graph_ != receiver.graph_) throw PBException("Linking nodes not in the same graph");
+        tbb::flow::make_edge(GetPort0(sender.node), receiver.node);
     }
 
 
