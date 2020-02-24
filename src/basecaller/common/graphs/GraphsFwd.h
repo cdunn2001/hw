@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,13 +23,26 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "SmartHostAllocation.h"
 
 namespace PacBio {
-namespace Cuda {
-namespace Memory {
+namespace Graphs {
 
-std::atomic<size_t> SmartHostAllocation::bytesAllocated_{0};
-std::atomic<size_t> SmartHostAllocation::peakBytesAllocated_{0};
+template <typename PerfEnum>
+class GraphManager;
 
-}}}
+template <typename PerfEnum>
+class INode;
+
+template <typename In, typename PerfEnum>
+class InputNode;
+
+template <typename In, typename Out, typename PerfEnum>
+class TransformNode;
+
+template <typename In, typename Out, typename PerfEnum>
+class MultiTransformNode;
+
+template <typename In, typename PerfEnum>
+class LeafNode;
+
+}}

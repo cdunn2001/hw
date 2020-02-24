@@ -14,8 +14,6 @@ set(CPP_LIST
     memory/DataManagerKey.h
     memory/ManagedAllocations.h
     memory/ManagedAllocations.cpp
-    memory/SmartHostAllocation.h
-    memory/SmartHostAllocation.cpp
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
     memory/UnifiedCudaArray.h

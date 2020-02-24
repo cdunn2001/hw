@@ -47,6 +47,8 @@ namespace Memory {
 
 namespace {
 
+using namespace PacBio::Memory;
+
 // Helper class to keep track of memory high water marks
 class AllocStat
 {
@@ -127,7 +129,7 @@ public:
     {
         std::lock_guard<std::mutex> lm(m_);
         enabled_ = true;
-        pinned_ = true;
+        defaultType_ = ManagedAllocType::PINNED;
     }
 
     // After calling this, calls to the `Return` functions
@@ -136,14 +138,22 @@ public:
     {
         std::lock_guard<std::mutex> lm(m_);
         enabled_ = false;
-        pinned_ = false;
+        defaultType_ = ManagedAllocType::STANDARD;
         FlushPoolsImpl();
     }
 
-    SmartHostAllocation GetHostAlloc(size_t size, const AllocationMarker& marker)
+    ManagedAllocType GetCurrentType() const
     {
-        SmartHostAllocation ptr;
+        return defaultType_;
+    }
+
+    SmartAllocation GetHostAlloc(size_t size, const AllocationMarker& marker, ManagedAllocType requestedType)
+    {
+        SmartAllocation ptr;
         if (size == 0) return ptr;
+
+        if (requestedType == ManagedAllocType::DEFAULT)
+            requestedType = defaultType_;
 
         std::lock_guard<std::mutex> lm(m_);
         auto& queue = hostAllocs_[size];
@@ -153,7 +163,23 @@ public:
             queue.pop_front();
             ptr.AllocID(marker.AsHash());
         } else {
-            ptr = SmartHostAllocation(size, pinned_, marker.AsHash());
+            if (requestedType == ManagedAllocType::PINNED)
+            {
+                ptr = SmartAllocation(size,
+                                      &CudaRawMallocHost,
+                                      &CudaFreeHost,
+                                      AllocationID(marker.AsHash()),
+                                      AllocationType(requestedType.Flags()));
+            } else if (requestedType == ManagedAllocType::STANDARD)
+            {
+                ptr = SmartAllocation(size,
+                                      &malloc,
+                                      &free,
+                                      AllocationID(marker.AsHash()),
+                                      AllocationType(requestedType.Flags()));
+            } else {
+                throw PBException("Unsupported allocation type");
+            }
         }
 
         assert(allocMarkers_.count(marker.AsHash()) == 0
@@ -188,11 +214,17 @@ public:
         return ptr;
     }
 
-    void ReturnHostAlloc(SmartHostAllocation alloc)
+    void ReturnHostAlloc(SmartAllocation alloc)
     {
         std::lock_guard<std::mutex> lm(m_);
 
-        if (!enabled_ || alloc.Pinned() != pinned_) return;
+        if (!enabled_) return;
+        if (defaultType_ != alloc.AllocatorType())
+        {
+            PBLOG_WARN << "Performance mode enabled, but allocation of different type has been returned.  Statistics may be incomplete/wrong";
+            return;
+        }
+
         if (alloc.AllocID() != 0)
             hostStats_[alloc.AllocID()].DeallocationSize(alloc.size());
         hostAllocs_[alloc.size()].push_front(std::move(alloc));
@@ -274,7 +306,7 @@ private:
     }
 
 
-    std::map<size_t, std::deque<SmartHostAllocation>> hostAllocs_;
+    std::map<size_t, std::deque<SmartAllocation>> hostAllocs_;
     std::map<size_t, std::deque<SmartDeviceAllocation>> devAllocs_;
 
     std::map<size_t, AllocStat> hostStats_;
@@ -284,19 +316,19 @@ private:
 
     std::mutex m_;
     bool enabled_ = false;
-    bool pinned_ = false;
+    ManagedAllocType defaultType_{ManagedAllocType::STANDARD};
 };
 
 }
 
-SmartHostAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker)
+SmartAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker, ManagedAllocType type)
 {
     static thread_local size_t counter = 0;
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
-    return AllocationManager::GetManager().GetHostAlloc(size, marker);
+    return AllocationManager::GetManager().GetHostAlloc(size, marker, type);
 }
 
 SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker)
@@ -309,7 +341,7 @@ SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMa
     return AllocationManager::GetManager().GetDeviceAlloc(size, marker);
 }
 
-void ReturnManagedHostAllocation(SmartHostAllocation alloc)
+void ReturnManagedHostAllocation(SmartAllocation alloc)
 {
     if (alloc.size() == 0) return;
     static thread_local size_t counter = 0;
@@ -346,6 +378,11 @@ void DisablePerformanceMode()
     Profiler::FinalReport();
 #endif
     AllocationManager::GetManager().DisablePerformanceMode();
+}
+
+ManagedAllocType GetCurrentAllocType()
+{
+    return AllocationManager::GetManager().GetCurrentType();
 }
 
 }}} // ::PacBio::Cuda::Memory

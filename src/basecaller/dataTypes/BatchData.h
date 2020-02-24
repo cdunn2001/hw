@@ -29,6 +29,8 @@
 //  Description:
 //  Defines classes BatchData, BatchDimensions, and BlockView.
 
+#include <pacbio/datasource/SensorPacket.h>
+
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
@@ -167,7 +169,7 @@ public:
     {
     public:
         using DiffType = std::ptrdiff_t;
-        using ValueType = LaneArray<T, laneSize>;
+        using ValueType = LaneArray<std::remove_const_t<T>, laneSize>;
     public:
         static DiffType distance(const ConstLaneIterator& first, const ConstLaneIterator& last)
         {
@@ -343,7 +345,40 @@ class BatchData : private Cuda::Memory::detail::DataManager
     using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
     using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
 
+
+    // Helper validation function, to make sure if we are constructing using
+    // data from a SensorPacket, that packet's dimensions are consistent
+    const BatchDimensions& ValidateDims(const BatchDimensions& dims,
+                                        const DataSource::PacketLayout& layout)
+    {
+        if (layout.Encoding() != DataSource::PacketLayout::INT16)
+            throw PBException("Cannot create batch from 12 bit SensorPacket");
+        if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
+            throw PBException("Cannot create batch from SensorPacket with frame data");
+
+        if (dims.framesPerBatch != layout.NumFrames())
+            throw PBException("PacketLayout had " + std::to_string(layout.NumFrames()) +
+                              " frames, but " + std::to_string(dims.framesPerBatch) + " was expected");
+        if (dims.laneWidth != layout.BlockWidth())
+            throw PBException("PacketLayout had " + std::to_string(layout.BlockWidth()) +
+                              " lane width, but " + std::to_string(dims.laneWidth) + " was expected");
+        if (dims.lanesPerBatch != layout.NumBlocks())
+            throw PBException("PacketLayout had " + std::to_string(layout.NumBlocks()) +
+                              " num blocks, but " + std::to_string(dims.lanesPerBatch) + " was expected");
+
+        return dims;
+    }
 public:
+    BatchData(DataSource::SensorPacket packet,
+              const BatchDimensions& dims,
+              Cuda::Memory::SyncDirection syncDirection,
+              const Cuda::Memory::AllocationMarker& marker)
+        : dims_(ValidateDims(dims, packet.Layout()))
+        , availableFrames_(dims.framesPerBatch)
+        , data_(std::move(packet).RelinquishAllocation(), dims.laneWidth * dims.framesPerBatch * dims.lanesPerBatch,
+                syncDirection, marker)
+    {}
+
     BatchData(const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,
               const Cuda::Memory::AllocationMarker& marker)
@@ -386,7 +421,12 @@ public:
     }
 
     void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
-    void CopyToDevice() { data_.CopyToDevice(); }
+    // Note: For this class (and UnifiedCudaArray) `const` implies that the contents of the data stays the same,
+    //       but not necessarily the location.  `mutable` has been applied in a few select places such that
+    //       we can copy data to (or from) the GPU even for a const object (On the gpu you'll only be able to
+    //       get a const view of the data, but we still have to technically modify things in order to get
+    //       the payload up there in the first place).
+    void CopyToDevice() const { data_.CopyToDevice(); }
 
     BlockView<T> GetBlockView(size_t laneIdx)
     {

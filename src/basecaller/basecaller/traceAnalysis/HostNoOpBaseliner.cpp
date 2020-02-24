@@ -22,7 +22,7 @@ void HostNoOpBaseliner::Finalize()
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-HostNoOpBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
+HostNoOpBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
 
@@ -34,7 +34,7 @@ HostNoOpBaseliner::Process(Data::TraceBatch<ElementTypeIn> rawTrace)
         auto statsView = out.second.baselinerStats.GetHostView();
         for (size_t frame = 0; frame < traceData.NumFrames(); ++frame)
         {
-            ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
+            const ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
             ElementTypeOut* dest = cameraTraceData.Data() + (frame * cameraTraceData.LaneWidth());
             std::memcpy(dest, src, sizeof(ElementTypeIn) * traceData.LaneWidth());
             LaneArray data(dest, dest + cameraTraceData.LaneWidth());

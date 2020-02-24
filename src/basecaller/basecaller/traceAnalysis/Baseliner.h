@@ -50,7 +50,7 @@ public:
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
               Data::BaselinerMetrics>
-    operator()(Data::TraceBatch<ElementTypeIn> rawTrace)
+    operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
         return Process(std::move(rawTrace));
@@ -61,7 +61,7 @@ public:
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    Process(Data::TraceBatch<ElementTypeIn> rawTrace) = 0;
+    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;

@@ -120,7 +120,7 @@ void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelCo
 }
 
 
-BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& tbatch)
 {
     auto ret = [&]() {
         if(staticAnalysis_)
@@ -135,7 +135,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(TraceBatch<int16_t> tbatch)
     return ret;
 }
 
-BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(const TraceBatch<int16_t>& tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -183,7 +183,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(TraceBatch<int16_t>
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
-BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(TraceBatch<int16_t> tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(const TraceBatch<int16_t>& tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");

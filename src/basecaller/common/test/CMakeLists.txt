@@ -6,6 +6,7 @@ include(pacbio-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonTest OBJECT
     TestLaneArray.cpp
+    TestGraphAPI.cpp
 )
 
 target_link_libraries(libMongoCommonTest

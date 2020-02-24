@@ -24,7 +24,7 @@ void HostMultiScaleBaseliner::Finalize()
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
-HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
+HostMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
 
@@ -55,7 +55,7 @@ HostMultiScaleBaseliner::Process(Data::TraceBatch <ElementTypeIn> rawTrace)
 }
 
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
-HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
+HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
                                                                Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                Data::BlockView<ElementTypeIn> upperBuffer,
                                                                Data::BlockView<ElementTypeOut> baselineSubtractedData)

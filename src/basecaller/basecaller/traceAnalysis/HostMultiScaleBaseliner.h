@@ -48,7 +48,7 @@ public:
 private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    Process(Data::TraceBatch<ElementTypeIn> rawTrace) override;
+    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 
 private:
 
@@ -76,7 +76,7 @@ private:
 
         float Scale() const { return scaler_; }
 
-        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<ElementTypeIn>& traceData,
+        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                         Data::BlockView<ElementTypeIn> upperBuffer,
                                                                         Data::BlockView<ElementTypeOut> baselineSubtractedData);

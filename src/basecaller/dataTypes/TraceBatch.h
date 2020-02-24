@@ -29,6 +29,8 @@
 
 #include <cstdint>
 
+#include <pacbio/datasource/SensorPacket.h>
+
 #include "BatchData.h"
 #include "BatchMetadata.h"
 
@@ -42,6 +44,15 @@ template <typename T>
 class TraceBatch : public BatchData<T>
 {
 public:
+    TraceBatch(DataSource::SensorPacket packet,
+               const BatchMetadata& meta,
+               const BatchDimensions& dims,
+               Cuda::Memory::SyncDirection syncDirection,
+               const Cuda::Memory::AllocationMarker& marker)
+        : BatchData<T>(std::move(packet), dims, syncDirection, marker)
+        , meta_(meta)
+    {}
+
     TraceBatch(const BatchMetadata& meta,
                const BatchDimensions& dims,
                Cuda::Memory::SyncDirection syncDirection,

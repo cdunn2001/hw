@@ -128,7 +128,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
             // inadvertently insert an element in a multithreaded context.
             auto& analyzer = bAnalyzer_.at(input[i].GetMeta().PoolId());
             output[i] = std::make_unique<BatchAnalyzer::OutputType>(
-                analyzer(std::move(input[i])));
+                analyzer(input[i]));
     });
 
     // All this graph buisiness is to try and limit concurrency at this top level loop,
@@ -172,8 +172,8 @@ TraceAnalyzerTbb::~TraceAnalyzerTbb()
             "that are already utilizing the gpu\n";
     }
     BatchAnalyzer::ReportPerformance();
-    PBLOG_INFO << "Peak GPU memory usage: " << Cuda::Memory::SmartDeviceAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
-    PBLOG_INFO << "Peak (Managed) Host memory usage: " << Cuda::Memory::SmartHostAllocation::PeekAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+    PBLOG_INFO << "Peak GPU memory usage: " << Cuda::Memory::SmartDeviceAllocation::PeakAllocatedBytes() / static_cast<float>(1<<20) << " MB";
+    PBLOG_INFO << "Peak (Managed) Host memory usage: " << PacBio::Memory::SmartAllocation::PeakAllocatedBytes() / static_cast<float>(1<<20) << " MB";
 
     BatchAnalyzer::Finalize();
 }
