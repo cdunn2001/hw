@@ -4,7 +4,7 @@
 #include <applications/BazWriter.h>
 #include <applications/CudaAllocator.h>
 #include <applications/Repacker.h>
-#include <applications/TraceDataSource.h>
+#include <applications/TraceFileDataSource.h>
 #include <applications/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
@@ -223,7 +223,7 @@ private:
         DataSourceBase::Configuration config(layout, std::make_unique<CudaAllocator>());
 
         return std::make_unique<DataSourceRunner>(
-            std::make_unique<TraceDataSource>(std::move(config),
+            std::make_unique<TraceFileDataSource>(std::move(config),
                 inputTargetFile_,
                 frames_,
                 numZmw,

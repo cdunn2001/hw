@@ -23,7 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <applications/TraceDataSource.h>
+#include <applications/TraceFileDataSource.h>
 
 #include <numeric>
 
@@ -47,7 +47,7 @@ namespace Application {
 
 // std::unique_ptr<Cuda::Data::TraceFileReader> traceFileReader_;
 // DataSource::SensorPacketsChunk currChunk_;
-TraceDataSource::TraceDataSource(
+TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
         std::string file,
         uint32_t frames,
@@ -99,7 +99,7 @@ TraceDataSource::TraceDataSource(
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
 }
 
-void TraceDataSource::ContinueProcessing()
+void TraceFileDataSource::ContinueProcessing()
 {
     uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % traceFileReader_->NumZmwLanes();
     uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
@@ -133,7 +133,7 @@ void TraceDataSource::ContinueProcessing()
         this->SetDone();
 }
 
-std::vector<uint32_t> TraceDataSource::PoolIds() const
+std::vector<uint32_t> TraceFileDataSource::PoolIds() const
 {
     // TODO needs to change to support sparse data
     std::vector<uint32_t> poolIds(NumBatches());
@@ -141,19 +141,19 @@ std::vector<uint32_t> TraceDataSource::PoolIds() const
     return poolIds;
 }
 
-std::vector<uint32_t> TraceDataSource::UnitCellIds() const
+std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
 {
     std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * BlockWidth());
     std::iota(unitCellNumbers.begin(), unitCellNumbers.end(), 0);
     return unitCellNumbers;
 }
 
-std::vector<uint32_t> TraceDataSource::UnitCellFeatures() const
+std::vector<uint32_t> TraceFileDataSource::UnitCellFeatures() const
 {
     return std::vector<uint32_t>(numZmwLanes_ * BlockWidth(), 0);
 }
 
-void TraceDataSource::PreloadInputQueue(size_t chunks)
+void TraceFileDataSource::PreloadInputQueue(size_t chunks)
 {
     size_t numPreload = std::min(chunks, NumChunks());
 

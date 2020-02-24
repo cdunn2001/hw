@@ -38,14 +38,6 @@
 namespace PacBio {
 namespace Application {
 
-// DataSource implementation that uses a trace file for input.  Currently
-// mostly a work-in-progress, while the new mongo analyzer gets up and
-// running.
-// Has two modes of execution.  You either specify the number of zmw and number
-// of frames, and data is replicated to fill the request, or you specify nothing
-// and the trace file is juse used as it.  Note: the second mode is not fully
-// functional yet, and requires handling of sparse batch/lane ids to do true
-// trace file re-analysis.
 class TraceFileDataSource : public DataSource::DataSourceBase
 {
 public:

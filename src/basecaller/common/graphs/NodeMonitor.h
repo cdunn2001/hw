@@ -60,7 +60,7 @@ struct NodeMonitor
             return *this;
         }
 
-        int count = 0;             // Invcation count
+        int count = 0;             // Invocation count
         double idleTime = 0;       // Time spent idle
         double partTime = 0;       // Time spent doing work, but at less than full occupancy
         double fullTime = 0;       // Time spent at full occupancy

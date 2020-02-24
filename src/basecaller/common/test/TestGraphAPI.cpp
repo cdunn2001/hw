@@ -125,13 +125,13 @@ struct RAIITransform : public TransformBody<int, int>
 int RAIITransform::destructCount = 0;
 int RAIITransform::createCount = 0;
 
-struct RAIIMultiTransform : public TransformBody<int, int>
+struct RAIIMultiTransform : public MultiTransformBody<int, int>
 {
     RAIIMultiTransform() { createCount++; }
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1.0; }
 
-    int Process(int val) override { return val; }
+    void Process(int val) override { this->PushOut(val); }
 
     ~RAIIMultiTransform() { destructCount++; }
 
@@ -234,7 +234,11 @@ TEST(GraphAPI, MoveOnlyTypes)
     {
         MoveOnly() = default;
         MoveOnly(const MoveOnly&) = delete;
-        MoveOnly(MoveOnly&& other) { other.valid_ = false; }
+        MoveOnly(MoveOnly&& other)
+        {
+            valid_ = other.valid_;
+            other.valid_ = false;
+        }
         MoveOnly& operator=(const MoveOnly&) = delete;
         MoveOnly& operator=(MoveOnly&& other)
         {
@@ -253,7 +257,7 @@ TEST(GraphAPI, MoveOnlyTypes)
     // First double check the MoveOnly class' validity checks work
     {
         MoveOnly m1;
-        EXPECT_TRUE(m1);
+        ASSERT_TRUE(m1);
 
         MoveOnly m2(std::move(m1));
         EXPECT_FALSE(m1);

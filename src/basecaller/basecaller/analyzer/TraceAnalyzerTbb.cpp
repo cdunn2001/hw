@@ -128,7 +128,7 @@ TraceAnalyzerTbb::Analyze(vector<Data::TraceBatch<int16_t>> input)
             // inadvertently insert an element in a multithreaded context.
             auto& analyzer = bAnalyzer_.at(input[i].GetMeta().PoolId());
             output[i] = std::make_unique<BatchAnalyzer::OutputType>(
-                analyzer(std::move(input[i])));
+                analyzer(input[i]));
     });
 
     // All this graph buisiness is to try and limit concurrency at this top level loop,

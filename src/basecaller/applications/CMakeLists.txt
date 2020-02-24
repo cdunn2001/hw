@@ -12,8 +12,8 @@ add_library(libSmrtBasecaller STATIC
     Repacker.cpp
     TraceSaver.h
     TraceSaver.cpp
-    TraceDataSource.h
-    TraceDataSource.cpp
+    TraceFileDataSource.h
+    TraceFileDataSource.cpp
 )
 
 target_include_directories(libSmrtBasecaller

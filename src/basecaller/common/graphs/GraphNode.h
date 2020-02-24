@@ -35,11 +35,11 @@
 //                           downstream nodes.
 //
 //  Graph Nodes cannot be directly constructed.  You must either have a handle to
-//  a graph and ask it to create a node for you (in which case this is now a purely)
+//  a graph and ask it to create a node for you (in which case this is now a purely
 //  input node, it will have no parents), or you have a handle to an existing node
 //  and create a new node that will be it's child.  In general you just have to call
-//  the AddNode() function of a graph/node and supply it with a suitable IBody child
-//  class.  When that is done the graph will be updated with the new node and necessary
+//  the AddNode() function of a graph/node and supply it with a suitable IGraphNodeBody
+//  class class.  When that is done the graph will be updated with the new node and necessary
 //  edges, and a non-owning graph node pointer will be returned so you can potentially
 //  add even more children
 //
@@ -88,7 +88,7 @@ struct WrappedVal
 }
 
 
-// Base class of all nodes.  Note useful for much other than a generic handle
+// Base class of all nodes.  Not useful for much other than a generic handle
 // and doing performance reporting
 template <typename PerfEnum>
 class INode
@@ -135,13 +135,14 @@ public:
     // Adds a new child node to this node using body as an implementation.
     // Returns another graph node pointer (with input/output types matching body)
     // that can be used to add yet more children nodes (unless body is a leaf)
-    // T is going to be a type of "graph node body" (note the static_assert below ensuring that).
+    // T is going to be a type of "graph node body" (guaranteed by a static assert in
+    // GraphManager::AddNode)
     // In particular T will be a child of:
     // * TransformBody<In, Out>
     // * MultiTransformBody<In, Out>
     // * LeafBody<In>
     //
-    // The return type will be a pointer pointer to an actual GraphNode.
+    // The return type will be a pointer to an actual GraphNode.
     // That GraphNode will be the node that now owns the T handed in here and now
     // The type of the GraphNode will correspond to the type of the "body" handed in
     // (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>

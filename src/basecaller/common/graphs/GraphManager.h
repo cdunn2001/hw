@@ -81,7 +81,7 @@ decltype(auto) GetPort0(tbb::flow::multifunction_node<T1, T2>& node)
 } // detail
 
 // This class manages a collection of nodes that form a graph.  Calling AddNode()
-// with an IBody child will create a new graph node with no parents (i.e. a graph input)
+// with an IGraphNodeBody child will create a new graph node with no parents (i.e. a graph input)
 // The function will return a pointer to a graph node, upon which subsequent calls to
 // AddNode() can be made, forming a dependance chain.
 //
@@ -127,7 +127,7 @@ public:
     // * MultiTransformBody<In, Out>
     // * LeafBody<In>
     //
-    // The return type will be a pointer pointer to an actual GraphNode.
+    // The return type will be a pointer to an actual GraphNode.
     // That GraphNode will be the node that now owns the T handed in here and now
     // The type of the GraphNode will correspond to the type of the "body" handed in
     // (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>
@@ -143,7 +143,7 @@ public:
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {
         static_assert(std::is_base_of<IGraphNodeBody, T>::value,
-                      "Cannot generate a graph node from this type.  Must be an IBody child");
+                      "Cannot generate a graph node from this type.  Must be an IGraphNodeBody child");
 
         T* dummy = nullptr;  //used for type deduction
         // Unique pointer to a type of graph node
