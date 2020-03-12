@@ -17,11 +17,11 @@ build_basecaller(){
   ./cmake_setup.sh
   cd build/x86_64/Release_gcc
   make -j
-  ldd mongo/applications/mongo-basecaller
+  ldd mongo/applications/smrt-basecaller
   cd -
   cd build/x86_64/Release
   make -j
-  ldd mongo/applications/mongo-basecaller
+  ldd mongo/applications/smrt-basecaller
   )
 }
 
