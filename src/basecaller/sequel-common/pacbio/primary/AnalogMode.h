@@ -35,120 +35,100 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <numeric>
 #include <ostream>
 #include <vector>
 #include <algorithm>
 #include <cstdint>
 
+#include <pacbio/configuration/PBConfig.h>
+#include <pacbio/configuration/Validation.h>
 #include <pacbio/PBException.h>
-#include <pacbio/process/ConfigurationBase.h>
 
 namespace PacBio {
 namespace Primary {
 
-// internal JSON structure (deprecated)
-class AnalogConfig : public PacBio::Process::ConfigurationObject
-{
-    CONF_OBJ_SUPPORT_COPY(AnalogConfig)
-public:
-    // Defaults will be handled by the ctor of AnalogSetConfig
-    ADD_PARAMETER(float, red, 0.0f);
-    ADD_PARAMETER(float, green, 0.0f);
-    ADD_PARAMETER(float, relAmp, 0.0f);
-    ADD_PARAMETER(float, excessNoise, 0.0f);
-    ADD_PARAMETER(float, meanIpdSec, 0.0f);
-    ADD_PARAMETER(float, meanPulseWidthSec, 0.0f);
-    ADD_PARAMETER(float, pw2SlowStepRatio, 0.0f);
-    ADD_PARAMETER(float, ipd2SlowStepRatio, 0.0f);
-};
-
-
 //external JSON structure
 // This is overconstrained.  Either `spectralAngle` or `spectrumValues[]` can be specified but not both.
-// The code will automatically convert one format to the other format.  For future convenience, it is suggested
+// In either case the raw input will be inaccessible, and one should access the public normalizedSpectrumValues
+// that defaults to the normalized version of either input.
+//
+// For future convenience, it is suggested
 // that spectralAngle be deprecated, because it only is useful in one scheme (2C2A) while spectrumValues is
 // more general purpose.
-class AnalogConfigEx : public PacBio::Process::ConfigurationObject
+class AnalogConfigEx : public Configuration::PBConfig<AnalogConfigEx>
 {
-    ADD_PARAMETER(std::string, base, "X"); // or baseMap
-    //ADD_PARAMETER(float, spectralAngle, 0.0f); - these have been removed for special processing
-    //ADD_ARRAY(float, spectrumValues); - this too
-    ADD_PARAMETER(float, wavelength, 0.0f);
-    ADD_PARAMETER(float, relativeAmplitude, 1.0f);
-    ADD_PARAMETER(float, intraPulseXsnCV, 0.0f);
-    ADD_PARAMETER(float, ipdMeanSeconds, 0.0f);
-    ADD_PARAMETER(float, pulseWidthMeanSeconds, 0.0f);
-    ADD_PARAMETER(float, pw2SlowStepRatio, 0.0f);
-    ADD_PARAMETER(float, ipd2SlowStepRatio, 0.0f);
-public:
-    double spectralAngle() const {  return spectralAngle_;  }
-    const std::vector<double>& spectrumValues() const { return spectrumValues_; }
+    PB_CONFIG(AnalogConfigEx);
+
+    PB_CONFIG_PARAM(std::string, base, "X"); // or baseMap
 private:
-    double spectralAngle_;
-    std::vector<double> spectrumValues_;
+    PB_CONFIG_PARAM(float, spectralAngle, -1.0f);  // Negative values reserved to mean "unset"
+    PB_CONFIG_PARAM(std::vector<float>, spectrumValues, std::vector<float>{});
 public:
-    void Normalize()
-    {
-        double green = 0;
-        double red = 0;
-        int numChannels = 0;
-        if (Json().isMember("spectralAngle"))
-        {
-            spectralAngle_ = Json()["spectralAngle"].asDouble();
-            green = cos(spectralAngle_);
-            red = sin(spectralAngle_);
-            numChannels = 2;
-            spectrumValues_.resize(numChannels);
-            spectrumValues_[0] = green;
-            spectrumValues_[1] = red;
-        }
-        else if (Json().isMember("spectrumValues") && Json()["spectrumValues"].size() == 2)
-        {
-            numChannels = 2;
-            spectrumValues_.resize(numChannels);
-            spectrumValues_[0] = Json()["spectrumValues"][0].asDouble();
-            spectrumValues_[1] = Json()["spectrumValues"][1].asDouble();
-            green = spectrumValues_[0];
-            red = spectrumValues_[1];
-            spectralAngle_ = atan2(red, green);
-        }
-        else if (Json().isMember("spectrumValues") &&  Json()["spectrumValues"].size() == 1)
-        {
-            numChannels = 1;
-            spectrumValues_.resize(numChannels);
-            spectrumValues_[0] = Json()["spectrumValues"][0].asDouble();
-            green = spectrumValues_[0];
-            red = green;
-            spectralAngle_ = 0;
-        }
-        else
-        {
-            throw PBException("spectralAngle and spectrumValues[2] not given");
-        }
+    PB_CONFIG_PARAM(float, wavelength, 0.0f);
+    PB_CONFIG_PARAM(float, relativeAmplitude, 1.0f);
+    PB_CONFIG_PARAM(float, intraPulseXsnCV, 0.0f);
+    PB_CONFIG_PARAM(float, ipdMeanSeconds, 0.0f);
+    PB_CONFIG_PARAM(float, pulseWidthMeanSeconds, 0.0f);
+    PB_CONFIG_PARAM(float, pw2SlowStepRatio, 0.0f);
+    PB_CONFIG_PARAM(float, ipd2SlowStepRatio, 0.0f);
 
-        if (numChannels == 2)
+    PB_CONFIG_PARAM(std::vector<float>, normalizedSpectrumValues,
+                    Configuration::DefaultFunc([](float sa, const std::vector<float>& sv) { return Normalize(sa, sv); },
+                                               {"spectralAngle","spectrumValues"}));
+
+private:
+    static std::vector<float> Normalize(float spectralAngle, const std::vector<float>& spectrumValues)
+    {
+        static constexpr size_t green = 0;
+        static constexpr size_t red = 1;
+        std::vector<float> normalSpectrum;
+        const size_t sum = std::accumulate(spectrumValues.begin(), spectrumValues.end(), 0.0f);
+        if (spectralAngle >= 0)
         {
-            double sum = green + red;
+            normalSpectrum.resize(2);
+            normalSpectrum[green] = cos(spectralAngle);
+            normalSpectrum[red] = sin(spectralAngle);
+        }
+        else if (spectrumValues.size() == 2)
+        {
+            normalSpectrum = spectrumValues;
             assert(sum != 0);
-            green /= sum;
-            red /= sum;
-
-            spectrumValues_[0] = green;
-            spectrumValues_[1] = red;
-            Json()["spectrumValues"][0] = spectrumValues_[0];
-            Json()["spectrumValues"][1] = spectrumValues_[1];
+            normalSpectrum[0] /= sum;
+            normalSpectrum[2] /= sum;
         }
-        else if (numChannels == 1)
+        else if (spectrumValues.size() == 1)
         {
-            spectrumValues_[0] = 1.0;
-            Json()["spectrumValues"][0] = spectrumValues_[0];
+            normalSpectrum.resize(1);
+            normalSpectrum[0] = 1.0f;
         }
-    }
-    void PostImport() override
-    {
-      Normalize();
+        return normalSpectrum;
     }
 };
+
+}}
+
+namespace PacBio {
+namespace Configuration {
+
+template <typename T>
+void ValidateConfig(const Primary::AnalogConfigEx& conf, ValidationResults* results)
+{
+    if(conf.spectralAngle < 0 && conf.spectrumValues.size() == 0)
+        results->AddError("Neither of spectralAngle nor spectumValues are specified");
+    if(conf.normalizedSpectrumValues.size() == 0 || conf.normalizedSpectrumValues.size() > 2)
+        results->AddError("Incorrect number of spectrum values");
+    const auto sum = std::accumulate(conf.normalizedSpectrumValues.begin(),
+                                     conf.normalizedSpectrumValues.end(),
+                                     0.0f);
+    if (std::abs(1.0f - sum) > 1e-2f)
+        results->AddError("normalizedSpectrum Values is not normalized");
+}
+
+}}
+
+namespace PacBio {
+namespace Primary {
 
 /// Input or calibration properties describing an analog detection mode.
 /// Spectral data uses the conventional green --> red filter order, 
@@ -183,17 +163,17 @@ public: // Structors
 
     AnalogMode(const AnalogConfigEx& config)
             :
-            numFilters(config.spectrumValues().size())
-            , baseLabel(config.base()[0])
-            , relAmplitude(config.relativeAmplitude())
-            , excessNoiseCV(config.intraPulseXsnCV())
-            , interPulseDistance(config.ipdMeanSeconds())
-            , pulseWidth(config.pulseWidthMeanSeconds())
-            , pw2SlowStepRatio(config.pw2SlowStepRatio())
-            , ipd2SlowStepRatio(config.ipd2SlowStepRatio())
+            numFilters(config.normalizedSpectrumValues.size())
+            , baseLabel(config.base[0])
+            , relAmplitude(config.relativeAmplitude)
+            , excessNoiseCV(config.intraPulseXsnCV)
+            , interPulseDistance(config.ipdMeanSeconds)
+            , pulseWidth(config.pulseWidthMeanSeconds)
+            , pw2SlowStepRatio(config.pw2SlowStepRatio)
+            , ipd2SlowStepRatio(config.ipd2SlowStepRatio)
     {
         dyeSpectrum.clear();
-        for(auto x : config.spectrumValues())
+        for(auto x : config.normalizedSpectrumValues)
         {
             dyeSpectrum.push_back(x);
         }
@@ -302,9 +282,14 @@ inline AnalogSet ParseAnalogSet(const Json::Value& json)
     AnalogSet analogs;
     for (auto j : json)
     {
-        AnalogConfigEx conf;
-        conf.Load(j);
-        analogs.push_back(AnalogMode(conf));
+        AnalogConfigEx conf(j);
+        auto validation = conf.Validate();
+        if (validation.ErrorCount() > 0)
+        {
+            validation.PrintErrors();
+            throw PBException("Error validating analog json");
+        }
+        analogs.push_back(conf);
     }
     return analogs;
 }

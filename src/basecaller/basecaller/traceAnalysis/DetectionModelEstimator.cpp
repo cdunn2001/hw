@@ -34,7 +34,7 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
         analogs_[i] = movConfig.analogs[i];
     }
 
-    if (dmeConfig.Method() == Data::BasecallerDmeConfig::MethodName::Fixed &&
+    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed &&
         dmeConfig.SimModel.useSimulatedBaselineParams == true)
     {
         fixedBaselineParams_ = true;
