@@ -289,7 +289,7 @@ private:
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
                     + std::to_string(chunk.StartFrame()) + ","
-                    + std::to_string(chunk.EndFrame()) + ")";
+                    + std::to_string(chunk.StopFrame()) + ")";
                 for (auto& batch : chunk)
                     repacker->ProcessInput(std::move(batch));
                 const auto& reports = graph.FlushAndReport(chunkDurationMS);

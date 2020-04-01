@@ -43,7 +43,7 @@ class TraceFileDataSource : public DataSource::DataSourceBase
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
     TraceFileDataSource(DataSourceBase::Configuration config,
-                    std::string file)
+                        std::string file)
         : TraceFileDataSource(std::move(config), file, 0, 0, false, 0, 0)
     {}
 
@@ -83,6 +83,15 @@ public:
     // Or is it a maximum?  We can't really satisfy many guarantees
     double FrameRate() const override { return 0.0; }
 
+    DataSource::HardwareInformation GetHardwareInformation() override
+    {
+        DataSource::HardwareInformation ret;
+        ret.SetShortName("Tracefile DataSouce");
+        ret.SetSummary("Tracefile DataSource using " + filename_ + " as input");
+
+        return ret;
+    }
+
 private:
 
     // throw a bunch of data into the queues during construction rather than after
@@ -96,6 +105,8 @@ private:
     size_t chunkIndex_;
     size_t batchIndex_;
     size_t maxQueueSize_;
+
+    std::string filename_;
 
     std::unique_ptr<Cuda::Data::TraceFileReader> traceFileReader_;
     DataSource::SensorPacketsChunk currChunk_;
