@@ -74,30 +74,29 @@ public:
     PB_CONFIG_PARAM(float, ipd2SlowStepRatio, 0.0f);
 
     PB_CONFIG_PARAM(std::vector<float>, normalizedSpectrumValues,
-                    Configuration::DefaultFunc([](float sa, const std::vector<float>& sv) { return Normalize(sa, sv); },
-                                               {"spectralAngle","spectrumValues"}));
+                    Configuration::DefaultFunc(Normalize, {"spectralAngle","spectrumValues"}));
 
 private:
-    static std::vector<float> Normalize(float spectralAngle, const std::vector<float>& spectrumValues)
+    static std::vector<float> Normalize(float specAngle, const std::vector<float>& specValues)
     {
         static constexpr size_t green = 0;
         static constexpr size_t red = 1;
         std::vector<float> normalSpectrum;
-        const size_t sum = std::accumulate(spectrumValues.begin(), spectrumValues.end(), 0.0f);
-        if (spectralAngle >= 0)
+        const size_t sum = std::accumulate(specValues.begin(), specValues.end(), 0.0f);
+        if (specAngle >= 0)
         {
             normalSpectrum.resize(2);
-            normalSpectrum[green] = cos(spectralAngle);
-            normalSpectrum[red] = sin(spectralAngle);
+            normalSpectrum[green] = cos(specAngle);
+            normalSpectrum[red] = sin(specAngle);
         }
-        else if (spectrumValues.size() == 2)
+        else if (specValues.size() == 2)
         {
-            normalSpectrum = spectrumValues;
+            normalSpectrum = specValues;
             assert(sum != 0);
             normalSpectrum[0] /= sum;
             normalSpectrum[2] /= sum;
         }
-        else if (spectrumValues.size() == 1)
+        else if (specValues.size() == 1)
         {
             normalSpectrum.resize(1);
             normalSpectrum[0] = 1.0f;
