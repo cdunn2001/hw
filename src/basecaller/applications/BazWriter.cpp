@@ -125,7 +125,7 @@ BazWriterBody::BazWriterBody(
                          Readout::BASES,
                          MetricsVerbosity::MINIMAL,
                          "",
-                         basecallerConfig.RenderJSON(),
+                         basecallerConfig.Serialize().toStyledString(),
                          zmwNumbers,
                          zmwFeatures,
                          PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,

@@ -26,71 +26,72 @@
 // Description:
 /// \brief declaration of the object used to configure the Real Time Metrics
 
+// TODO remove this file?
 
 #ifndef SEQUEL_RTMETRICSCONFIG_H
 #define SEQUEL_RTMETRICSCONFIG_H
 
-#include <pacbio/process/ConfigurationBase.h>
+#include <pacbio/configuration/PBConfig.h>
 #include <pacbio/primary/SequelDefinitions.h>
-#include <pacbio/primary/PrimaryConfig.h>
 
 namespace PacBio {
-
 namespace Primary {
 
-class RTMetricsRegion : public PacBio::Process::ConfigurationObject
+class RTMetricsRegion : public Configuration::PBConfig<RTMetricsRegion>
 {
-    CONF_OBJ_SUPPORT_COPY(RTMetricsRegion);
-public:
-    ADD_PARAMETER(std::string, name, "");
-    ADD_PARAMETER(uint32_t, xMin, 0);
-    ADD_PARAMETER(uint32_t, yMin, 0);
-    ADD_PARAMETER(uint32_t, xExtent, 0);
-    ADD_PARAMETER(uint32_t, yExtent, 0);
+    PB_CONFIG(RTMetricsRegion);
+
+    PB_CONFIG_PARAM(std::string, name, "");
+    PB_CONFIG_PARAM(uint32_t, xMin, 0);
+    PB_CONFIG_PARAM(uint32_t, yMin, 0);
+    PB_CONFIG_PARAM(uint32_t, xExtent, 0);
+    PB_CONFIG_PARAM(uint32_t, yExtent, 0);
 };
 
-class RTMetricsRegionNew : public PacBio::Process::ConfigurationObject
+class RTMetricsRegionNew : public Configuration::PBConfig<RTMetricsRegionNew>
 {
-    CONF_OBJ_SUPPORT_COPY(RTMetricsRegionNew);
-public:
+    PB_CONFIG(RTMetricsRegionNew)
+
     SMART_ENUM(zmwType, SEQUENCING, PORSEQUENCING,
                LASERSCATTER, LPTITRATION2P0X, LPTITRATION1P5X, LPTITRATION0P5X, LPTITRATION0P0X);
     SMART_ENUM(zmwMetric, Baseline, BaselineStd, Pkmid, Snr,
                PulseRate, PulseWidth, BaseRate, BaseWidth);
-    ADD_ARRAY(zmwType, zmwTypesFilter);
-    ADD_ARRAY(zmwMetric, zmwMetricsReported);
-    ADD_PARAMETER(std::string, name, "");
-    ADD_PARAMETER(uint32_t, xMin, 0);
-    ADD_PARAMETER(uint32_t, yMin, 0);
-    ADD_PARAMETER(uint32_t, xExtent, 0);
-    ADD_PARAMETER(uint32_t, yExtent, 0);
-    ADD_PARAMETER(uint32_t, samplingFactorStride, 1);
-    ADD_PARAMETER(uint32_t, minSampleSize, 1000);
+    PB_CONFIG_PARAM(std::vector<zmwType>, zmwTypesFilter, {});
+    PB_CONFIG_PARAM(std::vector<zmwMetric>, zmwMetricsReported, {});
+    PB_CONFIG_PARAM(std::string, name, "");
+    PB_CONFIG_PARAM(uint32_t, xMin, 0);
+    PB_CONFIG_PARAM(uint32_t, yMin, 0);
+    PB_CONFIG_PARAM(uint32_t, xExtent, 0);
+    PB_CONFIG_PARAM(uint32_t, yExtent, 0);
+    PB_CONFIG_PARAM(uint32_t, samplingFactorStride, 1);
+    PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
 public:
-    void ReportKineticMetrics()
+    static std::vector<zmwMetric> ReportSignalMetrics()
     {
-        zmwMetricsReported.append(zmwMetric::PulseRate);
-        zmwMetricsReported.append(zmwMetric::PulseWidth);
-        zmwMetricsReported.append(zmwMetric::BaseRate);
-        zmwMetricsReported.append(zmwMetric::BaseWidth);
+        return {zmwMetric::Baseline,
+                zmwMetric::BaselineStd,
+                zmwMetric::Pkmid,
+                zmwMetric::Snr};
     }
-    void ReportSignalMetrics()
+    static std::vector<zmwMetric> ReportAllMetrics()
     {
-        zmwMetricsReported.append(zmwMetric::Baseline);
-        zmwMetricsReported.append(zmwMetric::BaselineStd);
-        zmwMetricsReported.append(zmwMetric::Pkmid);
-        zmwMetricsReported.append(zmwMetric::Snr);
-    }
-    void ReportAllMetrics()
-    {
-        ReportKineticMetrics();
-        ReportSignalMetrics();
+        return {zmwMetric::PulseRate,
+                zmwMetric::PulseWidth,
+                zmwMetric::BaseRate,
+                zmwMetric::BaseWidth,
+                zmwMetric::Baseline,
+                zmwMetric::BaselineStd,
+                zmwMetric::Pkmid,
+                zmwMetric::Snr};
     }
 };
 
-class RTMetricsConfig : public PacBio::Process::ConfigurationObject
+class RTMetricsConfig : public Configuration::PBConfig<RTMetricsConfig>
 {
 public:
+
+    PB_CONFIG(RTMetricsConfig);
+
     // The two modes below control the filtering for reporting
     // baseline metrics - baseline and baseline sigma vs.
     // signal metrics - pkmid and snr. signalConfigMode is only
@@ -104,60 +105,46 @@ public:
     //
     SMART_ENUM(BaselineMode, MODE0, MODE1, MODE2);
     SMART_ENUM(SignalMode, MODE0, MODE1, MODE2);
-    ADD_ENUM(BaselineMode, baselineConfigMode, BaselineMode::MODE2);
-    ADD_ENUM(SignalMode, signalConfigMode, SignalMode::MODE2);
+    PB_CONFIG_PARAM(SignalMode, signalConfigMode, SignalMode::MODE2);
+    PB_CONFIG_PARAM(BaselineMode, baselineConfigMode,
+                    Configuration::DefaultFunc([](bool newFmt) { return newFmt ? BaselineMode::MODE1 : BaselineMode::MODE2},
+                                               {"newJsonFormat"}));
 
-
-    ADD_PARAMETER(uint32_t, minBaselineFrames, 100);
-    ADD_PARAMETER(uint32_t, minSampleSize, 1000);
+    PB_CONFIG_PARAM(uint32_t, minBaselineFrames, 100);
+    PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
 
     // These thresholds are used to determine if
     // a ZMW is "sequencing". They are in units
     // of seconds. The upper thresholds are only used
     // when the new format is enabled.
-    ADD_PARAMETER(float, minBaseRate, 0.25f);
-    ADD_PARAMETER(float, maxBaseRate, -1.0f);
-    ADD_PARAMETER(float, minBaseWidth, 0.0625f);
-    ADD_PARAMETER(float, maxBaseWidth, -1.0f);
+    PB_CONFIG_PARAM(float, minBaseRate, 0.25f);
+    PB_CONFIG_PARAM(float, maxBaseRate, -1.0f);
+    PB_CONFIG_PARAM(float, minBaseWidth, 0.0625f);
+    PB_CONFIG_PARAM(float, maxBaseWidth, -1.0f);
 
     // DME confidence score threshold
-    ADD_PARAMETER(float, minConfidenceScore, 0.0f);
+    PB_CONFIG_PARAM(float, minConfidenceScore, 0.0f);
 
     // Sampling factor stride used for all regions when
     // the old format is enabled. The new format allows for
     // a sampling factor to be set per region.
-    ADD_PARAMETER(uint32_t, samplingFactorStride, 1);
-    ADD_PARAMETER(uint32_t, numMetricsSuperChunks, 3);
+    PB_CONFIG_PARAM(uint32_t, samplingFactorStride, 1);
+    PB_CONFIG_PARAM(uint32_t, numMetricsSuperChunks, 3);
 
     // Flag for specifying the new format, this
     // also enables other settings.
-    ADD_PARAMETER(bool, newJsonFormat, true);
-    ADD_PARAMETER(uint32_t, maxQueueSize, 5);
+    PB_CONFIG_PARAM(bool, newJsonFormat, true);
+    PB_CONFIG_PARAM(uint32_t, maxQueueSize, 5);
 
-    ADD_PARAMETER(bool, useRealtimeActivityLabels, false);
+    PB_CONFIG_PARAM(bool, useRealtimeActivityLabels, false);
 
     // We keep both the old and new way of specifying regions.
     // When we have completely transitioned over, we
     // can remove the old way of specifying regions.
     //
     // TODO: Remove "regions" when new format becomes the default.
-    ADD_ARRAY(RTMetricsRegion, regions);
-    ADD_ARRAY(RTMetricsRegionNew, newRegions);
-
-    // This macro doesn't currently support an explicitly defined constructor
-    // We'll need to manually define what it would supply.
-    //CONF_OBJ_SUPPORT_COPY(RTMetricsConfig);
-    RTMetricsConfig(const RTMetricsConfig& a ) {  Copy(a); PostImportAll(); } \
-    RTMetricsConfig& operator=(const RTMetricsConfig& a) { Copy(a); PostImportAll(); MarkChanged(); return *this; }
-
-    RTMetricsConfig()
-    {
-        if (newJsonFormat)
-        {
-            // Remove DME success check for reporting baselines.
-            baselineConfigMode = BaselineMode::MODE1;
-        }
-    }
+    PB_CONFIG_PARAM(std::vector<RTMetricsRegion>, regions, {});
+    PB_CONFIG_PARAM(std::vector<RTMetricsRegionNew>, newRegions, {});
 
     void SetSequelChipRegionDefaults()
     {

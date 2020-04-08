@@ -29,17 +29,19 @@
 #include <common/MongoConstants.h>
 #include "MovieConfig.h"
 
-#include <pacbio/process/ConfigurationBase.h>
+#include <pacbio/configuration/PBConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class StaticDetModelConfig : public PacBio::Process::ConfigurationObject
+class StaticDetModelConfig : public Configuration::PBConfig<StaticDetModelConfig>
 {
 public:
-    ADD_PARAMETER(float, baselineMean, 0.0f);
-    ADD_PARAMETER(float, baselineVariance, 33.0f);
+    PB_CONFIG(StaticDetModelConfig);
+
+    PB_CONFIG_PARAM(float, baselineMean, 0.0f);
+    PB_CONFIG_PARAM(float, baselineVariance, 33.0f);
 
 public:
     struct AnalogMode

@@ -52,9 +52,9 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     {
         // Ensure that PrimaryConfig is sufficient.
         auto& pc = Data::GetPrimaryConfig();
-        ASSERT_EQ(64u, pc.zmwsPerLane());
-        pc.lanesPerPool = std::max(pc.lanesPerPool(), bDims.lanesPerBatch);
-        pc.framesPerChunk = std::max(pc.framesPerChunk(), bDims.framesPerBatch);
+        ASSERT_EQ(64u, pc.zmwsPerLane);
+        pc.lanesPerPool = std::max(pc.lanesPerPool, bDims.lanesPerBatch);
+        pc.framesPerChunk = std::max(pc.framesPerChunk, bDims.framesPerBatch);
     }
 
     const vector<uint32_t> poolIds {2u, 3u, 5u, 8u, 1u};

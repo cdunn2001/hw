@@ -122,7 +122,6 @@ add_library( libSequelCommon1
     ManuallyBufferedFile.cpp
     MemoryBuffer.h
     MemoryBuffer.cpp
-    PrimaryConfig.h
     PulseLookback.h
     RTMetricsConfig.h
     SequelDefinitions.h

@@ -59,6 +59,7 @@ TraceFileDataSource::TraceFileDataSource(
     , chunkIndex_{0}
     , batchIndex_{0}
     , maxQueueSize_(maxQueueSize)
+    , filename_(file)
     , currChunk_(0, GetConfig().layout.NumFrames())
 {
     const auto& config = GetConfig();
@@ -122,7 +123,7 @@ void TraceFileDataSource::ContinueProcessing()
     batchIndex_++;
     if (batchIndex_ == NumBatches())
     {
-        auto chunk = SensorPacketsChunk(currChunk_.EndFrame(), currChunk_.EndFrame() + BlockLen(), NumBatches());
+        auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), NumBatches());
         std::swap(chunk, currChunk_);
         this->PushChunk(std::move(chunk));
         batchIndex_ = 0;
