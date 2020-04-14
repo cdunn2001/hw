@@ -25,6 +25,8 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
+#include <mongo/datasource/WXDataSource.h>
+
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Graphs;
 using namespace PacBio::Mongo;
@@ -35,11 +37,28 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
 
+////////////
+// vvvv This could be cleaned up.
+
+// Need a global to support CtrlC handling
+std::atomic<bool> globalHalt{false};
+
+// this could go into a header file.
+SMART_ENUM(Source_t, UNKNOWN, TRACE_FILE, WX2, OTHER_TBD
+);
+
+struct SourceConfig  : public PacBio::Process::ConfigurationObject
+{
+    ADD_ENUM(Source_t,source, Source_t::TRACE_FILE);
+};
+
+// ^^^^
+///////
+
 class SmrtBasecaller : public ThreadedProcessBase
 {
 public:
-    SmrtBasecaller()
-    {}
+    SmrtBasecaller() {}
 
     ~SmrtBasecaller()
     {
@@ -47,7 +66,8 @@ public:
         Join();
     }
 
-    void HandleProcessArguments(const std::vector<std::string>& args)
+
+    void HandleProcessArguments(const std::vector <std::string> &args)
     {
         if (args.size() > 0)
         {
@@ -55,7 +75,7 @@ public:
         }
     }
 
-    void HandleProcessOptions(const Values& options)
+    void HandleProcessOptions(const Values &options)
     {
         ThreadedProcessBase::HandleProcessOptions(options);
 
@@ -72,13 +92,19 @@ public:
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
-        if (!inputTargetFile_.empty())
+        switch (sourceConfig_.source())
         {
-            PBLOG_INFO << "Input Target: " << inputTargetFile_;
-            MetaDataFromTraceFileSource(inputTargetFile_);
-            GroundTruthFromTraceFileSource(inputTargetFile_);
-        } else {
-            throw PBException("No input file specified");
+            case Source_t::TRACE_FILE:
+                if (!inputTargetFile_.empty())
+                {
+                    PBLOG_INFO << "Input Target: " << inputTargetFile_;
+                    MetaDataFromTraceFileSource(inputTargetFile_);
+                    GroundTruthFromTraceFileSource(inputTargetFile_);
+                }
+                break;
+            default:
+                PBLOG_INFO << "Not using a trace file ";
+                break;
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -89,7 +115,8 @@ public:
         }
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
-        PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) / PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
+        PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) /
+                                                        PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
     }
 
     void Run()
@@ -105,19 +132,19 @@ public:
         DisablePerformanceMode();
     }
 
-    SmrtBasecaller& Config(const BasecallerConfig& basecallerConfig)
+    SmrtBasecaller &Config(const BasecallerConfig &basecallerConfig, const SourceConfig& sourceConfig)
     {
         basecallerConfig_.Load(basecallerConfig);
+        sourceConfig_ .Load(sourceConfig);
         return *this;
     }
 
-    const BasecallerConfig& Config() const
-    { return basecallerConfig_; }
+    const BasecallerConfig &Config() const { return basecallerConfig_; }
 
 private:
-    void MetaDataFromTraceFileSource(const std::string& traceFileName)
+    void MetaDataFromTraceFileSource(const std::string &traceFileName)
     {
-        const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+        const auto &traceFile = SequelTraceFileHDF5(traceFileName);
 
         traceFile.FrameRate >> movieConfig_.frameRate;
         traceFile.AduGain >> movieConfig_.photoelectronSensitivity;
@@ -153,7 +180,7 @@ private:
 
         for (size_t i = 0; i < numAnalogs; i++)
         {
-            auto& analog = movieConfig_.analogs[i];
+            auto &analog = movieConfig_.analogs[i];
             analog.baseLabel = baseMap[i];
             analog.relAmplitude = relativeAmpl[i];
             analog.excessNoiseCV = excessNoiseCV[i];
@@ -164,24 +191,22 @@ private:
         }
     }
 
-    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
+    void GroundTruthFromTraceFileSource(const std::string &traceFileName)
     {
-        auto setBlMeanAndCovar = [](const std::string& traceFileName,
-                                    ConfigurationObject::ConfigurationPod<float>& blMean,
-                                    ConfigurationObject::ConfigurationPod<float>& blCovar,
-                                    const std::string& exceptMsg)
-        {
-            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+        auto setBlMeanAndCovar = [](const std::string &traceFileName,
+                                    ConfigurationObject::ConfigurationPod<float> &blMean,
+                                    ConfigurationObject::ConfigurationPod<float> &blCovar,
+                                    const std::string &exceptMsg) {
+            const auto &traceFile = SequelTraceFileHDF5(traceFileName);
             if (traceFile.simulated)
             {
-                boost::multi_array<float,2> stateMean;
-                boost::multi_array<float,2> stateCovar;
+                boost::multi_array<float, 2> stateMean;
+                boost::multi_array<float, 2> stateCovar;
                 traceFile.StateMean >> stateMean;
                 traceFile.StateCovariance >> stateCovar;
                 blMean = stateMean[0][0];
                 blCovar = stateCovar[0][0];
-            }
-            else
+            } else
             {
                 throw PBException(exceptMsg);
             }
@@ -193,9 +218,8 @@ private:
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
                               "Requested static pipeline analysis but input trace file is not simulated!");
-        }
-        else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
-                 basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+        } else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
+                   basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
         {
             setBlMeanAndCovar(traceFileName,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
@@ -205,13 +229,13 @@ private:
     }
 
     // TODO support wolverine and potentially other sources
-    std::unique_ptr<DataSourceRunner> CreateSource()
+    std::unique_ptr <DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
-        std::array<size_t, 3> layoutDims {
-            PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool,
-            PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-            PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane
+        std::array<size_t, 3> layoutDims{
+                PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool,
+                PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
+                PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane
         };
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
@@ -222,16 +246,27 @@ private:
         const auto frameRate = PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate;
         DataSourceBase::Configuration config(layout, std::make_unique<CudaAllocator>());
 
-        return std::make_unique<DataSourceRunner>(
-            std::make_unique<TraceFileDataSource>(std::move(config),
-                inputTargetFile_,
-                frames_,
-                numZmw,
-                cache_,
-                numChunksPreloadInputQueue_));
+        std::unique_ptr<DataSourceBase> dataSource;
+        switch(sourceConfig_.source())
+        {
+            case Source_t::TRACE_FILE:
+                dataSource = std::make_unique<TraceFileDataSource>(std::move(config),
+                                                              inputTargetFile_,
+                                                              frames_,
+                                                              numZmw,
+                                                              cache_,
+                                                              numChunksPreloadInputQueue_);
+                break;
+            case Source_t::WX2:
+                dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(config) /*, wxconfig tbd*/);
+                break;
+            default:
+                throw PBException("Data source " + sourceConfig_.source().toString() + " not supported");
+        }
+        return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
-    std::unique_ptr<MultiTransformBody<SensorPacket, const TraceBatch<int16_t>>> CreateRepacker() const
+    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>> CreateRepacker() const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool;
@@ -240,24 +275,26 @@ private:
         return std::make_unique<TrivialRepackerBody>(requiredDims);
     }
 
-    std::unique_ptr<LeafBody<const TraceBatch<int16_t>>> CreateTraceSaver() const
+    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver() const
     {
         return std::make_unique<NoopTraceSaverBody>();
     }
 
-    std::unique_ptr<TransformBody<const TraceBatch<int16_t>, BatchResult>> CreateBasecaller(const std::vector<uint32_t>& poolIds) const
+    std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
+    CreateBasecaller(const std::vector <uint32_t> &poolIds) const
     {
         return std::make_unique<BasecallerBody>(poolIds, basecallerConfig_, movieConfig_);
     }
 
-    std::unique_ptr<LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
+    std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner &source)
     {
         if (hasBazFile_)
         {
             return std::make_unique<BazWriterBody>(outputBazFile_, source.NumFrames(),
                                                    source.UnitCellIds(), source.UnitCellFeatures(),
                                                    basecallerConfig_, zmwOutputStrideFactor_);
-        } else {
+        } else
+        {
             return std::make_unique<NoopBazWriterBody>();
 
         }
@@ -270,38 +307,39 @@ private:
 
         auto source = CreateSource();
 
-        GraphManager<GraphProfiler> graph(Config().init.numWorkerThreads);
-        auto * repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
+        GraphManager <GraphProfiler> graph(Config().init.numWorkerThreads);
+        auto *repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
-        auto * analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
+        auto *analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
 
         size_t numChunksAnalyzed = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
 
         const double chunkDurationMS = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk
-                                     / PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate
-                                     * 1e3;
-        while(source->IsActive())
+                                       / PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate
+                                       * 1e3;
+        while (source->IsActive())
         {
             SensorPacketsChunk chunk;
             if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
-                    + std::to_string(chunk.StartFrame()) + ","
-                    + std::to_string(chunk.EndFrame()) + ")";
-                for (auto& batch : chunk)
+                              + std::to_string(chunk.StartFrame()) + ","
+                              + std::to_string(chunk.StopFrame()) + ")";
+                for (auto &batch : chunk)
                     repacker->ProcessInput(std::move(batch));
-                const auto& reports = graph.FlushAndReport(chunkDurationMS);
+                const auto &reports = graph.FlushAndReport(chunkDurationMS);
 
                 std::stringstream ss;
                 ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
 
-                for (auto& report: reports)
+                for (auto &report: reports)
                 {
                     if (!report.realtime)
                     {
-                        PBLOG_WARN << report.stage.toString() << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                        PBLOG_WARN << report.stage.toString()
+                                   << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
                                    << report.dutyCycle * 100 << "%, "
                                    << 1e3 / report.avgDuration << "ms, "
                                    << report.idlePercent << "%, "
@@ -339,6 +377,7 @@ private:
     // Configuration objects
     BasecallerConfig basecallerConfig_;
     MovieConfig movieConfig_;
+    SourceConfig sourceConfig_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
@@ -386,8 +425,10 @@ int main(int argc, char* argv[])
 
         ConfigMux mux;
         BasecallerConfig basecallerConfig;
+        SourceConfig sourceConfig;
         mux.Add("basecaller", basecallerConfig);
         mux.Add("common", PacBio::Mongo::Data::GetPrimaryConfig());
+        mux.Add("source", sourceConfig);
         mux.SetStrict(options.get("strict"));
         mux.ProcessCommandLine(options.all("config"));
 
@@ -405,7 +446,7 @@ int main(int argc, char* argv[])
         auto bc = std::unique_ptr<SmrtBasecaller>(new SmrtBasecaller());
 
         bc->HandleProcessArguments(parser.args());
-        bc->Config(basecallerConfig);
+        bc->Config(basecallerConfig,sourceConfig);
 
         {
             PacBio::Logging::LogStream ls;

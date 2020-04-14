@@ -122,7 +122,7 @@ void TraceFileDataSource::ContinueProcessing()
     batchIndex_++;
     if (batchIndex_ == NumBatches())
     {
-        auto chunk = SensorPacketsChunk(currChunk_.EndFrame(), currChunk_.EndFrame() + BlockLen(), NumBatches());
+        auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), NumBatches());
         std::swap(chunk, currChunk_);
         this->PushChunk(std::move(chunk));
         batchIndex_ = 0;

@@ -36,5 +36,7 @@ add_executable(smrt-basecaller
 target_link_libraries(smrt-basecaller
     PUBLIC
         libSmrtBasecaller
+    PRIVATE
+        libMongoDatasource
 )
 add_subdirectory(test)

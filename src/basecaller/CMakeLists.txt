@@ -54,7 +54,20 @@ include(mongo-config)
 
 create_config_header(mongo-config.h MongoConfig)
 
-add_subdirectory(sequel-common/pacbio/primary sequel-common)
+if (true)
+    list(APPEND CMAKE_MODULE_PATH
+            /home/UNIXHOME/mlakata/git/hw-mongo/bamboo/install/gcc_x86_64/lib/CMakeTargets/
+            )
+    include(pacbio-hdf5)
+    include(MongoDatasource)
+    set_target_properties(HwMongo::libMongoDatasource PROPERTIES IMPORTED_GLOBAL TRUE)
+    add_library(libMongoDatasource ALIAS HwMongo::libMongoDatasource)
+
+    #    include(SequelCommon)
+    add_subdirectory(sequel-common/pacbio/primary sequel-common)
+else()
+    add_subdirectory(sequel-common/pacbio/primary sequel-common)
+endif()
 
 add_subdirectory(common)
 add_subdirectory(applications)
