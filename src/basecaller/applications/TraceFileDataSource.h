@@ -43,7 +43,7 @@ class TraceFileDataSource : public DataSource::DataSourceBase
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
     TraceFileDataSource(DataSourceBase::Configuration config,
-                    std::string file)
+                        std::string file)
         : TraceFileDataSource(std::move(config), file, 0, 0, false, 0, 0)
     {}
 
@@ -97,6 +97,7 @@ public:
         info.hwVersion = one;
         info.swVersion = one;
         info.SetShortName( "TraceFileDataSource");
+        info.SetSummary("Tracefile DataSource using " + filename_ + " as input");
         info.SetSummary( info.ShortName() + " " + info.hwVersion.ToString());
         return info;
     }
@@ -115,6 +116,8 @@ private:
     size_t chunkIndex_;
     size_t batchIndex_;
     size_t maxQueueSize_;
+
+    std::string filename_;
 
     std::unique_ptr<Cuda::Data::TraceFileReader> traceFileReader_;
     DataSource::SensorPacketsChunk currChunk_;

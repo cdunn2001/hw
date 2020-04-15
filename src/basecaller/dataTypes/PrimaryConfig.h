@@ -30,36 +30,33 @@
 /// \brief  Global configuration for the Primary realtime pipeline. These values
 ///         may be changed at run time.
 
-#include <pacbio/utilities/Finally.h>
-#include <pacbio/ipc/PoolFactory.h>
-#include <pacbio/process/ConfigurationBase.h>
+#include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/CpuInfo.h>
-
-//#include <pacbio/primary/SequelDefinitions.h>
-//#include <pacbio/primary/ipc_config.h>
-//#include <pacbio/primary/ChipClass.h>
+#include <pacbio/utilities/Finally.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class PrimaryConfig :  public PacBio::Process::ConfigurationObject
+class PrimaryConfig :  public Configuration::PBConfig<PrimaryConfig>
 {
+    PB_CONFIG(PrimaryConfig);
+
     // TODO: zmwsPerLane should be deprecated and eventually removed.
     // In many places we use the constexpr laneSize defined in MongoConstants.h.
-    ADD_PARAMETER(uint32_t, zmwsPerLane, 64);
-    ADD_PARAMETER(uint32_t, lanesPerPool, 4096);
-    ADD_PARAMETER(uint32_t, framesPerChunk, 128);
+    PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 64);
+    PB_CONFIG_PARAM(uint32_t, lanesPerPool, 4096);
+    PB_CONFIG_PARAM(uint32_t, framesPerChunk, 128);
 
     // Rate at which frames are read from the sensor.
-    ADD_PARAMETER(double, sensorFrameRate, 100.0f);
+    PB_CONFIG_PARAM(double, sensorFrameRate, 100.0f);
 
     // Maxmimum polymerization rate supported.
-    ADD_PARAMETER(float, maxPolRate, 1.5f);
+    PB_CONFIG_PARAM(float, maxPolRate, 1.5f);
 
     // Metrics/BazWriter
-    ADD_PARAMETER(uint32_t, framesPerHFMetricBlock, 4096);
-    ADD_PARAMETER(bool, realtimeActivityLabels, true);
+    PB_CONFIG_PARAM(uint32_t, framesPerHFMetricBlock, 4096);
+    PB_CONFIG_PARAM(bool, realtimeActivityLabels, true);
 
 public:
     void StreamOut(std::ostream& os)

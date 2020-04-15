@@ -3,3 +3,4 @@ depcache/
 pa-third-party/
 pa-common/
 **/build/
+.idea/

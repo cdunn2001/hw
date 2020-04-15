@@ -59,6 +59,7 @@ TraceFileDataSource::TraceFileDataSource(
     , chunkIndex_{0}
     , batchIndex_{0}
     , maxQueueSize_(maxQueueSize)
+    , filename_(file)
     , currChunk_(0, GetConfig().layout.NumFrames())
 {
     const auto& config = GetConfig();

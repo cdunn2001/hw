@@ -8,6 +8,7 @@
 #include <applications/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/SourceConfig.h>
 #include <common/MongoConstants.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/graphs/GraphManager.h>
@@ -16,6 +17,8 @@
 
 #include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/PBException.h>
+#include <pacbio/configuration/ParseCombined.h>
+#include <pacbio/configuration/MergeConfigs.h>
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/datasource/PacketLayout.h>
@@ -33,6 +36,7 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
 
 using namespace PacBio::Application;
+using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
@@ -43,14 +47,6 @@ using namespace PacBio::Primary;
 // Need a global to support CtrlC handling
 std::atomic<bool> globalHalt{false};
 
-// this could go into a header file.
-SMART_ENUM(Source_t, UNKNOWN, TRACE_FILE, WX2, OTHER_TBD
-);
-
-struct SourceConfig  : public PacBio::Process::ConfigurationObject
-{
-    ADD_ENUM(Source_t,source, Source_t::TRACE_FILE);
-};
 
 // ^^^^
 ///////
@@ -58,7 +54,10 @@ struct SourceConfig  : public PacBio::Process::ConfigurationObject
 class SmrtBasecaller : public ThreadedProcessBase
 {
 public:
-    SmrtBasecaller() {}
+    SmrtBasecaller(const BasecallerConfig& config, const SourceConfig& sourceConfig)
+        : basecallerConfig_(config)
+        , sourceConfig_(sourceConfig)
+    {}
 
     ~SmrtBasecaller()
     {
@@ -92,7 +91,7 @@ public:
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
-        switch (sourceConfig_.source())
+        switch (sourceConfig_.source)
         {
             case Source_t::TRACE_FILE:
                 if (!inputTargetFile_.empty())
@@ -132,14 +131,8 @@ public:
         DisablePerformanceMode();
     }
 
-    SmrtBasecaller &Config(const BasecallerConfig &basecallerConfig, const SourceConfig& sourceConfig)
-    {
-        basecallerConfig_.Load(basecallerConfig);
-        sourceConfig_ .Load(sourceConfig);
-        return *this;
-    }
-
-    const BasecallerConfig &Config() const { return basecallerConfig_; }
+    const BasecallerConfig& Config() const
+    { return basecallerConfig_; }
 
 private:
     void MetaDataFromTraceFileSource(const std::string &traceFileName)
@@ -193,11 +186,12 @@ private:
 
     void GroundTruthFromTraceFileSource(const std::string &traceFileName)
     {
-        auto setBlMeanAndCovar = [](const std::string &traceFileName,
-                                    ConfigurationObject::ConfigurationPod<float> &blMean,
-                                    ConfigurationObject::ConfigurationPod<float> &blCovar,
-                                    const std::string &exceptMsg) {
-            const auto &traceFile = SequelTraceFileHDF5(traceFileName);
+        auto setBlMeanAndCovar = [](const std::string& traceFileName,
+                                    float& blMean,
+                                    float& blCovar,
+                                    const std::string& exceptMsg)
+        {
+            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
             if (traceFile.simulated)
             {
                 boost::multi_array<float, 2> stateMean;
@@ -218,8 +212,9 @@ private:
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineMean,
                               basecallerConfig_.algorithm.staticDetModelConfig.baselineVariance,
                               "Requested static pipeline analysis but input trace file is not simulated!");
-        } else if (basecallerConfig_.algorithm.dmeConfig.Method() == BasecallerDmeConfig::MethodName::Fixed &&
-                   basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+        }
+        else if (basecallerConfig_.algorithm.dmeConfig.Method == BasecallerDmeConfig::MethodName::Fixed &&
+                 basecallerConfig_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
         {
             setBlMeanAndCovar(traceFileName,
                               basecallerConfig_.algorithm.dmeConfig.SimModel.baselineMean,
@@ -243,11 +238,10 @@ private:
 
         // TODO need a way to let trace file specify numZmw and num frames
         const auto numZmw = numZmwLanes_ * laneSize;
-        const auto frameRate = PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate;
         DataSourceBase::Configuration config(layout, std::make_unique<CudaAllocator>());
 
         std::unique_ptr<DataSourceBase> dataSource;
-        switch(sourceConfig_.source())
+        switch(sourceConfig_.source)
         {
             case Source_t::TRACE_FILE:
                 dataSource = std::make_unique<TraceFileDataSource>(std::move(config),
@@ -261,7 +255,7 @@ private:
                 dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(config) /*, wxconfig tbd*/);
                 break;
             default:
-                throw PBException("Data source " + sourceConfig_.source().toString() + " not supported");
+                throw PBException("Data source " + sourceConfig_.source.toString() + " not supported");
         }
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
@@ -325,9 +319,9 @@ private:
             if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
             {
                 PBLOG_INFO << "Analyzing chunk frames = ["
-                              + std::to_string(chunk.StartFrame()) + ","
-                              + std::to_string(chunk.StopFrame()) + ")";
-                for (auto &batch : chunk)
+                    + std::to_string(chunk.StartFrame()) + ","
+                    + std::to_string(chunk.StopFrame()) + ")";
+                for (auto& batch : chunk)
                     repacker->ProcessInput(std::move(batch));
                 const auto &reports = graph.FlushAndReport(chunkDurationMS);
 
@@ -423,35 +417,41 @@ int main(int argc, char* argv[])
         auto options = parser.parse_args(argc, (const char* const*) argv);
         ThreadedProcessBase::HandleGlobalOptions(options);
 
-        ConfigMux mux;
-        BasecallerConfig basecallerConfig;
-        SourceConfig sourceConfig;
-        mux.Add("basecaller", basecallerConfig);
-        mux.Add("common", PacBio::Mongo::Data::GetPrimaryConfig());
-        mux.Add("source", sourceConfig);
-        mux.SetStrict(options.get("strict"));
-        mux.ProcessCommandLine(options.all("config"));
+        Json::Value json = MergeConfigs(options.all("config"));
+        PBLOG_DEBUG << json; // this does NOT work with --showconfig
+        auto configs = ParseCombined(json,
+                PARAM(Data::PrimaryConfig, "common"),
+                PARAM(BasecallerConfig, "basecaller"),
+                PARAM(SourceConfig, "source"));
+        auto validation = configs.Validate();
+        if (validation.ErrorCount() > 0)
+        {
+            validation.PrintErrors();
+            throw PBException("Json validation failed");
+        }
 
         if (options.get("showconfig"))
         {
-            std::cout << mux.ToJson() << std::endl;
+            std::cout << configs.Serialize() << std::endl;
             return 0;
         }
 
         if (options.is_set_by_user("numWorkerThreads"))
         {
-            basecallerConfig.init.numWorkerThreads = options.get("numWorkerThreads");
+            configs.get<BasecallerConfig>().init.numWorkerThreads = options.get("numWorkerThreads");
         }
 
-        auto bc = std::unique_ptr<SmrtBasecaller>(new SmrtBasecaller());
+        Data::GetPrimaryConfig() = configs.get<Data::PrimaryConfig>();
+        auto bc = std::unique_ptr<SmrtBasecaller>(new SmrtBasecaller(configs.get<BasecallerConfig>(),
+                configs.get<SourceConfig>()
+                ));
 
         bc->HandleProcessArguments(parser.args());
-        bc->Config(basecallerConfig,sourceConfig);
 
         {
             PacBio::Logging::LogStream ls;
-            ls << "\"common\" : " << PacBio::Mongo::Data::GetPrimaryConfig().RenderJSON() << "\n";
-            ls << "\"basecaller\" : " << bc->Config();
+            ls << "\"common\" : " << PacBio::Mongo::Data::GetPrimaryConfig().Serialize() << "\n";
+            ls << "\"basecaller\" : " << bc->Config().Serialize();
         }
 
         bc->HandleProcessOptions(options);

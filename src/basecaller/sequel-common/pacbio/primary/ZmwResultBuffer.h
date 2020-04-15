@@ -35,7 +35,6 @@
 #include <pacbio/smrtdata/Basecall.h>
 
 #include "BasecallingMetrics.h"
-#include "PrimaryConfig.h"
 
 using PacBio::SmrtData::Basecall;
 
@@ -70,21 +69,6 @@ public: // Static constants
     static constexpr size_t MaxMetricsLatency = 2;
 
 public: // Static members and methods
-    static void Configure(const PrimaryConfig& pc)
-    {
-        std::string x;
-        if (!pc.Validate (x)) throw PBException(x);
-        MaxNumMetrics = (pc.cache.framesPerTranche / pc.framesPerBlock) + MaxMetricsLatency;
-        MaxNumSamples = (pc.cache.framesPerTranche / pc.cache.frameRate) * pc.maxAverageBaseRatePerSecond;
-
-        size_t totalBytes =  sizeof(ZmwResultBuffer) +
-                             (MaxMetricsSize * MaxNumMetrics) +
-                             (sizeof(TFeat) * MaxNumSamples);
-
-        MaxBufferSize = std::ceil(totalBytes / static_cast<float>(4096)) * 4096;
-        MaxNumSamples += (MaxBufferSize - totalBytes) / sizeof(TFeat);
-    }
-
     static size_t MaxNumMetricsPerBuffer()
     {
         return MaxNumMetrics;

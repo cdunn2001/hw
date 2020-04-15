@@ -30,20 +30,21 @@
 #ifndef SEQUEL_BAZIOCONFIG_H
 #define SEQUEL_BAZIOCONFIG_H
 
-#include <pacbio/process/ConfigurationBase.h>
+#include <pacbio/configuration/PBConfig.h>
 
 namespace PacBio {
 namespace Primary {
 
-class BazIOConfig : public PacBio::Process::ConfigurationObject
+class BazIOConfig : public Configuration::PBConfig<BazIOConfig>
 {
 public:
-    CONF_OBJ_SUPPORT_COPY(BazIOConfig);
-    ADD_PARAMETER(uint32_t, BufferSizeMBytes, 32);
-    ADD_PARAMETER(float, MaxMBPerSecondWrite, 450.0f);
-    ADD_PARAMETER(uint32_t, numBazBuffers, 3);
-    ADD_PARAMETER(bool, useHalfFloat, true);
-    ADD_PARAMETER(uint32_t, numMetrics, 8);
+    PB_CONFIG(BazIOConfig);
+
+    PB_CONFIG_PARAM(uint32_t, BufferSizeMBytes, 32);
+    PB_CONFIG_PARAM(float, MaxMBPerSecondWrite, 450.0f);
+    PB_CONFIG_PARAM(uint32_t, numBazBuffers, 3);
+    PB_CONFIG_PARAM(bool, useHalfFloat, true);
+    PB_CONFIG_PARAM(uint32_t, numMetrics, 8);
 };
 
 }}
