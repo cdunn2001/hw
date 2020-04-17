@@ -54,27 +54,8 @@ include(mongo-config)
 
 create_config_header(mongo-config.h MongoConfig)
 
-if (false)
-    # For testing local integration with hw-mongo sitting in a neighboring directory
-    list(APPEND CMAKE_MODULE_PATH
-            /home/UNIXHOME/mlakata/git/hw-mongo/bamboo/install/gcc_x86_64/lib/CMakeTargets/
-            )
-    include(pacbio-hdf5)
-    include(MongoDatasource)
-    set_target_properties(HwMongo::libMongoDatasource PROPERTIES IMPORTED_GLOBAL TRUE)
-    add_library(libPacbioHwMongo ALIAS HwMongo::libMongoDatasource)
-endif()
-if (true)
-    # integrating hw-mongo correctly using the generated exported *.cmake file
-    list(INSERT CMAKE_MODULE_PATH 0
-            /home/UNIXHOME/mlakata/git/pa-third-party/cmake-targets/
-            )
-    list(APPEND CMAKE_MODULE_PATH
-            /home/UNIXHOME/mlakata/git/hw-mongo/bamboo/install/gcc_x86_64/lib/CMakeTargets/
-            )
-    include(pacbio-hdf5)
-    include(pacbio-hw-mongo)
-endif()
+include(pacbio-hw-mongo)
+
 add_subdirectory(sequel-common/pacbio/primary sequel-common)
 add_subdirectory(common)
 add_subdirectory(applications)
