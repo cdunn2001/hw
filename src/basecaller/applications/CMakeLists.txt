@@ -37,6 +37,6 @@ target_link_libraries(smrt-basecaller
     PUBLIC
         libSmrtBasecaller
     PRIVATE
-        libMongoDatasource
+        libPacbioHwMongo
 )
 add_subdirectory(test)
