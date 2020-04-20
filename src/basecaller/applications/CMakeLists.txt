@@ -2,18 +2,18 @@
 cmake_minimum_required(VERSION 3.8)
 
 add_library(libSmrtBasecaller STATIC
-    Basecaller.h
-    Basecaller.cpp
-    BazWriter.h
-    BazWriter.cpp
-    CudaAllocator.h
-    CudaAllocator.cpp
-    Repacker.h
-    Repacker.cpp
-    TraceSaver.h
-    TraceSaver.cpp
-    TraceFileDataSource.h
-    TraceFileDataSource.cpp
+        Basecaller.h
+        Basecaller.cpp
+        BazWriter.h
+        BazWriter.cpp
+        CudaAllocator.h
+        CudaAllocator.cpp
+        Repacker.h
+        Repacker.cpp
+        TraceSaver.h
+        TraceSaver.cpp
+        TraceFileDataSource.h
+        TraceFileDataSource.cpp
 )
 
 target_include_directories(libSmrtBasecaller
@@ -29,14 +29,13 @@ target_link_libraries(libSmrtBasecaller
 )
 
 add_executable(smrt-basecaller
-    SmrtBasecaller.cpp
+        SmrtBasecaller.cpp
 )
 
 
 target_link_libraries(smrt-basecaller
-    PUBLIC
-        libSmrtBasecaller
     PRIVATE
+        libSmrtBasecaller
         libPacbioHwMongo
 )
 add_subdirectory(test)

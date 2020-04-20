@@ -5,13 +5,14 @@ add_executable(unpacker
         unpacker.h
         unpacker.cpp
         main.cpp
-        )
+)
 
 target_include_directories(unpacker
-        PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR})
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+)
 
 target_link_libraries(unpacker
+    PRIVATE
         libPacbioCplusplusApi
-        )
-
+)

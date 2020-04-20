@@ -66,7 +66,7 @@ public:
     }
 
 
-    void HandleProcessArguments(const std::vector <std::string> &args)
+    void HandleProcessArguments(const std::vector <std::string>& args)
     {
         if (args.size() > 0)
         {
@@ -74,7 +74,7 @@ public:
         }
     }
 
-    void HandleProcessOptions(const Values &options)
+    void HandleProcessOptions(const Values& options)
     {
         ThreadedProcessBase::HandleProcessOptions(options);
 
@@ -94,12 +94,13 @@ public:
         switch (sourceConfig_.source)
         {
             case Source_t::TRACE_FILE:
-                if (!inputTargetFile_.empty())
+                if (inputTargetFile_.empty())
                 {
-                    PBLOG_INFO << "Input Target: " << inputTargetFile_;
-                    MetaDataFromTraceFileSource(inputTargetFile_);
-                    GroundTruthFromTraceFileSource(inputTargetFile_);
+                    throw PBException("TRACE_FILE requires an --inputfile argument");
                 }
+                PBLOG_INFO << "Input Target: " << inputTargetFile_;
+                MetaDataFromTraceFileSource(inputTargetFile_);
+                GroundTruthFromTraceFileSource(inputTargetFile_);
                 break;
             default:
                 PBLOG_INFO << "Not using a trace file ";
@@ -135,9 +136,9 @@ public:
     { return basecallerConfig_; }
 
 private:
-    void MetaDataFromTraceFileSource(const std::string &traceFileName)
+    void MetaDataFromTraceFileSource(const std::string& traceFileName)
     {
-        const auto &traceFile = SequelTraceFileHDF5(traceFileName);
+        const auto& traceFile = SequelTraceFileHDF5(traceFileName);
 
         traceFile.FrameRate >> movieConfig_.frameRate;
         traceFile.AduGain >> movieConfig_.photoelectronSensitivity;
@@ -173,7 +174,7 @@ private:
 
         for (size_t i = 0; i < numAnalogs; i++)
         {
-            auto &analog = movieConfig_.analogs[i];
+            auto& analog = movieConfig_.analogs[i];
             analog.baseLabel = baseMap[i];
             analog.relAmplitude = relativeAmpl[i];
             analog.excessNoiseCV = excessNoiseCV[i];
@@ -184,7 +185,7 @@ private:
         }
     }
 
-    void GroundTruthFromTraceFileSource(const std::string &traceFileName)
+    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
     {
         auto setBlMeanAndCovar = [](const std::string& traceFileName,
                                     float& blMean,
@@ -275,12 +276,12 @@ private:
     }
 
     std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
-    CreateBasecaller(const std::vector <uint32_t> &poolIds) const
+    CreateBasecaller(const std::vector <uint32_t>& poolIds) const
     {
         return std::make_unique<BasecallerBody>(poolIds, basecallerConfig_, movieConfig_);
     }
 
-    std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner &source)
+    std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
     {
         if (hasBazFile_)
         {
@@ -323,12 +324,12 @@ private:
                     + std::to_string(chunk.StopFrame()) + ")";
                 for (auto& batch : chunk)
                     repacker->ProcessInput(std::move(batch));
-                const auto &reports = graph.FlushAndReport(chunkDurationMS);
+                const auto& reports = graph.FlushAndReport(chunkDurationMS);
 
                 std::stringstream ss;
                 ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
 
-                for (auto &report: reports)
+                for (auto& report: reports)
                 {
                     if (!report.realtime)
                     {
@@ -458,7 +459,7 @@ int main(int argc, char* argv[])
 
         bc->Run();
 
-    } catch (std::exception &ex) {
+    } catch (std::exception& ex) {
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }

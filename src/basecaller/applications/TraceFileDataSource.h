@@ -83,7 +83,8 @@ public:
     // Or is it a maximum?  We can't really satisfy many guarantees
     double FrameRate() const override { return 0.0; }
 
-    PacBio::DataSource::HardwareInformation GetHardwareInformation() override
+
+    DataSource::HardwareInformation GetHardwareInformation() override
     {
         PacBio::DataSource::HardwareInformation info;
         PacBio::DataSource::Version one;

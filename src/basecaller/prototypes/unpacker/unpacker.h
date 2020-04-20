@@ -1,6 +1,8 @@
 //
 // Created by mlakata on 3/20/20.
 //
+// this benchmarking test is stolen from Benchy code from primaryanalysis/Sequel/acquisition/src.
+//
 
 #ifndef PA_MONGO_UNPACKER_H
 #define PA_MONGO_UNPACKER_H
@@ -90,31 +92,28 @@ public:
         return numBytes;
     }
 
-/// Scatters 16 bit pixels to Tiles. This is not optimized and
-/// will probably never be used if the sensor always outputs 12 bit data.
-    long Scatter(
-            const int16_t *rasterPixels,
-            const uint64_t numPixels,
-            void *destPacket
-    )
-    {
-#if 0
-        for (uint64_t i = 0; i < numPixels; i++)
-        {
-            (*destTileIter)->SetPixel(i % Tile::NumPixels, destFrameOffset, rasterPixels[i]);
-            if ((i + 1) % Tile::NumPixels == 0)
-            {
-                destTileIter++;
-            }
-        }
-        return (numPixels + Tile::NumPixels - 1) / Tile::NumPixels;
-#else
-        (void) rasterPixels;
-        (void) numPixels;
-        (void) destPacket;
-        return 0;
-#endif
-    }
+
+// This code has bit rotted. Leaving it here for historical reference in case we want to do
+// some more benchmarking.
+
+///// Scatters 16 bit pixels to Tiles. This is not optimized and
+///// will probably never be used if the sensor always outputs 12 bit data.
+//    long Scatter(
+//            const int16_t *rasterPixels,
+//            const uint64_t numPixels,
+//            void *destPacket
+//    )
+//    {
+//        for (uint64_t i = 0; i < numPixels; i++)
+//        {
+//            (*destTileIter)->SetPixel(i % Tile::NumPixels, destFrameOffset, rasterPixels[i]);
+//            if ((i + 1) % Tile::NumPixels == 0)
+//            {
+//                destTileIter++;
+//            }
+//        }
+//        return (numPixels + Tile::NumPixels - 1) / Tile::NumPixels;
+//    }
 
 // 128 input bits have 10 12-bit sample words, with 8 bits left over.
 // 128 output bits is limited to 8 output 16-bit words.
