@@ -1,7 +1,7 @@
-set (VERSION bid28)
+set (VERSION bid30)
 
 set (LOCAL_THIRD_PARTY_SCRIPTS off CACHE bool "Use local version of third party scripts" FORCE)
-set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/../pa-third-party CACHE string "Location of a local  pa-third-party repository" FORCE)
+set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE string "Location of a local  pa-third-party repository" FORCE)
 
 function (SetupProject projName)
 
