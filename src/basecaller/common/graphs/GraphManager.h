@@ -107,7 +107,7 @@ class GraphManager
 public:
     // 0 defaults to basically hardware threads
     GraphManager(size_t threads = 0)
-        : init_(threads == 0 ? tbb::task_scheduler_init::automatic : threads)
+        : init_(threads == 0 ? tbb::task_scheduler_init::automatic : static_cast<int>(threads))
     {}
 
     // Do not enable the move constructors.  Graph nodes will retain
@@ -184,11 +184,11 @@ public:
 
             const auto& timings = node->Timings();
             report.stage = node->Stage();
-            report.dutyCycle = (timings.partTime + timings.fullTime) / expectedDurationMS;
-            report.totalTime = timings.idleTime + timings.partTime + timings.fullTime;
-            report.avgOccupancy = timings.accumulatedOccupancy / report.totalTime;
-            report.idlePercent = timings.idleTime / report.totalTime * 100.0f;
-            report.avgDuration = timings.accumulatedDuration / timings.count;
+            report.dutyCycle = static_cast<float>((timings.partTime + timings.fullTime) / expectedDurationMS);
+            report.totalTime = static_cast<float>(timings.idleTime + timings.partTime + timings.fullTime);
+            report.avgOccupancy = static_cast<float>(timings.accumulatedOccupancy / report.totalTime);
+            report.idlePercent = static_cast<float>(timings.idleTime / report.totalTime * 100.0f);
+            report.avgDuration = static_cast<float>(timings.accumulatedDuration / timings.count);
 
             report.realtime = report.dutyCycle <= node->MaxDutyCycle();
             if (!report.realtime)

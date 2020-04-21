@@ -83,14 +83,26 @@ public:
     // Or is it a maximum?  We can't really satisfy many guarantees
     double FrameRate() const override { return 0.0; }
 
+
     DataSource::HardwareInformation GetHardwareInformation() override
     {
-        DataSource::HardwareInformation ret;
-        ret.SetShortName("Tracefile DataSouce");
-        ret.SetSummary("Tracefile DataSource using " + filename_ + " as input");
-
-        return ret;
+        PacBio::DataSource::HardwareInformation info;
+        PacBio::DataSource::Version one;
+        one.major = 1;
+        one.minor = 0;
+        one.build = 0;
+        one.revision = 0;
+        one.branch = "develop"; // FIXME
+        info.driverVersion = one;
+        info.fwVersion = one;
+        info.hwVersion = one;
+        info.swVersion = one;
+        info.SetShortName( "TraceFileDataSource");
+        info.SetSummary("Tracefile DataSource using " + filename_ + " as input");
+        info.SetSummary( info.ShortName() + " " + info.hwVersion.ToString());
+        return info;
     }
+
 
 private:
 

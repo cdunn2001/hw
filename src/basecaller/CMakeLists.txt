@@ -54,8 +54,9 @@ include(mongo-config)
 
 create_config_header(mongo-config.h MongoConfig)
 
-add_subdirectory(sequel-common/pacbio/primary sequel-common)
+include(pacbio-hw-mongo)
 
+add_subdirectory(sequel-common/pacbio/primary sequel-common)
 add_subdirectory(common)
 add_subdirectory(applications)
 add_subdirectory(basecaller)

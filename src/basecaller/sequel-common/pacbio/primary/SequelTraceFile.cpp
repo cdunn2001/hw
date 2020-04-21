@@ -62,8 +62,9 @@ namespace PacBio
 
   static const int GREEN_TRACE_OFFSET = 0;
   static const int RED_TRACE_OFFSET = 1;
+#ifdef SUPPORT_VARIANCE
   static const int numBlocks = 1;
-
+#endif
 
   // data types
 

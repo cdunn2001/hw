@@ -8,6 +8,7 @@
 #include <applications/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
+#include <dataTypes/SourceConfig.h>
 #include <common/MongoConstants.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/graphs/GraphManager.h>
@@ -27,6 +28,8 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
+#include <mongo/datasource/WXDataSource.h>
+
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Graphs;
 using namespace PacBio::Mongo;
@@ -38,11 +41,22 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
 
+////////////
+// vvvv This could be cleaned up.
+
+// Need a global to support CtrlC handling
+std::atomic<bool> globalHalt{false};
+
+
+// ^^^^
+///////
+
 class SmrtBasecaller : public ThreadedProcessBase
 {
 public:
-    SmrtBasecaller(const BasecallerConfig& config)
+    SmrtBasecaller(const BasecallerConfig& config, const SourceConfig& sourceConfig)
         : basecallerConfig_(config)
+        , sourceConfig_(sourceConfig)
     {}
 
     ~SmrtBasecaller()
@@ -51,7 +65,8 @@ public:
         Join();
     }
 
-    void HandleProcessArguments(const std::vector<std::string>& args)
+
+    void HandleProcessArguments(const std::vector <std::string>& args)
     {
         if (args.size() > 0)
         {
@@ -76,13 +91,20 @@ public:
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
-        if (!inputTargetFile_.empty())
+        switch (sourceConfig_.source)
         {
-            PBLOG_INFO << "Input Target: " << inputTargetFile_;
-            MetaDataFromTraceFileSource(inputTargetFile_);
-            GroundTruthFromTraceFileSource(inputTargetFile_);
-        } else {
-            throw PBException("No input file specified");
+            case Source_t::TRACE_FILE:
+                if (inputTargetFile_.empty())
+                {
+                    throw PBException("TRACE_FILE requires an --inputfile argument");
+                }
+                PBLOG_INFO << "Input Target: " << inputTargetFile_;
+                MetaDataFromTraceFileSource(inputTargetFile_);
+                GroundTruthFromTraceFileSource(inputTargetFile_);
+                break;
+            default:
+                PBLOG_INFO << "Not using a trace file ";
+                break;
         }
 
         if (options.is_set_by_user("outputbazfile"))
@@ -93,7 +115,8 @@ public:
         }
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
-        PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) / PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
+        PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) /
+                                                        PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
     }
 
     void Run()
@@ -172,14 +195,13 @@ private:
             const auto& traceFile = SequelTraceFileHDF5(traceFileName);
             if (traceFile.simulated)
             {
-                boost::multi_array<float,2> stateMean;
-                boost::multi_array<float,2> stateCovar;
+                boost::multi_array<float, 2> stateMean;
+                boost::multi_array<float, 2> stateCovar;
                 traceFile.StateMean >> stateMean;
                 traceFile.StateCovariance >> stateCovar;
                 blMean = stateMean[0][0];
                 blCovar = stateCovar[0][0];
-            }
-            else
+            } else
             {
                 throw PBException(exceptMsg);
             }
@@ -203,13 +225,13 @@ private:
     }
 
     // TODO support wolverine and potentially other sources
-    std::unique_ptr<DataSourceRunner> CreateSource()
+    std::unique_ptr <DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
-        std::array<size_t, 3> layoutDims {
-            PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool,
-            PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-            PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane
+        std::array<size_t, 3> layoutDims{
+                PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool,
+                PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
+                PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane
         };
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
@@ -219,16 +241,27 @@ private:
         const auto numZmw = numZmwLanes_ * laneSize;
         DataSourceBase::Configuration config(layout, std::make_unique<CudaAllocator>());
 
-        return std::make_unique<DataSourceRunner>(
-            std::make_unique<TraceFileDataSource>(std::move(config),
-                inputTargetFile_,
-                frames_,
-                numZmw,
-                cache_,
-                numChunksPreloadInputQueue_));
+        std::unique_ptr<DataSourceBase> dataSource;
+        switch(sourceConfig_.source)
+        {
+            case Source_t::TRACE_FILE:
+                dataSource = std::make_unique<TraceFileDataSource>(std::move(config),
+                                                              inputTargetFile_,
+                                                              frames_,
+                                                              numZmw,
+                                                              cache_,
+                                                              numChunksPreloadInputQueue_);
+                break;
+            case Source_t::WX2:
+                dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(config) /*, wxconfig tbd*/);
+                break;
+            default:
+                throw PBException("Data source " + sourceConfig_.source.toString() + " not supported");
+        }
+        return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
-    std::unique_ptr<MultiTransformBody<SensorPacket, const TraceBatch<int16_t>>> CreateRepacker() const
+    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>> CreateRepacker() const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool;
@@ -237,24 +270,26 @@ private:
         return std::make_unique<TrivialRepackerBody>(requiredDims);
     }
 
-    std::unique_ptr<LeafBody<const TraceBatch<int16_t>>> CreateTraceSaver() const
+    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver() const
     {
         return std::make_unique<NoopTraceSaverBody>();
     }
 
-    std::unique_ptr<TransformBody<const TraceBatch<int16_t>, BatchResult>> CreateBasecaller(const std::vector<uint32_t>& poolIds) const
+    std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
+    CreateBasecaller(const std::vector <uint32_t>& poolIds) const
     {
         return std::make_unique<BasecallerBody>(poolIds, basecallerConfig_, movieConfig_);
     }
 
-    std::unique_ptr<LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
+    std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
     {
         if (hasBazFile_)
         {
             return std::make_unique<BazWriterBody>(outputBazFile_, source.NumFrames(),
                                                    source.UnitCellIds(), source.UnitCellFeatures(),
                                                    basecallerConfig_, zmwOutputStrideFactor_);
-        } else {
+        } else
+        {
             return std::make_unique<NoopBazWriterBody>();
 
         }
@@ -267,19 +302,19 @@ private:
 
         auto source = CreateSource();
 
-        GraphManager<GraphProfiler> graph(Config().init.numWorkerThreads);
-        auto * repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
+        GraphManager <GraphProfiler> graph(Config().init.numWorkerThreads);
+        auto *repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
-        auto * analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
+        auto *analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
 
         size_t numChunksAnalyzed = 0;
         PacBio::Dev::QuietAutoTimer timer(0);
 
         const double chunkDurationMS = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk
-                                     / PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate
-                                     * 1e3;
-        while(source->IsActive())
+                                       / PacBio::Mongo::Data::GetPrimaryConfig().sensorFrameRate
+                                       * 1e3;
+        while (source->IsActive())
         {
             SensorPacketsChunk chunk;
             if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
@@ -298,7 +333,8 @@ private:
                 {
                     if (!report.realtime)
                     {
-                        PBLOG_WARN << report.stage.toString() << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                        PBLOG_WARN << report.stage.toString()
+                                   << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
                                    << report.dutyCycle * 100 << "%, "
                                    << 1e3 / report.avgDuration << "ms, "
                                    << report.idlePercent << "%, "
@@ -336,6 +372,7 @@ private:
     // Configuration objects
     BasecallerConfig basecallerConfig_;
     MovieConfig movieConfig_;
+    SourceConfig sourceConfig_;
 
     std::string inputTargetFile_;
     std::string outputBazFile_;
@@ -382,13 +419,16 @@ int main(int argc, char* argv[])
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));
-        PBLOG_INFO << json;
-        auto configs = ParseCombined(json, PARAM(Data::PrimaryConfig, "common"), PARAM(BasecallerConfig, "basecaller"));
+        PBLOG_DEBUG << json; // this does NOT work with --showconfig
+        auto configs = ParseCombined(json,
+                PARAM(Data::PrimaryConfig, "common"),
+                PARAM(BasecallerConfig, "basecaller"),
+                PARAM(SourceConfig, "source"));
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
         {
             validation.PrintErrors();
-            throw PBException("Json valdiation failed");
+            throw PBException("Json validation failed");
         }
 
         if (options.get("showconfig"))
@@ -403,7 +443,9 @@ int main(int argc, char* argv[])
         }
 
         Data::GetPrimaryConfig() = configs.get<Data::PrimaryConfig>();
-        auto bc = std::unique_ptr<SmrtBasecaller>(new SmrtBasecaller(configs.get<BasecallerConfig>()));
+        auto bc = std::unique_ptr<SmrtBasecaller>(new SmrtBasecaller(configs.get<BasecallerConfig>(),
+                configs.get<SourceConfig>()
+                ));
 
         bc->HandleProcessArguments(parser.args());
 
@@ -417,7 +459,7 @@ int main(int argc, char* argv[])
 
         bc->Run();
 
-    } catch (std::exception &ex) {
+    } catch (std::exception& ex) {
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }
