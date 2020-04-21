@@ -38,6 +38,8 @@ namespace {
 // Just a dummy enum to satisfy the API, we don't
 // really care about the performance reporting in
 // these tests
+// Intel compiler complains about unused features of the smart enum for some reason.
+#pragma warning disable 177
 SMART_ENUM(STAGES, ONE, TWO, THREE, FOUR, FIVE);
 
 struct CountingLeaf : public LeafBody<int>
@@ -84,7 +86,7 @@ struct SubtractMin : public MultiTransformBody<int, int>
         if (data_.size() == window_)
         {
             auto min = *std::min_element(data_.begin(), data_.end());
-            for (auto val : data_) PushOut(val - min);
+            for (auto val1 : data_) PushOut(val1 - min);
             data_.resize(0);
         }
     }
@@ -99,7 +101,7 @@ struct RAIILeaf : public LeafBody<int>
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1.0; }
 
-    void Process(int val) override {}
+    void Process(int val) override { (void) val; }
 
     ~RAIILeaf() { destructCount++; }
 

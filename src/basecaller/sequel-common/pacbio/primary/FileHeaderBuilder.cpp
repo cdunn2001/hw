@@ -102,6 +102,8 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
           , useHalfFloat_(useHalfFloat)
           , realtimeActivityLabels_(realtimeActivityLabels)
 {
+    (void) spiderOnSequel;
+
     Default();
 
     if (!SanityCheckMetricBlockSizes())
