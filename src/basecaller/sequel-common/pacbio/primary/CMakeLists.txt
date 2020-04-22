@@ -181,22 +181,6 @@ if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/null.cpp)
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/null.cpp "")
 endif()
 
-# The  libSequelCommon target includes ALL the full dependencies.
-add_library( libSequelCommon
-    STATIC
-        ${CMAKE_CURRENT_BINARY_DIR}/null.cpp
-)
-
-
-message(STATUS "libSequelCommon boost dependencies: Boost_LIBRARIES= ${Boost_LIBRARIES}" )
-target_link_libraries( libSequelCommon
-    PUBLIC
-        libSequelCommon1
-        libTbb
-    PRIVATE
-        SegFault
-)
-
 add_custom_target(rstdocs DEPENDS ZmwStats.rst)
 add_custom_command(OUTPUT ZmwStats.rst
     COMMAND cpp -P ${CMAKE_CURRENT_LIST_DIR}/ZmwStats_template.rst | column --table --separator '|' --output-separator '|' > ZmwStats.rst
