@@ -44,7 +44,7 @@ add_executable(CommonTests
 
 target_link_libraries(CommonTests
     libProtoCommon
-    gtest
+    libGtest
 )
 
 target_include_directories(CommonTests
@@ -52,7 +52,7 @@ target_include_directories(CommonTests
         ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(CommonTests
-        gtest_main)
+        libGtestWithMain)
 
 set_target_properties(CommonTests PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(CommonTests PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

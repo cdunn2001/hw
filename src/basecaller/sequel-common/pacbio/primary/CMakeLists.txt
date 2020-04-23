@@ -169,7 +169,7 @@ target_link_libraries( libSequelCommon1
   PUBLIC
     libPacbioCplusplusApi
     libPacbioSmrtdata
-    libHdf5_cpp
+    libHdf5Cpp
     ${Boost_LIBRARIES}  # boost::iostreams required for ChipLayout which uses gzip streams
     libJsoncpp
     libHalf

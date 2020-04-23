@@ -50,7 +50,7 @@ add_executable(BaselineTests
 
 target_link_libraries(BaselineTests
     libProtoCommon
-    gtest
+    libGtest
 )
 
 target_include_directories(BaselineTests
@@ -58,7 +58,7 @@ target_include_directories(BaselineTests
         ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(BaselineTests
-    gtest_main)
+    libGtestWithMain)
 
 set_target_properties(BaselineTests PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineTests PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

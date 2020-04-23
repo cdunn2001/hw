@@ -40,7 +40,7 @@ add_executable(FrameLabelerTests
 
 target_link_libraries(FrameLabelerTests
     libFrameLabeler
-    gtest
+    libGtest
 )
 
 target_include_directories(FrameLabelerTests
@@ -48,7 +48,7 @@ target_include_directories(FrameLabelerTests
         ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(FrameLabelerTests
-    gtest_main)
+    libGtestWithMain)
 
 set_target_properties(FrameLabelerTests PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(FrameLabelerTests PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

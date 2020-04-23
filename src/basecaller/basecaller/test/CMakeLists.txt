@@ -16,7 +16,7 @@ target_link_libraries(libMongoBasecallerTest
     libMongoBasecallerAnalyzer
     libProtoCommon
     libTbb
-    gtest
+    libGtest
 )
 
 # Define the test executable specific to mongo basecaller analyzer.
@@ -26,7 +26,7 @@ add_executable(${exec})
 
 target_link_libraries(${exec}
     libMongoBasecallerTest
-    gtest_main
+    libGtestWithMain
 )
 
 add_test(${exec} ${exec} --gtest_output=xml:${exec}.xml)
