@@ -2,7 +2,6 @@
 //
 #include <applications/Basecaller.h>
 #include <applications/BazWriter.h>
-#include <applications/CudaAllocator.h>
 #include <applications/Repacker.h>
 #include <applications/TraceFileDataSource.h>
 #include <applications/TraceSaver.h>
@@ -121,7 +120,7 @@ public:
 
     void Run()
     {
-        EnablePerformanceMode();
+        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
 
         RunAnalyzer();
         Join();
@@ -129,7 +128,7 @@ public:
         // Need to free up our allocations that are pooled. If that happens
         // during static teardown, we'll likely try to free cuda allocations
         // after the cuda runtime is already gone, which causes a crash
-        DisablePerformanceMode();
+        DisableAllCaching();
     }
 
     const BasecallerConfig& Config() const
@@ -239,7 +238,9 @@ private:
 
         // TODO need a way to let trace file specify numZmw and num frames
         const auto numZmw = numZmwLanes_ * laneSize;
-        DataSourceBase::Configuration config(layout, std::make_unique<CudaAllocator>());
+        DataSourceBase::Configuration config(
+            layout,
+            CreateAllocator(AllocatorMode::CUDA, AllocationMarker("TraceFileDataSource")));
 
         std::unique_ptr<DataSourceBase> dataSource;
         switch(sourceConfig_.source)

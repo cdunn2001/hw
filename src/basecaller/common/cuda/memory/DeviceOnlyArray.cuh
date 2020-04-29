@@ -109,7 +109,7 @@ class DeviceOnlyArray : private detail::DataManager
 public:
     template <typename... Args>
     DeviceOnlyArray(const AllocationMarker& marker, size_t count, Args&&... args)
-        : data_(GetManagedDeviceAllocation(count*sizeof(T), marker))
+        : data_(GetGlobalAllocator().GetDeviceAllocation(count*sizeof(T), marker))
         , count_(count)
         , checker_(std::make_unique<CheckerType>())
     {
@@ -151,6 +151,7 @@ public:
                     data_.get<U>(DataKey()),
                     count_);
             CudaSynchronizeDefaultStream();
+            GetGlobalAllocator().ReturnDeviceAllocation(std::move(data_));
         }
     }
 

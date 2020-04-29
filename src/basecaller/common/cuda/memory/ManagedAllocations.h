@@ -33,6 +33,7 @@
 
 #include <pacbio/PBException.h>
 #include <pacbio/memory/SmartAllocation.h>
+#include <pacbio/memory/IAllocator.h>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
 
 namespace PacBio {
@@ -130,29 +131,79 @@ private:
                 std::string(__FILE__  ":" + std::to_string(__LINE__))          \
                 .substr(strlen(PacBio::Primary::MongoConfig::workspaceDir)+1))
 
-// These functions define the memory management API.  One might be tempted to bundle them together as
-// static functions in a class.  However there is obviously state associated with these routines,
-// and having static member variables opens us up to initialization ordering issues.  Instead these
-// are left as free functions, with the associated state handled by a singleton class in the
-// implementation file.
+// Extension of the IAllocator interface, which provides two new piece
+// of functionality:
+// 1. Allows cuda allocations (which are a fundamentally different type from
+//    host allocations)
+// 2. Facilitates allocation caching, which in some situations can be significantly
+//    faster than allocating/deallocating individual allocations each time they are
+//    needed
+class IMongoCachedAllocator : public PacBio::Memory::IAllocator
+{
+public:
+    using IAllocator::GetAllocation;
+    virtual PacBio::Memory::SmartAllocation GetAllocation(size_t count, const AllocationMarker& marker) = 0;
+    virtual SmartDeviceAllocation GetDeviceAllocation(size_t count, const AllocationMarker& marker) = 0;
 
-PacBio::Memory::SmartAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker,
-                                                         ManagedAllocType type = ManagedAllocType::DEFAULT);
-SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker);
+    // Opt-in routines that allow allocation caching.  If you let a SmartAllocation expire it will
+    // be deallocated, but if instead you return it via one of these functions, it may be recycled
+    // to satisfy future allocation requests.
+    // Note: Allocation caching can be disabled application wide.  If allocation is disabled,
+    //       then calling these functions will simply free the memory
+    // Note: Different instances of IMongoCachedAllocator may share the same allocation cache.
+    //       Certain things cannot be mixed (like huge pages and normal system allocations),
+    //       but otherwise the implementation will share allocation pools between instances
+    // Note: The allocation caching scheme is currently very simple.  Calling these "Return"
+    //       functions for frequent one-off allocations of irregular size will probably result
+    //       in them never being recycled, and they will live until the cache is manually
+    //       cleared (probably not until the end of execution).  In this situation it will
+    //       effectively appear to be a memory leak.
+    void ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc);
+    void ReturnDeviceAllocation(SmartDeviceAllocation alloc);
+};
 
-void ReturnManagedHostAllocation(PacBio::Memory::SmartAllocation alloc);
-void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc);
+enum class CachingMode
+{
+    ENABLED,
+    DISABLED
+};
 
-ManagedAllocType GetCurrentAllocType();
+// Supported flavors of host allocations for mongo
+enum class AllocatorMode
+{
+    MALLOC,
+    CUDA,
+    HUGE_CUDA
+};
 
-// Enable performance mode to use pinned memory on the host
-// (which is necessary for efficient data transfers) and re-use
-// memory allocations when possible (which is necessary as cuda
-// malloc functions seem surprisingly slow).  The only reason this
-// is configurable is to support limited use of this software on
-// machines that may not have gpu hardware
-void EnablePerformanceMode();
-void DisablePerformanceMode();
+// Sets the global allocation mode.  This is controlled
+// on an application level, to better faciliate scenarious
+// such as running a host-only version on a computer without
+// a GPU (where allocating pinned host memory would failed)
+void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc);
+
+// Gets globablly IMongoCachedAllocator, using whatever mode
+// the application as a whole has been configured to use
+IMongoCachedAllocator& GetGlobalAllocator();
+
+// Creates an instance of IMongoCachedAllocator of a given mode,
+// regardless of how the whole application is configured.
+// Note: The caching for each mode is done statically and is
+//       shared between instances of each mode.  This function
+//       will allow you to diverge from the globally set mode,
+//       but it will not give you a separate and indpendant
+//       allocation cache
+std::unique_ptr<IMongoCachedAllocator> CreateAllocator(
+    AllocatorMode alloc,
+    const AllocationMarker& marker);
+
+// Toggles caching for the individual allocator modes
+void EnableHostCaching(AllocatorMode mode);
+void EnableGpuCaching();
+void DisableHostCaching(AllocatorMode mode);
+void DisableGpuCaching();
+void DisableAllCaching();
+
 
 }}} // ::PacBio::Cuda::Memory
 

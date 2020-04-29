@@ -6,8 +6,6 @@ add_library(libSmrtBasecaller STATIC
         Basecaller.cpp
         BazWriter.h
         BazWriter.cpp
-        CudaAllocator.h
-        CudaAllocator.cpp
         Repacker.h
         Repacker.cpp
         TraceSaver.h

@@ -46,7 +46,8 @@ namespace Basecaller {
 TEST(TestTraceAnalyzerTbb, CheckMetadata)
 {
     Logging::LogSeverityContext logContext (Logging::LogLevel::WARN);
-    Cuda::Memory::DisablePerformanceMode();
+    Cuda::Memory::SetGlobalAllocationMode(Cuda::Memory::CachingMode::DISABLED,
+                                          Cuda::Memory::AllocatorMode::MALLOC);
 
     const Data::BatchDimensions bDims {8, 16};
     {
