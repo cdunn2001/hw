@@ -2,6 +2,7 @@
 depcache/
 pa-third-party/
 pa-common/
+hw-mongo/
 **/build/
 .idea/
 cmake-build-debug/

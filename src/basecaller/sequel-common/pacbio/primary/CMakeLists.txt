@@ -169,7 +169,7 @@ target_link_libraries( libSequelCommon1
   PUBLIC
     libPacbioCplusplusApi
     libPacbioSmrtdata
-    libHdf5_cpp
+    libHdf5Cpp
     ${Boost_LIBRARIES}  # boost::iostreams required for ChipLayout which uses gzip streams
     libJsoncpp
     libHalf
@@ -180,22 +180,6 @@ target_link_libraries( libSequelCommon1
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/null.cpp)
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/null.cpp "")
 endif()
-
-# The  libSequelCommon target includes ALL the full dependencies.
-add_library( libSequelCommon
-    STATIC
-        ${CMAKE_CURRENT_BINARY_DIR}/null.cpp
-)
-
-
-message(STATUS "libSequelCommon boost dependencies: Boost_LIBRARIES= ${Boost_LIBRARIES}" )
-target_link_libraries( libSequelCommon
-    PUBLIC
-        libSequelCommon1
-        libTbb
-    PRIVATE
-        SegFault
-)
 
 add_custom_target(rstdocs DEPENDS ZmwStats.rst)
 add_custom_command(OUTPUT ZmwStats.rst

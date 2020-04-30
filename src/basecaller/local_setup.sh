@@ -16,3 +16,5 @@
 git submodule add -b develop ssh://git@bitbucket.nanofluidics.com:7999/test/pa-third-party.git
 
 git submodule add -b develop ssh://git@bitbucket.nanofluidics.com:7999/test/pa-common.git
+
+git submodule add -b develop ssh://git@bitbucket.nanofluidics.com:7999/test/hw-mongo.git

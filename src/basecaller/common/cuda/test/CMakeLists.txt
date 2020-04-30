@@ -12,7 +12,7 @@ add_library(libMongoCommonCudaTest OBJECT
 target_link_libraries(libMongoCommonCudaTest
     libMongoCommon
     libMongoCommonCuda
-    gtest
+    libGtest
 )
 
 # Define the test executable specific to cuda common
@@ -22,7 +22,7 @@ add_executable(${exec})
 
 target_link_libraries(${exec}
     libMongoCommonCudaTest
-    gtest_main
+    libGtestWithMain
 )
 
 add_test(${exec} ${exec} --gtest_output=xml:${exec}.xml)

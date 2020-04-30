@@ -1,12 +1,16 @@
-set (VERSION bid30)
+set (VERSION bid31)
 
 set (LOCAL_THIRD_PARTY_SCRIPTS off CACHE bool "Use local version of third party scripts" FORCE)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE string "Location of a local  pa-third-party repository" FORCE)
 
 function (SetupProject projName)
 
+list(APPEND CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_LIST_DIR}/nexus-versions"
+)
+
 if (LOCAL_THIRD_PARTY_SCRIPTS)
-    include(${LOCAL_THIRD_PARTY_LOCATION}/${projName}-setup.cmake)
+    include(${LOCAL_THIRD_PARTY_LOCATION}/setup.cmake)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} PARENT_SCOPE)
     message("Setting module path to: " ${CMAKE_MODULE_PATH})
 else()
@@ -64,7 +68,7 @@ else()
       message(FATAL_ERROR "Expected dependency ${package} in ${ROOT}")
     ENDIF()
 
-    include(${ROOT}/${projName}-setup.cmake)
+    include(${ROOT}/setup.cmake)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} PARENT_SCOPE)
     message("Setting module path to: " ${CMAKE_MODULE_PATH})
 endif()
