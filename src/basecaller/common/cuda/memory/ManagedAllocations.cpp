@@ -32,7 +32,9 @@
 #include <iomanip>
 #include <sstream>
 
+#include <pacbio/datasource/AllocationSlicer.h>
 #include <pacbio/logging/Logger.h>
+#include <pacbio/HugePage.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
 
@@ -46,6 +48,7 @@ namespace Memory {
 namespace {
 
 using namespace PacBio::Memory;
+using namespace PacBio::DataSource;
 
 // Helper class to keep track of memory high water marks
 class AllocStat
@@ -102,18 +105,69 @@ struct PinnedAllocator
 
 struct HugePinnedAllocator
 {
-    static constexpr uint32_t supportedIAllocatorFlags = IAllocator::CUDA_MEMORY | IAllocator::HUGEPAGES;
+    static constexpr uint32_t supportedIAllocatorFlags =
+          IAllocator::CUDA_MEMORY
+        | IAllocator::HUGEPAGES
+        | IAllocator::ALIGN_64B;
+
     static constexpr const char* description = "Pinned HugePage Host Memory";
 
     using AllocationT = SmartAllocation;
     static SmartAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
     {
-        throw PBException("Not yet implemented");
-        //return SmartAllocation(size,
-        //                       &CudaRawMallocHost,
-        //                       &CudaFreeHost,
-        //                       AllocationID{marker.AsHash()},
-        //                       AllocationType{static_cast<size_t>(AllocatorMode::CUDA)});
+        return SmartAllocation(size,
+                               &Allocate,
+                               &Deallocate,
+                               AllocationID{marker.AsHash()},
+                               AllocationType{static_cast<size_t>(AllocatorMode::HUGE_CUDA)});
+    }
+
+    HugePinnedAllocator()
+    {
+        Allocator();
+    }
+
+private:
+    static void* Allocate(size_t size)
+    {
+        return Allocator().Allocate(size);
+    }
+
+    static void Deallocate(void* ptr)
+    {
+        Allocator().Deallocate(ptr);
+    }
+
+    // Helper class, to do the extra work required to unify huge
+    // page allocations with the cuda runtime
+    struct HugePinnedHelper
+    {
+        static void* Malloc(size_t size)
+        {
+            auto ptr = PacBio::HugePage::Malloc(size);
+            // This function both page-locks the allocation,
+            // and registers the address range with the cuda
+            // runtime
+            CudaHostRegister(ptr, size);
+            return ptr;
+        }
+
+        static void Free(void* ptr)
+        {
+            // This function unlocks the page, and updates
+            // the cuda runtime bookkeeping to reflect that
+            CudaHostUnregister(ptr);
+            PacBio::HugePage::Free(ptr);
+        }
+    };
+
+    // Singleton access.  We're already using a static and application
+    // wide allocation cache, so it makes sense to similarly treat
+    // the AllocationSlicer that backs it all
+    static AllocationSlicer<HugePinnedHelper, 64>& Allocator()
+    {
+        static AllocationSlicer<HugePinnedHelper, 64> alloc_(1<<30);
+        return alloc_;
     }
 };
 
@@ -170,10 +224,35 @@ public:
     {
         if (cache_)
         {
-            PBLOG_ERROR << "Destroying AllocationManager while allocations are active.  "
+            // Note: The use of a static AllocationManager for allocation caching
+            //       opens us up to some potential error modes.  In particular,
+            //       it's somewhere between difficult and impossible to control
+            //       destruction order of objects with static storage duration.
+            //       Technically it happens in reverse order of construction, but
+            //       unless you are very careful to only use things in your destructor
+            //       that are used in your constructor, odds are any globals used in
+            //       the destructor of a static object are already dead.
+            //
+            //       This means that freeing any allocations after main exits is probably
+            //       fatal.  The core problem is that the cuda runtime has possibly torn
+            //       down, so any calls to that API are likely to fail hard.  Beyond that
+            //       the HugePinnedAllocator has some static data that is also probably
+            //       problematic, but not really worth wrestling with when the cuda problem
+            //       can't be solved.
+            //
+            //       We could move away from a static/global allocation cache, which would
+            //       fix most (but not all) of the issues.  However mongo started out with
+            //       non-global caching, and it was cumbersom enough to use that we migrated
+            //       to this static solution.  We can always revisit that design choice, but
+            //       for now things work and these problems are mostly theoretical.
+            //
+            //       So at the end of the day, it's simply required that you make sure any
+            //       allocations are freed before main exits, as well as all caching disabled.
+            PBLOG_ERROR << "Destroying AllocationManager while cache is still active!  "
                         << "This indicates not all memory was freed before static teardown "
-                        << "which usually causes an error, as the cuda runtime may no longer "
-                        << "exit.  We're probably about to die gracelessly and now you know why!";
+                        << "which usually causes an error, as global/static objects involved "
+                        << "in deallocations, such as the cuda runtime itself, may already be "
+                        << "dead.  We're probably about to die gracelessly and now you know why!";
 
             FlushPools();
         }
@@ -181,8 +260,8 @@ public:
 
     // After calling this, calls to the `Return` functions will always
     // store memory for future use, and host allocations will use
-    // pinned memory.  Beware no memory is ever freed unless
-    // you call `EnablePooling`.  For certain usage patterns
+    // pinned memory.  Beware no memory is ever freed until
+    // you call `DisableCaching`.  For certain usage patterns
     // (e.g. irregular and unpredictable allocation sizes), use of
     // AllocationManager will effectively look like a memory leak
     void EnableCaching()
@@ -329,6 +408,7 @@ public:
         counter++;
         auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
         Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
+
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
         return HostManager::GetManager().GetAlloc(size, marker);
     }
@@ -339,6 +419,7 @@ public:
         counter++;
         auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
         Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
+
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
         return GpuManager::GetManager().GetAlloc(size, marker);
     }
@@ -355,13 +436,17 @@ private:
 std::pair<AllocatorMode, std::unique_ptr<IMongoCachedAllocator>>& AllocInstance()
 {
     using Data = std::pair<AllocatorMode, std::unique_ptr<IMongoCachedAllocator>>;
-    static Data data{AllocatorMode::MALLOC, std::make_unique<MongoCachedAllocator<MallocAllocator>>(AllocationMarker("Not Recorded"))};
+    static Data data{AllocatorMode::MALLOC,
+                     std::make_unique<MongoCachedAllocator<MallocAllocator>>(AllocationMarker("Not Recorded"))};
 
     return data;
 }
 
 } // anon namespace
 
+// Helper function, to help consolidate switches over AllocatorMode
+// to a single location.  `f` is expected to be a function-like
+// thing that accepts an AllocationManager as an argument
 template <typename F>
 void VisitHostManager(AllocatorMode mode, F&& f)
 {
@@ -410,8 +495,8 @@ void IMongoCachedAllocator::ReturnDeviceAllocation(SmartDeviceAllocation alloc)
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
 
+    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
     AllocationManager<GpuAllocator>::GetManager().ReturnAlloc(std::move(alloc));
 }
 

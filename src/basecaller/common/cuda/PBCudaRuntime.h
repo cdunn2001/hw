@@ -35,6 +35,9 @@ void  CudaRawCopyDevice(void* dest, void* src, size_t count);
 void  CudaSynchronizeDefaultStream();
 void  CudaRawCopyToSymbol(const void* dest, void* src, size_t count);
 
+void CudaHostRegister(void* ptr, size_t size);
+void CudaHostUnregister(void* ptr);
+
 // Manually check if an error has occured.  Will capture
 // asynchronous errors that have not yet happened since
 // the last CUDA API call.  This also might be the only

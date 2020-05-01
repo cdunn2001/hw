@@ -169,4 +169,14 @@ void CudaRawCopyToSymbol(const void* dest, void* src, size_t count)
     cudaCheckErrors(::cudaMemcpyToSymbol(dest, src, count));
 }
 
+void CudaHostRegister(void* ptr, size_t size)
+{
+    cudaCheckErrors(::cudaHostRegister(ptr, size, cudaHostRegisterPortable));
+}
+
+void CudaHostUnregister(void* ptr)
+{
+    cudaCheckErrors(::cudaHostUnregister(ptr));
+}
+
 }}

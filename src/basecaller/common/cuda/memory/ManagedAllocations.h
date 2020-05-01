@@ -40,57 +40,6 @@ namespace PacBio {
 namespace Cuda {
 namespace Memory {
 
-// Ideally external code will not specify the ManagedAllocType
-// (effectively using DEFAULT) so that there can be a cohesive
-// allocation strategy.  However, this is a global system, and
-// to allow it to interact with an RAII class like an instance
-// of an IAllocator, one needs to be able to request a specific
-// allocation type to satisfy whatever requirements are
-// associated with that instance.  Efficient allocations and
-// correct statistics will still require the global state and
-// RAII instances to remain in coordination with each other, but
-// doing things this way allows us to maintain correctness
-// in terms of the actual properties of individual allocations,
-// as well as detect and warn if the caching/statistics are
-// not going to work properly.
-class ManagedAllocType
-{
-public:
-    enum Flags : uint32_t
-    {
-        DEFAULT  = 0,
-        STANDARD = 1>>0,
-        PINNED   = 1>>1,
-        HUGEPAGE = 1>>2  // Not yet supported
-    };
-
-    ManagedAllocType(uint32_t flags)
-        : val_(flags)
-    {
-        if ((flags & STANDARD) && (flags != STANDARD))
-            throw PBException("STANDARD allocation flag incompatible with other flags");
-    }
-
-    bool operator==(uint32_t flags) const
-    {
-        return val_ == flags;
-    }
-
-    bool operator!=(uint32_t flags) const
-    {
-        return !(*this == flags);
-    }
-
-    bool Supports(uint32_t flags) const
-    {
-        return (val_ & flags) == flags;
-    }
-
-    uint32_t Flags() const { return val_; }
-private:
-    uint32_t val_;
-};
-
 
 // Class used to give some sort of identity to an
 // allocation, for the purpose of allocation tracking.
@@ -182,7 +131,7 @@ enum class AllocatorMode
 // a GPU (where allocating pinned host memory would failed)
 void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc);
 
-// Gets globablly IMongoCachedAllocator, using whatever mode
+// Gets globabl IMongoCachedAllocator, using whatever mode
 // the application as a whole has been configured to use
 IMongoCachedAllocator& GetGlobalAllocator();
 
