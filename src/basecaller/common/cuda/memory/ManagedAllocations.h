@@ -107,8 +107,22 @@ public:
     //       in them never being recycled, and they will live until the cache is manually
     //       cleared (probably not until the end of execution).  In this situation it will
     //       effectively appear to be a memory leak.
-    void ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc);
-    void ReturnDeviceAllocation(SmartDeviceAllocation alloc);
+    // WARN: These routines will not be safe to call after the exit of main.  The caching
+    //       involves static storage duration data structures, which the runtime will start
+    //       destroying once main exits.  Care has been taken to make sure any allocations
+    //       already returned will be safely deallocated, but if you have a static member
+    //       variable somewhere that may contain an allocation, it's entirely possible that
+    //       by the time it's destroyed, the cuda runtime itself has been torn down and
+    //       any attempts to deallocate cuda memory will crash the program.
+    //
+    //       It's possible with a little work to make the caching part of the RAII setup
+    //       of SmartAllocation and SmartDeviceAllocation, in which case it's possible to
+    //       inject a mechanism to detect if the necessary global data has been destroyed
+    //       before attempting to use it. (e.g. via std::weak_ptr or something similar)
+    //       This would still leave it an error to deallocate memory after main exits, just
+    //       one we could have cleaner logging/teardown for.
+    static void ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc);
+    static void ReturnDeviceAllocation(SmartDeviceAllocation alloc);
 };
 
 enum class CachingMode

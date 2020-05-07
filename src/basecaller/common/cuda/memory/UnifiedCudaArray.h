@@ -187,7 +187,7 @@ public:
         }
 
         //recycle our allocation
-        GetGlobalAllocator().ReturnHostAllocation(std::move(hostData_));
+        IMongoCachedAllocator::ReturnHostAllocation(std::move(hostData_));
     }
 
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
@@ -209,7 +209,7 @@ public:
             GetHostView();
         }
 
-        GetGlobalAllocator().ReturnDeviceAllocation(std::move(gpuData_));
+        IMongoCachedAllocator::ReturnDeviceAllocation(std::move(gpuData_));
     }
 
     // Calling these functions may cause

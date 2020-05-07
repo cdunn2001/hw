@@ -151,7 +151,7 @@ public:
                     data_.get<U>(DataKey()),
                     count_);
             CudaSynchronizeDefaultStream();
-            GetGlobalAllocator().ReturnDeviceAllocation(std::move(data_));
+            IMongoCachedAllocator::ReturnDeviceAllocation(std::move(data_));
         }
     }
 

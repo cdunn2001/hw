@@ -200,7 +200,23 @@ template <typename Allocator>
 struct AllocationManager
 {
 private:
-    AllocationManager() = default;
+    AllocationManager()
+    {
+        // We're doing something somewhat subtle here.  AllocationManager is
+        // used with a static storage duration, but it's members include memory
+        // allocations that in turn rely on other data structures with static
+        // storage as well.  The most notable of these is the cuda runtime
+        // itself.  If we're not careful about the lifetime of static objects,
+        // we will potentially crash during application teardown, when we try
+        // to give memory back to the cuda runtime that is no longer alive.
+        //
+        // The destruction order of static/global objects is the reverse of
+        // the *completion* of their constructors.  By creating and destroying
+        // an allocation here during the ctor, we ensure that all static/global
+        // infrastructure required to free allocations will live longer than
+        // this object, making destruction of the contained allocations safe.
+        Allocator::CreateAllocation(1, AllocationMarker(""));
+    }
 
     AllocationManager(const AllocationManager&) = delete;
     AllocationManager(AllocationManager&&) = delete;
@@ -222,40 +238,7 @@ public:
 
     ~AllocationManager()
     {
-        if (cache_)
-        {
-            // Note: The use of a static AllocationManager for allocation caching
-            //       opens us up to some potential error modes.  In particular,
-            //       it's somewhere between difficult and impossible to control
-            //       destruction order of objects with static storage duration.
-            //       Technically it happens in reverse order of construction, but
-            //       unless you are very careful to only use things in your destructor
-            //       that are used in your constructor, odds are any globals used in
-            //       the destructor of a static object are already dead.
-            //
-            //       This means that freeing any allocations after main exits is probably
-            //       fatal.  The core problem is that the cuda runtime has possibly torn
-            //       down, so any calls to that API are likely to fail hard.  Beyond that
-            //       the HugePinnedAllocator has some static data that is also probably
-            //       problematic, but not really worth wrestling with when the cuda problem
-            //       can't be solved.
-            //
-            //       We could move away from a static/global allocation cache, which would
-            //       fix most (but not all) of the issues.  However mongo started out with
-            //       non-global caching, and it was cumbersom enough to use that we migrated
-            //       to this static solution.  We can always revisit that design choice, but
-            //       for now things work and these problems are mostly theoretical.
-            //
-            //       So at the end of the day, it's simply required that you make sure any
-            //       allocations are freed before main exits, as well as all caching disabled.
-            PBLOG_ERROR << "Destroying AllocationManager while cache is still active!  "
-                        << "This indicates not all memory was freed before static teardown "
-                        << "which usually causes an error, as global/static objects involved "
-                        << "in deallocations, such as the cuda runtime itself, may already be "
-                        << "dead.  We're probably about to die gracelessly and now you know why!";
-
-            FlushPools();
-        }
+        if (cache_) FlushPools();
     }
 
     // After calling this, calls to the `Return` functions will always
