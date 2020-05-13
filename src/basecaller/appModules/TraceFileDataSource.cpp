@@ -78,7 +78,7 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.layout.BlockWidth() != laneSize)
         throw PBException("Unexpected lane width requested");
 
-    if (maxQueueSize_ == 0) maxQueueSize_ = preloadChunks + 2;
+    if (maxQueueSize_ == 0) maxQueueSize_ = preloadChunks + 1;
 
     // TODO should be able to handle both eventually
     assert(config.layout.Type() == PacketLayout::BLOCK_LAYOUT_DENSE);
@@ -102,6 +102,8 @@ TraceFileDataSource::TraceFileDataSource(
 
 void TraceFileDataSource::ContinueProcessing()
 {
+    if (ChunksReady() >= maxQueueSize_) return;
+
     uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % traceFileReader_->NumZmwLanes();
     uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
 

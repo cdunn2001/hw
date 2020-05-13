@@ -161,8 +161,8 @@ public:
             throw PBException("Cannot have multiple outputs from a graph node if the output type is not const!");
 
         auto * ret = graph_->AddNode(std::move(body), stage);
-        hasChild_ = true;
         graph_->MakeEdge(*this, *ret);
+        hasChild_ = true;
         return ret;
     }
 
@@ -228,7 +228,7 @@ private:
     GraphManager<PerfEnum>* graph_;
     std::unique_ptr<TransformBody<In, Out>> body_;
     tbb::flow::function_node<WrappedIn, WrappedOut> node;
-    bool hasChild_ = false;
+    std::atomic_bool hasChild_{false};
 };
 
 template <typename In, typename Out, typename PerfEnum>
@@ -242,8 +242,8 @@ public:
             throw PBException("Cannot have multiple outputs from a graph node if the output type is not const!");
 
         auto * ret = graph_->AddNode(std::move(body), stage);
-        hasChild_ = true;
         graph_->MakeEdge(*this, *ret);
+        hasChild_ = true;
         return ret;
     }
 
@@ -292,14 +292,12 @@ private:
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
         body_->Process(*in.val);
-        auto& deque = body_->GetDeque();
-        while (!deque.empty())
-        {
-            WrappedOut out;
-            out.val = std::make_shared<Out>(std::move(deque.back()));
-            deque.pop_back();
-            std::get<0>(output).try_put(out);
-        }
+        body_->ConsumeAllOutput([&output](auto&& val)
+                               {
+                                   WrappedOut wrapped;
+                                   wrapped.val = std::make_shared<Out>(std::move(val));
+                                   std::get<0>(output).try_put(wrapped);
+                               });
     }
 
     template <typename Output, typename T = In, std::enable_if_t<!std::is_const<T>::value, int> = 0>
@@ -310,20 +308,18 @@ private:
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
         body_->Process(std::move(*in.val));
-        auto& deque = body_->GetDeque();
-        while (!deque.empty())
-        {
-            WrappedOut out;
-            out.val = std::make_shared<Out>(std::move(deque.back()));
-            deque.pop_back();
-            std::get<0>(output).try_put(out);
-        }
+        body_->ConsumeAllOutput([&output](auto&& val)
+                               {
+                                   WrappedOut wrapped;
+                                   wrapped.val = std::make_shared<Out>(std::move(val));
+                                   std::get<0>(output).try_put(wrapped);
+                               });
     }
 
     GraphManager<PerfEnum>* graph_;
     std::unique_ptr<MultiTransformBody<In, Out>> body_;
     tbb::flow::multifunction_node<WrappedIn, std::tuple<WrappedOut>> node;
-    bool hasChild_ = false;
+    std::atomic_bool hasChild_{false};
 };
 
 template <typename In, typename PerfEnum>

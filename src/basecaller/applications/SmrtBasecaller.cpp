@@ -227,7 +227,7 @@ private:
     }
 
     // TODO support wolverine and potentially other sources
-    std::unique_ptr <DataSourceRunner> CreateSource()
+    std::unique_ptr<DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
         std::array<size_t, 3> layoutDims{

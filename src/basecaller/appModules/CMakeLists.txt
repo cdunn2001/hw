@@ -26,4 +26,4 @@ target_link_libraries(libAppModules
         libBazio
 )
 
-#add_subdirectory(test)
+add_subdirectory(test)
