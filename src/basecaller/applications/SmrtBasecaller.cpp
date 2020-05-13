@@ -1,10 +1,8 @@
-//#include <utility>
-//
-#include <applications/Basecaller.h>
-#include <applications/BazWriter.h>
-#include <applications/Repacker.h>
-#include <applications/TraceFileDataSource.h>
-#include <applications/TraceSaver.h>
+#include <appModules/Basecaller.h>
+#include <appModules/BazWriter.h>
+#include <appModules/Repacker.h>
+#include <appModules/TraceFileDataSource.h>
+#include <appModules/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/SourceConfig.h>
