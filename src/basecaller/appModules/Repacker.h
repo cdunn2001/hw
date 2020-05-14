@@ -65,9 +65,11 @@ public:
             throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.laneWidth) +
                               " blockWidth but received " + std::to_string(packet.Layout().BlockWidth()));
 
-        Mongo::Data::BatchMetadata meta(packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
-                           packet.StartFrame(),
-                           packet.StartFrame() + packet.NumFrames());
+        Mongo::Data::BatchMetadata meta(
+            packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
+            packet.StartFrame(),
+            packet.StartFrame() + packet.NumFrames(),
+            packet.StartZmw());
         PushOut(Mongo::Data::TraceBatch<int16_t>(std::move(packet),
                                     meta,
                                     expectedDims_,

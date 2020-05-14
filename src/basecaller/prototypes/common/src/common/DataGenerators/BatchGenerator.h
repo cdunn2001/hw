@@ -60,7 +60,8 @@ public:
             // TODO: We allocate the memory here but do not de-allocate with the corresponding
             // call to DeactivateGpuMem().
             chunk.emplace_back(Mongo::Data::BatchMetadata(b, chunkIndex_ * BlockLen(),
-                                                          (chunkIndex_ * BlockLen()) + BlockLen()),
+                                                          (chunkIndex_ * BlockLen()) + BlockLen(),
+                                                          b * batchDims.ZmwsPerBatch()),
                                batchDims,
                                Memory::SyncDirection::HostWriteDeviceRead,
                                SOURCE_MARKER());

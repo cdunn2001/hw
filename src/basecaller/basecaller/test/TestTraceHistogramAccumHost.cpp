@@ -56,7 +56,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     const unsigned int chunkSize = 64;  // frames per chunk
     const unsigned int poolSize = 6;    // lanes per pool
 
-    Data::BatchMetadata bmd {7, 0, chunkSize};
+    Data::BatchMetadata bmd {7, 0, chunkSize, 7*poolSize*laneSize};
     Data::BasecallerTraceHistogramConfig histConfig;
     Data::MovieConfig movConfig;
     Data::CameraBatchFactory ctbFactory {chunkSize, poolSize,
@@ -116,7 +116,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
         t0 += n;
         t1 += n;
         assert(t0 < t1);
-        bmd = Data::BatchMetadata(bmd.PoolId(), t0, t1);
+        bmd = Data::BatchMetadata(bmd.PoolId(), t0, t1, bmd.FirstZmw());
     }
 };
 
