@@ -140,9 +140,9 @@ enum class AllocatorMode
 };
 
 // Sets the global allocation mode.  This is controlled
-// on an application level, to better faciliate scenarious
+// on an application level, to better faciliate scenarios
 // such as running a host-only version on a computer without
-// a GPU (where allocating pinned host memory would failed)
+// a GPU (where allocating pinned host memory would fail)
 void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc);
 
 // Gets globabl IMongoCachedAllocator, using whatever mode

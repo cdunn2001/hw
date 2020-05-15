@@ -71,6 +71,11 @@ private:
     size_t peakBytes_{0};
 };
 
+/////////////////////////////////////////
+// Some backend allocators that an be
+// plugged into the caching framework
+/////////////////////////////////////////
+
 struct MallocAllocator
 {
     static constexpr uint32_t supportedIAllocatorFlags = 0;
@@ -120,11 +125,6 @@ struct HugePinnedAllocator
                                &Deallocate,
                                AllocationID{marker.AsHash()},
                                AllocationType{static_cast<size_t>(AllocatorMode::HUGE_CUDA)});
-    }
-
-    HugePinnedAllocator()
-    {
-        Allocator();
     }
 
 private:

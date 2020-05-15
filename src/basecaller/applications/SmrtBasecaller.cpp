@@ -125,9 +125,14 @@ public:
         RunAnalyzer();
         Join();
 
-        // Need to free up our allocations that are pooled. If that happens
-        // during static teardown, we'll likely try to free cuda allocations
-        // after the cuda runtime is already gone, which causes a crash
+        // Go ahead and free up all our allocation pools, though we
+        // don't strictly need to do this as they can clean up after
+        // themselves.  Still, there are currently some outstanding
+        // static lifetime issues that can affect *other* allocations
+        // that live past the end of main, so for now this is just
+        // a way to be explicit and encourage the practice of manually
+        // getting rid of any static lifetime allocations before main
+        // ends
         DisableAllCaching();
     }
 
