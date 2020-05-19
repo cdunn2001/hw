@@ -39,7 +39,7 @@ void run(const Data::DataManagerParams& dataParams,
          const Subframe::AnalogMeta& baselineMeta,
          size_t simulKernels)
 {
-    Memory::EnablePerformanceMode();
+    SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
 
     static constexpr size_t gpuBlockThreads = laneSize/2;
 
@@ -99,7 +99,7 @@ void run(const Data::DataManagerParams& dataParams,
 
     FrameLabeler::Finalize();
 
-    Memory::DisablePerformanceMode();
+    Memory::DisableAllCaching();
 }
 
 }}

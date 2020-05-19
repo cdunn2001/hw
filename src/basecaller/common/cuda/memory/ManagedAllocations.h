@@ -33,62 +33,12 @@
 
 #include <pacbio/PBException.h>
 #include <pacbio/memory/SmartAllocation.h>
+#include <pacbio/memory/IAllocator.h>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
 
 namespace PacBio {
 namespace Cuda {
 namespace Memory {
-
-// Ideally external code will not specify the ManagedAllocType
-// (effectively using DEFAULT) so that there can be a cohesive
-// allocation strategy.  However, this is a global system, and
-// to allow it to interact with an RAII class like an instance
-// of an IAllocator, one needs to be able to request a specific
-// allocation type to satisfy whatever requirements are
-// associated with that instance.  Efficient allocations and
-// correct statistics will still require the global state and
-// RAII instances to remain in coordination with each other, but
-// doing things this way allows us to maintain correctness
-// in terms of the actual properties of individual allocations,
-// as well as detect and warn if the caching/statistics are
-// not going to work properly.
-class ManagedAllocType
-{
-public:
-    enum Flags : uint32_t
-    {
-        DEFAULT  = 0,
-        STANDARD = 1>>0,
-        PINNED   = 1>>1,
-        HUGEPAGE = 1>>2  // Not yet supported
-    };
-
-    ManagedAllocType(uint32_t flags)
-        : val_(flags)
-    {
-        if ((flags & STANDARD) && (flags != STANDARD))
-            throw PBException("STANDARD allocation flag incompatible with other flags");
-    }
-
-    bool operator==(uint32_t flags) const
-    {
-        return val_ == flags;
-    }
-
-    bool operator!=(uint32_t flags) const
-    {
-        return !(*this == flags);
-    }
-
-    bool Supports(uint32_t flags) const
-    {
-        return (val_ & flags) == flags;
-    }
-
-    uint32_t Flags() const { return val_; }
-private:
-    uint32_t val_;
-};
 
 
 // Class used to give some sort of identity to an
@@ -130,29 +80,93 @@ private:
                 std::string(__FILE__  ":" + std::to_string(__LINE__))          \
                 .substr(strlen(PacBio::Primary::MongoConfig::workspaceDir)+1))
 
-// These functions define the memory management API.  One might be tempted to bundle them together as
-// static functions in a class.  However there is obviously state associated with these routines,
-// and having static member variables opens us up to initialization ordering issues.  Instead these
-// are left as free functions, with the associated state handled by a singleton class in the
-// implementation file.
+// Extension of the IAllocator interface, which provides two new piece
+// of functionality:
+// 1. Allows cuda allocations (which are a fundamentally different type from
+//    host allocations)
+// 2. Facilitates allocation caching, which in some situations can be significantly
+//    faster than allocating/deallocating individual allocations each time they are
+//    needed
+class IMongoCachedAllocator : public PacBio::Memory::IAllocator
+{
+public:
+    using IAllocator::GetAllocation;
+    virtual PacBio::Memory::SmartAllocation GetAllocation(size_t count, const AllocationMarker& marker) = 0;
+    virtual SmartDeviceAllocation GetDeviceAllocation(size_t count, const AllocationMarker& marker) = 0;
 
-PacBio::Memory::SmartAllocation GetManagedHostAllocation(size_t size, const AllocationMarker& marker,
-                                                         ManagedAllocType type = ManagedAllocType::DEFAULT);
-SmartDeviceAllocation GetManagedDeviceAllocation(size_t size, const AllocationMarker& marker);
+    // Opt-in routines that allow allocation caching.  If you let a SmartAllocation expire it will
+    // be deallocated, but if instead you return it via one of these functions, it may be recycled
+    // to satisfy future allocation requests.
+    // Note: Allocation caching can be disabled application wide.  If allocation is disabled,
+    //       then calling these functions will simply free the memory
+    // Note: Different instances of IMongoCachedAllocator may share the same allocation cache.
+    //       Certain things cannot be mixed (like huge pages and normal system allocations),
+    //       but otherwise the implementation will share allocation pools between instances
+    // Note: The allocation caching scheme is currently very simple.  Calling these "Return"
+    //       functions for frequent one-off allocations of irregular size will probably result
+    //       in them never being recycled, and they will live until the cache is manually
+    //       cleared (probably not until the end of execution).  In this situation it will
+    //       effectively appear to be a memory leak.
+    // WARN: These routines will not be safe to call after the exit of main.  The caching
+    //       involves static storage duration data structures, which the runtime will start
+    //       destroying once main exits.  Care has been taken to make sure any allocations
+    //       already returned will be safely deallocated, but if you have a static member
+    //       variable somewhere that may contain an allocation, it's entirely possible that
+    //       by the time it's destroyed, the cuda runtime itself has been torn down and
+    //       any attempts to deallocate cuda memory will crash the program.
+    //
+    //       It's possible with a little work to make the caching part of the RAII setup
+    //       of SmartAllocation and SmartDeviceAllocation, in which case it's possible to
+    //       inject a mechanism to detect if the necessary global data has been destroyed
+    //       before attempting to use it. (e.g. via std::weak_ptr or something similar)
+    //       This would still leave it an error to deallocate memory after main exits, just
+    //       one we could have cleaner logging/teardown for.
+    static void ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc);
+    static void ReturnDeviceAllocation(SmartDeviceAllocation alloc);
+};
 
-void ReturnManagedHostAllocation(PacBio::Memory::SmartAllocation alloc);
-void ReturnManagedDeviceAllocation(SmartDeviceAllocation alloc);
+enum class CachingMode
+{
+    ENABLED,
+    DISABLED
+};
 
-ManagedAllocType GetCurrentAllocType();
+// Supported flavors of host allocations for mongo
+enum class AllocatorMode
+{
+    MALLOC,
+    CUDA,
+    HUGE_CUDA
+};
 
-// Enable performance mode to use pinned memory on the host
-// (which is necessary for efficient data transfers) and re-use
-// memory allocations when possible (which is necessary as cuda
-// malloc functions seem surprisingly slow).  The only reason this
-// is configurable is to support limited use of this software on
-// machines that may not have gpu hardware
-void EnablePerformanceMode();
-void DisablePerformanceMode();
+// Sets the global allocation mode.  This is controlled
+// on an application level, to better faciliate scenarios
+// such as running a host-only version on a computer without
+// a GPU (where allocating pinned host memory would fail)
+void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc);
+
+// Gets globabl IMongoCachedAllocator, using whatever mode
+// the application as a whole has been configured to use
+IMongoCachedAllocator& GetGlobalAllocator();
+
+// Creates an instance of IMongoCachedAllocator of a given mode,
+// regardless of how the whole application is configured.
+// Note: The caching for each mode is done statically and is
+//       shared between instances of each mode.  This function
+//       will allow you to diverge from the globally set mode,
+//       but it will not give you a separate and indpendant
+//       allocation cache
+std::unique_ptr<IMongoCachedAllocator> CreateAllocator(
+    AllocatorMode alloc,
+    const AllocationMarker& marker);
+
+// Toggles caching for the individual allocator modes
+void EnableHostCaching(AllocatorMode mode);
+void EnableGpuCaching();
+void DisableHostCaching(AllocatorMode mode);
+void DisableGpuCaching();
+void DisableAllCaching();
+
 
 }}} // ::PacBio::Cuda::Memory
 

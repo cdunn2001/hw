@@ -251,7 +251,7 @@ void run(const Data::DataManagerParams& dataParams,
          size_t simulKernels,
          BaselineFilterMode mode)
 {
-    Memory::EnablePerformanceMode();
+    SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
 
     if (mode == BaselineFilterMode::GlobalFull)
     {
@@ -399,7 +399,7 @@ void run(const Data::DataManagerParams& dataParams,
         }
     }
 
-    Memory::DisablePerformanceMode();
+    Memory::DisableAllCaching();
 }
 
 }}

@@ -100,7 +100,7 @@ public:
                      SyncDirection dir,
                      const AllocationMarker& marker)
         : activeOnHost_(true)
-        , hostData_{GetManagedHostAllocation(count*sizeof(HostType), marker)}
+        , hostData_{GetGlobalAllocator().GetAllocation(count*sizeof(HostType), marker)}
         , gpuData_{}
         , syncDir_(dir)
         , marker_(marker)
@@ -187,7 +187,7 @@ public:
         }
 
         //recycle our allocation
-        ReturnManagedHostAllocation(std::move(hostData_));
+        IMongoCachedAllocator::ReturnHostAllocation(std::move(hostData_));
     }
 
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
@@ -209,7 +209,7 @@ public:
             GetHostView();
         }
 
-        ReturnManagedDeviceAllocation(std::move(gpuData_));
+        IMongoCachedAllocator::ReturnDeviceAllocation(std::move(gpuData_));
     }
 
     // Calling these functions may cause
@@ -279,7 +279,7 @@ private:
     {
         if (gpuData_) return;
 
-        gpuData_ = GetManagedDeviceAllocation(hostData_.size(), marker_);
+        gpuData_ = GetGlobalAllocator().GetDeviceAllocation(hostData_.size(), marker_);
     }
 
     void CopyImpl(bool toHost, bool manual) const

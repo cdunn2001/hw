@@ -70,12 +70,12 @@ struct StreamMonitor : public ::testing::Test
 {
     void SetUp() override
     {
-        EnablePerformanceMode();
+        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
     }
 
     void TearDown() override
     {
-        DisablePerformanceMode();
+        Memory::DisableAllCaching();
     }
 };
 
