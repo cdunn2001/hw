@@ -265,13 +265,56 @@ private:
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
-    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>> CreateRepacker() const
+    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>>
+    CreateRepacker(PacketLayout inputLayout) const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool;
         requiredDims.framesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
         requiredDims.laneWidth = PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane;
-        return std::make_unique<TrivialRepackerBody>(requiredDims);
+
+        if (inputLayout.Encoding() != PacketLayout::INT16)
+        {
+            throw PBException("Only 16 bit input is supported so far");
+        }
+
+        if (inputLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
+        {
+            throw PBException("Only dense block layouts are supported so far");
+        }
+
+        // check if the trivial repacker is a good fit first, as it's always preferred
+        {
+            bool trivial = true;
+            if (requiredDims.lanesPerBatch != inputLayout.NumBlocks()) trivial = false;
+            if (requiredDims.laneWidth != inputLayout.BlockWidth()) trivial = false;
+            if (requiredDims.framesPerBatch != inputLayout.NumFrames()) trivial = false;
+
+            if (trivial)
+            {
+                PBLOG_INFO << "Instantiating TrivialRepacker";
+                return std::make_unique<TrivialRepackerBody>(requiredDims);
+            }
+        }
+
+        // Now check if the BlockRepacker is a valid fit
+        {
+            bool valid = true;
+            if (inputLayout.BlockWidth() % 32 != 0) valid = false;
+            if (requiredDims.framesPerBatch % inputLayout.NumFrames() != 0) valid = false;
+            if (valid)
+            {
+                PBLOG_INFO << "Instantiating BlockRepacker";
+                const size_t numZmw = numZmwLanes_ * laneSize;
+                const size_t numThreads = 3;
+                return std::make_unique<BlockRepacker>(inputLayout, requiredDims, numZmw, numThreads);
+            }
+        }
+
+        throw PBException("No repacker exists that can handle this PacketLayout:"
+                          " numBlocks, numFrames, blockWidth -- " + std::to_string(inputLayout.NumBlocks())
+                          + ", " + std::to_string(inputLayout.NumFrames()) + ", "
+                          + std::to_string(inputLayout.BlockWidth()));
     }
 
     std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver() const
@@ -307,7 +350,7 @@ private:
         auto source = CreateSource();
 
         GraphManager <GraphProfiler> graph(Config().init.numWorkerThreads);
-        auto *repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
+        auto *repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
         auto *analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
