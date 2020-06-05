@@ -6,8 +6,10 @@ add_library(libAppModules STATIC
         Basecaller.cpp
         BazWriter.h
         BazWriter.cpp
-        Repacker.h
-        Repacker.cpp
+        BlockRepacker.h
+        BlockRepacker.cpp
+        TrivialRepacker.h
+        TrivialRepacker.cpp
         TraceSaver.h
         TraceSaver.cpp
         TraceFileDataSource.h

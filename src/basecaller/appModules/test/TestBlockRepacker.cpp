@@ -36,7 +36,7 @@
 #include <common/graphs/GraphNodeBody.h>
 #include <common/graphs/GraphNode.h>
 
-#include <appModules/Repacker.h>
+#include <appModules/BlockRepacker.h>
 #include <dataTypes/TraceBatch.h>
 
 using namespace PacBio::Application;

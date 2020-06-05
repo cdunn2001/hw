@@ -1,6 +1,7 @@
 #include <appModules/Basecaller.h>
 #include <appModules/BazWriter.h>
-#include <appModules/Repacker.h>
+#include <appModules/BlockRepacker.h>
+#include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
