@@ -1,9 +1,13 @@
 
 cmake_minimum_required(VERSION 3.13)
-project(MongoBasecallerDemo
+project(MongoBasecaller
     VERSION 0.0
-    LANGUAGES CXX CUDA
+    LANGUAGES C CXX CUDA
 )
+
+enable_testing()
+
+include(setup-thirdparty.cmake)
 
 # TODO: Use C++17 when we have a newer version of GCC available.
 set(CMAKE_CXX_STANDARD 14)
