@@ -140,6 +140,49 @@ private:
     half2 data_;
 };
 
+class PBFloat2
+{
+public:
+    PBFloat2() = default;
+
+    CUDA_ENABLED PBFloat2(float f) : data_{f,f} {}
+    CUDA_ENABLED PBFloat2(float f1, float f2) : data_{f1, f2} {}
+
+#if defined(__CUDA_ARCH__)
+    __device__ PBFloat2(PBHalf2 f) : data_{__half22float2(f.data())} {}
+#else
+    PBFloat2(PBHalf2 f) : data_{f.FloatX(), f.FloatY()} {}
+#endif
+
+    // Set/get individual elements
+    CUDA_ENABLED void  X(float f) { data_.x = f; }
+    CUDA_ENABLED void  Y(float f) { data_.y = f; }
+    CUDA_ENABLED float X() const { return data_.x; }
+    CUDA_ENABLED float Y() const { return data_.y; }
+
+    template <int id>
+    CUDA_ENABLED float Get() const
+    {
+        static_assert(id < 2, "Out of bounds access in PBFloat2");
+        if (id == 0) return X();
+        else return Y();
+    }
+
+    CUDA_ENABLED const float2& data() const { return data_; }
+
+    CUDA_ENABLED PBFloat2 operator+(const PBFloat2& o) const { return PBFloat2(data_.x + o.data().x, data_.y + o.data().y);}
+    CUDA_ENABLED PBFloat2 operator-(const PBFloat2& o) const { return PBFloat2(data_.x - o.data().x, data_.y - o.data().y);}
+    CUDA_ENABLED PBFloat2 operator*(const PBFloat2& o) const { return PBFloat2(data_.x * o.data().x, data_.y * o.data().y);}
+    CUDA_ENABLED PBFloat2 operator/(const PBFloat2& o) const { return PBFloat2(data_.x / o.data().x, data_.y / o.data().y);}
+
+    CUDA_ENABLED PBFloat2& operator+=(const PBFloat2& o) { data_.x += o.data().x; data_.y += o.data().y; return *this;}
+    CUDA_ENABLED PBFloat2& operator-=(const PBFloat2& o) { data_.x -= o.data().x; data_.y -= o.data().y; return *this;}
+    CUDA_ENABLED PBFloat2& operator*=(const PBFloat2& o) { data_.x *= o.data().x; data_.y *= o.data().y; return *this;}
+    CUDA_ENABLED PBFloat2& operator/=(const PBFloat2& o) { data_.x /= o.data().x; data_.y /= o.data().y; return *this;}
+private:
+    float2 data_;
+};
+
 class PBBool2
 {
 public:

@@ -40,6 +40,12 @@ inline __device__ PBHalf2 Blend(PBBool2 cond, PBHalf2 l, PBHalf2 r)
     return PBHalf2(__halves2half2(low, high));
 }
 
+inline __device__ PBFloat2 Blend(PBShort2 cond, PBFloat2 l, PBFloat2 r)
+{
+    float low  = cond.X() ? l.X() : r.X();
+    float high = cond.Y() ? l.Y() : r.Y();
+    return PBFloat2(low, high);
+}
 
 inline __device__ PBHalf2 Blend(PBShort2 cond, PBHalf2 l, PBHalf2 r)
 {
