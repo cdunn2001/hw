@@ -24,6 +24,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
+#include <random>
 
 #include <gtest/gtest.h>
 
@@ -126,8 +127,12 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
         }
     }
 
-    // Re-order the packets, just for the fun of it.
-    std::random_shuffle(ret.begin(), ret.end());
+    // Re-order the packets, just for the fun of it. Don't want
+    // the order to change between runs, nor do we really care
+    // if the shuffle is all that random.  We just want to
+    // present data that is already sorted
+    std::mt19937 g(12345);
+    std::shuffle(ret.begin(), ret.end(), g);
 
     return ret;
 }

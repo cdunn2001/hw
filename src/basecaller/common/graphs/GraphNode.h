@@ -292,7 +292,7 @@ private:
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
         body_->Process(*in.val);
-        body_->ConsumeAllOutput([&output](auto&& val)
+        body_->FlushOutput([&output](auto&& val)
                                {
                                    WrappedOut wrapped;
                                    wrapped.val = std::make_shared<Out>(std::move(val));
@@ -308,12 +308,12 @@ private:
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
         body_->Process(std::move(*in.val));
-        body_->ConsumeAllOutput([&output](auto&& val)
-                               {
-                                   WrappedOut wrapped;
-                                   wrapped.val = std::make_shared<Out>(std::move(val));
-                                   std::get<0>(output).try_put(wrapped);
-                               });
+        body_->FlushOutput([&output](auto&& val)
+                           {
+                               WrappedOut wrapped;
+                               wrapped.val = std::make_shared<Out>(std::move(val));
+                               std::get<0>(output).try_put(wrapped);
+                           });
     }
 
     GraphManager<PerfEnum>* graph_;

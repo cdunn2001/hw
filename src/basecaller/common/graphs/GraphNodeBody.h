@@ -153,8 +153,15 @@ public:
     // Thread-safe routine to consume all completed work
     // waiting in the output queue.  Must supply a functor
     // `f` which will accept output values as an argument
+    // It is expected that `f` will be a lightweight functor,
+    // (e.g. just accepting the input and funneling it to
+    // another container).  The current implementation
+    // will lock once for the whole execution, meaning if
+    // a `Func` is supplied that is computationally intense,
+    // other threads may be stalled waiting to put data
+    // into the queue.
     template <typename Func>
-    void ConsumeAllOutput(Func&& f)
+    void FlushOutput(Func&& f)
     {
         std::lock_guard<std::mutex> lm(outputMutex_);
         while(!output.empty())

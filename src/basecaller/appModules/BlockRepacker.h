@@ -38,7 +38,7 @@ namespace Application {
 
 // A Moderately general block repacker, intended to handle a number of situations:
 // - inbound SensorPackets: are BLOCK_LAYOUT_DENSE.
-// - inbound SensorPackets: have a block width that is a multiple of 32 16 bit pixels
+// - inbound SensorPackets: have a block width that is a multiple of 32 16-bit pixels
 // - inbound SensorPackets: have a uniform frame count
 // - inbound SensorPackets: have a frame count that is equal to, or an even divisor of,
 //                          the output TraceBatch frame count
@@ -91,6 +91,7 @@ public:
     {
     public:
         virtual void Process(DataSource::SensorPacket packet) = 0;
+        virtual ~Impl() = default;
     };
 
 private:
