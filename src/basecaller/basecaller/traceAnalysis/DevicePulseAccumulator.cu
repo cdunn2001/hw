@@ -78,11 +78,11 @@ public:
             signalLastFrame_[i] = PBShort2(0);
             signalMax_[i] = PBShort2(0);
             signalTotal_[i] = PBShort2(0);
-            signalM2_[i] = PBHalf2(0.0f);
+            signalM2_[i] = PBFloat2(0.0f);
             label_[i] = PBShort2(initialState);
             m0_[i] = PBHalf2(0.0f);
             m1_[i] = PBHalf2(0.0f);
-            m2_[i] = PBHalf2(0.0f);
+            m2_[i] = PBFloat2(0.0f);
         }
     }
 
@@ -183,8 +183,8 @@ public:
         stats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
         stats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
         stats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
-        stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
-        stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+        stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
+        stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
 
 private:
@@ -193,16 +193,16 @@ private:
 
     CudaArray<PBShort2, blockThreads> signalFrstFrame_;   // Signal of the most recent frame added
     CudaArray<PBShort2, blockThreads> signalLastFrame_;   // Signal recorded for the last frame in the segment
-    CudaArray<PBHalf2, blockThreads> signalMax_;         // Max signal over all frames in segment
+    CudaArray<PBHalf2, blockThreads> signalMax_;          // Max signal over all frames in segment
     CudaArray<PBShort2, blockThreads> signalTotal_;       // Signal total, excluding the first and last frame
-    CudaArray<PBHalf2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
+    CudaArray<PBFloat2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
 
-    CudaArray<PBShort2, blockThreads> label_;             // // Internal label ID corresponding to detection modes
+    CudaArray<PBShort2, blockThreads> label_;             // Internal label ID corresponding to detection modes
 
     // Baseline stats computed from frames marked as baseline
-    CudaArray<PBHalf2, blockThreads> m0_;
-    CudaArray<PBHalf2, blockThreads> m1_;
-    CudaArray<PBHalf2, blockThreads> m2_;
+    CudaArray<PBHalf2,  blockThreads> m0_;
+    CudaArray<PBHalf2,  blockThreads> m1_;
+    CudaArray<PBFloat2, blockThreads> m2_;
 };
 
 template <typename LabelManager, size_t blockThreads>
