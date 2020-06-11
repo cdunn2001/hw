@@ -1,4 +1,7 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+#ifndef mongo_dataTypes_MovieConfig_H_
+#define mongo_dataTypes_MovieConfig_H_
+
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,34 +26,36 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+//  Defines class MovieConfig.
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-#define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-
-#include <dataTypes/Pulse.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <array>
+#include <common/MongoConstants.h>
+#include <dataTypes/AnalogMode.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostSimulatedPulseAccumulator : public PulseAccumulator
+/// Represents configuration of the instrument, chemistry, and data collection
+/// for a particular movie.
+struct MovieConfig
 {
-public:     // Static functions
-    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
-    static void Finalize();
-
 public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
-    ~HostSimulatedPulseAccumulator() override;
+    float frameRate;
+    float photoelectronSensitivity;
+    float refSnr;
 
-private:
-    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    /// Convention is to order analogs by decreasing relative amplitude.
+    std::array<AnalogMode, numAnalogs> analogs;
 
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+    // TODO: Will likely need additional members.
 };
 
-}}} // namespace PacBio::Mongo::Basecaller
+/// Creates an instance with somewhat arbitrary value.
+/// Convenient for some unit tests.
+MovieConfig MockMovieConfig();
 
-#endif // PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+}}}     // namespace PacBio::Mongo::Data
+
+#endif // mongo_dataTypes_MovieConfig_H_

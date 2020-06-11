@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,34 +23,34 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+/// \brief  Global configuration for the Primary realtime pipeline. These values
+///         may be changed at run time.
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-#define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+#ifndef mongo_dataTypes_BasecallerPulseAccumConfig_H_
+#define mongo_dataTypes_BasecallerPulseAccumConfig_H_
 
-#include <dataTypes/Pulse.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <pacbio/configuration/PBConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostSimulatedPulseAccumulator : public PulseAccumulator
+class BasecallerPulseAccumConfig : public Configuration::PBConfig<BasecallerPulseAccumConfig>
 {
-public:     // Static functions
-    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
-    static void Finalize();
-
 public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
-    ~HostSimulatedPulseAccumulator() override;
+    PB_CONFIG(BasecallerPulseAccumConfig);
 
-private:
-    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses)
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::GpuPulses);
 
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+    // Increasing this number will directly increase memory usage, even if
+    // we don't saturate the allowed number of calls, so be conservative
+    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 12);
 };
 
-}}} // namespace PacBio::Mongo::Basecaller
+}}}     // namespace PacBio::Mongo::Data
 
-#endif // PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+
+#endif //mongo_dataTypes_BasecallerPulseAccumConfig_H_

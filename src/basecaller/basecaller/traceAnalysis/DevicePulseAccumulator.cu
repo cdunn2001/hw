@@ -31,7 +31,7 @@
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchVectors.cuh>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
@@ -328,10 +328,11 @@ template <typename LabelManager>
 std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
-void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
+void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig,
+                                                     const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     constexpr bool hostExecution = false;
-    PulseAccumulator::InitFactory(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 
     CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
 

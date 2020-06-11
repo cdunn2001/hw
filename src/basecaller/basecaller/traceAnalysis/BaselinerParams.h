@@ -5,7 +5,7 @@
 #include <initializer_list>
 #include <vector>
 
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
 namespace PacBio {
 namespace Mongo {

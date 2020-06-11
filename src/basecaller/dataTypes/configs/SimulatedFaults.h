@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -22,51 +22,28 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+/// \brief  Global configuration for the Primary realtime pipeline. These values
+///         may be changed at run time.
 
-#ifndef mongo_datatypes_StaticDetectionModel_h
-#define mongo_datatypes_StaticDetectionModel_h
-
-#include <common/MongoConstants.h>
-#include "MovieConfig.h"
+#ifndef mongo_dataTypes_SimulatedFaults_H_
+#define mongo_dataTypes_SimulatedFaults_H_
 
 #include <pacbio/configuration/PBConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class StaticDetModelConfig : public Configuration::PBConfig<StaticDetModelConfig>
+class SimulatedFaults : public Configuration::PBConfig<SimulatedFaults>
 {
-public:
-    PB_CONFIG(StaticDetModelConfig);
+    PB_CONFIG(SimulatedFaults);
 
-    PB_CONFIG_PARAM(float, baselineMean, 0.0f);
-    PB_CONFIG_PARAM(float, baselineVariance, 33.0f);
-
-public:
-    struct AnalogMode
-    {
-        float mean;
-        float var;
-    };
-
-    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
-    {
-        std::array<AnalogMode, numAnalogs> analogs;
-        const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
-        for (size_t i = 0; i < analogs.size(); i++)
-        {
-            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
-            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2.f);
-
-            analogs[i].mean = mean;
-            analogs[i].var = var;
-        }
-
-        return analogs;
-    }
+    PB_CONFIG_PARAM(int, negativeDyeSpectrumCounter,0);
 };
 
-}}} // PacBio::Mongo::Data
+}}}     // namespace PacBio::Mongo::Data
 
-#endif // mongo_datatypes_StaticDetectionModel_h
+#endif //mongo_dataTypes_SimulatedFaults_H_

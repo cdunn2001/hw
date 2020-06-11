@@ -4,9 +4,8 @@
 #include <memory>
 
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
-#include <dataTypes/ConfigForward.h>
-#include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchData.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 
 namespace PacBio {
 namespace Mongo {

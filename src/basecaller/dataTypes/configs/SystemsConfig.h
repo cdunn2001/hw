@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,33 +24,35 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-#define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+#ifndef mongo_dataTypes_SystemsConfig_H_
+#define mongo_dataTypes_SystemsConfig_H_
 
-#include <dataTypes/Pulse.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <pacbio/configuration/PBConfig.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostSimulatedPulseAccumulator : public PulseAccumulator
+class SystemsConfig : public Configuration::PBConfig<SystemsConfig>
 {
-public:     // Static functions
-    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
-    static void Finalize();
-
 public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
-    ~HostSimulatedPulseAccumulator() override;
+    PB_CONFIG(SystemsConfig);
+    /// The number of host worker threads to use.  Most parallelism should be
+    /// handled internal to the GPU, so this does not need to be large.
+    /// A minimum of 3 will allow efficient overlap of upload/download/compute,
+    /// but beyond that it shouldn't really be any higher than what is necessary
+    /// for active host stages to keep up with the gpu
 
-private:
-    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    // TODO add hooks so that we can switch between gpu and host centric defaults
+    // without manually specifying a million parameters
+    PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 8);
 
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+    /// If true, the threads are bound to a particular set of cores for the
+    /// Sequel Alpha machines when running on the host.
+    PB_CONFIG_PARAM(bool, bindCores, false);
 };
 
-}}} // namespace PacBio::Mongo::Basecaller
+}}}     // namespace PacBio::Mongo::Data
 
-#endif // PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+
+#endif //mongo_dataTypes_SystemsConfig_H_

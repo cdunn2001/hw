@@ -33,9 +33,9 @@
 #include <pacbio/logging/Logger.h>
 
 #include <appModules/Basecaller.h>
-#include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchMetadata.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
 
 using std::vector;
 
@@ -48,6 +48,8 @@ TEST(TestBasecaller, CheckMetadata)
     Cuda::Memory::SetGlobalAllocationMode(Cuda::Memory::CachingMode::DISABLED,
                                           Cuda::Memory::AllocatorMode::MALLOC);
 
+    Data::SmrtBasecallerConfig config{};
+    auto& algoConfig = config.algorithm;
     const Data::BatchDimensions bDims {8, 16};
     const vector<uint32_t> poolIds = {2u, 3u, 5u, 8u, 1u};
     const auto& dimMap = [&](){
@@ -56,17 +58,15 @@ TEST(TestBasecaller, CheckMetadata)
         return ret;
     }();
 
-    Data::BasecallerConfig bcConfig;
-    bcConfig.algorithm.staticAnalysis = false;
-    bcConfig.algorithm.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
-    bcConfig.algorithm.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
-    bcConfig.algorithm.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
-    bcConfig.algorithm.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
-    bcConfig.init.numWorkerThreads = 6;
+    algoConfig.staticAnalysis = false;
+    algoConfig.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
+    algoConfig.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
+    algoConfig.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
+    algoConfig.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
 
     Data::MovieConfig movConfig = Data::MockMovieConfig();
 
-    auto basecaller = Application::BasecallerBody(dimMap, bcConfig, movConfig);
+    auto basecaller = Application::BasecallerBody(dimMap, algoConfig, movConfig);
 
     vector<Data::TraceBatch<int16_t>> chunk;
     vector<Data::BatchMetadata> bmdVec;
@@ -83,4 +83,3 @@ TEST(TestBasecaller, CheckMetadata)
         EXPECT_EQ(bmdVec[i], result.pulses.GetMeta());
     }
 }
-

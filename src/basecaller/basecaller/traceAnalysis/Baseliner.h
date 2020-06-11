@@ -5,7 +5,7 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasicTypes.h>

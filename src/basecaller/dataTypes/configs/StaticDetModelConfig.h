@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -22,35 +22,51 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-#define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+#ifndef mongo_datatypes_StaticDetectionModel_h
+#define mongo_datatypes_StaticDetectionModel_h
 
-#include <dataTypes/Pulse.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <common/MongoConstants.h>
+#include "MovieConfig.h"
+
+#include <pacbio/configuration/PBConfig.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostSimulatedPulseAccumulator : public PulseAccumulator
+class StaticDetModelConfig : public Configuration::PBConfig<StaticDetModelConfig>
 {
-public:     // Static functions
-    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
-    static void Finalize();
+public:
+    PB_CONFIG(StaticDetModelConfig);
+
+    PB_CONFIG_PARAM(float, baselineMean, 0.0f);
+    PB_CONFIG_PARAM(float, baselineVariance, 33.0f);
 
 public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
-    ~HostSimulatedPulseAccumulator() override;
+    struct AnalogMode
+    {
+        float mean;
+        float var;
+    };
 
-private:
-    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
+    {
+        std::array<AnalogMode, numAnalogs> analogs;
+        const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
+        for (size_t i = 0; i < analogs.size(); i++)
+        {
+            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
+            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2.f);
 
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+            analogs[i].mean = mean;
+            analogs[i].var = var;
+        }
+
+        return analogs;
+    }
 };
 
-}}} // namespace PacBio::Mongo::Basecaller
+}}} // PacBio::Mongo::Data
 
-#endif // PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+#endif // mongo_datatypes_StaticDetectionModel_h

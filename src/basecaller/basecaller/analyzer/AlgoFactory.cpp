@@ -24,7 +24,8 @@
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 using std::make_unique;
 using std::ostringstream;
@@ -195,19 +196,20 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (pulseAccumOpt_)
     {
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
-        PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        PulseAccumulator::Configure(bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
-        HostSimulatedPulseAccumulator::Configure(
-            bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         HostPulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+            movConfig,
+            bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
         DevicePulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+            movConfig,
+            bcConfig.pulseAccumConfig);
         break;
     default:
         ostringstream msg;
@@ -220,15 +222,15 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     {
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
         DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                         Data::GetPrimaryConfig().sensorFrameRate,
-                                         Data::GetPrimaryConfig().realtimeActivityLabels);
+                                         bcConfig.Metrics.framesPerHFMetricBlock,
+                                         movConfig.frameRate,
+                                         bcConfig.Metrics.realtimeActivityLabels);
         break;
     default:
         HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                   Data::GetPrimaryConfig().sensorFrameRate,
-                                   Data::GetPrimaryConfig().realtimeActivityLabels);
+                                   bcConfig.Metrics.framesPerHFMetricBlock,
+                                   movConfig.frameRate,
+                                   bcConfig.Metrics.realtimeActivityLabels);
     }
 
     // TODO: Configure other algorithms according to options.

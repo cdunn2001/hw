@@ -2,7 +2,7 @@
 
 #include <tbb/parallel_for.h>
 
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 #include "SubframeLabelManager.h"
 
 namespace PacBio {
@@ -13,10 +13,11 @@ template <typename LabelManager>
 std::unique_ptr<LabelManager> HostPulseAccumulator<LabelManager>::manager_;
 
 template <typename LabelManager>
-void HostPulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
+void HostPulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig,
+                                                   const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     const auto hostExecution = true;
-    PulseAccumulator::InitFactory(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 
     Cuda::Utility::CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
 

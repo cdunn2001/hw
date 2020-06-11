@@ -1,62 +1,40 @@
-#ifndef mongo_dataTypes_BasecallerConfig_H_
-#define mongo_dataTypes_BasecallerConfig_H_
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+/// \brief  Global configuration for the Primary realtime pipeline. These values
+///         may be changed at run time.
 
-#include <array>
+#ifndef mongo_dataTypes_BasecallerDmeConfig_H_
+#define mongo_dataTypes_BasecallerDmeConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
-#include <pacbio/utilities/SmartEnum.h>
-
-#include "AnalogMode.h"
-#include "PrimaryConfig.h"
-#include "StaticDetModelConfig.h"
-
-// TODO: After some mongo dust has settled, purge unused configuration properties.
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
-
-class BasecallerInitConfig : public Configuration::PBConfig<BasecallerInitConfig>
-{
-public:
-    PB_CONFIG(BasecallerInitConfig);
-    /// The number of host worker threads to use.  Most parallelism should be
-    /// handled internal to the GPU, so this does not need to be large.
-    /// A minimum of 3 will allow efficient overlap of upload/download/compute,
-    /// but beyond that it shouldn't really be any higher than what is necessary
-    /// for active host stages to keep up with the gpu
-
-    // TODO add hooks so that we can switch between gpu and host centric defaults
-    // without manually specifying a million parameters
-    PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 8);
-
-    /// If true, the threads are bound to a particular set of cores for the
-    /// Sequel Alpha machines when running on the host.
-    PB_CONFIG_PARAM(bool, bindCores, false);
-};
-
-
-class BasecallerTraceHistogramConfig : public Configuration::PBConfig<BasecallerTraceHistogramConfig>
-{
-public:
-    PB_CONFIG(BasecallerTraceHistogramConfig);
-
-    SMART_ENUM(MethodName, Host, Gpu);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
-    PB_CONFIG_PARAM(unsigned int, NumFramesPreAccumStats, 1000u);
-
-    // Bin size of data histogram is nominally defined as initial estimate
-    // of baseline sigma multiplied by this coefficient.
-    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
-
-    // Use fall-back baseline sigma when number of baseline frames is
-    // less than this value.
-    PB_CONFIG_PARAM(unsigned int, BaselineStatMinFrameCount, 50u);
-
-    // Use this value as an estimate for baseline standard deviation when
-    // we have insufficient data.
-    PB_CONFIG_PARAM(float, FallBackBaselineSigma, 10.0f);
-};
 
 class FixedDmeConfig : public Configuration::PBConfig<FixedDmeConfig>
 {
@@ -202,126 +180,7 @@ public:
     PB_CONFIG_PARAM(float, GofLogChiSqrThresh2, 8.0f);
 };
 
-
-class BasecallerFrameLabelerConfig : public Configuration::PBConfig<BasecallerFrameLabelerConfig>
-{
-public:
-    PB_CONFIG(BasecallerFrameLabelerConfig);
-
-    // TODO: When we are done testing subframe and it presumably becomes
-    //       default, consider putting subframe specific options into a
-    //       new subgroup
-
-    SMART_ENUM(MethodName, NoOp, DeviceSubFrameGaussCaps)
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::DeviceSubFrameGaussCaps);
-
-    PB_CONFIG_PARAM(float, UpperThreshold, 7.0f);
-    PB_CONFIG_PARAM(float, LowerThreshold, 2.0f);
-    PB_CONFIG_PARAM(float, Alpha, 1.0f);
-    PB_CONFIG_PARAM(float, Beta, 1.0f);
-    PB_CONFIG_PARAM(float, Gamma, 1.0f);
-};
-
-class BasecallerPulseAccumConfig : public Configuration::PBConfig<BasecallerPulseAccumConfig>
-{
-public:
-    PB_CONFIG(BasecallerPulseAccumConfig);
-
-    SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses)
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::GpuPulses);
-
-    // Increasing this number will directly increase memory usage, even if
-    // we don't saturate the allowed number of calls, so be conservative
-    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 12);
-};
-
-class BasecallerMetricsConfig : public Configuration::PBConfig<BasecallerMetricsConfig>
-{
-public:
-    PB_CONFIG(BasecallerMetricsConfig);
-
-    SMART_ENUM(MethodName, Host, NoOp, Gpu);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Gpu);
-
-    PB_CONFIG_PARAM(uint32_t, sandwichTolerance, 0);
-};
-
-
-class BasecallerBaselinerConfig : public Configuration::PBConfig<BasecallerBaselinerConfig>
-{
-public:
-    PB_CONFIG(BasecallerBaselinerConfig);
-
-    SMART_ENUM(MethodName,
-               MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
-               TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
-               DeviceMultiScale,
-               NoOp);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::DeviceMultiScale);
-};
-
-
-class BasecallerPulseToBaseConfig : public Configuration::PBConfig<BasecallerPulseToBaseConfig>
-{
-public:
-    PB_CONFIG(BasecallerPulseToBaseConfig);
-
-    SMART_ENUM(MethodName, Simple, Simulator, SigmaCut, ExShortPulse);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Simple);
-
-    PB_CONFIG_PARAM(uint32_t, BasesPerZmwChunk, 50u); // used by p2bsimulator ... maybe moved up?
-    PB_CONFIG_PARAM(float, SnrThresh, 100.0f);
-    PB_CONFIG_PARAM(double, XspAmpThresh, 0.70);  // Valid range is [0, 1].
-    PB_CONFIG_PARAM(float, XspWidthThresh, 3.5f); // Must be >= 0.
-};
-
-
-class SimulatedFaults : public Configuration::PBConfig<SimulatedFaults>
-{
-    PB_CONFIG(SimulatedFaults);
-
-    PB_CONFIG_PARAM(int, negativeDyeSpectrumCounter,0);
-};
-
-
-class BasecallerAlgorithmConfig : public Configuration::PBConfig<BasecallerAlgorithmConfig>
-{
-public:
-    PB_CONFIG(BasecallerAlgorithmConfig);
-
-    PB_CONFIG_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
-    PB_CONFIG_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
-    PB_CONFIG_OBJECT(BasecallerDmeConfig, dmeConfig);
-    PB_CONFIG_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
-    PB_CONFIG_OBJECT(BasecallerPulseAccumConfig, pulseAccumConfig);
-    PB_CONFIG_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
-    PB_CONFIG_OBJECT(BasecallerMetricsConfig, Metrics);
-    PB_CONFIG_OBJECT(SimulatedFaults, simulatedFaults);
-
-    PB_CONFIG_OBJECT(StaticDetModelConfig, staticDetModelConfig);
-    PB_CONFIG_PARAM(bool, staticAnalysis, true);
-
-public:
-    std::string CombinedMethodName() const
-    {
-        return baselinerConfig.Method.toString() + "_"
-             + dmeConfig.Method.toString() + "_"
-             + frameLabelerConfig.Method.toString() + "_"
-             + PulseToBase.Method.toString() + "_"
-             + Metrics.Method.toString();
-    }
-};
-
-
-class BasecallerConfig : public Configuration::PBConfig<BasecallerConfig>
-{
-    PB_CONFIG(BasecallerConfig);
-
-    PB_CONFIG_OBJECT(BasecallerInitConfig, init);
-    PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
-};
-
 }}}     // namespace PacBio::Mongo::Data
 
 
-#endif //mongo_dataTypes_BasecallerConfig_H_
+#endif //mongo_dataTypes_BasecallerDmeConfig_H_

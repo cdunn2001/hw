@@ -1,8 +1,8 @@
 
 #include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include "DetectionModelEstimator.h"
 

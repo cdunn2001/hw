@@ -42,7 +42,8 @@ private:     // Types
     struct AccumImpl;
 
 public:     // Static functions
-    static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
+    static void Configure(const Data::MovieConfig& movieConfig,
+                          const Data::BasecallerPulseAccumConfig& pulseConfig);
     static void Finalize();
 
 public:

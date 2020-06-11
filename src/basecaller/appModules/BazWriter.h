@@ -35,7 +35,7 @@
 
 #include <common/graphs/GraphNodeBody.h>
 
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/BatchResult.h>
 
 namespace PacBio {
@@ -59,7 +59,7 @@ public:
                   size_t expectedFrames,
                   const std::vector<uint32_t>& zmwNumbers,
                   const std::vector<uint32_t>& zmwFeatures,
-                  const Mongo::Data::BasecallerConfig& basecallerConfig,
+                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
                   size_t outputStride);
 
     ~BazWriterBody()

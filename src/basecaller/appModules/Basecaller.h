@@ -34,9 +34,9 @@
 #include <basecaller/analyzer/AlgoFactory.h>
 #include <basecaller/analyzer/BatchAnalyzer.h>
 
-#include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BatchResult.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 #include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
@@ -47,18 +47,18 @@ class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::Tra
     using BatchAnalyzer = Mongo::Basecaller::BatchAnalyzer;
 public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                   const Mongo::Data::BasecallerConfig& bcConfig,
+                   const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
                    const Mongo::Data::MovieConfig& movConfig)
-        : algoFactory_ (bcConfig.algorithm)
+        : algoFactory_(algoConfig)
     {
-        algoFactory_.Configure(bcConfig.algorithm, movConfig);
+        algoFactory_.Configure(algoConfig, movConfig);
 
         // TODO: If algoFactory_::Configure is handling configuration of the
         // various algorithms, is there a reason to still have a
         // BatchAnalyzer::Configure?
-        BatchAnalyzer::Configure(bcConfig.algorithm, movConfig);
+        BatchAnalyzer::Configure(algoConfig, movConfig);
 
-        const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
+        const bool staticAnalysis = algoConfig.staticAnalysis;
         for (const auto & kv : poolDims)
         {
             const auto& poolId = kv.first;
@@ -69,7 +69,7 @@ public:
             auto batchAnalyzer = Mongo::Basecaller::BatchAnalyzer(poolId, dims, algoFactory_);
             if (staticAnalysis)
             {
-                batchAnalyzer.SetupStaticModel(bcConfig.algorithm.staticDetModelConfig, movConfig);
+                batchAnalyzer.SetupStaticModel(algoConfig.staticDetModelConfig, movConfig);
             }
 
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));

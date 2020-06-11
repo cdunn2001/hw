@@ -37,7 +37,7 @@
 
 #include <dataTypes/AnalogMode.h>
 #include <dataTypes/BaselinerStatAccumState.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 

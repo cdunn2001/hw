@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,34 +23,35 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+/// \brief  Global configuration for the Primary realtime pipeline. These values
+///         may be changed at run time.
 
-#ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
-#define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+#ifndef mongo_dataTypes_SmrtBasecallerConfig_H_
+#define mongo_dataTypes_SmrtBasecallerConfig_H_
 
-#include <dataTypes/Pulse.h>
-#include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <pacbio/configuration/PBConfig.h>
+
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
+#include <dataTypes/configs/BatchLayoutConfig.h>
+#include <dataTypes/configs/SourceConfig.h>
+#include <dataTypes/configs/SystemsConfig.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-class HostSimulatedPulseAccumulator : public PulseAccumulator
+class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig>
 {
-public:     // Static functions
-    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
-    static void Finalize();
+    PB_CONFIG(SmrtBasecallerConfig);
 
-public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
-    ~HostSimulatedPulseAccumulator() override;
-
-private:
-    std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
-
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+    PB_CONFIG_OBJECT(SystemsConfig, system);
+    PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
+    PB_CONFIG_OBJECT(BatchLayoutConfig, layout);
+    PB_CONFIG_OBJECT(SourceConfig, source);
 };
 
-}}} // namespace PacBio::Mongo::Basecaller
+}}}     // namespace PacBio::Mongo::Data
 
-#endif // PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
+
+#endif //mongo_dataTypes_SmrtBasecallerConfig_H_

@@ -36,8 +36,8 @@
 
 #include <pacbio/logging/Logger.h>
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 #include <dataTypes/CameraTraceBatch.h>
 
 #include <gtest/gtest.h>

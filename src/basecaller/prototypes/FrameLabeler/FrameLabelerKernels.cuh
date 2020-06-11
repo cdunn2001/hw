@@ -37,6 +37,7 @@
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchMetrics.h>
+#include <dataTypes/configs/ConfigForward.h>
 
 #include "SubframeScorer.cuh"
 

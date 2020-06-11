@@ -4,10 +4,10 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void HostSimulatedPulseAccumulator::Configure(size_t maxCallsPerZmw)
+void HostSimulatedPulseAccumulator::Configure(const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     const auto hostExecution = true;
-    PulseAccumulator::InitFactory(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 }
 
 void HostSimulatedPulseAccumulator::Finalize()

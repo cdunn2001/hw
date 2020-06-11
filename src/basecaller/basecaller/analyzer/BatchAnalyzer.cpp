@@ -47,7 +47,8 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/StaticDetModelConfig.h>
 
 #include "AlgoFactory.h"
 

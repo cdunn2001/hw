@@ -31,7 +31,7 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 

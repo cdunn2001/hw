@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 #include <dataTypes/BatchMetrics.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/PulseBatch.h>
 
@@ -42,10 +42,11 @@ class PulseAccumulator
 {
 public:     // Static functions
 
-    static void Configure(size_t maxCallsPerZmw);
+    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
     static void Finalize();
 
-    static void InitFactory(bool hostExecution, size_t maxCallsPerZmw);
+    static void InitFactory(bool hostExecution,
+                            const Data::BasecallerPulseAccumConfig& pulseConfig);
 
 protected: // static members
     static std::unique_ptr<Data::PulseBatchFactory> batchFactory_;

@@ -31,6 +31,7 @@
 
 #include <common/MongoConstants.h>
 
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/Pulse.h>
 
 using namespace PacBio::Primary;
@@ -112,7 +113,7 @@ BazWriterBody::BazWriterBody(
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
-        const BasecallerConfig& basecallerConfig,
+        const SmrtBasecallerConfig& basecallerConfig,
         size_t outputStride)
     : bazName_(bazName)
     , zmwOutputStrideFactor_(outputStride)
@@ -128,9 +129,9 @@ BazWriterBody::BazWriterBody(
                          basecallerConfig.Serialize().toStyledString(),
                          zmwNumbers,
                          zmwFeatures,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
                          false,
                          true,
                          true,

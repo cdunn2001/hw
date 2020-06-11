@@ -39,13 +39,14 @@
 #include <basecaller/analyzer/BatchAnalyzer.h>
 
 #include <common/DataGenerators/BatchGenerator.h>
-#include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/MovieConfig.h>
-#include <dataTypes/PrimaryConfig.h>
+#include <dataTypes/configs/BasecallerPulseAccumConfig.h>
+#include <dataTypes/configs/BasecallerMetricsConfig.h>
+#include <dataTypes/configs/BatchLayoutConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 
@@ -57,22 +58,32 @@ namespace Basecaller {
 
 namespace {
 
+class TestConfig : public Configuration::PBConfig<TestConfig>
+{
+public:
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(Data::BatchLayoutConfig, layout);
+    PB_CONFIG_OBJECT(Data::BasecallerMetricsConfig, metrics);
+    PB_CONFIG_OBJECT(Data::BasecallerPulseAccumConfig, pulses);
+};
+
 // We simulate each base per zmw per block according to the following scheme:
 struct BaseSimConfig
 {
     BaseSimConfig()
     {
-        unsigned int poolSize = Data::GetPrimaryConfig().lanesPerPool;
-        unsigned int chunkSize = Data::GetPrimaryConfig().framesPerChunk;
-        dims.framesPerBatch = chunkSize;
+        config = TestConfig{};
+        dims.framesPerBatch = config.layout.framesPerChunk;
         dims.laneWidth = laneSize;
-        dims.lanesPerBatch = poolSize;
+        dims.lanesPerBatch = config.layout.lanesPerPool;
     };
 
     Data::BatchDimensions dims;
     unsigned int numBases = 10;
     unsigned int ipd = 1;
     unsigned int baseWidth = 4;
+    double frameRate = 100;
     std::map<Data::Pulse::NucleotideLabel, unsigned int> midSignal = {
         {Data::Pulse::NucleotideLabel::G, 10},
         {Data::Pulse::NucleotideLabel::A, 20},
@@ -84,20 +95,23 @@ struct BaseSimConfig
         {Data::Pulse::NucleotideLabel::T, 35},
         {Data::Pulse::NucleotideLabel::C, 45}};
     std::string pattern = "ACGT";
+    TestConfig config;
 };
 
-Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
+Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
 {
-    Cuda::Data::BatchGenerator batchGenerator(Data::GetPrimaryConfig().framesPerChunk,
-                                              Data::GetPrimaryConfig().zmwsPerLane,
-                                              Data::GetPrimaryConfig().lanesPerPool,
+    const auto& layoutConfig = sim.config.layout;
+    const auto& pulseConfig = sim.config.pulses;
+
+    Cuda::Data::BatchGenerator batchGenerator(layoutConfig.framesPerChunk,
+                                              layoutConfig.zmwsPerLane,
+                                              layoutConfig.lanesPerPool,
                                               8192,
-                                              Data::GetPrimaryConfig().lanesPerPool);
+                                              layoutConfig.lanesPerPool);
     auto chunk = batchGenerator.PopulateChunk();
 
-    Data::BasecallerAlgorithmConfig basecallerConfig;
     Data::PulseBatchFactory batchFactory(
-        basecallerConfig.pulseAccumConfig.maxCallsPerZmw,
+        pulseConfig.maxCallsPerZmw,
         Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto pulses = batchFactory.NewBatch(
@@ -105,7 +119,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
             chunk.front().StorageDims()).first;
 
     auto LabelConv = [&](size_t index) {
-        switch (config.pattern[index % config.pattern.size()])
+        switch (sim.pattern[index % sim.pattern.size()])
         {
         case 'A':
             return Data::Pulse::NucleotideLabel::A;
@@ -128,7 +142,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
         pulseView.Reset();
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
-            for (size_t b = 0; b < config.numBases; ++b)
+            for (size_t b = 0; b < sim.numBases; ++b)
             {
                 Data::Pulse pulse;
 
@@ -136,11 +150,11 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
 
                 // Populate pulse data
                 pulse.Label(label);
-                pulse.Start(b * config.baseWidth + b * config.ipd
-                                    + batchNo * config.dims.framesPerBatch)
-                     .Width(config.baseWidth);
-                pulse.MidSignal(config.midSignal[label] + b)
-                     .MaxSignal(config.maxSignal[label]);
+                pulse.Start(b * sim.baseWidth + b * sim.ipd
+                                    + batchNo * sim.dims.framesPerBatch)
+                     .Width(sim.baseWidth);
+                pulse.MidSignal(sim.midSignal[label] + b)
+                     .MaxSignal(sim.maxSignal[label]);
                 pulse.MeanSignal(pulse.MidSignal());
                 float m2modifier = (b % 2 == 0) ? 1.1f : 1.01f;
                 pulse.SignalM2(pulse.MidSignal()
@@ -219,11 +233,12 @@ Data::PulseDetectorMetrics GeneratePulseDetectorMetrics(BaseSimConfig config)
 }
 
 Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>
-GenerateModels(BaseSimConfig)
+GenerateModels(BaseSimConfig sim)
 {
+    const auto& layoutConfig = sim.config.layout;
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
                                                              laneSize>> models(
-        Data::GetPrimaryConfig().lanesPerPool,
+        layoutConfig.lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
         SOURCE_MARKER());
     Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
@@ -253,27 +268,27 @@ GenerateModels(BaseSimConfig)
 } // anonymous namespace
 
 template <typename HFT>
-void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
+void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
 {
 
     // TODO: test that the last block is finalized regardless of condition?
 
-    size_t numFramesPerBatch = 128;
-    size_t numBatchesPerHFMB = Data::GetPrimaryConfig().framesPerHFMetricBlock
+    size_t numFramesPerBatch = sim.config.layout.framesPerChunk;
+    size_t numBatchesPerHFMB = sim.config.metrics.framesPerHFMetricBlock
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
 
-    config.pattern = "ACGTGG";
-    config.ipd = 0;
-    const auto& baselinerStats = GenerateBaselineMetrics(config);
-    const auto& models = GenerateModels(config);
-    const auto& flMetrics = GenerateFrameLabelerMetrics(config);
-    const auto& pdMetrics = GeneratePulseDetectorMetrics(config);
+    sim.pattern = "ACGTGG";
+    sim.ipd = 0;
+    const auto& baselinerStats = GenerateBaselineMetrics(sim);
+    const auto& models = GenerateModels(sim);
+    const auto& flMetrics = GenerateFrameLabelerMetrics(sim);
+    const auto& pdMetrics = GeneratePulseDetectorMetrics(sim);
 
     int blocks_tested = 0;
 
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
-        auto pulses = GenerateBases(config, batchIdx);
+        auto pulses = GenerateBases(sim, batchIdx);
         auto basecallingMetrics = hfMetrics(
                 pulses, baselinerStats, models, flMetrics, pdMetrics);
         if (basecallingMetrics)
@@ -286,17 +301,17 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
-                                * config.numBases
-                                * config.baseWidth,
+                                * sim.numBases
+                                * sim.baseWidth,
                               mb.numPulseFrames[z]);
                     ASSERT_EQ(numBatchesPerHFMB
-                                * config.numBases
-                                * config.baseWidth,
+                                * sim.numBases
+                                * sim.baseWidth,
                               mb.numBaseFrames[z]);
                     // The pulses don't run to the end of each block, so all
                     // but one pulse is abutted. Plus we have the GG, which
                     // doesn't count as a sandwich.
-                    ASSERT_EQ((numBatchesPerHFMB) * (config.numBases - 2),
+                    ASSERT_EQ((numBatchesPerHFMB) * (sim.numBases - 2),
                               mb.numHalfSandwiches[z]);
                     // Sandwiches are one per block, on the 'GTG'
                     ASSERT_EQ(numBatchesPerHFMB,
@@ -322,9 +337,9 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
                               mb.numBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numBasesByAnalog[3][z]);
-                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                    ASSERT_EQ(numBatchesPerHFMB * sim.numBases,
                               mb.numPulses[z]);
-                    ASSERT_EQ(numBatchesPerHFMB * config.numBases,
+                    ASSERT_EQ(numBatchesPerHFMB * sim.numBases,
                               mb.numBases[z]);
                     // This will always something random, doesn't matter at the
                     // moment
@@ -356,13 +371,13 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
                     EXPECT_NEAR(0.0451073, mb.pkZvar[1][z], 0.001);
                     EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
                     EXPECT_NEAR(0.0960086, mb.pkZvar[3][z], 0.001);
-                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (sim.baseWidth - 2),
                               mb.numPkMidFrames[0][z]);
-                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (sim.baseWidth - 2),
                               mb.numPkMidFrames[1][z]);
-                    ASSERT_EQ(numBatchesPerHFMB * 4 * (config.baseWidth - 2),
+                    ASSERT_EQ(numBatchesPerHFMB * 4 * (sim.baseWidth - 2),
                               mb.numPkMidFrames[2][z]);
-                    ASSERT_EQ(numBatchesPerHFMB * 2 * (config.baseWidth - 2),
+                    ASSERT_EQ(numBatchesPerHFMB * 2 * (sim.baseWidth - 2),
                               mb.numPkMidFrames[3][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[0][z]);
@@ -390,68 +405,69 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& config)
 
 TEST(TestHFMetricsFilter, Populated_Device)
 {
+    BaseSimConfig sim;
     {
-        Data::BasecallerAlgorithmConfig bcConfig{};
-        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                         Data::GetPrimaryConfig().sensorFrameRate,
-                                         Data::GetPrimaryConfig().realtimeActivityLabels);
+        const auto& metricsConfig = sim.config.metrics;
+        DeviceHFMetricsFilter::Configure(metricsConfig.sandwichTolerance,
+                                         metricsConfig.framesPerHFMetricBlock,
+                                         sim.frameRate,
+                                         metricsConfig.realtimeActivityLabels);
     }
 
 
-    BaseSimConfig config;
     int poolId = 0;
-    DeviceHFMetricsFilter hfMetrics(poolId, config.dims.lanesPerBatch);
-    testPopulated(hfMetrics, config);
+    DeviceHFMetricsFilter hfMetrics(poolId, sim.dims.lanesPerBatch);
+    testPopulated(hfMetrics, sim);
 }
 
 TEST(TestHFMetricsFilter, Populated)
 {
+    BaseSimConfig sim;
     {
-        Data::BasecallerAlgorithmConfig bcConfig{};
-        HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                   Data::GetPrimaryConfig().sensorFrameRate,
-                                   Data::GetPrimaryConfig().realtimeActivityLabels);
+        const auto& metricsConfig = sim.config.metrics;
+        HFMetricsFilter::Configure(metricsConfig.sandwichTolerance,
+                                   metricsConfig.framesPerHFMetricBlock,
+                                   sim.frameRate,
+                                   metricsConfig.realtimeActivityLabels);
     }
 
 
-    BaseSimConfig config;
     int poolId = 0;
-    HostHFMetricsFilter hfMetrics(poolId, config.dims.lanesPerBatch);
-    testPopulated(hfMetrics, config);
+    HostHFMetricsFilter hfMetrics(poolId, sim.dims.lanesPerBatch);
+    testPopulated(hfMetrics, sim);
 }
 
 TEST(TestHFMetricsFilter, Noop)
 {
+    BaseSimConfig sim;
+    const auto& layoutConfig = sim.config.layout;
+    const auto& metricsConfig = sim.config.metrics;
     {
-        Data::BasecallerAlgorithmConfig bcConfig{};
-        NoHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                     Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                     Data::GetPrimaryConfig().sensorFrameRate,
-                                     Data::GetPrimaryConfig().realtimeActivityLabels);
+        NoHFMetricsFilter::Configure(metricsConfig.sandwichTolerance,
+                                     metricsConfig.framesPerHFMetricBlock,
+                                     sim.frameRate,
+                                     metricsConfig.realtimeActivityLabels);
     }
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
                                                              laneSize>> models(
-        Data::GetPrimaryConfig().lanesPerPool,
+        layoutConfig.lanesPerPool,
         Cuda::Memory::SyncDirection::Symmetric,
         SOURCE_MARKER());
 
 
     int poolId = 0;
     NoHFMetricsFilter hfMetrics(poolId);
-    size_t numFramesPerBatch = 128;
-    size_t numBatchesPerHFMB = Data::GetPrimaryConfig().framesPerHFMetricBlock
+    size_t numFramesPerBatch = layoutConfig.framesPerChunk;
+    size_t numBatchesPerHFMB = metricsConfig.framesPerHFMetricBlock
                              / numFramesPerBatch; // = 32, for 4096 frame HFMBs
-    BaseSimConfig config;
-    config.ipd = 0;
-    const auto& baselinerStats = GenerateBaselineMetrics(config);
-    const auto& flMetrics = GenerateFrameLabelerMetrics(config);
-    const auto& pdMetrics = GeneratePulseDetectorMetrics(config);
+    sim.ipd = 0;
+    const auto& baselinerStats = GenerateBaselineMetrics(sim);
+    const auto& flMetrics = GenerateFrameLabelerMetrics(sim);
+    const auto& pdMetrics = GeneratePulseDetectorMetrics(sim);
 
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
-        auto pulses = GenerateBases(config, batchIdx);
+        auto pulses = GenerateBases(sim, batchIdx);
         auto basecallingMetrics = hfMetrics(pulses, baselinerStats, models, flMetrics, pdMetrics);
         ASSERT_FALSE(basecallingMetrics);
     }

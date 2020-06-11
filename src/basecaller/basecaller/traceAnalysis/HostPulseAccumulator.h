@@ -54,7 +54,8 @@ class HostPulseAccumulator : public PulseAccumulator
     using BaselineStats = StatAccumulator<FloatArray>;
 
 public:     // Static functions
-    static void Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw);
+    static void Configure(const Data::MovieConfig& movieConfig,
+                          const Data::BasecallerPulseAccumConfig& pulseConfig);
     static void Finalize();
 
 public:

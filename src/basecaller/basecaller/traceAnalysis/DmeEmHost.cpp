@@ -37,7 +37,7 @@
 
 #include <common/LaneArray.h>
 #include <common/NumericUtil.h>
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/UHistogramSimd.h>
 
 using std::numeric_limits;

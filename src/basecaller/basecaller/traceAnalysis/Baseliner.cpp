@@ -1,7 +1,7 @@
 #include "Baseliner.h"
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerBaselinerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 namespace PacBio {
 namespace Mongo {

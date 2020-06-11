@@ -1,7 +1,4 @@
-#ifndef mongo_dataTypes_PrimaryConfig_H_
-#define mongo_dataTypes_PrimaryConfig_H_
-
-// Copyright (c) 2016-2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -30,61 +27,31 @@
 /// \brief  Global configuration for the Primary realtime pipeline. These values
 ///         may be changed at run time.
 
+#ifndef mongo_dataTypes_BasecallerMetricsConfig_H_
+#define mongo_dataTypes_BasecallerMetricsConfig_H_
+
 #include <pacbio/configuration/PBConfig.h>
-#include <pacbio/utilities/CpuInfo.h>
-#include <pacbio/utilities/Finally.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class PrimaryConfig :  public Configuration::PBConfig<PrimaryConfig>
+class BasecallerMetricsConfig : public Configuration::PBConfig<BasecallerMetricsConfig>
 {
-    PB_CONFIG(PrimaryConfig);
+public:
+    PB_CONFIG(BasecallerMetricsConfig);
 
-    // TODO: zmwsPerLane should be deprecated and eventually removed.
-    // In many places we use the constexpr laneSize defined in MongoConstants.h.
-    PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 64);
-    PB_CONFIG_PARAM(uint32_t, lanesPerPool, 4096);
-    PB_CONFIG_PARAM(uint32_t, framesPerChunk, 128);
+    SMART_ENUM(MethodName, Host, NoOp, Gpu);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::Gpu);
 
-    // Rate at which frames are read from the sensor.
-    PB_CONFIG_PARAM(double, sensorFrameRate, 100.0f);
+    PB_CONFIG_PARAM(uint32_t, sandwichTolerance, 0);
 
-    // Maxmimum polymerization rate supported.
-    PB_CONFIG_PARAM(float, maxPolRate, 1.5f);
-
-    // Metrics/BazWriter
     PB_CONFIG_PARAM(uint32_t, framesPerHFMetricBlock, 4096);
     PB_CONFIG_PARAM(bool, realtimeActivityLabels, true);
-
-public:
-    void StreamOut(std::ostream& os)
-    {
-        os << "    zmwsPerLane = " << zmwsPerLane << '\n'
-           << "    lanesPerPool = " << lanesPerPool << '\n'
-           << "    framesPerChunk = " << framesPerChunk << '\n'
-           << "    sensorFrameRate = " << sensorFrameRate << '\n'
-           << "    maxPolRate, = " << maxPolRate << '\n'
-           << std::flush;
-    }
 };
-
-
-inline std::ostream& operator<<(std::ostream& o, PrimaryConfig& config)
-{
-    config.StreamOut(o);
-    return o;
-}
-
-// This should referenced as Data::GetPrimaryConfig() to avoid confusion with the other
-// GetPrimaryConfig() from PacBio::Primary::GetPrimaryConfig()
-inline PrimaryConfig& GetPrimaryConfig()
-{
-   static PrimaryConfig config;
-   return config;
-}
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif //mongo_dataTypes_PrimaryConfig_H_
+
+#endif //mongo_dataTypes_BasecallerMetricsConfig_H_

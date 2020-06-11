@@ -27,7 +27,7 @@
 #include "DeviceSGCFrameLabeler.h"
 
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;

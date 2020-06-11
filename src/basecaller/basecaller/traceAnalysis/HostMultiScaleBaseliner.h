@@ -24,8 +24,8 @@ public:
     using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
 
 public:
-    static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig);
+    static void Configure(const Data::BasecallerBaselinerConfig&,
+                          const Data::MovieConfig&);
 
 
     static void Finalize();

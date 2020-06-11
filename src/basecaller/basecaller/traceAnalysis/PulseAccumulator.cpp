@@ -26,7 +26,7 @@
 
 #include "PulseAccumulator.h"
 
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -36,20 +36,21 @@ std::unique_ptr<Data::PulseBatchFactory> PulseAccumulator::batchFactory_;
 
 // static
 
-void PulseAccumulator::Configure(size_t maxCallsPerZmw)
+void PulseAccumulator::Configure(const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
-    InitFactory(true, maxCallsPerZmw);
+    InitFactory(true, pulseConfig);
 }
 
 void PulseAccumulator::Finalize() {}
 
-void PulseAccumulator::InitFactory(bool hostExecution, size_t maxCallsPerZmw)
+void PulseAccumulator::InitFactory(bool hostExecution,
+                                   const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     using Cuda::Memory::SyncDirection;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
-            maxCallsPerZmw,
+            pulseConfig.maxCallsPerZmw,
             syncDir);
 }
 
