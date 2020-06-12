@@ -40,18 +40,19 @@ ZmwDataManager<TIn, TOut>::ZmwDataManager(
     batchDims.framesPerBatch = params_.blockLength;
     batchDims.lanesPerBatch = params_.kernelLanes;
 
+    const size_t zmwsPerBatch = batchDims.ZmwsPerBatch();
     for (size_t i = 0; i < numBatches_; ++i)
     {
         using Mongo::Data::BatchMetadata;
-        bank0.emplace_back(BatchMetadata(i, 0, params_.blockLength),
+        bank0.emplace_back(BatchMetadata(i, 0, params_.blockLength, i*zmwsPerBatch),
                            batchDims,
                            Memory::SyncDirection::HostWriteDeviceRead,
                            SOURCE_MARKER());
-        bank1.emplace_back(BatchMetadata(i, 0, params_.blockLength),
+        bank1.emplace_back(BatchMetadata(i, 0, params_.blockLength, i*zmwsPerBatch),
                            batchDims,
                            Memory::SyncDirection::HostWriteDeviceRead,
                            SOURCE_MARKER());
-        output.emplace_back(BatchMetadata(i, 0, params_.blockLength),
+        output.emplace_back(BatchMetadata(i, 0, params_.blockLength, i*zmwsPerBatch),
                             batchDims,
                             Memory::SyncDirection::HostReadDeviceWrite,
                             SOURCE_MARKER());
@@ -154,12 +155,13 @@ void ZmwDataManager<TIn, TOut>::FillerThread()
         size_t batchId = 0;
         const size_t startFrame = blockIdx_ * params_.blockLength;
         const size_t stopFrame = startFrame + params_.blockLength;
+        const size_t zmwPerBatch = params_.laneWidth * params_.kernelLanes;
         for (auto& b : bank)
         {
             auto kernelProf = prof.CreateScopedProfiler(DATA::FILL_KERNEL);
             (void)kernelProf;
 
-            Mongo::Data::BatchMetadata meta(batchId, startFrame, stopFrame);
+            Mongo::Data::BatchMetadata meta(batchId, startFrame, stopFrame, batchId * zmwPerBatch);
             b.SetMeta(meta);
             FillNext(b);
 

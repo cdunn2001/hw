@@ -68,7 +68,7 @@ TEST(TestNoOpPulseAccumulator, Run)
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     PulseAccumulator pulseAccumulator(poolId);
@@ -109,7 +109,7 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     HostSimulatedPulseAccumulator pulseAccumulator(poolId);
@@ -171,7 +171,7 @@ void TestPulseAccumulator()
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
     // Discard metrics:
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first)).first;
 

@@ -57,6 +57,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <mutex>
 #include <type_traits>
 
 namespace PacBio {
@@ -140,15 +141,37 @@ struct MultiTransformBody : public LeafBody<In>
 public:
     // TODO parent should define this?
     using InternalOut = std::remove_const_t<Out>;
+
+    // Thread-safe routine to push a completed piece of work to
+    // the output queue (which is potentially shared among threads)
     void PushOut(InternalOut out)
     {
+        std::lock_guard<std::mutex> lm(outputMutex_);
         output.emplace_back(std::move(out));
     }
-    std::deque<InternalOut>& GetDeque()
+
+    // Thread-safe routine to consume all completed work
+    // waiting in the output queue.  Must supply a functor
+    // `f` which will accept output values as an argument
+    // It is expected that `f` will be a lightweight functor,
+    // (e.g. just accepting the input and funneling it to
+    // another container).  The current implementation
+    // will lock once for the whole execution, meaning if
+    // a `Func` is supplied that is computationally intense,
+    // other threads may be stalled waiting to put data
+    // into the queue.
+    template <typename Func>
+    void FlushOutput(Func&& f)
     {
-        return output;
+        std::lock_guard<std::mutex> lm(outputMutex_);
+        while(!output.empty())
+        {
+            f(std::move(output.back()));
+            output.pop_back();
+        }
     }
 private:
+    std::mutex outputMutex_;
     std::deque<InternalOut> output;
 };
 

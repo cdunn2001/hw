@@ -23,7 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <applications/BazWriter.h>
+#include <appModules/BazWriter.h>
 
 #include <pacbio/logging/Logger.h>
 #include <pacbio/primary/FileHeaderBuilder.h>

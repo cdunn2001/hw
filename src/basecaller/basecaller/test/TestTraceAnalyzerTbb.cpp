@@ -78,7 +78,7 @@ TEST(TestTraceAnalyzerTbb, CheckMetadata)
     vector<Data::BatchMetadata> bmdVec;
     for (const auto pid : poolIds)
     {
-        const Data::BatchMetadata bmd(pid, 0, bDims.framesPerBatch);
+        const Data::BatchMetadata bmd(pid, 0, bDims.framesPerBatch, pid*bDims.ZmwsPerBatch());
         bmdVec.push_back(bmd);
         chunk.emplace_back(bmd, bDims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
     }

@@ -23,8 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_APPLICATION_REPACKER_H
-#define PACBIO_APPLICATION_REPACKER_H
+#ifndef PACBIO_APPLICATION_TRIVIAL_REPACKER_H
+#define PACBIO_APPLICATION_TRIVIAL_REPACKER_H
 
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
@@ -65,9 +65,11 @@ public:
             throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.laneWidth) +
                               " blockWidth but received " + std::to_string(packet.Layout().BlockWidth()));
 
-        Mongo::Data::BatchMetadata meta(packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
-                           packet.StartFrame(),
-                           packet.StartFrame() + packet.NumFrames());
+        Mongo::Data::BatchMetadata meta(
+            packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
+            packet.StartFrame(),
+            packet.StartFrame() + packet.NumFrames(),
+            packet.StartZmw());
         PushOut(Mongo::Data::TraceBatch<int16_t>(std::move(packet),
                                     meta,
                                     expectedDims_,
@@ -78,7 +80,6 @@ private:
     Mongo::Data::BatchDimensions expectedDims_;
 };
 
-
 }}
 
-#endif //PACBIO_APPLICATION_REPACKER_H
+#endif //PACBIO_APPLICATION_TRIVIAL_REPACKER_H

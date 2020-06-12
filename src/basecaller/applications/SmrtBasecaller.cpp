@@ -1,10 +1,34 @@
-//#include <utility>
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
-#include <applications/Basecaller.h>
-#include <applications/BazWriter.h>
-#include <applications/Repacker.h>
-#include <applications/TraceFileDataSource.h>
-#include <applications/TraceSaver.h>
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#include <appModules/Basecaller.h>
+#include <appModules/BazWriter.h>
+#include <appModules/BlockRepacker.h>
+#include <appModules/TrivialRepacker.h>
+#include <appModules/TraceFileDataSource.h>
+#include <appModules/TraceSaver.h>
 #include <dataTypes/BasecallerConfig.h>
 #include <dataTypes/MovieConfig.h>
 #include <dataTypes/SourceConfig.h>
@@ -229,7 +253,7 @@ private:
     }
 
     // TODO support wolverine and potentially other sources
-    std::unique_ptr <DataSourceRunner> CreateSource()
+    std::unique_ptr<DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
         std::array<size_t, 3> layoutDims{
@@ -267,13 +291,56 @@ private:
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
-    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>> CreateRepacker() const
+    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>>
+    CreateRepacker(PacketLayout inputLayout) const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().lanesPerPool;
         requiredDims.framesPerBatch = PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk;
         requiredDims.laneWidth = PacBio::Mongo::Data::GetPrimaryConfig().zmwsPerLane;
-        return std::make_unique<TrivialRepackerBody>(requiredDims);
+
+        if (inputLayout.Encoding() != PacketLayout::INT16)
+        {
+            throw PBException("Only 16 bit input is supported so far");
+        }
+
+        if (inputLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
+        {
+            throw PBException("Only dense block layouts are supported so far");
+        }
+
+        // check if the trivial repacker is a good fit first, as it's always preferred
+        {
+            bool trivial = true;
+            if (requiredDims.lanesPerBatch != inputLayout.NumBlocks()) trivial = false;
+            if (requiredDims.laneWidth != inputLayout.BlockWidth()) trivial = false;
+            if (requiredDims.framesPerBatch != inputLayout.NumFrames()) trivial = false;
+
+            if (trivial)
+            {
+                PBLOG_INFO << "Instantiating TrivialRepacker";
+                return std::make_unique<TrivialRepackerBody>(requiredDims);
+            }
+        }
+
+        // Now check if the BlockRepacker is a valid fit
+        {
+            bool valid = true;
+            if (inputLayout.BlockWidth() % 32 != 0) valid = false;
+            if (requiredDims.framesPerBatch % inputLayout.NumFrames() != 0) valid = false;
+            if (valid)
+            {
+                PBLOG_INFO << "Instantiating BlockRepacker";
+                const size_t numZmw = numZmwLanes_ * laneSize;
+                const size_t numThreads = 3;
+                return std::make_unique<BlockRepacker>(inputLayout, requiredDims, numZmw, numThreads);
+            }
+        }
+
+        throw PBException("No repacker exists that can handle this PacketLayout:"
+                          " numBlocks, numFrames, blockWidth -- " + std::to_string(inputLayout.NumBlocks())
+                          + ", " + std::to_string(inputLayout.NumFrames()) + ", "
+                          + std::to_string(inputLayout.BlockWidth()));
     }
 
     std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver() const
@@ -309,9 +376,9 @@ private:
         auto source = CreateSource();
 
         GraphManager <GraphProfiler> graph(Config().init.numWorkerThreads);
-        auto *repacker = graph.AddNode(CreateRepacker(), GraphProfiler::REPACKER);
+        auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
-        auto *analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
+        auto* analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
 
         size_t numChunksAnalyzed = 0;
