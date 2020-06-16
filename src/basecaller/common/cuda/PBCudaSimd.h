@@ -170,10 +170,10 @@ public:
 
     CUDA_ENABLED const float2& data() const { return data_; }
 
-    CUDA_ENABLED PBFloat2 operator+(const PBFloat2& o) const { return PBFloat2(data_.x + o.data().x, data_.y + o.data().y);}
-    CUDA_ENABLED PBFloat2 operator-(const PBFloat2& o) const { return PBFloat2(data_.x - o.data().x, data_.y - o.data().y);}
-    CUDA_ENABLED PBFloat2 operator*(const PBFloat2& o) const { return PBFloat2(data_.x * o.data().x, data_.y * o.data().y);}
-    CUDA_ENABLED PBFloat2 operator/(const PBFloat2& o) const { return PBFloat2(data_.x / o.data().x, data_.y / o.data().y);}
+    friend CUDA_ENABLED PBFloat2 operator+(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x + r.data().x, l.data().y + r.data().y);}
+    friend CUDA_ENABLED PBFloat2 operator-(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x - r.data().x, l.data().y - r.data().y);}
+    friend CUDA_ENABLED PBFloat2 operator*(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x * r.data().x, l.data().y * r.data().y);}
+    friend CUDA_ENABLED PBFloat2 operator/(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x / r.data().x, l.data().y / r.data().y);}
 
     CUDA_ENABLED PBFloat2& operator+=(const PBFloat2& o) { data_.x += o.data().x; data_.y += o.data().y; return *this;}
     CUDA_ENABLED PBFloat2& operator-=(const PBFloat2& o) { data_.x -= o.data().x; data_.y -= o.data().y; return *this;}
