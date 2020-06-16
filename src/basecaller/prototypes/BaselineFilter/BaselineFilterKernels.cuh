@@ -256,8 +256,8 @@ public:
         stats.baselineStats.moment0[2*threadIdx.x+1] = m0B_[threadIdx.x].FloatY();
         stats.baselineStats.moment1[2*threadIdx.x] = m1B_[threadIdx.x].FloatX();
         stats.baselineStats.moment1[2*threadIdx.x+1] = m1B_[threadIdx.x].FloatY();
-        stats.baselineStats.moment2[2*threadIdx.x] = m2B_[threadIdx.x].FloatX();
-        stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].FloatY();
+        stats.baselineStats.moment2[2*threadIdx.x] = m2B_[threadIdx.x].X();
+        stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].Y();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
         stats.rawBaselineSum[2*threadIdx.x] = rawSumB_[threadIdx.x].FloatX();
@@ -272,34 +272,34 @@ public:
         stats.fullAutocorrState.moment1First[2*threadIdx.x+1] = m1LagFirst_[threadIdx.x].FloatY();
         stats.fullAutocorrState.moment1Last[2*threadIdx.x] = m1LagLast_[threadIdx.x].FloatX();
         stats.fullAutocorrState.moment1Last[2*threadIdx.x+1] = m1LagLast_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.moment2[2*threadIdx.x] = m2Lag_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.moment2[2*threadIdx.x+1] = m2Lag_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.moment2[2*threadIdx.x] = m2Lag_[threadIdx.x].X();
+        stats.fullAutocorrState.moment2[2*threadIdx.x+1] = m2Lag_[threadIdx.x].Y();
 
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
         stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
+        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
 
 private:
     // Min/max over all baseline-subtracted frames
-    Utility::CudaArray<PBHalf2, blockThreads> minB_;
-    Utility::CudaArray<PBHalf2, blockThreads> maxB_;
+    Utility::CudaArray<PBHalf2,  blockThreads> minB_;
+    Utility::CudaArray<PBHalf2,  blockThreads> maxB_;
     // Sum over all baseline frames before baseline subtraction
-    Utility::CudaArray<PBHalf2, blockThreads> rawSumB_;
+    Utility::CudaArray<PBHalf2,  blockThreads> rawSumB_;
     // Baseline stats computed from baseline-subtracted frames classified as baseline
-    Utility::CudaArray<PBHalf2, blockThreads> m0B_;
-    Utility::CudaArray<PBHalf2, blockThreads> m1B_;
-    Utility::CudaArray<PBHalf2, blockThreads> m2B_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m0B_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1B_;
+    Utility::CudaArray<PBFloat2, blockThreads> m2B_;
     // Auto-correlation stats computed from all frames
-    Utility::CudaArray<PBHalf2, blockThreads> m0_;
-    Utility::CudaArray<PBHalf2, blockThreads> m1_;
-    Utility::CudaArray<PBHalf2, blockThreads> m2_;
-    Utility::CudaArray<PBHalf2, blockThreads> m1LagFirst_;
-    Utility::CudaArray<PBHalf2, blockThreads> m1LagLast_;
-    Utility::CudaArray<PBHalf2, blockThreads> m2Lag_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m0_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1_;
+    Utility::CudaArray<PBFloat2, blockThreads> m2_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1LagFirst_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1LagLast_;
+    Utility::CudaArray<PBFloat2, blockThreads> m2Lag_;
 };
 
 template <size_t blockThreads, size_t lag>

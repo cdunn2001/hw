@@ -97,15 +97,15 @@ public: // metrics
     // The baseline stat accumulator:
     SingleMetric<PBHalf2> baselineM0;
     SingleMetric<PBHalf2> baselineM1;
-    SingleMetric<float2> baselineM2;
+    SingleMetric<float2>  baselineM2;
 
     // The autocorrelation accumulator:
     SingleMetric<PBHalf2> traceM0;
     SingleMetric<PBHalf2> traceM1;
-    SingleMetric<float2> traceM2;
+    SingleMetric<float2>  traceM2;
     SingleMetric<PBHalf2> autocorrM1First;
     SingleMetric<PBHalf2> autocorrM1Last;
-    SingleMetric<PBHalf2> autocorrM2;
+    SingleMetric<float2>  autocorrM2;
 
 public: // state trackers
     // These are the right size, but doesn't follow the <Pair, laneSize/2>
@@ -276,7 +276,7 @@ __global__ void InitializeMetrics(
 
     blockMetrics.autocorrM1First[threadIdx.x] = 0.0f;
     blockMetrics.autocorrM1Last[threadIdx.x] = 0.0f;
-    blockMetrics.autocorrM2[threadIdx.x] = 0.0f;
+    blockMetrics.autocorrM2[threadIdx.x] = zero;
 
     for (size_t a = 0; a < numAnalogs; ++a)
     {
