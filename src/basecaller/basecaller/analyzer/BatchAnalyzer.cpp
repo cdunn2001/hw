@@ -75,20 +75,20 @@ void BatchAnalyzer::ReportPerformance()
     Profiler::FinalReport();
 }
 
+// These are required here even though defaulted, as this class
+// has unique_ptrs to types that are incomplete in the header
+// file
+BatchAnalyzer& BatchAnalyzer::operator=(BatchAnalyzer&&) = default;
 BatchAnalyzer::~BatchAnalyzer() = default;
-BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
-
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
                              const Data::BatchDimensions& dims,
                              const AlgoFactory& algoFac)
-    : poolId_ (poolId)
-    , models_(dims.lanesPerBatch , Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
+    : models_(dims.lanesPerBatch ,
+              Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+              SOURCE_MARKER())
+    , poolId_ (poolId)
 {
-    static const unsigned int dmeDelayStride = 2u;  // TODO: Make this configurable.
-    // TODO: Is poolId_ defined appropriately for this use?
-    poolDmeDelay_ = poolId_ / dmeDelayStride;       // TODO: What are the units--frames, chunks, ... ?
-
     baseliner_ = algoFac.CreateBaseliner(poolId, dims);
     traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, dims);
     dme_ = algoFac.CreateDetectionModelEstimator(poolId, dims);
@@ -97,11 +97,30 @@ BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
     hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId, dims);
 }
 
-void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,
-                                     const PacBio::Mongo::Data::MovieConfig& movieConfig)
+SingleEstimateBatchAnalyzer::SingleEstimateBatchAnalyzer(uint32_t poolId,
+                                                         const Data::BatchDimensions& dims,
+                                                         const AlgoFactory& algoFac)
+    : BatchAnalyzer(poolId, dims, algoFac)
 {
-    staticAnalysis_ = true;
+}
 
+DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
+                                                           const Data::BatchDimensions& dims,
+                                                           const AlgoFactory& algoFac)
+    : BatchAnalyzer(poolId, dims, algoFac)
+{
+    static const unsigned int dmeDelayStride = 2u;  // TODO: Make this configurable.
+    // TODO: Is poolId_ defined appropriately for this use?
+    poolDmeDelay_ = PoolId() / dmeDelayStride;       // TODO: What are the units--frames, chunks, ... ?
+}
+
+FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
+                                                 const Data::BatchDimensions& dims,
+                                                 const Data::StaticDetModelConfig& staticDetModelConfig,
+                                                 const Data::MovieConfig& movieConfig,
+                                                 const AlgoFactory& algoFac)
+    : BatchAnalyzer(poolId, dims, algoFac)
+{
     // Not running DME, need to fake our model
     Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
 
@@ -125,24 +144,21 @@ void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelCo
 
 BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& tbatch)
 {
-    auto ret = [&]() {
-        if(staticAnalysis_)
-        {
-            return StaticModelPipeline(std::move(tbatch));
-        } else {
-            return StandardPipeline(std::move(tbatch));
-        }
-    }();
-    if (Cuda::StreamErrorCount() > 0)
-        throw PBException("Unexpected stream synchronization issues were detected");
-    return ret;
-}
-
-BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(const TraceBatch<int16_t>& tbatch)
-{
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
+    auto ret = AnalyzeImpl(tbatch);
+
+    if (Cuda::StreamErrorCount() > 0)
+        throw PBException("Unexpected stream synchronization issues were detected");
+
+    nextFrameId_ = tbatch.Metadata().LastFrame();
+
+    return ret;
+}
+
+BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+{
     auto mode = Profiler::Mode::REPORT;
     if (tbatch.Metadata().FirstFrame() < 1281) mode = Profiler::Mode::OBSERVE;
     if (tbatch.Metadata().FirstFrame() < 257) mode = Profiler::Mode::IGNORE;
@@ -155,7 +171,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(const TraceBatch<in
 
     auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -181,20 +197,15 @@ BatchAnalyzer::OutputType BatchAnalyzer::StaticModelPipeline(const TraceBatch<in
     (void)download;
     pulses.Pulses().LaneView(0);
 
-    nextFrameId_ = tbatch.Metadata().LastFrame();
-
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
-BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
 {
-    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
-    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
-
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
-    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -265,8 +276,6 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(const TraceBatch<int16
             pulses, baselinerMetrics, models_, frameLabelerMetrics,
             pulseDetectorMetrics);
 
-    nextFrameId_ = tbatch.Metadata().LastFrame();
-
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
@@ -274,11 +283,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(const TraceBatch<int16
 // WiP: Prototype for analysis that supports slowly varying detection
 // model parameters.
 BatchAnalyzer::OutputType
-BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
+DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
 {
-    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
-    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
-
     // This constant depends on the baseliner implementation and configuration.
     // It should be initialized by a call to a Baseliner member.
     static const unsigned int nFramesBaselinerStartUp = 100;
@@ -289,7 +295,7 @@ BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
-    auto baselinedTracesAndMetrics = (*baseliner_)(std::move(tbatch));
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -297,7 +303,7 @@ BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
     // Then wait a while more to stagger DME executions of different pools.
     // Then reset the trace histograms and start accumulating data for the first DME execution.
     if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
-            && frameCount_ + baselinedTraces.NumFrames() >= nFramesBaselinerStartUp + poolDmeDelay_)
+            && baselinedTraces.GetMeta().LastFrame() >= nFramesBaselinerStartUp + poolDmeDelay_)
     {
         // TODO: Reset traceHistAccum_.
 
@@ -353,9 +359,6 @@ BatchAnalyzer::QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch)
     {
         // TODO: Reset histograms.
     }
-
-    nextFrameId_ = tbatch.Metadata().LastFrame();
-    frameCount_ += tbatch.NumFrames();
 
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }

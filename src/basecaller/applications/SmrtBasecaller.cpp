@@ -233,7 +233,7 @@ private:
             }
         };
 
-        if (config_.algorithm.staticAnalysis == true)
+        if (config_.algorithm.modelEstimationMode == BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
         {
             setBlMeanAndCovar(traceFileName,
                               config_.algorithm.staticDetModelConfig.baselineMean,

@@ -51,14 +51,10 @@ public:
                    const Mongo::Data::MovieConfig& movConfig)
         : algoFactory_(algoConfig)
     {
+        using namespace Mongo::Data;
+
         algoFactory_.Configure(algoConfig, movConfig);
 
-        // TODO: If algoFactory_::Configure is handling configuration of the
-        // various algorithms, is there a reason to still have a
-        // BatchAnalyzer::Configure?
-        BatchAnalyzer::Configure(algoConfig, movConfig);
-
-        const bool staticAnalysis = algoConfig.staticAnalysis;
         for (const auto & kv : poolDims)
         {
             const auto& poolId = kv.first;
@@ -66,11 +62,24 @@ public:
             const auto it = bAnalyzer_.find(poolId);
             if (it != bAnalyzer_.cend()) continue;  // Ignore duplicate ids.
 
-            auto batchAnalyzer = Mongo::Basecaller::BatchAnalyzer(poolId, dims, algoFactory_);
-            if (staticAnalysis)
+            using namespace Mongo::Basecaller;
+            auto batchAnalyzer = [&]() -> std::unique_ptr<BatchAnalyzer>
             {
-                batchAnalyzer.SetupStaticModel(algoConfig.staticDetModelConfig, movConfig);
-            }
+                switch (algoConfig.modelEstimationMode)
+                {
+                case BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations:
+                    return std::make_unique<FixedModelBatchAnalyzer>(poolId, dims,
+                                                                     algoConfig.staticDetModelConfig,
+                                                                     movConfig, algoFactory_);
+                case BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations:
+                    return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_);
+                case BasecallerAlgorithmConfig::ModelEstimationMode::DynamicEstimations:
+                    return std::make_unique<DynamicEstimateBatchAnalyzer>(poolId, dims, algoFactory_);
+                default:
+                throw PBException("Unexpected model estimation mode: "
+                                 + algoConfig.modelEstimationMode.toString());
+                }
+            }();
 
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
         }
@@ -83,7 +92,6 @@ public:
 
     ~BasecallerBody()
     {
-        BatchAnalyzer::Finalize();
         BatchAnalyzer::ReportPerformance();
     }
 
@@ -92,7 +100,7 @@ public:
 
     Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatch<int16_t>& in) override
     {
-        auto& analyzer = bAnalyzer_.at(in.GetMeta().PoolId());
+        auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
         return analyzer(std::move(in));
     }
 private:
@@ -100,7 +108,7 @@ private:
     Mongo::Basecaller::AlgoFactory algoFactory_;
 
     // One analyzer for each pool. Key is pool id.
-    std::map<uint32_t, BatchAnalyzer> bAnalyzer_;
+    std::map<uint32_t, std::unique_ptr<BatchAnalyzer>> bAnalyzer_;
 };
 
 }}

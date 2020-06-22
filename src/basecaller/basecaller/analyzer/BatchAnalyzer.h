@@ -52,29 +52,7 @@ public:     // Types
     using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
     using OutputType = PacBio::Mongo::Data::BatchResult;
 
-    enum class PoolStatus
-    {
-        STARTUP_DME_DELAY,  // Baseliner startup + DME delay
-        STARTUP_DME_INIT,   // Histogram trace + inital DME
-        SEQUENCING,         // Producing potentially useful results
-        STOPPED,            // Pool stopped for throughput limits.
-        ERROR               // Something went very wrong.
-    };
-
-public:     // Static functions
-    /// Sets algorithm configuration and system calibration properties.
-    /// Static because the config types keep a JSON representation and
-    /// deserialize on each reference, but the values will be the same for
-    /// each BatchAnalyzer instance for a given movie.
-    /// \note Not thread safe. Do not call this function while threads are
-    /// running analysis.
-    static void Configure(const Data::BasecallerAlgorithmConfig&,
-                          const Data::MovieConfig&)
-    {}
-
-    static void Finalize()
-    {}
-
+public:
     static void ReportPerformance();
 
 public:     // Structors & assignment operators
@@ -83,10 +61,10 @@ public:     // Structors & assignment operators
                   const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
-    BatchAnalyzer(BatchAnalyzer&&);
+    BatchAnalyzer(BatchAnalyzer&&) = default;
 
     BatchAnalyzer& operator=(const BatchAnalyzer&) = delete;
-    BatchAnalyzer& operator=(BatchAnalyzer&&) = default;
+    BatchAnalyzer& operator=(BatchAnalyzer&&);
 
     ~BatchAnalyzer();
 
@@ -96,19 +74,9 @@ public:
     // TODO clean this change to reference
     OutputType operator()(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
 
-    OutputType StandardPipeline(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
-    OutputType StaticModelPipeline(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
+    uint32_t PoolId() const { return poolId_; }
 
-    void SetupStaticModel(const Data::StaticDetModelConfig& staticDetModelConfig,
-                          const Data::MovieConfig& movieConfig);
-
-    OutputType QuasiStationaryPipeline(Data::TraceBatch<int16_t> tbatch);
-
-private:
-    uint32_t poolId_;   // ZMW pool being processed by this analyzer.
-    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
-    uint32_t frameCount_ = 0;   // Number of frames processed.
-    uint32_t poolDmeDelay_;
+protected:
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<FrameLabeler> frameLabeler_;
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
@@ -118,15 +86,88 @@ private:
 
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
+private:
+    virtual OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) = 0;
+
+    uint32_t poolId_;   // ZMW pool being processed by this analyzer.
+    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+};
+
+// Does a single dme estimate upfront, once we've gathered enough
+// data in the baseline stats and histogram
+class SingleEstimateBatchAnalyzer : public BatchAnalyzer
+{
+public:
+    SingleEstimateBatchAnalyzer(uint32_t poolId,
+                                const Data::BatchDimensions& dims,
+                                const AlgoFactory& algoFac);
+
+    SingleEstimateBatchAnalyzer(const SingleEstimateBatchAnalyzer&) = delete;
+    SingleEstimateBatchAnalyzer(SingleEstimateBatchAnalyzer&&) = default;
+
+    SingleEstimateBatchAnalyzer& operator=(const SingleEstimateBatchAnalyzer&) = delete;
+    SingleEstimateBatchAnalyzer& operator=(SingleEstimateBatchAnalyzer&&) = default;
+
+    ~SingleEstimateBatchAnalyzer() = default;
+
+    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+private:
     bool isModelInitialized_ {false};
 
-    PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
+};
 
-    // runs the main compute phases with a static model, bypassing things like the
-    // dme and trace binning.  This is necessary for now because they are not
-    // even implemented, but may remain desirable in the future when tweaking/profiling
-    // steady-state basecalling performance
-    bool staticAnalysis_ {false};
+// Runs a version of the pipeline with no DME stage.  The model is setallmeans
+// statically up-front to match the (simulated) input data
+class FixedModelBatchAnalyzer : public BatchAnalyzer
+{
+public:
+    FixedModelBatchAnalyzer(uint32_t poolId,
+                            const Data::BatchDimensions& dims,
+                            const Data::StaticDetModelConfig& staticDetModelConfig,
+                            const Data::MovieConfig& movieConfig,
+                            const AlgoFactory& algoFac);
+
+    FixedModelBatchAnalyzer(const FixedModelBatchAnalyzer&) = delete;
+    FixedModelBatchAnalyzer(FixedModelBatchAnalyzer&&) = default;
+
+    FixedModelBatchAnalyzer& operator=(const FixedModelBatchAnalyzer&) = delete;
+    FixedModelBatchAnalyzer& operator=(FixedModelBatchAnalyzer&&) = default;
+
+    ~FixedModelBatchAnalyzer() = default;
+
+    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+};
+
+// Runs continuous (staggered) dme estimations that update as new data comes in.
+// Estimations are evently staggered between different pools, so that chunks are
+// all roughly the same computational expense
+class DynamicEstimateBatchAnalyzer : public BatchAnalyzer
+{
+public:
+    DynamicEstimateBatchAnalyzer(uint32_t poolId,
+                                 const Data::BatchDimensions& dims,
+                                 const AlgoFactory& algoFac);
+
+    DynamicEstimateBatchAnalyzer(const DynamicEstimateBatchAnalyzer&) = delete;
+    DynamicEstimateBatchAnalyzer(DynamicEstimateBatchAnalyzer&&) = default;
+
+    DynamicEstimateBatchAnalyzer& operator=(const DynamicEstimateBatchAnalyzer&) = delete;
+    DynamicEstimateBatchAnalyzer& operator=(DynamicEstimateBatchAnalyzer&&) = default;
+
+    ~DynamicEstimateBatchAnalyzer() = default;
+
+    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+private:
+    enum class PoolStatus
+    {
+        STARTUP_DME_DELAY,  // Baseliner startup + DME delay
+        STARTUP_DME_INIT,   // Histogram trace + inital DME
+        SEQUENCING,         // Producing potentially useful results
+        STOPPED,            // Pool stopped for throughput limits.
+        ERROR               // Something went very wrong.
+    };
+    PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
+    uint32_t poolDmeDelay_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
