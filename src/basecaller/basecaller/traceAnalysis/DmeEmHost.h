@@ -81,6 +81,12 @@ public:     // Static functions
         *a = Blend(mask, b, *a);
     }
 
+    /// Updates *detModel by increasing the amplitude of all detection modes by
+    /// \a scale. Also updates all detection mode covariances according
+    /// to the standard noise model. Ratios of amplitudes among detection modes
+    /// and properties of the background mode are preserved.
+    static void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel);
+
 public:
     DmeEmHost(uint32_t poolId, unsigned int poolSize);
 
@@ -139,11 +145,7 @@ private:    // Functions
                               LaneDetModelHost* detModel) const;
 
 
-    /// Updates *detModel by increasing the amplitude of all detection modes by
-    /// \a scale. Also updates all detection mode covariances according
-    /// to the standard noise model. Ratios of amplitudes among detection modes
-    /// and properties of the background mode are preserved.
-    void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel) const;
+
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
