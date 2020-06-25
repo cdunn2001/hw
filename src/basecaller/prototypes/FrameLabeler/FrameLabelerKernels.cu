@@ -332,44 +332,13 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
 constexpr size_t FrameLabeler::BlockThreads;
 
-int32_t FrameLabeler::framesPerChunk_ = 0;
-int32_t FrameLabeler::lanesPerPool_ = 0;
-ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>>> FrameLabeler::scratchData_;
-
-void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
-                             int32_t lanesPerPool, int32_t framesPerChunk)
+void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta)
 {
-    if (lanesPerPool <= 0) throw PBException("Invalid value for lanesPerPool");
-    if (framesPerChunk <= 0) throw PBException("Invalid value for framesPerChunk");
-
     Subframe::TransitionMatrix transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
     CudaCopyToSymbol(trans, &transHost);
-
-    framesPerChunk_ = framesPerChunk;
-    lanesPerPool_ = lanesPerPool;
 }
 
-void FrameLabeler::Finalize()
-{
-    scratchData_.Clear();
-}
-
-std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> FrameLabeler::BorrowScratch()
-{
-    std::unique_ptr<ViterbiDataHost<BlockThreads>> ret;
-    bool success = scratchData_.TryPop(ret);
-    if (! success)
-    {
-        ret = std::make_unique<ViterbiDataHost<BlockThreads>>(framesPerChunk_ + ViterbiStitchLookback, lanesPerPool_);
-    }
-    assert(ret);
-    return ret;
-}
-
-void FrameLabeler::ReturnScratch(std::unique_ptr<ViterbiDataHost<FrameLabeler::BlockThreads>> data)
-{
-    scratchData_.Push(std::move(data));
-}
+void FrameLabeler::Finalize() {}
 
 static BatchDimensions LatBatchDims(size_t lanesPerPool)
 {
@@ -380,16 +349,11 @@ static BatchDimensions LatBatchDims(size_t lanesPerPool)
     return ret;
 }
 
-FrameLabeler::FrameLabeler()
-    : latent_(SOURCE_MARKER(), lanesPerPool_)
-    , prevLat_(LatBatchDims(lanesPerPool_), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
+FrameLabeler::FrameLabeler(size_t lanesPerPool)
+    : latent_(SOURCE_MARKER(), lanesPerPool)
+    , prevLat_(LatBatchDims(lanesPerPool), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
 {
-    if (framesPerChunk_ == 0 || lanesPerPool_ == 0)
-    {
-        throw PBException("Must call FrameLabeler::Configure before constructing FrameLabeler objects!");
-    }
-
-    PBLauncher(InitLatent, lanesPerPool_, BlockThreads)(prevLat_);
+    PBLauncher(InitLatent, lanesPerPool, BlockThreads)(prevLat_);
     CudaSynchronizeDefaultStream();
 }
 
@@ -399,13 +363,13 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
                                 Mongo::Data::BatchData<int16_t>& output,
                                 Mongo::Data::FrameLabelerMetrics& metricsOutput)
 {
-    auto labels = BorrowScratch();
+    ViterbiDataHost<BlockThreads> labels(input.NumFrames() + ViterbiStitchLookback, input.LanesPerBatch());
 
-    const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, lanesPerPool_, BlockThreads);
+    const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, input.LanesPerBatch(), BlockThreads);
     launcher(models,
              input,
              latent_,
-             *labels,
+             labels,
              prevLat_,
              latOut,
              output,
@@ -413,7 +377,6 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
 
     Cuda::CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
-    ReturnScratch(std::move(labels));
 }
 
 }}

@@ -38,50 +38,26 @@ uint32_t HFMetricsFilter::sandwichTolerance_ = 0;
 uint32_t HFMetricsFilter::framesPerHFMetricBlock_ = 0;
 double HFMetricsFilter::frameRate_ = 0;
 bool HFMetricsFilter::realtimeActivityLabels_ = 0;
-uint32_t HFMetricsFilter::framesPerChunk_;
-uint32_t HFMetricsFilter::lanesPerBatch_;
-uint32_t HFMetricsFilter::zmwsPerBatch_;
 std::unique_ptr<Data::BasecallingMetricsFactory> HFMetricsFilter::metricsFactory_;
 
 void HFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                 uint32_t framesPerHFMetricBlock,
-                                uint32_t framesPerChunk,
                                 double frameRate,
                                 bool realtimeActivityLabels,
-                                uint32_t lanesPerBatch,
                                 bool hostExecution)
 {
     framesPerHFMetricBlock_ = framesPerHFMetricBlock;
-    framesPerChunk_ = framesPerChunk;
-    if (framesPerHFMetricBlock_ < framesPerChunk)
-        throw PBException("HFMetric frame block size cannot be smaller than "
-                          "trace block size!");
-
     sandwichTolerance_ = sandwichTolerance;
     frameRate_ = frameRate;
     realtimeActivityLabels_ = realtimeActivityLabels;
-    Data::BatchDimensions dims;
-    dims.framesPerBatch = framesPerChunk;
-    dims.lanesPerBatch = lanesPerBatch;
-    dims.laneWidth = laneSize;
-    lanesPerBatch_ = lanesPerBatch;
-    zmwsPerBatch_ = dims.ZmwsPerBatch();
 
     using Cuda::Memory::SyncDirection;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead
                                            : SyncDirection::HostReadDeviceWrite;
-    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(dims, syncDir);
+    metricsFactory_ = std::make_unique<Data::BasecallingMetricsFactory>(syncDir);
 }
 
-void HFMetricsFilter::Finalize()
-{
-    DestroyAllocationPools();
-}
-
-void HFMetricsFilter::DestroyAllocationPools()
-{
-    metricsFactory_.reset();
-}
+void HFMetricsFilter::Finalize() {}
 
 NoHFMetricsFilter::~NoHFMetricsFilter() = default;
 

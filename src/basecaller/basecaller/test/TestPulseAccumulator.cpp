@@ -46,29 +46,35 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+namespace {
+
+Data::BatchDimensions GetDims()
+{
+    Data::BatchDimensions ret;
+    ret.lanesPerBatch = 1;
+    ret.laneWidth = Data::GetPrimaryConfig().zmwsPerLane;
+    ret.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
+    return ret;
+}
+
+}
+
 TEST(TestNoOpPulseAccumulator, Run)
 {
-    // Simulate a single lane of data.
-    Data::GetPrimaryConfig().lanesPerPool = 1;
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+    auto dims = GetDims();
 
     Data::BasecallerAlgorithmConfig bcConfig;
     PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0), dims);
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     PulseAccumulator pulseAccumulator(poolId);
@@ -90,26 +96,20 @@ TEST(TestNoOpPulseAccumulator, Run)
 TEST(TestHostSimulatedPulseAccumulator, Run)
 {
     // Simulate a single lane of data.
-    Data::GetPrimaryConfig().lanesPerPool = 1;
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+    auto dims = GetDims();
 
     Data::BasecallerAlgorithmConfig bcConfig;
     HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0), dims);
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     HostSimulatedPulseAccumulator pulseAccumulator(poolId);
@@ -147,9 +147,7 @@ template <typename PulseAccumulatorToTest>
 void TestPulseAccumulator()
 {
     // Simulate a single lane of data.
-    Data::GetPrimaryConfig().lanesPerPool = 1;
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
+    auto dims = GetDims();
 
     Data::BasecallerAlgorithmConfig bcConfig;
     Data::MovieConfig movieConfig;
@@ -160,25 +158,21 @@ void TestPulseAccumulator()
     PulseAccumulatorToTest::Configure(movieConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0));
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, 128, 0), dims);
     // Discard metrics:
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first)).first;
 
     // Simulate out labels batch accordingly fixed pattern of baseline + pulse frames.
     const size_t ipd = 6;
     const size_t pw = 10;
-    assert(framesPerChunk % (ipd + pw) == 0);
+    assert(dims.framesPerBatch % (ipd + pw) == 0);
     std::vector<Data::LabelsBatch::ElementType> simLabels;
     std::vector<Data::BaselinedTraceElement> simTrc;
 
@@ -196,14 +190,14 @@ void TestPulseAccumulator()
     {
         size_t frameNum = 0;
         size_t base = 0;
-        while (frameNum < framesPerChunk)
+        while (frameNum < dims.framesPerBatch)
         {
             for (size_t b = 0; b < ipd; b++)
             {
                 simTrc.push_back(std::round(d(gen)));
             }
             simLabels.insert(simLabels.end(), ipd, 0);
-            if (frameNum < framesPerChunk - 16u)
+            if (frameNum < dims.framesPerBatch - 16u)
             {
                 baselineFrames += ipd;
             }
@@ -250,7 +244,7 @@ void TestPulseAccumulator()
 
     assert(labelsBatch.NumFrames() == labelsBatch.TraceData().NumFrames() + labelsBatch.LatentTrace().NumFrames());
 
-    PulseAccumulatorToTest pulseAccumulator(poolId, lanesPerPool);
+    PulseAccumulatorToTest pulseAccumulator(poolId, dims.lanesPerBatch);
 
     const auto& pulseRet = pulseAccumulator(std::move(labelsBatch));
     const auto& pulseBatch = pulseRet.first;

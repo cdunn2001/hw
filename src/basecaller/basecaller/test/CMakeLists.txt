@@ -7,7 +7,6 @@ include(pacbio-gtest)
 add_library(libMongoBasecallerTest OBJECT
     TestBaseliner.cpp
     TestHFMetricsFilter.cpp
-    TestTraceAnalyzerTbb.cpp
     TestTraceHistogramAccumHost.cpp
     TestPulseAccumulator.cpp
 )

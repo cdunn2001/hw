@@ -47,11 +47,10 @@ public:  // types
     using ElementType = Data::BaselinedTraceElement;
 
 public:     // Static functions
-    static void Configure(int lanesPerPool, int framesPerChunk);
+    static void Configure();
     static void Finalize();
 
-    static void InitAllocationPools(bool hostExecution, size_t latentFrames);
-    static void DestroyAllocationPools();
+    static void InitFactory(bool hostExecution, size_t latentFrames);
 
 protected: // static members
     static std::unique_ptr<Data::LabelsBatchFactory> batchFactory_;

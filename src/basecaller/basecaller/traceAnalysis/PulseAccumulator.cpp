@@ -38,34 +38,25 @@ std::unique_ptr<Data::PulseBatchFactory> PulseAccumulator::batchFactory_;
 
 void PulseAccumulator::Configure(size_t maxCallsPerZmw)
 {
-    InitAllocationPools(true, maxCallsPerZmw);
+    InitFactory(true, maxCallsPerZmw);
 }
 
-void PulseAccumulator::Finalize()
-{
-    DestroyAllocationPools();
-}
+void PulseAccumulator::Finalize() {}
 
-void PulseAccumulator::InitAllocationPools(bool hostExecution, size_t maxCallsPerZmw)
+void PulseAccumulator::InitFactory(bool hostExecution, size_t maxCallsPerZmw)
 {
     using Cuda::Memory::SyncDirection;
-
-    Data::BatchDimensions dims;
-    dims.framesPerBatch = Data::GetPrimaryConfig().framesPerChunk;
-    dims.lanesPerBatch = Data::GetPrimaryConfig().lanesPerPool;
-    dims.laneWidth = laneSize;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
             maxCallsPerZmw,
-            dims,
             syncDir);
 }
 
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
 PulseAccumulator::Process(Data::LabelsBatch labels)
 {
-    auto ret = batchFactory_->NewBatch(labels.Metadata());
+    auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {
@@ -80,11 +71,6 @@ PulseAccumulator::Process(Data::LabelsBatch labels)
     labels.GetBlockView(0);
 
     return ret;
-}
-
-void PulseAccumulator::DestroyAllocationPools()
-{
-    batchFactory_.reset();
 }
 
 PulseAccumulator::PulseAccumulator(uint32_t poolId)

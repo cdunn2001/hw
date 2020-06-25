@@ -349,9 +349,9 @@ private:
     }
 
     std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
-    CreateBasecaller(const std::vector <uint32_t>& poolIds) const
+    CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims) const
     {
-        return std::make_unique<BasecallerBody>(poolIds, basecallerConfig_, movieConfig_);
+        return std::make_unique<BasecallerBody>(poolDims, basecallerConfig_, movieConfig_);
     }
 
     std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
@@ -374,11 +374,22 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, BAZWRITER);
 
         auto source = CreateSource();
+        auto poolIds = source->PoolIds();
+        // TODO Some negotation between the source and repacker needs to happen,
+        // which results in the creation of this map.  For now, hard code all
+        // batches to be uniform dimensions.  In reality, the number of lanes
+        // per pool may vary
+        std::map<uint32_t, Data::BatchDimensions> poolDims;
+        Data::BatchDimensions dims;
+        dims.framesPerBatch = GetPrimaryConfig().framesPerChunk;
+        dims.laneWidth = GetPrimaryConfig().zmwsPerLane;
+        dims.lanesPerBatch = GetPrimaryConfig().lanesPerPool;
+        for (auto id : poolIds) poolDims[id] = dims;
 
         GraphManager <GraphProfiler> graph(Config().init.numWorkerThreads);
         auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
         repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
-        auto* analyzer = repacker->AddNode(CreateBasecaller(source->PoolIds()), GraphProfiler::ANALYSIS);
+        auto* analyzer = repacker->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
 
         size_t numChunksAnalyzed = 0;

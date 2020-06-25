@@ -54,13 +54,10 @@ public:     // Types
 public: // Static functions
     static void Configure(uint32_t sandwichTolerance,
                           uint32_t framesPerHFMetricBlock,
-                          uint32_t framesPerChunk,
                           double frameRate,
                           bool realtimeActivityLabels,
-                          uint32_t lanesPerBatch,
                           bool hostExecution=true);
     static void Finalize();
-    static void DestroyAllocationPools();
 
 protected: // Static members
     static std::unique_ptr<Data::BasecallingMetricsFactory> metricsFactory_;
@@ -68,9 +65,6 @@ protected: // Static members
     static uint32_t framesPerHFMetricBlock_;
     static double frameRate_;
     static bool realtimeActivityLabels_;
-    static uint32_t lanesPerBatch_;
-    static uint32_t zmwsPerBatch_;
-    static uint32_t framesPerChunk_;
 
 
 public: // Structors

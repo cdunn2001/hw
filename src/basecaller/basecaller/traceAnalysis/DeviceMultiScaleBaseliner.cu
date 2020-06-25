@@ -45,19 +45,16 @@ void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&
                                           const Data::MovieConfig&)
 {
     const auto hostExecution = false;
-    Baseliner::InitAllocationPools(hostExecution);
+    Baseliner::InitFactory(hostExecution);
 }
 
-void DeviceMultiScaleBaseliner::Finalize()
-{
-    Baseliner::DestroyAllocationPools();
-}
+void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
 DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
     Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());

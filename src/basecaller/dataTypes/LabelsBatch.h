@@ -92,12 +92,9 @@ private:    // Data
 class LabelsBatchFactory
 {
 public:
-    LabelsBatchFactory(uint32_t framesPerChunk,
-                       uint32_t lanesPerPool,
-                       uint32_t latentFrames,
+    LabelsBatchFactory(uint32_t latentFrames,
                        Cuda::Memory::SyncDirection syncDirection)
-        : dims_{lanesPerPool, framesPerChunk, laneSize}
-        , latentFrames_(latentFrames)
+        : latentFrames_(latentFrames)
         , syncDirection_(syncDirection)
     {}
 
@@ -118,7 +115,6 @@ public:
     }
 
 private:
-    BatchDimensions dims_;
     size_t latentFrames_;
     Cuda::Memory::SyncDirection syncDirection_;
 };

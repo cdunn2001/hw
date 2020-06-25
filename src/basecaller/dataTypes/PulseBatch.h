@@ -81,26 +81,23 @@ class PulseBatchFactory
 {
 public:
     PulseBatchFactory(const size_t maxCallsPerZmw,
-                      const BatchDimensions& batchDims,
                       Cuda::Memory::SyncDirection syncDir)
         : maxCallsPerZmw_(maxCallsPerZmw)
-        , batchDims_(batchDims)
         , syncDir_(syncDir)
     {}
 
     std::pair<PulseBatch, PulseDetectorMetrics>
-    NewBatch(const BatchMetadata& batchMetadata) const
+    NewBatch(const BatchMetadata& batchMetadata, const BatchDimensions& batchDims) const
     {
         return std::make_pair(
             PulseBatch(
-                maxCallsPerZmw_, batchDims_, batchMetadata, syncDir_, SOURCE_MARKER()),
-            PulseDetectorMetrics(batchDims_, syncDir_, SOURCE_MARKER()));
+                maxCallsPerZmw_, batchDims, batchMetadata, syncDir_, SOURCE_MARKER()),
+            PulseDetectorMetrics(batchDims, syncDir_, SOURCE_MARKER()));
 
     }
 
 private:
     size_t maxCallsPerZmw_;
-    BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
 };
 

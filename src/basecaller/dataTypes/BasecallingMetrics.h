@@ -87,22 +87,20 @@ static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingM
 class BasecallingMetricsFactory
 {
 public: // methods:
-    BasecallingMetricsFactory(const Data::BatchDimensions& batchDims,
-                              Cuda::Memory::SyncDirection syncDir)
-        : batchDims_(batchDims)
-        , syncDir_(syncDir)
+    BasecallingMetricsFactory(Cuda::Memory::SyncDirection syncDir)
+        : syncDir_(syncDir)
     {}
 
-    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>> NewBatch()
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>>
+    NewBatch(uint32_t numLanes)
     {
         return std::make_unique<Cuda::Memory::UnifiedCudaArray<BasecallingMetrics>>(
-            batchDims_.lanesPerBatch,
+            numLanes,
             syncDir_,
             SOURCE_MARKER());
     }
 
 private: // members:
-    Data::BatchDimensions batchDims_;
     Cuda::Memory::SyncDirection syncDir_;
 };
 

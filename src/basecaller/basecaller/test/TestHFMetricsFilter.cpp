@@ -98,10 +98,11 @@ Data::PulseBatch GenerateBases(BaseSimConfig config, size_t batchNo = 0)
     Data::BasecallerAlgorithmConfig basecallerConfig;
     Data::PulseBatchFactory batchFactory(
         basecallerConfig.pulseAccumConfig.maxCallsPerZmw,
-        config.dims,
         Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
-    auto pulses = batchFactory.NewBatch(chunk.front().Metadata()).first;
+    auto pulses = batchFactory.NewBatch(
+            chunk.front().Metadata(),
+            chunk.front().StorageDims()).first;
 
     auto LabelConv = [&](size_t index) {
         switch (config.pattern[index % config.pattern.size()])
@@ -393,10 +394,8 @@ TEST(TestHFMetricsFilter, Populated_Device)
         Data::BasecallerAlgorithmConfig bcConfig{};
         DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                          Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                         Data::GetPrimaryConfig().framesPerChunk,
                                          Data::GetPrimaryConfig().sensorFrameRate,
-                                         Data::GetPrimaryConfig().realtimeActivityLabels,
-                                         Data::GetPrimaryConfig().lanesPerPool);
+                                         Data::GetPrimaryConfig().realtimeActivityLabels);
     }
 
 
@@ -412,16 +411,14 @@ TEST(TestHFMetricsFilter, Populated)
         Data::BasecallerAlgorithmConfig bcConfig{};
         HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                    Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                   Data::GetPrimaryConfig().framesPerChunk,
                                    Data::GetPrimaryConfig().sensorFrameRate,
-                                   Data::GetPrimaryConfig().realtimeActivityLabels,
-                                   Data::GetPrimaryConfig().lanesPerPool);
+                                   Data::GetPrimaryConfig().realtimeActivityLabels);
     }
 
 
     BaseSimConfig config;
     int poolId = 0;
-    HostHFMetricsFilter hfMetrics(poolId);
+    HostHFMetricsFilter hfMetrics(poolId, config.dims.lanesPerBatch);
     testPopulated(hfMetrics, config);
 }
 
@@ -431,10 +428,8 @@ TEST(TestHFMetricsFilter, Noop)
         Data::BasecallerAlgorithmConfig bcConfig{};
         NoHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                      Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                     Data::GetPrimaryConfig().framesPerChunk,
                                      Data::GetPrimaryConfig().sensorFrameRate,
-                                     Data::GetPrimaryConfig().realtimeActivityLabels,
-                                     Data::GetPrimaryConfig().lanesPerPool);
+                                     Data::GetPrimaryConfig().realtimeActivityLabels);
     }
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf,
                                                              laneSize>> models(

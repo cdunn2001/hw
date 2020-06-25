@@ -7,7 +7,7 @@ namespace Basecaller {
 void HostSimulatedPulseAccumulator::Configure(size_t maxCallsPerZmw)
 {
     const auto hostExecution = true;
-    PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, maxCallsPerZmw);
 }
 
 void HostSimulatedPulseAccumulator::Finalize()
@@ -24,7 +24,7 @@ HostSimulatedPulseAccumulator::~HostSimulatedPulseAccumulator() = default;
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
 HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
 {
-    auto ret = batchFactory_->NewBatch(labels.Metadata());
+    auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
 
     for (size_t laneIdx = 0; laneIdx < labels.LanesPerBatch(); ++laneIdx)
     {

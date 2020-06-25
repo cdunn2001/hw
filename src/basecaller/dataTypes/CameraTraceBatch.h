@@ -21,27 +21,20 @@ class CameraBatchFactory
 public:
     using ElementType = BaselinedTraceElement;
 
-    CameraBatchFactory(size_t framesPerChunk,
-                       size_t lanesPerPool,
-                       Cuda::Memory::SyncDirection syncDirection)
+    CameraBatchFactory(Cuda::Memory::SyncDirection syncDirection)
         : syncDirection_(syncDirection)
-    {
-        dims_.laneWidth = laneSize;
-        dims_.framesPerBatch = framesPerChunk;
-        dims_.lanesPerBatch = lanesPerPool;
-    }
+    {}
 
     std::pair<TraceBatch<ElementType>, BaselinerMetrics>
-    NewBatch(const BatchMetadata& meta) const
+    NewBatch(const BatchMetadata& meta, const BatchDimensions dims) const
     {
         const auto& marker = SOURCE_MARKER();
-        return std::make_pair(TraceBatch<ElementType>(meta, dims_, syncDirection_, marker),
-                              BaselinerMetrics(dims_, syncDirection_, marker));
+        return std::make_pair(TraceBatch<ElementType>(meta, dims, syncDirection_, marker),
+                              BaselinerMetrics(dims, syncDirection_, marker));
     }
 
 private:
     Cuda::Memory::SyncDirection syncDirection_;
-    BatchDimensions dims_;
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -78,7 +78,9 @@ public:     // Static functions
     static void ReportPerformance();
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
+    BatchAnalyzer(uint32_t poolId,
+                  const Data::BatchDimensions& dims,
+                  const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&);

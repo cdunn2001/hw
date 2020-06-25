@@ -26,9 +26,6 @@
 
 #include "FrameLabeler.h"
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
-
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -36,34 +33,23 @@ namespace Basecaller {
 std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
 
 // static
-void FrameLabeler::Configure(int /*lanesPerPool*/, int /*framesPerChunk*/)
+void FrameLabeler::Configure()
 {
     const auto hostExecution = true;
-    InitAllocationPools(hostExecution, 0);
+    InitFactory(hostExecution, 0);
 }
 
 void FrameLabeler::Finalize()
-{
-    DestroyAllocationPools();
-}
+{}
 
-void FrameLabeler::InitAllocationPools(bool hostExecution, size_t latentFrames)
+void FrameLabeler::InitFactory(bool hostExecution, size_t latentFrames)
 {
     using Cuda::Memory::SyncDirection;
 
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::LabelsBatchFactory>(
-            framesPerChunk,
-            lanesPerPool,
             latentFrames,
             syncDir);
-}
-
-void FrameLabeler::DestroyAllocationPools()
-{
-    batchFactory_.reset();
 }
 
 FrameLabeler::FrameLabeler(uint32_t poolId)

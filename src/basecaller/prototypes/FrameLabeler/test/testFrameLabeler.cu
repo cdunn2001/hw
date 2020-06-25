@@ -97,8 +97,8 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     }
 
     std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
-    FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
-    std::vector<FrameLabeler> frameLabelers(poolsPerChip);
+    FrameLabeler::Configure(meta);
+    std::vector<FrameLabeler> frameLabelers;
 
     BatchDimensions latBatchDims;
     latBatchDims.framesPerBatch = dataParams.blockLength;
@@ -107,8 +107,10 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     std::vector<BatchData<int16_t>> latTrace;
 
     models.reserve(poolsPerChip);
+    frameLabelers.reserve(poolsPerChip);
     for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
+        frameLabelers.emplace_back(dataParams.kernelLanes);
         models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
         for (uint32_t j = 0; j < lanesPerPool; ++j)

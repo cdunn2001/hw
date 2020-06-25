@@ -287,7 +287,7 @@ public:
     Process(const PulseBatchFactory& factory, LabelsBatch labels)
     {
         assert(blockThreads*2 == labels.LaneWidth());
-        auto ret = factory.NewBatch(labels.Metadata());
+        auto ret = factory.NewBatch(labels.Metadata(), labels.StorageDims());
 
         const auto& launcher = PBLauncher(
             ProcessLabels<LabelManager, blockThreads>,
@@ -331,7 +331,7 @@ template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
 {
     constexpr bool hostExecution = false;
-    PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, maxCallsPerZmw);
 
     CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
 
@@ -347,7 +347,6 @@ template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Finalize()
 {
     AccumImpl::Finalize();
-    PulseAccumulator::DestroyAllocationPools();
 }
 
 template <typename LabelManager>

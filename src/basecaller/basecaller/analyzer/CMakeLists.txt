@@ -8,11 +8,6 @@ add_library(libMongoBasecallerAnalyzer STATIC
     AlgoFactory.cpp
     BatchAnalyzer.h
     BatchAnalyzer.cpp
-    ITraceAnalyzer.h
-    ITraceAnalyzer.cpp
-    ITraceAnalyzerAsync.h
-    TraceAnalyzerTbb.h
-    TraceAnalyzerTbb.cpp
 )
 
 target_link_libraries(libMongoBasecallerAnalyzer

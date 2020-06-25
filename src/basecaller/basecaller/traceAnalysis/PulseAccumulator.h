@@ -45,8 +45,7 @@ public:     // Static functions
     static void Configure(size_t maxCallsPerZmw);
     static void Finalize();
 
-    static void InitAllocationPools(bool hostExecution, size_t maxCallsPerZmw);
-    static void DestroyAllocationPools();
+    static void InitFactory(bool hostExecution, size_t maxCallsPerZmw);
 
 protected: // static members
     static std::unique_ptr<Data::PulseBatchFactory> batchFactory_;
@@ -67,9 +66,9 @@ public:
         return Process(std::move(labels));
     }
 
-    auto EmptyPulseBatch(const Data::BatchMetadata& metadata)
+    auto EmptyPulseBatch(const Data::BatchMetadata& metadata, const Data::BatchDimensions& dims)
     {
-        auto ret = batchFactory_->NewBatch(metadata);
+        auto ret = batchFactory_->NewBatch(metadata, dims);
 
         for (size_t laneIdx = 0; laneIdx < ret.first.Dims().lanesPerBatch; ++laneIdx)
         {

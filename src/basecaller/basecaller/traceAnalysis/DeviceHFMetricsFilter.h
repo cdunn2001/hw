@@ -49,10 +49,8 @@ class DeviceHFMetricsFilter : public HFMetricsFilter
 public: // static methods
     static void Configure(uint32_t sandwichTolerance,
                           uint32_t framesPerHFMetricBlock,
-                          uint32_t framesPerChunk,
                           double frameRate,
-                          bool realtimeActivityLabels,
-                          uint32_t lanesPerBatch);
+                          bool realtimeActivityLabels);
 
 public:
     class AccumImpl;

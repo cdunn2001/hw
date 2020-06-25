@@ -60,12 +60,13 @@ void run(const Data::DataManagerParams& dataParams,
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
 
-    FrameLabeler::Configure(meta, dataParams.kernelLanes, dataParams.blockLength);
-    std::vector<FrameLabeler> frameLabelers(numBatches);
+    FrameLabeler::Configure(meta);
+    std::vector<FrameLabeler> frameLabelers;
     models.reserve(numBatches);
+    frameLabelers.reserve(numBatches);
     for (size_t i = 0; i < numBatches; ++i)
     {
-
+        frameLabelers.emplace_back(dataParams.kernelLanes);
         models.emplace_back(dataParams.kernelLanes, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         auto modelView = models.back().GetHostView();
         for (size_t j = 0; j < dataParams.kernelLanes; ++j)

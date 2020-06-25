@@ -156,10 +156,8 @@ void BazWriterBody::Process(BatchResult in)
         throw PBException("Data out of order, multiple chunks being processed simultaneously");
     }
 
-    const auto& primaryConfig = PacBio::Mongo::Data::GetPrimaryConfig();
-    // TODO this needs to change once we support sparse layout for trace re-analysis
     // TODO note, this maybe needs to be contiguous integers?  Unless we can guarantee order of inputs, we may need more robust bookkeeping
-    size_t currentZmwIndex = pulseBatch.GetMeta().PoolId() * primaryConfig.lanesPerPool * primaryConfig.zmwsPerLane;
+    size_t currentZmwIndex = pulseBatch.GetMeta().FirstZmw();
     for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
     {
         const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);

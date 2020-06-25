@@ -46,7 +46,7 @@ class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::Tra
 {
     using BatchAnalyzer = Mongo::Basecaller::BatchAnalyzer;
 public:
-    BasecallerBody(const std::vector<uint32_t>& poolIds,
+    BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerConfig& bcConfig,
                    const Mongo::Data::MovieConfig& movConfig)
         : algoFactory_ (bcConfig.algorithm)
@@ -59,12 +59,14 @@ public:
         BatchAnalyzer::Configure(bcConfig.algorithm, movConfig);
 
         const bool staticAnalysis = bcConfig.algorithm.staticAnalysis;
-        for (unsigned int poolId : poolIds)
+        for (const auto & kv : poolDims)
         {
+            const auto& poolId = kv.first;
+            const auto& dims = kv.second;
             const auto it = bAnalyzer_.find(poolId);
             if (it != bAnalyzer_.cend()) continue;  // Ignore duplicate ids.
 
-            auto batchAnalyzer = Mongo::Basecaller::BatchAnalyzer(poolId, algoFactory_);
+            auto batchAnalyzer = Mongo::Basecaller::BatchAnalyzer(poolId, dims, algoFactory_);
             if (staticAnalysis)
             {
                 batchAnalyzer.SetupStaticModel(bcConfig.algorithm.staticDetModelConfig, movConfig);
@@ -73,6 +75,11 @@ public:
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
         }
     }
+
+    BasecallerBody(const BasecallerBody&) = delete;
+    BasecallerBody(BasecallerBody&&) = default;
+    BasecallerBody& operator=(const BasecallerBody&) = delete;
+    BasecallerBody& operator=(BasecallerBody&&) = default;
 
     ~BasecallerBody()
     {
