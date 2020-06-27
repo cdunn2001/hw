@@ -58,13 +58,12 @@ namespace Primary {
 // more general purpose.
 class AnalogConfigEx : public Configuration::PBConfig<AnalogConfigEx>
 {
+public:
     PB_CONFIG(AnalogConfigEx);
 
     PB_CONFIG_PARAM(std::string, base, "X"); // or baseMap
-private:
     PB_CONFIG_PARAM(float, spectralAngle, -1.0f);  // Negative values reserved to mean "unset"
     PB_CONFIG_PARAM(std::vector<float>, spectrumValues, std::vector<float>{});
-public:
     PB_CONFIG_PARAM(float, wavelength, 0.0f);
     PB_CONFIG_PARAM(float, relativeAmplitude, 1.0f);
     PB_CONFIG_PARAM(float, intraPulseXsnCV, 0.0f);
