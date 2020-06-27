@@ -65,9 +65,6 @@ public:
     PB_CONFIG_OBJECT(StaticDetModelConfig, staticDetModelConfig);
     PB_CONFIG_PARAM(bool, staticAnalysis, true);
 
-    PB_CONFIG_PARAM(uint32_t, framesPerHFMetricBlock, 4096);
-    PB_CONFIG_PARAM(bool, realtimeActivityLabels, true);
-
 public:
     std::string CombinedMethodName() const
     {
