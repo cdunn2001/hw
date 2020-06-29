@@ -205,10 +205,10 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
     const short baselineLevel = 250;
     const short baselineSigma = 30;
     const uint16_t pulseWidth = 0;    // No pulses.
-    const uint16_t pulseIpd = batchConfig.framesPerChunk;
+    const uint16_t pulseIpd = static_cast<uint16_t>(batchConfig.framesPerChunk);
     auto pfParams = Cuda::Data::PicketFenceParams()
             .PulseWidth(pulseWidth)
-            .PulseIpd(batchConfig.framesPerChunk)
+            .PulseIpd(pulseIpd)
             .BaselineSignalLevel(baselineLevel)
             .BaselineSigma(baselineSigma);
 
