@@ -1,5 +1,5 @@
-#ifndef mongo_dataTypes_PrimaryConfig_H_
-#define mongo_dataTypes_PrimaryConfig_H_
+#ifndef mongo_dataTypes_configs_PrimaryConfig_H_
+#define mongo_dataTypes_configs_PrimaryConfig_H_
 
 // Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
@@ -26,9 +26,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-/// \brief  Global configuration for the Primary realtime pipeline. These values
-///         may be changed at run time.
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/CpuInfo.h>
@@ -64,4 +61,4 @@ inline void ValidateConfig<Mongo::Data::BatchLayoutConfig>(
 
 }}
 
-#endif //mongo_dataTypes_PrimaryConfig_H_
+#endif //mongo_dataTypes_configs_PrimaryConfig_H_

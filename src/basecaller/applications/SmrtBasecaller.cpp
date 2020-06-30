@@ -375,7 +375,7 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, BAZWRITER);
 
         auto source = CreateSource();
-        auto poolIds = source->PoolIds();
+        const auto& poolIds = source->PoolIds();
         // TODO Some negotation between the source and repacker needs to happen,
         // which results in the creation of this map.  For now, hard code all
         // batches to be uniform dimensions.  In reality, the number of lanes

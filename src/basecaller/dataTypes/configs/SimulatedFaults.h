@@ -23,12 +23,9 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-/// \brief  Global configuration for the Primary realtime pipeline. These values
-///         may be changed at run time.
 
-#ifndef mongo_dataTypes_SimulatedFaults_H_
-#define mongo_dataTypes_SimulatedFaults_H_
+#ifndef mongo_dataTypes_configs_SimulatedFaults_H_
+#define mongo_dataTypes_configs_SimulatedFaults_H_
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
@@ -46,4 +43,4 @@ class SimulatedFaults : public Configuration::PBConfig<SimulatedFaults>
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif //mongo_dataTypes_SimulatedFaults_H_
+#endif //mongo_dataTypes_configs_SimulatedFaults_H_

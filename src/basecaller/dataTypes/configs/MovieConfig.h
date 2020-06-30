@@ -1,5 +1,5 @@
-#ifndef mongo_dataTypes_MovieConfig_H_
-#define mongo_dataTypes_MovieConfig_H_
+#ifndef mongo_dataTypes_configs_MovieConfig_H_
+#define mongo_dataTypes_configs_MovieConfig_H_
 
 // Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
@@ -58,4 +58,4 @@ MovieConfig MockMovieConfig();
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif // mongo_dataTypes_MovieConfig_H_
+#endif // mongo_dataTypes_configs_MovieConfig_H_

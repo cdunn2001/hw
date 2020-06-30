@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_SystemsConfig_H_
-#define mongo_dataTypes_SystemsConfig_H_
+#ifndef mongo_dataTypes_configs_SystemsConfig_H_
+#define mongo_dataTypes_configs_SystemsConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
 
@@ -55,4 +55,4 @@ public:
 }}}     // namespace PacBio::Mongo::Data
 
 
-#endif //mongo_dataTypes_SystemsConfig_H_
+#endif //mongo_dataTypes_configs_SystemsConfig_H_

@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_BasecallerConfig_fwd_H_
-#define mongo_dataTypes_BasecallerConfig_fwd_H_
+#ifndef mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#define mongo_dataTypes_configs_BasecallerConfig_fwd_H_
 
 namespace PacBio {
 namespace Mongo {
@@ -47,4 +47,4 @@ class SystemsConfig;
 }}}     // namespace PacBio::Mongo::Data
 
 
-#endif // mongo_dataTypes_BasecallerConfig_fwd_H_
+#endif // mongo_dataTypes_configs_BasecallerConfig_fwd_H_

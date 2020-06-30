@@ -23,8 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef mongo_datatypes_StaticDetectionModel_h
-#define mongo_datatypes_StaticDetectionModel_h
+#ifndef mongo_dataTypes_configs_StaticDetectionModel_h
+#define mongo_dataTypes_configs_StaticDetectionModel_h
 
 #include <common/MongoConstants.h>
 #include "MovieConfig.h"
@@ -69,4 +69,4 @@ public:
 
 }}} // PacBio::Mongo::Data
 
-#endif // mongo_datatypes_StaticDetectionModel_h
+#endif // mongo_dataTypes_configs_StaticDetectionModel_h

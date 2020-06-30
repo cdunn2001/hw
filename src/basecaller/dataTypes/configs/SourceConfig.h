@@ -23,12 +23,9 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-/// \brief  Global configuration for the Primary realtime pipeline. These values
-///         may be changed at run time.
 
-#ifndef PA_MONGO_SOURCECONFIG_H
-#define PA_MONGO_SOURCECONFIG_H
+#ifndef mongo_dataTypes_configs_sourceConfig_H
+#define mongo_dataTypes_configs_sourceConfig_H
 
 #include <array>
 
@@ -55,4 +52,4 @@ struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif //PA_MONGO_SOURCECONFIG_H
+#endif //mongo_dataTypes_configs_sourceConfig_H
