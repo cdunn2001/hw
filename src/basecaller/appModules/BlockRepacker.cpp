@@ -32,11 +32,6 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Cuda::Memory;
 
-// Intel complains because there are some functions defined in
-// this namespace but never used, but they are general things
-// like move asignement operators, that should exist in case
-// the code evolves to use them.
-#pragma warning disable 177
 namespace {
 
 // Helper factory function to create a TraceBatch for us
