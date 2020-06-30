@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -22,51 +22,41 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
 
-#ifndef mongo_datatypes_StaticDetectionModel_h
-#define mongo_datatypes_StaticDetectionModel_h
-
-#include <common/MongoConstants.h>
-#include "MovieConfig.h"
+#ifndef mongo_dataTypes_configs_BasecallerTraceHistogramConfig_H_
+#define mongo_dataTypes_configs_BasecallerTraceHistogramConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class StaticDetModelConfig : public Configuration::PBConfig<StaticDetModelConfig>
+class BasecallerTraceHistogramConfig : public Configuration::PBConfig<BasecallerTraceHistogramConfig>
 {
 public:
-    PB_CONFIG(StaticDetModelConfig);
+    PB_CONFIG(BasecallerTraceHistogramConfig);
 
-    PB_CONFIG_PARAM(float, baselineMean, 0.0f);
-    PB_CONFIG_PARAM(float, baselineVariance, 33.0f);
+    SMART_ENUM(MethodName, Host, Gpu);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
+    PB_CONFIG_PARAM(unsigned int, NumFramesPreAccumStats, 1000u);
 
-public:
-    struct AnalogMode
-    {
-        float mean;
-        float var;
-    };
+    // Bin size of data histogram is nominally defined as initial estimate
+    // of baseline sigma multiplied by this coefficient.
+    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
 
-    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
-    {
-        std::array<AnalogMode, numAnalogs> analogs;
-        const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
-        for (size_t i = 0; i < analogs.size(); i++)
-        {
-            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
-            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2.f);
+    // Use fall-back baseline sigma when number of baseline frames is
+    // less than this value.
+    PB_CONFIG_PARAM(unsigned int, BaselineStatMinFrameCount, 50u);
 
-            analogs[i].mean = mean;
-            analogs[i].var = var;
-        }
-
-        return analogs;
-    }
+    // Use this value as an estimate for baseline standard deviation when
+    // we have insufficient data.
+    PB_CONFIG_PARAM(float, FallBackBaselineSigma, 10.0f);
 };
 
-}}} // PacBio::Mongo::Data
+}}}     // namespace PacBio::Mongo::Data
 
-#endif // mongo_datatypes_StaticDetectionModel_h
+#endif //mongo_dataTypes_configs_BasecallerTraceHistogramConfig_H_
+

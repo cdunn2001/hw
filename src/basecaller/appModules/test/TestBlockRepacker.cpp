@@ -281,7 +281,6 @@ struct Wrapper
     explicit Wrapper(T t)
     : data_(t)
     {}
-    operator T&() { return data_;}
     operator const T&() const { return data_;}
 private:
     T data_;

@@ -2,8 +2,36 @@
 cmake_minimum_required(VERSION 3.13)
 
 set(CPP_LIST
+    configs/BasecallerAlgorithmConfig.cpp
+    configs/BasecallerAlgorithmConfig.h
+    configs/BasecallerBaselinerConfig.cpp
+    configs/BasecallerBaselinerConfig.h
+    configs/BasecallerDmeConfig.cpp
+    configs/BasecallerDmeConfig.h
+    configs/BasecallerFrameLabelerConfig.cpp
+    configs/BasecallerFrameLabelerConfig.h
+    configs/BasecallerMetricsConfig.cpp
+    configs/BasecallerMetricsConfig.h
+    configs/BasecallerPulseAccumConfig.cpp
+    configs/BasecallerPulseAccumConfig.h
+    configs/BasecallerPulseToBaseConfig.cpp
+    configs/BasecallerPulseToBaseConfig.h
+    configs/BasecallerTraceHistogramConfig.cpp
+    configs/BasecallerTraceHistogramConfig.h
+    configs/BatchLayoutConfig.h
+    configs/BatchLayoutConfig.cpp
+    configs/ConfigForward.h
+    configs/MovieConfig.cpp
+    configs/MovieConfig.h
+    configs/SimulatedFaults.h
+    configs/SmrtBasecallerConfig.cpp
+    configs/SmrtBasecallerConfig.h
+    configs/SourceConfig.h
+    configs/StaticDetModelConfig.cpp
+    configs/StaticDetModelConfig.h
+    configs/SystemsConfig.h
+    configs/SystemsConfig.cpp
     AnalogMode.h
-    BasecallerConfig.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp
     BasecallingMetricsAccumulator.h
@@ -26,24 +54,18 @@ set(CPP_LIST
     HQRFPhysicalStates.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
-    ConfigForward.h
     DetectionModelHost.h
     DetectionModelHost.cpp
     LaneDetectionModel.h
     LaneDetectionModel.cpp
     LabelsBatch.h
     LabelsBatch.cpp
-    MovieConfig.h
-    MovieConfig.cpp
     PoolHistogram.h
     PoolHistogram.cpp
-    PrimaryConfig.h
     Pulse.h
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
-    StaticDetModelConfig.h
-    StaticDetModelConfig.cpp
     TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp

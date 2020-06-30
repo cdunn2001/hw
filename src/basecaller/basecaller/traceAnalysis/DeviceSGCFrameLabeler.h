@@ -52,11 +52,11 @@ public:     // Static functions
     /// each DeviceSGCFrameLabeler instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::MovieConfig& movieConfig, int lanesPerPool, int framesPerChunk);
+    static void Configure(const Data::MovieConfig& movieConfig);
     static void Finalize();
 
 public:
-    DeviceSGCFrameLabeler(uint32_t poolId);
+    DeviceSGCFrameLabeler(uint32_t poolId, uint32_t lanesPerPool);
     ~DeviceSGCFrameLabeler() override;
 
 private:    // Customizable implementation

@@ -47,7 +47,8 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/StaticDetModelConfig.h>
 
 #include "AlgoFactory.h"
 
@@ -78,20 +79,22 @@ BatchAnalyzer::~BatchAnalyzer() = default;
 BatchAnalyzer::BatchAnalyzer(BatchAnalyzer&&) = default;
 
 
-BatchAnalyzer::BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac)
+BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
+                             const Data::BatchDimensions& dims,
+                             const AlgoFactory& algoFac)
     : poolId_ (poolId)
-    , models_(Data::GetPrimaryConfig().lanesPerPool, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
+    , models_(dims.lanesPerBatch , Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 {
     static const unsigned int dmeDelayStride = 2u;  // TODO: Make this configurable.
     // TODO: Is poolId_ defined appropriately for this use?
     poolDmeDelay_ = poolId_ / dmeDelayStride;       // TODO: What are the units--frames, chunks, ... ?
 
-    baseliner_ = algoFac.CreateBaseliner(poolId);
-    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId);
-    dme_ = algoFac.CreateDetectionModelEstimator(poolId);
-    frameLabeler_ = algoFac.CreateFrameLabeler(poolId);
-    pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId);
-    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId);
+    baseliner_ = algoFac.CreateBaseliner(poolId, dims);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, dims);
+    dme_ = algoFac.CreateDetectionModelEstimator(poolId, dims);
+    frameLabeler_ = algoFac.CreateFrameLabeler(poolId, dims);
+    pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId, dims);
+    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId, dims);
 }
 
 void BatchAnalyzer::SetupStaticModel(const PacBio::Mongo::Data::StaticDetModelConfig& staticDetModelConfig,
@@ -245,7 +248,8 @@ BatchAnalyzer::OutputType BatchAnalyzer::StandardPipeline(const TraceBatch<int16
         {
             auto frameLabelerMetrics = frameLabeler_->EmptyMetrics(baselinedTraces.StorageDims());
 
-            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata());
+            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
+                                                                       baselinedTraces.StorageDims());
             auto pulses = std::move(pulsesAndMetrics.first);
             auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
             return std::make_tuple(std::move(pulses),

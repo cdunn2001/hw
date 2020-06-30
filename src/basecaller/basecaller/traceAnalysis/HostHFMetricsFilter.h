@@ -41,9 +41,9 @@ namespace Basecaller {
 class HostHFMetricsFilter : public HFMetricsFilter
 {
 public:
-    HostHFMetricsFilter(uint32_t poolId)
+    HostHFMetricsFilter(uint32_t poolId, uint32_t lanesPerBatch)
         : HFMetricsFilter(poolId)
-        , metrics_(lanesPerBatch_)
+        , metrics_(lanesPerBatch)
     { };
     HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
     HostHFMetricsFilter(HostHFMetricsFilter&&) = default;

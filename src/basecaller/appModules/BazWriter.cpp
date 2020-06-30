@@ -31,6 +31,7 @@
 
 #include <common/MongoConstants.h>
 
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/Pulse.h>
 
 using namespace PacBio::Primary;
@@ -112,7 +113,7 @@ BazWriterBody::BazWriterBody(
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
-        const BasecallerConfig& basecallerConfig,
+        const SmrtBasecallerConfig& basecallerConfig,
         size_t outputStride)
     : bazName_(bazName)
     , zmwOutputStrideFactor_(outputStride)
@@ -128,9 +129,9 @@ BazWriterBody::BazWriterBody(
                          basecallerConfig.Serialize().toStyledString(),
                          zmwNumbers,
                          zmwFeatures,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
-                         PacBio::Mongo::Data::GetPrimaryConfig().framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
+                         basecallerConfig.layout.framesPerChunk,
                          false,
                          true,
                          true,
@@ -156,10 +157,8 @@ void BazWriterBody::Process(BatchResult in)
         throw PBException("Data out of order, multiple chunks being processed simultaneously");
     }
 
-    const auto& primaryConfig = PacBio::Mongo::Data::GetPrimaryConfig();
-    // TODO this needs to change once we support sparse layout for trace re-analysis
     // TODO note, this maybe needs to be contiguous integers?  Unless we can guarantee order of inputs, we may need more robust bookkeeping
-    size_t currentZmwIndex = pulseBatch.GetMeta().PoolId() * primaryConfig.lanesPerPool * primaryConfig.zmwsPerLane;
+    size_t currentZmwIndex = pulseBatch.GetMeta().FirstZmw();
     for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
     {
         const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);

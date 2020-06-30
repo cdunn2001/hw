@@ -1,6 +1,4 @@
-#include "MovieConfig.h"
-
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //

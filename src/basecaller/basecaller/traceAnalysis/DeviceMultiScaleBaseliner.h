@@ -32,7 +32,7 @@
 #include <stdint.h>
 
 #include <dataTypes/BasicTypes.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/TraceBatch.h>
 #include <basecaller/traceAnalysis/Baseliner.h>
 
@@ -74,8 +74,8 @@ public:     // Static functions
     /// each Baseliner instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig);
+    static void Configure(const Data::BasecallerBaselinerConfig&,
+                          const Data::MovieConfig&);
 
 
     static void Finalize();

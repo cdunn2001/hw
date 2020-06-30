@@ -5,7 +5,7 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/BasicTypes.h>
@@ -30,8 +30,7 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
-    static void InitAllocationPools(bool hostExecution);
-    static void DestroyAllocationPools();
+    static void InitFactory(bool hostExecution);
 
     static void Finalize();
 

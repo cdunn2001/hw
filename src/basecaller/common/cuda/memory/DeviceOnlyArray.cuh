@@ -113,14 +113,17 @@ public:
         , count_(count)
         , checker_(std::make_unique<CheckerType>())
     {
-        // Even if we are an array of const types, we need to be non-const during construction
-        using U = typename std::remove_const<T>::type;
-        auto launchParams = ComputeBlocksThreads(count, (void*)&detail::InitFilters<U, Args...>);
-        detail::InitFilters<<<launchParams.first, launchParams.second>>>(
-                data_.get<U>(DataKey()),
-                count_,
-                std::forward<Args>(args)...);
-        CudaSynchronizeDefaultStream();
+        if (sizeof...(args) > 0 || !std::is_trivially_default_constructible<T>::value)
+        {
+            // Even if we are an array of const types, we need to be non-const during construction
+            using U = typename std::remove_const<T>::type;
+            auto launchParams = ComputeBlocksThreads(count, (void*)&detail::InitFilters<U, Args...>);
+            detail::InitFilters<<<launchParams.first, launchParams.second>>>(
+                    data_.get<U>(DataKey()),
+                    count_,
+                    std::forward<Args>(args)...);
+            CudaSynchronizeDefaultStream();
+        }
     }
 
     DeviceOnlyArray() = delete;
@@ -144,13 +147,16 @@ public:
     {
         if (data_)
         {
-            // Even if we are an array of const types, we need to be non-const during destruction
-            using U = std::remove_const_t<T>;
-            auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
-            detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
-                    data_.get<U>(DataKey()),
-                    count_);
-            CudaSynchronizeDefaultStream();
+            if (!std::is_trivially_destructible<T>::value)
+            {
+                // Even if we are an array of const types, we need to be non-const during destruction
+                using U = std::remove_const_t<T>;
+                auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
+                detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
+                        data_.get<U>(DataKey()),
+                        count_);
+                CudaSynchronizeDefaultStream();
+            }
             IMongoCachedAllocator::ReturnDeviceAllocation(std::move(data_));
         }
     }

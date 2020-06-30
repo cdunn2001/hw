@@ -1,7 +1,7 @@
 #include "Baseliner.h"
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerBaselinerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -14,27 +14,17 @@ void Baseliner::Configure(const Data::BasecallerBaselinerConfig&,
                           const Data::MovieConfig&)
 {
     const auto hostExecution = true;
-    InitAllocationPools(hostExecution);
+    InitFactory(hostExecution);
 }
 
-void Baseliner::InitAllocationPools(bool hostExecution)
+void Baseliner::InitFactory(bool hostExecution)
 {
     using Cuda::Memory::SyncDirection;
 
-    const auto framesPerChunk = Data::GetPrimaryConfig().framesPerChunk;
-    const auto lanesPerPool = Data::GetPrimaryConfig().lanesPerPool;
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(framesPerChunk, lanesPerPool, syncDir);
+    batchFactory_ = std::make_unique<Data::CameraBatchFactory>(syncDir);
 }
 
-void Baseliner::DestroyAllocationPools()
-{
-    batchFactory_.reset();
-}
-
-void Baseliner::Finalize()
-{
-    DestroyAllocationPools();
-}
+void Baseliner::Finalize() {}
 
 }}}     // namespace PacBio::Mongo::Basecaller

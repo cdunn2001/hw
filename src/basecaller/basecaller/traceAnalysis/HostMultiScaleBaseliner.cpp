@@ -14,13 +14,10 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
                                         const Data::MovieConfig&)
 {
     const auto hostExecution = true;
-    Baseliner::InitAllocationPools(hostExecution);
+    Baseliner::InitFactory(hostExecution);
 }
 
-void HostMultiScaleBaseliner::Finalize()
-{
-    Baseliner::DestroyAllocationPools();
-}
+void HostMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
@@ -28,7 +25,7 @@ HostMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace
 {
     assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
 
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
     // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
     Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),

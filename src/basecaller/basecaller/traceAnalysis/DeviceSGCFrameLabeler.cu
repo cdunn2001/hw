@@ -27,7 +27,7 @@
 #include "DeviceSGCFrameLabeler.h"
 
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -38,10 +38,10 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig, int lanesPerPool, int framesPerChunk)
+void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig)
 {
     const auto hostExecution = false;
-    InitAllocationPools(hostExecution, ViterbiStitchLookback);
+    InitFactory(hostExecution, ViterbiStitchLookback);
 
     std::array<Subframe::AnalogMeta, 4> meta;
     for (size_t i = 0; i < meta.size(); i++)
@@ -53,18 +53,17 @@ void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig, int 
 
     }
 
-    Cuda::FrameLabeler::Configure(meta, lanesPerPool, framesPerChunk);
+    Cuda::FrameLabeler::Configure(meta);
 }
 
 void DeviceSGCFrameLabeler::Finalize()
 {
-    DestroyAllocationPools();
     Cuda::FrameLabeler::Finalize();
 }
 
-DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId)
+DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId, uint32_t lanesPerPool)
     : FrameLabeler(poolId)
-    , labeler_(std::make_unique<Cuda::FrameLabeler>())
+    , labeler_(std::make_unique<Cuda::FrameLabeler>(lanesPerPool))
 {}
 
 DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;

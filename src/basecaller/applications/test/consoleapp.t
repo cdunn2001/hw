@@ -1,6 +1,6 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
-  $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 1 --config common.lanesPerPool=1 --config basecaller.algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 1 --config layout.lanesPerPool=1 --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65
@@ -10,7 +10,7 @@
   $ bazviewer --silent -d -n 63 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
-  $ smrt-basecaller --inputfile ${TRCFILE} --zmwOutputStrideFactor 4 --numZmwLanes 1 --config common.lanesPerPool=1 --config basecaller.algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ smrt-basecaller --inputfile ${TRCFILE} --zmwOutputStrideFactor 4 --numZmwLanes 1 --config layout.lanesPerPool=1 --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
   65

@@ -30,7 +30,7 @@
 #include <sstream>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/PBException.h>
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 #include "TraceHistogramAccumulator.h"
 
 namespace PacBio {

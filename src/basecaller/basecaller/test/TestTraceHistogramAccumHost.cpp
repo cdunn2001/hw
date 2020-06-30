@@ -36,8 +36,8 @@
 
 #include <pacbio/logging/Logger.h>
 
-#include <dataTypes/BasecallerConfig.h>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 #include <dataTypes/CameraTraceBatch.h>
 
 #include <gtest/gtest.h>
@@ -59,8 +59,7 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
     Data::BatchMetadata bmd {7, 0, chunkSize, 7*poolSize*laneSize};
     Data::BasecallerTraceHistogramConfig histConfig;
     Data::MovieConfig movConfig;
-    Data::CameraBatchFactory ctbFactory {chunkSize, poolSize,
-                                         Cuda::Memory::SyncDirection::Symmetric};
+    Data::CameraBatchFactory ctbFactory {Cuda::Memory::SyncDirection::Symmetric};
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
     void SetUp()
@@ -76,7 +75,11 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
               Data::BaselinerMetrics>
     GenerateCamTraceBatch(TraceElementType x, float blMean, float blVar)
     {
-        auto ctb = ctbFactory.NewBatch(bmd);
+        Data::BatchDimensions dims;
+        dims.framesPerBatch = chunkSize;
+        dims.laneWidth = laneSize;
+        dims.lanesPerBatch = poolSize;
+        auto ctb = ctbFactory.NewBatch(bmd, dims);
         auto& traces = ctb.first;
         auto& stats = ctb.second;
 

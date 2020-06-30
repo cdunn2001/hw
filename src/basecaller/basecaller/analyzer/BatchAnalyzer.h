@@ -37,7 +37,7 @@
 #include <dataTypes/BatchResult.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/ConfigForward.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/PulseBatch.h>
 
 namespace PacBio {
@@ -78,7 +78,9 @@ public:     // Static functions
     static void ReportPerformance();
 
 public:     // Structors & assignment operators
-    BatchAnalyzer(uint32_t poolId, const AlgoFactory& algoFac);
+    BatchAnalyzer(uint32_t poolId,
+                  const Data::BatchDimensions& dims,
+                  const AlgoFactory& algoFac);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&);

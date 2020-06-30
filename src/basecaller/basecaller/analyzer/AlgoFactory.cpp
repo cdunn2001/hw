@@ -24,8 +24,8 @@
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 
-#include <dataTypes/MovieConfig.h>
-#include <dataTypes/PrimaryConfig.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 using std::make_unique;
 using std::ostringstream;
@@ -139,9 +139,6 @@ AlgoFactory::~AlgoFactory()
 void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                             const Data::MovieConfig& movConfig)
 {
-    poolSize_ = Data::GetPrimaryConfig().lanesPerPool;
-    chunkSize_ = Data::GetPrimaryConfig().framesPerChunk;
-
     switch (baselinerOpt_)
     {
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
@@ -184,13 +181,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (frameLabelerOpt_)
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
-        FrameLabeler::Configure(Data::GetPrimaryConfig().lanesPerPool,
-                                Data::GetPrimaryConfig().framesPerChunk);
+        FrameLabeler::Configure();
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        DeviceSGCFrameLabeler::Configure(movConfig,
-                                         Data::GetPrimaryConfig().lanesPerPool,
-                                         Data::GetPrimaryConfig().framesPerChunk);
+        DeviceSGCFrameLabeler::Configure(movConfig);
         break;
     default:
         ostringstream msg;
@@ -202,19 +196,20 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (pulseAccumOpt_)
     {
     case Data::BasecallerPulseAccumConfig::MethodName::NoOp:
-        PulseAccumulator::Configure(bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        PulseAccumulator::Configure(bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
-        HostSimulatedPulseAccumulator::Configure(
-            bcConfig.pulseAccumConfig.maxCallsPerZmw);
+        HostSimulatedPulseAccumulator::Configure(bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         HostPulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+            movConfig,
+            bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
         DevicePulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig, bcConfig.pulseAccumConfig.maxCallsPerZmw);
+            movConfig,
+            bcConfig.pulseAccumConfig);
         break;
     default:
         ostringstream msg;
@@ -227,19 +222,15 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     {
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
         DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                         Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                         Data::GetPrimaryConfig().framesPerChunk,
-                                         Data::GetPrimaryConfig().sensorFrameRate,
-                                         Data::GetPrimaryConfig().realtimeActivityLabels,
-                                         Data::GetPrimaryConfig().lanesPerPool);
+                                         bcConfig.Metrics.framesPerHFMetricBlock,
+                                         movConfig.frameRate,
+                                         bcConfig.Metrics.realtimeActivityLabels);
         break;
     default:
         HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
-                                   Data::GetPrimaryConfig().framesPerHFMetricBlock,
-                                   Data::GetPrimaryConfig().framesPerChunk,
-                                   Data::GetPrimaryConfig().sensorFrameRate,
-                                   Data::GetPrimaryConfig().realtimeActivityLabels,
-                                   Data::GetPrimaryConfig().lanesPerPool);
+                                   bcConfig.Metrics.framesPerHFMetricBlock,
+                                   movConfig.frameRate,
+                                   bcConfig.Metrics.realtimeActivityLabels);
     }
 
     // TODO: Configure other algorithms according to options.
@@ -248,7 +239,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
 
 unique_ptr<Baseliner>
-AlgoFactory::CreateBaseliner(unsigned int poolId) const
+AlgoFactory::CreateBaseliner(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
     // to represent both the baseliner method and param. When the GPU version
@@ -260,7 +251,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
             return std::make_unique<HostNoOpBaseliner>(poolId);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
@@ -270,7 +261,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
             // TODO: scaler currently set to default 1.0f
             return std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f, FilterParamsLookup(baselinerOpt_),
-                                                             Data::GetPrimaryConfig().lanesPerPool);
+                                                             dims.lanesPerBatch);
             break;
         default:
             ostringstream msg;
@@ -281,7 +272,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId) const
 }
 
 std::unique_ptr<FrameLabeler>
-AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
+AlgoFactory::CreateFrameLabeler(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     switch (frameLabelerOpt_)
     {
@@ -289,7 +280,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
         return std::make_unique<FrameLabeler>(poolId);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        return std::make_unique<DeviceSGCFrameLabeler>(poolId);
+        return std::make_unique<DeviceSGCFrameLabeler>(poolId, dims.lanesPerBatch);
         break;
     default:
         ostringstream msg;
@@ -300,12 +291,12 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId) const
 }
 
 unique_ptr<TraceHistogramAccumulator>
-AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
+AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     switch (histAccumOpt_)
     {
     case Data::BasecallerTraceHistogramConfig::MethodName::Host:
-        return std::make_unique<TraceHistogramAccumHost>(poolId, poolSize_);
+        return std::make_unique<TraceHistogramAccumHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
         // TODO: For now fall through to throw exception.
@@ -319,15 +310,15 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId) const
 }
 
 std::unique_ptr<DetectionModelEstimator>
-AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
+AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        return make_unique<DetectionModelEstimator>(poolId, poolSize_);
+        return make_unique<DetectionModelEstimator>(poolId, dims.lanesPerBatch);
 
     case Data::BasecallerDmeConfig::MethodName::EmHost:
-        return make_unique<DmeEmHost>(poolId, poolSize_);
+        return make_unique<DmeEmHost>(poolId, dims.lanesPerBatch);
 
     default:
         ostringstream msg;
@@ -339,7 +330,7 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId) const
 }
 
 std::unique_ptr<PulseAccumulator>
-AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
+AlgoFactory::CreatePulseAccumulator(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     switch (pulseAccumOpt_)
     {
@@ -350,10 +341,10 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
         return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
-        return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, Data::GetPrimaryConfig().lanesPerPool);
+        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch);
         break;
     default:
         ostringstream msg;
@@ -364,7 +355,7 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId) const
 }
 
 std::unique_ptr<HFMetricsFilter>
-AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
+AlgoFactory::CreateHFMetricsFilter(unsigned int poolId, const Data::BatchDimensions& dims) const
 {
     switch (hfMetricsOpt_)
     {
@@ -372,10 +363,10 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId) const
         return std::make_unique<NoHFMetricsFilter>(poolId);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Host:
-        return std::make_unique<HostHFMetricsFilter>(poolId);
+        return std::make_unique<HostHFMetricsFilter>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        return std::make_unique<DeviceHFMetricsFilter>(poolId, poolSize_);
+        return std::make_unique<DeviceHFMetricsFilter>(poolId, dims.lanesPerBatch);
         break;
     default:
         ostringstream msg;

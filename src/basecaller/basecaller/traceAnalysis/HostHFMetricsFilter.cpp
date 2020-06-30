@@ -38,9 +38,9 @@ namespace Basecaller {
 
 void HostHFMetricsFilter::FinalizeBlock()
 {
-    for (size_t l = 0; l < lanesPerBatch_; ++l)
+    for (auto& metric : metrics_)
     {
-        metrics_[l].FinalizeMetrics(realtimeActivityLabels_, static_cast<float>(frameRate_));
+        metric.FinalizeMetrics(realtimeActivityLabels_, static_cast<float>(frameRate_));
     }
 }
 
@@ -49,7 +49,7 @@ HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 {
     const auto& pulses = pulseBatch.Pulses();
-    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
+    tbb::parallel_for(uint32_t{0}, pulseBatch.Dims().lanesPerBatch , [&](size_t l)
     {
         const auto& laneCalls = pulses.LaneView(l);
         metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
@@ -58,7 +58,7 @@ void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 
 void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
 {
-    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
+    tbb::parallel_for(size_t{0}, modelsBatch.Size(), [&](size_t l)
     {
         const auto& models = modelsBatch.GetHostView()[l];
         metrics_[l].AddModels(models);
@@ -70,7 +70,7 @@ void HostHFMetricsFilter::AddMetrics(
         const Data::FrameLabelerMetrics& frameLabelerMetrics,
         const Data::PulseDetectorMetrics& pdMetrics)
 {
-    tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
+    tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l)
     {
         metrics_[l].AddBatchMetrics(
                 baselinerMetrics.baselinerStats.GetHostView()[l],
@@ -89,11 +89,7 @@ HostHFMetricsFilter::Process(
 {
     if (framesSeen_ == 0)
     {
-        for (size_t l = 0; l < lanesPerBatch_; ++l)
-        {
-            // Prepares for the next block, including pre-populating startFrame
-            metrics_[l].Reset();
-        }
+        for (auto& metric : metrics_) metric.Reset();
     }
     AddPulses(pulseBatch);
     AddModels(models);
@@ -104,8 +100,8 @@ HostHFMetricsFilter::Process(
     {
         FinalizeBlock();
         framesSeen_ = 0;
-        auto ret = metricsFactory_->NewBatch();
-        tbb::parallel_for(uint32_t{0}, lanesPerBatch_, [&](size_t l)
+        auto ret = metricsFactory_->NewBatch(pulseBatch.Dims().lanesPerBatch);
+        tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l)
         {
             metrics_[l].PopulateBasecallingMetrics(
                     ret->GetHostView()[l]);

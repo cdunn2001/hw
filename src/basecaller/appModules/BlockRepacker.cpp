@@ -708,7 +708,7 @@ private:
 namespace PacBio {
 namespace Application {
 
-BlockRepacker::BlockRepacker(PacketLayout expectedInputLayout,
+BlockRepacker::BlockRepacker(PacketLayout /*expectedInputLayout*/,
                              BatchDimensions outputDims,
                              size_t numZmw,
                              size_t concurrencyLimit)

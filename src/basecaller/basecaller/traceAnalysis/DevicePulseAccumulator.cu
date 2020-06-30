@@ -31,7 +31,7 @@
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchVectors.cuh>
-#include <dataTypes/MovieConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
@@ -287,7 +287,7 @@ public:
     Process(const PulseBatchFactory& factory, LabelsBatch labels)
     {
         assert(blockThreads*2 == labels.LaneWidth());
-        auto ret = factory.NewBatch(labels.Metadata());
+        auto ret = factory.NewBatch(labels.Metadata(), labels.StorageDims());
 
         const auto& launcher = PBLauncher(
             ProcessLabels<LabelManager, blockThreads>,
@@ -328,10 +328,11 @@ template <typename LabelManager>
 std::unique_ptr<DeviceOnlyObj<const LabelManager>> DevicePulseAccumulator<LabelManager>::AccumImpl::manager_;
 
 template <typename LabelManager>
-void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig, size_t maxCallsPerZmw)
+void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig,
+                                                     const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     constexpr bool hostExecution = false;
-    PulseAccumulator::InitAllocationPools(hostExecution, maxCallsPerZmw);
+    PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 
     CudaArray<Data::Pulse::NucleotideLabel, numAnalogs> analogMap;
 
@@ -347,7 +348,6 @@ template <typename LabelManager>
 void DevicePulseAccumulator<LabelManager>::Finalize()
 {
     AccumImpl::Finalize();
-    PulseAccumulator::DestroyAllocationPools();
 }
 
 template <typename LabelManager>

@@ -37,6 +37,7 @@
 
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchMetrics.h>
+#include <dataTypes/configs/ConfigForward.h>
 
 #include "SubframeScorer.cuh"
 
@@ -219,19 +220,13 @@ public:
     // Helpers to provide scratch space data.  Used to pool allocations so we
     // only need enough to satisfy the current active batches, not one for
     // each possible pool.
-    static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta,
-                          int32_t lanesPerPool, int32_t framesPerChunk);
-private:
-    static std::unique_ptr<ViterbiDataHost<BlockThreads>> BorrowScratch();
-    static void ReturnScratch(std::unique_ptr<ViterbiDataHost<BlockThreads>> data);
+    static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta);
 
 public:
-    // This is necessary to call, if we wait until the C++ runtime is tearing down, the static scratch data
-    // may be freed after the cuda runtime is torn down, which causes problems
     static void Finalize();
 
 public:
-    FrameLabeler();
+    FrameLabeler(size_t lanesPerPool);
 
     FrameLabeler(const FrameLabeler&) = delete;
     FrameLabeler(FrameLabeler&&) = default;
@@ -247,10 +242,6 @@ public:
 private:
     Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
     Mongo::Data::BatchData<int16_t> prevLat_;
-
-    static int32_t lanesPerPool_;
-    static int32_t framesPerChunk_;
-    static ThreadSafeQueue<std::unique_ptr<ViterbiDataHost<BlockThreads>>> scratchData_;
 };
 
 }}

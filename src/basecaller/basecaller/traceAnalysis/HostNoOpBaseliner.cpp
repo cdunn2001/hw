@@ -12,19 +12,16 @@ void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
                                   const Data::MovieConfig&)
 {
     const auto hostExecution = true;
-    Baseliner::InitAllocationPools(hostExecution);
+    Baseliner::InitFactory(hostExecution);
 }
 
-void HostNoOpBaseliner::Finalize()
-{
-    Baseliner::DestroyAllocationPools();
-}
+void HostNoOpBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
 HostNoOpBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta());
+    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
     for (size_t laneIdx = 0; laneIdx < rawTrace.LanesPerBatch(); ++laneIdx)
     {

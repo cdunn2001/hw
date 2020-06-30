@@ -37,7 +37,7 @@ namespace Basecaller {
 class HostSimulatedPulseAccumulator : public PulseAccumulator
 {
 public:     // Static functions
-    static void Configure(size_t maxCallsPerZmw);
+    static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
     static void Finalize();
 
 public:

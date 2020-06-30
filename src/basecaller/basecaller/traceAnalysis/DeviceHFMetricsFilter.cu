@@ -766,7 +766,7 @@ public:
 
         if (framesSeen_ >= framesPerHFMetricBlock_)
         {
-            auto ret = metricsFactory_->NewBatch();
+            auto ret = metricsFactory_->NewBatch(pulseBatch.Dims().lanesPerBatch);
             const auto& finalizeLauncher = Cuda::PBLauncher(
                     FinalizeMetrics,
                     lanesPerBatch_,
@@ -817,17 +817,13 @@ DeviceHFMetricsFilter::Process(
 
 void DeviceHFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                       uint32_t framesPerHFMetricBlock,
-                                      uint32_t framesPerChunk,
                                       double frameRate,
-                                      bool realtimeActivityLabels,
-                                      uint32_t lanesPerBatch)
+                                      bool realtimeActivityLabels)
 {
     HFMetricsFilter::Configure(sandwichTolerance,
                                framesPerHFMetricBlock,
-                               framesPerChunk,
                                frameRate,
                                realtimeActivityLabels,
-                               lanesPerBatch,
                                false);
     auto trainedCartHost = TrainedCartDevice::PopulatedModel();
     CudaCopyToSymbol(trainedCartParams, &trainedCartHost);
