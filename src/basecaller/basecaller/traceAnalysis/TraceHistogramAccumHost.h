@@ -65,6 +65,9 @@ private:    // TraceHistogramAccumulator implementation.
             const Data::TraceBatch<TraceElementType>& ctb,
             const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) override;
 
+    void ResetImpl() override;
+    void FullResetImpl() override;
+
     const PoolHistType& HistogramImpl() const override;
 
     const PoolTraceStatsType& TraceStatsImpl() const override;

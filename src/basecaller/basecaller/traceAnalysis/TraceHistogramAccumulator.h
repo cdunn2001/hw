@@ -116,6 +116,19 @@ public:     // Non-const functions
         frameCount_ += traces.NumFrames();
     }
 
+    void Reset()
+    {
+        histFrameCount_ = 0;
+        ResetImpl();
+    }
+
+    void FullReset()
+    {
+        histFrameCount_ = 0;
+        frameCount_ = 0;
+        FullResetImpl();
+    }
+
 protected:  // Data
     // Number of frames added to histograms.
     size_t histFrameCount_ = 0;
@@ -138,6 +151,9 @@ private:    // Customizable implementation.
     virtual void AddBatchImpl(
         const Data::TraceBatch<DataType>& traces,
         const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) = 0;
+
+    virtual void ResetImpl() = 0;
+    virtual void FullResetImpl() = 0;
 
     virtual const PoolHistType& HistogramImpl() const = 0;
 

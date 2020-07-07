@@ -314,9 +314,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // Then wait a while more to stagger DME executions of different pools.
     // Then reset the trace histograms and start accumulating data for the first DME execution.
     if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
-            && baselinedTraces.GetMeta().LastFrame() >= nFramesBaselinerStartUp + poolDmeDelayFrames_)
+            && baselinedTraces.GetMeta().FirstFrame() >= nFramesBaselinerStartUp + poolDmeDelayFrames_)
     {
-        // TODO: Reset traceHistAccum_.
+        traceHistAccum_->FullReset();
         poolStatus_ = PoolStatus::STARTUP_DME_INIT;
     }
 
@@ -344,6 +344,8 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
         // Estimate/update model parameters from histogram.
         assert(dme_);
         dme_->Estimate(traceHistAccum_->Histogram(), &models_);
+        traceHistAccum_->Reset();
+
     }
 
     // This part simply mimics the StaticModelPipeline.
@@ -358,19 +360,20 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     auto basecallingMetrics = (*hfMetrics_)(pulses, baselinerMetrics, models_,
                                             frameLabelerMetrics, pulseDetectorMetrics);
 
-    // TODO: Drop results if poolStatus_ != PoolStatus::SEQUENCING.
-
     // TODO: What is the "schedule" pattern of producing metrics.
     // Do not need to be aligned over pools (or lanes).
 
     // TODO: When metrics are produced, use them to update detection models.
 
-    if (doDme)
+    if (poolStatus_ != PoolStatus::SEQUENCING)
     {
-        // TODO: Reset histograms.
+        auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
+                                                                   baselinedTraces.StorageDims());
+        return BatchResult(std::move(pulsesAndMetrics.first), nullptr);
+    } else
+    {
+        return BatchResult(std::move(pulses), std::move(basecallingMetrics));
     }
-
-    return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
