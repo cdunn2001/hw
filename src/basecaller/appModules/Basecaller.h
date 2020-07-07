@@ -55,6 +55,13 @@ public:
 
         algoFactory_.Configure(algoConfig, movConfig);
 
+        // TODO this computation will not be sufficient for sparse layouts
+        uint32_t maxPoolId = std::accumulate(poolDims.begin(), poolDims.end(), 0u,
+                                             [](uint32_t currMax, auto&& kv)
+                                             {
+                                                 return std::max(currMax, kv.first);
+                                             });
+
         for (const auto & kv : poolDims)
         {
             const auto& poolId = kv.first;
@@ -74,10 +81,14 @@ public:
                 case BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations:
                     return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_);
                 case BasecallerAlgorithmConfig::ModelEstimationMode::DynamicEstimations:
-                    return std::make_unique<DynamicEstimateBatchAnalyzer>(poolId, dims, algoFactory_);
+                    return std::make_unique<DynamicEstimateBatchAnalyzer>(poolId,
+                                                                          maxPoolId,
+                                                                          dims,
+                                                                          algoConfig.dmeConfig,
+                                                                          algoFactory_);
                 default:
-                throw PBException("Unexpected model estimation mode: "
-                                 + algoConfig.modelEstimationMode.toString());
+                    throw PBException("Unexpected model estimation mode: "
+                                     + algoConfig.modelEstimationMode.toString());
                 }
             }();
 

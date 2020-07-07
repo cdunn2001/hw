@@ -132,9 +132,6 @@ public:
     // 1 will round up to a single full chunk.
     PB_CONFIG_PARAM(uint32_t, MinFramesForEstimate, 4000);
 
-    // Number of frames to skip between estimation attempts.
-    PB_CONFIG_PARAM(unsigned int, MinSkipFrames, 0);
-
     // Coefficient for the reduction of model confidence triggered by laser
     // power changes.
     // Set less than zero to preserve prior behavior, described by comment

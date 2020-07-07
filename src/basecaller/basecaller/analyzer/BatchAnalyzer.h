@@ -145,7 +145,9 @@ class DynamicEstimateBatchAnalyzer : public BatchAnalyzer
 {
 public:
     DynamicEstimateBatchAnalyzer(uint32_t poolId,
+                                 uint32_t maxPoolId,
                                  const Data::BatchDimensions& dims,
+                                 const Data::BasecallerDmeConfig& dmeConfig,
                                  const AlgoFactory& algoFac);
 
     DynamicEstimateBatchAnalyzer(const DynamicEstimateBatchAnalyzer&) = delete;
@@ -167,7 +169,7 @@ private:
         ERROR               // Something went very wrong.
     };
     PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
-    uint32_t poolDmeDelay_;
+    uint32_t poolDmeDelayFrames_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

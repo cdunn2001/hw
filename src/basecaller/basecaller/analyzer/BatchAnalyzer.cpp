@@ -105,13 +105,24 @@ SingleEstimateBatchAnalyzer::SingleEstimateBatchAnalyzer(uint32_t poolId,
 }
 
 DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
+                                                           uint32_t maxPoolId,
                                                            const Data::BatchDimensions& dims,
+                                                           const Data::BasecallerDmeConfig& dmeConfig,
                                                            const AlgoFactory& algoFac)
     : BatchAnalyzer(poolId, dims, algoFac)
 {
-    static const unsigned int dmeDelayStride = 2u;  // TODO: Make this configurable.
-    // TODO: Is poolId_ defined appropriately for this use?
-    poolDmeDelay_ = PoolId() / dmeDelayStride;       // TODO: What are the units--frames, chunks, ... ?
+    // Set up a staggering pattern, so that we always estimate at the requested
+    // interval, but estimates for individual batches are spread out evenly
+    // between chunks.  For instance if it takes 4 chunks to get enough data
+    // for an estimate, then once all startup latencies are finally finished,
+    // we'll estimate the first quarter of batches during one chunk, the next
+    // quarter during the next chunk, and so on.
+    const auto framesPerChunk = dims.framesPerBatch;
+    const auto chunksPerEstimate = (dmeConfig.MinFramesForEstimate + framesPerChunk - 1)
+                                 / framesPerChunk;
+    const auto fraction = static_cast<float>(poolId) / (maxPoolId+1);
+    poolDmeDelayFrames_ = static_cast<uint32_t>(fraction * chunksPerEstimate)
+                  * dims.framesPerBatch;
 }
 
 FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
@@ -303,10 +314,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // Then wait a while more to stagger DME executions of different pools.
     // Then reset the trace histograms and start accumulating data for the first DME execution.
     if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
-            && baselinedTraces.GetMeta().LastFrame() >= nFramesBaselinerStartUp + poolDmeDelay_)
+            && baselinedTraces.GetMeta().LastFrame() >= nFramesBaselinerStartUp + poolDmeDelayFrames_)
     {
         // TODO: Reset traceHistAccum_.
-
         poolStatus_ = PoolStatus::STARTUP_DME_INIT;
     }
 
