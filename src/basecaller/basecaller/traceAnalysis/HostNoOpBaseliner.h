@@ -35,6 +35,8 @@ public:
     HostNoOpBaseliner(HostNoOpBaseliner&&) = default;
     ~HostNoOpBaseliner() override;
 
+    size_t StartupLatency() const override { return 0; }
+
 private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
     Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;

@@ -27,6 +27,8 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include <basecaller/traceAnalysis/BaselinerParams.h>
+#include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
 #include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
 
@@ -75,5 +77,37 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t l
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
+
+size_t DeviceMultiScaleBaseliner::StartupLatency() const
+{
+    static const auto params = FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
+
+    // Just check to make sure no one changed the hard coded filter parameters
+    // without updating this here.
+    assert([&]() -> bool
+    {
+        const auto& strides = params.Strides();
+        const auto& widths = params.Widths();
+
+        bool valid = true;
+        valid &= strides.size() == 2;
+        valid &= widths.size() == 2;
+        if (!valid) throw PBException("Unexpected number of baseline filters");
+
+        valid &= widths[0] == width1;
+        valid &= widths[1] == width2;
+        valid &= strides[0] == stride1;
+        valid &= strides[1] == stride2;
+
+        if (!valid)
+            throw PBException("Unexpected filter settings in DeviceMultiScaleBaseliner");
+
+        return valid;
+    }());
+
+    assert(ValidateParams());
+
+    return params.LatentSize();
+}
 
 }}}

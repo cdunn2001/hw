@@ -220,7 +220,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
-    if (!isModelInitialized_)
+    if (!isModelInitialized_ && tbatch.GetMeta().FirstFrame() > baseliner_->StartupLatency())
     {
         // TODO: Factor model initialization and estimation operations.
 
@@ -296,16 +296,14 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
 BatchAnalyzer::OutputType
 DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
 {
-    // This constant depends on the baseliner implementation and configuration.
-    // It should be initialized by a call to a Baseliner member.
-    static const unsigned int nFramesBaselinerStartUp = 100;
+    assert(baseliner_);
+    const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();
 
     // Minimum number of frames needed for estimating the detection model.
     static const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
-    assert(baseliner_);
     auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);

@@ -66,8 +66,8 @@ BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::Method
         }
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
         {
-            // TODO: Need to fill in parameters.
-            BaselinerParams ret(Strides{}, Widths{}, 0, 0);
+            // For now the same as TwoScaleMedium
+            BaselinerParams ret(Strides{2, 8}, Widths{9, 31}, 2.44f, 0.50f);
             logChoice(ret);
             return ret;
         }

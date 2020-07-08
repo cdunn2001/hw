@@ -33,6 +33,7 @@ public:
 public:
     HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config, uint32_t lanesPerPool)
         : Baseliner(poolId, scaler)
+        , latency_(config.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
@@ -40,6 +41,8 @@ public:
            baselinerByLane_.emplace_back(config, scaler);
        }
     }
+
+    size_t StartupLatency() const override { return latency_; }
 
     HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
     HostMultiScaleBaseliner(HostMultiScaleBaseliner&&) = default;
@@ -176,6 +179,7 @@ private:
 
 private:
     std::vector<MultiScaleBaseliner> baselinerByLane_;
+    size_t latency_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
