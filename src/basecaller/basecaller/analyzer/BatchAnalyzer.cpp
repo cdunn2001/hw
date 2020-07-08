@@ -63,6 +63,8 @@ SMART_ENUM(
     Upload,
     Download,
     Baseline,
+    Histogram,
+    DME,
     FrameLabeling,
     PulseAccumulating,
     Metrics
@@ -171,10 +173,14 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& t
 BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
 {
     auto mode = Profiler::Mode::REPORT;
-    if (tbatch.Metadata().FirstFrame() < 1281) mode = Profiler::Mode::OBSERVE;
-    if (tbatch.Metadata().FirstFrame() < 257) mode = Profiler::Mode::IGNORE;
+    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*10+1) mode = Profiler::Mode::OBSERVE;
+    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*2+1)  mode = Profiler::Mode::IGNORE;
     Profiler profiler(mode, 3.0, 100.0);
 
+    // TODO baseliner should have a virtual "PrepareData" function or something.
+    //      Having an explicitly measurable upload step makes the profiles
+    //      more meaningful, but these explicit gpu calls means we can't run
+    //      on a system without a gpu even if we're using purely host modules.
     auto upload = profiler.CreateScopedProfiler(FilterStages::Upload);
     (void)upload;
     tbatch.CopyToDevice();
@@ -206,16 +212,34 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
 
     auto download = profiler.CreateScopedProfiler(FilterStages::Download);
     (void)download;
-    pulses.Pulses().LaneView(0);
-
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
 BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
 {
+    auto mode = Profiler::Mode::IGNORE;
+    if (isModelInitialized_)
+    {
+        auto framesSince = tbatch.Metadata().FirstFrame() - firstFrameWithEstimates_;
+        if (framesSince > tbatch.NumFrames()*2)  mode = Profiler::Mode::OBSERVE;
+        if (framesSince > tbatch.NumFrames()*10) mode = Profiler::Mode::REPORT;
+    }
+    Profiler profiler(mode, 3.0, 100.0);
+
+    // TODO baseliner should have a virtual "PrepareData" function or something.
+    //      Having an explicitly measurable upload step makes the profiles
+    //      more meaningful, but these explicit gpu calls means we can't run
+    //      on a system without a gpu even if we're using purely host modules.
+    auto upload = profiler.CreateScopedProfiler(FilterStages::Upload);
+    (void)upload;
+    tbatch.CopyToDevice();
+    Cuda::CudaSynchronizeDefaultStream();
+
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
+    auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
+    (void)baselineProfile;
     auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
@@ -238,6 +262,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
             // Initialize the detection model from baseliner statistics.
             models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());
             isModelInitialized_ = true;
+            firstFrameWithEstimates_ = tbatch.Metadata().FirstFrame();
 
             // Estimate model parameters from histogram.
             assert(dme_);
@@ -245,18 +270,22 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
         }
     }
 
-    auto pulsesAndMetrics = [&baselinedTraces, this]() {
+    auto pulsesAndMetrics = [&baselinedTraces, &profiler, this]() {
         // When detection model is available, ...
         if (isModelInitialized_)
         {
             // Classify frames.
             assert(frameLabeler_);
+            auto frameProfile = profiler.CreateScopedProfiler(FilterStages::FrameLabeling);
+            (void)frameProfile;
             auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces),
                                                      models_);
             auto labels = std::move(labelsAndMetrics.first);
             auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
             // Generate pulses with metrics.
+            auto pulseProfile = profiler.CreateScopedProfiler(FilterStages::PulseAccumulating);
+            (void)pulseProfile;
             assert(pulseAccumulator_);
             auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
             auto pulses = std::move(pulsesAndMetrics.first);
@@ -279,14 +308,18 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
                                    std::move(pulseDetectorMetrics));
         }
     }();
-    auto pulses = std::move(std::get<0>(pulsesAndMetrics));
-    auto frameLabelerMetrics = std::move(std::get<1>(pulsesAndMetrics));
-    auto pulseDetectorMetrics = std::move(std::get<2>(pulsesAndMetrics));
+    auto& pulses = std::get<0>(pulsesAndMetrics);
+    auto& frameLabelerMetrics = std::get<1>(pulsesAndMetrics);
+    auto& pulseDetectorMetrics = std::get<2>(pulsesAndMetrics);
 
+    auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
+    (void)metricsProfile;
     auto basecallingMetrics = (*hfMetrics_)(
             pulses, baselinerMetrics, models_, frameLabelerMetrics,
             pulseDetectorMetrics);
 
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
+    (void)download;
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
@@ -297,13 +330,50 @@ BatchAnalyzer::OutputType
 DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
 {
     assert(baseliner_);
-    const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();
+    assert(traceHistAccum_);
+    static const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();
 
     // Minimum number of frames needed for estimating the detection model.
     static const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
 
+    auto roundToChunkMultiple = [&](size_t val)
+    {
+        auto numFrames = tbatch.NumFrames();
+        return (val + numFrames - 1) / numFrames * numFrames;
+    };
+    // We want to avoid intial transient phases before profiling.
+    // First the baseline filter needs to flush latent transients,
+    // then the histogram needs to get a reliable baseline statistics,
+    // and then finally we need to gather enough data for the DME to
+    // run.  Since DME execution is staggered, we really need to wait
+    // 2x that number of frames, in order for everything to be steady
+    // state
+    const auto startupLatency =
+          roundToChunkMultiple(nFramesBaselinerStartUp)
+        + roundToChunkMultiple(traceHistAccum_->NumFramesPreAccumStats())
+        + 2* roundToChunkMultiple(minFramesForDme);
+    auto mode = Profiler::Mode::IGNORE;
+    if (tbatch.Metadata().FirstFrame() > startupLatency)
+    {
+        auto framesSince = tbatch.Metadata().FirstFrame() - startupLatency;
+        if (framesSince > 2*minFramesForDme)  mode = Profiler::Mode::OBSERVE;
+        if (framesSince > 10*minFramesForDme) mode = Profiler::Mode::REPORT;
+    }
+    Profiler profiler(mode, 3.0, 100.0);
+
+    // TODO baseliner should have a virtual "PrepareData" function or something.
+    //      Having an explicitly measurable upload step makes the profiles
+    //      more meaningful, but these explicit gpu calls means we can't run
+    //      on a system without a gpu even if we're using purely host modules.
+    auto upload = profiler.CreateScopedProfiler(FilterStages::Upload);
+    (void)upload;
+    tbatch.CopyToDevice();
+    Cuda::CudaSynchronizeDefaultStream();
+
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
+    auto baselineProfile = profiler.CreateScopedProfiler(FilterStages::Baseline);
+    (void)baselineProfile;
     auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
@@ -320,6 +390,8 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
 
     // Accumulate histogram of baseline-subtracted trace data.
     // This operation also accumulates baseliner statistics.
+    auto histProfile = profiler.CreateScopedProfiler(FilterStages::Histogram);
+    (void)histProfile;
     assert(traceHistAccum_);
     traceHistAccum_->AddBatch(baselinedTraces,
                               baselinerMetrics.baselinerStats);
@@ -341,6 +413,8 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // estimate detection model.
     if (doDme)
     {
+        auto dmeProfile = profiler.CreateScopedProfiler(FilterStages::DME);
+        (void)dmeProfile;
         // Estimate/update model parameters from histogram.
         assert(dme_);
         dme_->Estimate(traceHistAccum_->Histogram(), &models_);
@@ -349,14 +423,21 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     }
 
     // This part simply mimics the StaticModelPipeline.
+
+    auto frameProfile = profiler.CreateScopedProfiler(FilterStages::FrameLabeling);
+    (void)frameProfile;
     auto labelsAndMetrics = (*frameLabeler_)(std::move(baselinedTraces), models_);
     auto labels = std::move(labelsAndMetrics.first);
     auto frameLabelerMetrics = std::move(labelsAndMetrics.second);
 
+    auto pulseProfile = profiler.CreateScopedProfiler(FilterStages::PulseAccumulating);
+    (void)pulseProfile;
     auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
+    auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
+    (void)metricsProfile;
     auto basecallingMetrics = (*hfMetrics_)(pulses, baselinerMetrics, models_,
                                             frameLabelerMetrics, pulseDetectorMetrics);
 
@@ -365,6 +446,8 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
 
     // TODO: When metrics are produced, use them to update detection models.
 
+    auto download = profiler.CreateScopedProfiler(FilterStages::Download);
+    (void)download;
     if (poolStatus_ != PoolStatus::SEQUENCING)
     {
         auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),

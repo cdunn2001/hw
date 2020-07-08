@@ -113,6 +113,10 @@ public:
     OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
 private:
     bool isModelInitialized_ {false};
+    // Marks the first frame that get's a real model estimate and
+    // can produce legitimate basecalls.  This variable is meaningless
+    // while isModelInitialized == false.
+    uint32_t firstFrameWithEstimates_ = std::numeric_limits<uint32_t>::max();
 
 };
 
