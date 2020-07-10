@@ -105,8 +105,6 @@ size_t DeviceMultiScaleBaseliner::StartupLatency() const
         return valid;
     }());
 
-    assert(ValidateParams());
-
     return params.LatentSize();
 }
 
