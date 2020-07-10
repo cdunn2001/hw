@@ -12,7 +12,7 @@ module load pacbio-devtools
 module load patchelf
 module load libusb/1.0.22
 module load cmake/3.13.3
-module load cuda
+module load cuda/10.1.168_418.67
 
 # to build the Wolverine Personality:
 # module load vivado/2018.3
