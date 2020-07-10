@@ -328,11 +328,13 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     const bool doDme = poolStatus_ != PoolStatus::STARTUP_DME_DELAY
             && traceHistAccum_->HistogramFrameCount() >= minFramesForDme;
 
-    if (doDme && poolStatus_ == PoolStatus::STARTUP_DME_INIT)
+    // Keep our model at our best guess from baseline stats.  This smooths
+    // the transition to a real model, when considering any latent data
+    // that may be stored in downstream filters
+    if (poolStatus_ == PoolStatus::STARTUP_DME_INIT)
     {
-        // Initialize the detection model from baseliner statistics.
         models_ = dme_->InitDetectionModels(traceHistAccum_->TraceStats());
-        poolStatus_ = PoolStatus::SEQUENCING;
+        if (doDme) poolStatus_ = PoolStatus::SEQUENCING;
     }
 
     // When sufficient trace data have been histogrammed,
