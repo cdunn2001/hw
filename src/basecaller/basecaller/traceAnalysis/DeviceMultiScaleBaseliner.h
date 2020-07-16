@@ -85,6 +85,8 @@ public:
 
     ~DeviceMultiScaleBaseliner() override;
 
+    size_t StartupLatency() const override;
+
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
               Data::BaselinerMetrics>

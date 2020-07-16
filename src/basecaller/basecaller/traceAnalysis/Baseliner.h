@@ -57,6 +57,11 @@ public:
 
     float Scale() const { return scaler_; }
 
+    // Will indicate the number of frames that are input
+    // before all startup transients are flushed.  Data
+    // before this point isn't necessarily reliable.
+    virtual size_t StartupLatency() const = 0;
+
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>

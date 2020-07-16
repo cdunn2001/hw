@@ -40,10 +40,33 @@ namespace Basecaller {
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
+    , stats_(poolSize)
     , poolHist_ (poolId, poolSize)
     , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 { }
 
+void TraceHistogramAccumHost::ResetImpl()
+{
+    isHistInitialized_ = false;
+    const auto numLanes = stats_.size();
+    stats_.clear();
+    stats_.resize(numLanes);
+}
+
+void TraceHistogramAccumHost::ClearImpl()
+{
+    const auto numLanes = stats_.size();
+    hist_.clear();
+    hist_.reserve(numLanes);
+    for(unsigned int lane = 0; lane < numLanes; lane++)
+    {
+        InitHistogram(lane);
+    }
+
+    stats_.clear();
+    stats_.resize(numLanes);
+    isHistInitialized_ = true;
+}
 
 void TraceHistogramAccumHost::AddBatchImpl(
         const Data::TraceBatch<TraceElementType>& traces,
@@ -54,31 +77,13 @@ void TraceHistogramAccumHost::AddBatchImpl(
 
     const auto numLanes = traces.LanesPerBatch();
 
-    if (FramesAdded() == 0)
-    {
-        // This is the first trace batch.
-
-        // Reset all the histograms.
-        hist_.clear();
-        hist_.reserve(traces.LanesPerBatch());
-        isHistInitialized_ = false;
-        histFrameCount_ = 0;
-
-        // Reset baseline stat accumulators.
-        InitStats(numLanes);
-    }
-
     // Have we accumulated enough data for baseline statistics, which are
     // needed to initialize the histograms?
     const bool doInitHist = !isHistInitialized_
             && FramesAdded() + traces.NumFrames() >= NumFramesPreAccumStats();
     if (doInitHist)
     {
-        for(unsigned int lane = 0; lane < numLanes; lane++)
-        {
-            InitHistogram(lane);
-        }
-        isHistInitialized_ = true;
+        Clear();
     }
 
     // For each lane/block in the batch ...

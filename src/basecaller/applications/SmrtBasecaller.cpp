@@ -233,7 +233,7 @@ private:
             }
         };
 
-        if (config_.algorithm.staticAnalysis == true)
+        if (config_.algorithm.modelEstimationMode == BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
         {
             setBlMeanAndCovar(traceFileName,
                               config_.algorithm.staticDetModelConfig.baselineMean,
@@ -421,7 +421,7 @@ private:
                         PBLOG_WARN << report.stage.toString()
                                    << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
                                    << report.dutyCycle * 100 << "%, "
-                                   << 1e3 / report.avgDuration << "ms, "
+                                   << report.avgDuration << "ms, "
                                    << report.idlePercent << "%, "
                                    << report.avgOccupancy;
                     }

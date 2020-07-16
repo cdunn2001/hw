@@ -96,7 +96,6 @@ private:    // Types
         ANALOG_REP,
         SNR_SUFFICIENT,
         SNR_DROP,
-        GOOD_FIT,
         G_TEST,
         NUM_CONF_FACTORS
     };

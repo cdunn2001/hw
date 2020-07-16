@@ -60,7 +60,9 @@ public:
     PB_CONFIG_OBJECT(SimulatedFaults, simulatedFaults);
 
     PB_CONFIG_OBJECT(StaticDetModelConfig, staticDetModelConfig);
-    PB_CONFIG_PARAM(bool, staticAnalysis, true);
+
+    SMART_ENUM(ModelEstimationMode, FixedEstimations, InitialEstimations, DynamicEstimations);
+    PB_CONFIG_PARAM(ModelEstimationMode, modelEstimationMode, ModelEstimationMode::FixedEstimations);
 
 public:
     std::string CombinedMethodName() const

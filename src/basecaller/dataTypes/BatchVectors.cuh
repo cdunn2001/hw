@@ -45,21 +45,24 @@ class VectorView : private Cuda::Memory::detail::DataManager
 public:
     __device__ VectorView(T* data,
                Len_t * len,
+               Len_t * overflow,
                uint32_t maxLen,
                Cuda::Memory::detail::DataManagerKey)
         : data_(Cuda::Memory::DeviceHandle<T>(data, maxLen, DataKey()))
         , len_(len)
+        , overflow_(overflow)
     {}
 
     template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
     __device__ operator VectorView<const T>()
     {
-        return VectorView<const T>(data_.Data(), len_, data_.Size());
+        return VectorView<const T>(data_.Data(), len_, overflow_, data_.Size());
     }
 
     __device__ void Reset()
     {
         *len_ = 0;
+        *overflow_ = 0;
     }
 
     __device__ const T& operator[](size_t idx) const
@@ -73,20 +76,35 @@ public:
     }
 
     template <typename U, std::enable_if_t<std::is_assignable<T, U>::value, int> = 0>
-    __device__ void push_back(U&& val)
+    __device__ bool push_back(U&& val)
     {
-        assert(*len_ < data_.Size());
-        data_[*len_] = std::forward<U>(val);
-        (*len_)++;
+        assert(*len_ <= data_.Size());
+        if (*len_ < data_.Size())
+        {
+            data_[*len_] = std::forward<U>(val);
+            (*len_)++;
+            return true;
+        } else {
+            *overflow_++;
+            return false;
+        }
     }
 
     // Creates a default initialized entry at the back of the vector
     // Note that this implementation is limited to trivially_default_constructible
     // types, so this is in fact a noop.
-    __device__ void emplace_back_default()
+    __device__ bool emplace_back_default()
     {
-        assert(*len_ < data_.Size());
-        (*len_)++;
+        assert(*len_ <= data_.Size());
+        if (*len_ < data_.Size())
+        {
+            (*len_)++;
+            return true;
+        } else
+        {
+            (*overflow_)++;
+            return false;
+        }
     }
 
     __device__ T& back()
@@ -104,6 +122,7 @@ public:
 private:
     Cuda::Memory::DeviceView<T> data_;
     Len_t* len_;
+    Len_t* overflow_;
 };
 
 template <typename T>
@@ -114,6 +133,7 @@ public:
         : maxLen_(vecs.MaxLen())
         , data_(vecs.Data({}).GetDeviceHandle(info))
         , lens_(vecs.Lens({}).GetDeviceHandle(info))
+        , overflows_(vecs.Overflows({}).GetDeviceHandle(info))
     {}
 
     template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
@@ -122,6 +142,7 @@ public:
         : maxLen_(vecs.MaxLen())
         , data_(vecs.Data({}).GetDeviceHandle(info))
         , lens_(vecs.Lens({}).GetDeviceHandle(info))
+        , overflows_(vecs.Overflows({}).GetDeviceHandle(info))
     {}
 
     __device__ VectorView<T> GetVector(int zmw)
@@ -130,6 +151,7 @@ public:
         auto offset = zmw*maxLen_;
         return VectorView<T>(data_.Data() + offset,
                              lens_.Data() + zmw,
+                             overflows_.Data() + zmw,
                              maxLen_,
                              DataKey());
     }
@@ -139,8 +161,9 @@ public:
         auto offset = zmw*maxLen_;
         return VectorView<const T>(data_.Data() + offset,
                                    lens_.Data() + zmw,
-                                    maxLen_,
-                                    DataKey());
+                                   overflows_.Data() + zmw,
+                                   maxLen_,
+                                   DataKey());
     }
 
 private:
@@ -149,6 +172,7 @@ private:
     using idx_t = typename std::conditional<std::is_const<T>::value, const uint32_t, uint32_t>::type;
     Cuda::Memory::DeviceView<T> data_;
     Cuda::Memory::DeviceView<idx_t> lens_;
+    Cuda::Memory::DeviceView<idx_t> overflows_;
 };
 
 // Define overloads for this function, so that we can track kernel invocations, and

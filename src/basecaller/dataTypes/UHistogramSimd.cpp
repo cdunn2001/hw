@@ -111,8 +111,12 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(const LaneHistogram<ScalarDataType
     for (unsigned int bin = 0; bin < numBins_ + 1u; ++bin)
     {
         binStart_[bin] = lb + ScalarDataType(bin) * binSize_;
+    }
+    for (unsigned int bin = 0; bin < numBins_; ++bin)
+    {
         binCount_[bin] = ConstLaneArrayRef<ScalarCountType>(laneHist.binCount[bin].data());
     }
+    binCount_[numBins_] = LaneArray<ScalarCountType>{0};
 }
 
 

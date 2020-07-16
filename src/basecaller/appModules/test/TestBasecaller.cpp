@@ -25,7 +25,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines unit tests for class TraceAnalyzerTbb.
+//  Defines unit tests for class Basecaller.
 
 #include <vector>
 #include <gtest/gtest.h>
@@ -58,7 +58,7 @@ TEST(TestBasecaller, CheckMetadata)
         return ret;
     }();
 
-    algoConfig.staticAnalysis = false;
+    algoConfig.modelEstimationMode = Data::BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations;
     algoConfig.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
     algoConfig.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
     algoConfig.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;

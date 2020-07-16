@@ -68,23 +68,26 @@ class LaneVectorView : private Cuda::Memory::detail::DataManager
 public:
     LaneVectorView(T* data,
                    Len_t * lens,
+                   Len_t * overflows,
                    uint32_t maxLen,
                    Cuda::Memory::detail::PassKey<BatchVectors<typename std::remove_const<T>::type>>)
         : maxLen_(maxLen)
         , data_(data, maxLen*laneSize, DataKey())
         , lens_(lens, laneSize, DataKey())
+        , overflows_(overflows, laneSize, DataKey())
     {}
 
     template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>
     operator LaneVectorView<const T>()
     {
-        return LaneVectorView<const T>(data_.Data(), lens_.Data(), maxLen_);
+        return LaneVectorView<const T>(data_.Data(), lens_.Data(), overflows_.Data(), maxLen_);
     }
 
     // Sets all lengths back to zero.
     void Reset()
     {
         std::fill(lens_.Data(), lens_.Data() + lens_.Size(), 0);
+        std::fill(overflows_.Data(), overflows_.Data() + overflows_.Size(), 0);
     }
 
     const T& operator()(size_t zmw, size_t idx) const
@@ -99,24 +102,34 @@ public:
     }
 
     template <typename U, std::enable_if_t<std::is_assignable<T, U>::value, int> = 0>
-    void push_back(size_t zmw, U&& val)
+    bool push_back(size_t zmw, U&& val)
     {
         assert(zmw < laneSize);
-        assert(lens_[zmw] < maxLen_);
-        data_[zmw*maxLen_ + lens_[zmw]] = std::forward<U>(val);
-        lens_[zmw]++;
+        assert(lens_[zmw] <= maxLen_);
+        if (lens_[zmw] < maxLen_)
+        {
+            data_[zmw*maxLen_ + lens_[zmw]] = std::forward<U>(val);
+            lens_[zmw]++;
+            return true;
+        } else
+        {
+            overflows_[zmw]++;
+            return false;
+        }
     }
 
     T* ZmwData(int zmw) { return data_.Data() + zmw * maxLen_; }
     const T* ZmwData(int zmw) const { return data_.Data() + zmw * maxLen_; }
 
     uint32_t size(int zmw) const { return lens_[zmw]; }
+    uint32_t overflows(int zmw) const { return overflows_[zmw]; }
 
 private:
     uint32_t maxLen_;
 
     Cuda::Memory::HostView<T> data_;
     Cuda::Memory::HostView<Len_t> lens_;
+    Cuda::Memory::HostView<Len_t> overflows_;
 };
 
 // This class manages a set of vectors, with one vector for each zmw
@@ -148,6 +161,7 @@ public:
         , maxLen_(maxLen)
         , data_(zmwPerBatch * maxLen, syncDir, marker)
         , lens_(zmwPerBatch, syncDir, marker)
+        , overflows_(zmwPerBatch, syncDir, marker)
     {}
 
     LaneVectorView<T> LaneView(uint32_t laneId)
@@ -156,8 +170,10 @@ public:
         assert(laneOffset < zmwPerBatch_);
         auto dView = data_.GetHostView();
         auto lView = lens_.GetHostView();
+        auto oView = overflows_.GetHostView();
         return LaneVectorView<T>(dView.Data() + laneOffset*maxLen_,
                            lView.Data() + laneOffset,
+                           oView.Data() + laneOffset,
                            maxLen_,
                            {});
     }
@@ -167,8 +183,10 @@ public:
         assert(laneOffset < zmwPerBatch_);
         auto dView = data_.GetHostView();
         auto lView = lens_.GetHostView();
+        auto oView = overflows_.GetHostView();
         return LaneVectorView<const T>(dView.Data() + laneOffset*maxLen_,
                            lView.Data() + laneOffset,
+                           oView.Data() + laneOffset,
                            maxLen_,
                            {});
     }
@@ -183,6 +201,9 @@ public:
     UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<T>>) { return lens_; }
     const UnifiedCudaArray<uint32_t>& Lens(PassKey<GpuBatchVectors<const T>>) const { return lens_; }
 
+    UnifiedCudaArray<uint32_t>& Overflows(PassKey<GpuBatchVectors<T>>) { return overflows_; }
+    const UnifiedCudaArray<uint32_t>& Overflows(PassKey<GpuBatchVectors<const T>>) const { return overflows_; }
+
     void DeactivateGpuMem()
     {
         data_.DeactivateGpuMem();
@@ -195,6 +216,7 @@ private:
 
     Cuda::Memory::UnifiedCudaArray<T> data_;
     Cuda::Memory::UnifiedCudaArray<uint32_t> lens_;
+    Cuda::Memory::UnifiedCudaArray<uint32_t> overflows_;
 };
 
 }}} //::PacBio::Mongo::Data

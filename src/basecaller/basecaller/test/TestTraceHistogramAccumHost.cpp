@@ -151,14 +151,17 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
     }
 
     // Expected accumulated baseline statistics.
+    // Note that it's only over the last three chunks.
+    // The first chunks baseline stats are used to
+    // create the histogram bounds, and then reset
     const auto n0 = chunkSize/2;
-    const float mExpect = std::accumulate(mPar.begin(), mPar.end(), 0.0f) / nChunks;
-    float s2Expect = (n0 - 1) * std::accumulate(s2Par.begin(), s2Par.end(), 0.0f);
-    for (unsigned int i = 0; i < nChunks; ++i)
+    const float mExpect = std::accumulate(mPar.begin()+1, mPar.end(), 0.0f) / (nChunks-1);
+    float s2Expect = (n0 - 1) * std::accumulate(s2Par.begin()+1, s2Par.end(), 0.0f);
+    for (unsigned int i = 1; i < nChunks; ++i)
     {
         s2Expect += n0 * pow2(mPar[i] - mExpect);
     }
-    s2Expect /= (nChunks*n0 - 1);
+    s2Expect /= ((nChunks-1)*n0 - 1);
 
     // Check the accumulated baseline statistics.
     const auto& tsPool = tha.TraceStatsHost();
@@ -170,7 +173,7 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
         const auto s2 = bls.Variance();
         for (unsigned int i = 0; i < laneSize; ++i)
         {
-            EXPECT_EQ(nChunks*n0, n[i]);
+            EXPECT_EQ((nChunks-1)*n0, n[i]);
             EXPECT_FLOAT_EQ(mExpect, m[i]);
             EXPECT_FLOAT_EQ(s2Expect, s2[i]);
         }

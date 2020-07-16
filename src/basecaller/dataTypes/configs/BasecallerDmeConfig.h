@@ -50,7 +50,7 @@ public:
     PB_CONFIG(BasecallerDmeConfig);
 
     SMART_ENUM(MethodName, Fixed, EmHost);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Fixed);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::EmHost);
 
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);
@@ -131,9 +131,6 @@ public:
 
     // 1 will round up to a single full chunk.
     PB_CONFIG_PARAM(uint32_t, MinFramesForEstimate, 4000);
-
-    // Number of frames to skip between estimation attempts.
-    PB_CONFIG_PARAM(unsigned int, MinSkipFrames, 0);
 
     // Coefficient for the reduction of model confidence triggered by laser
     // power changes.
