@@ -76,6 +76,9 @@ public:
 
     uint32_t PoolId() const { return poolId_; }
 
+    // TODO these really should be private, with protected accessors.  Children should
+    //      be able to use these and even call non-const methods, but should not be able
+    //      to destroy the contained type.
 protected:
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<FrameLabeler> frameLabeler_;

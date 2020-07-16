@@ -45,7 +45,7 @@ TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
     , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
 { }
 
-void TraceHistogramAccumHost::FullResetImpl()
+void TraceHistogramAccumHost::ResetImpl()
 {
     isHistInitialized_ = false;
     const auto numLanes = stats_.size();
@@ -53,7 +53,7 @@ void TraceHistogramAccumHost::FullResetImpl()
     stats_.resize(numLanes);
 }
 
-void TraceHistogramAccumHost::ResetImpl()
+void TraceHistogramAccumHost::ClearImpl()
 {
     const auto numLanes = stats_.size();
     hist_.clear();
@@ -83,7 +83,7 @@ void TraceHistogramAccumHost::AddBatchImpl(
             && FramesAdded() + traces.NumFrames() >= NumFramesPreAccumStats();
     if (doInitHist)
     {
-        Reset();
+        Clear();
     }
 
     // For each lane/block in the batch ...

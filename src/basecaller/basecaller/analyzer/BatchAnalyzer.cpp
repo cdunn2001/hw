@@ -113,7 +113,7 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
                                                            const AlgoFactory& algoFac)
     : BatchAnalyzer(poolId, dims, algoFac)
 {
-    // Set up a staggering pattern, so that we always estimate at the requested
+    // Set up a stagger pattern, such that we always estimate at the requested
     // interval, but estimates for individual batches are spread out evenly
     // between chunks.  For instance if it takes 4 chunks to get enough data
     // for an estimate, then once all startup latencies are finally finished,
@@ -309,8 +309,8 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
         }
     }();
     auto& pulses = std::get<0>(pulsesAndMetrics);
-    auto& frameLabelerMetrics = std::get<1>(pulsesAndMetrics);
-    auto& pulseDetectorMetrics = std::get<2>(pulsesAndMetrics);
+    const auto& frameLabelerMetrics = std::get<1>(pulsesAndMetrics);
+    const auto& pulseDetectorMetrics = std::get<2>(pulsesAndMetrics);
 
     auto metricsProfile = profiler.CreateScopedProfiler(FilterStages::Metrics);
     (void)metricsProfile;
@@ -384,7 +384,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     if (poolStatus_ == PoolStatus::STARTUP_DME_DELAY
             && baselinedTraces.GetMeta().FirstFrame() >= nFramesBaselinerStartUp + poolDmeDelayFrames_)
     {
-        traceHistAccum_->FullReset();
+        traceHistAccum_->Reset();
         poolStatus_ = PoolStatus::STARTUP_DME_INIT;
     }
 
@@ -418,7 +418,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
         // Estimate/update model parameters from histogram.
         assert(dme_);
         dme_->Estimate(traceHistAccum_->Histogram(), &models_);
-        traceHistAccum_->Reset();
+        traceHistAccum_->Clear();
 
     }
 

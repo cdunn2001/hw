@@ -1,4 +1,4 @@
-# This cram test is based off simtraces.t, with specific tweaks to accomidate
+# This cram test is based off simtraces.t, with specific tweaks to accomodate
 # a staggered detection model estimation process.  Namely, the first part of
 # the input traces will be dropped on the ground while we gather histograms
 # for the dme to run, and estimations are staggered so that different lanes
