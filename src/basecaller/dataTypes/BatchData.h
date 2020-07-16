@@ -38,14 +38,11 @@
 namespace PacBio {
 namespace Mongo {
 
-template <typename T, unsigned int N>
-class ConstLaneArrayRef;
-
-template <typename T, unsigned int N>
-class LaneArrayRef;
-
-template <typename T, unsigned int N>
+template <typename T, size_t N>
 class LaneArray;
+// TODO why these forwards??
+template <typename T, size_t N>
+struct PtrView;
 
 namespace Data {
 
@@ -137,27 +134,27 @@ public:
             return *this;
         }
 
-        LaneArrayRef<T, laneSize> operator*()
+        LaneArray<T, laneSize> Extract() const
         {
-            return LaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            return LaneArray<T, laneSize>(PtrView<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*() const
+        void Store(const LaneArray<T, laneSize>& lane)
         {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            memcpy(ptr_ + (curFrame_ * laneWidth_), &lane, sizeof(lane));
         }
 
-        LaneArrayRef<T, laneSize> operator[](size_t idx)
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return LaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
+        //LaneArrayRef<T, laneSize> operator[](size_t idx)
+        //{
+        //    assert(curFrame_ + idx < numFrames_);
+        //    return LaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        //}
 
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
+        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        //{
+        //    assert(curFrame_ + idx < numFrames_);
+        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        //}
     private:
         T* ptr_;
         size_t curFrame_;
@@ -219,27 +216,23 @@ public:
             return *this;
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*()
+        ValueType Extract() const
         {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            // TODO this remove_const_t is ugly and probably confusing
+            return ValueType(PtrView<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*() const
-        {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
-        }
+        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
+        //{
+        //    assert(curFrame_ + idx < numFrames_);
+        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        //}
 
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
-
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
+        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
+        //{
+        //    assert(curFrame_ + idx < numFrames_);
+        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+        //}
     private:
         T* ptr_;
         size_t curFrame_;
@@ -266,6 +259,8 @@ public:
     { return ConstLaneIterator(data_ , numFrames_, laneWidth_, numFrames_); }
 
 public:
+    // TODO clean up this `laneWidth_` business.  It's only pretending things
+    // will work if it's not 64
     BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey)
         : data_(data)
         , laneWidth_(laneWidth)

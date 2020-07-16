@@ -70,7 +70,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
              ++relativeFrameIndex, ++blIter)
         {
             EmitFrameLabels(currSegment, lanePulses, baselineStats,
-                            *blIter, blockLatTrace, currTrace,
+                            blIter.Extract(), blockLatTrace, currTrace,
                             relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
         }
 
@@ -83,7 +83,7 @@ template <typename LabelManager>
 void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegment,
                                                          Data::LaneVectorView<Data::Pulse>& pulses,
                                                          BaselineStats& baselineStats,
-                                                         const ConstLabelArrayRef& label,
+                                                         const LabelArray& label,
                                                          const SignalBlockView& blockLatTrace,
                                                          const SignalBlockView& currTrace,
                                                          size_t relativeFrameIndex,
@@ -112,7 +112,7 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
     const auto& isBaseline = (!pulseMask) & (!boundaryMask);
     if (any(isBaseline))
     {
-        baselineStats.AddSample(FloatArray{signal}, isBaseline);
+        baselineStats.AddSample(AsFloat(signal), isBaseline);
     }
 }
 

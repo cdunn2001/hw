@@ -222,7 +222,8 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
-    mldx.degOfFreedom = numFrames - nModelParams;
+    // TODO should this really be int?
+    mldx.degOfFreedom = AsInt(numFrames) - nModelParams;
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]
@@ -257,7 +258,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
         // Inverses of variances.
         ModeArray varinv = var.array().inverse();
 
-        static const float log_2pi = log(2.0f * pi_f);
+        static const float log_2pi = std::log(2.0f * pi_f);
         ModeArray prefactors = rho.log() - 0.5f*var.log() - 0.5f*log_2pi;
 
         FloatVec probSum(0.0f);
@@ -489,8 +490,6 @@ DmeEmHost::PrelimScaleFactor(const LaneDetModelHost& model,
 {
     using std::max;  using std::min;
     using std::sqrt;
-
-    using ClarFloat = ConstLaneArrayRef<float>;
 
     // Define a fractile that includes all of the background and half of the pulse frames.
     const auto& bgMode = model.BaselineMode();

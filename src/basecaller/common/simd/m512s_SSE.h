@@ -35,10 +35,12 @@
 #endif
 
 #include <cassert>
+#include <cstring>
 #include <immintrin.h>
 #include <ostream>
 
 #include "m512f_SSE.h"
+#include "m512i_SSE.h"
 #include "xcompile.h"
 
 namespace PacBio {
@@ -98,11 +100,22 @@ public:     // Structors
         : data{{v1, v2, v3, v4}}
     {}
 
-    m512s(const m512f& even, const m512f& odd)
-        : data{{_mm_or_si128(FloatToCh0(even.data1()), FloatToCh1(odd.data1()))
-              , _mm_or_si128(FloatToCh0(even.data2()), FloatToCh1(odd.data2()))
-              , _mm_or_si128(FloatToCh0(even.data3()), FloatToCh1(odd.data3()))
-              , _mm_or_si128(FloatToCh0(even.data4()), FloatToCh1(odd.data4()))}}
+    m512s(const m512i& low, const m512i& high)
+    {
+        // Unless I'm missing something, no good SSE
+        // intrinsics for packing 16 bit values.
+        // Emulating this here since that won't be the
+        // case for avx512
+        for (size_t i = 0; i < 16; ++i)
+        {
+            data.raw[i] = low[i];
+            data.raw[i+16] = high[i];
+        }
+
+    }
+
+    m512s(const m512f& low, const m512f& high)
+        : m512s(m512i(low), m512i(high))
     {}
 
 public:     // Assignment
@@ -126,6 +139,11 @@ public:     // Assignment
         data.simd[2] = _mm_add_epi16(this->data.simd[2], x.data.simd[2]);
         data.simd[3] = _mm_add_epi16(this->data.simd[3], x.data.simd[3]);
         return *this;
+    }
+
+    m512s& operator+=(const m512s& x)
+    {
+        return AddWithRollOver(x);
     }
 
     // Return a scalar value
@@ -185,6 +203,17 @@ public:     // Functor types
 
 public:     // Conversion methods
 
+    friend m512s Blend(const m512b& bLow, const m512b& bHigh, const m512s& l, const m512s& r)
+    {
+        // Again emulating for lack of good SSE intrinsics
+        m512s ret;
+        for (size_t i = 0; i < 16; ++i)
+        {
+            ret.data.raw[i] = bLow[i] ? l[i] : r[i];
+            ret.data.raw[i+16] = bHigh[i] ? l[i+16] : r[i+16];
+        }
+        return ret;
+    }
     /// Convert the even channel of an interleaved 2-channel layout to float.
     friend m512f Channel0(const m512s& in)
     {
@@ -205,7 +234,7 @@ public:     // Conversion methods
                      _mm_cvtepi32_ps(Ch1_32(in.data.simd[3])));
     }
     // Converts index 0-15 into a m512f
-    friend m512f LowHalf(const m512s& in)
+    friend m512f LowFloats(const m512s& in)
     {
         return m512f(_mm_cvtepi32_ps(_mm_cvtepi16_epi32(in.data.simd[0])),
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[0], 0xEE))),
@@ -214,13 +243,31 @@ public:     // Conversion methods
     }
 
     // Converts index 16-31 into a m512f
-    friend m512f HighHalf(const m512s& in)
+    friend m512f HighFloats(const m512s& in)
     {
         return m512f(_mm_cvtepi32_ps(_mm_cvtepi16_epi32(in.data.simd[2])),
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[2], 0xEE))),
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(in.data.simd[3])),
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE))));
     }
+    // Converts index 0-15 into a m512f
+    friend m512i LowInts(const m512s& in)
+    {
+        return m512i(_mm_cvtepi16_epi32(in.data.simd[0]),
+                     _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[0], 0xEE)),
+                     _mm_cvtepi16_epi32(in.data.simd[1]),
+                     _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[1], 0xEE)));
+    }
+
+    // Converts index 16-31 into a m512f
+    friend m512i HighInts(const m512s& in)
+    {
+        return m512i(_mm_cvtepi16_epi32(in.data.simd[2]),
+                     _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[2], 0xEE)),
+                     _mm_cvtepi16_epi32(in.data.simd[3]),
+                     _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE)));
+    }
+
 
 public:     // Non-member (friend) functions
 
@@ -308,6 +355,63 @@ public:     // Non-member (friend) functions
                      _mm_max_epi16(a.data.simd[1], b.data.simd[1]),
                      _mm_max_epi16(a.data.simd[2], b.data.simd[2]),
                      _mm_max_epi16(a.data.simd[3], b.data.simd[3]));
+    }
+
+    static m512b help(__m128i a, __m128i b)
+    {
+        __m128 low1 = _mm_castsi128_ps(_mm_cvtepi16_epi32(a));
+        __m128 high1 = _mm_castsi128_ps(_mm_cvtepi16_epi32(_mm_bsrli_si128(a, 8)));
+        __m128 low2 = _mm_castsi128_ps(_mm_cvtepi16_epi32(b));
+        __m128 high2 = _mm_castsi128_ps(_mm_cvtepi16_epi32(_mm_bsrli_si128(b, 8)));
+
+        return m512b{low1, high1, low2, high2};
+    }
+
+    friend std::pair<m512b, m512b> operator!=(const m512s& a, const m512s& b)
+    {
+        std::pair<m512b, m512b> ret;
+        ret.first = help(~_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+                         ~_mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
+        ret.second= help(~_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+                         ~_mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
+        return ret;
+    }
+    friend std::pair<m512b, m512b> operator==(const m512s& a, const m512s& b)
+    {
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+                         _mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
+        ret.second= help(_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+                         _mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
+        return ret;
+    }
+    friend std::pair<m512b, m512b> operator>(const m512s& a, const m512s& b)
+    {
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmpgt_epi16(a.data.simd[0], b.data.simd[0]),
+                         _mm_cmpgt_epi16(a.data.simd[1], b.data.simd[1]));
+        ret.second= help(_mm_cmpgt_epi16(a.data.simd[2], b.data.simd[2]),
+                         _mm_cmpgt_epi16(a.data.simd[3], b.data.simd[3]));
+        return ret;
+    }
+    friend std::pair<m512b, m512b> operator<(const m512s& a, const m512s& b)
+    {
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmplt_epi16(a.data.simd[0], b.data.simd[0]),
+                         _mm_cmplt_epi16(a.data.simd[1], b.data.simd[1]));
+        ret.second= help(_mm_cmplt_epi16(a.data.simd[2], b.data.simd[2]),
+                         _mm_cmplt_epi16(a.data.simd[3], b.data.simd[3]));
+        return ret;
+    }
+    friend std::pair<m512b, m512b> operator<=(const m512s& a, const m512s& b)
+    {
+        auto tmp = (a > b);
+        return {!tmp.first, !tmp.second};
+    }
+    friend std::pair<m512b, m512b> operator>=(const m512s& a, const m512s& b)
+    {
+        auto tmp = (a < b);
+        return {!tmp.first, !tmp.second};
     }
 
 private:    // Utility methods

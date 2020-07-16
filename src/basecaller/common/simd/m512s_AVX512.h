@@ -78,9 +78,9 @@ public:     // Structors
     // Construct from native vector type
     m512s(ImplType v_) : v(v_) {}
 
-    m512s(const m512f& even, const m512f& odd)
-        : v(_mm512_or_si512(FloatToCh0(even.data()), FloatToCh1(odd.data())))
-    {}
+        //m512s(const m512f& even, const m512f& odd)
+    //    : v(_mm512_or_si512(FloatToCh0(even.data()), FloatToCh1(odd.data())))
+    //{}
 
 public:     // Assignment
     m512s& operator=(const m512s& x) = default;

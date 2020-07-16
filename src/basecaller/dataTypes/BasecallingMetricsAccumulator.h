@@ -54,11 +54,14 @@ namespace Data {
 
 class BasecallingMetricsAccumulator
 {
+    // TODO rename
+    template <typename T>
+    using Array_t = PacBio::Cuda::Utility::CudaArray<T, 64>;
 public: // types
     template <typename T>
-    using SingleMetric = LaneArray<T>;
+    using SingleMetric = Array_t<T>;
     template <typename T>
-    using AnalogMetric = std::array<LaneArray<T>, numAnalogs>;
+    using AnalogMetric = std::array<Array_t<T>, numAnalogs>;
 
 public:
     BasecallingMetricsAccumulator()
@@ -95,29 +98,29 @@ public: // complex accessors
 
     AnalogMetric<float> PkmidMean() const;
 
-    SingleMetric<uint16_t> NumBases() const;
+    SingleMetric<int16_t> NumBases() const;
 
-    SingleMetric<uint16_t> NumPulses() const;
+    SingleMetric<int16_t> NumPulses() const;
 
     SingleMetric<float> PulseWidth() const;
 
 private: // metrics
-    SingleMetric<uint16_t> numPulseFrames_;
-    SingleMetric<uint16_t> numBaseFrames_;
-    SingleMetric<uint16_t> numSandwiches_;
-    SingleMetric<uint16_t> numHalfSandwiches_;
-    SingleMetric<uint16_t> numPulseLabelStutters_;
-    SingleMetric<HQRFPhysicalStates> activityLabel_;
+    SingleMetric<int16_t> numPulseFrames_;
+    SingleMetric<int16_t> numBaseFrames_;
+    SingleMetric<int16_t> numSandwiches_;
+    SingleMetric<int16_t> numHalfSandwiches_;
+    SingleMetric<int16_t> numPulseLabelStutters_;
+    SingleMetric<int16_t> activityLabel_;
     AnalogMetric<float> pkMidSignal_;
     AnalogMetric<float> bpZvar_;
     AnalogMetric<float> pkZvar_;
     AnalogMetric<float> pkMax_;
     AnalogMetric<float> modelVariance_;
     AnalogMetric<float> modelMean_;
-    AnalogMetric<uint16_t> numPkMidFrames_;
-    AnalogMetric<uint16_t> numPkMidBasesByAnalog_;
-    AnalogMetric<uint16_t> numBasesByAnalog_;
-    AnalogMetric<uint16_t> numPulsesByAnalog_;
+    AnalogMetric<int16_t> numPkMidFrames_;
+    AnalogMetric<int16_t> numPkMidBasesByAnalog_;
+    AnalogMetric<int16_t> numBasesByAnalog_;
+    AnalogMetric<int16_t> numPulsesByAnalog_;
 
     TraceAnalysisMetrics traceMetrics_;
 

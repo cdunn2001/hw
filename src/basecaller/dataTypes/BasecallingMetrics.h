@@ -56,27 +56,27 @@ public: // types
 
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
-    SingleMetric<HQRFPhysicalStates> activityLabel;
-    SingleMetric<uint16_t> numPulseFrames;
-    SingleMetric<uint16_t> numBaseFrames;
-    SingleMetric<uint16_t> numSandwiches;
-    SingleMetric<uint16_t> numHalfSandwiches;
-    SingleMetric<uint16_t> numPulseLabelStutters;
-    SingleMetric<uint16_t> numBases;
-    SingleMetric<uint16_t> numPulses;
+    SingleMetric<int16_t> activityLabel;
+    SingleMetric<int16_t> numPulseFrames;
+    SingleMetric<int16_t> numBaseFrames;
+    SingleMetric<int16_t> numSandwiches;
+    SingleMetric<int16_t> numHalfSandwiches;
+    SingleMetric<int16_t> numPulseLabelStutters;
+    SingleMetric<int16_t> numBases;
+    SingleMetric<int16_t> numPulses;
     AnalogMetric<float> pkMidSignal;
     AnalogMetric<float> bpZvar;
     AnalogMetric<float> pkZvar;
     AnalogMetric<float> pkMax;
-    AnalogMetric<uint16_t> numPkMidFrames;
-    AnalogMetric<uint16_t> numPkMidBasesByAnalog;
-    AnalogMetric<uint16_t> numBasesByAnalog;
-    AnalogMetric<uint16_t> numPulsesByAnalog;
+    AnalogMetric<int16_t> numPkMidFrames;
+    AnalogMetric<int16_t> numPkMidBasesByAnalog;
+    AnalogMetric<int16_t> numBasesByAnalog;
+    AnalogMetric<int16_t> numPulsesByAnalog;
 
     // TODO Add useful tracemetrics members here (there are others in the
     // accumulator member..., not sure if they are used):
-    SingleMetric<uint32_t> startFrame;
-    SingleMetric<uint32_t> numFrames;
+    SingleMetric<int32_t> startFrame;
+    SingleMetric<int32_t> numFrames;
     SingleMetric<float> autocorrelation;
     SingleMetric<float> pulseDetectionScore;
     SingleMetric<int16_t> pixelChecksum;

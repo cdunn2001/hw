@@ -41,7 +41,25 @@ namespace Cuda {
 // Aliasing for now, mostly so there is an easy hook if we want to either
 // have a proper wrapper type like PBHalf2, or need to stub in third
 // part half precision float for the host.
-using PBHalf = half;
+//#if defined(__CUDA_ARCH__)
+    using PBHalf = half;
+//#else
+//class PBHalf
+//{
+//public:
+//    PBHalf() = default;
+//    PBHalf(float f)
+//        : h_(__float2half_rn(f))
+//    {}
+//
+//    operator half&() { return h_; }
+//    operator const half&() const { return h_; }
+//
+//    operator float() const { return h_; }
+//private:
+//    half h_;
+//};
+//#endif
 
 class PBShort2
 {

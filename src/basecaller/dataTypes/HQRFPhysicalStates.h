@@ -28,11 +28,13 @@
 // Description:
 /// \brief HQRFPhsyicalStates
 
+#include <cstdint>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-enum class HQRFPhysicalStates : std::uint16_t
+enum class HQRFPhysicalStates : int16_t
 {
     EMPTY = 0,
     SINGLE,

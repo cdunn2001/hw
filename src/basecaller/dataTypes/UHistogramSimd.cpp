@@ -51,11 +51,12 @@ template <typename DataT, typename CountT>
 UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
                                               const DataType& lowerBound,
                                               const DataType& upperBound)
-    : binSize_ {0}
+    : binSize_ (0)
     , nLowOutliers_ {0}
     , nHighOutliers_ {0}
     , binStart_ (numBins + 1u)
-    , binCount_ (numBins + 1u, CountType{0})
+      // TODO fix need for explicit cast
+    , binCount_ (numBins + 1u, CountType{static_cast<short>(0)})
     , numBins_ (numBins)
 {
     // Check parameter values.
@@ -99,22 +100,22 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
 
 template <typename DataT, typename CountT>
 UHistogramSimd<DataT, CountT>::UHistogramSimd(const LaneHistogram<ScalarDataType, ScalarCountType>& laneHist)
-    : binSize_ (laneHist.binSize.begin(), laneHist.binSize.end())
-    , nLowOutliers_ (laneHist.outlierCountLow.begin(), laneHist.outlierCountLow.end())
-    , nHighOutliers_ (laneHist.outlierCountHigh.begin(), laneHist.outlierCountHigh.end())
-    , binStart_ (laneHist.numBins + 1u)
-    , binCount_ (laneHist.numBins + 1u)
-    , numBins_ (laneHist.numBins)
+    : binSize_(laneHist.binSize)
+    , nLowOutliers_(laneHist.outlierCountLow)
+    , nHighOutliers_(laneHist.outlierCountHigh)
+    , binStart_(laneHist.numBins + 1u)
+    , binCount_(laneHist.numBins + 1u)
+    , numBins_(laneHist.numBins)
 {
     assert(Simd::SimdTypeTraits<DataType>::width == laneHist.binSize.size());
-    const ConstLaneArrayRef<ScalarDataType> lb (laneHist.lowBound.data());
+    const LaneArray<ScalarDataType> lb(laneHist.lowBound);
     for (unsigned int bin = 0; bin < numBins_ + 1u; ++bin)
     {
         binStart_[bin] = lb + ScalarDataType(bin) * binSize_;
     }
     for (unsigned int bin = 0; bin < numBins_; ++bin)
     {
-        binCount_[bin] = ConstLaneArrayRef<ScalarCountType>(laneHist.binCount[bin].data());
+        binCount_[bin] = LaneArray<ScalarCountType, 64>(laneHist.binCount[bin]);
     }
     binCount_[numBins_] = LaneArray<ScalarCountType>{0};
 }
@@ -160,7 +161,7 @@ UHistogramSimd<DataT, CountT>::Fractile(FloatType frac) const
     static constexpr auto inf = std::numeric_limits<ScalarDataType>::infinity();
 
     UnionConv<DataType> ret;
-    const auto nf = MakeUnion(frac * FloatType(TotalCount()));
+    const auto nf = MakeUnion(frac * AsFloat(TotalCount()));
     for (unsigned int z = 0; z < SimdTypeTraits<DataType>::width; ++z)
     {
         // Find the critical bin.
@@ -230,12 +231,12 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
     }
 
     // Tally the cumulative count.
-    auto cc = FloatType(LowOutlierCount());
-    cc += FloatType(CountNonuniform(IndexType(0), xbin));
+    auto cc = AsFloat(LowOutlierCount());
+    cc += AsFloat(CountNonuniform(IndexType(0), xbin));
     cc += xbinCount * xrem / BinSize();
 
-    cc = Blend(mLow, FloatType(LowOutlierCount()), cc);
-    cc = Blend(mHigh, FloatType(LowOutlierCount() + InRangeCount()), cc);
+    cc = Blend(mLow, AsFloat(LowOutlierCount()), cc);
+    cc = Blend(mHigh, AsFloat(LowOutlierCount() + InRangeCount()), cc);
     cc = Blend(mNan, FloatType(NAN), cc);
 
     return cc;
@@ -243,6 +244,7 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 
 
 // Explicit instantiations
-template class UHistogramSimd<LaneArray<float>, LaneArray<unsigned short>>;
+// TODO create m512us type?
+template class UHistogramSimd<LaneArray<float>, LaneArray<short>>;
 
 }}}     // namespace PacBio::Mongo::Data

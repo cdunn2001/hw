@@ -79,9 +79,9 @@ public:     // Const methods
         return AutocorrAccumState
         {
             stats_.GetState(),
-            {m1First_.cbegin(), m1First_.cend()},
-            {m1Last_.cbegin(), m1Last_.cend()},
-            {m2_.cbegin(), m2_.cend()},
+            m1First_,
+            m1Last_,
+            m2_
         };
     }
 

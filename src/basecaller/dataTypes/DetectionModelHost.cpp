@@ -43,7 +43,7 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     , updated_ (false)  // TODO: Is this right?
 {
     static_assert(numAnalogs == ldm.numAnalogs, "Mismatch in number of analogs.");
-    auto analogWeight = 0.25f * (1.0f - FloatVec(ConstLaneArrayRef<VF2, laneSize>(ldm.BaselineWeight().data())));
+    auto analogWeight = 0.25f * (1.0f - FloatVec(ldm.BaselineWeight()));
     detectionModes_.reserve(numAnalogs);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
@@ -114,26 +114,31 @@ void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
 template <typename VF>
 template <typename FloatT>
 SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam, const Cuda::Utility::CudaArray<FloatT, laneSize>& weight)
-    : weight_ (ConstLaneArrayRef<FloatT, laneSize>(weight.data()))
-    , mean_ (ConstLaneArrayRef<FloatT, laneSize>(lam.means.data()))
-    , var_ (ConstLaneArrayRef<FloatT, laneSize>(lam.vars.data()))
+    : weight_ (weight)
+    , mean_ (lam.means)
+    , var_ (lam.vars)
 { }
 
 template <typename VF>
 template <typename FloatT>
 SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam, const FloatVec& weight)
     : weight_ (weight)
-    , mean_ (ConstLaneArrayRef<FloatT, laneSize>(lam.means.data()))
-    , var_ (ConstLaneArrayRef<FloatT, laneSize>(lam.vars.data()))
+    , mean_ (lam.means)
+    , var_ (lam.vars)
 { }
 
 template <typename VF>
 template <typename VF2>
 void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
 {
+    using namespace PacBio::Cuda::Utility;
+    auto ConvertToCudaArray = [](const VF& lane){
+        CudaArray<ScalarType<VF>, laneSize> tmp = lane;
+        return CudaArray<VF2, laneSize>(tmp.begin(), tmp.end());
+    };
     assert(lam);
-    LaneArrayRef<VF2, laneSize>(lam->means.data()) =  mean_;
-    LaneArrayRef<VF2, laneSize>(lam->vars.data()) = var_;
+    lam->means = ConvertToCudaArray(mean_);
+    lam->vars = ConvertToCudaArray(var_);
     // TODO: What about weight_?
 }
 

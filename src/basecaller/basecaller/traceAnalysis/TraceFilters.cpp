@@ -23,7 +23,7 @@ size_t extremumFilterHgw(RandInIter p, RandInIter in1, RandOutIter out,
     // Fill in all but the last needed to compute the first value.
     while (r.size() < width &&  p != in1)
     {
-        r.PushBack(ValueType(*p));
+        r.PushBack(ValueType(p.Extract()));
         p += std::min(stride, RandInIter::distance(p, in1));
     }
 
@@ -53,8 +53,10 @@ size_t extremumFilterHgw(RandInIter p, RandInIter in1, RandOutIter out,
         // same address space:  push the current value before assigning the output.
         //
         auto front = r.front();
-        r.PushBack(ValueType(p[i]));
-        *out++ = extremOp(s, front);
+        r.PushBack(ValueType(p.Extract()));
+        out.Store(extremOp(s, front));
+        out++;
+        p += stride;
     }
 
     // Store the current value of s

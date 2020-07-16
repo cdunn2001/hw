@@ -45,7 +45,6 @@
 #include <smmintrin.h>
 
 #include "m512f_SSE.h"
-#include "m512s_SSE.h"
 #include "mm_blendv_si128.h"
 #include "xcompile.h"
 
@@ -468,26 +467,6 @@ public:     // Non-member (friend) functions
         const m512i b = a + 1;
         return Blend(maskB, b, a);
     }
-
-    // Creates an m512s that has the m512i data duplicated.  The replication is
-    // compact (16 original followed by the 16 replica)
-    friend m512s Replicate (const m512i& a)
-    {
-        // No good conversions from int32 to int16 until AVX512.  Doing the
-        // necessary packing while keeping the ordering of a contiguous
-        // (unlike our Ch_0 and Ch_1 functions) would be difficult.  Just
-        // using array access for simplicity.
-        alignas(alignof(m512s)) short b[m512s::size()];
-        static_assert(2 * size() == m512s::size(), "Unexpected size mismatch");
-        for (size_t i = 0; i < size(); ++i)
-        {
-            assert(a[i] <= std::numeric_limits<short>::max());
-            b[i] = static_cast<short>(a[i]);
-            b[i+size()] = static_cast<short>(a[i]);
-        }
-        return m512s(b);
-    }
-
 };
 
 inline m512i floorCastInt(const m512f& f)

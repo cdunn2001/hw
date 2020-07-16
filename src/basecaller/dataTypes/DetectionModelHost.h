@@ -130,11 +130,11 @@ public:     // Const interface
     /// Indicates whether the model was updated since the previous trace block
     /// for unit cell specified by \a zmwIndex.
     /// 0 <= \a zmwIndex < vecSize.
-    bool Updated(size_t zmwIndex) const
-    {
-        assert (zmwIndex < vecSize);
-        return updated_[zmwIndex];
-    }
+    //bool Updated(size_t zmwIndex) const
+    //{
+    //    assert (zmwIndex < vecSize);
+    //    return updated_[zmwIndex];
+    //}
 
     /// Vector of booleans indicated whether each unit cell was updated.
     BoolVec Updated() const
@@ -147,11 +147,11 @@ public:     // Const interface
     /// If the model is a result of multiple estimates averaged together, the
     /// confidence score may exceed 1.0.
     /// 0 <= \a zmwIndex < vecSize.
-    float Confidence(size_t zmwIndex) const
-    {
-        assert (zmwIndex < vecSize);
-        return confid_[zmwIndex];
-    }
+    //float Confidence(size_t zmwIndex) const
+    //{
+    //    assert (zmwIndex < vecSize);
+    //    return confid_[zmwIndex];
+    //}
 
     /// The confidence scores for the complete lane.
     const FloatVec& Confidence() const

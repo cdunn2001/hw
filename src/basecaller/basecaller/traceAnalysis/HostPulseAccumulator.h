@@ -46,8 +46,8 @@ namespace Basecaller {
 template <typename LabelManager>
 class HostPulseAccumulator : public PulseAccumulator
 {
-    using ConstLabelArrayRef = ConstLaneArrayRef<Data::LabelsBatch::ElementType>;
-    using ConstSignalArrayRef = ConstLaneArrayRef<Data::BaselinedTraceElement>;
+    using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
+    using SignalArray = LaneArray<Data::BaselinedTraceElement>;
     using SignalBlockView = Data::BlockView<Data::BaselinedTraceElement>;
     using ConstSignalBlockView = Data::BlockView<const Data::BaselinedTraceElement>;
     using FloatArray = LaneArray<float>;
@@ -66,13 +66,13 @@ public:
     class LabelsSegment
     {
     public:
-        using FrameArray = LaneArray<uint32_t>;
+        using FrameArray = LaneArray<int32_t>;
         using FloatArray = LaneArray<float>;
         using SignalArray = LaneArray<Data::BaselinedTraceElement>;
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
 
     public:
-        LabelsSegment(const FrameArray& startFrame, const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
+        LabelsSegment(const FrameArray& startFrame, const LabelArray& label, const SignalArray& signal)
             : startFrame_(startFrame)
             , endFrame_(0)
             , signalFrstFrame_(signal)
@@ -95,7 +95,7 @@ public:
         { }
 
     public:
-        LaneMask<> IsNewSegment(const ConstLabelArrayRef& label) const
+        LaneMask<> IsNewSegment(const LabelArray& label) const
         {
             return LabelManager::IsNewSegment(this->label_, label);
         }
@@ -115,28 +115,28 @@ public:
             Data::Pulse pls{};
 
             endFrame_ = frameIndex;
-            int width = frameIndex - startFrame_[zmw];
+            int width = frameIndex - MakeUnion(startFrame_)[zmw];
 
-            float raw_mean = (signalTotal_[zmw] + signalLastFrame_[zmw] + signalFrstFrame_[zmw]) / static_cast<float>(width);
-            float raw_mid = signalTotal_[zmw] / static_cast<float>(width - 2);
+            float raw_mean = MakeUnion(signalTotal_ + signalLastFrame_ + signalFrstFrame_)[zmw] / static_cast<float>(width);
+            float raw_mid = MakeUnion(signalTotal_)[zmw] / static_cast<float>(width - 2);
 
             using std::min;
             using std::max;
 
-            pls.Start(startFrame_[zmw])
+            pls.Start(MakeUnion(startFrame_)[zmw])
                 .Width(width)
                 .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
                 .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
-                .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(signalMax_[zmw]))))
-                .SignalM2(signalM2_[zmw])
-                .Label(manager.Nucleotide(label_[zmw]))
+                .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(MakeUnion(signalMax_)[zmw]))))
+                .SignalM2(MakeUnion(signalM2_)[zmw])
+                .Label(manager.Nucleotide(MakeUnion(label_)[zmw]))
                 .IsReject(false);
 
             return pls;
         }
 
         void ResetSegment(const LaneMask<laneSize>& boundaryMask, uint32_t frameIndex,
-                          const ConstLabelArrayRef& label, const ConstSignalArrayRef& signal)
+                          const LabelArray& label, const SignalArray& signal)
         {
             startFrame_ = Blend(boundaryMask, FrameArray{frameIndex}, startFrame_);
             endFrame_ = Blend(boundaryMask, FrameArray{0}, endFrame_);
@@ -148,10 +148,10 @@ public:
             label_ = Blend(boundaryMask, label, label_);
         }
 
-        void AddSignal(const LaneMask<laneSize>& update, const ConstSignalArrayRef& signal)
+        void AddSignal(const LaneMask<laneSize>& update, const SignalArray& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
-            signalM2_ = Blend(update, signalM2_ + (FloatArray(signalLastFrame_) * FloatArray(signalLastFrame_)), signalM2_);
+            signalM2_ = Blend(update, signalM2_ + (AsFloat(signalLastFrame_) * AsFloat(signalLastFrame_)), signalM2_);
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
             signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }
@@ -175,16 +175,16 @@ private:
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
                          BaselineStats& baselineStats,
-                         const ConstLabelArrayRef& label, const SignalBlockView& blockLatTrace,
+                         const LabelArray& label, const SignalBlockView& blockLatTrace,
                          const SignalBlockView& currTrace, size_t relativeFrameIndex, uint32_t absFrameIndex);
 
-    ConstSignalArrayRef Signal(size_t relativeFrameIndex, const SignalBlockView& latTrace,
+    SignalArray Signal(size_t relativeFrameIndex, const SignalBlockView& latTrace,
                                const SignalBlockView& currTrace) const
     {
         return relativeFrameIndex < latTrace.NumFrames()
-               ?  ConstSignalArrayRef(latTrace.Data() + (relativeFrameIndex * latTrace.LaneWidth()))
-               :  ConstSignalArrayRef(currTrace.Data() + ((relativeFrameIndex - latTrace.NumFrames())
-                                      * currTrace.LaneWidth()));
+            // TODO this += nonsense is silly
+            ?  SignalArray((latTrace.CBegin() += relativeFrameIndex).Extract())
+            :  SignalArray((currTrace.CBegin() += (relativeFrameIndex - latTrace.NumFrames())).Extract());
     }
 
 private:
