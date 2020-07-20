@@ -76,10 +76,10 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     for ( ; blsIter != baselineSubtractedData.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
             blsIter += Stride(), lowerIter += Stride(), upperIter += Stride())
     {
-        auto upper = upperIter.Extract();
-        auto lower = lowerIter.Extract();
-        const auto& bias = AsFloat(upper + lower) / FloatArray{2.0f};
-        const auto& framebkgndSigma = AsFloat(upper - lower) / cSigmaBias_;
+        auto upperVal = upperIter.Extract();
+        auto lowerVal = lowerIter.Extract();
+        const auto& bias = AsFloat(upperVal + lowerVal) / FloatArray{2.0f};
+        const auto& framebkgndSigma = AsFloat(upperVal - lowerVal) / cSigmaBias_;
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 

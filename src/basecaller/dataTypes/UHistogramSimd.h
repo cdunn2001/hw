@@ -53,7 +53,7 @@ namespace Data {
 /// large as that of DataT. When creating on the heap, this may require use of
 /// a special allocator.
 template <typename DataT, typename CountT>
-class alignas(DataT) alignas(8) UHistogramSimd
+class alignas(DataT) UHistogramSimd
 {
 public:     // Types
     /// The type of the data.

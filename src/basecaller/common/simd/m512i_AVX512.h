@@ -40,7 +40,6 @@
 
 #include "m512b_AVX512.h"
 #include "m512f_AVX512.h"
-#include "m512s_AVX512.h"
 #include "xcompile.h"
 
 //#include <Eigen/Core>
@@ -249,13 +248,6 @@ public:     // Non-member (friend) functions
     friend m512i inc (const m512i& a, const m512b& mask)
     { return m512i(_mm512_mask_add_epi32(a.v, mask.data(), a.v, m512i(1).v)); }
 
-    // Creates an m512s that has the m512i data duplicated.  The replication is
-    // compact (16 original followed by the 16 replica)
-    friend m512s Replicate (const m512i& a)
-    {
-        assert(all(a <= std::numeric_limits<short>::max()));
-        return m512s(_mm512_broadcast_i64x4(_mm512_cvtepi32_epi16(a.v)));
-    }
 public:     // stream
     friend std::ostream& operator << (std::ostream& stream, const m512i& vec)
     {

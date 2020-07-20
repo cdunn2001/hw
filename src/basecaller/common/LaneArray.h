@@ -52,13 +52,23 @@ struct PairAccess_t
     using SType = typename std::decay_t<T>::SimdType;
     static constexpr auto SimdCount = std::decay_t<T>::SimdCount/2;
     struct pair {
+        pair(SType& f, SType& s)
+            : first{f}
+            , second{s}
+        {}
         SType& first;
         SType& second;
     };
     struct const_pair {
+        const_pair(const SType& f, const SType& s)
+            : first{f}
+            , second{s}
+        {}
         const SType& first;
         const SType& second;
     };
+
+    PairAccess_t(T& d) : inner_{d} {}
 
     //pair operator[](size_t idx)
     //{
@@ -87,9 +97,9 @@ auto PairAccess(T&& t)
 template <typename Ret, typename F, size_t...Ids, typename... Args>
 Ret Helper2(F&& f, std::index_sequence<Ids...>, Args&&... args)
 {
-    auto f2 = [&](size_t id, auto&&... args)
+    auto f2 = [&](size_t id, auto&&... args2)
     {
-        return f(args.data()[id]...);
+        return f(args2.data()[id]...);
     };
     return Ret{f2(Ids, args...)...};
 }
@@ -155,7 +165,7 @@ template <typename Ret, typename...Args>
 static constexpr wid_types wid_helper()
 {
     if (all_true<(Ret::SimdCount == Args::SimdCount)...>::value) return all_same;
-    if (Ret::ScalarCount / Ret::SimdCount == 16) return input_16;
+    else if (Ret::ScalarCount / Ret::SimdCount == 16) return input_16;
     else return input_32;
 }
 
@@ -396,21 +406,21 @@ public:
     friend LaneMask operator| (const LaneMask& l, const LaneMask& r)
     {
         return Helper<LaneMask>(
-            [](auto&& l, auto&& r){ return l | r; },
+            [](auto&& l2, auto&& r2){ return l2 | r2; },
             l, r);
     }
 
     friend LaneMask operator! (const LaneMask& m)
     {
         return Helper<LaneMask>(
-            [](auto&& m){ return !m; },
+            [](auto&& m2){ return !m2; },
             m);
     }
 
     friend LaneMask operator& (const LaneMask& l, const LaneMask& r)
     {
         return Helper<LaneMask>(
-            [](auto&& l, auto&& r){ return l & r; },
+            [](auto&& l2, auto&& r2){ return l2 & r2; },
             l, r);
     }
 
@@ -506,70 +516,70 @@ public:
     friend Child operator -(const Child& l, const Child& r)
     {
         return Helper<Child>(
-            [](auto&& l, auto&& r){ return l - r;},
+            [](auto&& l2, auto&& r2){ return l2 - r2;},
             l, r);
     }
 
     friend Child operator *(const Child& l, const Child& r)
     {
         return Helper<Child>(
-            [](auto&& l, auto&& r){ return l * r;},
+            [](auto&& l2, auto&& r2){ return l2 * r2;},
             l, r);
     }
 
     friend Child operator /(const Child& l, const Child& r)
     {
         return Helper<Child>(
-            [](auto&& l, auto&& r){ return l / r;},
+            [](auto&& l2, auto&& r2){ return l2 / r2;},
             l, r);
     }
 
     friend Child operator +(const Child& l, const Child& r)
     {
         return Helper<Child>(
-            [](auto&& l, auto&& r){ return l + r;},
+            [](auto&& l2, auto&& r2){ return l2 + r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator >=(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l >= r;},
+            [](auto&& l2, auto&& r2){ return l2 >= r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator >(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l > r;},
+            [](auto&& l2, auto&& r2){ return l2 > r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator <=(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l <= r;},
+            [](auto&& l2, auto&& r2){ return l2 <= r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator <(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l < r;},
+            [](auto&& l2, auto&& r2){ return l2 < r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator ==(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l == r;},
+            [](auto&& l2, auto&& r2){ return l2 == r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator !=(const Child& l, const Child& r)
     {
         return Helper<LaneMask<ScalarCount>>(
-            [](auto&& l, auto&& r){ return l != r;},
+            [](auto&& l2, auto&& r2){ return l2 != r2;},
             l, r);
     }
 
@@ -611,7 +621,7 @@ public:
     friend Child Blend(const LaneMask<ScalarCount>& b, const Child& c1, const Child& c2)
     {
         return Helper<Child>(
-            [](auto&& b, auto&& l, auto&& r){ return Blend(b, l, r); },
+            [](auto&& b2, auto&& l, auto&& r){ return Blend(b2, l, r); },
             b, c1, c2);
     }
 
@@ -739,7 +749,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> erfc(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return erfc(in); },
+        [](auto&& in2){ return erfc(in2); },
         in);
 }
 
@@ -747,7 +757,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> log(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return log(in); },
+        [](auto&& in2){ return log(in2); },
         in);
 }
 
@@ -755,7 +765,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> log2(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return log2(in); },
+        [](auto&& in2){ return log2(in2); },
         in);
 }
 
@@ -763,7 +773,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> exp(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return exp(in); },
+        [](auto&& in2){ return exp(in2); },
         in);
 }
 
@@ -771,7 +781,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> exp2(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return exp2(in); },
+        [](auto&& in2){ return exp2(in2); },
         in);
 }
 
@@ -779,7 +789,7 @@ template <size_t ScalarCount>
 LaneArray<float, ScalarCount> sqrt(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in){ return sqrt(in); },
+        [](auto&& in2){ return sqrt(in2); },
         in);
 }
 
@@ -787,7 +797,7 @@ template <size_t ScalarCount>
 LaneArray<int, ScalarCount> floorCastInt(const LaneArray<float, ScalarCount>& in)
 {
     return Helper<LaneArray<int, ScalarCount>>(
-        [](auto&& in){ return floorCastInt(in); },
+        [](auto&& in2){ return floorCastInt(in2); },
         in);
 }
 
@@ -809,7 +819,7 @@ template <size_t ScalarCount>
 LaneArray<int, ScalarCount> operator|(const LaneArray<int, ScalarCount>& l, const LaneArray<int, ScalarCount>& r)
 {
     return Helper<LaneArray<int, ScalarCount>>(
-        [](auto&& l, auto&& r) { return l | r; },
+        [](auto&& l2, auto&& r2) { return l2 | r2; },
         l, r);
 }
 

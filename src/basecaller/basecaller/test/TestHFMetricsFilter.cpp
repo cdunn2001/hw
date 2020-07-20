@@ -160,6 +160,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
                 pulse.SignalM2(pulse.MidSignal()
                                * pulse.MidSignal()
                                * (pulse.Width() - 2) * m2modifier);
+                pulse.IsReject(false);
                 pulseView.push_back(zmw, pulse);
             }
         }
@@ -307,7 +308,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                     ASSERT_EQ(numBatchesPerHFMB
                                 * sim.numBases
                                 * sim.baseWidth,
-                              mb.numBaseFrames[z]);
+                              mb.numBaseFrames[z]) << z;
                     // The pulses don't run to the end of each block, so all
                     // but one pulse is abutted. Plus we have the GG, which
                     // doesn't count as a sandwich.

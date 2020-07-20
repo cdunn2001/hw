@@ -40,6 +40,8 @@
 #include <pacbio/PBException.h>
 
 #include "m512f_AVX512.h"
+#include "m512i_AVX512.h"
+#include "m512b_AVX512.h"
 #include "xcompile.h"
 
 namespace PacBio {
@@ -78,9 +80,16 @@ public:     // Structors
     // Construct from native vector type
     m512s(ImplType v_) : v(v_) {}
 
-        //m512s(const m512f& even, const m512f& odd)
-    //    : v(_mm512_or_si512(FloatToCh0(even.data()), FloatToCh1(odd.data())))
-    //{}
+    m512s(const m512i& low, const m512i& high)
+    {
+        __m512i l = _mm512_castsi256_si512(_mm512_cvtepi32_epi16(low.data()));
+        __m256i h = _mm512_cvtepi32_epi16(high.data());
+        v = _mm512_inserti64x4(l, h, 1);
+    }
+
+    m512s(const m512f& low, const m512f& high)
+        : m512s(m512i(low), m512i(high))
+    {}
 
 public:     // Assignment
     m512s& operator=(const m512s& x) = default;
@@ -93,6 +102,12 @@ public:     // Assignment
     }
      /// unsaturated add
      m512s& AddWithRollOver(const m512s& x)
+     {
+         v = _mm512_add_epi16(v, x.v);
+         return *this;
+     }
+
+     m512s& operator+=(const m512s& x)
      {
          v = _mm512_add_epi16(v, x.v);
          return *this;
@@ -145,6 +160,49 @@ public:     // Functor types
         }
     };
 
+    // TODO SSE version uses saturation...?  Make them consistent one way
+    // or another
+    friend m512s operator+(const m512s& l, const m512s& r)
+    {
+        return m512s(_mm512_add_epi16(l.v, r.v));
+    }
+    friend m512s operator-(const m512s& l, const m512s& r)
+    {
+        return m512s(_mm512_sub_epi16(l.v, r.v));
+    }
+
+    static std::pair<m512b, m512b> help(__mmask32 mask)
+    {
+        auto low = static_cast<__mmask16>(mask & 0xFFFF);
+        auto high = static_cast<__mmask16>((mask & 0xFFFF0000) >> 16);
+        return {m512b{low}, m512b{high}};
+    }
+
+    friend std::pair<m512b, m512b> operator!=(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmpneq_epi16_mask(a.v, b.v));
+    }
+    friend std::pair<m512b, m512b> operator==(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmpeq_epi16_mask(a.v, b.v));
+    }
+    friend std::pair<m512b, m512b> operator>(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmpgt_epi16_mask(a.v, b.v));
+    }
+    friend std::pair<m512b, m512b> operator<(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmplt_epi16_mask(a.v, b.v));
+    }
+    friend std::pair<m512b, m512b> operator<=(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmple_epi16_mask(a.v, b.v));
+    }
+    friend std::pair<m512b, m512b> operator>=(const m512s& a, const m512s& b)
+    {
+        return help(_mm512_cmpge_epi16_mask(a.v, b.v));
+    }
+
 public:     // Conversion methods
 
     // Convert the even channel of an interleaved 2-channel layout to float.
@@ -163,17 +221,28 @@ public:     // Conversion methods
         return m512f(_mm512_cvt_roundepi32_ps(Ch1_32(in.v), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
     }
     // Converts index 0-15 into an m512f
-    friend m512f LowHalf(const m512s& in)
+    friend m512f LowFloats(const m512s& in)
     {
         auto tmp = _mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 0));
         return m512f(_mm512_cvt_roundepi32_ps(tmp, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
     }
 
     // Converts index 16-31 into an m512f
-    friend m512f HighHalf(const m512s& in)
+    friend m512f HighFloats(const m512s& in)
     {
         auto tmp = _mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 1));
         return m512f(_mm512_cvt_roundepi32_ps(tmp, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+    }
+
+    friend m512i LowInts(const m512s& in)
+    {
+        return m512i(_mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
+    }
+
+    // Converts index 16-31 into an m512f
+    friend m512i HighInts(const m512s& in)
+    {
+        return m512i(_mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 1)));
     }
 
 public:     // Non-member (friend) functions
@@ -205,6 +274,12 @@ public:     // Non-member (friend) functions
     friend m512s max(const m512s& a, const m512s&b)
     {
         return m512s(_mm512_max_epi16(a.v, b.v));
+    }
+
+    friend m512s Blend(const m512b& bLow, const m512b& bHigh, const m512s& l, const m512s& r)
+    {
+        __mmask32 mask = (bHigh.data() << 16) | bLow.data();
+        return m512s(_mm512_mask_blend_epi16(mask, r.v, l.v));
     }
 
 private:    // Utility methods

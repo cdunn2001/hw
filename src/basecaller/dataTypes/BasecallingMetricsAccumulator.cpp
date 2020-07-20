@@ -361,7 +361,9 @@ void BasecallingMetricsAccumulator::Count(
             const Pulse* pulse = &pulses(zi, bi);
 
             uint8_t pulseLabel = static_cast<uint8_t>(pulse->Label());
-            numPulseFrames_[zi] += pulse->Width();
+            // TODO either revive unsigned types, or consider changing type
+            //      of pulse->Width();
+            numPulseFrames_[zi] += static_cast<int16_t>(pulse->Width());
             numPulsesByAnalog_[pulseLabel][zi]++;
             pkMax_[pulseLabel][zi] = std::max(pkMax_[pulseLabel][zi],
                                               pulse->MaxSignal());
@@ -397,7 +399,8 @@ void BasecallingMetricsAccumulator::Count(
 
             if (!pulse->IsReject())
             {
-                numBaseFrames_[zi] += pulse->Width();
+                // TODO unsigned
+                numBaseFrames_[zi] += static_cast<int16_t>(pulse->Width());
                 numBasesByAnalog_[pulseLabel][zi]++;
 
                 if (!isnan(pulse->MidSignal()))
@@ -405,7 +408,8 @@ void BasecallingMetricsAccumulator::Count(
                     numPkMidBasesByAnalog_[pulseLabel][zi]++;
 
                     // Inter-pulse moments (in terms of frames)
-                    const uint16_t midWidth = static_cast<uint16_t>(pulse->Width() - 2);
+                    // TODO unsigned?
+                    const int16_t midWidth = static_cast<int16_t>(pulse->Width() - 2);
                     // count (M0)
                     numPkMidFrames_[pulseLabel][zi] += midWidth;
                     // sum of signals (M1)
