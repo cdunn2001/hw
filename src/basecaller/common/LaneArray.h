@@ -46,85 +46,13 @@ namespace Mongo {
 // TODO fix namespaces?
 using namespace Simd;
 
-template <typename T>
-struct PairAccess_t
+
+// TODO move?
+// TODO fix attrocious naming
+inline m512s Blend(const std::pair<const m512b&, const m512b&>& b, const m512s& l, const m512s& r)
 {
-    using SType = typename std::decay_t<T>::SimdType;
-    static constexpr auto SimdCount = std::decay_t<T>::SimdCount/2;
-    struct pair {
-        pair(SType& f, SType& s)
-            : first{f}
-            , second{s}
-        {}
-        SType& first;
-        SType& second;
-    };
-    struct const_pair {
-        const_pair(const SType& f, const SType& s)
-            : first{f}
-            , second{s}
-        {}
-        const SType& first;
-        const SType& second;
-    };
-
-    PairAccess_t(T& d) : inner_{d} {}
-
-    //pair operator[](size_t idx)
-    //{
-    //    auto* ptr = inner_.data();
-    //    return pair{ ptr[2*idx], ptr[2*idx+1] };
-    //}
-
-    const_pair operator[](size_t idx) const
-    {
-        auto& ptr = inner_.data();
-        return const_pair{ ptr[2*idx], ptr[2*idx+1] };
-    }
-
-    auto& data() { return *this; }
-    const auto& data() const { return *this; }
-    T& inner_;
-};
-
-template <typename T>
-auto PairAccess(T&& t)
-{
-    return PairAccess_t<T>{t};
-}
-
-
-template <typename Ret, typename F, size_t...Ids, typename... Args>
-Ret Helper2(F&& f, std::index_sequence<Ids...>, Args&&... args)
-{
-    auto f2 = [&](size_t id, auto&&... args2)
-    {
-        return f(args2.data()[id]...);
-    };
-    return Ret{f2(Ids, args...)...};
-}
-
-// TODO make the default constructor noop and a lot of the motivation for
-// the compexity goes away.  We'll still need something to handle 32/16
-// width simd types, but we don't have to try and construct in place
-template <typename Ret, typename F, typename... Args>
-Ret Helper3(F&& f, Args&&... args)
-{
-    //auto f2 = [&](size_t id, auto&&... args)
-    //{
-    //    return f(args.data()[id]...);
-    //};
-    //return Ret{f2(Ids, args...)...};
-    Ret ret{};
-    for (size_t i = 0; i < Ret::SimdCount/2; ++i)
-    {
-        auto val = f(args.data()[i]...);
-        // TODO this assumes pair.  Need to make it automatic,
-        // or at least make compiler errors friendly
-        ret.data()[2*i] = val.first;
-        ret.data()[2*i+1] = val.second;
-    }
-    return ret;
+    // TODO fix this redirection?
+    return Blend(b.first, b.second, l, r);
 }
 
 template <bool...bs>
@@ -133,71 +61,20 @@ struct bool_pack {};
 template <bool...bs>
 using all_true = std::is_same<bool_pack<true, bs...>, bool_pack<bs..., true>>;
 
-// TODO this is a mess...!
-template<bool identity> struct pass_through;
-template <> struct pass_through<true>
-{
-    template <typename T>
-    static decltype(auto) Do(T&& t) { return std::forward<T>(t); }
-};
-template <> struct pass_through<false>
-{
-    template <typename T>
-    // TODO I think this leaves a danling reference if input is temporary
-    static decltype(auto) Do(T&& t) { return PairAccess(std::forward<T>(t)); }
-};
-
-template <size_t len, typename T>
-decltype(auto) through(T&&t)
-{
-    static constexpr bool b = (len == std::decay_t<T>::SimdCount);
-    return pass_through<b>::Do(std::forward<T>(t));
-}
-
-enum wid_types
-{
-    all_same,
-    input_16,
-    input_32
-};
+template <typename T>
+struct len_trait;
+//{
+//    static constexpr size_t SimdCount = 1;
+//    static constexpr size_t ScalarCount = 1;
+//    static constexpr size_t SimdWidth = 1;
+//};
 
 template <typename Ret, typename...Args>
-static constexpr wid_types wid_helper()
+static constexpr size_t MinSimdCount()
 {
-    if (all_true<(Ret::SimdCount == Args::SimdCount)...>::value) return all_same;
-    else if (Ret::ScalarCount / Ret::SimdCount == 16) return input_16;
-    else return input_32;
-}
-
-// TODO naming sucks
-template <wid_types>
-struct wid_struct_t
-{
-    template <typename Ret, typename F, typename...Args>
-    static Ret Helper(F&& f, Args&&... args)
-    {
-        static constexpr auto len = Ret::SimdCount;
-        return Helper2<Ret>(std::forward<F>(f), std::make_index_sequence<len>{}, through<len>(std::forward<Args>(args))...);
-    }
-};
-
-template <>
-struct wid_struct_t<wid_types::input_16>
-{
-    template <typename Ret, typename F, typename...Args>
-    static Ret Helper(F&& f, Args&&... args)
-    {
-        static constexpr auto len = Ret::SimdCount/2;
-        return Helper3<Ret>(std::forward<F>(f), through<len>(std::forward<Args>(args))...);
-    }
-};
-
-template <typename Ret, typename F, typename... Args>
-Ret Helper(F&& f, Args&&... args)
-{
-    static constexpr auto t = wid_helper<Ret, std::decay_t<Args>...>();
-
-    return wid_struct_t<t>::template Helper<Ret>(std::forward<F>(f), std::forward<Args>(args)...);
+    constexpr auto ret = std::min({len_trait<Ret>::SimdCount, len_trait<Args>::SimdCount...});
+    static_assert(ret == 2 || ret == 4, "");
+    return ret;
 }
 
 // TODO clean/rethink?
@@ -229,11 +106,11 @@ private:
 
 public:
     static constexpr size_t SimdCount = SimdCount_;
-    static constexpr size_t ScalarCount = SimdCount * SimdTypeTraits<T>::width;
-    explicit BaseArray(const std::array<T, SimdCount>& dat) : data_(dat) {}
+    static constexpr size_t SimdWidth = SimdTypeTraits<T>::width;
+    static constexpr size_t ScalarCount = SimdCount * SimdWidth;
+    using SimdType = T;
 
     // TODO worry about alignment
-    // TODO Make default ctor a noop?
     explicit BaseArray(const Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>& data)
     {
         constexpr auto width = SimdTypeTraits<T>::width;
@@ -264,53 +141,14 @@ public:
         }
     }
 
-    // Constructor that allows conversion (e.g. for promoting array of floats
-    // to an array of m512f).
-    template <typename U,
-              // This prevents U = T, which is necessary if T is already scalar,
-              // in which case we'd be duplicating the above constructor
-              std::enable_if_t<!std::is_same<T, U>::value, int> = 0,
-              // Make sure we can validly create our native scalar type from U
-              std::enable_if_t<std::is_constructible<T, U>::value, int> = 0
-    >
-    explicit BaseArray(const std::array<U, SimdCount>& dat)
+    template <typename U, std::enable_if_t<std::is_convertible<U, ScalarType<T>>::value, int> = 0>
+    BaseArray(U&& val)
     {
-        for (size_t i = 0; i < SimdCount; ++i)
+        for (auto& d : data_)
         {
-            data_[i] = T(dat[i]);
+            d = ScalarType<T>(val);
         }
     }
-
-    // Construct off either 1 or N entries
-    template <class... Ts,
-            // Using SFINAE to make sure each type in Ts is (essentially) T.
-            // The tuple is used to unpack all entries in the variadic pack, and
-            // enable_if will prevent the function from being valid if the wrong
-            // type is slipped in.
-            typename dummy = std::tuple<
-                std::enable_if_t<std::is_same<std::decay_t<Ts>, T>::value, int>...
-            >
-    >
-    BaseArray(Ts&&... ts) : data_{{std::forward<Ts>(ts)...}}
-    {
-        static_assert(sizeof...(ts) == SimdCount || sizeof...(ts) == 1, "Incorrect number of arguments");
-        if (sizeof...(ts) == 1) data_.fill(data()[0]);
-    }
-
-    // Similar to the last ctor, but now allowing type conversion (e.g. promoting from float)
-    // TODO I think this can be unified with the above
-    // TODO do we need decay?
-    //template <class... Ts,
-    //          typename dummy1 = std::tuple<
-    //              std::enable_if_t<std::is_constructible<T, std::decay_t<Ts>>::value, int>...
-    //          >,
-    //          typename dummy2 = std::tuple<
-    //              std::enable_if_t<!std::is_same<std::decay_t<Ts>, T>::value, int>...
-    //          >
-    //>
-    //BaseArray(Ts&&... ts) : BaseArray(T(std::forward<Ts>(ts))...) {}
-    template <typename U, std::enable_if_t<std::is_convertible<U, ScalarType<T>>::value, int> = 0>
-    BaseArray(U&& val) : BaseArray(T(val)) {}
 
     // TODO check alignment somehow?
     BaseArray(PtrView<ScalarType<T>, ScalarCount> dat)
@@ -321,15 +159,63 @@ public:
         }
     }
 
-    // TODO do we want this?
-    BaseArray() : BaseArray(T(static_cast<ScalarType<T>>(0))) {}
+    // Intentionally not initializing our data
+    // Would just kill this off, but it's unfortunately
+    // required by Eigen at least.
+    BaseArray() = default;
 
-    // TODO should these be protected only?
-    // allows access to underlying array, assuming calling code is explicitly
-    // aware of how long the array is.
-    operator const std::array<T,SimdCount>&() const
+    template <size_t N, typename U, std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    static decltype(auto) Access(U&& val, size_t idx)
     {
-        return data_;
+        return (val.data()[idx]);
+    }
+
+    template <size_t N, typename U, std::enable_if_t<2*N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    static auto Access(U&& val, size_t idx)
+    {
+        using SimdType = typename std::decay_t<U>::SimdType;
+        using Ref_t = std::conditional_t<std::is_const<std::remove_reference_t<U>>::value, const SimdType&, SimdType&>;
+        return std::pair<Ref_t, Ref_t>{val.data()[idx*2], val.data()[idx*2+1]};
+    }
+
+    template <size_t N, typename U, std::enable_if_t<1 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    static decltype(auto) Access(U&& val, size_t idx)
+    {
+        val.fuckit();
+        return (val);
+    }
+
+    template <typename F, typename...Args, std::enable_if_t<sizeof...(Args) != 0, int> = 0 >
+    BaseArray(F&& f, const Args&... args)
+    {
+        static constexpr auto loopMax = MinSimdCount<Child, Args...>();
+        for (size_t i = 0; i < loopMax; ++i)
+        {
+            Access<loopMax>(*this, i) = f(Access<loopMax>(args, i)...);
+        }
+    }
+
+    template <typename F, typename...Args>
+    Child& Update(F&& f, const Args&... args)
+    {
+        static constexpr auto loopMax = MinSimdCount<Child, Args...>();
+        for (size_t i = 0; i < loopMax; ++i)
+        {
+            f(Access<loopMax>(*this, i), Access<loopMax>(args, i)...);
+        }
+        return static_cast<Child&>(*this);
+    }
+
+    template <typename F, typename Ret, typename...Args>
+    static Ret Reduce(F&& f, Ret initial, const Args&... args)
+    {
+        Ret ret = initial;
+        static constexpr auto loopMax = MinSimdCount<Args...>();
+        for (size_t i = 0; i < loopMax; ++i)
+        {
+            f(ret, Access<loopMax>(args, i)...);
+        }
+        return ret;
     }
 
     // TODO clean and check assembly
@@ -378,62 +264,57 @@ class LaneMask : public BaseArray<m512b, ScalarCount_/16, LaneMask<ScalarCount_>
 public:
     using Base::Base;
     static constexpr auto SimdCount = Base::SimdCount;
+    static constexpr auto SimdWidth = Base::SimdWidth;
     static constexpr auto ScalarCount = Base::ScalarCount;
-    using SimdType = m512b;
+    using SimdType = typename Base::SimdType;
+    using Base::Update;
+    using Base::Reduce;
 
 public:
     friend bool all(const LaneMask& m)
     {
-        bool ret = true;
-        for (const auto& d : m.data()) ret &= all(d);
-        return ret;
+        return Reduce([](auto&& l, auto&& r) { l &= all(r); }, true, m);
     }
 
     friend bool any(const LaneMask& m)
     {
-        bool ret = false;
-        for (const auto& d : m.data()) ret |= any(d);
-        return ret;
+        return Reduce([](auto&& l, auto&& r) { l |= any(r); }, false, m);
     }
 
     friend bool none(const LaneMask& m)
     {
-        bool ret = true;
-        for (const auto& d : m.data()) ret &= none(d);
-        return ret;
+        return Reduce([](auto&& l, auto&& r) { l &= none(r); }, true, m);
     }
 
     friend LaneMask operator| (const LaneMask& l, const LaneMask& r)
     {
-        return Helper<LaneMask>(
+        return LaneMask(
             [](auto&& l2, auto&& r2){ return l2 | r2; },
             l, r);
     }
 
     friend LaneMask operator! (const LaneMask& m)
     {
-        return Helper<LaneMask>(
+        return LaneMask(
             [](auto&& m2){ return !m2; },
             m);
     }
 
     friend LaneMask operator& (const LaneMask& l, const LaneMask& r)
     {
-        return Helper<LaneMask>(
+        return LaneMask(
             [](auto&& l2, auto&& r2){ return l2 & r2; },
             l, r);
     }
 
     LaneMask& operator &= (const LaneMask& o)
     {
-        for (size_t i = 0; i < SimdCount; ++i) this->data()[i] &= o.data()[i];
-        return *this;
+        return Update([](auto&& l, auto&& r) { l &= r; }, o);
     }
 
     LaneMask& operator |= (const LaneMask& o)
     {
-        for (size_t i = 0; i < SimdCount; ++i) this->data()[i] |= o.data()[i];
-        return *this;
+        return Update([](auto&& l, auto&& r) { l |= r; }, o);
     }
 
     bool operator[](size_t idx) const
@@ -455,172 +336,133 @@ protected:
 public:
     using Base::data;
     using Base::Base;
+    using Base::Update;
+    using Base::Reduce;
     static constexpr auto SimdCount = Base::SimdCount;
     static constexpr auto ScalarCount = Base::ScalarCount;
 
     Child& operator+=(const Child& other)
     {
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            data_[i] += other.data()[i];
-        }
-        return static_cast<Child&>(*this);
+        return Update([](auto&& l, auto&& r) { l += r; }, other);
     }
     Child& operator-=(const Child& other)
     {
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            data_[i] -= other.data()[i];
-        }
-        return static_cast<Child&>(*this);
+        return Update([](auto&& l, auto&& r) { l -= r; }, other);
     }
     Child& operator/=(const Child& other)
     {
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            data_[i] /= other.data()[i];
-        }
-        return static_cast<Child&>(*this);
+        return Update([](auto&& l, auto&& r) { l /= r; }, other);
     }
     Child& operator*=(const Child& other)
     {
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            data_[i] *= other.data()[i];
-        }
-        return static_cast<Child&>(*this);
-    }
-
-    // TODO should only exist for floats...
-    friend LaneMask<ScalarCount> isnan(const Child& c)
-    {
-        return Helper<LaneMask<ScalarCount>>(
-            [](auto&& d){ return isnan(d); },
-            c);
-    }
-    // TODO should only exist for floats...
-    friend LaneMask<ScalarCount> isfinite(const Child& c)
-    {
-        return Helper<LaneMask<ScalarCount>>(
-            [](auto&& d){ return isfinite(d); },
-            c);
+        return Update([](auto&& l, auto&& r) { l *= r; }, other);
     }
 
     friend Child operator -(const Child& c)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& d){ return -d;},
             c);
     }
 
     friend Child operator -(const Child& l, const Child& r)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& l2, auto&& r2){ return l2 - r2;},
             l, r);
     }
 
     friend Child operator *(const Child& l, const Child& r)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& l2, auto&& r2){ return l2 * r2;},
             l, r);
     }
 
     friend Child operator /(const Child& l, const Child& r)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& l2, auto&& r2){ return l2 / r2;},
             l, r);
     }
 
     friend Child operator +(const Child& l, const Child& r)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& l2, auto&& r2){ return l2 + r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator >=(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 >= r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator >(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 > r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator <=(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 <= r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator <(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 < r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator ==(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 == r2;},
             l, r);
     }
 
     friend LaneMask<ScalarCount> operator !=(const Child& l, const Child& r)
     {
-        return Helper<LaneMask<ScalarCount>>(
+        return LaneMask<ScalarCount>(
             [](auto&& l2, auto&& r2){ return l2 != r2;},
             l, r);
     }
 
     friend Child min(const Child& l, const Child& r)
     {
-        Child ret;
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            using std::min;
-            ret.data()[i] = min(l.data()[i], r.data()[i]);
-        }
-        return ret;
+        return Child(
+            [](auto&& l2, auto&& r2){ return min(l2, r2);},
+            l, r);
     }
     friend Child max(const Child& l, const Child& r)
     {
-        Child ret;
-        for (size_t i = 0; i < SimdCount; ++i)
-        {
-            using std::max;
-            ret.data()[i] = max(l.data()[i], r.data()[i]);
-        }
-        return ret;
+        return Child(
+            [](auto&& l2, auto&& r2){ return max(l2, r2);},
+            l, r);
     }
 
     friend ScalarType<T> reduceMax(const Child& c)
     {
-        auto ret = std::numeric_limits<ScalarType<T>>::lowest();
-        for (const auto& d : c.data()) ret = std::max(ret, reduceMax(d));
-        return ret;
+        auto init = std::numeric_limits<ScalarType<T>>::lowest();
+        return Reduce([](auto&& l, auto&& r) { l = std::max(l, reduceMax(r)); }, init, c);
     }
 
     friend ScalarType<T> reduceMin(const Child& c)
     {
-        auto ret = std::numeric_limits<ScalarType<T>>::max();
-        for (const auto& d : c.data()) ret = std::min(ret, reduceMin(d));
-        return ret;
+        auto init = std::numeric_limits<ScalarType<T>>::max();
+        return Reduce([](auto&& l, auto&& r) { l = std::min(l, reduceMin(r)); }, init, c);
     }
 
     friend Child Blend(const LaneMask<ScalarCount>& b, const Child& c1, const Child& c2)
     {
-        return Helper<Child>(
+        return Child(
             [](auto&& b2, auto&& l, auto&& r){ return Blend(b2, l, r); },
             b, c1, c2);
     }
@@ -663,55 +505,129 @@ struct vec_count<short, Len>
     static constexpr size_t value = Len / 32;
 };
 
-template <typename T, size_t ScalarCount_ = laneSize>
-class LaneArray : public ArithmeticArray<vec_type_t<T>, ScalarCount_/16, LaneArray<T, ScalarCount_>>
+template <typename T, size_t ScalarCount, template <typename, size_t> class Child>
+using ArithmeticBase = ArithmeticArray<vec_type_t<T>, vec_count<T, ScalarCount>::value, Child<T, ScalarCount>>;
+
+template <typename T, size_t ScalarCount = laneSize>
+class LaneArray;
+
+template <size_t ScalarCount>
+class LaneArray<float, ScalarCount> : public ArithmeticBase<float, ScalarCount, LaneArray>
 {
-    static_assert(ScalarCount_ % 16 == 0, "");
-    using Base = ArithmeticArray<vec_type_t<T>, ScalarCount_/16, LaneArray<T, ScalarCount_>>;
+    using Base = ArithmeticBase<float, ScalarCount, LaneArray>;
 public:
     using Base::Base;
-    static constexpr auto SimdCount = Base::SimdCount;
-    static constexpr auto ScalarCount = Base::ScalarCount;
-    using SimdType = T;
+
+    friend LaneMask<ScalarCount> isnan(const LaneArray& c)
+    {
+        return LaneMask<ScalarCount>(
+            [](auto&& d){ return isnan(d); },
+            c);
+    }
+
+    friend LaneMask<ScalarCount> isfinite(const LaneArray& c)
+    {
+        return LaneMask<ScalarCount>(
+            [](auto&& d){ return isfinite(d); },
+            c);
+    }
+
+
+    friend LaneArray erfc(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return erfc(in2); },
+            in);
+    }
+
+    friend LaneArray log(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return log(in2); },
+            in);
+    }
+
+    friend LaneArray log2(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return log2(in2); },
+            in);
+    }
+
+    friend LaneArray exp(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return exp(in2); },
+            in);
+    }
+
+    friend LaneArray exp2(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return exp2(in2); },
+            in);
+    }
+
+    friend LaneArray sqrt(const LaneArray& in)
+    {
+        return LaneArray(
+            [](auto&& in2){ return sqrt(in2); },
+            in);
+    }
+
+    friend LaneArray<int, ScalarCount> floorCastInt(const LaneArray& in)
+    {
+        return LaneArray<int, ScalarCount>(
+            [](auto&& in2){ return floorCastInt(in2); },
+            in);
+    }
+
 };
 
-template <size_t ScalarCount_>
-class LaneArray<short, ScalarCount_> : public ArithmeticArray<m512s, ScalarCount_/32, LaneArray<short, ScalarCount_>>
+template <size_t ScalarCount>
+class LaneArray<int32_t, ScalarCount> : public ArithmeticBase<int32_t, ScalarCount, LaneArray>
 {
-    static_assert(ScalarCount_ % 32 == 0, "");
-    using Base = ArithmeticArray<m512s, ScalarCount_/32, LaneArray<short, ScalarCount_>>;
-    using T = short;
+    using Base = ArithmeticBase<int32_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
-    static constexpr auto SimdCount = Base::SimdCount;
-    static constexpr auto ScalarCount = Base::ScalarCount;
+
+    friend LaneArray operator|(const LaneArray& l, const LaneArray& r)
+    {
+        return LaneArray(
+            [](auto&& l2, auto&& r2) { return l2 | r2; },
+            l, r);
+    }
+
 };
 
-// tODO ??? keep?
+template <size_t ScalarCount>
+class LaneArray<int16_t, ScalarCount> : public ArithmeticBase<int16_t, ScalarCount, LaneArray>
+{
+    using Base = ArithmeticBase<int16_t, ScalarCount, LaneArray>;
+public:
+    using Base::Base;
+
+    friend LaneArray inc(const LaneArray& in, const LaneMask<ScalarCount>& mask)
+    {
+        // TODO add scalar arithmetic.  This promotes to a full vector
+        return Blend(mask, in + (short)1, in);
+    }
+};
+
 template <size_t Len>
 LaneArray<float, Len> AsFloat(const LaneArray<short, Len>& in)
 {
-    LaneArray<float, Len> out;
-    // TODO again, clean up Len/Count naming...!!
-    for (size_t i = 0; i < LaneArray<short, Len>::SimdCount; ++i)
-    {
-        out.data()[2*i] = LowFloats(in.data()[i]);
-        out.data()[2*i+1] = HighFloats(in.data()[i]);
-    }
-    return out;
+    return LaneArray<float, Len>(
+        [](auto&& in2) { return std::make_pair(LowFloats(in2), HighFloats(in2)); },
+        in);
 }
 
 template <size_t Len>
 LaneArray<int, Len> AsInt(const LaneArray<short, Len>& in)
 {
-    LaneArray<int, Len> out;
-    // TODO again, clean up Len/Count naming...!!
-    for (size_t i = 0; i < LaneArray<short, Len>::SimdCount; ++i)
-    {
-        out.data()[2*i] = LowInts(in.data()[i]);
-        out.data()[2*i+1] = HighInts(in.data()[i]);
-    }
-    return out;
+    return LaneArray<int, Len>(
+        [](auto&& in2) { return std::make_pair(LowInts(in2), HighInts(in2)); },
+        in);
 }
 
 // TODO clean/kill?
@@ -724,104 +640,40 @@ LaneArray<float, Len> AsFloat(const ArrayUnion<LaneArray<short, Len>>& in)
 template <size_t Len>
 LaneArray<float, Len> AsFloat(const LaneArray<int, Len>& in)
 {
-    LaneArray<float, Len> out;
-    // TODO again, clean up Len/Count naming...!!
-    for (size_t i = 0; i < LaneArray<int, Len>::SimdCount; ++i)
-    {
-        out.data()[i] = in.data()[i].AsFloat();
-    }
-    return out;
+    return LaneArray<float, Len>(
+        [](auto&& in2) { return in2.AsFloat(); },
+        in);
 }
 
 template <size_t Len>
 LaneArray<short, Len> AsShort(const LaneArray<float, Len>& in)
 {
-    LaneArray<short, Len> out;
-    // TODO again, clean up Len/Count naming...!!
-    for (size_t i = 0; i < LaneArray<short, Len>::SimdCount; ++i)
-    {
-        out.data()[i] = m512s(in.data()[2*i], in.data()[2*i+1]);
-    }
-    return out;
-}
-
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> erfc(const LaneArray<float, ScalarCount>& in)
-{
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return erfc(in2); },
+    return LaneArray<short, Len>(
+        [](auto&& in2) { return m512s(in2.first, in2.second); },
         in);
 }
 
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> log(const LaneArray<float, ScalarCount>& in)
+template <typename T, size_t Len, typename Child>
+struct len_trait<BaseArray<T, Len, Child>>
 {
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return log(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> log2(const LaneArray<float, ScalarCount>& in)
+    static constexpr size_t SimdCount = BaseArray<T, Len, Child>::SimdCount;
+    static constexpr size_t ScalarCount = BaseArray<T, Len, Child>::ScalarCount;
+    static constexpr size_t SimdWidth = BaseArray<T, Len, Child>::SimdWidth;
+};
+template <typename T, size_t Len>
+struct len_trait<LaneArray<T, Len>>
 {
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return log2(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> exp(const LaneArray<float, ScalarCount>& in)
+    static constexpr size_t SimdCount = LaneArray<T,Len>::SimdCount;
+    static constexpr size_t ScalarCount = LaneArray<T,Len>::ScalarCount;
+    static constexpr size_t SimdWidth = LaneArray<T,Len>::SimdWidth;
+};
+template <size_t Len>
+struct len_trait<LaneMask<Len>>
 {
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return exp(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> exp2(const LaneArray<float, ScalarCount>& in)
-{
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return exp2(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<float, ScalarCount> sqrt(const LaneArray<float, ScalarCount>& in)
-{
-    return Helper<LaneArray<float, ScalarCount>>(
-        [](auto&& in2){ return sqrt(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<int, ScalarCount> floorCastInt(const LaneArray<float, ScalarCount>& in)
-{
-    return Helper<LaneArray<int, ScalarCount>>(
-        [](auto&& in2){ return floorCastInt(in2); },
-        in);
-}
-
-template <size_t ScalarCount>
-LaneArray<short, ScalarCount> inc(const LaneArray<short, ScalarCount>& in, const LaneMask<ScalarCount>& mask)
-{
-    // TODO add scalar arithmetic.  This promotes to a full vector
-    return Blend(mask, in + (short)1, in);
-}
-
-// TODO fix attrocious naming
-inline m512s Blend(PairAccess_t<const LaneMask<64>&>::const_pair b, const m512s& l, const m512s& r)
-{
-    // TODO fix this redirection?
-    return Blend(b.first, b.second, l, r);
-}
-
-template <size_t ScalarCount>
-LaneArray<int, ScalarCount> operator|(const LaneArray<int, ScalarCount>& l, const LaneArray<int, ScalarCount>& r)
-{
-    return Helper<LaneArray<int, ScalarCount>>(
-        [](auto&& l2, auto&& r2) { return l2 | r2; },
-        l, r);
-}
+    static constexpr size_t SimdCount = LaneMask<Len>::SimdCount;
+    static constexpr size_t ScalarCount = LaneMask<Len>::ScalarCount;
+    static constexpr size_t SimdWidth = LaneMask<Len>::SimdWidth;
+};
 
 }}      // namespace PacBio::Mongo
 

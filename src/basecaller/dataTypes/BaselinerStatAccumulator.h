@@ -79,15 +79,15 @@ public:     // Non-const functions
 private:
     // Statistics of trace after baseline estimate has been subtracted.
     AutocorrAccumulator<FloatArray> baselineSubtractedStats_;
-    LaneArray traceMin;
-    LaneArray traceMax;
+    LaneArray traceMin{std::numeric_limits<T>::max()};
+    LaneArray traceMax{std::numeric_limits<T>::lowest()};
 
     // Statistics of baseline frames after baseline estimate has
     // been subtracted.
     StatAccumulator<FloatArray> baselineStats_;
 
     // Sum of baseline frames _prior_ to baseline subtraction.
-    LaneArray rawBaselineSum_;
+    LaneArray rawBaselineSum_{0};
 };
 
 }}}     // namespace PacBio::Mongo::Data

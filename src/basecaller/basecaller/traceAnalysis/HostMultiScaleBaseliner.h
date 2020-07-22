@@ -166,14 +166,14 @@ private:
         const FloatArray cMeanBias_;
         float scaler_;
 
-        FloatArray prevSigma_;
+        FloatArray prevSigma_{0};
         bool firstFrame_ = true;
-        LaneArray latData_;
-        LaneArray latRawData_;
+        LaneArray latData_{0};
+        LaneArray latRawData_{0};
         Mask latLMask_{false};
         AlignedCircularBuffer<Mask> latHMask_{2};
-        FloatArray thrLow_;
-        FloatArray thrHigh_;
+        FloatArray thrLow_{0};
+        FloatArray thrHigh_{0};
 
     };  // MultiScaleBaseliner
 
