@@ -84,6 +84,7 @@ TEST(SignalGeneratorTest, CompareData)
                 EXPECT_EQ(expectedPixelSums[zmw], pixelSums[zmw])
                     << "batchIdx=" << batchIdx
                     << " frameOffset=" << frameOffset
+                    << " zmw=" << zmw
                     << " expectedPixelSums[" << zmw << "]=" << expectedPixelSums[zmw]
                     << " pixelSums[" << zmw << "]=" << pixelSums[zmw];
             }
