@@ -80,7 +80,7 @@ private:
         {
             for(size_t zmw = 0; zmw < nZmwsToRead; zmw++)
             {
-                data[(frame*nZmwsToRead)+zmw] = d[(zmw*nFramesToRead)+frame];
+                data[(frame*numZmws)+zmw] = d[(zmw*nFramesToRead)+frame];
             }
         }
         if (nZmwsToRead*nFramesToRead < zmwsPerLane_*framesPerChunk_)
