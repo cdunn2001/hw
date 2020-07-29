@@ -37,7 +37,7 @@ private:
                        size_t blockIdx,
                        std::vector<int16_t>& v) override
     {
-        traceFileReader_.PopulateBlock(laneIdx, blockIdx, v);
+        traceFileReader_.PopulateBlock(laneIdx, blockIdx, v.data());
     }
 
 private:

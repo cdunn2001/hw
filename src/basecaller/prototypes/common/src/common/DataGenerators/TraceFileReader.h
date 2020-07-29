@@ -10,6 +10,7 @@
 #include <vector_types.h>
 
 #include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -27,13 +28,6 @@ public:
         FetchBlock(laneIdx, blockIdx, v);
     }
 
-    void PopulateBlock(size_t laneIdx, size_t blockIdx, std::vector<int16_t>& v)
-    {
-        size_t wrappedLane = laneIdx % numZmwLanes_;
-        size_t wrappedBlock = blockIdx % numChunks_;
-        FetchBlock(wrappedLane, wrappedBlock, v.data());
-    }
-
     size_t NumChunks() const
     { return numChunks_; }
 
@@ -45,6 +39,9 @@ private:
 
     uint32_t FetchBlock(size_t laneIdx, size_t blockIdx, int16_t* data)
     {
+        if (laneIdx >= numZmwLanes_) throw PBException("Bad lane index given!");
+        if (blockIdx >= numChunks_) throw PBException("Bad chunk index given!");
+
         if (cached_)
         {
             std::memcpy(data, pixelCache_[blockIdx][laneIdx].origin(),
@@ -72,22 +69,25 @@ private:
                               size_t numFrames, int16_t* data) const
     {
         size_t nFramesToRead = std::min(numFrames, numFrames_ - frameOffset);
-        std::vector<int16_t> d(numZmws*nFramesToRead);
-        boost::multi_array_ref<int16_t,2> dataIn{d.data(), boost::extents[numZmws][nFramesToRead]};
-        dataIn.reindex(boost::array<boost::multi_array<int16_t,2>::index,2>{zmwIndex, frameOffset});
+        size_t nZmwsToRead = std::min(numZmws, numZmws_ - zmwIndex);
+        std::vector<int16_t> d(nZmwsToRead*nFramesToRead);
+        using range = boost::multi_array_types::extent_range;
+        const range zmwRange(zmwIndex, zmwIndex+nZmwsToRead);
+        const range frameRange(frameOffset, frameOffset+nFramesToRead);
+        boost::multi_array_ref<int16_t,2> dataIn{d.data(), boost::extents[zmwRange][frameRange]};
         traceFile_.Traces().ReadTraceBlock(dataIn);
         for (size_t frame = 0; frame < nFramesToRead; frame++)
         {
-            for(size_t zmw = 0; zmw < numZmws; zmw++)
+            for(size_t zmw = 0; zmw < nZmwsToRead; zmw++)
             {
-                data[(frame*numZmws)+zmw] = d[(zmw*nFramesToRead) + frame];
+                data[(frame*nZmwsToRead)+zmw] = d[(zmw*nFramesToRead)+frame];
             }
         }
-        if (nFramesToRead < framesPerChunk_)
+        if (nZmwsToRead*nFramesToRead < zmwsPerLane_*framesPerChunk_)
         {
             // Pad out if not enough frames.
-            std::memset(data + (nFramesToRead * zmwsPerLane_),
-                        0, (framesPerChunk_ - nFramesToRead) * zmwsPerLane_);
+            std::memset(data + (nFramesToRead * nZmwsToRead),
+                        0, (framesPerChunk_ - nFramesToRead) * (zmwsPerLane_ - nZmwsToRead));
         }
         return framesPerChunk_;
     }
