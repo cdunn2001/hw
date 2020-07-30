@@ -83,11 +83,16 @@ private:
                 data[(frame*numZmws)+zmw] = d[(zmw*nFramesToRead)+frame];
             }
         }
+        // Pad if not enough data.
         if (nZmwsToRead*nFramesToRead < zmwsPerLane_*framesPerChunk_)
         {
-            // Pad out if not enough frames.
-            std::memset(data + (nFramesToRead * nZmwsToRead),
-                        0, (framesPerChunk_ - nFramesToRead) * (zmwsPerLane_ - nZmwsToRead));
+            for (size_t frame = nFramesToRead; frame < numFrames; frame++)
+            {
+                for (size_t zmw = nZmwsToRead; zmw < numZmws; zmw++)
+                {
+                    data[(frame*numZmws)+zmw] = 0;
+                }
+            }
         }
         return framesPerChunk_;
     }
