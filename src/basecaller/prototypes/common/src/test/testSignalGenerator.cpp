@@ -5,11 +5,12 @@
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SignalGenerator.h>
-#include <pacbio/primary/SequelTraceFile.h>
+#include <pacbio/tracefile/TraceFile.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::TraceFile;
 
 TEST(SignalGeneratorTest, Construct)
 {
@@ -27,8 +28,6 @@ TEST(SignalGeneratorTest, Construct)
 
 TEST(SignalGeneratorTest, CompareData)
 {
-    using PacBio::Primary::SequelTraceFileHDF5;
-
     static constexpr size_t zmwLaneWidth = 64;
 
     auto dataParams = DataManagerParams()
@@ -50,7 +49,7 @@ TEST(SignalGeneratorTest, CompareData)
     std::mt19937 eng(rd());
     std::uniform_int_distribution<> distr(0, dataParams.kernelLanes);
 
-    SequelTraceFileHDF5 traceIn(traceParams.traceFileName);
+    const TraceFile traceFile{traceParams.traceFileName};
     std::vector<int16_t> truth(dataParams.laneWidth * dataParams.blockLength);
 
     while (manager.MoreData())
@@ -68,14 +67,17 @@ TEST(SignalGeneratorTest, CompareData)
             std::vector<int16_t> pixelSums(zmwLaneWidth, 0);
 
             const size_t zmwOffset = batchIdx * dataParams.laneWidth * dataParams.kernelLanes + lane * dataParams.laneWidth;
-            traceIn.Read1CZmwLaneSegment(zmwOffset, dataParams.laneWidth, frameOffset, dataParams.blockLength, truth.data());
+            using range = boost::multi_array_types::extent_range;
+            const range zmwRange(zmwOffset, zmwOffset+dataParams.laneWidth);
+            const range frameRange(frameOffset, frameOffset+dataParams.blockLength);
+            boost::multi_array_ref<int16_t,2> traceIn{truth.data(), boost::extents[zmwRange][frameRange]};
+            traceFile.Traces().ReadTraceBlock(traceIn);
             for (size_t frame = 0; frame < dataParams.blockLength; ++frame)
             {
-                auto rowOffset = frame * dataParams.laneWidth;
                 for (size_t k = 0; k < dataParams.laneWidth; ++k)
                 {
                     pixelSums[k] += blockView(frame, k);
-                    expectedPixelSums[k] += truth[rowOffset + k];
+                    expectedPixelSums[k] += truth[(k*dataParams.blockLength) + frame];
                 }
             }
 
@@ -84,6 +86,7 @@ TEST(SignalGeneratorTest, CompareData)
                 EXPECT_EQ(expectedPixelSums[zmw], pixelSums[zmw])
                     << "batchIdx=" << batchIdx
                     << " frameOffset=" << frameOffset
+                    << " zmw=" << zmw
                     << " expectedPixelSums[" << zmw << "]=" << expectedPixelSums[zmw]
                     << " pixelSums[" << zmw << "]=" << pixelSums[zmw];
             }

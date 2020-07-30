@@ -29,7 +29,7 @@ public:
                         params.numBlocks,
                         params.numZmwLanes)
         , traceParams_(traceParams)
-        , traceFileReader_(std::make_unique<TraceFileReader>(traceParams_.traceFileName, params.laneWidth, params.blockLength))
+        , traceFileReader_(traceParams_.traceFileName, params.laneWidth, params.blockLength)
     {}
 
 private:
@@ -37,12 +37,12 @@ private:
                        size_t blockIdx,
                        std::vector<int16_t>& v) override
     {
-        traceFileReader_->PopulateBlock(laneIdx, blockIdx, v);
+        traceFileReader_.PopulateBlock(laneIdx, blockIdx, v.data());
     }
 
 private:
     TraceFileParams traceParams_;
-    std::unique_ptr<TraceFileReader> traceFileReader_;
+    TraceFileReader traceFileReader_;
 };
 
 }}}
