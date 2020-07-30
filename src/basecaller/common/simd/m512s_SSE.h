@@ -46,6 +46,68 @@
 namespace PacBio {
 namespace Simd {
 
+template <typename T>
+struct PairRef
+{
+    PairRef(T& t1, T& t2) : first(t1), second(t2) {}
+    PairRef(const std::pair<T, T>& p) : first(p.first), second(p.second) {}
+
+    template <typename Other,
+              bool IsConst = std::is_const<T>::value,
+              bool isPair = std::is_same<Other, std::pair<T,T>>::value,
+              bool isRef = std::is_base_of<PairRef<const T>, Other>::value,
+              std::enable_if_t<!IsConst && (isPair || isRef),int> = 0>
+    PairRef& operator=(const Other& other)
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    friend std::pair<m512b, m512b> operator!=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first != t2.first, t1.second != t2.second};
+    }
+
+    friend std::pair<m512b, m512b> operator==(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first == t2.first, t1.second == t2.second};
+    }
+
+    friend std::pair<m512b, m512b> operator>(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first > t2.first, t1.second > t2.second};
+    }
+    friend std::pair<m512b, m512b> operator>=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first >= t2.first, t1.second >= t2.second};
+    }
+    friend std::pair<m512b, m512b> operator<(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first < t2.first, t1.second < t2.second};
+    }
+    friend std::pair<m512b, m512b> operator<=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first <= t2.first, t1.second <= t2.second};
+    }
+
+    T& first;
+    T& second;
+};
+
+template <typename T>
+struct MyPair : PairRef<const T>
+{
+    MyPair() : PairRef<const T>(t1_, t2_) {}
+    MyPair(const T t1, const T t2) : PairRef<const T>(t1_, t2_), t1_(t1) , t2_(t2)
+    {}
+
+    T t1_;
+    T t2_;
+};
+
+
+
 // SIMD 512-bit short vector (32 packed 16-bit short int values).
 CLASS_ALIGNAS(16) m512s
 {
@@ -100,7 +162,7 @@ public:     // Structors
         : data{{v1, v2, v3, v4}}
     {}
 
-    m512s(const m512i& low, const m512i& high)
+    explicit m512s(const m512i& low, const m512i& high)
     {
         // Unless I'm missing something, no good SSE
         // intrinsics for packing 16 bit values.
@@ -114,9 +176,14 @@ public:     // Structors
 
     }
 
-    m512s(const m512f& low, const m512f& high)
+    explicit m512s(const m512f& low, const m512f& high)
         : m512s(m512i(low), m512i(high))
     {}
+
+    operator MyPair<m512i>() const
+    {
+        return {LowInts(*this), HighInts(*this)};
+    }
 
 public:     // Assignment
     m512s& operator=(const m512s& x) = default;
@@ -367,48 +434,48 @@ public:     // Non-member (friend) functions
         return m512b{low1, high1, low2, high2};
     }
 
-    friend std::pair<m512b, m512b> operator!=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator!=(const m512s& a, const m512s& b)
     {
-        std::pair<m512b, m512b> ret;
-        ret.first = help(~_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+        MyPair<m512b> ret;
+        ret.t1_ = help(~_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
                          ~_mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.second= help(~_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.t2_= help(~_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
                          ~_mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend std::pair<m512b, m512b> operator==(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator==(const m512s& a, const m512s& b)
     {
-        std::pair<m512b, m512b> ret;
-        ret.first = help(_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+        MyPair<m512b> ret;
+        ret.t1_ = help(_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.second= help(_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.t2_= help(_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend std::pair<m512b, m512b> operator>(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator>(const m512s& a, const m512s& b)
     {
-        std::pair<m512b, m512b> ret;
-        ret.first = help(_mm_cmpgt_epi16(a.data.simd[0], b.data.simd[0]),
+        MyPair<m512b> ret;
+        ret.t1_ = help(_mm_cmpgt_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmpgt_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.second= help(_mm_cmpgt_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.t2_= help(_mm_cmpgt_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmpgt_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend std::pair<m512b, m512b> operator<(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator<(const m512s& a, const m512s& b)
     {
-        std::pair<m512b, m512b> ret;
-        ret.first = help(_mm_cmplt_epi16(a.data.simd[0], b.data.simd[0]),
+        MyPair<m512b> ret;
+        ret.t1_ = help(_mm_cmplt_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmplt_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.second= help(_mm_cmplt_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.t2_= help(_mm_cmplt_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmplt_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend std::pair<m512b, m512b> operator<=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator<=(const m512s& a, const m512s& b)
     {
         auto tmp = (a > b);
         return {!tmp.first, !tmp.second};
     }
-    friend std::pair<m512b, m512b> operator>=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator>=(const m512s& a, const m512s& b)
     {
         auto tmp = (a < b);
         return {!tmp.first, !tmp.second};

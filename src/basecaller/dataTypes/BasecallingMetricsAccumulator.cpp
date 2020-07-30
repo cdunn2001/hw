@@ -351,7 +351,7 @@ void BasecallingMetricsAccumulator::Count(
         const LaneVectorView<const Pulse>& pulses,
         uint32_t numFrames)
 {
-    traceMetrics_.NumFrames() += numFrames;
+    traceMetrics_.NumFrames() += static_cast<int32_t>(numFrames);
     for (size_t zi = 0; zi < laneSize; ++zi)
     {
         const Pulse* prevPulse = &prevBasecallCache_[zi];

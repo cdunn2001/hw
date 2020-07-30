@@ -110,7 +110,7 @@ public:     // Export
         return m512f(_mm512_cvt_roundepi32_ps(v, _MM_FROUND_NO_EXC));
     }
 
-    explicit operator m512f() const
+    operator m512f() const
     {
         return m512f(_mm512_cvt_roundepi32_ps(v, _MM_FROUND_NO_EXC));
     }

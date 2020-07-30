@@ -128,7 +128,7 @@ public:     // Export
                      _mm_cvtepi32_ps(data.simd[3]));
     }
 
-    explicit operator m512f() const
+    operator m512f() const
     {
         return m512f(_mm_cvtepi32_ps(data.simd[0]),
                      _mm_cvtepi32_ps(data.simd[1]),

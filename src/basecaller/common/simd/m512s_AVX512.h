@@ -47,6 +47,68 @@
 namespace PacBio {
 namespace Simd {
 
+// TODO move
+template <typename T>
+struct PairRef
+{
+    PairRef(T& t1, T& t2) : first(t1), second(t2) {}
+    PairRef(const std::pair<T, T>& p) : first(p.first), second(p.second) {}
+
+    template <typename Other,
+              bool IsConst = std::is_const<T>::value,
+              bool isPair = std::is_same<Other, std::pair<T,T>>::value,
+              bool isRef = std::is_base_of<PairRef<const T>, Other>::value,
+              std::enable_if_t<!IsConst && (isPair || isRef),int> = 0>
+    PairRef& operator=(const Other& other)
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    friend std::pair<m512b, m512b> operator!=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first != t2.first, t1.second != t2.second};
+    }
+
+    friend std::pair<m512b, m512b> operator==(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first == t2.first, t1.second == t2.second};
+    }
+
+    friend std::pair<m512b, m512b> operator>(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first > t2.first, t1.second > t2.second};
+    }
+    friend std::pair<m512b, m512b> operator>=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first >= t2.first, t1.second >= t2.second};
+    }
+    friend std::pair<m512b, m512b> operator<(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first < t2.first, t1.second < t2.second};
+    }
+    friend std::pair<m512b, m512b> operator<=(const PairRef<T>& t1, const PairRef<T>& t2)
+    {
+        return  {t1.first <= t2.first, t1.second <= t2.second};
+    }
+
+    T& first;
+    T& second;
+};
+
+template <typename T>
+struct MyPair : PairRef<const T>
+{
+    MyPair(const T t1, const T t2) : PairRef<const T>(t1_, t2_), t1_(t1) , t2_(t2)
+    {}
+
+    T t1_;
+    T t2_;
+};
+
+
+
 // SIMD 512-bit short vector (32 packed 16-bit short int values).
 CLASS_ALIGNAS(64) m512s
 {
@@ -71,6 +133,10 @@ public:     // Structors
     // Replicate scalar x across v
     m512s(short x)  : v(_mm512_set1_epi16(x)) {}
 
+    // putting this here to explicitly prevent implicit
+    // conversions
+    m512s(int x) = delete;
+
     // Load x from pointer px. px must be aligned to 16 bytes.
     m512s(const short *px) : v(_mm512_load_si512(reinterpret_cast<const __m512i*>(px))) {}
 
@@ -90,6 +156,11 @@ public:     // Structors
     m512s(const m512f& low, const m512f& high)
         : m512s(m512i(low), m512i(high))
     {}
+
+    operator MyPair<m512i>() const
+    {
+        return {LowInts(*this), HighInts(*this)};
+    }
 
 public:     // Assignment
     m512s& operator=(const m512s& x) = default;
@@ -171,34 +242,34 @@ public:     // Functor types
         return m512s(_mm512_sub_epi16(l.v, r.v));
     }
 
-    static std::pair<m512b, m512b> help(__mmask32 mask)
+    static MyPair<m512b> help(__mmask32 mask)
     {
         auto low = static_cast<__mmask16>(mask & 0xFFFF);
         auto high = static_cast<__mmask16>((mask & 0xFFFF0000) >> 16);
         return {m512b{low}, m512b{high}};
     }
 
-    friend std::pair<m512b, m512b> operator!=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator!=(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmpneq_epi16_mask(a.v, b.v));
     }
-    friend std::pair<m512b, m512b> operator==(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator==(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmpeq_epi16_mask(a.v, b.v));
     }
-    friend std::pair<m512b, m512b> operator>(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator>(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmpgt_epi16_mask(a.v, b.v));
     }
-    friend std::pair<m512b, m512b> operator<(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator<(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmplt_epi16_mask(a.v, b.v));
     }
-    friend std::pair<m512b, m512b> operator<=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator<=(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmple_epi16_mask(a.v, b.v));
     }
-    friend std::pair<m512b, m512b> operator>=(const m512s& a, const m512s& b)
+    friend MyPair<m512b> operator>=(const m512s& a, const m512s& b)
     {
         return help(_mm512_cmpge_epi16_mask(a.v, b.v));
     }

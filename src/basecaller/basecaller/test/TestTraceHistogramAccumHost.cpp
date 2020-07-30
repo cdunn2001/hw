@@ -187,7 +187,7 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
         ASSERT_GE(hLane.NumBins(), 0);
         const unsigned int nBins = hLane.NumBins();
         const auto& irc = hLane.InRangeCount();
-        EXPECT_TRUE(all(((nChunks-1)*chunkSize) == irc));
+        EXPECT_TRUE(all(int16_t((nChunks-1)*chunkSize) == irc));
         for (unsigned int b = 0; b < nBins; ++b)
         {
             const auto& bStart = MakeUnion(hLane.BinStart(b));
