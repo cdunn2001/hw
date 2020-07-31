@@ -37,7 +37,6 @@
 #include <common/graphs/GraphNodeBody.h>
 #include <common/graphs/GraphNode.h>
 
-#include <pacbio/primary/SequelTraceFile.h>
 #include <pacbio/PBException.h>
 #include <pacbio/configuration/ParseCombined.h>
 #include <pacbio/configuration/MergeConfigs.h>
@@ -62,6 +61,7 @@ using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
+using namespace PacBio::TraceFile;
 
 ////////////
 // vvvv This could be cleaned up.
@@ -164,11 +164,14 @@ public:
 private:
     void MetaDataFromTraceFileSource(const std::string& traceFileName)
     {
-        const auto& traceFile = SequelTraceFileHDF5(traceFileName);
+        const auto& traceFile = TraceFile(traceFileName);
+        const auto& acqParams = traceFile.Scan().AcqParams();
+        const auto& chipInfo = traceFile.Scan().ChipInfo();
+        const auto& dyeSet = traceFile.Scan().DyeSet();
 
-        traceFile.FrameRate >> movieConfig_.frameRate;
-        traceFile.AduGain >> movieConfig_.photoelectronSensitivity;
-        traceFile.AnalogRefSnr >> movieConfig_.refSnr;
+        movieConfig_.frameRate = acqParams.frameRate;
+        movieConfig_.photoelectronSensitivity = acqParams.aduGain;
+        movieConfig_.refSnr = chipInfo.analogRefSnr;
 
         // Analog information
         size_t traceNumAnalogs;
@@ -180,17 +183,17 @@ private:
         std::vector<float> ipd2SlowStepRatio;
         std::vector<float> pw2SlowStepRatio;
 
-        traceFile.NumAnalog >> traceNumAnalogs;
+        traceNumAnalogs = TraceFile::DefaultNumAnalogs;
         if (traceNumAnalogs != numAnalogs)
             throw PBException("Trace file does not have 4 analogs!");
 
-        traceFile.BaseMap >> baseMap;
-        traceFile.RelativeAmp >> relativeAmpl;
-        traceFile.ExcessNoiseCV >> excessNoiseCV;
-        traceFile.IpdMean >> interPulseDistance;
-        traceFile.PulseWidthMean >> pulseWidth;
-        traceFile.Ipd2SlowStepRatio >> ipd2SlowStepRatio;
-        traceFile.Pw2SlowStepRatio >> pw2SlowStepRatio;
+        baseMap = dyeSet.baseMap;
+        relativeAmpl = dyeSet.relativeAmp;
+        excessNoiseCV = dyeSet.excessNoiseCV;
+        interPulseDistance = dyeSet.ipdMean;
+        pulseWidth = dyeSet.pulseWidthMean;
+        ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio;
+        pw2SlowStepRatio = dyeSet.pw2SlowStepRatio;
 
         // Check relative amplitude is sorted decreasing.
         if (!std::is_sorted(relativeAmpl.rbegin(), relativeAmpl.rend()))
@@ -218,15 +221,12 @@ private:
                                     float& blCovar,
                                     const std::string& exceptMsg)
         {
-            const auto& traceFile = SequelTraceFileHDF5(traceFileName);
-            if (traceFile.simulated)
+            const TraceFile traceFile{traceFileName};
+            if (traceFile.IsSimulated())
             {
-                boost::multi_array<float, 2> stateMean;
-                boost::multi_array<float, 2> stateCovar;
-                traceFile.StateMean >> stateMean;
-                traceFile.StateCovariance >> stateCovar;
-                blMean = stateMean[0][0];
-                blCovar = stateCovar[0][0];
+                const auto groundTruth = traceFile.GroundTruth();
+                blMean = groundTruth.stateMean[0][0];
+                blCovar = groundTruth.stateCovariance[0][0];
             } else
             {
                 throw PBException(exceptMsg);
