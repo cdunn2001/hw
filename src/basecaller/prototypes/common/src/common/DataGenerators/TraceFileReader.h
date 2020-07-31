@@ -50,14 +50,14 @@ private:
         }
         else
         {
-            if (laneCurrentChunk_[laneIdx] < blockIdx)
+            if (laneCurrentChunk_[laneIdx] != blockIdx)
             {
                 ReadZmwLaneBlock(laneIdx * zmwsPerLane_,
                                  zmwsPerLane_,
                                  blockIdx * framesPerChunk_,
                                  framesPerChunk_,
                                  pixelCache_[0][laneIdx].origin());
-                laneCurrentChunk_[laneIdx] = (laneCurrentChunk_[laneIdx] + 1) % numChunks_;
+                laneCurrentChunk_[laneIdx] = blockIdx;
             }
             std::memcpy(data, pixelCache_[0][laneIdx].origin(),
                         framesPerChunk_ * zmwsPerLane_ * sizeof(int16_t));

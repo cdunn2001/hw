@@ -30,7 +30,7 @@ TraceFileReader::TraceFileReader(const std::string& traceFileName, size_t zmwsPe
     else
     {
         pixelCache_.resize(boost::extents[1][numZmwLanes_][framesPerChunk_][zmwsPerLane_]);
-        laneCurrentChunk_.resize(numZmwLanes_, 0);
+        laneCurrentChunk_.resize(numZmwLanes_, std::numeric_limits<size_t>::max());
     }
 }
 

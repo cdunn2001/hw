@@ -129,6 +129,7 @@ private:
 
     TraceFile::TraceFile traceFile_;
     std::vector<int16_t> traceDataCache_;
+    std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
 };

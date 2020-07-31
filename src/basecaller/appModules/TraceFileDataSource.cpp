@@ -94,6 +94,7 @@ TraceFileDataSource::TraceFileDataSource(
 
     if (cache_)
     {
+        // Cache entire file into memory.
         traceDataCache_.resize(numTraceLanes_*BlockWidth()*numTraceChunks_*BlockLen());
         for (size_t traceLane = 0; traceLane < numTraceLanes_; traceLane++)
         {
@@ -103,6 +104,12 @@ TraceFileDataSource::TraceFileDataSource(
                                        traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*numTraceChunks_)+traceChunk)));
             }
         }
+    }
+    else
+    {
+        // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
+        traceDataCache_.resize(numTraceLanes_*BlockWidth()*BlockLen());
+        laneCurrentChunk_.resize(numTraceLanes_, std::numeric_limits<size_t>::max());
     }
 
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
@@ -191,7 +198,14 @@ void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, int
     }
     else
     {
-        ReadBlockFromTraceFile(traceLane, traceChunk, data);
+        if (laneCurrentChunk_[traceLane] != traceChunk)
+        {
+            ReadBlockFromTraceFile(traceLane, traceChunk,
+                                   traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()));
+            laneCurrentChunk_[traceLane] = traceChunk;
+        }
+        std::memcpy(data, traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()),
+                    BlockWidth()*BlockLen()*sizeof(int16_t));
     }
 }
 
