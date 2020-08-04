@@ -89,7 +89,7 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
         analog = zeros;
     }
 
-    const auto& seconds = AsFloat(traceMetrics_.NumFrames()) / LaneArray<float>(frameRate);
+    const auto& seconds = traceMetrics_.NumFrames() / frameRate;
 
     features[ActivityLabeler::PULSERATE] = numPulses / seconds;
 
@@ -512,7 +512,7 @@ void BasecallingMetricsAccumulator::FinalizeMetrics(
     }
 
     auto& pdScore = traceMetrics_.PulseDetectionScore();
-    pdScore = pdScore / AsFloat(traceMetrics_.NumFrames());
+    pdScore = pdScore / traceMetrics_.NumFrames();
     pdScore = Blend(isnan(pdScore), LaneArray<float>(0), pdScore);
 
     if (realtimeActivityLabels)

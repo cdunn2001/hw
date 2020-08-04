@@ -107,19 +107,6 @@ struct magic<ArrayUnion<T>>
 template <typename T>
 using magic_t = typename magic<T>::type;
 
-// TODO replace Noop with int8_t?
-//template <typename T1, typename T2,
-//          typename T11 = std::conditional_t<std::is_same<Noop,magic_t<T1>>::value,
-//                                            magic_t<T2>,
-//                                            magic_t<T1>
-//                                            >,
-//          typename T22 = std::conditional_t<std::is_same<Noop,magic_t<T2>>::value,
-//                                            magic_t<T1>,
-//                                            magic_t<T2>
-//                                            >
-//          >
-//using magic2 = std::common_type_t<T11, T22>;
-
 template <typename...Ts>
 struct magic22
 {
@@ -136,29 +123,17 @@ struct magic22
 
     using DefType = magic_t<std::tuple_element_t<IdxOfDefault(), std::tuple<std::decay_t<Ts>...>>>;
 
+    // This abomination is to keep us as a dependant type for SFINAE failures.  Intel was having
+    // issues so I had to get slightly more convoluted than should have been necessary
     template <typename ...Us>
     auto Helper() ->
     std::common_type_t<std::conditional_t<std::is_same<magic_t<Us>, Noop>::value,
                                                        DefType,
                                                        magic_t<Us>>...>;
-    //template <typename... Us>
-    //static constexpr auto Helper2() ->
-
-    //template <typename T = std::tuple<Ts...>>
-    //static constexpr auto Helper()
-    //{
-
-    //}
 };
 
 template <typename...Ts>
 using magic2 = decltype(std::declval<magic22<Ts...>>().template Helper<Ts...>());
-//using magic2 = typename magic22<Ts...>::template type<Ts...>;
-
-//template <typename T1, typename T2, typename T3, typename T4 = std::enable_if_t<std::is_same<ScalarType<T2>, magic2<T1, T2>>::value>>
-//struct magic44 {
-//    using type = magic2<T1, T2>;
-//};
 
 template <typename T1, typename T2, bool b>
 struct magic44 {};
@@ -170,9 +145,6 @@ struct magic44<T1, T2, true> {
 
 template <typename T1, typename T2, typename T3>
 using magic4 = typename magic44<T1, T2, std::is_same<ScalarType<T3>, magic2<T1, T2>>::value>::type;
-
-template <typename T1, typename T2, typename T3, typename Ret>
-using magic5 = std::enable_if_t<std::is_same<ScalarType<T3>, magic2<T1, T2>>::value, Ret>;
 
 template <typename T> struct IsLaneArray
 { static constexpr bool value = false; };
@@ -192,50 +164,6 @@ template <
     typename Ret = std::conditional_t<std::is_same<void, RetRequest>::value, LaneArray<common, VecLen>, RetRequest>
     >
 using SmartReturn = std::enable_if_t<SingleLaneArray || IsCommon, Ret>;
-
-// No member for the default type.  We're going to use SFINAE
-// to disable functions where mixed type arguments make
-// no sense
-template <typename T1, typename T2, typename ScalarMul = std::common_type_t<magic_t<T1>, magic_t<T2>>>
-struct MixedType {
-private:
-    static constexpr auto N = std::max((uint16_t)SimdTypeTraits<T1>::width, (uint16_t)SimdTypeTraits<T2>::width);
-public:
-    using ArithmeticType = LaneArray<ScalarMul, N>;
-    // TODO this won't work
-    //using CompareType = LaneArray
-};
-
-//template <typename T1, typename T2>
-//struct MixedType<ArrayUnion<T1>, ArrayUnion<T2>>
-//{
-//    using ArithmeticType = typename MixedType<T1, T2>::ArithmeticType;
-//};
-//template <typename T1, typename T2>
-//struct MixedType<ArrayUnion<T1>, T2>
-//{
-//    using ArithmeticType = typename MixedType<T1, T2>::ArithmeticType;
-//};
-//template <typename T1, typename T2>
-//struct MixedType<T1, ArrayUnion<T2>>
-//{
-//    using ArithmeticType = typename MixedType<T1, T2>::ArithmeticType;
-//};
-
-//template <size_t N>
-//struct MixedType<LaneArray<float, N>,   LaneArray<float,N>>   { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<float,                 LaneArray<float,N>>   { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<LaneArray<float, N>,   float>                { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<int32_t,               LaneArray<float,N>> { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<LaneArray<float, N>, int32_t>              { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<int16_t,               LaneArray<float,N>> { using type = LaneArray<float, N>; };
-//template <size_t N>
-//struct MixedType<LaneArray<int16_t, N>, int16_t>              { using type = LaneArray<int16_t, N>; };
 
 template <typename T>
 struct PairRef
@@ -268,12 +196,6 @@ inline m512s Blend(const PairRef<const m512b>& b, const m512s& l, const m512s& r
     return Blend(b.first, b.second, l, r);
 }
 
-template <bool...bs>
-struct bool_pack {};
-
-template <bool...bs>
-using all_true = std::is_same<bool_pack<true, bs...>, bool_pack<bs..., true>>;
-
 template <typename T>
 struct len_trait;
 template <typename T>
@@ -284,20 +206,6 @@ struct len_trait
     static constexpr size_t SimdWidth = 1;
 };
 
-template <typename T>
-constexpr size_t rename_me()
-{
-    constexpr auto tmp = len_trait<T>::SimdCount;
-    return tmp == 1 ? std::numeric_limits<size_t>::max() : tmp;
-}
-
-template <typename Ret, typename...Args>
-static constexpr size_t MinSimdCount()
-{
-    constexpr auto ret = std::min({rename_me<Ret>(), rename_me<Args>()...});
-    static_assert(ret == 2 || ret == 4, "");
-    return ret;
-}
 template <typename...Args>
 static constexpr size_t MaxSimdCount()
 {
@@ -407,27 +315,6 @@ public:
     {
         return (val.data()[idx]);
     }
-    //template <size_t N, size_t, typename WorkingType, typename U,
-    //          typename foo = std::conditional_t<std::is_same<WorkingType, Noop>::value,
-    //                                            ScalarType<std::decay_t<U>>,
-    //                                            WorkingType>,
-    //          std::enable_if_t<std::is_same<typename std::decay_t<U>::SimdType, vec_type_t<foo>>::value, int> = 0,
-    //          std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
-    //static decltype(auto) Access(U&& val, size_t idx)
-    //{
-    //    return (val.data()[idx]);
-    //}
-
-    //template <size_t N, size_t, typename WorkingType, typename U,
-    //          typename foo = std::conditional_t<std::is_same<WorkingType, Noop>::value,
-    //                                            ScalarType<std::decay_t<U>>,
-    //                                            WorkingType>,
-    //          std::enable_if_t<!std::is_same<typename std::decay_t<U>::SimdType, vec_type_t<foo>>::value, int> = 0,
-    //          std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
-    //static decltype(auto) Access(U&& val, size_t idx)
-    //{
-    //    return WorkingType(val.data()[idx]);
-    //}
 
     template <size_t N, size_t, typename WorkingType, typename U,
         std::enable_if_t<N == 2*len_trait<std::decay_t<U>>::SimdCount && (N > 2), int> = 0>
@@ -447,13 +334,6 @@ public:
         return PairRef<Ref_t>{val.data()[idx*2], val.data()[idx*2+1]};
     }
 
-    //template <size_t N, size_t, typename WorkingType, typename U,
-    //          std::enable_if_t<1 == len_trait<U>::SimdCount, int> = 0>
-    //static decltype(auto) Access(std::remove_const_t<U>& val, size_t)
-    //{
-    //    return (val);
-    //}
-
     template <size_t N, size_t ScalarStride, typename WorkingType, typename  U,
               std::enable_if_t<1 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
     static auto Access(U&& val, size_t)
@@ -471,9 +351,10 @@ public:
     BaseArray(F&& f, const Args&... args)
     {
         static_assert(sizeof...(Args) > 0, "");
-        static constexpr auto loopMax = std::min(MaxSimdCount<Args...>(), Child::SimdCount);
-        static constexpr auto ScalarStride = ScalarCount / loopMax;
-        using WorkingType = magic2<Args...>;//std::common_type_t<ScalarType<std::decay_t<Args>>...>;
+        using WorkingType = magic2<Args...>;
+        static constexpr auto ScalarStride = std::max(SimdTypeTraits<vec_type_t<WorkingType>>::width,
+                                                      SimdTypeTraits<SimdType>::width);
+        static constexpr auto loopMax = ScalarCount / ScalarStride;
         for (size_t i = 0; i < loopMax; ++i)
         {
             Access<loopMax, ScalarStride, Noop>(static_cast<Child&>(*this), i) = f(Access<loopMax, ScalarStride, WorkingType>(args, i)...);
@@ -923,29 +804,6 @@ LaneArray<float, Len> AsFloat(const LaneArray<short, Len>& in)
 }
 
 template <size_t Len>
-LaneArray<int, Len> AsInt(const LaneArray<short, Len>& in)
-{
-    return LaneArray<int, Len>(
-        [](auto&& in2) { return std::make_pair(LowInts(in2), HighInts(in2)); },
-        in);
-}
-
-// TODO clean/kill?
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const ArrayUnion<LaneArray<short, Len>>& in)
-{
-    return AsFloat(in.Simd());
-}
-
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const LaneArray<int, Len>& in)
-{
-    return LaneArray<float, Len>(
-        [](auto&& in2) { return in2.AsFloat(); },
-        in);
-}
-
-template <size_t Len>
 LaneArray<short, Len> AsShort(const LaneArray<float, Len>& in)
 {
     return LaneArray<short, Len>(
@@ -953,13 +811,15 @@ LaneArray<short, Len> AsShort(const LaneArray<float, Len>& in)
         in);
 }
 
-template <typename T, size_t Len, typename Child>
-struct len_trait<BaseArray<T, Len, Child>>
+
+template <size_t Len>
+LaneArray<int, Len> AsInt(const LaneArray<short, Len>& in)
 {
-    static constexpr size_t SimdCount = BaseArray<T, Len, Child>::SimdCount;
-    static constexpr size_t ScalarCount = BaseArray<T, Len, Child>::ScalarCount;
-    static constexpr size_t SimdWidth = BaseArray<T, Len, Child>::SimdWidth;
-};
+    return LaneArray<int, Len>(
+        [](auto&& in2) { return std::make_pair(LowInts(in2), HighInts(in2)); },
+        in);
+}
+
 template <typename T, size_t Len>
 struct len_trait<LaneArray<T, Len>>
 {

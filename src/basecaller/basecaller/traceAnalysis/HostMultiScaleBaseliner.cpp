@@ -78,8 +78,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     {
         auto upperVal = upperIter.Extract();
         auto lowerVal = lowerIter.Extract();
-        const auto& bias = AsFloat(upperVal + lowerVal) / FloatArray{2.0f};
-        const auto& framebkgndSigma = AsFloat(upperVal - lowerVal) / cSigmaBias_;
+        const auto& bias = (upperVal + lowerVal) / 2.0f;
+        const auto& framebkgndSigma = (upperVal - lowerVal) / cSigmaBias_;
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
@@ -93,7 +93,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
             // NOTE: We need to scale the trace data (from DN to e-) and
             // end up converting the baseline subtracted data to float in order
             // to perform the conversion and then end up converting it back.
-            auto out = AsShort((AsFloat(rawSignal) - bias - frameBiasEstimate) * FloatArray{Scale()});
+            auto out = AsShort((rawSignal - bias - frameBiasEstimate) * Scale());
             strideIter.Store(out);
 
             AddToBaselineStats(rawSignal, out, baselinerStats);
@@ -114,16 +114,15 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
         // NOTE: Thresholds below are specified as floats whereas
         // incoming frame data are shorts.
 
-        auto floatBaselineSubtracted = AsFloat(baselineSubtractedFrame);
         // Compute the high mask at the plus-1 position (this) for variance
-        const auto& maskHp1 = floatBaselineSubtracted < thrHigh_;
+        const auto& maskHp1 = baselineSubtractedFrame < thrHigh_;
 
         // Compute the full mask to use for the single-frame latent variance
         // Minus-1[High] & Pos-0[Low] & Plus-1[High]
         const auto& mask = latHMask_.front() & latLMask_ & maskHp1;
 
         // Push the plus-1 frame masks
-        latLMask_ = floatBaselineSubtracted < thrLow_;
+        latLMask_ = baselineSubtractedFrame < thrLow_;
         latHMask_.push_back(maskHp1);
 
         baselinerStats.AddSample(latRawData_, latData_, mask);
