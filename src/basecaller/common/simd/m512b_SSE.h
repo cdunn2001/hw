@@ -71,7 +71,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512b() {}
+    m512b() = default;
     
     // Copy constructor
     m512b(const m512b& x) = default;

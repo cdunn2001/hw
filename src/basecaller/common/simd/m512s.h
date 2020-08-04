@@ -18,6 +18,34 @@
 namespace PacBio {
 namespace Simd {
 
+template <typename T>
+std::conditional_t<std::is_same<T, float>::value, m512f, m512i>Low(const m512s& in);
+
+template <>
+inline m512f Low<float>(const m512s& in)
+{
+    return LowFloats(in);
+}
+template <>
+inline m512i Low<int>(const m512s& in)
+{
+    return LowInts(in);
+}
+
+template <typename T>
+std::conditional_t<std::is_same<T, float>::value, m512f, m512i>High(const m512s& in);
+
+template <>
+inline m512f High<float>(const m512s& in)
+{
+    return HighFloats(in);
+}
+template <>
+inline m512i High<int>(const m512s& in)
+{
+    return HighInts(in);
+}
+
 template<>
 struct SimdTypeTraits<m512s>
 {

@@ -81,7 +81,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512i() {}
+    m512i() = default;
 
     // Replicate scalar x across v
     m512i(int x) // : v(_mm512_set1_epi16(x))
@@ -126,6 +126,9 @@ public:     // Assignment
     m512i& operator += (const m512i& x) { v = _mm512_add_epi32(this->v, x.v);   return *this; }
     m512i& operator -= (const m512i& x) { v = _mm512_sub_epi32(this->v, x.v);   return *this; }
     m512i& operator *= (const m512i& x) { v = _mm512_mullo_epi32(this->v, x.v); return *this; }
+    m512i& operator /= (const m512i& x) { v = _mm512_div_epi32(this->v, x.v);   return *this; }
+
+    m512i operator - () const { return m512i(_mm512_sub_epi32(_mm512_setzero_si512(), v)); }
 
     // Return a scalar value
     int operator[](unsigned int i) const

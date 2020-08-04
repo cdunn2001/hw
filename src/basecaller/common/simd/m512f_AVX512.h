@@ -68,7 +68,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512f() {}
+    m512f() = default;
 
     // Replicate scalar x across v.
     m512f(float x) : v(_mm512_set1_ps(x)) {}

@@ -26,6 +26,7 @@
 #ifndef mongo_common_LaneArray_H_
 #define mongo_common_LaneArray_H_
 
+#include <algorithm>
 #include <cstddef>
 #include <type_traits>
 #include <array>
@@ -77,30 +78,82 @@ struct vec_count<short, Len>
 template <typename T, size_t ScalarCount = laneSize>
 class LaneArray;
 
+struct Noop {};
+
 template <typename T>
 struct magic
 {
+    // Don't let integral scalars affect the return type.  This is primarily
+    // to combat things like LaneArray<short> + int = LaneArray<int>, as
+    // it's painfully difficult to type short literals
+    using typee = std::conditional_t<std::is_integral<T>::value, Noop, ScalarType<T>>;
     // intel is stupid and requires this...  type eventually gets used in
     // `std::common_type`, and intel barfs if certain eigen types make it there
     // This is just a crude filter to replace any non-arithmetic types with void,
     // which for our purposes is just as good
-    using typee = ScalarType<T>;
-    using typee2 = std::conditional_t<std::is_arithmetic<typee>::value, typee, void>;
-    // Filter out double and long
+    using typee2 = std::conditional_t<std::is_arithmetic<typee>::value
+                                      || std::is_same<Noop, typee>::value,
+                                      typee, void>;
+    // Filter out double
     // temporarily force signed
-    using type = std::conditional_t<sizeof(typee) < 8, typee2, void>;
+    using type = std::conditional_t<!std::is_same<typee2, double>::value, typee2, void>;
 };
 template <typename T>
 struct magic<ArrayUnion<T>>
 {
-    using type = ScalarType<T>;
+    using type = typename magic<T>::type;
 };
 
 template <typename T>
 using magic_t = typename magic<T>::type;
 
-template <typename T1, typename T2>
-using magic2 = std::common_type_t<magic_t<T1>, magic_t<T2>>;
+// TODO replace Noop with int8_t?
+//template <typename T1, typename T2,
+//          typename T11 = std::conditional_t<std::is_same<Noop,magic_t<T1>>::value,
+//                                            magic_t<T2>,
+//                                            magic_t<T1>
+//                                            >,
+//          typename T22 = std::conditional_t<std::is_same<Noop,magic_t<T2>>::value,
+//                                            magic_t<T1>,
+//                                            magic_t<T2>
+//                                            >
+//          >
+//using magic2 = std::common_type_t<T11, T22>;
+
+template <typename...Ts>
+struct magic22
+{
+    static constexpr size_t IdxOfDefault()
+    {
+        bool isNoop[sizeof...(Ts)] {std::is_same<Noop, magic_t<Ts>>::value...};
+        size_t ret = 0;
+        for (size_t i = 0; i < sizeof...(Ts); ++i)
+        {
+            if (!isNoop[i]) ret = i;
+        }
+        return ret;
+    }
+
+    using DefType = magic_t<std::tuple_element_t<IdxOfDefault(), std::tuple<std::decay_t<Ts>...>>>;
+
+    template <typename ...Us>
+    auto Helper() ->
+    std::common_type_t<std::conditional_t<std::is_same<magic_t<Us>, Noop>::value,
+                                                       DefType,
+                                                       magic_t<Us>>...>;
+    //template <typename... Us>
+    //static constexpr auto Helper2() ->
+
+    //template <typename T = std::tuple<Ts...>>
+    //static constexpr auto Helper()
+    //{
+
+    //}
+};
+
+template <typename...Ts>
+using magic2 = decltype(std::declval<magic22<Ts...>>().template Helper<Ts...>());
+//using magic2 = typename magic22<Ts...>::template type<Ts...>;
 
 //template <typename T1, typename T2, typename T3, typename T4 = std::enable_if_t<std::is_same<ScalarType<T2>, magic2<T1, T2>>::value>>
 //struct magic44 {
@@ -125,14 +178,18 @@ template <typename T> struct IsLaneArray
 { static constexpr bool value = false; };
 template <typename T, size_t N> struct IsLaneArray<LaneArray<T, N>>
 { static constexpr bool value = true; };
+template <typename T> struct IsLaneArray<ArrayUnion<T>>
+{ static constexpr bool value = true; };
 
 template <
-    typename Arg1, typename Arg2, typename T, typename Ret = T,  // public API
+    typename Arg1, typename Arg2, typename T, typename RetRequest = void,  // public API
     // SFINAE check to see if there is a sensible common type
     typename common = magic2<Arg1, Arg2>,
     //
     bool SingleLaneArray = IsLaneArray<Arg1>::value xor IsLaneArray<Arg2>::value,
-    bool IsCommon = std::is_same<ScalarType<T>, common>::value
+    bool IsCommon = std::is_same<ScalarType<T>, common>::value,
+    size_t VecLen = std::max((uint16_t)SimdTypeTraits<Arg1>::width, (uint16_t)SimdTypeTraits<Arg2>::width),
+    typename Ret = std::conditional_t<std::is_same<void, RetRequest>::value, LaneArray<common, VecLen>, RetRequest>
     >
 using SmartReturn = std::enable_if_t<SingleLaneArray || IsCommon, Ret>;
 
@@ -180,6 +237,29 @@ public:
 //template <size_t N>
 //struct MixedType<LaneArray<int16_t, N>, int16_t>              { using type = LaneArray<int16_t, N>; };
 
+template <typename T>
+struct PairRef
+{
+    PairRef(T& t1, T& t2) : first(t1), second(t2) {}
+    PairRef(const std::pair<T, T>& p) : first(p.first), second(p.second) {}
+
+    template <typename Other,
+              bool IsConst = std::is_const<T>::value,
+              bool isPair = std::is_same<Other, std::pair<T,T>>::value,
+              bool isRef = std::is_base_of<PairRef<const T>, Other>::value,
+              std::enable_if_t<!IsConst && (isPair || isRef),int> = 0>
+    PairRef& operator=(const Other& other)
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    T& first;
+    T& second;
+};
+
+
 // TODO move?
 // TODO fix attrocious naming
 inline m512s Blend(const PairRef<const m512b>& b, const m512s& l, const m512s& r)
@@ -218,6 +298,12 @@ static constexpr size_t MinSimdCount()
     static_assert(ret == 2 || ret == 4, "");
     return ret;
 }
+template <typename...Args>
+static constexpr size_t MaxSimdCount()
+{
+    static_assert(sizeof...(Args) > 0,"");
+    return std::max({(size_t)len_trait<Args>::SimdCount...});
+}
 
 // TODO clean/rethink?
 template <typename T, size_t Len>
@@ -253,6 +339,10 @@ public:
     using SimdType = T;
 
     // TODO worry about alignment
+    // Can't use this ctor for bools, as they are not bitwise equivalant
+    template <typename U = T,
+              bool isBool = std::is_same<ScalarType<U>, bool>::value,
+              std::enable_if_t<!isBool, int> = 0>
     explicit BaseArray(const Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>& data)
     {
         constexpr auto width = SimdTypeTraits<T>::width;
@@ -265,8 +355,9 @@ public:
     }
 
     template <typename U,
-        typename dummy1 = std::enable_if_t<std::is_constructible<T, U>::value>,
-        typename dummy2 = std::enable_if_t<!std::is_same<T, U>::value>>
+        typename Scalar = ScalarType<T>,
+        typename dummy1 = std::enable_if_t<std::is_constructible<Scalar, U>::value>,
+        typename dummy2 = std::enable_if_t<!std::is_same<Scalar, U>::value>>
     explicit BaseArray(const Cuda::Utility::CudaArray<U, ScalarCount>& data)
     {
         static constexpr auto width = SimdTypeTraits<T>::width;
@@ -292,9 +383,12 @@ public:
         }
     }
 
-    // TODO check alignment somehow?
-    BaseArray(PtrView<ScalarType<T>, ScalarCount> dat)
+    template <typename U = ScalarType<T>,
+        std::enable_if_t<!std::is_same<bool, U>::value, int> = 0
+        >
+    BaseArray(PtrView<U, ScalarCount> dat)
     {
+        assert(static_cast<size_t>(dat[0]) % 64 == 0);
         for (size_t i = 0; i < SimdCount; ++i)
         {
             data_[i] = T(dat[i*SimdTypeTraits<T>::width]);
@@ -307,76 +401,94 @@ public:
     BaseArray() = default;
 
     // TODO rename/comment anonymous size_t
-    template <size_t N, size_t, typename U, std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    template <size_t N, size_t, typename WorkingType, typename U,
+              std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
     static decltype(auto) Access(U&& val, size_t idx)
     {
         return (val.data()[idx]);
     }
+    //template <size_t N, size_t, typename WorkingType, typename U,
+    //          typename foo = std::conditional_t<std::is_same<WorkingType, Noop>::value,
+    //                                            ScalarType<std::decay_t<U>>,
+    //                                            WorkingType>,
+    //          std::enable_if_t<std::is_same<typename std::decay_t<U>::SimdType, vec_type_t<foo>>::value, int> = 0,
+    //          std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    //static decltype(auto) Access(U&& val, size_t idx)
+    //{
+    //    return (val.data()[idx]);
+    //}
 
-    template <size_t N, size_t, typename U, std::enable_if_t<2*N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    //template <size_t N, size_t, typename WorkingType, typename U,
+    //          typename foo = std::conditional_t<std::is_same<WorkingType, Noop>::value,
+    //                                            ScalarType<std::decay_t<U>>,
+    //                                            WorkingType>,
+    //          std::enable_if_t<!std::is_same<typename std::decay_t<U>::SimdType, vec_type_t<foo>>::value, int> = 0,
+    //          std::enable_if_t<N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    //static decltype(auto) Access(U&& val, size_t idx)
+    //{
+    //    return WorkingType(val.data()[idx]);
+    //}
+
+    template <size_t N, size_t, typename WorkingType, typename U,
+        std::enable_if_t<N == 2*len_trait<std::decay_t<U>>::SimdCount && (N > 2), int> = 0>
     static auto Access(U&& val, size_t idx)
     {
+        if (idx%2 == 0) return Low<WorkingType>(val.data()[idx/2]);
+        else return High<WorkingType>(val.data()[idx/2]);
+    }
+
+    template <size_t N, size_t, typename WorkingType, typename U,
+              std::enable_if_t<2*N == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    static auto Access(U&& val, size_t idx)
+    {
+        // Ignoring workingtype.  TODO are there any good static asserts to put here?
         using SimdType = typename std::decay_t<U>::SimdType;
         using Ref_t = std::conditional_t<std::is_const<std::remove_reference_t<U>>::value, const SimdType, SimdType>;
         return PairRef<Ref_t>{val.data()[idx*2], val.data()[idx*2+1]};
     }
 
-    //template <size_t N, size_t, typename U,
-    //std::enable_if_t<1 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
-    //static decltype(auto) Access(U&& val, size_t)
+    //template <size_t N, size_t, typename WorkingType, typename U,
+    //          std::enable_if_t<1 == len_trait<U>::SimdCount, int> = 0>
+    //static decltype(auto) Access(std::remove_const_t<U>& val, size_t)
     //{
     //    return (val);
     //}
 
-    template <size_t N, size_t, typename U,
-              std::enable_if_t<1 == len_trait<U>::SimdCount, int> = 0>
-    static decltype(auto) Access(std::remove_const_t<U>& val, size_t)
+    template <size_t N, size_t ScalarStride, typename WorkingType, typename  U,
+              std::enable_if_t<1 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+    static auto Access(U&& val, size_t)
     {
-        return (val);
+        return static_cast<vec_type_t<WorkingType>>(val);
     }
 
-    template <size_t N, size_t ScalarStride, typename U,
-              std::enable_if_t<1 == len_trait<U>::SimdCount, int> = 0,
-              std::enable_if_t<ScalarStride == 16 || ScalarStride == SimdTypeTraits<vec_type_t<U>>::width,int> = 0>
-    static auto Access(const U& val, size_t)
-    {
-        return val;
-    }
-
-    template <size_t N, size_t ScalarStride, typename U,
-              std::enable_if_t<1 == len_trait<U>::SimdCount, int> = 0,
-              std::enable_if_t<ScalarStride == 2*SimdTypeTraits<vec_type_t<U>>::width,int> = 0>
-    static auto Access(const U& val, size_t)
-    {
-        auto ret = vec_type_t<U>(val);
-        return MyPair<decltype(ret)>(ret, ret);
-    }
-
-    template <size_t N, size_t N2, typename U>
+    template <size_t N, size_t N2, typename WorkingType, typename U>
     static decltype(auto) Access(const ArrayUnion<U>& t, size_t idx)
     {
-        return Access<N,N2>(t.Simd(), idx);
+        return Access<N,N2, WorkingType>(t.Simd(), idx);
     }
 
     template <typename F, typename...Args, std::enable_if_t<sizeof...(Args) != 0, int> = 0 >
     BaseArray(F&& f, const Args&... args)
     {
-        static constexpr auto loopMax = MinSimdCount<Child, Args...>();
+        static_assert(sizeof...(Args) > 0, "");
+        static constexpr auto loopMax = std::min(MaxSimdCount<Args...>(), Child::SimdCount);
         static constexpr auto ScalarStride = ScalarCount / loopMax;
+        using WorkingType = magic2<Args...>;//std::common_type_t<ScalarType<std::decay_t<Args>>...>;
         for (size_t i = 0; i < loopMax; ++i)
         {
-            Access<loopMax, ScalarStride>(*this, i) = f(Access<loopMax, ScalarStride>(args, i)...);
+            Access<loopMax, ScalarStride, Noop>(static_cast<Child&>(*this), i) = f(Access<loopMax, ScalarStride, WorkingType>(args, i)...);
         }
     }
 
     template <typename F, typename...Args>
     Child& Update(F&& f, const Args&... args)
     {
-        static constexpr auto loopMax = MinSimdCount<Child, Args...>();
+        static constexpr auto loopMax = MaxSimdCount<Child, Args...>();
         static constexpr auto ScalarStride = ScalarCount / loopMax;
+        using WorkingType = ScalarType<Child>;
         for (size_t i = 0; i < loopMax; ++i)
         {
-            f(Access<loopMax, ScalarStride>(*this, i), Access<loopMax, ScalarStride>(args, i)...);
+            f(Access<loopMax, ScalarStride, WorkingType>(static_cast<Child&>(*this), i), Access<loopMax, ScalarStride, WorkingType>(args, i)...);
         }
         return static_cast<Child&>(*this);
     }
@@ -384,19 +496,23 @@ public:
     template <typename F, typename Ret, typename...Args>
     static Ret Reduce(F&& f, Ret initial, const Args&... args)
     {
-        static constexpr auto loopMax = MinSimdCount<Args...>();
+        static constexpr auto loopMax = MaxSimdCount<Child, Args...>();
         static constexpr auto ScalarStride = ScalarCount / loopMax;
+        using WorkingType = ScalarType<Child>;
 
         Ret ret = initial;
         for (size_t i = 0; i < loopMax; ++i)
         {
-            f(ret, Access<loopMax, ScalarStride>(args, i)...);
+            f(ret, Access<loopMax, ScalarStride, WorkingType>(args, i)...);
         }
         return ret;
     }
 
     // TODO clean and check assembly
     // TODO remove implicit?
+    template <
+        typename U = ScalarType<T>,
+        std::enable_if_t<!std::is_same<bool, U>::value, int> = 0>
     operator Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>() const
     {
         Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ret;
@@ -418,7 +534,6 @@ public:
         }
         return ret;
     }
-
 
     const std::array<T, SimdCount>& data() const
     {
@@ -446,6 +561,30 @@ public:
     using SimdType = typename Base::SimdType;
     using Base::Update;
     using Base::Reduce;
+    using Base::data;
+
+    LaneMask() = default;
+    LaneMask(const Cuda::Utility::CudaArray<bool, ScalarCount_>& arr)
+    {
+        for (size_t i = 0; i < SimdCount; ++i)
+        {
+            auto start = i * SimdWidth;
+            data()[i] = m512b(arr[start+0],  arr[start+1],  arr[start+2],  arr[start+3],
+                              arr[start+4],  arr[start+5],  arr[start+6],  arr[start+7],
+                              arr[start+8],  arr[start+9],  arr[start+10], arr[start+11],
+                              arr[start+12], arr[start+13], arr[start+14], arr[start+15]);
+        }
+    }
+
+    explicit operator Cuda::Utility::CudaArray<bool, ScalarCount_>() const
+    {
+        Cuda::Utility::CudaArray<bool, ScalarCount_> ret;
+        for (size_t i = 0; i < ScalarCount_; ++i)
+        {
+            ret[i] = (*this)[i];
+        }
+        return ret;
+    }
 
 public:
     friend bool all(const LaneMask& m)
@@ -546,34 +685,34 @@ public:
             c);
     }
 
-    template <typename T1, typename T2, typename common = magic4<T1, T2, Child>>
-    friend Child operator -(const T1& l, const T2& r)
+    template <typename T1, typename T2>
+    friend auto operator -(const T1& l, const T2& r) -> SmartReturn<T1, T2, Child>
     {
-        return Child(
+        return SmartReturn<T1, T2, Child>(
             [](auto&& l2, auto&& r2){ return l2 - r2;},
             l, r);
     }
 
-    template <typename T1, typename T2, typename common = magic4<T1, T2, Child>>
-    friend Child operator *(const T1& l, const T2& r)
+    template <typename T1, typename T2>
+    friend auto operator *(const T1& l, const T2& r) -> SmartReturn<T1, T2, Child>
     {
-        return Child(
+        return SmartReturn<T1, T2, Child>(
             [](auto&& l2, auto&& r2){ return l2 * r2;},
             l, r);
     }
 
-    template <typename T1, typename T2, typename common = magic4<T1, T2, Child>>
-    friend Child operator /(const T1& l, const T2& r)
+    template <typename T1, typename T2>
+    friend auto operator /(const T1& l, const T2& r) -> SmartReturn<T1, T2, Child>
     {
-        return Child(
+        return SmartReturn<T1, T2, Child>(
             [](auto&& l2, auto&& r2){ return l2 / r2;},
             l, r);
     }
 
-    template <typename T1, typename T2, typename common = magic4<T1, T2, Child>>
-    friend Child operator +(const T1& l, const T2& r)
+    template <typename T1, typename T2>
+    friend auto operator +(const T1& l, const T2& r) -> SmartReturn<T1, T2, Child>
     {
-        return Child(
+        return SmartReturn<T1, T2, Child>(
             [](auto&& l2, auto&& r2){ return l2 + r2;},
             l, r);
     }
@@ -658,6 +797,11 @@ public:
             b, c1, c2);
     }
 
+    friend Child inc(const Child& in, const LaneMask<ScalarCount>& mask)
+    {
+        return Blend(mask, in + static_cast<ScalarType<T>>(1), in);
+    }
+
     struct minOp
     {
         Child operator()(const Child& a, const Child& b)
@@ -677,6 +821,7 @@ using ArithmeticBase = ArithmeticArray<vec_type_t<T>, vec_count<T, ScalarCount>:
 template <size_t ScalarCount>
 class LaneArray<float, ScalarCount> : public ArithmeticBase<float, ScalarCount, LaneArray>
 {
+    static_assert(ScalarCount == 64, "");
     using Base = ArithmeticBase<float, ScalarCount, LaneArray>;
 public:
     using Base::Base;
@@ -743,7 +888,6 @@ public:
             [](auto&& in2){ return floorCastInt(in2); },
             in);
     }
-
 };
 
 template <size_t ScalarCount>
@@ -768,12 +912,6 @@ class LaneArray<int16_t, ScalarCount> : public ArithmeticBase<int16_t, ScalarCou
     using Base = ArithmeticBase<int16_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
-
-    friend LaneArray inc(const LaneArray& in, const LaneMask<ScalarCount>& mask)
-    {
-        // TODO add scalar arithmetic.  This promotes to a full vector
-        return Blend(mask, in + (short)1, in);
-    }
 };
 
 template <size_t Len>
@@ -837,6 +975,14 @@ struct len_trait<LaneMask<Len>>
     static constexpr size_t SimdWidth = LaneMask<Len>::SimdWidth;
 };
 
+template <typename T>
+struct len_trait<ArrayUnion<T>>
+{
+    static constexpr size_t SimdCount = len_trait<T>::SimdCount;
+    static constexpr size_t ScalarCount = len_trait<T>::ScalarCount;
+    static constexpr size_t SimdWidth = len_trait<T>::SimdWidth;
+};
+
 }}      // namespace PacBio::Mongo
 
 
@@ -858,6 +1004,13 @@ template <typename T, size_t N>
 struct SimdTypeTraits<Mongo::LaneArray<T,N>>
 {
     typedef T scalar_type;
+    static const uint16_t width = N;
+};
+
+template <size_t N>
+struct SimdTypeTraits<Mongo::LaneMask<N>>
+{
+    typedef bool scalar_type;
     static const uint16_t width = N;
 };
 

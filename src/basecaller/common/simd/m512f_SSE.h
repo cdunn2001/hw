@@ -73,7 +73,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512f() {}
+    m512f() = default;
         
     // Replicate scalar x across v.
     m512f(float x)
@@ -124,7 +124,7 @@ public:     // Structors
 
 public:     // Assignment
     m512f& operator=(const m512f& x) = default;
-        
+
     // Assignment from scalar value
     m512f& operator=(float fv)
     {
@@ -135,7 +135,7 @@ public:     // Assignment
 
         return *this;
     }
-        
+
     // Compound assignment operators
     m512f& operator+=(const m512f& x)
     {
@@ -145,7 +145,7 @@ public:     // Assignment
         data.simd[3] = _mm_add_ps(this->data.simd[3], x.data.simd[3]);
         return *this;
     }
-        
+
     m512f& operator-=(const m512f& x)
     {
         data.simd[0] = _mm_sub_ps(this->data.simd[0], x.data.simd[0]);
@@ -154,7 +154,7 @@ public:     // Assignment
         data.simd[3] = _mm_sub_ps(this->data.simd[3], x.data.simd[3]);
         return *this;
     }
-        
+
     m512f& operator*=(const m512f& x)
     {
         data.simd[0] = _mm_mul_ps(this->data.simd[0], x.data.simd[0]);
@@ -163,7 +163,7 @@ public:     // Assignment
         data.simd[3] = _mm_mul_ps(this->data.simd[3], x.data.simd[3]);
         return *this;
     }
-        
+
     m512f& operator/=(const m512f& x)
     {
         data.simd[0] = _mm_div_ps(this->data.simd[0], x.data.simd[0]);
@@ -268,6 +268,14 @@ public:     // Non-member (friend) functions
                      _mm_cmpeq_ps(l.data.simd[3], r.data.simd[3]));
     }
 
+    friend m512b operator != (const m512f &l, const m512f &r)
+    {
+        return m512b(_mm_cmpneq_ps(l.data.simd[0], r.data.simd[0]),
+                     _mm_cmpneq_ps(l.data.simd[1], r.data.simd[1]),
+                     _mm_cmpneq_ps(l.data.simd[2], r.data.simd[2]),
+                     _mm_cmpneq_ps(l.data.simd[3], r.data.simd[3]));
+    }
+
     friend m512b operator > (const m512f &l, const m512f &r)
     {
         return m512b(_mm_cmpgt_ps(l.data.simd[0], r.data.simd[0]),
@@ -306,7 +314,7 @@ public:     // Non-member (friend) functions
                      _mm_add_ps(l.data.simd[2], r.data.simd[2]),
                      _mm_add_ps(l.data.simd[3], r.data.simd[3]));
     }
-        
+
     friend m512f operator - (const m512f &l, const m512f &r)
     {
         return m512f(_mm_sub_ps(l.data.simd[0], r.data.simd[0]),
@@ -314,7 +322,7 @@ public:     // Non-member (friend) functions
                      _mm_sub_ps(l.data.simd[2], r.data.simd[2]),
                      _mm_sub_ps(l.data.simd[3], r.data.simd[3]));
     }
-        
+
     friend m512f operator * (const m512f &l, const m512f &r)
     {
         return m512f(_mm_mul_ps(l.data.simd[0], r.data.simd[0]),
@@ -322,7 +330,7 @@ public:     // Non-member (friend) functions
                      _mm_mul_ps(l.data.simd[2], r.data.simd[2]),
                      _mm_mul_ps(l.data.simd[3], r.data.simd[3]));
     }
-        
+
     friend m512f operator / (const m512f &l, const m512f &r)
     {
         return m512f(_mm_div_ps(l.data.simd[0], r.data.simd[0]),
@@ -332,7 +340,7 @@ public:     // Non-member (friend) functions
     }
 
     friend m512b isnan(const m512f& x)
-    { 
+    {
         const auto ff = m512f(-1.0f);
         return m512b(_mm_andnot_ps(_mm_cmpord_ps(x.data.simd[0], x.data.simd[0]), ff.data.simd[0]),
                      _mm_andnot_ps(_mm_cmpord_ps(x.data.simd[1], x.data.simd[1]), ff.data.simd[1]),
@@ -640,7 +648,7 @@ public:     // Non-member (friend) functions
     }
 
     friend m512f add(const m512f& a, const m512f& b, const m512b& mask)
-    { 
+    {
         return Blend(mask, a + b, a);
     }
 

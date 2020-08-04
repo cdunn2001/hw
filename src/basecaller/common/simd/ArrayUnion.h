@@ -89,6 +89,13 @@ private:
     std::array<Scalar_T, SimdTypeTraits<T>::width> elements;
 };
 
+template <typename T>
+struct SimdTypeTraits<ArrayUnion<T>>
+{
+    using scalar_type = ScalarType<T>;
+    static const uint16_t width = SimdTypeTraits<T>::width;
+};
+
 }}      // namespace PacBio::Simd
 
 #endif // mongo_common_simd_ArrayUnion_H_

@@ -79,7 +79,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512i() {}
+    m512i() = default;
 
     // Replicate scalar x across v.
     m512i(int x)
@@ -175,6 +175,24 @@ public:     // Assignment
         data.simd[2] = _mm_mullo_epi32(this->data.simd[2], x.data.simd[2]);
         data.simd[3] = _mm_mullo_epi32(this->data.simd[3], x.data.simd[3]);
         return *this;
+    }
+
+    m512i& operator/=(const m512i& x)
+    {
+        data.simd[0] = _mm_div_epi32(this->data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_div_epi32(this->data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_div_epi32(this->data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_div_epi32(this->data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512i operator-() const
+    {
+        const auto zero = _mm_setzero_si128();
+        return m512i(_mm_sub_epi32(zero, data.simd[0]),
+                     _mm_sub_epi32(zero, data.simd[1]),
+                     _mm_sub_epi32(zero, data.simd[2]),
+                     _mm_sub_epi32(zero, data.simd[3]));
     }
 
     // Return a scalar value

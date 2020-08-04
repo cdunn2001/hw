@@ -46,68 +46,6 @@
 namespace PacBio {
 namespace Simd {
 
-template <typename T>
-struct PairRef
-{
-    PairRef(T& t1, T& t2) : first(t1), second(t2) {}
-    PairRef(const std::pair<T, T>& p) : first(p.first), second(p.second) {}
-
-    template <typename Other,
-              bool IsConst = std::is_const<T>::value,
-              bool isPair = std::is_same<Other, std::pair<T,T>>::value,
-              bool isRef = std::is_base_of<PairRef<const T>, Other>::value,
-              std::enable_if_t<!IsConst && (isPair || isRef),int> = 0>
-    PairRef& operator=(const Other& other)
-    {
-        first = other.first;
-        second = other.second;
-        return *this;
-    }
-
-    friend std::pair<m512b, m512b> operator!=(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first != t2.first, t1.second != t2.second};
-    }
-
-    friend std::pair<m512b, m512b> operator==(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first == t2.first, t1.second == t2.second};
-    }
-
-    friend std::pair<m512b, m512b> operator>(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first > t2.first, t1.second > t2.second};
-    }
-    friend std::pair<m512b, m512b> operator>=(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first >= t2.first, t1.second >= t2.second};
-    }
-    friend std::pair<m512b, m512b> operator<(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first < t2.first, t1.second < t2.second};
-    }
-    friend std::pair<m512b, m512b> operator<=(const PairRef<T>& t1, const PairRef<T>& t2)
-    {
-        return  {t1.first <= t2.first, t1.second <= t2.second};
-    }
-
-    T& first;
-    T& second;
-};
-
-template <typename T>
-struct MyPair : PairRef<const T>
-{
-    MyPair() : PairRef<const T>(t1_, t2_) {}
-    MyPair(const T t1, const T t2) : PairRef<const T>(t1_, t2_), t1_(t1) , t2_(t2)
-    {}
-
-    T t1_;
-    T t2_;
-};
-
-
-
 // SIMD 512-bit short vector (32 packed 16-bit short int values).
 CLASS_ALIGNAS(16) m512s
 {
@@ -136,7 +74,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512s() {}
+    m512s() = default;
 
     // Replicate scalar x across v.
     m512s(short x)
@@ -180,9 +118,14 @@ public:     // Structors
         : m512s(m512i(low), m512i(high))
     {}
 
-    operator MyPair<m512i>() const
+    operator std::pair<m512i, m512i>() const
     {
         return {LowInts(*this), HighInts(*this)};
+    }
+
+    operator std::pair<m512f, m512f>() const
+    {
+        return {LowFloats(*this), HighFloats(*this)};
     }
 
 public:     // Assignment
@@ -198,8 +141,7 @@ public:     // Assignment
         return *this;
     }
 
-    // unsaturated addition
-    m512s& AddWithRollOver(const m512s& x)
+    m512s& operator+=(const m512s& x)
     {
         data.simd[0] = _mm_add_epi16(this->data.simd[0], x.data.simd[0]);
         data.simd[1] = _mm_add_epi16(this->data.simd[1], x.data.simd[1]);
@@ -208,9 +150,40 @@ public:     // Assignment
         return *this;
     }
 
-    m512s& operator+=(const m512s& x)
+    m512s& operator-=(const m512s& x)
     {
-        return AddWithRollOver(x);
+        data.simd[0] = _mm_sub_epi16(this->data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_sub_epi16(this->data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_sub_epi16(this->data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_sub_epi16(this->data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512s& operator*=(const m512s& x)
+    {
+        data.simd[0] = _mm_mullo_epi16(this->data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_mullo_epi16(this->data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_mullo_epi16(this->data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_mullo_epi16(this->data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512s& operator/=(const m512s& x)
+    {
+        data.simd[0] = _mm_div_epi16(this->data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_div_epi16(this->data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_div_epi16(this->data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_div_epi16(this->data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512s operator-() const
+    {
+        const auto zero = _mm_setzero_si128();
+        return m512s(_mm_sub_epi16(zero, data.simd[0]),
+                     _mm_sub_epi16(zero, data.simd[1]),
+                     _mm_sub_epi16(zero, data.simd[2]),
+                     _mm_sub_epi16(zero, data.simd[3]));
     }
 
     // Return a scalar value
@@ -300,6 +273,7 @@ public:     // Conversion methods
                      _mm_cvtepi32_ps(Ch1_32(in.data.simd[2])),
                      _mm_cvtepi32_ps(Ch1_32(in.data.simd[3])));
     }
+
     // Converts index 0-15 into a m512f
     friend m512f LowFloats(const m512s& in)
     {
@@ -373,22 +347,20 @@ public:     // Non-member (friend) functions
                      _mm_or_si128(l.data.simd[3], r.data.simd[3]));
     }
 
-    // saturated addition
     friend m512s operator + (const m512s &l, const m512s &r)
     {
-        return m512s(_mm_adds_epi16(l.data.simd[0], r.data.simd[0]),
-                     _mm_adds_epi16(l.data.simd[1], r.data.simd[1]),
-                     _mm_adds_epi16(l.data.simd[2], r.data.simd[2]),
-                     _mm_adds_epi16(l.data.simd[3], r.data.simd[3]));
+        return m512s(_mm_add_epi16(l.data.simd[0], r.data.simd[0]),
+                     _mm_add_epi16(l.data.simd[1], r.data.simd[1]),
+                     _mm_add_epi16(l.data.simd[2], r.data.simd[2]),
+                     _mm_add_epi16(l.data.simd[3], r.data.simd[3]));
     }
 
-    // saturated substraction
     friend m512s operator - (const m512s &l, const m512s &r)
     {
-        return m512s(_mm_subs_epi16(l.data.simd[0], r.data.simd[0]),
-                     _mm_subs_epi16(l.data.simd[1], r.data.simd[1]),
-                     _mm_subs_epi16(l.data.simd[2], r.data.simd[2]),
-                     _mm_subs_epi16(l.data.simd[3], r.data.simd[3]));
+        return m512s(_mm_sub_epi16(l.data.simd[0], r.data.simd[0]),
+                     _mm_sub_epi16(l.data.simd[1], r.data.simd[1]),
+                     _mm_sub_epi16(l.data.simd[2], r.data.simd[2]),
+                     _mm_sub_epi16(l.data.simd[3], r.data.simd[3]));
     }
 
     /// Multiply: overflow returns the low 16 bits of the 32-bit result.
@@ -434,48 +406,48 @@ public:     // Non-member (friend) functions
         return m512b{low1, high1, low2, high2};
     }
 
-    friend MyPair<m512b> operator!=(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator!=(const m512s& a, const m512s& b)
     {
-        MyPair<m512b> ret;
-        ret.t1_ = help(~_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+        std::pair<m512b, m512b> ret;
+        ret.first = help(~_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
                          ~_mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.t2_= help(~_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.second= help(~_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
                          ~_mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend MyPair<m512b> operator==(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator==(const m512s& a, const m512s& b)
     {
-        MyPair<m512b> ret;
-        ret.t1_ = help(_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmpeq_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmpeq_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.t2_= help(_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.second= help(_mm_cmpeq_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmpeq_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend MyPair<m512b> operator>(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator>(const m512s& a, const m512s& b)
     {
-        MyPair<m512b> ret;
-        ret.t1_ = help(_mm_cmpgt_epi16(a.data.simd[0], b.data.simd[0]),
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmpgt_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmpgt_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.t2_= help(_mm_cmpgt_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.second= help(_mm_cmpgt_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmpgt_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend MyPair<m512b> operator<(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator<(const m512s& a, const m512s& b)
     {
-        MyPair<m512b> ret;
-        ret.t1_ = help(_mm_cmplt_epi16(a.data.simd[0], b.data.simd[0]),
+        std::pair<m512b, m512b> ret;
+        ret.first = help(_mm_cmplt_epi16(a.data.simd[0], b.data.simd[0]),
                          _mm_cmplt_epi16(a.data.simd[1], b.data.simd[1]));
-        ret.t2_= help(_mm_cmplt_epi16(a.data.simd[2], b.data.simd[2]),
+        ret.second= help(_mm_cmplt_epi16(a.data.simd[2], b.data.simd[2]),
                          _mm_cmplt_epi16(a.data.simd[3], b.data.simd[3]));
         return ret;
     }
-    friend MyPair<m512b> operator<=(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator<=(const m512s& a, const m512s& b)
     {
         auto tmp = (a > b);
         return {!tmp.first, !tmp.second};
     }
-    friend MyPair<m512b> operator>=(const m512s& a, const m512s& b)
+    friend std::pair<m512b, m512b> operator>=(const m512s& a, const m512s& b)
     {
         auto tmp = (a < b);
         return {!tmp.first, !tmp.second};
