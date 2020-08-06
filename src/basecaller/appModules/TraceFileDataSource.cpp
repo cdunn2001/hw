@@ -92,24 +92,30 @@ TraceFileDataSource::TraceFileDataSource(
     if (numZmwLanes_ == 0) numZmwLanes_ = numTraceLanes_;
     if (numChunks_ == 0) numChunks_ = numTraceChunks_;
 
+    // Adjust number of lanes and chunks we read from the trace files
+    // if requested lanes and chunks is less to only cache what we need.
+    numTraceLanes_ = std::min(numZmwLanes_, numTraceLanes_);
+    numTraceChunks_ = std::min(numChunks_, numTraceChunks_);
+
     if (cache_)
     {
         // Cache entire file into memory.
-        traceDataCache_.resize(numTraceLanes_*BlockWidth()*numTraceChunks_*BlockLen());
-        for (size_t traceLane = 0; traceLane < numTraceLanes_; traceLane++)
+
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen());
+        for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
         {
-            for (size_t traceChunk = 0; traceChunk < numTraceChunks_; traceChunk++)
+            for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
                 ReadBlockFromTraceFile(traceLane, traceChunk,
-                                       traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*numTraceChunks_)+traceChunk)));
+                                       traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*NumTraceChunks())+traceChunk)));
             }
         }
     }
     else
     {
         // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
-        traceDataCache_.resize(numTraceLanes_*BlockWidth()*BlockLen());
-        laneCurrentChunk_.resize(numTraceLanes_, std::numeric_limits<size_t>::max());
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*BlockLen());
+        laneCurrentChunk_.resize(NumTraceLanes(), std::numeric_limits<size_t>::max());
     }
 
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
@@ -193,7 +199,7 @@ void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, int
     if (cache_)
     {
         std::memcpy(data,
-                    traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*numTraceChunks_)+traceChunk)),
+                    traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*NumTraceChunks())+traceChunk)),
                     BlockLen()*BlockWidth()*sizeof(int16_t));
     }
     else
@@ -213,17 +219,18 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
 {
     size_t nZmwsToRead = std::min(BlockWidth(), NumTraceZmws() - (traceLane*BlockWidth()));
     size_t nFramesToRead = std::min(BlockLen(), NumTraceFrames() - (traceChunk*BlockLen()));
-    std::vector<int16_t> pixels(nZmwsToRead*nFramesToRead);
     using range = boost::multi_array_types::extent_range;
     const range zmwRange(traceLane*BlockWidth(), (traceLane*BlockWidth()) + nZmwsToRead);
     const range frameRange(traceChunk*BlockLen(), (traceChunk*BlockLen()) + nFramesToRead);
-    boost::multi_array_ref<int16_t,2> d{pixels.data(), boost::extents[zmwRange][frameRange]};
+    boost::multi_array<int16_t,2> d{boost::extents[zmwRange][frameRange]};
+    boost::multi_array_ref<int16_t,2> out{data, boost::extents[nFramesToRead][nZmwsToRead]};
     traceFile_.Traces().ReadTraceBlock(d);
-    for (size_t z = 0; z < nZmwsToRead; z++)
+    d.reindex(0);
+    for (size_t zmw = 0; zmw < nZmwsToRead; zmw++)
     {
-        for (size_t f = 0; f < nFramesToRead; f++)
+        for (size_t frame = 0; frame < nFramesToRead; frame++)
         {
-            data[(f*BlockWidth())+z] = pixels[(z*nFramesToRead)+f];
+            out[frame][zmw] = d[zmw][frame];
         }
     }
     if (nZmwsToRead*nFramesToRead < BlockWidth()*BlockLen())
@@ -232,7 +239,7 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
         {
             for (size_t zmw = nZmwsToRead; zmw < BlockWidth(); zmw++)
             {
-                data[(frame*BlockWidth())+zmw] = 0;
+                out[frame][zmw] = 0;
             }
         }
     }
