@@ -92,22 +92,23 @@ TraceFileDataSource::TraceFileDataSource(
     if (numZmwLanes_ == 0) numZmwLanes_ = numTraceLanes_;
     if (numChunks_ == 0) numChunks_ = numTraceChunks_;
 
-    // Adjust number of lanes and chunks we read from the trace files
+    // Adjust number of lanes and chunks we read from the trace file
     // if requested lanes and chunks is less to only cache what we need.
     numTraceLanes_ = std::min(numZmwLanes_, numTraceLanes_);
     numTraceChunks_ = std::min(numChunks_, numTraceChunks_);
 
     if (cache_)
     {
-        // Cache entire file into memory.
-
+        // Cache requested portion of trace file into memory.
         traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen());
         for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
         {
             for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
                 ReadBlockFromTraceFile(traceLane, traceChunk,
-                                       traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*NumTraceChunks())+traceChunk)));
+                                       traceDataCache_.data() +
+                                       (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
+                                       (traceChunk*BlockWidth()*BlockLen()));
             }
         }
     }
@@ -199,7 +200,9 @@ void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, int
     if (cache_)
     {
         std::memcpy(data,
-                    traceDataCache_.data()+((BlockWidth()*BlockLen())*((traceLane*NumTraceChunks())+traceChunk)),
+                    traceDataCache_.data() +
+                    (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
+                    (traceChunk*BlockWidth()*BlockLen()),
                     BlockLen()*BlockWidth()*sizeof(int16_t));
     }
     else
