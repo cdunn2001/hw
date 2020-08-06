@@ -346,8 +346,18 @@ template<> Params<short> LaneArrayHomogeneousTypes<short>::params_{
     LinearArray<short>{-20, 9},
         -4,
         18};
+template<> Params<uint32_t> LaneArrayHomogeneousTypes<uint32_t>::params_{
+    LinearArray<uint32_t>{3, 91},
+    LinearArray<uint32_t>{17, 22},
+        3,
+        7};
+template<> Params<uint16_t> LaneArrayHomogeneousTypes<uint16_t>::params_{
+    LinearArray<uint16_t>{10, 3},
+    LinearArray<uint16_t>{20, 9},
+        4,
+        18};
 
-using ArrTypes = ::testing::Types<short, int, float>;
+using ArrTypes = ::testing::Types<short, int, float, uint16_t, uint32_t>;
 TYPED_TEST_SUITE(LaneArrayHomogeneousTypes, ArrTypes);
 
 TYPED_TEST(LaneArrayHomogeneousTypes, Arithmetic)
@@ -357,8 +367,6 @@ TYPED_TEST(LaneArrayHomogeneousTypes, Arithmetic)
 
     const auto v1 = IncreasingLaneArray<T>(params.vec1.initial, params.vec1.stride);
     const auto v2 = IncreasingLaneArray<T>(params.vec2.initial, params.vec2.stride);
-
-    EXPECT_TRUE(all(-v1 == IncreasingLaneArray<T>(-params.vec1.initial, -params.vec1.stride)));
 
     {
         LaneMask<laneSize> mask(AlternatingBools());
@@ -559,28 +567,38 @@ TEST(LaneArray, IntOps)
     EXPECT_TRUE(ValidateOp<std::bit_or<int>>(a | b, a, b));
 }
 
-TEST(LaneArray, ValidConversions)
+TEST(LaneArray, OperationResultTypes)
 {
     LaneArray<float, laneSize> fltArr;
-    LaneArray<int, laneSize> intArr;
-    LaneArray<short, laneSize> shortArr;
+    LaneArray<int32_t, laneSize> intArr;
+    LaneArray<uint32_t, laneSize> uintArr;
+    LaneArray<int16_t, laneSize> shortArr;
+    LaneArray<uint16_t, laneSize> ushortArr;
 
     auto CheckType = [](auto&& result, auto&& expected)
     {
-        return std::is_same<std::decay_t<decltype(result)>, std::decay_t<decltype(result)>>::value;
+        return std::is_same<std::decay_t<decltype(result)>, std::decay_t<decltype(expected)>>::value;
     };
 
     EXPECT_TRUE(CheckType(fltArr*fltArr,   LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(intArr*fltArr,   LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(fltArr*intArr,   LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(uintArr*fltArr,   LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(fltArr*uintArr,   LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(shortArr*fltArr, LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(fltArr*shortArr, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(ushortArr*fltArr, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(fltArr*ushortArr, LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(1.0f*fltArr,     LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(fltArr*1.0f,     LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(1*fltArr,        LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(fltArr*1,        LaneArray<float, laneSize>{}));
-    EXPECT_TRUE(CheckType((short)1*fltArr, LaneArray<float, laneSize>{}));
-    EXPECT_TRUE(CheckType(fltArr*(short)1, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(1u*fltArr,        LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(fltArr*1u,        LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType((int16_t)1*fltArr, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(fltArr*(int16_t)1, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType((uint16_t)1*fltArr, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(fltArr*(uint16_t)1, LaneArray<float, laneSize>{}));
 
     EXPECT_TRUE(CheckType(intArr*intArr,   LaneArray<int, laneSize>{}));
     EXPECT_TRUE(CheckType(shortArr*intArr, LaneArray<int, laneSize>{}));
@@ -590,17 +608,268 @@ TEST(LaneArray, ValidConversions)
     EXPECT_TRUE(CheckType((short)1*intArr, LaneArray<int, laneSize>{}));
     EXPECT_TRUE(CheckType(intArr*(short)1, LaneArray<int, laneSize>{}));
 
+    EXPECT_TRUE(CheckType(uintArr*uintArr,   LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(ushortArr*uintArr, LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(uintArr*ushortArr, LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(1u*uintArr,        LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(uintArr*1u,        LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType((unsigned short)1*uintArr, LaneArray<uint32_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(uintArr*(unsigned short)1, LaneArray<uint32_t, laneSize>{}));
+
     EXPECT_TRUE(CheckType(shortArr*shortArr, LaneArray<short, laneSize>{}));
     EXPECT_TRUE(CheckType(short(1)*shortArr, LaneArray<short, laneSize>{}));
     EXPECT_TRUE(CheckType(shortArr*short(1), LaneArray<short, laneSize>{}));
 
+    EXPECT_TRUE(CheckType(ushortArr*ushortArr, LaneArray<uint16_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(uint16_t(1)*ushortArr, LaneArray<uint16_t, laneSize>{}));
+    EXPECT_TRUE(CheckType(ushortArr*uint16_t(1), LaneArray<uint16_t, laneSize>{}));
+
     // This is the exception.  Don't let a scalar int promote a shortArray
     EXPECT_TRUE(CheckType(1*shortArr, LaneArray<short, laneSize>{}));
     EXPECT_TRUE(CheckType(shortArr*1, LaneArray<short, laneSize>{}));
+    EXPECT_TRUE(CheckType(1u*ushortArr, LaneArray<unsigned short, laneSize>{}));
+    EXPECT_TRUE(CheckType(ushortArr*1u, LaneArray<unsigned short, laneSize>{}));
 
     // Float scalars do always cause promotions still
     EXPECT_TRUE(CheckType(1.f*intArr,   LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(intArr*1.f,   LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(1.f*shortArr, LaneArray<float, laneSize>{}));
     EXPECT_TRUE(CheckType(shortArr*1.f, LaneArray<float, laneSize>{}));
+
+    EXPECT_TRUE(CheckType(1.f*uintArr,   LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(uintArr*1.f,   LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(1.f*ushortArr, LaneArray<float, laneSize>{}));
+    EXPECT_TRUE(CheckType(ushortArr*1.f, LaneArray<float, laneSize>{}));
+}
+
+// As long as we're just doing 2-s compliment and normal unsigned rollover,
+// there's really not much difference between signed and unsigned arithmetic.
+// A large portion of the potentially unsigned SIMD intrinsics don't even
+// exist (e.g. _mm512_add_epu32 doesn't exist, you're supposed to use
+// _mm512_add_epi32).  All we really need to check is comparisons, division,
+// and maybe a few conversions.
+TEST(LaneArray, SignedVsUnsignedIntegers)
+{
+    LaneArray<int16_t, laneSize> shortSignedZero{0};
+    LaneArray<int16_t, laneSize> shortSignedNeg1{static_cast<int16_t>(-1)};
+    LaneArray<int16_t, laneSize> shortSignedNeg2{static_cast<int16_t>(-2)};
+
+    LaneArray<int32_t, laneSize> intSignedZero{0};
+    LaneArray<int32_t, laneSize> intSignedNeg1{static_cast<int32_t>(-1)};
+    LaneArray<int32_t, laneSize> intSignedNeg2{static_cast<int32_t>(-2)};
+
+    // Force "rollover" with negatives, just to verify that the same byte
+    // pattern has different signed/unsigned results for some key operations
+    LaneArray<uint16_t, laneSize> shortUnsignedZero{0};
+    LaneArray<uint16_t, laneSize> shortUnsignedNeg1{static_cast<uint16_t>(-1)};
+    LaneArray<uint16_t, laneSize> shortUnsignedNeg2{static_cast<uint16_t>(-2)};
+
+    LaneArray<uint32_t, laneSize> intUnsignedZero{0};
+    LaneArray<uint32_t, laneSize> intUnsignedNeg1{static_cast<uint32_t>(-1)};
+    LaneArray<uint32_t, laneSize> intUnsignedNeg2{static_cast<uint32_t>(-2)};
+
+    // Check comparisons.  They are all implemented indpenedantly
+    // (e.g. > isn't the negation of >=), so we should check them all
+    EXPECT_TRUE(all(intSignedNeg1 < intSignedZero));
+    EXPECT_TRUE(all(intSignedNeg1 <= intSignedZero));
+    EXPECT_TRUE(none(intSignedNeg1 > intSignedZero));
+    EXPECT_TRUE(none(intSignedNeg1 >= intSignedZero));
+
+    EXPECT_TRUE(all(shortSignedNeg1 < shortSignedZero));
+    EXPECT_TRUE(all(shortSignedNeg1 <= shortSignedZero));
+    EXPECT_TRUE(none(shortSignedNeg1 > shortSignedZero));
+    EXPECT_TRUE(none(shortSignedNeg1 >= shortSignedZero));
+
+    EXPECT_TRUE(none(shortUnsignedNeg1 < shortUnsignedZero));
+    EXPECT_TRUE(none(shortUnsignedNeg1 <= shortUnsignedZero));
+    EXPECT_TRUE(all(shortUnsignedNeg1 > shortUnsignedZero));
+    EXPECT_TRUE(all(shortUnsignedNeg1 >= shortUnsignedZero));
+
+    EXPECT_TRUE(none(intUnsignedNeg1 < intUnsignedZero));
+    EXPECT_TRUE(none(intUnsignedNeg1 <= intUnsignedZero));
+    EXPECT_TRUE(all(intUnsignedNeg1 > intUnsignedZero));
+    EXPECT_TRUE(all(intUnsignedNeg1 >= intUnsignedZero));
+
+    // Now check division
+    EXPECT_TRUE(all(shortSignedNeg2 / shortSignedNeg1 == static_cast<int16_t>(2)));
+    EXPECT_TRUE(all(intSignedNeg2 / intSignedNeg1 == static_cast<int32_t>(2)));
+    EXPECT_TRUE(none(shortUnsignedNeg2 / shortUnsignedNeg1 == static_cast<uint16_t>(2)));
+    EXPECT_TRUE(none(intUnsignedNeg2 / intUnsignedNeg1 == static_cast<uint32_t>(2)));
+
+    // Make sure we have expected sign when going to a wider signed type like float.
+    EXPECT_TRUE(all(AsFloat(shortUnsignedNeg2) > 0.0f));
+    EXPECT_TRUE(all(AsFloat(shortSignedNeg2) < 0.0f));
+    EXPECT_TRUE(all(AsFloat(intUnsignedNeg2) > 0.0f));
+    EXPECT_TRUE(all(AsFloat(intSignedNeg2) < 0.0f));
+}
+
+// How do you write a unit test that checks to make sure certain code
+// *doesn't* compile?  Magic, that's how.  (Really by forcing dependant
+// contexts and relying on SFINAE)
+
+template <typename T> struct sink { using type = void; };
+template <typename T> using sink_t = typename sink<T>::type;
+
+template <template <typename, typename> class F, typename T1, typename T2, typename Result = void>
+struct CheckCompiles : public std::false_type {};
+template <template <typename, typename> class F, typename T1, typename T2>
+struct CheckCompiles<F, T1, T2, sink_t<F<T1, T2>>> : public std::true_type {};
+
+template <typename T1, typename T2>
+using Multiply = decltype(std::declval<const T1&>() * std::declval<const T2&>());
+
+struct MulOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() * std::declval<const T2&>());
+};
+struct DivOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() / std::declval<const T2&>());
+};
+struct SubOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() - std::declval<const T2&>());
+};
+struct AddOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() + std::declval<const T2&>());
+};
+struct MulEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<T1&>() *= std::declval<const T2&>());
+};
+struct DivEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<T1&>() /= std::declval<const T2&>());
+};
+struct SubEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<T1&>() -= std::declval<const T2&>());
+};
+struct AddEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<T1&>() += std::declval<const T2&>());
+};
+struct GtOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() > std::declval<const T2&>());
+};
+struct LtOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() < std::declval<const T2&>());
+};
+struct GtEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() >= std::declval<const T2&>());
+};
+struct LtEqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() <= std::declval<const T2&>());
+};
+struct EqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() == std::declval<const T2&>());
+};
+struct NeqOp {
+template <typename T1, typename T2>
+using type = decltype(std::declval<const T1&>() != std::declval<const T2&>());
+};
+
+template<class T>
+struct LaneArrayBinaryOps : public ::testing::Test {
+    using type = T;
+};
+using BinaryTypes = ::testing::Types<MulOp, DivOp, AddOp, SubOp,
+                                     LtOp, GtOp, LtEqOp, GtEqOp, EqOp, NeqOp>;
+TYPED_TEST_SUITE(LaneArrayBinaryOps, BinaryTypes);
+
+TYPED_TEST(LaneArrayBinaryOps, Valid)
+{
+    using Op = typename TestFixture::type;
+
+
+    // Helper function to do the scalar/vector combinatorics
+    auto PermuteScalarVector = [](bool expectedToCompile, auto&& t1, auto&& t2)
+    {
+        using T1 = std::decay_t<decltype(t1)>;
+        using T2 = std::decay_t<decltype(t2)>;
+        bool success = true;
+        success &= (!expectedToCompile) xor CheckCompiles<Op::template type, LaneArray<T1, laneSize>, LaneArray<T2, laneSize>>::value;
+        success &= (!expectedToCompile) xor CheckCompiles<Op::template type, T1, LaneArray<T2, laneSize>>::value;
+        success &= (!expectedToCompile) xor CheckCompiles<Op::template type, LaneArray<T1, laneSize>, T2>::value;
+        return success;
+    };
+    auto TestAllCombinations = [&](bool expectedToCompile, auto&& t1, auto&& t2)
+    {
+        return PermuteScalarVector(expectedToCompile, t1, t2)
+             & PermuteScalarVector(expectedToCompile, t2, t1);
+    };
+
+    EXPECT_TRUE(TestAllCombinations(true, float{}, float{}));
+    EXPECT_TRUE(TestAllCombinations(true, float{}, int32_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, float{}, uint32_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, float{}, int16_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, float{}, uint16_t{}));
+
+    EXPECT_TRUE(TestAllCombinations(true, int32_t{}, int32_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, int32_t{}, int16_t{}));
+
+    EXPECT_TRUE(TestAllCombinations(true, uint32_t{}, uint32_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, uint32_t{}, uint16_t{}));
+
+    EXPECT_TRUE(TestAllCombinations(true, uint16_t{}, uint16_t{}));
+    EXPECT_TRUE(TestAllCombinations(true, int16_t{}, int16_t{}));
+
+    // Now the expected failures.  These combinations should
+    // cause a compilation error
+    EXPECT_TRUE(TestAllCombinations(false, int32_t{}, uint32_t{}));
+    EXPECT_TRUE(TestAllCombinations(false, int32_t{}, uint16_t{}));
+
+    EXPECT_TRUE(TestAllCombinations(false, int16_t{}, uint16_t{}));
+}
+
+template<class T>
+struct LaneArrayCompoundOps : public ::testing::Test {
+    using type = T;
+};
+using BinaryTypesCompound = ::testing::Types<MulEqOp, DivEqOp, AddEqOp, SubEqOp>;
+
+TYPED_TEST_SUITE(LaneArrayCompoundOps, BinaryTypesCompound);
+
+TYPED_TEST(LaneArrayCompoundOps, Valid)
+{
+    using Op = typename TestFixture::type;
+
+    // Helper function to do the scalar/vector combinatorics
+    auto TestVecScalarCombinations = [](bool expectedToCompile, auto&& t1, auto&& t2)
+    {
+        using T1 = std::decay_t<decltype(t1)>;
+        using T2 = std::decay_t<decltype(t2)>;
+        bool success = true;
+        success &= (!expectedToCompile) xor CheckCompiles<Op::template type, LaneArray<T1, laneSize>, LaneArray<T2, laneSize>>::value;
+        success &= (!expectedToCompile) xor CheckCompiles<Op::template type, LaneArray<T1, laneSize>, T2>::value;
+        return success;
+    };
+
+    EXPECT_TRUE(TestVecScalarCombinations(true, float{}, float{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, float{}, int32_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, float{}, uint32_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, float{}, int16_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, float{}, uint16_t{}));
+
+    EXPECT_TRUE(TestVecScalarCombinations(true, int32_t{}, int32_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, int32_t{}, int16_t{}));
+
+    EXPECT_TRUE(TestVecScalarCombinations(true, uint32_t{}, uint32_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, uint32_t{}, uint16_t{}));
+
+    EXPECT_TRUE(TestVecScalarCombinations(true, uint16_t{}, uint16_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(true, int16_t{}, int16_t{}));
+
+    // Now the expected failures.  These combinations should
+    // cause a compilation error
+    EXPECT_TRUE(TestVecScalarCombinations(false, int32_t{}, uint32_t{}));
+    EXPECT_TRUE(TestVecScalarCombinations(false, int32_t{}, uint16_t{}));
+
+    EXPECT_TRUE(TestVecScalarCombinations(false, int16_t{}, uint16_t{}));
 }

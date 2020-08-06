@@ -285,6 +285,14 @@ public:     // Non-member (friend) functions
                      _mm_mullo_epi32(l.data.simd[3], r.data.simd[3]));
     }
 
+    friend m512i operator / (const m512i &l, const m512i &r)
+    {
+        return m512i(_mm_div_epi32(l.data.simd[0], r.data.simd[0]),
+                     _mm_div_epi32(l.data.simd[1], r.data.simd[1]),
+                     _mm_div_epi32(l.data.simd[2], r.data.simd[2]),
+                     _mm_div_epi32(l.data.simd[3], r.data.simd[3]));
+    }
+
     friend m512i operator & (const m512i& l, const m512i& r)
     {
         return m512i(_mm_and_si128(l.data.simd[0], r.data.simd[0]),
@@ -300,7 +308,7 @@ public:     // Non-member (friend) functions
                      _mm_or_si128(l.data.simd[2], r.data.simd[2]),
                      _mm_or_si128(l.data.simd[3], r.data.simd[3]));
     }
-    
+
     friend m512i operator ^ (const m512i& l, const m512i& r)
     {
         return m512i(_mm_xor_si128(l.data.simd[0], r.data.simd[0]),

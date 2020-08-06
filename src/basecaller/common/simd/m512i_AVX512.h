@@ -162,6 +162,7 @@ public:     // Non-member (friend) functions
     friend m512i operator + (const m512i& l, const m512i& r) { return m512i(_mm512_add_epi32(l.v, r.v)); }
     friend m512i operator - (const m512i& l, const m512i& r) { return m512i(_mm512_sub_epi32(l.v, r.v)); }
     friend m512i operator * (const m512i& l, const m512i& r) { return m512i(_mm512_mullo_epi32(l.v, r.v)); }
+    friend m512i operator / (const m512i& l, const m512i& r) { return m512i(_mm512_div_epi32(l.v, r.v)); }
 
     friend m512i operator & (const m512i& l, const m512i& r) { return m512i(_mm512_and_si512(l.v, r.v)); }
     friend m512i operator | (const m512i& l, const m512i& r) { return m512i(_mm512_or_si512(l.v, r.v)); }

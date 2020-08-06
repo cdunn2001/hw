@@ -75,7 +75,8 @@ public:     // Structors
 
     // Convenient for initializing from a simple integer, e.g., m512f(0).
     // Eigen 3.2.5 uses such expressions, which are ambiguous without this constructor.
-    m512f(int x) : m512f(static_cast<float>(x)) {}
+    m512f(int32_t x) : m512f(static_cast<float>(x)) {}
+    m512f(uint32_t x) : m512f(static_cast<float>(x)) {}
 
     // Load x from pointer px. px must be aligned to 16 bytes.
     m512f(const float *px) : v(_mm512_load_ps(px)) {}

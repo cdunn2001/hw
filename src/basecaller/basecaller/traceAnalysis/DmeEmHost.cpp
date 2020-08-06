@@ -223,7 +223,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
     // TODO should this really be int?
-    mldx.degOfFreedom = AsInt(numFrames) - nModelParams;
+    mldx.degOfFreedom = AsInt(numFrames) - int(nModelParams);
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]

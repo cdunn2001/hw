@@ -52,9 +52,6 @@ CLASS_ALIGNAS(16) m512s
 public:     // Types
     typedef m512s type;
 
-    using Iterator = short*;
-    using ConstIterator = const short*;
-
 public:     // Static constants
     /// The number of floats represented by one instance.
     static constexpr size_t size()
@@ -193,54 +190,6 @@ public:     // Assignment
         return data.raw[i];
     }
 
-public:     // Functor types
-
-    // Performs min on the first 16 elements and max on the last 16
-    struct minmax
-    {
-        m512s operator() (const m512s& a, const m512s& b)
-        {
-            return m512s(_mm_min_epi16(a.data.simd[0], b.data.simd[0]),
-                         _mm_min_epi16(a.data.simd[1], b.data.simd[1]),
-                         _mm_max_epi16(a.data.simd[2], b.data.simd[2]),
-                         _mm_max_epi16(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-    // Performs max on the first 16 elements and min on the last 16
-    struct maxmin
-    {
-        m512s operator() (const m512s& a, const m512s& b)
-        {
-            return m512s(_mm_max_epi16(a.data.simd[0], b.data.simd[0]),
-                         _mm_max_epi16(a.data.simd[1], b.data.simd[1]),
-                         _mm_min_epi16(a.data.simd[2], b.data.simd[2]),
-                         _mm_min_epi16(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct minOp
-    {
-        m512s operator() (const m512s& a, const m512s& b)
-        {
-            return m512s(_mm_min_epi16(a.data.simd[0], b.data.simd[0]),
-                         _mm_min_epi16(a.data.simd[1], b.data.simd[1]),
-                         _mm_min_epi16(a.data.simd[2], b.data.simd[2]),
-                         _mm_min_epi16(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct maxOp
-    {
-        m512s operator() (const m512s& a, const m512s& b)
-        {
-            return m512s(_mm_max_epi16(a.data.simd[0], b.data.simd[0]),
-                         _mm_max_epi16(a.data.simd[1], b.data.simd[1]),
-                         _mm_max_epi16(a.data.simd[2], b.data.simd[2]),
-                         _mm_max_epi16(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-
 public:     // Conversion methods
 
     friend m512s Blend(const m512b& bLow, const m512b& bHigh, const m512s& l, const m512s& r)
@@ -253,25 +202,6 @@ public:     // Conversion methods
             ret.data.raw[i+16] = bHigh[i] ? l[i+16] : r[i+16];
         }
         return ret;
-    }
-    /// Convert the even channel of an interleaved 2-channel layout to float.
-    friend m512f Channel0(const m512s& in)
-    {
-        // Convert the 32-bit representation of channel 0 to float
-        return m512f(_mm_cvtepi32_ps(Ch0_32(in.data.simd[0])),
-                     _mm_cvtepi32_ps(Ch0_32(in.data.simd[1])),
-                     _mm_cvtepi32_ps(Ch0_32(in.data.simd[2])),
-                     _mm_cvtepi32_ps(Ch0_32(in.data.simd[3])));
-    }
-
-    /// Convert the odd channel of an interleaved 2-channel layout to float.
-    friend m512f Channel1(const m512s& in)
-    {
-        // Convert the 32-bit representation of channel 0 to float
-        return m512f(_mm_cvtepi32_ps(Ch1_32(in.data.simd[0])),
-                     _mm_cvtepi32_ps(Ch1_32(in.data.simd[1])),
-                     _mm_cvtepi32_ps(Ch1_32(in.data.simd[2])),
-                     _mm_cvtepi32_ps(Ch1_32(in.data.simd[3])));
     }
 
     // Converts index 0-15 into a m512f
@@ -311,25 +241,6 @@ public:     // Conversion methods
 
 
 public:     // Non-member (friend) functions
-
-    friend std::ostream& operator << (std::ostream& stream, const m512s& vec)
-    {
-        const auto ch0 = Channel0(vec);
-        const auto ch1 = Channel1(vec);
-
-        stream << ch0[0] << ":" << ch1[0] << "\t" << ch0[1] << ":" << ch1[1]
-               << "\t" << ch0[2] << ":" << ch1[2] << "\t" << ch0[3] << ":"
-               << ch1[3] << "\t" << ch0[4] << ":" << ch1[4] << "\t" << ch0[5]
-               << ":" << ch1[5] << "\t" << ch0[6] << ":" << ch1[6] << "\t"
-               << ch0[7] << ":" << ch1[7] << "\t" << ch0[8] << ":" << ch1[8]
-               << "\t" << ch0[9] << ":" << ch1[9] << "\t" << ch0[10] << ":"
-               << ch1[10] << "\t" << ch0[11] << ":" << ch1[11] << "\t"
-               << ch0[12] << ":" << ch1[12] << "\t" << ch0[13] << ":" << ch1[13]
-               << "\t" << ch0[14] << ":" << ch1[14] << "\t" << ch0[15] << ":"
-               << ch1[15];
-
-        return stream;
-    }
 
     friend m512s operator & (const m512s &l, const m512s &r)
     {
@@ -452,24 +363,6 @@ public:     // Non-member (friend) functions
         auto tmp = (a < b);
         return {!tmp.first, !tmp.second};
     }
-
-private:    // Utility methods
-
-    /// Keep only the low 16 bits (even channel value) as a 32-bit integer; preverve sign.
-    static ImplType Ch0_32(ImplType in) { return _mm_srai_epi32(_mm_slli_epi32(in, 16), 16); }
-
-    /// Keep only the high 16 bits (odd channel values) as a 32-bit integer; preserve sign.
-    static ImplType Ch1_32(ImplType in) { return _mm_srai_epi32(in, 16); }
-
-    // Convert four packed floats to four packed 32-integer and prune to 16-bit integer,
-    // keeping them in the low 16 bits.
-    static ImplType FloatToCh0(__m128 in) { return _mm_srli_epi32(_mm_slli_epi32(
-            _mm_cvtps_epi32(_mm_round_ps(in, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)), 16), 16); }
-
-    // Convert four packed floats to four packed 32-integer and prune to 16-bit integer,
-    // keeping them in the high 16 bits.
-    static ImplType FloatToCh1(__m128 in) { return _mm_slli_epi32(
-            _mm_cvtps_epi32(_mm_round_ps(in, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)), 16); }
 };
 
 }}      // namespace PacBio::Simd

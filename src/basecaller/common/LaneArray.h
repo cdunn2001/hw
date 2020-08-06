@@ -52,11 +52,11 @@ struct vec_type;
 
 // TODO remove unsigned hack/lie
 template<> struct vec_type<float> { using type = m512f; };
-template<> struct vec_type<int>   { using type = m512i; };
-template<> struct vec_type<unsigned int>   { using type = m512i; };
+template<> struct vec_type<int32_t>   { using type = m512i; };
+template<> struct vec_type<uint32_t>   { using type = m512ui; };
 template<> struct vec_type<bool>  { using type = m512b; };
-template<> struct vec_type<short> { using type = m512s; };
-template<> struct vec_type<unsigned short> { using type = m512s; };
+template<> struct vec_type<int16_t> { using type = m512s; };
+template<> struct vec_type<uint16_t> { using type = m512us; };
 
 template <typename T>
 using vec_type_t = typename vec_type<T>::type;
@@ -74,6 +74,12 @@ struct vec_count<short, Len>
     static_assert(Len % 32 == 0, "Invalid lenth");
     static constexpr size_t value = Len / 32;
 };
+template <size_t Len>
+struct vec_count<uint16_t, Len>
+{
+    static_assert(Len % 32 == 0, "Invalid lenth");
+    static constexpr size_t value = Len / 32;
+};
 
 template <typename T, size_t ScalarCount = laneSize>
 class LaneArray;
@@ -83,10 +89,10 @@ struct Noop {};
 template <typename T>
 struct magic
 {
-    // Don't let integral scalars affect the return type.  This is primarily
+    // Don't let 32 bit integral scalars affect the return type.  This is primarily
     // to combat things like LaneArray<short> + int = LaneArray<int>, as
     // it's painfully difficult to type short literals
-    using typee = std::conditional_t<std::is_integral<T>::value, Noop, ScalarType<T>>;
+    using typee = std::conditional_t<std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value, Noop, ScalarType<T>>;
     // intel is stupid and requires this...  type eventually gets used in
     // `std::common_type`, and intel barfs if certain eigen types make it there
     // This is just a crude filter to replace any non-arithmetic types with void,
@@ -121,15 +127,34 @@ struct magic22
         return ret;
     }
 
-    using DefType = magic_t<std::tuple_element_t<IdxOfDefault(), std::tuple<std::decay_t<Ts>...>>>;
+    static constexpr bool NoSignedMismatch()
+    {
+        bool isIntegral[sizeof...(Ts)] { std::is_integral<ScalarType<Ts>>::value...};
+        bool isSigned[sizeof...(Ts)] { std::is_signed<ScalarType<Ts>>::value...};
+        bool isBool[sizeof...(Ts)] { std::is_same<ScalarType<Ts>, bool>::value...};
+        bool isNoop[sizeof...(Ts)] {std::is_same<Noop, ScalarType<Ts>>::value...};
+
+        bool anyUnsignedInt = false;
+        bool anySignedInt = false;
+        for (size_t i = 0; i < sizeof...(Ts); ++i)
+        {
+            anyUnsignedInt |= !(isSigned[i] | isBool[i] | isNoop[i]);
+            anySignedInt |= (isSigned[i] & isIntegral[i]);
+        }
+
+        return !(anySignedInt & anyUnsignedInt);
+    }
+
+    using DefType = std::tuple_element_t<IdxOfDefault(), std::tuple<Ts...>>;
 
     // This abomination is to keep us as a dependant type for SFINAE failures.  Intel was having
     // issues so I had to get slightly more convoluted than should have been necessary
     template <typename ...Us>
     auto Helper() ->
-    std::common_type_t<std::conditional_t<std::is_same<magic_t<Us>, Noop>::value,
-                                                       DefType,
-                                                       magic_t<Us>>...>;
+        std::enable_if_t<NoSignedMismatch(),
+                         std::common_type_t<std::conditional_t<std::is_same<magic_t<Us>, Noop>::value,
+                                                               magic_t<DefType>,
+                                                               magic_t<Us>>...>>;
 };
 
 template <typename...Ts>
@@ -191,6 +216,11 @@ struct PairRef
 // TODO move?
 // TODO fix attrocious naming
 inline m512s Blend(const PairRef<const m512b>& b, const m512s& l, const m512s& r)
+{
+    // TODO fix this redirection?
+    return Blend(b.first, b.second, l, r);
+}
+inline m512us Blend(const PairRef<const m512b>& b, const m512us& l, const m512us& r)
 {
     // TODO fix this redirection?
     return Blend(b.first, b.second, l, r);
@@ -772,6 +802,22 @@ public:
 };
 
 template <size_t ScalarCount>
+class LaneArray<uint32_t, ScalarCount> : public ArithmeticBase<uint32_t, ScalarCount, LaneArray>
+{
+    using Base = ArithmeticBase<uint32_t, ScalarCount, LaneArray>;
+public:
+    using Base::Base;
+};
+
+template <size_t ScalarCount>
+class LaneArray<uint16_t, ScalarCount> : public ArithmeticBase<uint16_t, ScalarCount, LaneArray>
+{
+    using Base = ArithmeticBase<uint16_t, ScalarCount, LaneArray>;
+public:
+    using Base::Base;
+};
+
+template <size_t ScalarCount>
 class LaneArray<int32_t, ScalarCount> : public ArithmeticBase<int32_t, ScalarCount, LaneArray>
 {
     using Base = ArithmeticBase<int32_t, ScalarCount, LaneArray>;
@@ -800,6 +846,29 @@ LaneArray<float, Len> AsFloat(const LaneArray<short, Len>& in)
 {
     return LaneArray<float, Len>(
         [](auto&& in2) { return std::make_pair(LowFloats(in2), HighFloats(in2)); },
+        in);
+}
+template <size_t Len>
+LaneArray<float, Len> AsFloat(const LaneArray<uint16_t, Len>& in)
+{
+    return LaneArray<float, Len>(
+        [](auto&& in2) { return std::make_pair(LowFloats(in2), HighFloats(in2)); },
+        in);
+}
+
+template <size_t Len>
+LaneArray<float, Len> AsFloat(const LaneArray<uint32_t, Len>& in)
+{
+    return LaneArray<float, Len>(
+        [](auto&& in2) { return in2.AsFloat(); },
+        in);
+}
+
+template <size_t Len>
+LaneArray<float, Len> AsFloat(const LaneArray<int32_t, Len>& in)
+{
+    return LaneArray<float, Len>(
+        [](auto&& in2) { return in2.AsFloat(); },
         in);
 }
 
