@@ -32,8 +32,7 @@
 
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/SensorPacketsChunk.h>
-
-#include <common/DataGenerators/TraceFileReader.h>
+#include <pacbio/tracefile/TraceFile.h>
 
 namespace PacBio {
 namespace Application {
@@ -75,6 +74,9 @@ public:
     size_t NumChunks() const { return numChunks_; }
     size_t NumZmwLanes() const { return numZmwLanes_; }
     size_t NumTraceChunks() const { return numTraceChunks_ ; }
+    size_t NumTraceLanes() const { return numTraceLanes_; }
+    size_t NumTraceZmws() const { return numTraceZmws_; }
+    size_t NumTraceFrames() const { return numTraceFrames_; }
 
     size_t NumBatches() const override { return numZmwLanes_ / BatchLanes(); }
     size_t NumFrames() const override { return numChunks_ * BlockLen(); }
@@ -110,9 +112,14 @@ private:
     // a thread is spawned.  Can greatly increase both startup time and memory footprint,
     // but does allow data processing guaranteed to not have any IO bottlenecking
     void PreloadInputQueue(size_t chunks);
+    void PopulateBlock(size_t traceLane, size_t traceChunk, int16_t* data);
+    void ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, int16_t* data);
 
     size_t numZmwLanes_;
     size_t numChunks_;
+    size_t numTraceZmws_;
+    size_t numTraceFrames_;
+    size_t numTraceLanes_;
     size_t numTraceChunks_;
     size_t chunkIndex_;
     size_t batchIndex_;
@@ -120,7 +127,10 @@ private:
 
     std::string filename_;
 
-    std::unique_ptr<Cuda::Data::TraceFileReader> traceFileReader_;
+    TraceFile::TraceFile traceFile_;
+    std::vector<int16_t> traceDataCache_;
+    std::vector<size_t> laneCurrentChunk_;
+    bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
 };
 

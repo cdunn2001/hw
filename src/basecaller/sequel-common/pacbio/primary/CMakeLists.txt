@@ -127,8 +127,6 @@ add_library( libSequelCommon1
     SequelDefinitions.h
     SequelHDF5.h
     SequelHDF5.cpp
-    SequelTraceFile.h
-    SequelTraceFile.cpp
     TraceAnalysisMetrics.h
     UnitCell.h
     Util.h

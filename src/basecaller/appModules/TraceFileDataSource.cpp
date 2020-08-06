@@ -33,20 +33,10 @@
 
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
-using namespace PacBio::Cuda::Data;
 
 namespace PacBio {
 namespace Application {
 
-// size_t numZmwLanes_;
-// size_t numChunks_;
-// size_t numTraceChunks_;
-// size_t chunkIndex_;
-// size_t batchIndex_;
-// size_t maxQueueSize_;
-
-// std::unique_ptr<Cuda::Data::TraceFileReader> traceFileReader_;
-// DataSource::SensorPacketsChunk currChunk_;
 TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
         std::string file,
@@ -60,6 +50,8 @@ TraceFileDataSource::TraceFileDataSource(
     , batchIndex_{0}
     , maxQueueSize_(maxQueueSize)
     , filename_(file)
+    , traceFile_(filename_)
+    , cache_(cache)
     , currChunk_(0, GetConfig().layout.NumFrames())
 {
     const auto& config = GetConfig();
@@ -92,10 +84,40 @@ TraceFileDataSource::TraceFileDataSource(
     numZmwLanes_ = numZmw / (config.layout.BlockWidth());
     numChunks_ = (frames + BlockLen() - 1) / BlockLen();
 
-    traceFileReader_ = std::make_unique<TraceFileReader>(file, BlockWidth(), BlockLen(), cache);
-    if (numZmwLanes_ == 0) numZmwLanes_ = traceFileReader_->NumZmwLanes();
-    if (numChunks_ == 0) numChunks_ = traceFileReader_->NumChunks();
-    numTraceChunks_ = traceFileReader_->NumChunks();
+    numTraceZmws_ = traceFile_.Traces().NumZmws();
+    numTraceFrames_ = traceFile_.Traces().NumFrames();
+    numTraceLanes_ = (numTraceZmws_ + BlockWidth() - 1) / BlockWidth();
+    numTraceChunks_ = (numTraceFrames_ + BlockLen() - 1) / BlockLen();
+
+    if (numZmwLanes_ == 0) numZmwLanes_ = numTraceLanes_;
+    if (numChunks_ == 0) numChunks_ = numTraceChunks_;
+
+    // Adjust number of lanes and chunks we read from the trace file
+    // if requested lanes and chunks is less to only cache what we need.
+    numTraceLanes_ = std::min(numZmwLanes_, numTraceLanes_);
+    numTraceChunks_ = std::min(numChunks_, numTraceChunks_);
+
+    if (cache_)
+    {
+        // Cache requested portion of trace file into memory.
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen());
+        for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
+        {
+            for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
+            {
+                ReadBlockFromTraceFile(traceLane, traceChunk,
+                                       traceDataCache_.data() +
+                                       (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
+                                       (traceChunk*BlockWidth()*BlockLen()));
+            }
+        }
+    }
+    else
+    {
+        // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*BlockLen());
+        laneCurrentChunk_.resize(NumTraceLanes(), std::numeric_limits<size_t>::max());
+    }
 
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
 }
@@ -104,8 +126,8 @@ void TraceFileDataSource::ContinueProcessing()
 {
     if (ChunksReady() >= maxQueueSize_) return;
 
-    uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % traceFileReader_->NumZmwLanes();
-    uint32_t wrappedChunkIndex = chunkIndex_ % traceFileReader_->NumChunks();
+    uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % NumTraceLanes();
+    uint32_t wrappedChunkIndex = chunkIndex_ % NumTraceChunks();
 
     const auto startZmw = batchIndex_ * BatchLanes() * BlockWidth();
     const auto startFrame = chunkIndex_ * BlockLen();
@@ -116,8 +138,8 @@ void TraceFileDataSource::ContinueProcessing()
         auto block = batchData.BlockData(lane);
         assert(block.Count() * BlockWidth()*BlockLen()*sizeof(int16_t));
 
-        uint32_t wrappedLane = (traceStartZmwLane + lane) % traceFileReader_->NumZmwLanes();
-        traceFileReader_->PopulateBlock(wrappedLane, wrappedChunkIndex, reinterpret_cast<int16_t*>(block.Data()));
+        uint32_t wrappedLane = (traceStartZmwLane + lane) % NumTraceLanes();
+        PopulateBlock(wrappedLane, wrappedChunkIndex, reinterpret_cast<int16_t*>(block.Data()));
     }
 
     currChunk_.AddPacket(std::move(batchData));
@@ -170,6 +192,59 @@ void TraceFileDataSource::PreloadInputQueue(size_t chunks)
             ContinueProcessing();
         }
         PBLOG_INFO << "Done preloading input queue.";
+    }
+}
+
+void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, int16_t* data)
+{
+    if (cache_)
+    {
+        std::memcpy(data,
+                    traceDataCache_.data() +
+                    (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
+                    (traceChunk*BlockWidth()*BlockLen()),
+                    BlockLen()*BlockWidth()*sizeof(int16_t));
+    }
+    else
+    {
+        if (laneCurrentChunk_[traceLane] != traceChunk)
+        {
+            ReadBlockFromTraceFile(traceLane, traceChunk,
+                                   traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()));
+            laneCurrentChunk_[traceLane] = traceChunk;
+        }
+        std::memcpy(data, traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()),
+                    BlockWidth()*BlockLen()*sizeof(int16_t));
+    }
+}
+
+void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, int16_t* data)
+{
+    size_t nZmwsToRead = std::min(BlockWidth(), NumTraceZmws() - (traceLane*BlockWidth()));
+    size_t nFramesToRead = std::min(BlockLen(), NumTraceFrames() - (traceChunk*BlockLen()));
+    using range = boost::multi_array_types::extent_range;
+    const range zmwRange(traceLane*BlockWidth(), (traceLane*BlockWidth()) + nZmwsToRead);
+    const range frameRange(traceChunk*BlockLen(), (traceChunk*BlockLen()) + nFramesToRead);
+    boost::multi_array<int16_t,2> d{boost::extents[zmwRange][frameRange]};
+    boost::multi_array_ref<int16_t,2> out{data, boost::extents[nFramesToRead][nZmwsToRead]};
+    traceFile_.Traces().ReadTraceBlock(d);
+    d.reindex(0);
+    for (size_t zmw = 0; zmw < nZmwsToRead; zmw++)
+    {
+        for (size_t frame = 0; frame < nFramesToRead; frame++)
+        {
+            out[frame][zmw] = d[zmw][frame];
+        }
+    }
+    if (nZmwsToRead*nFramesToRead < BlockWidth()*BlockLen())
+    {
+        for (size_t frame = nFramesToRead; frame < BlockLen(); frame++)
+        {
+            for (size_t zmw = nZmwsToRead; zmw < BlockWidth(); zmw++)
+            {
+                out[frame][zmw] = 0;
+            }
+        }
     }
 }
 
