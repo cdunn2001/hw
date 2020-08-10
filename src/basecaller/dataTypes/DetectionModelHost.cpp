@@ -131,14 +131,9 @@ template <typename VF>
 template <typename VF2>
 void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
 {
-    using namespace PacBio::Cuda::Utility;
-    auto ConvertToCudaArray = [](const VF& lane){
-        CudaArray<ScalarType<VF>, laneSize> tmp = lane;
-        return CudaArray<VF2, laneSize>(tmp.begin(), tmp.end());
-    };
     assert(lam);
-    lam->means = ConvertToCudaArray(mean_);
-    lam->vars = ConvertToCudaArray(var_);
+    lam->means = mean_;
+    lam->vars = var_;
     // TODO: What about weight_?
 }
 

@@ -117,8 +117,7 @@ public:
 
         LaneIterator& operator++()
         {
-            curFrame_ = std::min(curFrame_ + 1, numFrames_);
-            return *this;
+            return *this+=1;
         }
 
         LaneIterator operator++(int)
@@ -130,8 +129,14 @@ public:
 
         LaneIterator& operator+=(size_t v)
         {
-            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            curFrame_ = curFrame_ + v;
+            if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
+        }
+        LaneIterator operator+(size_t v)
+        {
+            auto ret = *this;
+            return ret+=v;
         }
 
         LaneArray<T, laneSize> Extract() const
@@ -144,17 +149,6 @@ public:
             memcpy(ptr_ + (curFrame_ * laneWidth_), &lane, sizeof(lane));
         }
 
-        //LaneArrayRef<T, laneSize> operator[](size_t idx)
-        //{
-        //    assert(curFrame_ + idx < numFrames_);
-        //    return LaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        //}
-
-        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        //{
-        //    assert(curFrame_ + idx < numFrames_);
-        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        //}
     private:
         T* ptr_;
         size_t curFrame_;
@@ -199,8 +193,7 @@ public:
 
         ConstLaneIterator& operator++()
         {
-            curFrame_ = std::min(curFrame_ + 1, numFrames_);
-            return *this;
+            return *this+=1;
         }
 
         ConstLaneIterator operator++(int)
@@ -212,8 +205,15 @@ public:
 
         ConstLaneIterator& operator+=(size_t v)
         {
-            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            curFrame_ = curFrame_ + v;
+            if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
+        }
+
+        ConstLaneIterator operator+(size_t v)
+        {
+            auto ret = *this;
+            return ret+=v;
         }
 
         ValueType Extract() const
@@ -222,17 +222,6 @@ public:
             return ValueType(PtrView<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
-        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
-        //{
-        //    assert(curFrame_ + idx < numFrames_);
-        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        //}
-
-        //ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        //{
-        //    assert(curFrame_ + idx < numFrames_);
-        //    return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        //}
     private:
         T* ptr_;
         size_t curFrame_;
@@ -259,8 +248,6 @@ public:
     { return ConstLaneIterator(data_ , numFrames_, laneWidth_, numFrames_); }
 
 public:
-    // TODO clean up this `laneWidth_` business.  It's only pretending things
-    // will work if it's not 64
     BlockView(T* data, size_t laneWidth, size_t numFrames, DataManagerKey)
         : data_(data)
         , laneWidth_(laneWidth)

@@ -51,12 +51,11 @@ template <typename DataT, typename CountT>
 UHistogramSimd<DataT, CountT>::UHistogramSimd(unsigned int numBins,
                                               const DataType& lowerBound,
                                               const DataType& upperBound)
-    : binSize_ (0)
+    : binSize_ {0}
     , nLowOutliers_ {0}
     , nHighOutliers_ {0}
     , binStart_ (numBins + 1u)
-      // TODO fix need for explicit cast
-    , binCount_ (numBins + 1u, CountType{static_cast<short>(0)})
+    , binCount_ (numBins + 1u, CountType{0})
     , numBins_ (numBins)
 {
     // Check parameter values.
@@ -115,7 +114,7 @@ UHistogramSimd<DataT, CountT>::UHistogramSimd(const LaneHistogram<ScalarDataType
     }
     for (unsigned int bin = 0; bin < numBins_; ++bin)
     {
-        binCount_[bin] = LaneArray<ScalarCountType, 64>(laneHist.binCount[bin]);
+        binCount_[bin] = LaneArray<ScalarCountType>(laneHist.binCount[bin]);
     }
     binCount_[numBins_] = LaneArray<ScalarCountType>{0};
 }
@@ -161,7 +160,7 @@ UHistogramSimd<DataT, CountT>::Fractile(FloatType frac) const
     static constexpr auto inf = std::numeric_limits<ScalarDataType>::infinity();
 
     UnionConv<DataType> ret;
-    const auto nf = MakeUnion(frac * AsFloat(TotalCount()));
+    const auto nf = MakeUnion(frac * TotalCount());
     for (unsigned int z = 0; z < SimdTypeTraits<DataType>::width; ++z)
     {
         // Find the critical bin.
@@ -232,7 +231,7 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 
     // Tally the cumulative count.
     auto cc = AsFloat(LowOutlierCount());
-    cc += AsFloat(CountNonuniform(IndexType(0), xbin));
+    cc += CountNonuniform(IndexType(0), xbin);
     cc += xbinCount * xrem / BinSize();
 
     cc = Blend(mLow, AsFloat(LowOutlierCount()), cc);
@@ -244,7 +243,6 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
 
 
 // Explicit instantiations
-// TODO create m512us type?
-template class UHistogramSimd<LaneArray<float>, LaneArray<short>>;
+template class UHistogramSimd<LaneArray<float>, LaneArray<unsigned short>>;
 
 }}}     // namespace PacBio::Mongo::Data

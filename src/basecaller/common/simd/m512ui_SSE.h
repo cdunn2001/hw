@@ -44,7 +44,7 @@
 #include <ostream>
 #include <smmintrin.h>
 
-#include "m512f_SSE.h"
+#include "m512i_SSE.h"
 #include "mm_blendv_si128.h"
 #include "xcompile.h"
 
@@ -68,6 +68,8 @@ private:    // Implementation
     using ImplType = __m128i;
     static const size_t implOffsetElems = sizeof(ImplType) / sizeof(uint32_t);
 
+    // TODO rethink access
+public:
     union
     {
         ImplType simd[4];
@@ -102,13 +104,6 @@ public:     // Structors
         : data{{v1, v2, v3, v4}}
     {}
 
-    // Construct from m128f vector type
-    explicit m512ui(const m512f& x)
-        : data{{_mm_cvtps_epi32(_mm_round_ps(x.data1(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data2(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data3(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data4(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))}} {}
-
     // Construct from m128b vector type
     explicit m512ui(const m512b& x)
         : data{{_mm_castps_si128(x.data1())
@@ -116,24 +111,31 @@ public:     // Structors
               , _mm_castps_si128(x.data3())
               , _mm_castps_si128(x.data4())}} {}
 
+    explicit m512ui(const m512i& x)
+        : data{{x.data1()
+              , x.data2()
+              , x.data3()
+              , x.data4()}} {}
+
+    explicit operator m512i() const
+    {
+        return m512i(data1(), data2(), data3(), data4());
+    }
+
 public:     // Export
 
-    // dancing around a lack of unsigned intrinsics in SSE. We
-    // have to emulate this one
-    m512f AsFloat() const
-    {
-        m512f ret;
-        for (size_t i = 0; i < size(); ++i)
-        {
-            ret.data.raw[i] = static_cast<float>(data.raw[i]);
-        }
-        return ret;
-    }
+    const ImplType& data1() const
+    { return data.simd[0]; }
 
-    operator m512f() const
-    {
-        return AsFloat();
-    }
+    const ImplType& data2() const
+    { return data.simd[1]; }
+
+    const ImplType& data3() const
+    { return data.simd[2]; }
+
+    const ImplType& data4() const
+    { return data.simd[3]; }
+
 
 public:     // Assignment
     m512ui& operator=(const m512ui& x) = default;
@@ -186,7 +188,7 @@ public:     // Assignment
     }
 
     // Return a scalar value
-    int operator[](unsigned int i) const
+    uint32_t operator[](unsigned int i) const
     {
         assert(static_cast<size_t>(i) < this->size());
         return data.raw[i];
@@ -331,7 +333,7 @@ public:     // Non-member (friend) functions
 
     friend int reduceMax(const m512ui& a)
     {
-        int ret = std::numeric_limits<uint32_t>::min();
+        uint32_t ret = std::numeric_limits<uint32_t>::min();
         for (size_t i = 0; i < size(); ++i)
         {
             ret = std::max(ret, a[i]);
@@ -341,7 +343,7 @@ public:     // Non-member (friend) functions
 
     friend int reduceMin(const m512ui& a)
     {
-        int ret = std::numeric_limits<uint32_t>::max();
+        uint32_t ret = std::numeric_limits<uint32_t>::max();
         for (size_t i = 0; i < size(); ++i)
         {
             ret = std::min(ret, a[i]);
@@ -364,14 +366,6 @@ public:     // Non-member (friend) functions
         return Blend(maskB, b, a);
     }
 };
-
-inline m512ui floorCastUInt(const m512f& f)
-{
-    return m512ui(_mm_cvtps_epi32(_mm_floor_ps(f.data1()))
-                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data2()))
-                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data3()))
-                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
-}
 
 }}      // namespace PacBio::Simd
 

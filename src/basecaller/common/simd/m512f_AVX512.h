@@ -42,6 +42,8 @@
 #include "xcompile.h"
 
 #include "m512b_AVX512.h"
+#include "m512i_AVX512.h"
+#include "m512ui_AVX512.h"
 
 #define CMP_MASK _mm512_cmp_ps_mask
 
@@ -93,6 +95,28 @@ public:     // Structors
           float f13, float f14, float f15)
         : v(_mm512_setr_ps(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11,
                            f12, f13, f14, f15)) {}
+
+    m512f(const m512i& i)
+        : v(_mm512_cvt_roundepi32_ps(i.data(), _MM_FROUND_NO_EXC))
+    {}
+
+    // Construct from m512f vector type
+    explicit operator m512i() const
+    {
+        constexpr auto mode = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
+        return m512i(_mm512_cvt_roundps_epi32(v, mode));
+    }
+
+    m512f(const m512ui& i)
+        : v(_mm512_cvt_roundepu32_ps(i.data(), _MM_FROUND_NO_EXC))
+    {}
+
+    explicit operator m512ui() const
+    {
+        constexpr auto mode = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
+        return m512ui(_mm512_cvt_roundps_epu32(v, mode));
+    }
+
 
 public:     // Assignment
     m512f& operator=(const m512f& x) = default;
@@ -263,6 +287,20 @@ private:
         return m512f(_mm512_or_ps(l.v, r.v));
     }
 };
+
+inline m512i floorCastInt(const m512f& x)
+{
+    return m512i(_mm512_cvt_roundps_epi32(
+            x.data(),
+            (_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)));
+}
+
+inline m512ui floorCastUInt(const m512f& x)
+{
+    return m512ui(_mm512_cvt_roundps_epu32(
+            x.data(),
+            (_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)));
+}
 
 }}      // namespace PacBio::Simd
 

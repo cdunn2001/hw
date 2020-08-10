@@ -308,7 +308,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                     ASSERT_EQ(numBatchesPerHFMB
                                 * sim.numBases
                                 * sim.baseWidth,
-                              mb.numBaseFrames[z]) << z;
+                              mb.numBaseFrames[z]);
                     // The pulses don't run to the end of each block, so all
                     // but one pulse is abutted. Plus we have the GG, which
                     // doesn't count as a sandwich.

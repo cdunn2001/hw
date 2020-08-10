@@ -74,7 +74,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
 
     using ValueType = typename decltype(trIter)::ValueType;
     for ( ; blsIter != baselineSubtractedData.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
-            blsIter += Stride(), lowerIter += Stride(), upperIter += Stride())
+            lowerIter += Stride(), upperIter += Stride())
     {
         auto upperVal = upperIter.Extract();
         auto lowerVal = lowerIter.Extract();
@@ -84,9 +84,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
-        auto& strideIter = blsIter;
-        for (size_t i = 0; i < Stride() && strideIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
-             i++, strideIter++, trIter++)
+        for (size_t i = 0; i < Stride() && blsIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
+             i++, blsIter++, trIter++)
         {
             const auto& rawSignal = trIter.Extract();
 
@@ -94,7 +93,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
             // end up converting the baseline subtracted data to float in order
             // to perform the conversion and then end up converting it back.
             auto out = AsShort((rawSignal - bias - frameBiasEstimate) * Scale());
-            strideIter.Store(out);
+            blsIter.Store(out);
 
             AddToBaselineStats(rawSignal, out, baselinerStats);
 

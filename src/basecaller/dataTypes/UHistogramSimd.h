@@ -214,7 +214,7 @@ public:     // Modifying methods
         // Handle outliers.
         const auto maskLow  = select & (bin < 0);
         nLowOutliers_  = inc(nLowOutliers_, maskLow);
-        const auto maskHigh = select & (bin >= static_cast<int32_t>(numBins_));
+        const auto maskHigh = select & (bin >= static_cast<int>(numBins_));
         nHighOutliers_ = inc(nHighOutliers_, maskHigh);
 
         // Increment bin counts for in-range elements.

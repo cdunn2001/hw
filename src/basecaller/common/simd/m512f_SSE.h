@@ -40,6 +40,8 @@
 #include <ostream>
 
 #include "m512b_SSE.h"
+#include "m512i_SSE.h"
+#include "m512ui_SSE.h"
 #include "xcompile.h"
 
 namespace PacBio {
@@ -124,6 +126,46 @@ public:     // Structors
               , x.data3()
               , x.data4()}}
     {}
+
+    m512f(const m512i& v)
+        : data{{_mm_cvtepi32_ps(v.data1()),
+                _mm_cvtepi32_ps(v.data2()),
+                _mm_cvtepi32_ps(v.data3()),
+                _mm_cvtepi32_ps(v.data4())}}
+    {}
+
+    explicit operator m512i() const
+    {
+        return m512i(_mm_cvtps_epi32(_mm_round_ps(data.simd[0],_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)),
+                     _mm_cvtps_epi32(_mm_round_ps(data.simd[1],_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)),
+                     _mm_cvtps_epi32(_mm_round_ps(data.simd[2],_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)),
+                     _mm_cvtps_epi32(_mm_round_ps(data.simd[3],_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)));
+    }
+
+    // dancing around a lack of unsigned intrinsics in SSE. We
+    // have to emulate this one
+    m512f(const m512ui& v)
+    {
+        for (size_t i = 0; i < size(); ++i)
+        {
+            data.raw[i] = static_cast<float>(v[i]);
+        }
+    }
+
+    // dancing around a lack of unsigned intrinsics in SSE. We
+    // have to emulate this one
+    explicit operator m512ui() const
+    {
+        m512ui ret;
+        for (size_t i = 0; i < size(); ++i)
+        {
+            ret.data.raw[i] = static_cast<uint32_t>(data.raw[i]);
+        }
+        return ret;
+    }
+
+
+
 
 public:     // Assignment
     m512f& operator=(const m512f& x) = default;
@@ -660,6 +702,23 @@ public:     // Non-member (friend) functions
         return Blend(mask, a + m512f(1) , a);
     }
 };
+
+inline m512i floorCastInt(const m512f& f)
+{
+    return m512i(_mm_cvtps_epi32(_mm_floor_ps(f.data1()))
+                ,_mm_cvtps_epi32(_mm_floor_ps(f.data2()))
+                ,_mm_cvtps_epi32(_mm_floor_ps(f.data3()))
+                ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
+}
+
+inline m512ui floorCastUInt(const m512f& f)
+{
+    return m512ui(_mm_cvtps_epi32(_mm_floor_ps(f.data1()))
+                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data2()))
+                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data3()))
+                 ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
+}
+
 
 }}      // namespace PacBio::Simd
 

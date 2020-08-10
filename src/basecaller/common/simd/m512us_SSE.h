@@ -117,7 +117,7 @@ public:     // Structors
 
     operator std::pair<m512ui, m512ui>() const
     {
-        return {LowInts(*this), HighInts(*this)};
+        return {LowUInts(*this), HighUInts(*this)};
     }
 
     operator std::pair<m512f, m512f>() const
@@ -212,8 +212,8 @@ public:     // Conversion methods
                      _mm_cvtepi32_ps(_mm_cvtepu16_epi32(in.data.simd[3])),
                      _mm_cvtepi32_ps(_mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE))));
     }
-    // Converts index 0-15 into a m512f
-    friend m512ui LowInts(const m512us& in)
+
+    friend m512ui LowUInts(const m512us& in)
     {
         return m512ui(_mm_cvtepu16_epi32(in.data.simd[0]),
                       _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[0], 0xEE)),
@@ -221,10 +221,25 @@ public:     // Conversion methods
                       _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[1], 0xEE)));
     }
 
-    // Converts index 16-31 into a m512f
-    friend m512ui HighInts(const m512us& in)
+    friend m512i LowInts(const m512us& in)
+    {
+        return m512i(_mm_cvtepu16_epi32(in.data.simd[0]),
+                      _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[0], 0xEE)),
+                      _mm_cvtepu16_epi32(in.data.simd[1]),
+                      _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[1], 0xEE)));
+    }
+
+    friend m512ui HighUInts(const m512us& in)
     {
         return m512ui(_mm_cvtepu16_epi32(in.data.simd[2]),
+                      _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[2], 0xEE)),
+                      _mm_cvtepu16_epi32(in.data.simd[3]),
+                      _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE)));
+    }
+
+    friend m512i HighInts(const m512us& in)
+    {
+        return m512i(_mm_cvtepu16_epi32(in.data.simd[2]),
                       _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[2], 0xEE)),
                       _mm_cvtepu16_epi32(in.data.simd[3]),
                       _mm_cvtepu16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE)));

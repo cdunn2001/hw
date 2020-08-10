@@ -44,7 +44,7 @@
 #include <ostream>
 #include <smmintrin.h>
 
-#include "m512f_SSE.h"
+#include "m512b_SSE.h"
 #include "mm_blendv_si128.h"
 #include "xcompile.h"
 
@@ -105,36 +105,26 @@ public:     // Structors
         : data{{v1, v2, v3, v4}}
     {}
 
-    // Construct from m128f vector type
-    explicit m512i(const m512f& x)
-        : data{{_mm_cvtps_epi32(_mm_round_ps(x.data1(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data2(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data3(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data4(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))}} {}
-
     // Construct from m128b vector type
-    explicit m512i(const m512b& x) 
+    explicit m512i(const m512b& x)
         : data{{_mm_castps_si128(x.data1())
               , _mm_castps_si128(x.data2())
               , _mm_castps_si128(x.data3())
               , _mm_castps_si128(x.data4())}} {}
 
 public:     // Export
-    m512f AsFloat() const
-    {
-        return m512f(_mm_cvtepi32_ps(data.simd[0]),
-                     _mm_cvtepi32_ps(data.simd[1]),
-                     _mm_cvtepi32_ps(data.simd[2]),
-                     _mm_cvtepi32_ps(data.simd[3]));
-    }
+    const ImplType& data1() const
+    { return data.simd[0]; }
 
-    operator m512f() const
-    {
-        return m512f(_mm_cvtepi32_ps(data.simd[0]),
-                     _mm_cvtepi32_ps(data.simd[1]),
-                     _mm_cvtepi32_ps(data.simd[2]),
-                     _mm_cvtepi32_ps(data.simd[3]));
-    }
+    const ImplType& data2() const
+    { return data.simd[1]; }
+
+    const ImplType& data3() const
+    { return data.simd[2]; }
+
+    const ImplType& data4() const
+    { return data.simd[3]; }
+
 
 public:     // Assignment
     m512i& operator=(const m512i& x) = default;
@@ -447,38 +437,6 @@ public:     // Non-member (friend) functions
         return ret;
     }
 
-    friend m512i IndexOfMax(const m512f& nextVal, const m512i& nextIdx, m512f* curVal, const m512i& curIdx)
-    {
-        const auto maskf = m512f(nextVal > *curVal);
-        const auto maski = m512i(nextVal > *curVal);
-
-        *curVal = m512f(_mm_blendv_ps(curVal->data1(), nextVal.data1(), maskf.data1()),
-                        _mm_blendv_ps(curVal->data2(), nextVal.data2(), maskf.data2()),
-                        _mm_blendv_ps(curVal->data3(), nextVal.data3(), maskf.data3()),
-                        _mm_blendv_ps(curVal->data4(), nextVal.data4(), maskf.data4()));
-
-        return m512i(_mm_blendv_si128(curIdx.data.simd[0], nextIdx.data.simd[0], maski.data.simd[0]),
-                        _mm_blendv_si128(curIdx.data.simd[1], nextIdx.data.simd[1], maski.data.simd[1]),
-                        _mm_blendv_si128(curIdx.data.simd[2], nextIdx.data.simd[2], maski.data.simd[2]),
-                        _mm_blendv_si128(curIdx.data.simd[3], nextIdx.data.simd[3], maski.data.simd[3]));
-    }
-
-    friend void IndexOfMin(const m512f& nextVal, const m512i& nextIdx,
-                           const m512f& curVal, const m512i& curIdx,
-                           const m512i& nextMaxIdx, const m512i& curMaxIdx,
-                           m512i* newIdx, m512i* newMaxIdx)
-    {
-        const auto mask = m512i(nextVal <= curVal);
-        *newIdx = m512i(_mm_blendv_si128(curIdx.data.simd[0], nextIdx.data.simd[0], mask.data.simd[0]),
-                            _mm_blendv_si128(curIdx.data.simd[1], nextIdx.data.simd[1], mask.data.simd[1]),
-                            _mm_blendv_si128(curIdx.data.simd[2], nextIdx.data.simd[2], mask.data.simd[2]),
-                            _mm_blendv_si128(curIdx.data.simd[3], nextIdx.data.simd[3], mask.data.simd[3]));
-        *newMaxIdx = m512i(_mm_blendv_si128(curMaxIdx.data.simd[0], nextMaxIdx.data.simd[0], mask.data.simd[0]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[1], nextMaxIdx.data.simd[1], mask.data.simd[1]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[2], nextMaxIdx.data.simd[2], mask.data.simd[2]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[3], nextMaxIdx.data.simd[3], mask.data.simd[3]));
-    }
-
     friend m512i Blend(const m512b& mask, const m512i& success, const m512i& failure)
     {
         const m512i m = m512i(mask);
@@ -494,14 +452,6 @@ public:     // Non-member (friend) functions
         return Blend(maskB, b, a);
     }
 };
-
-inline m512i floorCastInt(const m512f& f)
-{
-    return m512i(_mm_cvtps_epi32(_mm_floor_ps(f.data1()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data2()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data3()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
-}
 
 }}      // namespace PacBio::Simd
 

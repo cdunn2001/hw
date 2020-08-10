@@ -68,10 +68,6 @@ public:     // Structors
     // Replicate scalar x across v
     m512us(uint16_t x)  : v(_mm512_set1_epi16(x)) {}
 
-    // putting this here to prevent implicit
-    // conversions
-    explicit m512us(uint32_t x) : m512us(static_cast<uint16_t>(x)) {}
-
     // Load x from pointer px. px must be aligned to 16 bytes.
     m512us(const uint16_t *px) : v(_mm512_load_si512(reinterpret_cast<const __m512i*>(px))) {}
 
@@ -94,7 +90,7 @@ public:     // Structors
 
     operator std::pair<m512ui, m512ui>() const
     {
-        return {LowInts(*this), HighInts(*this)};
+        return {LowUInts(*this), HighUInts(*this)};
     }
 
     operator std::pair<m512f, m512f>() const
@@ -197,13 +193,13 @@ public:     // Conversion methods
         return m512f(_mm512_cvt_roundepu32_ps(tmp, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
     }
 
-    friend m512ui LowInts(const m512us& in)
+    friend m512ui LowUInts(const m512us& in)
     {
         return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
     }
 
     // Converts index 16-31 into an m512f
-    friend m512ui HighInts(const m512us& in)
+    friend m512ui HighUInts(const m512us& in)
     {
         return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 1)));
     }

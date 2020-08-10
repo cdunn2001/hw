@@ -46,7 +46,7 @@ class TraceHistogramAccumulator
 public:     // Types
     using DataType = Data::BaselinedTraceElement;
     using HistDataType = float;
-    using HistCountType = short;
+    using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
     using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;

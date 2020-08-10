@@ -39,7 +39,7 @@
 #include <ostream>
 
 #include "m512b_AVX512.h"
-#include "m512f_AVX512.h"
+#include "m512i_AVX512.h"
 #include "xcompile.h"
 
 //#include <Eigen/Core>
@@ -52,19 +52,6 @@ CLASS_ALIGNAS(64) m512ui //: Eigen::NumTraits<float>
 {
 public:     // Types
     typedef m512ui type;
-
-    typedef m512f Real;
-    typedef m512f NonInteger;
-    typedef m512f Nested;
-    enum {
-        IsComplex = 0,
-        IsInteger = 0,
-        IsSigned = 1,
-        RequireInitialization = 1,
-        ReadCost = 1,
-        AddCost = 3,
-        MulCost = 3
-    };
 
 public:     // Static constants
     /// The number of floats represented by one instance.
@@ -95,23 +82,14 @@ public:     // Structors
     // Construct from native vector type
     m512ui(ImplType v_) : v(v_) {}
 
-    // Construct from m512f vector type
-    explicit m512ui(const m512f& x)
-        : v(_mm512_cvt_roundps_epu32(
-                x.data(),
-                (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))) {}
+    explicit m512ui(const m512i& x)
+        : v(x.data())
+    {}
 
-public:     // Export
-    m512f AsFloat() const
+    explicit operator m512i() const
     {
-        return m512f(_mm512_cvt_roundepu32_ps(v, _MM_FROUND_NO_EXC));
+        return m512i(v);
     }
-
-    operator m512f() const
-    {
-        return m512f(_mm512_cvt_roundepu32_ps(v, _MM_FROUND_NO_EXC));
-    }
-
 
 public:     // Assignment
     m512ui& operator=(const m512ui& x) = default;
@@ -189,13 +167,6 @@ public:     // Non-member (friend) functions
     { return m512ui(_mm512_mask_add_epi32(a.v, mask.data(), a.v, m512ui(1).v)); }
 
 };
-
-inline m512ui floorCastUInt(const m512f& x)
-{
-    return m512ui(_mm512_cvt_roundps_epu32(
-            x.data(),
-            (_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)));
-}
 
 }}      // namespace PacBio::Simd
 

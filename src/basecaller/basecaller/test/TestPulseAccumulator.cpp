@@ -287,9 +287,9 @@ void TestPulseAccumulator()
         StatAccumulator<LaneArray<float>> stats{LaneArray<float>(lanePulsesMetrics.moment0),
                                                 LaneArray<float>(lanePulsesMetrics.moment1),
                                                 LaneArray<float>(lanePulsesMetrics.moment2)};
-        const auto count = MakeUnion(stats.Count());
-        const auto mean = MakeUnion(stats.Mean());
-        const auto var = MakeUnion(stats.Variance());
+        const auto count = stats.Count().ToArray();
+        const auto mean = stats.Mean().ToArray();
+        const auto var = stats.Variance().ToArray();
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
             EXPECT_EQ(baselineFrames-1, count[zmwIdx]);

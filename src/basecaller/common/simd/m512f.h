@@ -18,8 +18,6 @@
 #error m512f type is not supported by the available instruction set.
 #endif
 
-#include "m512i.h"
-
 namespace PacBio {
 namespace Simd {
 
@@ -29,31 +27,6 @@ struct SimdTypeTraits<m512f>
     typedef float scalar_type;
     static const uint8_t width = 16;
 };
-
-
-// TODO: Vectorize this.
-inline m512f round(const m512f& xx)
-{
-    ArrayUnion<m512f> x(xx);
-    for (unsigned int i = 0; i < SimdTypeTraits<m512f>::width; ++i)
-    {
-        x[i] = std::round(x[i]);
-    }
-    return x;
-}
-
-/// Logistic function
-inline m512f expit(const m512f& x)
-{
-    const auto y = exp(x);
-    return y / (1 + y);
-}
-
-/// Inverse of the logistic function (expit)
-inline m512f logit(const m512f& x)
-{
-    return log(x / (1 - x));
-}
 
 }}      // namespace PacBio::Simd
 

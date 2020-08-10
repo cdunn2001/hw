@@ -130,8 +130,7 @@ __device__ PBHalf2 variance(const PBHalf2 M0, const PBHalf2 M1, const float2 M2)
     return PBHalf2(variance(M0.FloatX(), M1.FloatX(), M2.x), variance(M0.FloatY(), M1.FloatY(), M2.y));
 }
 
-// TODO fix signed?
-__device__ uint2 getWideLoad(const Cuda::Utility::CudaArray<int16_t, laneSize>& load)
+__device__ uint2 getWideLoad(const Cuda::Utility::CudaArray<uint16_t, laneSize>& load)
 { return make_uint2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
 
 __device__ float2 getWideLoad(const Cuda::Utility::CudaArray<float, laneSize>& load)

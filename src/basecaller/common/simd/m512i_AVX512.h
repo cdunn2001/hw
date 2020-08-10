@@ -39,7 +39,6 @@
 #include <ostream>
 
 #include "m512b_AVX512.h"
-#include "m512f_AVX512.h"
 #include "xcompile.h"
 
 //#include <Eigen/Core>
@@ -52,22 +51,6 @@ CLASS_ALIGNAS(64) m512i //: Eigen::NumTraits<float>
 {
 public:     // Types
     typedef m512i type;
-
-    typedef m512f Real;
-    typedef m512f NonInteger;
-    typedef m512f Nested;
-    enum {
-        IsComplex = 0,
-        IsInteger = 0,
-        IsSigned = 1,
-        RequireInitialization = 1,
-        ReadCost = 1,
-        AddCost = 3,
-        MulCost = 3
-    };
-
-    using Iterator      =       int*;
-    using ConstIterator = const int*;
 
 public:     // Static constants
     /// The number of floats represented by one instance.
@@ -97,24 +80,6 @@ public:     // Structors
 
     // Construct from native vector type
     m512i(ImplType v_) : v(v_) {}
-
-    // Construct from m512f vector type
-    explicit m512i(const m512f& x)
-        : v(_mm512_cvt_roundps_epi32(
-                x.data(),
-                (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))) {}
-
-public:     // Export
-    m512f AsFloat() const
-    {
-        return m512f(_mm512_cvt_roundepi32_ps(v, _MM_FROUND_NO_EXC));
-    }
-
-    operator m512f() const
-    {
-        return m512f(_mm512_cvt_roundepi32_ps(v, _MM_FROUND_NO_EXC));
-    }
-
 
 public:     // Assignment
     m512i& operator=(const m512i& x) = default;
@@ -224,28 +189,6 @@ public:     // Non-member (friend) functions
     friend m512i min(const m512i& a, const m512i&b) {   return m512i(_mm512_min_epi32(a.v, b.v)); }
     friend m512i max(const m512i& a, const m512i&b) { return m512i(_mm512_max_epi32(a.v, b.v)); }
 
-    friend m512i IndexOfMax(const m512f& nextVal, const m512i& nextIdx, m512f* curVal, const m512i& curIdx)
-    {
-        const auto mask = nextVal > *curVal;
-        *curVal = Blend(mask, nextVal, *curVal);
-        return Blend(mask, nextIdx, curIdx);
-    }
-
-    friend m512i IndexOfMax(const m512f& nextVal, const m512i& nextIdx, const m512f& curVal, const m512i& curIdx)
-    {
-        return Blend(nextVal > curVal, nextIdx, curIdx);
-    }
-
-    friend void IndexOfMin(const m512f& nextVal, const m512i& nextIdx,
-                           const m512f& curVal, const m512i& curIdx,
-                           const m512i& nextMaxIdx, const m512i& curMaxIdx,
-                           m512i* newIdx, m512i* newMaxIdx)
-    {
-        const auto mask = nextVal <= curVal;
-        *newIdx = Blend(mask, nextIdx, curIdx);
-        *newMaxIdx =  Blend(mask, nextMaxIdx, curMaxIdx);
-    }
-
     friend m512i Blend(const m512b& mask, const m512i& success, const m512i& failure)
     { return m512i(_mm512_mask_blend_epi32(mask.data(), failure.v, success.v)); }
 
@@ -264,13 +207,6 @@ public:     // stream
         return stream;
     }
 };
-
-inline m512i floorCastInt(const m512f& x)
-{
-    return m512i(_mm512_cvt_roundps_epi32(
-            x.data(),
-            (_MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)));
-}
 
 }}      // namespace PacBio::Simd
 

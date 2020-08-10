@@ -66,7 +66,7 @@ public:
     class LabelsSegment
     {
     public:
-        using FrameArray = LaneArray<int32_t>;
+        using FrameArray = LaneArray<uint32_t>;
         using FloatArray = LaneArray<float>;
         using SignalArray = LaneArray<Data::BaselinedTraceElement>;
         using LabelArray = LaneArray<Data::LabelsBatch::ElementType>;
@@ -99,7 +99,7 @@ public:
         {
             return LabelManager::IsNewSegment(this->label_, label);
         }
-        
+
         LaneMask<> IsPulse() const
         {
             return label_ != LabelArray{LabelManager::BaselineLabel()};
@@ -115,15 +115,17 @@ public:
             Data::Pulse pls{};
 
             endFrame_ = frameIndex;
-            int width = frameIndex - MakeUnion(startFrame_)[zmw];
+            auto startFrameZmw = MakeUnion(startFrame_)[zmw];
+            int width = frameIndex - startFrameZmw;
 
+            // TODO rethink this a bit maybe
             float raw_mean = MakeUnion(signalTotal_ + signalLastFrame_ + signalFrstFrame_)[zmw] / static_cast<float>(width);
             float raw_mid = MakeUnion(signalTotal_)[zmw] / static_cast<float>(width - 2);
 
             using std::min;
             using std::max;
 
-            pls.Start(MakeUnion(startFrame_)[zmw])
+            pls.Start(startFrameZmw)
                 .Width(width)
                 .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
                 .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
@@ -151,7 +153,7 @@ public:
         void AddSignal(const LaneMask<laneSize>& update, const SignalArray& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
-            signalM2_ = Blend(update, signalM2_ + (AsFloat(signalLastFrame_) * AsFloat(signalLastFrame_)), signalM2_);
+            signalM2_ = Blend(update, signalM2_ + (signalLastFrame_ * signalLastFrame_), signalM2_);
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
             signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }
@@ -181,10 +183,11 @@ private:
     SignalArray Signal(size_t relativeFrameIndex, const SignalBlockView& latTrace,
                                const SignalBlockView& currTrace) const
     {
-        return relativeFrameIndex < latTrace.NumFrames()
-            // TODO this += nonsense is silly
-            ?  SignalArray((latTrace.CBegin() += relativeFrameIndex).Extract())
-            :  SignalArray((currTrace.CBegin() += (relativeFrameIndex - latTrace.NumFrames())).Extract());
+        auto itr = relativeFrameIndex < latTrace.NumFrames()
+            ?  latTrace.CBegin() + relativeFrameIndex
+            :  currTrace.CBegin() + (relativeFrameIndex - latTrace.NumFrames());
+
+        return itr.Extract();
     }
 
 private:

@@ -211,8 +211,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 
     // Initialize intra-lane failure codes.
     IntVec zStatus = OK;
-    SetBits(numFrames < numeric_cast<int>(nFramesMin),
-            INSUF_DATA, &zStatus);
+    SetBits(numFrames < nFramesMin, INSUF_DATA, &zStatus);
 
     DmeDiagnostics<FloatVec> dmeDx {};
     dmeDx.fullEstimation = true;
@@ -223,7 +222,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
     // TODO should this really be int?
-    mldx.degOfFreedom = AsInt(numFrames) - int(nModelParams);
+    mldx.degOfFreedom = AsInt(numFrames - nModelParams);
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]

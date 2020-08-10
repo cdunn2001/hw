@@ -127,33 +127,16 @@ public:     // Const interface
         return detectionModes_;
     }
 
-    /// Indicates whether the model was updated since the previous trace block
-    /// for unit cell specified by \a zmwIndex.
-    /// 0 <= \a zmwIndex < vecSize.
-    //bool Updated(size_t zmwIndex) const
-    //{
-    //    assert (zmwIndex < vecSize);
-    //    return updated_[zmwIndex];
-    //}
-
-    /// Vector of booleans indicated whether each unit cell was updated.
+    /// Vector of booleans indicated whether the model for each
+    /// unit cell was updated.
     BoolVec Updated() const
     { return updated_; }
 
-    /// The heuristic confidence score for the model for unit cell specificed
-    /// by \a zmwIndex.
+    /// The heuristic confidence score for the model for each unit cell.
     /// 0 indicates no confidence; 1, utmost confidence from a single
     /// estimatation.
     /// If the model is a result of multiple estimates averaged together, the
     /// confidence score may exceed 1.0.
-    /// 0 <= \a zmwIndex < vecSize.
-    //float Confidence(size_t zmwIndex) const
-    //{
-    //    assert (zmwIndex < vecSize);
-    //    return confid_[zmwIndex];
-    //}
-
-    /// The confidence scores for the complete lane.
     const FloatVec& Confidence() const
     { return confid_; }
 

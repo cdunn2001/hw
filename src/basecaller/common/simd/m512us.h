@@ -30,7 +30,7 @@ inline std::conditional_t<std::is_same<float, float>::value, m512f, m512ui> Low<
 template <>
 inline std::conditional_t<std::is_same<uint32_t, float>::value, m512f, m512ui> Low<uint32_t>(const m512us& in)
 {
-    return LowInts(in);
+    return LowUInts(in);
 }
 
 template <typename T>
@@ -44,7 +44,7 @@ inline std::conditional_t<std::is_same<float, float>::value, m512f, m512ui>High<
 template <>
 inline std::conditional_t<std::is_same<uint32_t, float>::value, m512f, m512ui>High<uint32_t>(const m512us& in)
 {
-    return HighInts(in);
+    return HighUInts(in);
 }
 
 template<>

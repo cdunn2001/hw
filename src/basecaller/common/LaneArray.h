@@ -100,9 +100,10 @@ struct magic
     using typee2 = std::conditional_t<std::is_arithmetic<typee>::value
                                       || std::is_same<Noop, typee>::value,
                                       typee, void>;
-    // Filter out double
-    // temporarily force signed
-    using type = std::conditional_t<!std::is_same<typee2, double>::value, typee2, void>;
+    // Eliminate 64bit primitives.
+    // TODO should this be void?
+    using helper = std::conditional_t<std::is_same<void, typee2>::value, bool, typee2>;
+    using type = std::conditional_t<sizeof(helper) == 8, Noop, typee2>;
 };
 template <typename T>
 struct magic<ArrayUnion<T>>
@@ -326,7 +327,7 @@ public:
         >
     BaseArray(PtrView<U, ScalarCount> dat)
     {
-        assert(static_cast<size_t>(dat[0]) % 64 == 0);
+        //assert(reinterpret_cast<size_t>(dat[0]) % 64 == 0);
         for (size_t i = 0; i < SimdCount; ++i)
         {
             data_[i] = T(dat[i*SimdTypeTraits<T>::width]);
@@ -444,6 +445,11 @@ public:
             ret[i] = U(tmp[i]);
         }
         return ret;
+    }
+
+    Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ToArray() const
+    {
+        return *this;
     }
 
     const std::array<T, SimdCount>& data() const
@@ -860,7 +866,7 @@ template <size_t Len>
 LaneArray<float, Len> AsFloat(const LaneArray<uint32_t, Len>& in)
 {
     return LaneArray<float, Len>(
-        [](auto&& in2) { return in2.AsFloat(); },
+        [](auto&& in2) { return m512f(in2); },
         in);
 }
 
@@ -868,7 +874,7 @@ template <size_t Len>
 LaneArray<float, Len> AsFloat(const LaneArray<int32_t, Len>& in)
 {
     return LaneArray<float, Len>(
-        [](auto&& in2) { return in2.AsFloat(); },
+        [](auto&& in2) { return m512f(in2); },
         in);
 }
 
@@ -880,12 +886,29 @@ LaneArray<short, Len> AsShort(const LaneArray<float, Len>& in)
         in);
 }
 
+template <size_t Len>
+LaneArray<uint16_t, Len> AsUnsignedShort(const LaneArray<float, Len>& in)
+{
+    return LaneArray<uint16_t, Len>(
+        [](auto&& in2) { return m512us(in2.first, in2.second); },
+        in);
+}
+
 
 template <size_t Len>
 LaneArray<int, Len> AsInt(const LaneArray<short, Len>& in)
 {
     return LaneArray<int, Len>(
         [](auto&& in2) { return std::make_pair(LowInts(in2), HighInts(in2)); },
+        in);
+}
+
+template <size_t Len>
+LaneArray<int, Len> AsInt(const LaneArray<unsigned short, Len>& in)
+{
+    return LaneArray<int, Len>(
+        [](auto&& in2) { return std::make_pair(static_cast<m512i>(LowUInts(in2)),
+                                               static_cast<m512i>(HighUInts(in2))); },
         in);
 }
 

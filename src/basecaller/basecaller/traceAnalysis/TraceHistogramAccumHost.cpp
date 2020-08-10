@@ -110,8 +110,7 @@ void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
     const auto& laneBlStats = stats_[lane].BaselineFramesStats();
 
     const auto& blCount = laneBlStats.Count();
-    // TODO make this change unnecessary
-    const auto& sufficientData = blCount >= static_cast<float>(BaselineStatMinFrameCount());
+    const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
     const auto& blMean = Blend(sufficientData,
                                laneBlStats.Mean(),
                                LaneArray<float>(0.0f));

@@ -86,22 +86,22 @@ public:
 
 public:
     // Start frame of trace metric block
-    const SingleMetric<int32_t>& StartFrame() const
+    const SingleMetric<uint32_t>& StartFrame() const
     { return startFrame_; }
 
-    SingleMetric<int32_t>& StartFrame()
+    SingleMetric<uint32_t>& StartFrame()
     { return startFrame_; }
 
     // First frame after end of trace metric block
-    SingleMetric<int32_t> StopFrame() const
+    SingleMetric<uint32_t> StopFrame() const
     { return startFrame_ + numFrames_; }
 
     // Number of frames used to compute trace metrics.
     // These don't need to be stored for each ZMW in a lane...
-    const SingleMetric<int32_t>& NumFrames() const
+    const SingleMetric<uint32_t>& NumFrames() const
     { return numFrames_; }
 
-    SingleMetric<int32_t>& NumFrames()
+    SingleMetric<uint32_t>& NumFrames()
     { return numFrames_; }
 
     /// Autocorrelation of baseline-subtracted traces.
@@ -122,8 +122,8 @@ public:
 
     /// The number of baseline frames used by the pulse detection filter to
     /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
-    //const SingleMetric<int16_t> NumFramesBaseline() const
-    //{ return baselineStatAccum_.Count().AsShort(); }
+    const SingleMetric<uint16_t> NumFramesBaseline() const
+    { return AsUnsignedShort(baselineStatAccum_.Count()); }
 
     /* TODO: to reactivate these, if needed, they can't be one-bit bool
      * LaneArrays
@@ -184,8 +184,8 @@ public:
     { return autocorrAccum_; }
 
 private:
-    SingleMetric<int32_t> startFrame_;
-    SingleMetric<int32_t> numFrames_;
+    SingleMetric<uint32_t> startFrame_;
+    SingleMetric<uint32_t> numFrames_;
     SingleMetric<int16_t> pixelChecksum_;
     SingleMetric<float> pulseDetectionScore_;
 

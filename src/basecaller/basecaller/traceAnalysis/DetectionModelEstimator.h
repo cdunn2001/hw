@@ -54,8 +54,8 @@ public:     // Types
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
     using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
     using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
-    using PoolHist = Data::PoolHistogram<float, short>;
-    using LaneHist = Data::LaneHistogram<float, short>;
+    using PoolHist = Data::PoolHistogram<float, unsigned short>;
+    using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
