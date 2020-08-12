@@ -41,6 +41,7 @@
 
 #include "m512f_SSE.h"
 #include "m512ui_SSE.h"
+#include "m512s_SSE.h"
 #include "xcompile.h"
 
 namespace PacBio {
@@ -63,6 +64,7 @@ private:    // Implementation
     using ImplType = __m128i;
     static const size_t implOffsetElems = sizeof(ImplType) / sizeof(uint16_t);
 
+ public:  // TODO fix access?
     union
     {
         ImplType simd[4];
@@ -111,14 +113,33 @@ public:     // Structors
 
     }
 
+    explicit m512us(const m512i& low, const m512i& high)
+        : m512us(m512ui(low), m512ui(high))
+    {}
+
     explicit m512us(const m512f& low, const m512f& high)
         : m512us(m512ui(low), m512ui(high))
     {}
+
+    explicit m512us(const m512s& o)
+        : data{{o.data.simd[0], o.data.simd[1], o.data.simd[2], o.data.simd[3]}}
+    {}
+
+    explicit operator m512s() const
+    {
+        return m512s(data.simd[0], data.simd[1], data.simd[2], data.simd[3]);
+    }
 
     operator std::pair<m512ui, m512ui>() const
     {
         return {LowUInts(*this), HighUInts(*this)};
     }
+
+    operator std::pair<m512i, m512i>() const
+    {
+        return {LowInts(*this), HighInts(*this)};
+    }
+
 
     operator std::pair<m512f, m512f>() const
     {

@@ -123,7 +123,7 @@ public:
     /// The number of baseline frames used by the pulse detection filter to
     /// compute DWS statistics, FrameBaselineDWS() and FrameBaselineVarianceDWS().
     const SingleMetric<uint16_t> NumFramesBaseline() const
-    { return AsUnsignedShort(baselineStatAccum_.Count()); }
+    { return SingleMetric<uint16_t>(baselineStatAccum_.Count()); }
 
     /* TODO: to reactivate these, if needed, they can't be one-bit bool
      * LaneArrays

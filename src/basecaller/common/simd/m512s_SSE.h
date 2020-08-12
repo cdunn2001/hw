@@ -63,6 +63,7 @@ private:    // Implementation
     using ImplType = __m128i;
     static const size_t implOffsetElems = sizeof(ImplType) / sizeof(short);
 
+ public: // TODO fix access
     union
     {
         ImplType simd[4];
@@ -111,6 +112,10 @@ public:     // Structors
 
     }
 
+    explicit m512s(const m512ui& low, const m512ui& high)
+        : m512s(m512i(low), m512i(high))
+    {}
+
     explicit m512s(const m512f& low, const m512f& high)
         : m512s(m512i(low), m512i(high))
     {}
@@ -118,6 +123,11 @@ public:     // Structors
     operator std::pair<m512i, m512i>() const
     {
         return {LowInts(*this), HighInts(*this)};
+    }
+
+    operator std::pair<m512ui, m512ui>() const
+    {
+        return {LowUInts(*this), HighUInts(*this)};
     }
 
     operator std::pair<m512f, m512f>() const
@@ -213,7 +223,7 @@ public:     // Conversion methods
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[1], 0xEE))));
     }
 
-    // Converts index 16-31 into a m512f
+
     friend m512f HighFloats(const m512s& in)
     {
         return m512f(_mm_cvtepi32_ps(_mm_cvtepi16_epi32(in.data.simd[2])),
@@ -221,7 +231,7 @@ public:     // Conversion methods
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(in.data.simd[3])),
                      _mm_cvtepi32_ps(_mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE))));
     }
-    // Converts index 0-15 into a m512f
+
     friend m512i LowInts(const m512s& in)
     {
         return m512i(_mm_cvtepi16_epi32(in.data.simd[0]),
@@ -230,13 +240,22 @@ public:     // Conversion methods
                      _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[1], 0xEE)));
     }
 
-    // Converts index 16-31 into a m512f
+    friend m512ui LowUInts(const m512s& in)
+    {
+        return m512ui(LowInts(in));
+    }
+
     friend m512i HighInts(const m512s& in)
     {
         return m512i(_mm_cvtepi16_epi32(in.data.simd[2]),
                      _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[2], 0xEE)),
                      _mm_cvtepi16_epi32(in.data.simd[3]),
                      _mm_cvtepi16_epi32(_mm_shuffle_epi32(in.data.simd[3], 0xEE)));
+    }
+
+    friend m512ui HighUInts(const m512s& in)
+    {
+        return m512ui(HighInts(in));
     }
 
 

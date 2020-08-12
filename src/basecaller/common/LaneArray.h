@@ -392,6 +392,38 @@ public:
         }
     }
 
+    BaseArray(const BaseArray&) = default;
+
+    template <typename U, typename UChild>
+    BaseArray(const BaseArray<U, SimdCount, UChild>& o)
+    {
+        for (size_t i = 0; i < SimdCount; ++i)
+        {
+            data_[i] = T(o.data()[i]);
+        }
+    }
+
+    template <typename U, typename UChild>
+    BaseArray(const BaseArray<U, 2*SimdCount, UChild>& o)
+    {
+        for (size_t i = 0; i < SimdCount; ++i)
+        {
+            data_[i] = T(o.data()[2*i], o.data()[2*i+1]);
+        }
+    }
+
+    template <typename U, typename UChild>
+    BaseArray(const BaseArray<U, SimdCount/2, UChild>& o)
+    {
+        static_assert(SimdCount % 2 == 0, "");
+        for (size_t i = 0; i < SimdCount; i+=2)
+        {
+            auto tmp = std::pair<T,T>(o.data()[i/2]);
+            data_[i] = tmp.first;
+            data_[i+1] = tmp.second;
+        }
+    }
+
     template <typename F, typename...Args>
     Child& Update(F&& f, const Args&... args)
     {
@@ -846,62 +878,6 @@ class LaneArray<int16_t, ScalarCount> : public ArithmeticBase<int16_t, ScalarCou
 public:
     using Base::Base;
 };
-
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const LaneArray<short, Len>& in)
-{
-    return LaneArray<float, Len>(
-        [](auto&& in2) { return std::make_pair(LowFloats(in2), HighFloats(in2)); },
-        in);
-}
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const LaneArray<uint16_t, Len>& in)
-{
-    return LaneArray<float, Len>(
-        [](auto&& in2) { return std::make_pair(LowFloats(in2), HighFloats(in2)); },
-        in);
-}
-
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const LaneArray<uint32_t, Len>& in)
-{
-    return LaneArray<float, Len>(
-        [](auto&& in2) { return m512f(in2); },
-        in);
-}
-
-template <size_t Len>
-LaneArray<float, Len> AsFloat(const LaneArray<int32_t, Len>& in)
-{
-    return LaneArray<float, Len>(
-        [](auto&& in2) { return m512f(in2); },
-        in);
-}
-
-template <size_t Len>
-LaneArray<short, Len> AsShort(const LaneArray<float, Len>& in)
-{
-    return LaneArray<short, Len>(
-        [](auto&& in2) { return m512s(in2.first, in2.second); },
-        in);
-}
-
-template <size_t Len>
-LaneArray<uint16_t, Len> AsUnsignedShort(const LaneArray<float, Len>& in)
-{
-    return LaneArray<uint16_t, Len>(
-        [](auto&& in2) { return m512us(in2.first, in2.second); },
-        in);
-}
-
-
-template <size_t Len>
-LaneArray<int, Len> AsInt(const LaneArray<short, Len>& in)
-{
-    return LaneArray<int, Len>(
-        [](auto&& in2) { return std::make_pair(LowInts(in2), HighInts(in2)); },
-        in);
-}
 
 template <size_t Len>
 LaneArray<int, Len> AsInt(const LaneArray<unsigned short, Len>& in)

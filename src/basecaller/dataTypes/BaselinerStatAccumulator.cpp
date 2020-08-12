@@ -40,7 +40,7 @@ void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
                                             const LaneArray& baselineSubtracted,
                                             const Mask& isBaseline)
 {
-    const FloatArray bs = AsFloat(baselineSubtracted);
+    const FloatArray bs(baselineSubtracted);
 
     // Add frame to complete trace statistics.
     baselineSubtractedStats_.AddSample(bs);

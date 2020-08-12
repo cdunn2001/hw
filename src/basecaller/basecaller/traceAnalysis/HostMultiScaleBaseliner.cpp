@@ -92,7 +92,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
             // NOTE: We need to scale the trace data (from DN to e-) and
             // end up converting the baseline subtracted data to float in order
             // to perform the conversion and then end up converting it back.
-            auto out = AsShort((rawSignal - bias - frameBiasEstimate) * Scale());
+            LaneArray out((rawSignal - bias - frameBiasEstimate) * Scale());
             blsIter.Store(out);
 
             AddToBaselineStats(rawSignal, out, baselinerStats);

@@ -697,10 +697,10 @@ TEST(LaneArray, SignedVsUnsignedIntegers)
     EXPECT_TRUE(none(intUnsignedNeg2 / intUnsignedNeg1 == static_cast<uint32_t>(2)));
 
     // Make sure we have expected sign when going to a wider signed type like float.
-    EXPECT_TRUE(all(AsFloat(shortUnsignedNeg2) > 0.0f));
-    EXPECT_TRUE(all(AsFloat(shortSignedNeg2) < 0.0f));
-    EXPECT_TRUE(all(AsFloat(intUnsignedNeg2) > 0.0f));
-    EXPECT_TRUE(all(AsFloat(intSignedNeg2) < 0.0f));
+    EXPECT_TRUE(all(LaneArray<float, laneSize>(shortUnsignedNeg2) > 0.0f));
+    EXPECT_TRUE(all(LaneArray<float, laneSize>(shortSignedNeg2) < 0.0f));
+    EXPECT_TRUE(all(LaneArray<float, laneSize>(intUnsignedNeg2) > 0.0f));
+    EXPECT_TRUE(all(LaneArray<float, laneSize>(intSignedNeg2) < 0.0f));
 }
 
 // How do you write a unit test that checks to make sure certain code
@@ -872,4 +872,112 @@ TYPED_TEST(LaneArrayCompoundOps, Valid)
     EXPECT_TRUE(TestVecScalarCombinations(false, int32_t{}, uint16_t{}));
 
     EXPECT_TRUE(TestVecScalarCombinations(false, int16_t{}, uint16_t{}));
+}
+
+TEST(LaneArray, Conversions)
+{
+    auto cvtToAll = [&](const auto& in)
+    {
+        bool allPass = true;
+        bool pass = true;
+
+        auto test = [](const auto& convArr, const auto& origArr)
+        {
+            using conv_t = ScalarType<std::decay_t<decltype(convArr)>>;
+            using orig_t = ScalarType<std::decay_t<decltype(origArr)>>;
+            bool success = true;
+
+            const auto& convData = convArr.ToArray();
+            const auto& origData = origArr.ToArray();
+            // Make sure it's representble.
+            const bool isFloat = std::is_same<orig_t, float>::value;
+            for (size_t i = 0; i < origData.size(); ++i)
+            {
+                const bool outRange = static_cast<float>(origData[i]) < std::numeric_limits<conv_t>::lowest()
+                                   || static_cast<float>(origData[i]) > std::numeric_limits<conv_t>::max();
+                if (isFloat && outRange)
+                    continue;
+                else
+                {
+                    bool elemTest = convData[i] == static_cast<conv_t>(origData[i]);
+                    EXPECT_TRUE(elemTest) << i << ": "
+                                          << convData[i] << " "
+                                          << static_cast<conv_t>(origData[i])
+                                          << " " << origData[i];
+                    success &= elemTest;
+                }
+
+            }
+            return success;
+        };
+
+        pass = test(LaneArray<float>(in), in);
+        EXPECT_TRUE(pass) << "float conv failed";
+        allPass &= pass;
+
+        pass = test(LaneArray<int32_t>(in), in);
+        EXPECT_TRUE(pass) << "int32_t conv failed";
+        allPass &= pass;
+
+        pass = test(LaneArray<uint32_t>(in), in);
+        EXPECT_TRUE(pass) << "uint32_t conv failed";
+        allPass &= pass;
+
+        pass = test(LaneArray<int16_t>(in), in);
+        EXPECT_TRUE(pass) << "int16_t conv failed";
+        allPass &= pass;
+
+        pass = test(LaneArray<uint16_t>(in), in);
+        EXPECT_TRUE(pass) << "uint16_t conv failed";
+        allPass &= pass;
+
+        return allPass;
+    };
+
+    std::array<float, 5> fltPattern = {
+        12.5f, -12.5f,
+        2.f*std::numeric_limits<int16_t>::max(),
+        2.f*std::numeric_limits<int16_t>::min(),
+        1.5f*std::numeric_limits<int32_t>::max()};
+
+    std::array<int32_t, 5> intPattern = {
+        15, -15,
+        2*std::numeric_limits<int16_t>::max(),
+        2*std::numeric_limits<int16_t>::min(),
+        std::numeric_limits<int32_t>::max()};
+
+    std::array<uint32_t, 5> uintPattern = {
+        15, 31,
+        2*std::numeric_limits<int16_t>::max(),
+        3*std::numeric_limits<int16_t>::max(),
+        std::numeric_limits<uint32_t>::max()};
+
+    std::array<int16_t, 5> shortPattern = {
+        1, -7, 59, -13241,
+        std::numeric_limits<int16_t>::max()};
+
+    std::array<uint16_t, 5> ushortPattern = {
+        1, 7, 59, 13241,
+        std::numeric_limits<uint16_t>::max()};
+
+    CudaArray<float, laneSize>    fltData;
+    CudaArray<int32_t, laneSize>  intData;
+    CudaArray<uint32_t, laneSize> uintData;
+    CudaArray<int16_t, laneSize>  shortData;
+    CudaArray<uint16_t, laneSize> ushortData;
+
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        fltData[i] = fltPattern[i%5];
+        intData[i] = intPattern[i%5];
+        uintData[i] = uintPattern[i%5];
+        shortData[i] = shortPattern[i%5];
+        ushortData[i] = ushortPattern[i%5];
+    }
+
+    EXPECT_TRUE(cvtToAll(LaneArray<float, laneSize>(fltData)));
+    EXPECT_TRUE(cvtToAll(LaneArray<int32_t, laneSize>(intData)));
+    EXPECT_TRUE(cvtToAll(LaneArray<uint32_t, laneSize>(uintData)));
+    EXPECT_TRUE(cvtToAll(LaneArray<int16_t, laneSize>(shortData)));
+    EXPECT_TRUE(cvtToAll(LaneArray<uint16_t, laneSize>(ushortData)));
 }

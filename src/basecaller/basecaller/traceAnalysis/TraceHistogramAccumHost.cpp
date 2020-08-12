@@ -142,7 +142,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
     {
         // TODO: Filter edge frames.
-        h.AddDatum(AsFloat(lfi.Extract()));
+        h.AddDatum(LaneArray<float>(lfi.Extract()));
     }
 }
 

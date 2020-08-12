@@ -60,7 +60,8 @@ public:     // Static constants
     /// The number of short ints represented by one instance.
     static constexpr size_t size() { return sizeof(m512s) / sizeof(short); }
 
-private:    // Implementation
+    //private:    // Implementation
+ public: // TODO access
     using ImplType = __m512i;
     ImplType v;
 
@@ -91,6 +92,11 @@ public:     // Structors
         v = _mm512_inserti64x4(l, h, 1);
     }
 
+    explicit m512s(const m512ui& low, const m512ui& high)
+        : m512s(m512i(low), m512i(high))
+    {}
+
+
     m512s(const m512f& low, const m512f& high)
         : m512s(m512i(low), m512i(high))
     {}
@@ -98,6 +104,11 @@ public:     // Structors
     operator std::pair<m512i, m512i>() const
     {
         return {LowInts(*this), HighInts(*this)};
+    }
+
+    operator std::pair<m512ui, m512ui>() const
+    {
+        return {LowUInts(*this), HighUInts(*this)};
     }
 
     operator std::pair<m512f, m512f>() const
@@ -271,10 +282,20 @@ public:     // Conversion methods
         return m512i(_mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
     }
 
+    friend m512ui LowUInts(const m512s& in)
+    {
+        return m512ui(LowInts(in));
+    }
+
     // Converts index 16-31 into an m512f
     friend m512i HighInts(const m512s& in)
     {
         return m512i(_mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(in.v, 1)));
+    }
+
+    friend m512ui HighUInts(const m512s& in)
+    {
+        return m512ui(HighInts(in));
     }
 
 public:     // Non-member (friend) functions

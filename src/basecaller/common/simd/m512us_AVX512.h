@@ -41,6 +41,7 @@
 
 #include "m512f_AVX512.h"
 #include "m512ui_AVX512.h"
+#include "m512us_AVX512.h"
 #include "m512b_AVX512.h"
 #include "xcompile.h"
 
@@ -84,13 +85,31 @@ public:     // Structors
         v = _mm512_inserti64x4(l, h, 1);
     }
 
+    m512us(const m512i& low, const m512i& high)
+        : m512us(m512ui(low), m512ui(high))
+    {}
+
     m512us(const m512f& low, const m512f& high)
         : m512us(m512ui(low), m512ui(high))
     {}
 
+    explicit m512us(const m512s& x)
+        : v(x.v)
+    {}
+
+    explicit operator m512s() const
+    {
+        return m512s(v);
+    }
+
     operator std::pair<m512ui, m512ui>() const
     {
         return {LowUInts(*this), HighUInts(*this)};
+    }
+
+    operator std::pair<m512i, m512i>() const
+    {
+        return {LowInts(*this), HighInts(*this)};
     }
 
     operator std::pair<m512f, m512f>() const
@@ -198,11 +217,22 @@ public:     // Conversion methods
         return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
     }
 
+    friend m512i LowInts(const m512us& in)
+    {
+        return m512i(LowUInts(in));
+    }
+
     // Converts index 16-31 into an m512f
     friend m512ui HighUInts(const m512us& in)
     {
         return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 1)));
     }
+
+    friend m512i HighInts(const m512us& in)
+    {
+        return m512i(HighUInts(in));
+    }
+
 
 public:     // Non-member (friend) functions
 

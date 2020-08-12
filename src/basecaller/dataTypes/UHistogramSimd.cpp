@@ -230,13 +230,13 @@ UHistogramSimd<DataT, CountT>::CumulativeCount(DataType x) const
     }
 
     // Tally the cumulative count.
-    auto cc = AsFloat(LowOutlierCount());
+    auto cc = FloatType(LowOutlierCount());
     cc += CountNonuniform(IndexType(0), xbin);
     cc += xbinCount * xrem / BinSize();
 
-    cc = Blend(mLow, AsFloat(LowOutlierCount()), cc);
-    cc = Blend(mHigh, AsFloat(LowOutlierCount() + InRangeCount()), cc);
-    cc = Blend(mNan, FloatType(NAN), cc);
+    cc = Blend(mLow,  FloatType(LowOutlierCount()), cc);
+    cc = Blend(mHigh, FloatType(LowOutlierCount() + InRangeCount()), cc);
+    cc = Blend(mNan,  FloatType(NAN), cc);
 
     return cc;
 }
