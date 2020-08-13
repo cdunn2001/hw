@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512us_AVX512_H_
 #define mongo_common_simd_m512us_AVX512_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -165,7 +165,9 @@ public:     // Assignment
         return m512us(_mm512_div_epu16(l.v, r.v));
     }
 
-    static std::pair<m512b,m512b> help(__mmask32 mask)
+    // Turns an __mask32 mask returned from the intrinsic into a pair
+    // of __mmask16 types as our m512b type requires
+    static std::pair<m512b,m512b> CompHelper(__mmask32 mask)
     {
         auto low = static_cast<__mmask16>(mask & 0xFFFF);
         auto high = static_cast<__mmask16>((mask & 0xFFFF0000) >> 16);
@@ -174,27 +176,27 @@ public:     // Assignment
 
     friend std::pair<m512b,m512b> operator!=(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmpneq_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmpneq_epu16_mask(a.v, b.v));
     }
     friend std::pair<m512b,m512b> operator==(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmpeq_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmpeq_epu16_mask(a.v, b.v));
     }
     friend std::pair<m512b,m512b> operator>(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmpgt_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmpgt_epu16_mask(a.v, b.v));
     }
     friend std::pair<m512b,m512b> operator<(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmplt_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmplt_epu16_mask(a.v, b.v));
     }
     friend std::pair<m512b,m512b> operator<=(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmple_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmple_epu16_mask(a.v, b.v));
     }
     friend std::pair<m512b,m512b> operator>=(const m512us& a, const m512us& b)
     {
-        return help(_mm512_cmpge_epu16_mask(a.v, b.v));
+        return CompHelper(_mm512_cmpge_epu16_mask(a.v, b.v));
     }
 
 public:     // Conversion methods
@@ -205,6 +207,18 @@ public:     // Conversion methods
         return m512f(_mm512_cvt_roundepu32_ps(tmp, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
     }
 
+    // Converts index 0-15 into an m512ui
+    friend m512ui LowUInts(const m512us& in)
+    {
+        return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
+    }
+
+    // Converts index 0-15 into an m512i
+    friend m512i LowInts(const m512us& in)
+    {
+        return m512i(LowUInts(in));
+    }
+
     // Converts index 16-31 into an m512f
     friend m512f HighFloats(const m512us& in)
     {
@@ -212,22 +226,14 @@ public:     // Conversion methods
         return m512f(_mm512_cvt_roundepu32_ps(tmp, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
     }
 
-    friend m512ui LowUInts(const m512us& in)
-    {
-        return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 0)));
-    }
 
-    friend m512i LowInts(const m512us& in)
-    {
-        return m512i(LowUInts(in));
-    }
-
-    // Converts index 16-31 into an m512f
+    // Converts index 16-31 into an m512ui
     friend m512ui HighUInts(const m512us& in)
     {
         return m512ui(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(in.v, 1)));
     }
 
+    // Converts index 16-31 into an m512i
     friend m512i HighInts(const m512us& in)
     {
         return m512i(HighUInts(in));

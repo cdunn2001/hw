@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_ArrayUnion_H_
 #define mongo_common_simd_ArrayUnion_H_
 
-// Copyright (c) 2017, Pacific Biosciences of California, Inc.
+// Copyright (c) 2017,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //

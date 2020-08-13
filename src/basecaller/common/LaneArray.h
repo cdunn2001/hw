@@ -552,18 +552,18 @@ public:
         return Reduce([](auto&& l, auto&& r) { l &= none(r); }, true, m);
     }
 
-    friend LaneMask operator| (const LaneMask& l, const LaneMask& r)
-    {
-        return LaneMask(
-            [](auto&& l2, auto&& r2){ return l2 | r2; },
-            l, r);
-    }
-
     friend LaneMask operator! (const LaneMask& m)
     {
         return LaneMask(
             [](auto&& m2){ return !m2; },
             m);
+    }
+
+    friend LaneMask operator| (const LaneMask& l, const LaneMask& r)
+    {
+        return LaneMask(
+            [](auto&& l2, auto&& r2){ return l2 | r2; },
+            l, r);
     }
 
     friend LaneMask operator& (const LaneMask& l, const LaneMask& r)
@@ -572,6 +572,14 @@ public:
             [](auto&& l2, auto&& r2){ return l2 & r2; },
             l, r);
     }
+
+    friend LaneMask operator^ (const LaneMask& l, const LaneMask& r)
+    {
+        return LaneMask(
+            [](auto&& l2, auto&& r2){ return l2 ^ r2; },
+            l, r);
+    }
+
 
     LaneMask& operator &= (const LaneMask& o)
     {
@@ -878,15 +886,6 @@ class LaneArray<int16_t, ScalarCount> : public ArithmeticBase<int16_t, ScalarCou
 public:
     using Base::Base;
 };
-
-template <size_t Len>
-LaneArray<int, Len> AsInt(const LaneArray<unsigned short, Len>& in)
-{
-    return LaneArray<int, Len>(
-        [](auto&& in2) { return std::make_pair(static_cast<m512i>(LowUInts(in2)),
-                                               static_cast<m512i>(HighUInts(in2))); },
-        in);
-}
 
 template <typename T, size_t Len>
 struct len_trait<LaneArray<T, Len>>

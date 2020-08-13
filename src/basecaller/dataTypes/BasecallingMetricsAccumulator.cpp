@@ -42,13 +42,6 @@ namespace Data {
 
 namespace {
 
-// TODO clean
-template <typename T, size_t N, typename U>
-void Fill(CudaArray<T, N>& arr, U val)
-{
-    std::fill(arr.begin(), arr.end(), val);
-}
-
 // Evaluates a polynomial with a list of coefficients by descending degree
 // (e.g. y = ax^2 + bx + c)
 template <size_t size>
@@ -119,37 +112,37 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
     const auto& pkbases = numBasesByAnalog_;
 
     // make a copy of modelMean_
-    AnalogMetric<float> relamps(modelMean_);
+    std::array<LaneArray<float>, numAnalogs> relamps;
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        relamps[i] = LaneArray<float>(modelMean_[i]);
+    }
 
-    LaneArray<float> maxamp(relamps[0]);
+    LaneArray<float> maxamp = relamps[0];
     for (size_t i = 1; i < numAnalogs; ++i)
     {
-        maxamp = max(LaneArray<float>(relamps[i]), maxamp);
+        maxamp = max(relamps[i], maxamp);
     }
     for (size_t i = 0; i < numAnalogs; ++i)
     {
-        relamps[i] = LaneArray<float>(relamps[i]) / maxamp;
+        relamps[i] /= maxamp;
     }
 
     LaneArray<unsigned int> lowAmpIndex(0);
-    LaneArray<float> minamp(relamps[0]);
-    // TODO unify with above?
+    LaneArray<float> minamp = relamps[0];
     for (size_t i = 1; i < numAnalogs; ++i)
     {
-        // TODO rename
-        LaneArray<float> tmp(relamps[i]);
         static_assert(sizeof(unsigned int) == 4u, "");
         const auto& ila = LaneArray<unsigned int>(i);
-        lowAmpIndex = Blend(tmp < minamp, ila, lowAmpIndex);
-        minamp = min(tmp, minamp);
+        lowAmpIndex = Blend(relamps[i] < minamp, ila, lowAmpIndex);
+        minamp = min(relamps[i], minamp);
     }
 
     for (size_t i = 0; i < numAnalogs; ++i)
     {
         features[ActivityLabeler::BLOCKLOWSNR] += LaneArray<float>(pkmid[i]) / stdDev
                                                 * LaneArray<float>(pkbases[i]) / numBases
-            // TODO we've converted relamps about a millio times now
-                                                * minamp / LaneArray<float>(relamps[i]);
+                                                * minamp / relamps[i];
     }
     features[ActivityLabeler::BLOCKLOWSNR] = Blend(
             isnan(features[ActivityLabeler::BLOCKLOWSNR]),
@@ -174,7 +167,6 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
     for (size_t i = 0; i < numAnalogs; ++i)
     {
         // Can we avoid this Blend?
-        // TODO rename
         LaneArray<float> tmp(bpZvar_[i]);
         features[ActivityLabeler::BPZVARNORM] += Blend(isnan(tmp), zeros, tmp);
         lowbp = Blend((lowAmpIndex == i) & !isnan(tmp), tmp, lowbp);
@@ -255,24 +247,24 @@ void BasecallingMetricsAccumulator::PopulateBasecallingMetrics(
 
 void BasecallingMetricsAccumulator::Reset()
 {
-    Fill(numPulseFrames_, 0);
-    Fill(numBaseFrames_, 0);
-    Fill(numSandwiches_, 0);
-    Fill(numHalfSandwiches_, 0);
-    Fill(numPulseLabelStutters_, 0);
+    numPulseFrames_ = 0;
+    numBaseFrames_ = 0;
+    numSandwiches_ = 0;
+    numHalfSandwiches_ = 0;
+    numPulseLabelStutters_ = 0;
     prevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
     prevprevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
-    Fill(activityLabel_, static_cast<uint16_t>(HQRFPhysicalStates::EMPTY));
+    activityLabel_ = static_cast<uint16_t>(HQRFPhysicalStates::EMPTY);
     for (size_t a = 0; a < numAnalogs; ++a)
     {
-        Fill(pkMidSignal_[a], 0);
-        Fill(bpZvar_[a], 0);
-        Fill(pkZvar_[a], 0);
-        Fill(pkMax_[a], 0);
-        Fill(numPkMidFrames_[a], 0);
-        Fill(numPkMidBasesByAnalog_[a], 0);
-        Fill(numBasesByAnalog_[a], 0);
-        Fill(numPulsesByAnalog_[a], 0);
+        pkMidSignal_[a] = 0;
+        bpZvar_[a] = 0;
+        pkZvar_[a] = 0;
+        pkMax_[a] = 0;
+        numPkMidFrames_[a] = 0;
+        numPkMidBasesByAnalog_[a] = 0;
+        numBasesByAnalog_[a] = 0;
+        numPulsesByAnalog_[a] = 0;
     }
     traceMetrics_.Reset();
 }
@@ -320,10 +312,10 @@ void BasecallingMetricsAccumulator::AddModels(
 {
     for (size_t ai = 0; ai < numAnalogs; ++ai)
     {
-        for (size_t i = 0; i < laneSize; ++i)
+        for (size_t zi = 0; zi < laneSize; ++zi)
         {
-            modelVariance_[ai][i] = models.AnalogMode(ai).vars[i];
-            modelMean_[ai][i] = models.AnalogMode(ai).means[i];
+            modelVariance_[ai][zi] = models.AnalogMode(ai).vars[zi];
+            modelMean_[ai][zi] = models.AnalogMode(ai).means[zi];
         }
     }
 }
@@ -435,72 +427,72 @@ void BasecallingMetricsAccumulator::FinalizeMetrics(
         if (all(LaneArray<int16_t>(numPkMidBasesByAnalog_[pulseLabel]) == 0))
         {
             // No bases called on channel.
-            Fill(pkMidSignal_[pulseLabel], std::numeric_limits<float>::quiet_NaN());
-            Fill(bpZvar_[pulseLabel], std::numeric_limits<float>::quiet_NaN());
-            Fill(pkZvar_[pulseLabel], std::numeric_limits<float>::quiet_NaN());
+            pkMidSignal_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            bpZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            pkZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
         }
         else if (all(LaneArray<float>(numPkMidBasesByAnalog_[pulseLabel]) < 2)
                  || all(LaneArray<float>(numPkMidFrames_[pulseLabel]) < 2))
         {
-            Fill(bpZvar_[pulseLabel], std::numeric_limits<float>::quiet_NaN());
-            Fill(pkZvar_[pulseLabel], std::numeric_limits<float>::quiet_NaN());
+            bpZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
+            pkZvar_[pulseLabel] = std::numeric_limits<float>::quiet_NaN();
         }
         else
         {
             // Load up the values we ultimately intend to adjust
-            LaneArray<float> bpZvar(bpZvar_[pulseLabel]);
-            LaneArray<float> pkZvar(pkZvar_[pulseLabel]);
-            LaneArray<float> pkMidSignal(pkMidSignal_[pulseLabel]);
+            LaneArray<float> bpZvarLabel(bpZvar_[pulseLabel]);
+            LaneArray<float> pkZvarLabel(pkZvar_[pulseLabel]);
+            LaneArray<float> pkMidSignalLabel(pkMidSignal_[pulseLabel]);
 
             const LaneArray<float> nf(numPkMidFrames_[pulseLabel]);
             const LaneArray<float> nb(numPkMidBasesByAnalog_[pulseLabel]);
             // Convert moments to interpulse variance
-            bpZvar = (bpZvar - (pkMidSignal * pkMidSignal / nf)) / nf;
+            bpZvarLabel = (bpZvarLabel - (pkMidSignalLabel * pkMidSignalLabel / nf)) / nf;
 
             // Bessel's correction with num bases, not frames
-            bpZvar = bpZvar * nb / (nb - 1.0f);
+            bpZvarLabel = bpZvarLabel * nb / (nb - 1.0f);
 
             const auto baselineVariance =
                 traceMetrics_.FrameBaselineVarianceDWS();
 
-            bpZvar = bpZvar - baselineVariance / (nf / nb);
+            bpZvarLabel -= baselineVariance / (nf / nb);
 
-            pkZvar = (pkZvar - (pkMidSignal * pkMidSignal / nf)) / (nf - 1.0f);
+            pkZvarLabel = (pkZvarLabel - (pkMidSignalLabel * pkMidSignalLabel / nf)) / (nf - 1.0f);
 
             // pkzvar up to this point contains total signal variance. We
             // subtract out interpulse variance and baseline variance to leave
             // intrapulse variance.
-            pkZvar -= bpZvar + baselineVariance;
+            pkZvarLabel -= bpZvarLabel + baselineVariance;
 
             const LaneArray<float> modelIntraVars(modelVariance_[pulseLabel]);
             // the model intrapulse variance still contains baseline variance,
             // remove before normalizing
             auto mask = (modelIntraVars < baselineVariance);
-            pkZvar /= modelIntraVars - baselineVariance;
-            mask |= (pkZvar < 0.0f);
-            pkZvar = Blend(mask, LaneArray<float>(0.0f), pkZvar);
+            pkZvarLabel /= modelIntraVars - baselineVariance;
+            mask |= (pkZvarLabel < 0.0f);
+            pkZvarLabel = Blend(mask, LaneArray<float>(0.0f), pkZvarLabel);
 
 
-            const auto& pkMid = pkMidSignal / nf;
+            const auto& pkMid = pkMidSignalLabel / nf;
             mask = (pkMid < 0);
-            bpZvar /= (pkMid * pkMid);
-            mask |= (bpZvar < 0.0f);
-            bpZvar = Blend(mask, nans, bpZvar);
+            bpZvarLabel /= (pkMid * pkMid);
+            mask |= (bpZvarLabel < 0.0f);
+            bpZvarLabel = Blend(mask, nans, bpZvarLabel);
 
             // No bases called on channel.
             const LaneArray<int16_t> numPkMidBasesByAnalog(numPkMidBasesByAnalog_[pulseLabel]);
             mask = (numPkMidBasesByAnalog == 0);
-            pkMidSignal = Blend(mask, nans, pkMidSignal);
+            pkMidSignalLabel = Blend(mask, nans, pkMidSignalLabel);
             // Not enough bases called on channel
             mask |= (numPkMidBasesByAnalog < 2);
             mask |= (LaneArray<int16_t>(numPkMidFrames_[pulseLabel]) < 2);
-            bpZvar = Blend(mask, nans, bpZvar);
-            pkZvar = Blend(mask, nans, pkZvar);
+            bpZvarLabel = Blend(mask, nans, bpZvarLabel);
+            pkZvarLabel = Blend(mask, nans, pkZvarLabel);
 
             // Store the results
-            pkMidSignal_[pulseLabel] = pkMidSignal;
-            bpZvar_[pulseLabel] = bpZvar;
-            pkZvar_[pulseLabel] = pkZvar;
+            pkMidSignal_[pulseLabel] = pkMidSignalLabel;
+            bpZvar_[pulseLabel] = bpZvarLabel;
+            pkZvar_[pulseLabel] = pkZvarLabel;
         }
     }
 

@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512ui_SSE_H_
 #define mongo_common_simd_m512ui_SSE_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -68,8 +68,7 @@ private:    // Implementation
     using ImplType = __m128i;
     static const size_t implOffsetElems = sizeof(ImplType) / sizeof(uint32_t);
 
-    // TODO rethink access
-public:
+private:
     union
     {
         ImplType simd[4];
@@ -255,7 +254,7 @@ public:     // Non-member (friend) functions
                       _mm_or_si128(l.data.simd[2], r.data.simd[2]),
                       _mm_or_si128(l.data.simd[3], r.data.simd[3]));
     }
-    
+
     friend m512ui operator ^ (const m512ui& l, const m512ui& r)
     {
         return m512ui(_mm_xor_si128(l.data.simd[0], r.data.simd[0]),
@@ -270,7 +269,7 @@ public:     // Non-member (friend) functions
     // subtract off the lowest int16_t value. With rollovers considered, this
     // will put 0 back at the lowest value, making the result of signed int16_t
     // comparisons give us what we need
-    static __m128i prep(__m128i v)
+    static __m128i CompPrep(__m128i v)
     {
         auto min = _mm_set1_epi32(std::numeric_limits<int32_t>::lowest());
         return _mm_sub_epi32(v, min);
@@ -278,10 +277,10 @@ public:     // Non-member (friend) functions
 
     friend m512b operator < (const m512ui &l, const m512ui &r)
     {
-        return m512b(_mm_castsi128_ps(_mm_cmplt_epi32(prep(l.data.simd[0]), prep(r.data.simd[0]))),
-                     _mm_castsi128_ps(_mm_cmplt_epi32(prep(l.data.simd[1]), prep(r.data.simd[1]))),
-                     _mm_castsi128_ps(_mm_cmplt_epi32(prep(l.data.simd[2]), prep(r.data.simd[2]))),
-                     _mm_castsi128_ps(_mm_cmplt_epi32(prep(l.data.simd[3]), prep(r.data.simd[3]))));
+        return m512b(_mm_castsi128_ps(_mm_cmplt_epi32(CompPrep(l.data.simd[0]), CompPrep(r.data.simd[0]))),
+                     _mm_castsi128_ps(_mm_cmplt_epi32(CompPrep(l.data.simd[1]), CompPrep(r.data.simd[1]))),
+                     _mm_castsi128_ps(_mm_cmplt_epi32(CompPrep(l.data.simd[2]), CompPrep(r.data.simd[2]))),
+                     _mm_castsi128_ps(_mm_cmplt_epi32(CompPrep(l.data.simd[3]), CompPrep(r.data.simd[3]))));
     }
 
     friend m512b operator <= (const m512ui &l, const m512ui &r)
@@ -291,10 +290,10 @@ public:     // Non-member (friend) functions
 
     friend m512b operator > (const m512ui &l, const m512ui &r)
     {
-        return m512b(_mm_castsi128_ps(_mm_cmpgt_epi32(prep(l.data.simd[0]), prep(r.data.simd[0]))),
-                     _mm_castsi128_ps(_mm_cmpgt_epi32(prep(l.data.simd[1]), prep(r.data.simd[1]))),
-                     _mm_castsi128_ps(_mm_cmpgt_epi32(prep(l.data.simd[2]), prep(r.data.simd[2]))),
-                     _mm_castsi128_ps(_mm_cmpgt_epi32(prep(l.data.simd[3]), prep(r.data.simd[3]))));
+        return m512b(_mm_castsi128_ps(_mm_cmpgt_epi32(CompPrep(l.data.simd[0]), CompPrep(r.data.simd[0]))),
+                     _mm_castsi128_ps(_mm_cmpgt_epi32(CompPrep(l.data.simd[1]), CompPrep(r.data.simd[1]))),
+                     _mm_castsi128_ps(_mm_cmpgt_epi32(CompPrep(l.data.simd[2]), CompPrep(r.data.simd[2]))),
+                     _mm_castsi128_ps(_mm_cmpgt_epi32(CompPrep(l.data.simd[3]), CompPrep(r.data.simd[3]))));
     }
 
     friend m512b operator >= (const m512ui &l, const m512ui &r)

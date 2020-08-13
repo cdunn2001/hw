@@ -116,11 +116,11 @@ public:
 
             endFrame_ = frameIndex;
             auto startFrameZmw = MakeUnion(startFrame_)[zmw];
+            auto signalTotalZmw = MakeUnion(signalTotal_)[zmw];
             int width = frameIndex - startFrameZmw;
 
-            // TODO rethink this a bit maybe
-            float raw_mean = MakeUnion(signalTotal_ + signalLastFrame_ + signalFrstFrame_)[zmw] / static_cast<float>(width);
-            float raw_mid = MakeUnion(signalTotal_)[zmw] / static_cast<float>(width - 2);
+            float raw_mean = (signalTotalZmw + MakeUnion(signalLastFrame_)[zmw] + MakeUnion(signalFrstFrame_)[zmw]) / static_cast<float>(width);
+            float raw_mid = signalTotalZmw / static_cast<float>(width - 2);
 
             using std::min;
             using std::max;
@@ -153,7 +153,7 @@ public:
         void AddSignal(const LaneMask<laneSize>& update, const SignalArray& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
-            signalM2_ = Blend(update, signalM2_ + (signalLastFrame_ * signalLastFrame_), signalM2_);
+            signalM2_ = Blend(update, signalM2_ + signalLastFrame_ * signalLastFrame_, signalM2_);
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
             signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }

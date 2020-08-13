@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512i_AVX512_H_
 #define mongo_common_simd_m512i_AVX512_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2015,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -67,10 +67,7 @@ public:     // Structors
     m512i() = default;
 
     // Replicate scalar x across v
-    m512i(int x) // : v(_mm512_set1_epi16(x))
-    {
-        v = _mm512_set1_epi32(x);
-    }
+    m512i(int x) : v(_mm512_set1_epi32(x)) {}
 
     // Load x from pointer px. px must be aligned to 16 bytes.
     m512i(const int *px) : v(_mm512_load_si512(reinterpret_cast<const __m512i*>(px))) {}
@@ -104,23 +101,6 @@ public:     // Assignment
     }
 
     const ImplType& data() const { return v; }
-
-public:     // Functor types
-
-    struct minOp
-    {
-        m512i operator() (const m512i& l, const m512i& r)
-        { return m512i(_mm512_min_epi32(l.v, r.v)); }
-    };
-
-    struct maxOp
-    {
-        m512i operator() (const m512i& l, const m512i& r)
-        { return m512i(_mm512_max_epi32(l.v, r.v)); }
-    };
-
-    struct plus  { m512i operator() (const m512i& l, const m512i& r) { return (l + r); }};
-    struct minus { m512i operator() (const m512i& l, const m512i& r) { return (l - r); }};
 
 public:     // Non-member (friend) functions
 

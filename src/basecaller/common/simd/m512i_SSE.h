@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512i_SSE_H_
 #define mongo_common_simd_m512i_SSE_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2015,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -56,9 +56,6 @@ CLASS_ALIGNAS(16) m512i
 {
 public:     // Types
     typedef m512i type;
-
-    using Iterator = int*;
-    using ConstIterator = const int*;
 
 public:     // Static constants
     /// The number of floats represented by one instance.
@@ -191,51 +188,6 @@ public:     // Assignment
         assert(static_cast<size_t>(i) < this->size());
         return data.raw[i];
     }
-
-public:     // Functor types
-
-    struct minOp
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_min_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_min_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_min_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_min_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct maxOp
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_max_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_max_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_max_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_max_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct plus
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_add_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_add_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_add_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_add_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-    struct minus
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_sub_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_sub_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_sub_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_sub_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
 
 public:     // Non-member (friend) functions
 

@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512ui_AVX512_H_
 #define mongo_common_simd_m512ui_AVX512_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -68,10 +68,7 @@ public:     // Structors
     m512ui() = default;
 
     // Replicate scalar x across v
-    m512ui(uint32_t x)
-    {
-        v = _mm512_set1_epi32(x);
-    }
+    m512ui(uint32_t x) : v(_mm512_set1_epi32(x)) {}
 
     // Load x from pointer px. px must be aligned to 16 bytes.
     m512ui(const uint32_t *px) : v(_mm512_load_si512(reinterpret_cast<const __m512i*>(px))) {}
@@ -82,14 +79,9 @@ public:     // Structors
     // Construct from native vector type
     m512ui(ImplType v_) : v(v_) {}
 
-    explicit m512ui(const m512i& x)
-        : v(x.data())
-    {}
+    explicit m512ui(const m512i& x) : v(x.data()) {}
 
-    explicit operator m512i() const
-    {
-        return m512i(v);
-    }
+    explicit operator m512i() const { return m512i(v); }
 
 public:     // Assignment
     m512ui& operator=(const m512ui& x) = default;

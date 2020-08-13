@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512f_AVX512_H_
 #define mongo_common_simd_m512f_AVX512_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2015,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -56,9 +56,6 @@ CLASS_ALIGNAS(64) m512f
 public:     // Types
     typedef m512f type;
 
-    using Iterator      =       float*;
-    using ConstIterator = const float*;
-
 public:     // Static constants
     /// The number of floats represented by one instance.
     static constexpr size_t size() { return sizeof(m512f) / sizeof(float); }
@@ -75,8 +72,6 @@ public:     // Structors
     // Replicate scalar x across v.
     m512f(float x) : v(_mm512_set1_ps(x)) {}
 
-    // Convenient for initializing from a simple integer, e.g., m512f(0).
-    // Eigen 3.2.5 uses such expressions, which are ambiguous without this constructor.
     m512f(int32_t x) : m512f(static_cast<float>(x)) {}
     m512f(uint32_t x) : m512f(static_cast<float>(x)) {}
 
@@ -100,7 +95,6 @@ public:     // Structors
         : v(_mm512_cvt_roundepi32_ps(i.data(), _MM_FROUND_NO_EXC))
     {}
 
-    // Construct from m512f vector type
     explicit operator m512i() const
     {
         constexpr auto mode = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
@@ -129,8 +123,6 @@ public:    // Compound assignment operators
     m512f& operator -= (const m512f& x) { v = _mm512_sub_ps(this->v, x.v); return *this; }
     m512f& operator *= (const m512f& x) { v = _mm512_mul_ps(this->v, x.v); return *this; }
     m512f& operator /= (const m512f& x) { v = _mm512_div_ps(this->v, x.v); return *this; }
-    m512f& operator &= (const m512f& x) { v = and512(*this, x).v;          return *this; }
-    m512f& operator |= (const m512f& x) { v =  or512(*this, x).v;          return *this; }
 
     m512f operator - () const { return m512f(_mm512_sub_ps(_mm512_setzero_ps(), v)); }
 
@@ -147,29 +139,11 @@ public:     // Scalar access
     const ImplType& data() const
     { return v; }
 
-public:     // Functor types
-    struct minOp
-    {
-        m512f operator() (const m512f& l, const m512f& r)
-        { return m512f(_mm512_min_ps(l.v, r.v)); }
-    };
-
-    struct maxOp
-    {
-        m512f operator() (const m512f& l, const m512f& r)
-        { return m512f(_mm512_max_ps(l.v, r.v)); }
-    };
-
-    struct plus  { m512f operator() (const m512f& l, const m512f& r) { return m512f(_mm512_add_ps(l.v, r.v)); } };
-    struct minus { m512f operator() (const m512f& l, const m512f& r) { return m512f(_mm512_sub_ps(l.v, r.v)); } };
-
 public:     // Non-member (friend) functions
     friend m512f operator +  (const m512f& l, const m512f& r) { return m512f(_mm512_add_ps(l.v, r.v)); }
     friend m512f operator -  (const m512f& l, const m512f& r) { return m512f(_mm512_sub_ps(l.v, r.v)); }
     friend m512f operator *  (const m512f& l, const m512f& r) { return m512f(_mm512_mul_ps(l.v, r.v)); }
     friend m512f operator /  (const m512f& l, const m512f& r) { return m512f(_mm512_div_ps(l.v, r.v)); }
-    friend m512f operator |  (const m512f& l, const m512f& r) { return or512(l, r); }
-    friend m512f operator &  (const m512f& l, const m512f& r) { return and512(l, r); }
 
     friend m512b operator == (const m512f& l, const m512f& r) { return m512b(CMP_MASK(l.v, r.v, _CMP_EQ_OQ)); }
     friend m512b operator != (const m512f& l, const m512f& r) { return m512b(CMP_MASK(l.v, r.v, _CMP_NEQ_OQ)); }
@@ -209,7 +183,6 @@ public:     // Non-member (friend) functions
     friend m512f log2     (const m512f& x) { return log(x) / log(m512f(2.0f)); }
     friend m512f exp      (const m512f& x) { return m512f(_mm512_exp_ps(x.v)); }
     friend m512f exp2     (const m512f& x) { return m512f(_mm512_exp2_ps(x.v));}
-//    friend m512f expSuperFast(const m512f& x) { return exp(x); }
     friend m512f erf      (const m512f& x) { return m512f(_mm512_erf_ps(x.v)); }
 
     /// Complementary error function for AVX-512.
@@ -218,51 +191,12 @@ public:     // Non-member (friend) functions
 
     friend m512f square   (const m512f& x) { return x * x; }
 
-    static __m512 expSuperFast(const __m512& val)
-    {
-        const __m512 a = _mm512_set1_ps(1.442695040f * (1 << 23));
-        const __m512 b = _mm512_set1_ps(126.94269504f * (1 << 23));
-
-        __m512 val2 = _mm512_mul_ps(a,val);
-        val2 = _mm512_add_ps(b,val2);
-        __m512i val3 = _mm512_cvt_roundps_epi32 (val2,(_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC));
-        return _mm512_castsi512_ps(val3);
-    }
-
-    friend m512f expSuperFast(const m512f& x)
-    {
-     //   return m512f(expSuperFast(x.v)); // not so superfast after all?
-        return m512f(_mm512_exp_ps(x.v));
-    }
-
 public: // Masked
     friend m512f Blend(const m512b& mask, const m512f& success, const m512f& failure)
     { return m512f(_mm512_mask_blend_ps(mask.data(), failure.v, success.v)); }
 
     friend m512f inc (const m512f& a, const m512b& mask)
     { return m512f(_mm512_mask_add_ps(a.v, mask.data(), a.v, m512f(1).v)); }
-
-public: // FMA
-    friend m512f fmadd(const m512f& mul1, const m512f& mul2, const m512f& add1, const m512b& mask)
-    {
-        return m512f(_mm512_mask3_fmadd_ps(mul1.v, mul2.v, add1.v, mask.data()));
-    }
-
-    friend m512f add(const m512f& a, const m512f& b, const m512b& mask)
-    { return m512f(_mm512_mask_add_ps(a.v, mask.data(), a.v, b.v)); }
-
-
-
-public: // complex inline functions
-
-    friend m512f singleEntropy(const m512f& x)
-    {
-        return m512f(
-                _mm512_mask_blend_ps(
-                    _mm512_cmp_ps_mask(x.v, _mm512_setzero(), _CMP_EQ_OQ),
-                    _mm512_mul_ps(x.v, _mm512_log_ps(x.v)),
-                    _mm512_setzero()));
-    }
 
 public: // stream
     friend std::ostream& operator << (std::ostream& stream, const m512f& vec)
@@ -274,17 +208,6 @@ public: // stream
                << vec[14] << "\t" << vec[15];
 
         return stream;
-    }
-
-private:
-    friend m512f and512(const m512f& l, const m512f& r)
-    {
-        return m512f(_mm512_and_ps(l.v, r.v));
-    }
-
-    friend m512f or512(const m512f& l, const m512f& r)
-    {
-        return m512f(_mm512_or_ps(l.v, r.v));
     }
 };
 

@@ -221,8 +221,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
-    // TODO should this really be int?
-    mldx.degOfFreedom = AsInt(numFrames - nModelParams);
+    mldx.degOfFreedom = LaneArray<int>(numFrames - nModelParams);
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]

@@ -54,14 +54,13 @@ namespace Data {
 
 class BasecallingMetricsAccumulator
 {
-    // TODO rename
     template <typename T>
-    using Array_t = PacBio::Cuda::Utility::CudaArray<T, 64>;
+    using CudaArray = PacBio::Cuda::Utility::CudaArray<T, 64>;
 public: // types
     template <typename T>
-    using SingleMetric = Array_t<T>;
+    using SingleMetric = CudaArray<T>;
     template <typename T>
-    using AnalogMetric = std::array<Array_t<T>, numAnalogs>;
+    using AnalogMetric = std::array<CudaArray<T>, numAnalogs>;
 
 public:
     BasecallingMetricsAccumulator()

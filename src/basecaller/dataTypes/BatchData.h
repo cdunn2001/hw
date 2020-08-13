@@ -40,7 +40,6 @@ namespace Mongo {
 
 template <typename T, size_t N>
 class LaneArray;
-// TODO why these forwards??
 template <typename T, size_t N>
 struct PtrView;
 
@@ -218,7 +217,6 @@ public:
 
         ValueType Extract() const
         {
-            // TODO this remove_const_t is ugly and probably confusing
             return ValueType(PtrView<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 

@@ -112,7 +112,7 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
     const auto& isBaseline = (!pulseMask) & (!boundaryMask);
     if (any(isBaseline))
     {
-        baselineStats.AddSample(FloatArray(signal), isBaseline);
+        baselineStats.AddSample(FloatArray{signal}, isBaseline);
     }
 }
 
