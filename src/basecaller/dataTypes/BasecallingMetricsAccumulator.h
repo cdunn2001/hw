@@ -94,15 +94,15 @@ public:
 private:
     void LabelBlock(float frameRate);
 
-public: // complex accessors
+private: // complex accessors
 
     AnalogMetric<float> PkmidMean() const;
 
-    SingleMetric<uint16_t> NumBases() const;
+    LaneArray<uint16_t> NumBases() const;
 
-    SingleMetric<uint16_t> NumPulses() const;
+    LaneArray<uint16_t> NumPulses() const;
 
-    SingleMetric<float> PulseWidth() const;
+    LaneArray<float> PulseWidth() const;
 
 private: // metrics
     SingleMetric<uint16_t> numPulseFrames_;

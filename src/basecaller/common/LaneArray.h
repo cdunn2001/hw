@@ -286,6 +286,7 @@ public:
     {
         constexpr auto width = SimdTypeTraits<T>::width;
         auto* dat = data.data();
+        assert(reinterpret_cast<size_t>(dat) % alignof(T) == 0);
         for (auto& d : data_)
         {
             d = T(dat);
@@ -327,7 +328,7 @@ public:
         >
     BaseArray(PtrView<U, ScalarCount> dat)
     {
-        //assert(reinterpret_cast<size_t>(dat[0]) % 64 == 0);
+        assert(reinterpret_cast<size_t>(dat[0]) % alignof(T) == 0);
         for (size_t i = 0; i < SimdCount; ++i)
         {
             data_[i] = T(dat[i*SimdTypeTraits<T>::width]);
@@ -481,7 +482,7 @@ public:
 
     Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ToArray() const
     {
-        return *this;
+        return static_cast<const Child&>(*this);
     }
 
     const std::array<T, SimdCount>& data() const
@@ -525,7 +526,7 @@ public:
         }
     }
 
-    explicit operator Cuda::Utility::CudaArray<bool, ScalarCount_>() const
+    operator Cuda::Utility::CudaArray<bool, ScalarCount_>() const
     {
         Cuda::Utility::CudaArray<bool, ScalarCount_> ret;
         for (size_t i = 0; i < ScalarCount_; ++i)
@@ -770,7 +771,6 @@ using ArithmeticBase = ArithmeticArray<vec_type_t<T>, vec_count<T, ScalarCount>:
 template <size_t ScalarCount>
 class LaneArray<float, ScalarCount> : public ArithmeticBase<float, ScalarCount, LaneArray>
 {
-    static_assert(ScalarCount == 64, "");
     using Base = ArithmeticBase<float, ScalarCount, LaneArray>;
 public:
     using Base::Base;

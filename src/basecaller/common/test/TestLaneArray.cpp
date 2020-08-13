@@ -36,10 +36,16 @@ using namespace PacBio::Cuda::Utility;
 
 namespace {
 
-template <typename T, typename U, size_t Len = laneSize>
-CudaArray<T, Len> ConstantCudaArray(U val)
+template <typename T, size_t Len>
+struct alignas(64) AlignedCudaArray : public CudaArray<T, Len>
 {
-    CudaArray<T, Len> ret;
+    using CudaArray<T, Len>::CudaArray;
+};
+
+template <typename T, typename U, size_t Len = laneSize>
+AlignedCudaArray<T, Len> ConstantCudaArray(U val)
+{
+    AlignedCudaArray<T, Len> ret;
     for (size_t i = 0; i < Len; ++i)
     {
         ret[i] = val;
@@ -54,9 +60,9 @@ LaneArray<T, Len> ConstantLaneArray(U val)
 }
 
 template <typename T, typename U, size_t Len = laneSize>
-CudaArray<T, Len> IncreasingCudaArray(U startVal, U increment)
+AlignedCudaArray<T, Len> IncreasingCudaArray(U startVal, U increment)
 {
-    CudaArray<T, Len> ret;
+    AlignedCudaArray<T, Len> ret;
     for (size_t i = 0; i < Len; ++i)
     {
         ret[i] = startVal + i * increment;
@@ -71,9 +77,9 @@ LaneArray<T, Len> IncreasingLaneArray(U val, U increment)
 }
 
 template <size_t Len = laneSize>
-CudaArray<bool, Len> AlternatingBools()
+AlignedCudaArray<bool, Len> AlternatingBools()
 {
-    CudaArray<bool, Len> ret;
+    AlignedCudaArray<bool, Len> ret;
     for (size_t i = 0; i < Len; ++i)
     {
         ret[i] = (i % 2 == 0);
@@ -204,8 +210,8 @@ TEST(BoolArray, LogicalOps)
     EXPECT_FALSE(any(mask1));
     EXPECT_TRUE(none(mask1));
 
-    CudaArray<bool, laneSize> pattern1;
-    CudaArray<bool, laneSize> pattern2;
+    AlignedCudaArray<bool, laneSize> pattern1;
+    AlignedCudaArray<bool, laneSize> pattern2;
     for (size_t i = 0; i < laneSize; i+=4)
     {
         pattern1[i+0] = true;
@@ -284,13 +290,13 @@ struct LaneArrayHomogeneousTypes: public ::testing::Test {
 
 template <typename Op, typename Result, typename Arg1, typename Arg2, size_t Len>
 bool ValidateOp(const Result& actual,
-                      const LaneArray<Arg1, Len>& left,
-                      const LaneArray<Arg2, Len>& right)
+                const LaneArray<Arg1, Len>& left,
+                const LaneArray<Arg2, Len>& right)
 {
     Op op{};
-    auto a = static_cast<CudaArray<ScalarType<Result>, Len>>(actual);
-    auto l = MakeUnion(left);
-    auto r = MakeUnion(right);
+    auto a = actual.ToArray();
+    auto l = left.ToArray();
+    auto r = right.ToArray();
     bool correct = true;
     for (size_t i = 0; i < Len; ++i)
     {
@@ -304,9 +310,9 @@ bool ValidateOp(const Result& actual,
                       const LaneArray<Arg2, Len>& right)
 {
     Op op{};
-    auto a = static_cast<CudaArray<ScalarType<Result>, Len>>(actual);
+    auto a = actual.ToArray();
     auto l = left;
-    auto r = MakeUnion(right);
+    auto r = right.ToArray();
     bool correct = true;
     for (size_t i = 0; i < Len; ++i)
     {
@@ -320,8 +326,8 @@ bool ValidateOp(const Result& actual,
                       const Arg2& right)
 {
     Op op{};
-    auto a = static_cast<CudaArray<ScalarType<Result>, Len>>(actual);
-    auto l = MakeUnion(left);
+    auto a = actual.ToArray();
+    auto l = left.ToArray();
     auto r = right;
     bool correct = true;
     for (size_t i = 0; i < Len; ++i)
@@ -477,13 +483,13 @@ TEST(LaneArray, FloatOps)
     auto cudaArr = IncreasingCudaArray<float>(-40.2f, 13.9f);
     LaneArray<float, laneSize> laneArr(cudaArr);
 
-    auto result = CudaArray<float, laneSize>(erfc(laneArr));
+    auto result = erfc(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::erfc(cudaArr[i]));
     }
 
-    auto result2 = CudaArray<int, laneSize>(floorCastInt(laneArr));
+    auto result2 = floorCastInt(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_EQ(result2[i], std::floor(cudaArr[i]));
@@ -493,20 +499,20 @@ TEST(LaneArray, FloatOps)
     cudaArr = IncreasingCudaArray<float>(2.9f, 13.9f);
     laneArr = LaneArray<float, laneSize>(cudaArr);
 
-    result = CudaArray<float, laneSize>(sqrt(laneArr));
+    result = sqrt(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::sqrt(cudaArr[i]));
     }
 
 
-    result = CudaArray<float, laneSize>(log(laneArr));
+    result = log(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::log(cudaArr[i]));
     }
 
-    result = CudaArray<float, laneSize>(log2(laneArr));
+    result = log2(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::log2(cudaArr[i]));
@@ -518,13 +524,13 @@ TEST(LaneArray, FloatOps)
     cudaArr = IncreasingCudaArray<float>(-12.34f, .74f);
     laneArr = LaneArray<float, laneSize>(cudaArr);
 
-    result = CudaArray<float, laneSize>(exp(laneArr));
+    result = exp(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::exp(cudaArr[i]));
     }
 
-    result = CudaArray<float, laneSize>(exp2(laneArr));
+    result = exp2(laneArr).ToArray();
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_FLOAT_EQ(result[i], std::exp2(cudaArr[i]));
@@ -960,11 +966,11 @@ TEST(LaneArray, Conversions)
         1, 7, 59, 13241,
         std::numeric_limits<uint16_t>::max()};
 
-    CudaArray<float, laneSize>    fltData;
-    CudaArray<int32_t, laneSize>  intData;
-    CudaArray<uint32_t, laneSize> uintData;
-    CudaArray<int16_t, laneSize>  shortData;
-    CudaArray<uint16_t, laneSize> ushortData;
+    AlignedCudaArray<float, laneSize>    fltData;
+    AlignedCudaArray<int32_t, laneSize>  intData;
+    AlignedCudaArray<uint32_t, laneSize> uintData;
+    AlignedCudaArray<int16_t, laneSize>  shortData;
+    AlignedCudaArray<uint16_t, laneSize> ushortData;
 
     for (size_t i = 0; i < laneSize; ++i)
     {

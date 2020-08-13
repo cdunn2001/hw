@@ -76,11 +76,10 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
 {
     // Calculated in the accessor, so caching here:
     const auto& stdDev = traceMetrics_.FrameBaselineSigmaDWS();
-    // TODO check usages.  make these functions private and return lane array?
-    const auto& numBases = LaneArray<float>(NumBases());
-    const auto& numPulses = LaneArray<float>(NumPulses());
-    const auto& pulseWidth = LaneArray<float>(PulseWidth());
-    const auto& pkmid = PkmidMean();
+    const auto& numBases = NumBases();
+    const auto& numPulses = NumPulses();
+    const auto& pulseWidth = PulseWidth();
+    alignas(64) const auto pkmid = PkmidMean();
     LaneArray<float> zeros(0.0f);
 
     std::array<ArrayUnion<LaneArray<float>>, ActivityLabeler::NUM_FEATURES> features;
@@ -278,7 +277,7 @@ void BasecallingMetricsAccumulator::Reset()
     traceMetrics_.Reset();
 }
 
-auto BasecallingMetricsAccumulator::NumBases() const -> SingleMetric<uint16_t>
+auto BasecallingMetricsAccumulator::NumBases() const -> LaneArray<uint16_t>
 {
     LaneArray<uint16_t> ret(0);
     for (size_t a = 0; a < numAnalogs; ++a)
@@ -288,7 +287,7 @@ auto BasecallingMetricsAccumulator::NumBases() const -> SingleMetric<uint16_t>
     return ret;
 }
 
-auto BasecallingMetricsAccumulator::NumPulses() const -> SingleMetric<uint16_t>
+auto BasecallingMetricsAccumulator::NumPulses() const -> LaneArray<uint16_t>
 {
     LaneArray<uint16_t> ret(0);
     for (size_t a = 0; a < numAnalogs; ++a)
@@ -298,10 +297,9 @@ auto BasecallingMetricsAccumulator::NumPulses() const -> SingleMetric<uint16_t>
     return ret;
 }
 
-auto BasecallingMetricsAccumulator::PulseWidth() const -> SingleMetric<float>
+auto BasecallingMetricsAccumulator::PulseWidth() const -> LaneArray<float>
 {
-    // TODO here we keep bouncing between lane array and cuda array
-    auto ret = LaneArray<float>(NumPulses()) / LaneArray<float>(numPulseFrames_);
+    auto ret = NumPulses() / LaneArray<float>(numPulseFrames_);
     return Blend(isnan(ret), LaneArray<float>(0), ret);
 }
 
