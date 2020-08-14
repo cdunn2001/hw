@@ -30,8 +30,6 @@
 #include <vector>
 
 #include <common/LaneArray.h>
-#include <common/LaneArrayRef.h>
-#include <common/LaneMask.h>
 #include <common/StatAccumulator.h>
 #include <dataTypes/Pulse.h>
 #include <dataTypes/BasicTypes.h>

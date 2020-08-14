@@ -79,14 +79,14 @@ public:     // Structors
     // Copy constructor
     m512s(const m512s& x) = default;
 
-    //m512s(const m512f& even, const m512f& odd)
-    //{
-    //    for (unsigned int i = 0; i < vecLen / 2; ++i)
-    //    {
-    //        data[2*i] = static_cast<short>(even.data[i]);
-    //        data[2*i+1] = static_cast<short>(odd.data[i]);
-    //    }
-    //}
+    m512s(const m512f& even, const m512f& odd)
+    {
+        for (unsigned int i = 0; i < vecLen / 2; ++i)
+        {
+            data[2*i] = static_cast<short>(even.data[i]);
+            data[2*i+1] = static_cast<short>(odd.data[i]);
+        }
+    }
 
 public:     // Assignment
     m512s& operator=(const m512s& x) = default;

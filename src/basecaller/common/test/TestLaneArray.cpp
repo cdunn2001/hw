@@ -31,7 +31,6 @@
 #include <common/simd/ArrayUnion.h>
 
 using namespace PacBio::Mongo;
-using namespace PacBio::Simd;
 using namespace PacBio::Cuda::Utility;
 
 namespace {
@@ -259,23 +258,23 @@ TEST(BaseArray, PointerConstruction)
     };
 
     auto c1 = IncreasingCudaArray<float>(1.3f, 1.1f);
-    LaneArray<float, laneSize> arr1(PtrView<float, laneSize>(c1.data()));
+    LaneArray<float, laneSize> arr1(MemoryRange<float, laneSize>(c1.data()));
     EXPECT_TRUE(Validate(arr1, c1));
 
     auto c2 = IncreasingCudaArray<int32_t>(-22, 2);
-    LaneArray<int32_t, laneSize> arr2(PtrView<int32_t, laneSize>(c2.data()));
+    LaneArray<int32_t, laneSize> arr2(MemoryRange<int32_t, laneSize>(c2.data()));
     EXPECT_TRUE(Validate(arr2, c2));
 
     auto c3 = IncreasingCudaArray<uint32_t>(-22, 2);
-    LaneArray<uint32_t, laneSize> arr3(PtrView<uint32_t, laneSize>(c3.data()));
+    LaneArray<uint32_t, laneSize> arr3(MemoryRange<uint32_t, laneSize>(c3.data()));
     EXPECT_TRUE(Validate(arr3, c3));
 
     auto c4 = IncreasingCudaArray<int16_t>(-3, 5);
-    LaneArray<int16_t, laneSize> arr4(PtrView<int16_t, laneSize>(c4.data()));
+    LaneArray<int16_t, laneSize> arr4(MemoryRange<int16_t, laneSize>(c4.data()));
     EXPECT_TRUE(Validate(arr4, c4));
 
     auto c5 = IncreasingCudaArray<uint16_t>(3, 5);
-    LaneArray<uint16_t, laneSize> arr5(PtrView<uint16_t, laneSize>(c5.data()));
+    LaneArray<uint16_t, laneSize> arr5(MemoryRange<uint16_t, laneSize>(c5.data()));
     EXPECT_TRUE(Validate(arr5, c5));
 }
 
@@ -1088,8 +1087,8 @@ TEST(LaneArray, Conversions)
         // elements to help diagnose error instances
         auto test = [](const auto& convArr, const auto& origArr)
         {
-            using conv_t = ScalarType<std::decay_t<decltype(convArr)>>;
-            using orig_t = ScalarType<std::decay_t<decltype(origArr)>>;
+            using conv_t = PacBio::Simd::ScalarType<std::decay_t<decltype(convArr)>>;
+            using orig_t = PacBio::Simd::ScalarType<std::decay_t<decltype(origArr)>>;
             bool success = true;
 
             const auto& convData = convArr.ToArray();

@@ -33,16 +33,11 @@
 
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/LaneArray_fwd.h>
 #include <common/MongoConstants.h>
 
 namespace PacBio {
 namespace Mongo {
-
-template <typename T, size_t N>
-class LaneArray;
-template <typename T, size_t N>
-struct PtrView;
-
 namespace Data {
 
 class BatchDimensions
@@ -140,7 +135,7 @@ public:
 
         LaneArray<T, laneSize> Extract() const
         {
-            return LaneArray<T, laneSize>(PtrView<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            return LaneArray<T, laneSize>(MemoryRange<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
         void Store(const LaneArray<T, laneSize>& lane)
@@ -217,7 +212,7 @@ public:
 
         ValueType Extract() const
         {
-            return ValueType(PtrView<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            return ValueType(MemoryRange<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
     private:

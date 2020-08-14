@@ -34,8 +34,6 @@
 #include <common/MongoConstants.h>
 #include "TrainedCartParams.h"
 
-using namespace PacBio::Cuda::Utility;
-
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -164,7 +162,7 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
 
     LaneArray<float> lowbp(0);
     LaneArray<float> lowpk(0);
-    for (size_t i = 0; i < numAnalogs; ++i)
+    for (uint32_t i = 0; i < numAnalogs; ++i)
     {
         // Can we avoid this Blend?
         LaneArray<float> tmp(bpZvar_[i]);

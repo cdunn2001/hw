@@ -132,7 +132,7 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
-    const auto nChunks = mPar.size();
+    const uint32_t nChunks = mPar.size();
     ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
 
     // Count repeats. Skip first value because of NumFramesPreAccumStats logic.

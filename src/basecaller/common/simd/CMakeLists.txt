@@ -2,7 +2,17 @@
 cmake_minimum_required(VERSION 3.13)
 
 add_library(libMongoCommonSimd  STATIC
+    ArithmeticArray.cpp
+    ArithmeticArray.h
     ArrayUnion.h
+    BaseArray.cpp
+    BaseArray.h
+    LaneArrayImpl.cpp
+    LaneArrayImpl.h
+    LaneArrayTraits.cpp
+    LaneArrayTraits.h
+    LaneMaskImpl.cpp
+    LaneMaskImpl.h
     SimdVectorTypes.h
     m32f.h
     m32s.h
