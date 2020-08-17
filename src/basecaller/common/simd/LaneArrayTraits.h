@@ -199,6 +199,8 @@ class CommonArrayType
         {
             if (!isNoop[i]) return i;
         }
+        // Should be unreachable.
+        return std::numeric_limits<size_t>::max();
     }
 
     // Check if Ts... has both signed and unsigned integrals.  We have to

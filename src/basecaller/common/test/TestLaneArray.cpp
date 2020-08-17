@@ -33,8 +33,6 @@
 using namespace PacBio::Mongo;
 using namespace PacBio::Cuda::Utility;
 
-namespace {
-
 // Could potentially make this publicly visible.  However
 // CudaArray is quite naturally used in places in structures
 // which are dynamically allocated and intentionally layed out
@@ -55,6 +53,8 @@ struct alignas(64) AlignedCudaArray : public CudaArray<T, Len>
         : CudaArray<T, Len>(o)
     {}
 };
+
+namespace {
 
 // Helper to generate a CudaArray with a uniform value
 template <typename T, typename U, size_t Len = laneSize>
@@ -1248,10 +1248,12 @@ TEST(LaneArray, Misc)
                   "expected promotion to float");
 
     auto e = c + LaneArray<int32_t>{1};
+    EXPECT_TRUE(all(e == 2));
     static_assert(std::is_same<decltype(e), LaneArray<int32_t>>::value,
                   "expected promotion to int");
 
     auto f = c + 1;
+    EXPECT_TRUE(all(f == 2));
     static_assert(std::is_same<decltype(f), LaneArray<int16_t>>::value,
                   "expected NO promotion to int");
 

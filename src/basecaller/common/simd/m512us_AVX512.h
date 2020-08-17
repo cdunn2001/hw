@@ -37,7 +37,6 @@
 #include <cassert>
 #include <immintrin.h>
 #include <ostream>
-#include <pacbio/PBException.h>
 
 #include "m512f_AVX512.h"
 #include "m512ui_AVX512.h"
