@@ -109,7 +109,7 @@
 //    booleans.  It's only real (minor) complication is that as an
 //    array of booleans is not bitwise compatible with our m512b types,
 //    it must handle some of the creation/conversion logic that otherwise
-//    would have been andled in BaseArray.
+//    would have been handled in BaseArray.
 //
 // 3. ArithmeticArray: This class extends BaseArray and is in turn
 //    meant to be the parent of other LaneArray classes.  It generically
