@@ -85,24 +85,18 @@ template <typename T>
 struct len_trait
 {
     static constexpr size_t SimdCount = 0;
-    //    static constexpr size_t ScalarCount = 1;
-    //    static constexpr size_t SimdWidth = 1;
 };
 template <typename T, size_t Len>
 struct len_trait<LaneArray<T, Len>>
 {
     static_assert(Len % vec_type_t<T>::size() == 0, "Invalid length");
-    //    static constexpr size_t SimdWidth = vec_type_t<T>::size();
     static constexpr size_t SimdCount = Len / vec_type_t<T>::size();
-    //    static constexpr size_t ScalarCount = Len;
 };
 template <size_t Len>
 struct len_trait<LaneMask<Len>>
 {
     static_assert(Len % vec_type_t<bool>::size() == 0, "Invalid length");
-    //    static constexpr size_t SimdWidth = vec_type_t<bool>::size();
     static constexpr size_t SimdCount = Len / vec_type_t<bool>::size();
-    //    static constexpr size_t ScalarCount = Len;
 };
 template <typename T>
 struct len_trait<ArrayUnion<T>> : public len_trait<T> {};
