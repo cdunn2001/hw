@@ -200,7 +200,7 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
                 current = ActivityLabeler::TrainedCart::childrenRight[current];
             }
         }
-        activityLabel_[z] = ActivityLabeler::TrainedCart::value[current];
+        activityLabel_[z] = static_cast<HQRFPhysicalStates>(ActivityLabeler::TrainedCart::value[current]);
     }
 }
 
@@ -252,7 +252,7 @@ void BasecallingMetricsAccumulator::Reset()
     numPulseLabelStutters_ = 0;
     prevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
     prevprevBasecallCache_.fill(Pulse().Start(0).Width(0).Label(Pulse::NucleotideLabel::NONE));
-    activityLabel_ = static_cast<uint16_t>(HQRFPhysicalStates::EMPTY);
+    activityLabel_ = HQRFPhysicalStates::EMPTY;
     for (size_t a = 0; a < numAnalogs; ++a)
     {
         pkMidSignal_[a] = 0;

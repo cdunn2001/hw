@@ -27,6 +27,10 @@ HostNoOpBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         auto traceData = rawTrace.GetBlockView(laneIdx);
         auto cameraTraceData = out.first.GetBlockView(laneIdx);
+        if (cameraTraceData.NumFrames() < traceData.NumFrames())
+        {
+            throw PBException("Destination frame buffer is smaller than input buffer");
+        }
         auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
         auto statsView = out.second.baselinerStats.GetHostView();
         auto outItr = cameraTraceData.Begin();

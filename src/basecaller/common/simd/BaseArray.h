@@ -55,42 +55,21 @@
 namespace PacBio {
 namespace Simd {
 
-// Helper class to smooth over situations where we're iterating over both
-// 32 bit and 16 bit types.  It just sets up a pair of references so
-// that you can more naturally associate something like a single
-// m512s with a pair of m512i
-//
-// T can either be const or not, depending on the type of
-// reference you want.
+/// Helper alias to smooth over situations where we're iterating over both
+/// 32 bit and 16 bit types.  It just sets up a pair of references so
+/// that you can more naturally associate something like a single
+/// m512s with a pair of m512i
+///
+/// T can intentionally be either be const or not, depending on the type of
+/// reference you want.
 template <typename T>
-struct PairRef
-{
-    PairRef(T& t1, T& t2) : first(t1), second(t2) {}
-    PairRef(const std::pair<T, T>& p) : first(p.first), second(p.second) {}
+using PairRef = std::pair<T&, T&>;
 
-    // Allow assignments from other PairRefs or even std::pair, as
-    // long as our destination is not itself const.
-    template <typename Other,
-              bool IsConst = std::is_const<T>::value,
-              bool isPair = std::is_same<Other, std::pair<T,T>>::value,
-              bool isRef = std::is_base_of<PairRef<const T>, Other>::value,
-              std::enable_if_t<!IsConst && (isPair || isRef),int> = 0>
-    PairRef& operator=(const Other& other)
-    {
-        first = other.first;
-        second = other.second;
-        return *this;
-    }
-
-    T& first;
-    T& second;
-};
-
-// Describes a range of memory, which is delineated
-// by a pointer and a compile time length.  This is used
-// to force the calling code to write out the array length
-// in the type name should prevent/limit memory overrun
-// errors because of length mismatches
+/// Describes a range of memory, which is delineated
+/// by a pointer and a compile time length.  This is used
+/// to force the calling code to write out the array length
+/// in the type name should prevent/limit memory overrun
+/// errors because of length mismatches
 template <typename T, size_t Len>
 class MemoryRange
 {
@@ -104,16 +83,16 @@ private:
     const T* data_;
 };
 
-// CRTP base class for all LaneArray objects.  It's responsible for defining all
-// storage/construction/conversion logic.
-template <typename T, size_t SimdCount_, typename Child>
+/// CRTP base class for all LaneArray objects.  It's responsible for defining all
+/// storage/construction/conversion logic.
+template <typename T, size_t SimdCount_, typename Derived>
 class alignas(T) BaseArray
 {
-    // Helper function to find the argument that requires the max
-    // number of m512 varibles to store.  e.g. LaneArray<int> needs
-    // 4 while LaneArray<short> needs 2.
-    // Note: Scalars do come through as arguments, but their `SimdCount`
-    //       comes through as 1 so they effectively don't participate
+    /// Helper function to find the argument that requires the max
+    /// number of m512 varibles to store.  e.g. LaneArray<int> needs
+    /// 4 while LaneArray<short> needs 2.
+    /// Note: Scalars do come through as arguments, but their `SimdCount`
+    ///       comes through as 1 so they effectively don't participate
     template <typename...Args>
     static constexpr size_t MaxSimdCount()
     {
@@ -121,14 +100,14 @@ class alignas(T) BaseArray
         return std::max({(size_t)len_trait<Args>::SimdCount...});
     }
 
-    // Need to put static asserts checking the Child class within a function.
-    // At the class scope, Child<VIn> is not yet a valid type.
+    /// Need to put static asserts checking the Derived class within a function.
+    /// At the class scope, Derived<VIn> is not yet a valid type.
     static constexpr void Valid()
     {
-        static_assert(std::is_base_of<BaseArray, Child>::value,
+        static_assert(std::is_base_of<BaseArray, Derived>::value,
                      "Improper use of BaseArray class");
-        static_assert(sizeof(BaseArray) == sizeof(Child),
-                     "Children of BaseArray cannot add their own members");
+        static_assert(sizeof(BaseArray) == sizeof(Derived),
+                     "Derived classes of BaseArray cannot add their own members");
     }
 
 public:
@@ -139,14 +118,14 @@ public:
 
 public: // ctors
 
-    // Intentionally not initializing our data
-    // Would just kill this off, but it's unfortunately
-    // required by Eigen at least.
+    /// Intentionally not initializing our data
+    /// Would just kill this off, but it's unfortunately
+    /// required by Eigen at least.
     BaseArray() = default;
 
-    // Populate whole array with uniform value.
+    /// Populate whole array with uniform value.
     template <typename U, std::enable_if_t<std::is_convertible<U, ScalarType<T>>::value, int> = 0>
-    BaseArray(U&& val)
+    BaseArray(const U& val)
     {
         for (auto& d : data_)
         {
@@ -157,19 +136,19 @@ public: // ctors
         }
     }
 
-    // Explicit conversion from CudaArray.  We will use intrinsics to
-    // load the data, so the CudaArray is required to be appropriately
-    // aligned.
-    // Note: Can't use this ctor for bools, as they are not bitwise equivalant,
-    //       neither for SSE nor for AVX512
+    /// Explicit conversion from CudaArray.  We will use intrinsics to
+    /// load the data, so the CudaArray is required to be appropriately
+    /// aligned.
+    /// Note: Can't use this ctor for bools, as they are not bitwise equivalant,
+    ///       neither for SSE nor for AVX512
     template <typename U = T,
               bool isBool = std::is_same<ScalarType<U>, bool>::value,
               std::enable_if_t<!isBool, int> = 0>
     explicit BaseArray(const Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>& data)
     {
         constexpr auto width = SimdTypeTraits<T>::width;
-        auto* dat = data.data();
-        assert(reinterpret_cast<size_t>(dat) % alignof(T) == 0);
+        const auto* dat = data.data();
+        assert(reinterpret_cast<uintptr_t>(dat) % alignof(T) == 0);
 
         for (auto& d : data_)
         {
@@ -178,10 +157,10 @@ public: // ctors
         }
     }
 
-    // Explicit conversion from CudaArray, this time also converting from
-    // one type to another.
-    // Note: We still can't use this ctor for bools, as ArrayUnion is
-    //       incompatible (still requires bitwise compatible layout)
+    /// Explicit conversion from CudaArray, this time also converting from
+    /// one type to another.
+    /// Note: We still can't use this ctor for bools, as ArrayUnion is
+    ///       incompatible (still requires bitwise compatible layout)
     template <typename U,
         typename Scalar = ScalarType<T>,
         typename dummy1 = std::enable_if_t<std::is_constructible<Scalar, U>::value>,
@@ -202,26 +181,26 @@ public: // ctors
         }
     }
 
-    // Construct by loading data from an arbitrary memory location.
-    // Again it's the calling code's responsibility to ensure
-    // appropriate alignment.
+    /// Construct by loading data from an arbitrary memory location.
+    /// Again it's the calling code's responsibility to ensure
+    /// appropriate alignment.
     template <typename U = ScalarType<T>,
         std::enable_if_t<!std::is_same<bool, U>::value, int> = 0
         >
     BaseArray(MemoryRange<ScalarType<T>, ScalarCount> dat)
     {
-        assert(reinterpret_cast<size_t>(dat.get()) % alignof(T) == 0);
+        assert(reinterpret_cast<uintptr_t>(dat.get()) % alignof(T) == 0);
         for (size_t i = 0; i < SimdCount; ++i)
         {
             data_[i] = T(dat.get() + i*SimdTypeTraits<T>::width);
         }
     }
 
-    // Now copy/conversions from other BaseArrays
+    /// Now copy/conversions from other BaseArrays
     BaseArray(const BaseArray&) = default;
 
-    template <typename U, typename UChild>
-    BaseArray(const BaseArray<U, SimdCount, UChild>& o)
+    template <typename U, typename UDerived>
+    BaseArray(const BaseArray<U, SimdCount, UDerived>& o)
     {
         for (size_t i = 0; i < SimdCount; ++i)
         {
@@ -229,10 +208,10 @@ public: // ctors
         }
     }
 
-    // Handles converting to narrower type,
-    // e.g. m512i to m512s
-    template <typename U, typename UChild>
-    BaseArray(const BaseArray<U, 2*SimdCount, UChild>& o)
+    /// Handles converting to narrower type,
+    /// e.g. m512i to m512s
+    template <typename U, typename UDerived>
+    BaseArray(const BaseArray<U, 2*SimdCount, UDerived>& o)
     {
         for (size_t i = 0; i < SimdCount; ++i)
         {
@@ -240,10 +219,10 @@ public: // ctors
         }
     }
 
-    // Handles converting to wider type,
-    // e.g. m512s to m512i
-    template <typename U, typename UChild>
-    BaseArray(const BaseArray<U, SimdCount/2, UChild>& o)
+    /// Handles converting to wider type,
+    /// e.g. m512s to m512i
+    template <typename U, typename UDerived>
+    BaseArray(const BaseArray<U, SimdCount/2, UDerived>& o)
     {
         static_assert(SimdCount % 2 == 0, "");
         for (size_t i = 0; i < SimdCount; i+=2)
@@ -254,11 +233,11 @@ public: // ctors
         }
     }
 
-    // Constructs this base array as an arbitrary function of the supplied arguments.
-    // This function will automatically walk the supplied input arrays, calling
-    // F for each value.  This function does the necessary legwork to smooth over
-    // 32/16 bit mismatches as well as scalar/vector mismatches (via the Access function
-    // overload set)
+    /// Constructs this base array as an arbitrary function of the supplied arguments.
+    /// This function will automatically walk the supplied input arrays, calling
+    /// F for each value.  This function does the necessary legwork to smooth over
+    /// 32/16 bit mismatches as well as scalar/vector mismatches (via the Access function
+    /// overload set)
     template <typename F, typename...Args, std::enable_if_t<sizeof...(Args) != 0, int> = 0 >
     BaseArray(F&& f, const Args&... args)
     {
@@ -277,35 +256,35 @@ public: // ctors
         static constexpr auto loopMax = ScalarCount / ScalarStride;
         for (size_t i = 0; i < loopMax; ++i)
         {
-            Access<loopMax, void>(static_cast<Child&>(*this), i)
+            Access<loopMax, void>(static_cast<Derived&>(*this), i)
                 = f(Access<loopMax, WorkingType>(args, i)...);
         }
     }
 
  public: // transformation operations
 
-    // Very similar to the last ctor, but we'll update ourself instead
-    // of construction.  Useful for things like compound assignment
-    // operators
+    /// Very similar to the last ctor, but we'll update ourself instead
+    /// of construction.  Useful for things like compound assignment
+    /// operators
     template <typename F, typename...Args>
-    Child& Update(F&& f, const Args&... args)
+    Derived& Update(F&& f, const Args&... args)
     {
-        static constexpr auto loopMax = MaxSimdCount<Child, Args...>();
-        using WorkingType = ScalarType<Child>;
+        static constexpr auto loopMax = MaxSimdCount<Derived, Args...>();
+        using WorkingType = ScalarType<Derived>;
         for (size_t i = 0; i < loopMax; ++i)
         {
-            f(Access<loopMax, WorkingType>(static_cast<Child&>(*this), i),
+            f(Access<loopMax, WorkingType>(static_cast<Derived&>(*this), i),
               Access<loopMax, WorkingType>(args, i)...);
         }
-        return static_cast<Child&>(*this);
+        return static_cast<Derived&>(*this);
     }
 
-    // One more function for reduction operations (e.g. any/all/reduceMax)
+    /// One more function for reduction operations (e.g. any/all/reduceMax)
     template <typename F, typename Ret, typename...Args>
     static Ret Reduce(F&& f, Ret initial, const Args&... args)
     {
-        static constexpr auto loopMax = MaxSimdCount<Child, Args...>();
-        using WorkingType = ScalarType<Child>;
+        static constexpr auto loopMax = MaxSimdCount<Derived, Args...>();
+        using WorkingType = ScalarType<Derived>;
 
         Ret ret = initial;
         for (size_t i = 0; i < loopMax; ++i)
@@ -317,8 +296,8 @@ public: // ctors
 
  public: // conversions
 
-    // Convert ourselves to a CudaArray.  We're just going to do
-    // a memcpy, so no bools allowed
+    /// Convert ourselves to a CudaArray.  We're just going to do
+    /// a memcpy, so no bools allowed
     template <
         typename U = ScalarType<T>,
         std::enable_if_t<!std::is_same<bool, U>::value, int> = 0>
@@ -330,8 +309,8 @@ public: // ctors
         return ret;
     }
 
-    // Convert to CudaArray of a different type.  Again no bools,
-    // because we'll be using ArrayUnion which is incompatible
+    /// Convert to CudaArray of a different type.  Again no bools,
+    /// because we'll be using ArrayUnion which is incompatible
     template <typename U,
               bool different = !std::is_same<U, ScalarType<T>>::value,
               bool canConvert = std::is_convertible<ScalarType<T>, U>::value,
@@ -339,7 +318,7 @@ public: // ctors
     operator Cuda::Utility::CudaArray<U, ScalarCount>() const
     {
         Cuda::Utility::CudaArray<U, ScalarCount> ret;
-        auto tmp = MakeUnion(static_cast<const Child&>(*this));
+        auto tmp = MakeUnion(static_cast<const Derived&>(*this));
         for (size_t i = 0; i < ScalarCount; ++i)
         {
             ret[i] = static_cast<U>(tmp[i]);
@@ -349,7 +328,7 @@ public: // ctors
 
     Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ToArray() const
     {
-        return static_cast<const Child&>(*this);
+        return static_cast<const Derived&>(*this);
     }
 
 public: // raw simd data access.
@@ -392,7 +371,7 @@ private: // Access helpers
     // Note: we're returning a value, so this only works on the rhs of
     //       an assignment.
     template <size_t Count, typename WorkingType, typename U,
-        std::enable_if_t<Count == 2*len_trait<std::decay_t<U>>::SimdCount && (Count > 2), int> = 0>
+        std::enable_if_t<Count == 2*len_trait<std::decay_t<U>>::SimdCount, int> = 0>
     static auto Access(U&& val, size_t idx)
     {
         if (idx%2 == 0) return Low<WorkingType>(val.data()[idx/2]);
@@ -415,7 +394,7 @@ private: // Access helpers
     // something like LaneArray<int> * float sees the right overload
     // set and forces the m512i to convert to an m512f
     template <size_t N, typename WorkingType, typename  U,
-              std::enable_if_t<1 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
+              std::enable_if_t<0 == len_trait<std::decay_t<U>>::SimdCount, int> = 0>
     static auto Access(U&& val, size_t)
     {
         return static_cast<vec_type_t<WorkingType>>(val);

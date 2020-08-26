@@ -721,8 +721,8 @@ __global__ void FinalizeMetrics(
     if (realtimeActivityLabels)
     {
         PBShort2 activityLabels = labelBlock(blockMetrics, outMetrics, frameRate);
-        outMetrics.activityLabel[indX] = activityLabels.X();
-        outMetrics.activityLabel[indY] = activityLabels.Y();
+        outMetrics.activityLabel[indX] = static_cast<HQRFPhysicalStates>(activityLabels.X());
+        outMetrics.activityLabel[indY] = static_cast<HQRFPhysicalStates>(activityLabels.Y());
     }
 }
 

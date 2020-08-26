@@ -32,9 +32,9 @@
 namespace PacBio {
 namespace Simd {
 
-// Class that represents an array of bools.  Required to be an even multiple
-// of 16 elements so that we can easily using the m512b type for underlying
-// storage.
+/// Class that represents an array of bools.  Required to be an even multiple
+/// of 16 elements so that we can easily using the m512b type for underlying
+/// storage.
 template<size_t ScalarCount_>
 class LaneMask : public BaseArray<m512b, ScalarCount_/16, LaneMask<ScalarCount_>>
 {

@@ -109,7 +109,7 @@ private: // metrics
     SingleMetric<uint16_t> numSandwiches_;
     SingleMetric<uint16_t> numHalfSandwiches_;
     SingleMetric<uint16_t> numPulseLabelStutters_;
-    SingleMetric<uint16_t> activityLabel_;
+    SingleMetric<HQRFPhysicalStates> activityLabel_;
     AnalogMetric<float> pkMidSignal_;
     AnalogMetric<float> bpZvar_;
     AnalogMetric<float> pkZvar_;

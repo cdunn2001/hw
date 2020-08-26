@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512f_AVX512_H_
 #define mongo_common_simd_m512f_AVX512_H_
 
-// Copyright (c) 2015,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2015-2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -92,7 +92,7 @@ public:     // Structors
                            f12, f13, f14, f15)) {}
 
     m512f(const m512i& i)
-        : v(_mm512_cvt_roundepi32_ps(i.data(), _MM_FROUND_NO_EXC))
+        : v(_mm512_cvt_roundepi32_ps(i.data(), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
     {}
 
     explicit operator m512i() const
@@ -102,7 +102,7 @@ public:     // Structors
     }
 
     m512f(const m512ui& i)
-        : v(_mm512_cvt_roundepu32_ps(i.data(), _MM_FROUND_NO_EXC))
+        : v(_mm512_cvt_roundepu32_ps(i.data(), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
     {}
 
     explicit operator m512ui() const

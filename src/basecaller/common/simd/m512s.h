@@ -19,31 +19,41 @@ namespace PacBio {
 namespace Simd {
 
 template <typename T>
-std::conditional_t<std::is_same<T, float>::value, m512f, m512i> Low(const m512s& in);
+inline auto Low(const m512s& in);
 
 template <>
-inline std::conditional_t<std::is_same<float, float>::value, m512f, m512i> Low<float>(const m512s& in)
+inline auto Low<float>(const m512s& in)
 {
     return LowFloats(in);
 }
 template <>
-inline std::conditional_t<std::is_same<int, float>::value, m512f, m512i> Low<int>(const m512s& in)
+inline auto Low<int32_t>(const m512s& in)
 {
     return LowInts(in);
 }
+template <>
+inline auto Low<uint32_t>(const m512s& in)
+{
+    return LowUInts(in);
+}
 
 template <typename T>
-std::conditional_t<std::is_same<T, float>::value, m512f, m512i>High(const m512s& in);
+inline auto High(const m512s& in);
 
 template <>
-inline std::conditional_t<std::is_same<float, float>::value, m512f, m512i>High<float>(const m512s& in)
+inline auto High<float>(const m512s& in)
 {
     return HighFloats(in);
 }
 template <>
-inline std::conditional_t<std::is_same<int, float>::value, m512f, m512i>High<int>(const m512s& in)
+inline auto High<int32_t>(const m512s& in)
 {
     return HighInts(in);
+}
+template <>
+inline auto High<uint32_t>(const m512s& in)
+{
+    return HighUInts(in);
 }
 
 template<>

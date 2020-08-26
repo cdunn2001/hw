@@ -344,7 +344,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numBases[z]);
                     // This will always something random, doesn't matter at the
                     // moment
-                    EXPECT_EQ(static_cast<short>(Data::HQRFPhysicalStates::MULTI),
+                    EXPECT_EQ(Data::HQRFPhysicalStates::MULTI,
                               mb.activityLabel[z]);
                     EXPECT_EQ(0,
                               mb.startFrame[z]);

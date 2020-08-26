@@ -56,7 +56,7 @@ public: // types
 
 public: // metrics retained from accumulator (more can be pulled through if necessary)
     // TODO: remove anything that isn't consumed outside of HFMetricsFilter...
-    SingleMetric<uint16_t> activityLabel;
+    SingleMetric<HQRFPhysicalStates> activityLabel;
     SingleMetric<uint16_t> numPulseFrames;
     SingleMetric<uint16_t> numBaseFrames;
     SingleMetric<uint16_t> numSandwiches;

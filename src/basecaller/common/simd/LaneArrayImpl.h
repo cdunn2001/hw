@@ -22,6 +22,12 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// \file
+//  This file contains specializations of LaneArray for all supported types.
+//  This includes float, int32_t, uint32_t, int16_t and uint16_t.  These
+//  specializations are the insertion point for any type specific functionality,
+//  e.g. `isnan` or `exp` for floats.
 
 #ifndef mongo_common_simd_LaneArrayImpl_H_
 #define mongo_common_simd_LaneArrayImpl_H_
@@ -34,18 +40,10 @@
 #include <common/MongoConstants.h>
 
 #include <common/LaneArray_fwd.h>
-#include <common/simd/LaneArrayTraits.h>
 #include <common/simd/ArithmeticArray.h>
 #include <common/simd/BaseArray.h>
+#include <common/simd/LaneArrayTraits.h>
 #include <common/simd/LaneMaskImpl.h>
-
-#include <common/cuda/utility/CudaArray.h>
-#include <common/simd/m512b.h>
-#include <common/simd/m512f.h>
-#include <common/simd/m512i.h>
-#include <common/simd/m512s.h>
-#include <common/simd/SimdConvTraits.h>
-#include <common/simd/SimdTypeTraits.h>
 
 namespace PacBio {
 namespace Simd {

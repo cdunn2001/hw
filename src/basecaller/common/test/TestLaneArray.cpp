@@ -381,7 +381,7 @@ template<class T>
 struct LaneArrayHomogeneousTypes: public ::testing::Test {
     using type = T;
 
-    static Params<T> params_;
+    static Params<T> testingParams;
 };
 
 // Define an overload set for validation.  Probably could have abstracted it out,
@@ -421,8 +421,8 @@ bool ValidateOp(const Result& actual,
 }
 template <typename Op, typename Result, typename Arg1, typename Arg2, size_t Len>
 bool ValidateOp(const Result& actual,
-                      const LaneArray<Arg1, Len>& left,
-                      const Arg2& right)
+                const LaneArray<Arg1, Len>& left,
+                const Arg2& right)
 {
     Op op{};
     auto a = actual.ToArray();
@@ -437,27 +437,27 @@ bool ValidateOp(const Result& actual,
 }
 
 // Set up the actual parameters for each type.
-template<> Params<float> LaneArrayHomogeneousTypes<float>::params_{
+template<> Params<float> LaneArrayHomogeneousTypes<float>::testingParams{
     LinearArray<float>{13.5f, 1.5f},
     LinearArray<float>{9.25f, 1.75f},
         4.f,
         6.5f};
-template<> Params<int32_t> LaneArrayHomogeneousTypes<int32_t>::params_{
+template<> Params<int32_t> LaneArrayHomogeneousTypes<int32_t>::testingParams{
     LinearArray<int32_t>{-270, 91},
     LinearArray<int32_t>{17, 5},
         2,
         12};
-template<> Params<int16_t> LaneArrayHomogeneousTypes<int16_t>::params_{
+template<> Params<int16_t> LaneArrayHomogeneousTypes<int16_t>::testingParams{
     LinearArray<int16_t>{-10, 3},
     LinearArray<int16_t>{-20, 9},
         -4,
         18};
-template<> Params<uint32_t> LaneArrayHomogeneousTypes<uint32_t>::params_{
+template<> Params<uint32_t> LaneArrayHomogeneousTypes<uint32_t>::testingParams{
     LinearArray<uint32_t>{3, 91},
     LinearArray<uint32_t>{17, 22},
         3,
         7};
-template<> Params<uint16_t> LaneArrayHomogeneousTypes<uint16_t>::params_{
+template<> Params<uint16_t> LaneArrayHomogeneousTypes<uint16_t>::testingParams{
     LinearArray<uint16_t>{10, 3},
     LinearArray<uint16_t>{20, 9},
         4,
@@ -469,7 +469,7 @@ TYPED_TEST_SUITE(LaneArrayHomogeneousTypes, ArrTypes);
 // Test that goes through and checks all arithmetic binary operations
 TYPED_TEST(LaneArrayHomogeneousTypes, Arithmetic)
 {
-    auto& params = this->params_;
+    auto& params = this->testingParams;
     using T = typename TestFixture::type;
 
     const auto v1 = IncreasingLaneArray<T>(params.vec1.initial, params.vec1.stride);
@@ -534,7 +534,7 @@ TYPED_TEST(LaneArrayHomogeneousTypes, Arithmetic)
 // Similar to last test, now focusing on comparison binary operations
 TYPED_TEST(LaneArrayHomogeneousTypes, Comparisons)
 {
-    auto& params = this->params_;
+    auto& params = this->testingParams;
     using T = typename TestFixture::type;
 
     const auto v1 = IncreasingLaneArray<T>(params.vec1.initial, params.vec1.stride);
@@ -951,7 +951,7 @@ TYPED_TEST(LaneArrayBinaryOps, Valid)
              & PermuteScalarVector(expectedToCompile, t2, t1);
     };
 
-    // Now with the above lambds, we only have to specify two types,
+    // Now with the above lambdas, we only have to specify two types,
     // and we'll make sure the operation compiles (or not) as
     // expected regardless of scalar/vector and left/right
     // permutations.
