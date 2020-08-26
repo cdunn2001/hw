@@ -142,10 +142,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
     {
         // TODO: Filter edge frames.
-        // TODO: Would be nice to avoid copying to the temporary, x.
-        // Note that there is a possible elemental type conversion here.
-        const LaneArray<HistDataType> x {*lfi};
-        h.AddDatum(x);
+        h.AddDatum(LaneArray<float>(lfi.Extract()));
     }
 }
 
@@ -170,30 +167,15 @@ TraceHistogramAccumHost::HistogramImpl() const
         LaneHistType& phvl = phv[lane];
         const auto& histl = hist_[lane];
 
-        const auto& lb = histl.LowerBound();
-        assert(lb.Size() == phvl.lowBound.size());
-        copy(lb.begin(), lb.end(), phvl.lowBound.begin());
-        // TODO: Is this alternative std::copy any better?
-        // LaneArrayRef<HistDataType>(phvl.lowBound.data()) = lb;
-
-        const auto& bs = histl.BinSize();
-        assert(bs.Size() == phvl.binSize.size());
-        copy(bs.begin(), bs.end(), phvl.binSize.begin());
-
-        const auto& ocLow = histl.LowOutlierCount();
-        assert(ocLow.Size() == phvl.outlierCountLow.size());
-        copy(ocLow.begin(), ocLow.end(), phvl.outlierCountLow.begin());
-
-        const auto& ocHigh = histl.HighOutlierCount();
-        assert(ocHigh.Size() == phvl.outlierCountHigh.size());
-        copy(ocHigh.begin(), ocHigh.end(), phvl.outlierCountHigh.begin());
+        phvl.lowBound = histl.LowerBound();
+        phvl.binSize = histl.BinSize();
+        phvl.outlierCountLow = histl.LowOutlierCount();
+        phvl.outlierCountHigh = histl.HighOutlierCount();
 
         assert(histl.NumBins() == phvl.numBins);
         for (unsigned int bin = 0; bin < phvl.numBins; ++bin)
         {
-            const auto& bc = histl.BinCount(bin);
-            assert(bc.Size() == phvl.binCount[bin].size());
-            copy(bc.begin(), bc.end(), phvl.binCount[bin].begin());
+            phvl.binCount[bin] = histl.BinCount(bin);
         }
     }
 

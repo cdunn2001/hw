@@ -33,20 +33,11 @@
 
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <common/LaneArray_fwd.h>
 #include <common/MongoConstants.h>
 
 namespace PacBio {
 namespace Mongo {
-
-template <typename T, unsigned int N>
-class ConstLaneArrayRef;
-
-template <typename T, unsigned int N>
-class LaneArrayRef;
-
-template <typename T, unsigned int N>
-class LaneArray;
-
 namespace Data {
 
 class BatchDimensions
@@ -120,8 +111,7 @@ public:
 
         LaneIterator& operator++()
         {
-            curFrame_ = std::min(curFrame_ + 1, numFrames_);
-            return *this;
+            return *this+=1;
         }
 
         LaneIterator operator++(int)
@@ -133,31 +123,26 @@ public:
 
         LaneIterator& operator+=(size_t v)
         {
-            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            curFrame_ = curFrame_ + v;
+            if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
         }
-
-        LaneArrayRef<T, laneSize> operator*()
+        LaneIterator operator+(size_t v)
         {
-            return LaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            auto ret = *this;
+            return ret+=v;
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*() const
+        LaneArray<T, laneSize> Extract() const
         {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            return LaneArray<T, laneSize>(MemoryRange<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
-        LaneArrayRef<T, laneSize> operator[](size_t idx)
+        void Store(const LaneArray<T, laneSize>& lane)
         {
-            assert(curFrame_ + idx < numFrames_);
-            return LaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
+            memcpy(ptr_ + (curFrame_ * laneWidth_), &lane, sizeof(lane));
         }
 
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
     private:
         T* ptr_;
         size_t curFrame_;
@@ -202,8 +187,7 @@ public:
 
         ConstLaneIterator& operator++()
         {
-            curFrame_ = std::min(curFrame_ + 1, numFrames_);
-            return *this;
+            return *this+=1;
         }
 
         ConstLaneIterator operator++(int)
@@ -215,31 +199,22 @@ public:
 
         ConstLaneIterator& operator+=(size_t v)
         {
-            curFrame_ = std::min(curFrame_ + v, numFrames_);
+            curFrame_ = curFrame_ + v;
+            if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*()
+        ConstLaneIterator operator+(size_t v)
         {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            auto ret = *this;
+            return ret+=v;
         }
 
-        ConstLaneArrayRef<T, laneSize> operator*() const
+        ValueType Extract() const
         {
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + (curFrame_ * laneWidth_));
+            return ValueType(MemoryRange<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx)
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
-
-        ConstLaneArrayRef<T, laneSize> operator[](size_t idx) const
-        {
-            assert(curFrame_ + idx < numFrames_);
-            return ConstLaneArrayRef<T, laneSize>(ptr_ + ((curFrame_ + idx) * laneWidth_));
-        }
     private:
         T* ptr_;
         size_t curFrame_;

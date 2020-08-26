@@ -48,7 +48,7 @@ HostMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace
         statsView[laneIdx] = baselinerStats.GetState();
     });
 
-    return std::move(out);
+    return out;
 }
 
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
@@ -74,26 +74,28 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
 
     using ValueType = typename decltype(trIter)::ValueType;
     for ( ; blsIter != baselineSubtractedData.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
-            blsIter += Stride(), lowerIter += Stride(), upperIter += Stride())
+            lowerIter += Stride(), upperIter += Stride())
     {
-        const auto& bias = (*upperIter + *lowerIter).AsFloat() / FloatArray{2.0f};
-        const auto& framebkgndSigma = (*upperIter - *lowerIter).AsFloat() / cSigmaBias_;
+        auto upperVal = upperIter.Extract();
+        auto lowerVal = lowerIter.Extract();
+        const auto& bias = (upperVal + lowerVal) / 2.0f;
+        const auto& framebkgndSigma = (upperVal - lowerVal) / cSigmaBias_;
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma * FloatArray{Scale()});
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
-        auto& strideIter = blsIter;
-        for (size_t i = 0; i < Stride() && strideIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
-             i++, strideIter++, trIter++)
+        for (size_t i = 0; i < Stride() && blsIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
+             i++, blsIter++, trIter++)
         {
-            const auto& rawSignal = ValueType(*trIter);
+            const auto& rawSignal = trIter.Extract();
 
             // NOTE: We need to scale the trace data (from DN to e-) and
             // end up converting the baseline subtracted data to float in order
             // to perform the conversion and then end up converting it back.
-            *strideIter = ((rawSignal.AsFloat() - bias - frameBiasEstimate) * FloatArray{Scale()}).AsShort();
+            LaneArray out((rawSignal - bias - frameBiasEstimate) * Scale());
+            blsIter.Store(out);
 
-            AddToBaselineStats(rawSignal, ValueType(*strideIter), baselinerStats);
+            AddToBaselineStats(rawSignal, out, baselinerStats);
 
             firstFrame_ = false;
         }
@@ -112,14 +114,14 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
         // incoming frame data are shorts.
 
         // Compute the high mask at the plus-1 position (this) for variance
-        const auto& maskHp1 = baselineSubtractedFrame.AsFloat() < thrHigh_;
+        const auto& maskHp1 = baselineSubtractedFrame < thrHigh_;
 
         // Compute the full mask to use for the single-frame latent variance
         // Minus-1[High] & Pos-0[Low] & Plus-1[High]
         const auto& mask = latHMask_.front() & latLMask_ & maskHp1;
 
         // Push the plus-1 frame masks
-        latLMask_ = baselineSubtractedFrame.AsFloat() < thrLow_;
+        latLMask_ = baselineSubtractedFrame < thrLow_;
         latHMask_.push_back(maskHp1);
 
         baselinerStats.AddSample(latRawData_, latData_, mask);

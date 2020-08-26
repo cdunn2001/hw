@@ -22,7 +22,6 @@ class BaselinerStatAccumulator
 {
 public:     // Types
     using LaneArray = PacBio::Mongo::LaneArray<T>;
-    using ConstLaneArrayRef = PacBio::Mongo::ConstLaneArrayRef<T>;
     using FloatArray = PacBio::Mongo::LaneArray<float>;
     using Mask = PacBio::Mongo::LaneMask<>;
 
@@ -42,8 +41,8 @@ public:     // Mutating functions
     /// \a x contains raw trace values.
     /// \a y contains baseline-subtracted trace values.
     /// Only add to baseline statistics where \a isBaseline is true.
-    void AddSample(const ConstLaneArrayRef& rawTrace,
-                   const ConstLaneArrayRef& baselineSubtracted,
+    void AddSample(const LaneArray& rawTrace,
+                   const LaneArray& baselineSubtracted,
                    const Mask& isBaseline);
 
 public:     // Const functions
@@ -52,10 +51,10 @@ public:     // Const functions
         return BaselinerStatAccumState
         {
             baselineSubtractedStats_.GetState(),
-            {traceMin.cbegin(), traceMin.cend()},
-            {traceMax.cbegin(), traceMax.cend()},
+            traceMin,
+            traceMax,
             baselineStats_.GetState(),
-            {rawBaselineSum_.cbegin(), rawBaselineSum_.cend()}
+            rawBaselineSum_,
         };
     }
 
@@ -80,15 +79,15 @@ public:     // Non-const functions
 private:
     // Statistics of trace after baseline estimate has been subtracted.
     AutocorrAccumulator<FloatArray> baselineSubtractedStats_;
-    LaneArray traceMin;
-    LaneArray traceMax;
+    LaneArray traceMin{std::numeric_limits<T>::max()};
+    LaneArray traceMax{std::numeric_limits<T>::lowest()};
 
     // Statistics of baseline frames after baseline estimate has
     // been subtracted.
     StatAccumulator<FloatArray> baselineStats_;
 
     // Sum of baseline frames _prior_ to baseline subtraction.
-    LaneArray rawBaselineSum_;
+    LaneArray rawBaselineSum_{0};
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -1,6 +1,4 @@
-#ifndef Mongo_Common_HQRFPhysicalStates_H_
-#define Mongo_Common_HQRFPhysicalStates_H_
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,25 +22,6 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Description:
-/// \brief HQRFPhsyicalStates
 
-#include <cstdint>
+#include "ArithmeticArray.h"
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-enum class HQRFPhysicalStates : std::uint16_t
-{
-    EMPTY = 0,
-    SINGLE,
-    MULTI,
-    LOW,
-
-    NUM_PHYS_STATES
-};
-
-}}} // ::PacBio::Mongo::Data
-#endif // Mongo_Common_HQRFPhysicalStates_H_

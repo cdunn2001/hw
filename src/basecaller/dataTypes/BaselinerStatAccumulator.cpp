@@ -36,16 +36,16 @@ namespace Mongo {
 namespace Data {
 
 template <typename T>
-void BaselinerStatAccumulator<T>::AddSample(const ConstLaneArrayRef& rawTrace,
-                                            const ConstLaneArrayRef& baselineSubtracted,
+void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
+                                            const LaneArray& baselineSubtracted,
                                             const Mask& isBaseline)
 {
-    const FloatArray bs {baselineSubtracted};
+    const FloatArray bs(baselineSubtracted);
 
     // Add frame to complete trace statistics.
     baselineSubtractedStats_.AddSample(bs);
-    traceMin = min(bs, traceMin);
-    traceMax = max(bs, traceMax);
+    traceMin = min(baselineSubtracted, traceMin);
+    traceMax = max(baselineSubtracted, traceMax);
 
     // Add frame to baseline statistics if so flagged.
     baselineStats_.AddSample(bs, isBaseline);

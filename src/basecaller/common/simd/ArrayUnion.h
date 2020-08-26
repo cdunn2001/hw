@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_ArrayUnion_H_
 #define mongo_common_simd_ArrayUnion_H_
 
-// Copyright (c) 2017, Pacific Biosciences of California, Inc.
+// Copyright (c) 2017,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -87,6 +87,13 @@ union ArrayUnion
 private:
     T simd;
     std::array<Scalar_T, SimdTypeTraits<T>::width> elements;
+};
+
+template <typename T>
+struct SimdTypeTraits<ArrayUnion<T>>
+{
+    using scalar_type = ScalarType<T>;
+    static const uint16_t width = SimdTypeTraits<T>::width;
 };
 
 }}      // namespace PacBio::Simd

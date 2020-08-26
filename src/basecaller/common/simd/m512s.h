@@ -18,6 +18,44 @@
 namespace PacBio {
 namespace Simd {
 
+template <typename T>
+inline auto Low(const m512s& in);
+
+template <>
+inline auto Low<float>(const m512s& in)
+{
+    return LowFloats(in);
+}
+template <>
+inline auto Low<int32_t>(const m512s& in)
+{
+    return LowInts(in);
+}
+template <>
+inline auto Low<uint32_t>(const m512s& in)
+{
+    return LowUInts(in);
+}
+
+template <typename T>
+inline auto High(const m512s& in);
+
+template <>
+inline auto High<float>(const m512s& in)
+{
+    return HighFloats(in);
+}
+template <>
+inline auto High<int32_t>(const m512s& in)
+{
+    return HighInts(in);
+}
+template <>
+inline auto High<uint32_t>(const m512s& in)
+{
+    return HighUInts(in);
+}
+
 template<>
 struct SimdTypeTraits<m512s>
 {

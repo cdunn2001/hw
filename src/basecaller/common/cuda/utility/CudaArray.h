@@ -53,13 +53,10 @@ struct CudaArray
         memcpy(data_, data.data(), sizeof(T)*len);
     }
 
-    template <typename InIter>
-    CudaArray(InIter&& first, InIter&& last)
+    CudaArray& operator=(const T& val)
     {
-        assert(std::distance(first, last) == len);
-        std::copy(std::forward<InIter>(first),
-                  std::forward<InIter>(last),
-                  data_);
+        std::fill(begin(), end(), val);
+        return *this;
     }
 
     CUDA_ENABLED constexpr size_t size() const noexcept

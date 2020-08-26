@@ -78,14 +78,14 @@ private:
 
 struct MallocAllocator
 {
-    static constexpr uint32_t supportedIAllocatorFlags = 0;
+    static constexpr uint32_t supportedIAllocatorFlags = IAllocator::ALIGN_64B;
     static constexpr const char* description = "Standard Host Memory";
 
     using AllocationT = SmartAllocation;
     static SmartAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
     {
         return SmartAllocation(size,
-                               &malloc,
+                               [](size_t size) { return aligned_alloc(64, size); },
                                &free,
                                AllocationID{marker.AsHash()},
                                AllocationType{static_cast<size_t>(AllocatorMode::MALLOC)});
@@ -94,7 +94,9 @@ struct MallocAllocator
 
 struct PinnedAllocator
 {
-    static constexpr uint32_t supportedIAllocatorFlags = IAllocator::CUDA_MEMORY;
+    static constexpr uint32_t supportedIAllocatorFlags =
+          IAllocator::CUDA_MEMORY
+        | IAllocator::ALIGN_64B;
     static constexpr const char* description = "Pinned Host Memory";
 
     using AllocationT = SmartAllocation;

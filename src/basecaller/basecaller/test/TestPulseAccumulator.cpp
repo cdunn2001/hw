@@ -287,12 +287,15 @@ void TestPulseAccumulator()
         StatAccumulator<LaneArray<float>> stats{LaneArray<float>(lanePulsesMetrics.moment0),
                                                 LaneArray<float>(lanePulsesMetrics.moment1),
                                                 LaneArray<float>(lanePulsesMetrics.moment2)};
+        const auto count = stats.Count().ToArray();
+        const auto mean = stats.Mean().ToArray();
+        const auto var = stats.Variance().ToArray();
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
-            EXPECT_EQ(baselineFrames-1, stats.Count()[zmwIdx]);
-            EXPECT_NEAR(baselineMean, stats.Mean()[zmwIdx], 2*baselineStd);
+            EXPECT_EQ(baselineFrames-1, count[zmwIdx]);
+            EXPECT_NEAR(baselineMean, mean[zmwIdx], 2*baselineStd);
             // Variance of sample variance for normally distributed random variable should be (2*sigma^4)/(n-1)
-            EXPECT_NEAR(baselineStd*baselineStd, stats.Variance()[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));
+            EXPECT_NEAR(baselineStd*baselineStd, var[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));
             for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
                 const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];

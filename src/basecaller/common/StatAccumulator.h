@@ -41,9 +41,6 @@ namespace Mongo {
 
 // TODO: Add declaration decorators to enable use on CUDA device.
 
-// TODO: Use a type-traits-like technique to enable accepting
-// [Const]LaneArrayRef as function parameters instead of [const] LaneArray&.
-
 /// \brief A bundle of moment statistics.
 /// \details
 /// Provides mean and variance statistics on augmentable dataset.
@@ -125,10 +122,10 @@ public:     // Const methods
     {
         return StatAccumState
         {
-            {offset_.cbegin(), offset_.cend()},
-            {m0_.cbegin(), m0_.cend()},
-            {m1_.cbegin(), m1_.cend()},
-            {m2_.cbegin(), m2_.cend()}
+            offset_,
+            m0_,
+            m1_,
+            m2_,
         };
     }
 

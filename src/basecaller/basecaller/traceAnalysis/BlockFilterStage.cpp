@@ -30,7 +30,7 @@ Data::BlockView<T>* BlockFilterStage<T, Filter>::operator()(Data::BlockView<T>* 
         // Load the window buffer entirely instead of just the left width.
         for (unsigned int i = 0; i < width_; ++i)
         {
-            winbuf_.PushBack(typename decltype(filterRangeStart)::ValueType(*filterRangeStart));
+            winbuf_.PushBack(typename decltype(filterRangeStart)::ValueType(filterRangeStart.Extract()));
         }
     }
 

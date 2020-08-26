@@ -450,9 +450,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     (void)download;
     if (poolStatus_ != PoolStatus::SEQUENCING)
     {
-        auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
+        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
                                                                    baselinedTraces.StorageDims());
-        return BatchResult(std::move(pulsesAndMetrics.first), nullptr);
+        return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     } else
     {
         return BatchResult(std::move(pulses), std::move(basecallingMetrics));

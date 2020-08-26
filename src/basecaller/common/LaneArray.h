@@ -1,440 +1,137 @@
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+// This file is the entry point for using the LaneArray concept, though
+// all code is defined elsewhere.  LaneArray provides a generic
+// template class that can treat a fixed-length array of arithmetic
+// types that behave mathematically the same as their scalar counterparts.
+// These classes are vectorized, and should have their best performance on
+// an AVX512 compilation.  An SSE implementations exist, but it has a few
+// software emulations for missing intrinsics, plus it's fundamentally
+// limited in that it takes 4 registers to do what AVX512 can do with
+// one, which for some code will cause more pushing/popping data to/from
+// the stack.
+//
+// For the most part these types will behave as closely as possible to
+// their scalar counterparts, including respecting concepts like
+// "common type" and "integral promotions".  In simple terms this means
+// you get expected behaviour where:
+// LaneArray<int> + LaneArray<float> = LaneArray<float>.
+//
+// However there are a few notible exceptions worth being aware of:
+// 1. LaneArray<short> + LaneArray<short> = LaneArray<short>
+//    Normal 16 bit types get promoted to 32 bit in such a case but
+//    we very much don't want that.
+// 2. While LaneArray<short> * LaneArray<int> will result in
+//    LaneArray<int>, LaneArray<short> * int will *not*.  This
+//    is because it's very difficult to type 16 bit literals,
+//    and even if you have a 16 bit variable it's too easy to
+//    accidentally bump it up to 32 bit.  Without this exception
+//    we'll be either be constantly casting back to 16 bit types
+//    or else suffering from unecessary (and somewhat expensive)
+//    conversion to arrays of 32 bit types.
+//    2b. Scalar int and unsigned int are the *only* exceptions
+//        to this rule.  LaneArray<int> * float will still result
+//        in LaneArray<float>
+// 3. No implicit "demotions".  You can't do something like
+//    LaneArray<int> += float as that requires truncation.  Maybe
+//    this is my personal preferences bleeding through but enabling
+//    that did not seem a good idea even if primive types can
+//    behave that way.  If someone decides this should be changed,
+//    one should only have to tweak the definition of
+//    `CompoundOpIsValid` in `LaneArrayTraits.h`
+// 4. All mixed sign integral operations are disabled.  The compiler
+//    can warn you if you do silly things like signed/unsigned
+//    comparison, but that seemed difficult for me to emulate.
+//    So those operators are all undefined, and if a user wants
+//    to do something mixed type they will have to explicitly
+//    cast one of their arguments.  If someone decides this should
+//    be changed, one should only have to tweak the definition of
+//    `CommonArrayType` in `LaneArrayTraits.h`
+//
+// I've tried to document the implementation thouroughly, but here's
+// a big picture overview about how all the pieces fit together:
+// There are 4 main classes, all with separate responsibilities
+// 1. BaseArray: A CRTP base class at the top of the inheritance
+//    chain.  It's responsiblity is the storage/construction/conversion
+//    of the raw m512 array used.  By providing this functionality in
+//    a central place it avoids a lot of duplicate logic that would
+//    need to be in the various LaneArray types, though it comes at
+//    the cost of being rather abstract.
+//
+//    This class provides a special constructor and two special functions
+//    (Update and Reduce) that enable a lot of functionality in children
+//    classes.  These functions follow a common trend where it accepts
+//    a lambda function and an arbitrary set of arguments, and it
+//    automatically iterates over all the arrays involved, applying the
+//    lambda to each element.  This iteration process automatically
+//    handles 32bit vs 16bit mismatches (as the natural stride is different
+//    for each), as well as scalar arguments mixed in with the array
+//    arguments.
+//
+//    Children classes leverage these functions for all their
+//    defined operators/functions, as this allows them to have simple
+//    definitions uncomplicated by the bit width and vector/scalar issues
+//    mentioned.  In principle however these functions are publicly
+//    available, and in some cases it may be more efficient to use
+//    these functions directly if doing a complicated mathematical
+//    operation.  This could be faster for the same reason that expression
+//    templates (e.g. what Eigen uses) can be faster as your temporaries
+//    use less register/stack space and access patterns are potentially
+//    more cache friendly.  In fact, it should be possible to augment
+//    this framework to actually use expression templates itself,
+//    but doing so seemed a bit too far "out of scope" at the time
+//    this was written.  Still, it's an interesting idea for the future.
+//
+// 2. LaneMask: This is a relatively simple class that handles arrays of
+//    booleans.  It's only real (minor) complication is that as an
+//    array of booleans is not bitwise compatible with our m512b types,
+//    it must handle some of the creation/conversion logic that otherwise
+//    would have been handled in BaseArray.
+//
+// 3. ArithmeticArray: This class extends BaseArray and is in turn
+//    meant to be the parent of other LaneArray classes.  It generically
+//    provides the common functionality one would expect from arithmetic
+//    types (barring the exceptions mentioned above).  At face value
+//    it is very simple, though it does rely on the details of ADL
+//    and SFINAE to produce a comprehenive overload set that is seemless
+//    to use.  I've tried to document such "magic" thoroughly, but also
+//    to write things in such a way that things appear simple and these
+//    details can be glossed over unless one cares about them.
+//
+// 4. LaneArray: This is the main externally visible class.  There are
+//    specializations for every supported primitive type, where those
+//    specializations can be used to provide type-specific functionality
+//    (e.g. isnan).
+//    Note: There currently is no support for 64 bit types. (and it would
+//          not be trivial to add)
+
 #ifndef mongo_common_LaneArray_H_
 #define mongo_common_LaneArray_H_
 
-#include <algorithm>
-#include <type_traits>
-#include <boost/operators.hpp>
-
-#include <common/MongoConstants.h>
-#include <common/cuda/utility/CudaArray.h>
-#include <common/simd/SimdConvTraits.h>
-#include <common/simd/SimdTypeTraits.h>
-
-#include "LaneArrayRef.h"
-#include "LaneMask.h"
-
-namespace PacBio {
-namespace Mongo {
-
-/// A fixed-size array type that supports elementwise arithmetic operations.
-template <typename T, unsigned int N = laneSize>
-class LaneArray : public LaneArrayRef<T, N>
-{
-public:     // Types
-    using BaseRef = LaneArrayRef<T, N>;
-    using BaseConstRef = typename BaseRef::BaseConstRef;
-    using ElementType = T;
-
-public:     // Static constants
-    static constexpr unsigned int size = N;
-
-public:     // Structors and assignment
-    LaneArray() : BaseRef(nullptr)
-    { BaseRef::SetBasePointer(data_); }
-
-    LaneArray(const LaneArray& other)
-        : LaneArray()
-    { std::copy(other.begin(), other.end(), begin()); }
-
-    template <typename U>
-    explicit LaneArray(const ConstLaneArrayRef<U, N>& other)
-        : LaneArray()
-    { std::copy(other.begin(), other.end(), this->begin()); }
-
-    /// Broadcasting constructor supports implicit conversion of scalar value
-    /// to uniform vector.
-    LaneArray(const T& val)
-        : LaneArray()
-    { std::fill(begin(), end(), val); }
-
-    template <typename InputIterT>
-    LaneArray(const InputIterT& first, const InputIterT& last)
-        : LaneArray()
-    {
-        assert(std::distance(first, last) == N);
-        std::copy(first, last, begin());
-    }
-
-    // This could be accomplished with LaneArray(ConstLaneArrayRef(ca.data())),
-    // but this convenience seems worth the dependency on CudaArray.h.
-    // It's also safer since we ensure that ca has the correct size.
-    // TODO: Should we enable implicit conversion (i.e., remove the explicit qualifier)?
-    // TODO: Make the element type of CudaArray a template parameter.
-    explicit LaneArray(const Cuda::Utility::CudaArray<T, N>& ca)
-        : LaneArray(ca.begin(), ca.end())
-    { }
-
-    LaneArray& operator=(const LaneArray& that)
-    {
-        BaseRef::operator=(that);
-        return *this;
-    }
-
-    LaneArray& operator=(const ElementType& val)
-    {
-        BaseRef::operator=(val);
-        return *this;
-    }
-
-    template <typename U>
-    LaneArray& operator=(const ConstLaneArrayRef<U, N>& that)
-    {
-        BaseRef::template operator=<U>(that);
-        return *this;
-    }
-
-public:     // Iterators
-    using BaseRef::begin;
-    using BaseRef::end;
-    using BaseRef::cbegin;
-    using BaseRef::cend;
-
-public:     // Export
-    LaneArray<float, N> AsFloat() const
-    {
-        LaneArray<float, N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = static_cast<float>(data_[i]);
-        }
-        return ret;
-    }
-
-    LaneArray<short, N> AsShort() const
-    {
-        LaneArray<short, N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = static_cast<short>(data_[i]);
-        }
-        return ret;
-    }
-
-    LaneArray<unsigned short, N> AsUnsignedShort() const
-    {
-        LaneArray<unsigned short, N> ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = static_cast<unsigned short>(data_[i]);
-        }
-        return ret;
-    }
-
-public:     // Named unary operators
-    /// Square root
-    friend LaneArray sqrt(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = std::sqrt(x[i]);
-        }
-        return ret;
-    }
-
-    /// Absolute value
-    friend LaneArray abs(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = std::abs(x[i]);
-        }
-        return ret;
-    }
-
-    /// Natural exponential
-    friend LaneArray exp(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i) ret[i] = std::exp(x[i]);
-        return ret;
-    }
-
-    /// Base-2 exponential
-    friend LaneArray exp2(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret[i] = std::exp2(x[i]);
-        }
-        return ret;
-    }
-
-    /// Natural logarithm
-    friend LaneArray log(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i) ret[i] = std::log(x[i]);
-        return ret;
-    }
-
-    /// Base-2 logarithm
-    friend LaneArray log2(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i) ret[i] = std::log2(x[i]);
-        return ret;
-    }
-
-    /// Complementary error function
-    friend LaneArray erfc(const BaseConstRef& x)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i) ret[i] = std::erfc(x[i]);
-        return ret;
-    }
-
-public:     // Named binary operators
-    friend LaneArray max(const LaneArray& a, const LaneArray& b)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret.data_[i] = std::max(a[i], b[i]);
-        }
-        return ret;
-    }
-
-    friend LaneArray min(const LaneArray& a, const LaneArray& b)
-    {
-        LaneArray ret;
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ret.data_[i] = std::min(a[i], b[i]);
-        }
-        return ret;
-    }
-
-public:     // Functor types
-    struct minOp
-    {
-        LaneArray operator()(const LaneArray& a, const LaneArray& b)
-        { return min(a, b); }
-    };
-
-    struct maxOp
-    {
-        LaneArray operator()(const LaneArray& a, const LaneArray& b)
-        { return max(a, b); }
-    };
-
-public:
-    friend LaneMask<N> isnan(const LaneArray& a)
-    {
-        LaneMask<N> ret(false);
-        if (std::is_floating_point<T>::value)
-        {
-            for (unsigned int i = 0; i < N; ++i)
-            {
-                ret[i] = std::isnan(a[i]);
-            }
-        }
-        return ret;
-    }
-
-private:
-    T data_[N];
-};
-
-
-/// Unary negation.
-template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& a)
-{
-    LaneArray<T, N> nrv;
-    for (unsigned int i = 0; i < N; ++i) nrv[i] = -a[i];
-    return nrv;
-}
-
-// Binary operators with uniform element type.
-// TODO: Enable nonuniform types.
-template <typename T, unsigned int N>
-LaneArray<T, N> operator+(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv += rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator+(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (rhs);
-    nrv += lhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator+(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv += rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv -= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv -= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator-(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv -= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator*(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv *= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator*(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (rhs);
-    nrv *= lhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator*(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv *= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator/(const ConstLaneArrayRef<T, N>& lhs, const T& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv /= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator/(const T& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv /= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator/(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv /= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T, N> operator|(const ConstLaneArrayRef<T, N>& lhs, const ConstLaneArrayRef<T, N>& rhs)
-{
-    LaneArray<T, N> nrv (lhs);
-    nrv |= rhs;
-    return nrv;
-}
-
-template <typename T, unsigned int N>
-typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
-min(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
-{
-    LaneArray<T, N> ret;
-    for (unsigned int i = 0; i < N; ++i)
-    {
-        ret[i] = static_cast<T>(std::min(a[i], static_cast<float>(b[i])));
-    }
-    return ret;
-}
-
-
-template <typename T, unsigned int N>
-typename std::enable_if<std::is_integral<T>::value, LaneArray<T, N>>::type
-max(const LaneArray<float, N>& a, const LaneArray<T, N>& b)
-{
-    LaneArray<T, N> ret;
-    for (unsigned int i = 0; i < N; ++i)
-    {
-        ret[i] = static_cast<T>(std::max(a[i], static_cast<float>(b[i])));
-    }
-    return ret;
-}
-
-template <typename T, unsigned int N>
-LaneArray<T,N> Blend(const LaneMask<N>& tf,
-                     const ConstLaneArrayRef<T,N>& success,
-                     const ConstLaneArrayRef<T,N>& failure)
-{
-    LaneArray<T,N> ret;
-    for (unsigned int i = 0; i < N; ++i)
-    {
-        ret[i] = tf[i] ? success[i] : failure[i];
-    }
-    return ret;
-}
-
-template <typename T, unsigned int N> inline
-LaneArray<int, N> floorCastInt(const ConstLaneArrayRef<T, N>& f)
-{
-    static_assert(std::is_floating_point<T>::value, "T must be floating-point type.");
-    LaneArray<int, N> ret;
-    for (unsigned int i = 0; i < N; ++i)
-    {
-        ret[i] = static_cast<int>(std::floor(f[i]));
-    }
-    return ret;
-}
-
-template <typename T, unsigned int N> inline
-LaneArray<T, N> inc(const ConstLaneArrayRef<T, N>& a, const LaneMask<N>& mask)
-{
-    const LaneArray<T, N> ap1 = a + T(1);
-    return Blend(mask, ap1 , a);
-}
-
-}}      // namespace PacBio::Mongo
-
-
-// TODO: Seems like we might have a namespace wrinkle to iron out.
-namespace PacBio {
-namespace Simd {
-
-template <typename T, unsigned int N>
-struct SimdConvTraits<Mongo::LaneArray<T,N>>
-{
-    typedef Mongo::LaneMask<N> bool_conv;
-    typedef Mongo::LaneArray<float,N> float_conv;
-    typedef Mongo::LaneArray<int,N> index_conv;
-    typedef Mongo::LaneArray<short,N> pixel_conv;
-    typedef Mongo::LaneArray<T,N> union_conv;
-};
-
-template <typename T, unsigned int N>
-struct SimdTypeTraits<Mongo::LaneArray<T,N>>
-{
-    typedef T scalar_type;
-    static const uint16_t width = N;
-};
-
-}}   // namespace PacBio::Simd
+#include <common/LaneArray_fwd.h>
+#include <common/simd/LaneArrayImpl.h>
 
 #endif  // mongo_common_LaneArray_H_

@@ -31,6 +31,7 @@
 /// \brief  Bits for compiler cross-compatibility of SIMD-implemented types.
 
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <immintrin.h>
 
@@ -61,14 +62,66 @@ inline __m128 _mm_atan2_ps(__m128 y, __m128 x)
     return r;
 }
 
-inline __m128i _mm_div_epi16(__m128i a, __m128i b)
+inline __m128i _mm_div_epu16(__m128i a, __m128i b)
 {
-    __m128i r;
-    short* pa = reinterpret_cast<short*>(&a);
-    short* pb = reinterpret_cast<short*>(&b);
-    short* pr = reinterpret_cast<short*>(&r);
+    uint16_t pa[8];
+    uint16_t pb[8];
+    uint16_t pr[8];
+    memcpy(pa, &a, sizeof(a));
+    memcpy(pb, &b, sizeof(b));
 
     for (size_t i = 0; i < 8; ++i) pr[i] = pa[i] / pb[i];
+    __m128i r;
+    memcpy(&r, pr, sizeof(r));
+    return r;
+}
+
+inline __m128i _mm_div_epi16(__m128i a, __m128i b)
+{
+    //__m128i r;
+    //short* pa = reinterpret_cast<short*>(&a);
+    //short* pb = reinterpret_cast<short*>(&b);
+    //short* pr = reinterpret_cast<short*>(&r);
+    // TODO Should probably port this fix to the other
+    // functions, but this is the one crashing on me
+    // right now.
+    short pa[8];
+    short pb[8];
+    short pr[8];
+    memcpy(pa, &a, sizeof(a));
+    memcpy(pb, &b, sizeof(b));
+
+    for (size_t i = 0; i < 8; ++i) pr[i] = pa[i] / pb[i];
+    __m128i r;
+    memcpy(&r, pr, sizeof(r));
+    return r;
+}
+
+inline __m128i _mm_div_epu32(__m128i a, __m128i b)
+{
+    uint32_t pa[4];
+    uint32_t pb[4];
+    uint32_t pr[4];
+    memcpy(pa, &a, sizeof(a));
+    memcpy(pb, &b, sizeof(b));
+
+    for (size_t i = 0; i < 4; ++i) pr[i] = pa[i] / pb[i];
+    __m128i r;
+    memcpy(&r, pr, sizeof(r));
+    return r;
+}
+
+inline __m128i _mm_div_epi32(__m128i a, __m128i b)
+{
+    int pa[4];
+    int pb[4];
+    int pr[4];
+    memcpy(pa, &a, sizeof(a));
+    memcpy(pb, &b, sizeof(b));
+
+    for (size_t i = 0; i < 4; ++i) pr[i] = pa[i] / pb[i];
+    __m128i r;
+    memcpy(&r, pr, sizeof(r));
     return r;
 }
 

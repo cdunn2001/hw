@@ -72,8 +72,8 @@ public:     // Static functions
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
     static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
-                                             const ConstLaneArrayRef<float>& signalMean,
-                                             const ConstLaneArrayRef<float>& baselineVar);
+                                             const LaneArray<float>& signalMean,
+                                             const LaneArray<float>& baselineVar);
 
 public:     // Structors and assignment
     DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);

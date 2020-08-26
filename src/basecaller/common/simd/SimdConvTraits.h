@@ -36,6 +36,8 @@
 #include "m512f.h"
 #include "m512i.h"
 #include "m512s.h"
+#include "m512ui.h"
+#include "m512us.h"
 
 namespace PacBio {
 namespace Simd {
@@ -103,6 +105,26 @@ struct SimdConvTraits<m512s>
     typedef m512i index_conv;
     typedef m512s pixel_conv;
     typedef ArrayUnion<m512s> union_conv;
+};
+
+template<>
+struct SimdConvTraits<m512ui>
+{
+    typedef m512b bool_conv;
+    typedef m512f float_conv;
+    typedef m512i index_conv;
+    typedef m512s pixel_conv;
+    typedef ArrayUnion<m512ui> union_conv;
+};
+
+template<>
+struct SimdConvTraits<m512us>
+{
+    typedef m512b bool_conv;
+    typedef m512f float_conv;
+    typedef m512i index_conv;
+    typedef m512s pixel_conv;
+    typedef ArrayUnion<m512us> union_conv;
 };
 
 

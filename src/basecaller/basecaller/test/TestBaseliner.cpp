@@ -251,9 +251,9 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
                 const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
                 EXPECT_NEAR(count, (batchConfig.framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
-                EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));
+                EXPECT_NEAR(mean, 0, baselineSigma / std::sqrt(count));
                 EXPECT_NEAR(var, baselineSigma * baselineSigma, 2 * baselineSigma);
-                EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / sqrt(count));
+                EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / std::sqrt(count));
             }
         }
         blockNum++;
@@ -345,9 +345,9 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_OneSignalLevel)
                 const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
                 EXPECT_NEAR(count, (batchConfig.framesPerChunk / (pulseIpd + pulseWidth)) * pulseIpd, 20);
-                EXPECT_NEAR(mean, 0, baselineSigma / sqrt(count));
+                EXPECT_NEAR(mean, 0, baselineSigma / std::sqrt(count));
                 EXPECT_NEAR(var, baselineSigma * baselineSigma, 2 * baselineSigma);
-                EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / sqrt(count));
+                EXPECT_NEAR(rawMean, baselineLevel, baselineSigma / std::sqrt(count));
             }
         }
         blockNum++;

@@ -27,3 +27,11 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include "SubframeLabelManager.h"
+
+namespace PacBio {
+namespace Mongo {
+namespace Basecaller {
+
+constexpr int SubframeLabelManager::numAnalogs;
+
+}}}

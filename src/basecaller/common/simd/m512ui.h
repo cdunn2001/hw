@@ -1,5 +1,5 @@
-#ifndef mongo_common_simd_m512i_H_
-#define mongo_common_simd_m512i_H_
+#ifndef mongo_common_simd_m512ui_H_
+#define mongo_common_simd_m512ui_H_
 
 #include <limits>
 
@@ -9,25 +9,26 @@
 #include "SimdTypeTraits.h"
 
 #if     defined(PB_LOOP)
-#include "m512i_LOOP.h"
+//#include "m512ui_LOOP.h"
+#error LOOP not supported
 #elif   defined(PB_CORE_AVX512)
-#include "m512i_AVX512.h"
+#include "m512ui_AVX512.h"
 #elif   defined(__SSE2__)
-#include "m512i_SSE.h"
+#include "m512ui_SSE.h"
 #else
-#error m512i type is not supported by the available instruction set.
+#error m512ui type is not supported by the available instruction set.
 #endif
 
 namespace PacBio {
 namespace Simd {
 
 template<>
-struct SimdTypeTraits<m512i>
+struct SimdTypeTraits<m512ui>
 {
-	typedef int scalar_type;
+    typedef uint32_t scalar_type;
     static const uint8_t width = 16;
 };
 
 }}      // namespace PacBio::Simd
 
-#endif  // mongo_common_simd_m512i_H_
+#endif  // mongo_common_simd_m512ui_H_

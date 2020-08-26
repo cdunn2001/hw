@@ -1,7 +1,7 @@
 #ifndef mongo_common_simd_m512i_SSE_H_
 #define mongo_common_simd_m512i_SSE_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2015,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -44,8 +44,7 @@
 #include <ostream>
 #include <smmintrin.h>
 
-#include "m512f_SSE.h"
-#include "m512s_SSE.h"
+#include "m512b_SSE.h"
 #include "mm_blendv_si128.h"
 #include "xcompile.h"
 
@@ -57,9 +56,6 @@ CLASS_ALIGNAS(16) m512i
 {
 public:     // Types
     typedef m512i type;
-
-    using Iterator = int*;
-    using ConstIterator = const int*;
 
 public:     // Static constants
     /// The number of floats represented by one instance.
@@ -80,7 +76,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512i() {}
+    m512i() = default;
 
     // Replicate scalar x across v.
     m512i(int x)
@@ -106,36 +102,26 @@ public:     // Structors
         : data{{v1, v2, v3, v4}}
     {}
 
-    // Construct from m128f vector type
-    explicit m512i(const m512f& x)
-        : data{{_mm_cvtps_epi32(_mm_round_ps(x.data1(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data2(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data3(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))
-              , _mm_cvtps_epi32(_mm_round_ps(x.data4(),_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC))}} {}
-
     // Construct from m128b vector type
-    explicit m512i(const m512b& x) 
+    explicit m512i(const m512b& x)
         : data{{_mm_castps_si128(x.data1())
               , _mm_castps_si128(x.data2())
               , _mm_castps_si128(x.data3())
               , _mm_castps_si128(x.data4())}} {}
 
 public:     // Export
-    m512f AsFloat() const
-    {
-        return m512f(_mm_cvtepi32_ps(data.simd[0]),
-                     _mm_cvtepi32_ps(data.simd[1]),
-                     _mm_cvtepi32_ps(data.simd[2]),
-                     _mm_cvtepi32_ps(data.simd[3]));
-    }
+    const ImplType& data1() const
+    { return data.simd[0]; }
 
-    explicit operator m512f() const
-    {
-        return m512f(_mm_cvtepi32_ps(data.simd[0]),
-                     _mm_cvtepi32_ps(data.simd[1]),
-                     _mm_cvtepi32_ps(data.simd[2]),
-                     _mm_cvtepi32_ps(data.simd[3]));
-    }
+    const ImplType& data2() const
+    { return data.simd[1]; }
+
+    const ImplType& data3() const
+    { return data.simd[2]; }
+
+    const ImplType& data4() const
+    { return data.simd[3]; }
+
 
 public:     // Assignment
     m512i& operator=(const m512i& x) = default;
@@ -178,57 +164,30 @@ public:     // Assignment
         return *this;
     }
 
+    m512i& operator/=(const m512i& x)
+    {
+        data.simd[0] = _mm_div_epi32(this->data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_div_epi32(this->data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_div_epi32(this->data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_div_epi32(this->data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512i operator-() const
+    {
+        const auto zero = _mm_setzero_si128();
+        return m512i(_mm_sub_epi32(zero, data.simd[0]),
+                     _mm_sub_epi32(zero, data.simd[1]),
+                     _mm_sub_epi32(zero, data.simd[2]),
+                     _mm_sub_epi32(zero, data.simd[3]));
+    }
+
     // Return a scalar value
     int operator[](unsigned int i) const
     {
         assert(static_cast<size_t>(i) < this->size());
         return data.raw[i];
     }
-
-public:     // Functor types
-
-    struct minOp
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_min_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_min_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_min_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_min_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct maxOp
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_max_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_max_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_max_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_max_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-
-    struct plus
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_add_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_add_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_add_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_add_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
-    struct minus
-    {
-        m512i operator() (const m512i& a, const m512i& b)
-        {
-            return m512i(_mm_sub_epi32(a.data.simd[0], b.data.simd[0]),
-                         _mm_sub_epi32(a.data.simd[1], b.data.simd[1]),
-                         _mm_sub_epi32(a.data.simd[2], b.data.simd[2]),
-                         _mm_sub_epi32(a.data.simd[3], b.data.simd[3]));
-        }
-    };
 
 public:     // Non-member (friend) functions
 
@@ -268,6 +227,14 @@ public:     // Non-member (friend) functions
                      _mm_mullo_epi32(l.data.simd[3], r.data.simd[3]));
     }
 
+    friend m512i operator / (const m512i &l, const m512i &r)
+    {
+        return m512i(_mm_div_epi32(l.data.simd[0], r.data.simd[0]),
+                     _mm_div_epi32(l.data.simd[1], r.data.simd[1]),
+                     _mm_div_epi32(l.data.simd[2], r.data.simd[2]),
+                     _mm_div_epi32(l.data.simd[3], r.data.simd[3]));
+    }
+
     friend m512i operator & (const m512i& l, const m512i& r)
     {
         return m512i(_mm_and_si128(l.data.simd[0], r.data.simd[0]),
@@ -283,7 +250,7 @@ public:     // Non-member (friend) functions
                      _mm_or_si128(l.data.simd[2], r.data.simd[2]),
                      _mm_or_si128(l.data.simd[3], r.data.simd[3]));
     }
-    
+
     friend m512i operator ^ (const m512i& l, const m512i& r)
     {
         return m512i(_mm_xor_si128(l.data.simd[0], r.data.simd[0]),
@@ -422,38 +389,6 @@ public:     // Non-member (friend) functions
         return ret;
     }
 
-    friend m512i IndexOfMax(const m512f& nextVal, const m512i& nextIdx, m512f* curVal, const m512i& curIdx)
-    {
-        const auto maskf = m512f(nextVal > *curVal);
-        const auto maski = m512i(nextVal > *curVal);
-
-        *curVal = m512f(_mm_blendv_ps(curVal->data1(), nextVal.data1(), maskf.data1()),
-                        _mm_blendv_ps(curVal->data2(), nextVal.data2(), maskf.data2()),
-                        _mm_blendv_ps(curVal->data3(), nextVal.data3(), maskf.data3()),
-                        _mm_blendv_ps(curVal->data4(), nextVal.data4(), maskf.data4()));
-
-        return m512i(_mm_blendv_si128(curIdx.data.simd[0], nextIdx.data.simd[0], maski.data.simd[0]),
-                        _mm_blendv_si128(curIdx.data.simd[1], nextIdx.data.simd[1], maski.data.simd[1]),
-                        _mm_blendv_si128(curIdx.data.simd[2], nextIdx.data.simd[2], maski.data.simd[2]),
-                        _mm_blendv_si128(curIdx.data.simd[3], nextIdx.data.simd[3], maski.data.simd[3]));
-    }
-
-    friend void IndexOfMin(const m512f& nextVal, const m512i& nextIdx,
-                           const m512f& curVal, const m512i& curIdx,
-                           const m512i& nextMaxIdx, const m512i& curMaxIdx,
-                           m512i* newIdx, m512i* newMaxIdx)
-    {
-        const auto mask = m512i(nextVal <= curVal);
-        *newIdx = m512i(_mm_blendv_si128(curIdx.data.simd[0], nextIdx.data.simd[0], mask.data.simd[0]),
-                            _mm_blendv_si128(curIdx.data.simd[1], nextIdx.data.simd[1], mask.data.simd[1]),
-                            _mm_blendv_si128(curIdx.data.simd[2], nextIdx.data.simd[2], mask.data.simd[2]),
-                            _mm_blendv_si128(curIdx.data.simd[3], nextIdx.data.simd[3], mask.data.simd[3]));
-        *newMaxIdx = m512i(_mm_blendv_si128(curMaxIdx.data.simd[0], nextMaxIdx.data.simd[0], mask.data.simd[0]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[1], nextMaxIdx.data.simd[1], mask.data.simd[1]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[2], nextMaxIdx.data.simd[2], mask.data.simd[2]),
-                            _mm_blendv_si128(curMaxIdx.data.simd[3], nextMaxIdx.data.simd[3], mask.data.simd[3]));
-    }
-
     friend m512i Blend(const m512b& mask, const m512i& success, const m512i& failure)
     {
         const m512i m = m512i(mask);
@@ -468,35 +403,7 @@ public:     // Non-member (friend) functions
         const m512i b = a + 1;
         return Blend(maskB, b, a);
     }
-
-    // Creates an m512s that has the m512i data duplicated.  The replication is
-    // compact (16 original followed by the 16 replica)
-    friend m512s Replicate (const m512i& a)
-    {
-        // No good conversions from int32 to int16 until AVX512.  Doing the
-        // necessary packing while keeping the ordering of a contiguous
-        // (unlike our Ch_0 and Ch_1 functions) would be difficult.  Just
-        // using array access for simplicity.
-        alignas(alignof(m512s)) short b[m512s::size()];
-        static_assert(2 * size() == m512s::size(), "Unexpected size mismatch");
-        for (size_t i = 0; i < size(); ++i)
-        {
-            assert(a[i] <= std::numeric_limits<short>::max());
-            b[i] = static_cast<short>(a[i]);
-            b[i+size()] = static_cast<short>(a[i]);
-        }
-        return m512s(b);
-    }
-
 };
-
-inline m512i floorCastInt(const m512f& f)
-{
-    return m512i(_mm_cvtps_epi32(_mm_floor_ps(f.data1()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data2()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data3()))
-                ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
-}
 
 }}      // namespace PacBio::Simd
 

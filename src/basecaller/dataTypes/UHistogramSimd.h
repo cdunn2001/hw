@@ -53,7 +53,7 @@ namespace Data {
 /// large as that of DataT. When creating on the heap, this may require use of
 /// a special allocator.
 template <typename DataT, typename CountT>
-class alignas(alignof(DataT) > 8u ? alignof(DataT) : 8u) UHistogramSimd
+class alignas(DataT) UHistogramSimd
 {
 public:     // Types
     /// The type of the data.
@@ -214,7 +214,7 @@ public:     // Modifying methods
         // Handle outliers.
         const auto maskLow  = select & (bin < 0);
         nLowOutliers_  = inc(nLowOutliers_, maskLow);
-        const auto maskHigh = select & (bin >= numBins_);
+        const auto maskHigh = select & (bin >= static_cast<int>(numBins_));
         nHighOutliers_ = inc(nHighOutliers_, maskHigh);
 
         // Increment bin counts for in-range elements.

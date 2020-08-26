@@ -71,7 +71,7 @@ private:    // Implementation
 
 public:     // Structors
     // Purposefully do not initialize v.
-    m512b() {}
+    m512b() = default;
     
     // Copy constructor
     m512b(const m512b& x) = default;
@@ -163,13 +163,13 @@ public:  //member operators
 public:     // Non-member (friend) functions
     friend std::ostream& operator << (std::ostream& stream, const m512b& vec)
     {
-        stream << (bool) vec[0] << "\t" << (bool) vec[1] << "\t" 
-               << (bool) vec[2] << "\t" << (bool) vec[3] << "\t" 
-               << (bool) vec[4] << "\t" << (bool) vec[5] << "\t" 
-               << (bool) vec[6] << "\t" << (bool) vec[7] << "\t" 
-               << (bool) vec[8] << "\t" << (bool) vec[9] << "\t" 
+        stream << (bool) vec[0] << "\t" << (bool) vec[1] << "\t"
+               << (bool) vec[2] << "\t" << (bool) vec[3] << "\t"
+               << (bool) vec[4] << "\t" << (bool) vec[5] << "\t"
+               << (bool) vec[6] << "\t" << (bool) vec[7] << "\t"
+               << (bool) vec[8] << "\t" << (bool) vec[9] << "\t"
                << (bool) vec[10] << "\t" << (bool) vec[11] << "\t"
-               << (bool) vec[12] << "\t" << (bool) vec[13] << "\t" 
+               << (bool) vec[12] << "\t" << (bool) vec[13] << "\t"
                << (bool) vec[14] << "\t" << (bool) vec[15];
 
         return stream;

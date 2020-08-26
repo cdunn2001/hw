@@ -46,8 +46,8 @@ void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConf
 // static
 LaneArray<float> DetectionModelEstimator::ModelSignalCovar(
         const Data::AnalogMode& analog,
-        const ConstLaneArrayRef<float>& signalMean,
-        const ConstLaneArrayRef<float>& baselineVar)
+        const LaneArray<float>& signalMean,
+        const LaneArray<float>& baselineVar)
 {
     LaneArray<float> r {baselineVar};
     r += signalMean;
@@ -83,8 +83,6 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
 {
     using ElementType = typename Data::BaselinerStatAccumState::StatElement;
     using LaneArr = LaneArray<ElementType>;
-    using CLanArrRef = ConstLaneArrayRef<ElementType>;
-    using LanArrRef = LaneArrayRef<DetModelElementType>;
 
     StatAccumulator<LaneArr> blsa (blStats.baselineStats);
 
@@ -94,22 +92,22 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
     // fullAutocorrState is not yet populated by the GPU baseliner. For now, we just use the
     // minimum frames for estimating.
     //const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / CLanArrRef(blStats.TotalFrames());
-    const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / LaneArr(minFramesForEstimate_);
+    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / static_cast<float>(minFramesForEstimate_);
 
-    LanArrRef(ldm.BaselineMode().means.data()) = blMean;
-    LanArrRef(ldm.BaselineMode().vars.data()) = blVar;
-    LanArrRef(ldm.BaselineWeight().data()) = blWeight;
+    ldm.BaselineMode().means = blMean;
+    ldm.BaselineMode().vars = blVar;
+    ldm.BaselineWeight() = blWeight;
     assert(numAnalogs <= analogs_.size());
     const auto refSignal = refSnr_ * sqrt(blVar);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
         auto& aMode = ldm.AnalogMode(a);
-        LanArrRef(aMode.means.data()) = aMean;
+        aMode.means = aMean;
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
-        LanArrRef(aMode.vars.data()) = ModelSignalCovar(Analog(a), aMean, blVar);
+        aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
     }
 }
 

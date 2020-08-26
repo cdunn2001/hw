@@ -92,17 +92,17 @@ struct TestTraceHistogramAccumHost : public ::testing::Test
             auto bvl = traces.GetBlockView(l);
             for (auto lfi = bvl.Begin(); lfi != bvl.End(); ++lfi)
             {
-                *lfi = x;
-                bsa.AddSample(*lfi, *lfi, true);
+                bsa.AddSample(x, x, true);
+                lfi.Store(x);
             }
 
             Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
             bls = bsa.GetState();
 
             // Hack the baseline statistics.
-            LaneArrayRef<float>(bls.baselineStats.moment0) = n0;
-            LaneArrayRef<float>(bls.baselineStats.moment1) = n0 * blMean;
-            LaneArrayRef<float>(bls.baselineStats.moment2) = (n0 - 1)*blVar + n0*pow2(blMean);
+            bls.baselineStats.moment0 = n0;
+            bls.baselineStats.moment1 = n0 * blMean;
+            bls.baselineStats.moment2 = (n0 - 1)*blVar + n0*pow2(blMean);
         }
 
         // Prepare for the next call.
@@ -132,7 +132,7 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
-    const auto nChunks = mPar.size();
+    const uint32_t nChunks = mPar.size();
     ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
 
     // Count repeats. Skip first value because of NumFramesPreAccumStats logic.
@@ -168,9 +168,9 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
     for (const auto& tsLane : tsPool)
     {
         const auto& bls = tsLane.BaselineFramesStats();
-        const auto n = bls.Count();
-        const auto m = bls.Mean();
-        const auto s2 = bls.Variance();
+        const auto n = bls.Count().ToArray();
+        const auto m = bls.Mean().ToArray();
+        const auto s2 = bls.Variance().ToArray();
         for (unsigned int i = 0; i < laneSize; ++i)
         {
             EXPECT_EQ((nChunks-1)*n0, n[i]);
@@ -186,11 +186,12 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
         ASSERT_GE(hLane.NumBins(), 0);
         const unsigned int nBins = hLane.NumBins();
         const auto& irc = hLane.InRangeCount();
-        for (const unsigned int n : irc) EXPECT_EQ((nChunks-1)*chunkSize, n);
+        EXPECT_TRUE(all((nChunks-1)*chunkSize == irc));
         for (unsigned int b = 0; b < nBins; ++b)
         {
-            const auto& bStart = hLane.BinStart(b);
-            const auto& bStop = hLane.BinStart(b+1);
+            const auto& bStart = hLane.BinStart(b).ToArray();
+            const auto& bStop =  hLane.BinStart(b+1).ToArray();
+            const auto& bCount = hLane.BinCount(b).ToArray();
             for (unsigned int z = 0; z < laneSize; ++z)
             {
                 const auto i0 = nRepeat.lower_bound(bStart[z]);
@@ -198,7 +199,7 @@ TEST_F(TestTraceHistogramAccumHost, UniformSimple)
                 const unsigned int nExpect
                         = std::accumulate(i0, i1, 0u,
                                           [](unsigned int s, auto p){return s + p.second;});
-                EXPECT_EQ(nExpect, hLane.BinCount(b)[z]);
+                EXPECT_EQ(nExpect, bCount[z]);
             }
         }
     }

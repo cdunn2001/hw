@@ -31,6 +31,7 @@
 ///         on a time scale  equal to or greater than the standard block size.
 
 #include "HFMetricsFilter.h"
+#include <common/AlignedVector.h>
 #include <dataTypes/BasecallingMetricsAccumulator.h>
 #include <dataTypes/BatchMetrics.h>
 
@@ -71,7 +72,7 @@ private: // Block management
                     const Data::PulseDetectorMetrics& pdMetrics);
 
 private: // members
-    std::vector<Data::BasecallingMetricsAccumulator> metrics_;
+    AlignedVector<Data::BasecallingMetricsAccumulator> metrics_;
 };
 
 }}} // PacBio::Mongo::Basecaller

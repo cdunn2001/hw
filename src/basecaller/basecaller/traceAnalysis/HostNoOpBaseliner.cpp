@@ -27,16 +27,19 @@ HostNoOpBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         auto traceData = rawTrace.GetBlockView(laneIdx);
         auto cameraTraceData = out.first.GetBlockView(laneIdx);
+        if (cameraTraceData.NumFrames() < traceData.NumFrames())
+        {
+            throw PBException("Destination frame buffer is smaller than input buffer");
+        }
         auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
         auto statsView = out.second.baselinerStats.GetHostView();
-        for (size_t frame = 0; frame < traceData.NumFrames(); ++frame)
+        auto outItr = cameraTraceData.Begin();
+        for (auto inItr = traceData.CBegin(); inItr != traceData.CEnd(); inItr++, outItr++)
         {
-            const ElementTypeIn* src = traceData.Data() + (frame * traceData.LaneWidth());
-            ElementTypeOut* dest = cameraTraceData.Data() + (frame * cameraTraceData.LaneWidth());
-            std::memcpy(dest, src, sizeof(ElementTypeIn) * traceData.LaneWidth());
-            LaneArray data(dest, dest + cameraTraceData.LaneWidth());
+            auto copy = inItr.Extract();
+            outItr.Store(copy);
             Mask isBaseline { false };
-            baselinerStats.AddSample(data, data, isBaseline);
+            baselinerStats.AddSample(copy, copy, isBaseline);
         }
 
         statsView[laneIdx] = baselinerStats.GetState();

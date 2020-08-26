@@ -160,6 +160,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
                 pulse.SignalM2(pulse.MidSignal()
                                * pulse.MidSignal()
                                * (pulse.Width() - 2) * m2modifier);
+                pulse.IsReject(false);
                 pulseView.push_back(zmw, pulse);
             }
         }

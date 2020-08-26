@@ -1,6 +1,4 @@
-#ifndef Mongo_Common_HQRFPhysicalStates_H_
-#define Mongo_Common_HQRFPhysicalStates_H_
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,25 +22,49 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// Description:
-/// \brief HQRFPhsyicalStates
 
-#include <cstdint>
+#ifndef mongo_common_LaneArray_fwd_H_
+#define mongo_common_LaneArray_fwd_H_
+
+#include <cstddef>
+
+#include <common/MongoConstants.h>
 
 namespace PacBio {
+namespace Simd {
+
+// Forward declare the classes in the namespace they will be defined
+template<size_t ScalarCount_ = Mongo::laneSize>
+class LaneMask;
+
+template <typename T, size_t ScalarCount = Mongo::laneSize>
+class LaneArray;
+
+template <typename T, size_t ScalarCount>
+class MemoryRange;
+
+template <typename T>
+union ArrayUnion;
+
+}}
+
+// Now export the public types to the Mongo namespace
+namespace PacBio {
 namespace Mongo {
-namespace Data {
 
-enum class HQRFPhysicalStates : std::uint16_t
-{
-    EMPTY = 0,
-    SINGLE,
-    MULTI,
-    LOW,
+template<size_t ScalarCount = laneSize>
+using LaneMask = Simd::LaneMask<ScalarCount>;
 
-    NUM_PHYS_STATES
-};
+template <typename T, size_t ScalarCount = laneSize>
+using LaneArray = Simd::LaneArray<T, ScalarCount>;
 
-}}} // ::PacBio::Mongo::Data
-#endif // Mongo_Common_HQRFPhysicalStates_H_
+template <typename T, size_t ScalarCount>
+using MemoryRange = Simd::MemoryRange<T, ScalarCount>;
+
+template <typename T>
+using ArrayUnion = Simd::ArrayUnion<T>;
+
+}}
+
+
+#endif // mongo_common_LaneArray_fwd_H_
