@@ -80,6 +80,10 @@ public:     // Const functions
     unsigned int PoolSize() const
     { return poolSize_; }
 
+    // temporary testing hacks
+    virtual void CopyToDevice() const {};
+    virtual void DeactivateGpuMem() const {};
+
 public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
