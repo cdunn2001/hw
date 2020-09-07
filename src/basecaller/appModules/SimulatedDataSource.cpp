@@ -165,6 +165,59 @@ std::vector<int16_t> SawtoothGenerator::GenerateSignal(size_t numFrames, size_t 
 
 std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size_t idx)
 {
+    std::mt19937 gen(config_.seedFunc(idx));
+
+    auto GetBaselineSignal = [&](uint16_t frames)
+    {
+        std::normal_distribution<> rng(config_.baselineSignalLevel, config_.baselineSigma);
+        std::vector<short> baselineSignal;
+        for (size_t f = 0; f < frames; ++f)
+        {
+            baselineSignal.push_back(std::floor(rng(gen)));
+        }
+        return baselineSignal;
+    };
+
+    auto GetPulseSignal = [&](uint16_t frames)
+    {
+        std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
+        short pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
+        std::vector<short> baselineSignal = GetBaselineSignal(frames);
+
+        std::vector<short> pulseSignal;
+        for (size_t f = 0; f < frames; ++f)
+        {
+            pulseSignal.push_back(baselineSignal[f] + pulseLevel);
+        }
+        return pulseSignal;
+    };
+
+    auto GetPulseWidth = [&]()
+    {
+        if (config_.generatePoisson)
+        {
+            std::exponential_distribution<> rng(config_.pulseWidthRate);
+            return static_cast<uint16_t>(std::ceil(rng(gen)));
+        }
+        else
+        {
+            return config_.pulseWidth;
+        }
+    };
+
+    auto GetPulseIpd = [&]()
+    {
+        if (config_.generatePoisson)
+        {
+            std::exponential_distribution<> rng(config_.pulseIpdRate);
+            return static_cast<uint16_t>(std::ceil(rng(gen)));
+        }
+        else
+        {
+            return config_.pulseIpd;
+        }
+    };
+
     std::vector<int16_t> signal;
 
     size_t frame = 0;
@@ -188,57 +241,6 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
     assert(signal.size() == numFrames);
 
     return signal;
-}
-
-std::vector<short> PicketFenceGenerator::GetPulseSignal(uint16_t frames)
-{
-    std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
-    short pulseLevel = config_.pulseSignalLevels[rng(gen)];
-    std::vector<short> baselineSignal = GetBaselineSignal(frames);
-
-    std::vector<short> pulseSignal;
-    for (size_t f = 0; f < frames; ++f)
-    {
-        pulseSignal.push_back(baselineSignal[f] + pulseLevel);
-    }
-    return pulseSignal;
-}
-
-std::vector<short> PicketFenceGenerator::GetBaselineSignal(uint16_t frames)
-{
-    std::normal_distribution<> rng(config_.baselineSignalLevel, config_.baselineSigma);
-    std::vector<short> baselineSignal;
-    for (size_t f = 0; f < frames; ++f)
-    {
-        baselineSignal.push_back(std::floor(rng(gen)));
-    }
-    return baselineSignal;
-}
-
-uint16_t PicketFenceGenerator::GetPulseWidth()
-{
-    if (config_.generatePoisson)
-    {
-        std::exponential_distribution<> rng(config_.pulseWidthRate);
-        return static_cast<uint16_t>(std::ceil(rng(gen)));
-    }
-    else
-    {
-        return config_.pulseWidth;
-    }
-}
-
-uint16_t PicketFenceGenerator::GetPulseIpd()
-{
-    if (config_.generatePoisson)
-    {
-        std::exponential_distribution<> rng(config_.pulseIpdRate);
-        return static_cast<uint16_t>(std::ceil(rng(gen)));
-    }
-    else
-    {
-        return config_.pulseIpd;
-    }
 }
 
 }} //::PacBio::Application

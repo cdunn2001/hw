@@ -26,8 +26,6 @@
 #ifndef PACBIO_APPLICATION_SIMULATED_DATA_SOURCE_H
 #define PACBIO_APPLICATION_SIMULATED_DATA_SOURCE_H
 
-#include <random>
-
 #include <pacbio/datasource/DataSourceBase.h>
 
 namespace PacBio {
@@ -145,23 +143,16 @@ public:
         short baselineSignalLevel = 200;
         short baselineSigma = 20;
         std::vector<short> pulseSignalLevels = { 200 };
+        std::function<size_t(size_t)> seedFunc = [](size_t i) { return i; };
     };
     PicketFenceGenerator(const Config& config)
         : config_(config)
-        , gen(rd())
     {}
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
 private:
-    std::vector<short> GetPulseSignal(uint16_t frames);
-    std::vector<short> GetBaselineSignal(uint16_t frames);
-    uint16_t GetPulseWidth();
-    uint16_t GetPulseIpd();
-
     Config config_;
-    std::random_device rd;
-    std::mt19937 gen;
 };
 
 class SawtoothGenerator : public SignalGenerator
