@@ -243,4 +243,19 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
     return signal;
 }
 
+std::vector<int16_t> SortedGenerator::GenerateSignal(size_t numFrames, size_t idx)
+{
+    auto signal = gen_->GenerateSignal(numFrames, idx);
+    std::sort(signal.begin(), signal.end());
+    return signal;
+}
+
+std::vector<int16_t> RandomizedGenerator::GenerateSignal(size_t numFrames, size_t idx)
+{
+    std::mt19937 gen(config_.seedFunc(idx));
+    auto signal = gen_->GenerateSignal(numFrames, idx);
+    std::shuffle(signal.begin(), signal.end(), gen);
+    return signal;
+}
+
 }} //::PacBio::Application

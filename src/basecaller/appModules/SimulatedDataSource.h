@@ -178,6 +178,46 @@ private:
     Config config_;
 };
 
+class SortedGenerator : public SignalGenerator
+{
+public:
+    template <typename Gen, typename... Args>
+    static std::unique_ptr<SortedGenerator> Create(Args&&... args)
+    {
+        return std::make_unique<SortedGenerator>(std::make_unique<Gen>(std::forward<Args>(args)...));
+    }
+    SortedGenerator(std::unique_ptr<SignalGenerator> gen)
+        : gen_(std::move(gen))
+    {}
+
+    std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
+private:
+    std::unique_ptr<SignalGenerator> gen_;
+};
+
+class RandomizedGenerator : public SignalGenerator
+{
+public:
+    struct Config
+    {
+        std::function<size_t(size_t)> seedFunc = [](size_t i) { return i; };
+    };
+    template <typename Gen, typename... Args>
+    static std::unique_ptr<RandomizedGenerator> Create(const Config& config, Args&&... args)
+    {
+        return std::make_unique<RandomizedGenerator>(config, std::make_unique<Gen>(std::forward<Args>(args)...));
+    }
+    RandomizedGenerator(const Config& config, std::unique_ptr<SignalGenerator> gen)
+        : gen_(std::move(gen))
+        , config_(config)
+    {}
+
+    std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
+private:
+    std::unique_ptr<SignalGenerator> gen_;
+    Config config_;
+};
+
 
 }} // ::PacBio::Application
 
