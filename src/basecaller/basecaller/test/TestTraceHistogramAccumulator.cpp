@@ -30,8 +30,10 @@
 #include <appModules/SimulatedDataSource.h>
 
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 using namespace PacBio::Application;
 using namespace PacBio::Cuda::Memory;
@@ -74,6 +76,7 @@ public:
     using Hist_t = Hist;
 
     static void BinData(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
+                        DeviceAllocationStash& stash,
                         DataSourceBase::Configuration sourceConfig,
                         const SimulatedDataSource::SimConfig& simConfig,
                         std::unique_ptr<SignalGenerator> gen)
@@ -119,7 +122,7 @@ public:
 
                     auto hcopy = profiler.CreateScopedProfiler(Profiles::HIST_UPLOAD);
                     (void)hcopy;
-                    hists[poolId]->CopyToDevice();
+                    stash.RetrievePool(poolId);
                     CudaSynchronizeDefaultStream();
 
                     auto binning = profiler.CreateScopedProfiler(Profiles::BINNING);
@@ -129,7 +132,7 @@ public:
 
                     auto download = profiler.CreateScopedProfiler(Profiles::HIST_DOWNLOAD);
                     (void)download;
-                    hists[poolId]->DeactivateGpuMem();
+                    stash.StashPool(poolId);
                     CudaSynchronizeDefaultStream();
                 }
             }
@@ -141,10 +144,13 @@ public:
                         const SimulatedDataSource::SimConfig& simConfig,
                         std::unique_ptr<SignalGenerator> generator)
     {
+        DeviceAllocationStash stash;
+
         std::vector<std::unique_ptr<TraceHistogramAccumulator>> hists;
         for (size_t i = 0; i < params.numPools; ++i)
         {
-            hists.emplace_back(std::make_unique<Hist>(i, params.lanesPerPool));
+            StashableAllocRegistrar registrar(i, stash);
+            hists.emplace_back(std::make_unique<Hist>(i, params.lanesPerPool, &registrar));
 
             UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
                                                         SyncDirection::HostWriteDeviceRead,
@@ -157,12 +163,13 @@ public:
             hists.back()->Reset(std::move(poolBounds));
         }
 
-        RunTest(hists, params, simConfig, std::move(generator));
+        RunTest(hists, stash, params, simConfig, std::move(generator));
 
         return hists;
     }
 
     static void RunTest(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
+                        DeviceAllocationStash& stash,
                         const TestParameters& params,
                         const SimulatedDataSource::SimConfig& simConfig,
                         std::unique_ptr<SignalGenerator> generator)
@@ -174,11 +181,12 @@ public:
         DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
         sourceConfig.numFrames = params.numFrames;
 
-        BinData(hists, std::move(sourceConfig), simConfig, std::move(generator));
+        BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator));
     }
 };
 
-using HistTypes = ::testing::Types<TraceHistogramAccumHost>;
+using HistTypes = ::testing::Types<TraceHistogramAccumHost,
+                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalInterleaved>>;
 TYPED_TEST_SUITE(Histogram, HistTypes);
 
 TYPED_TEST(Histogram, ResetFromStats)
@@ -211,7 +219,7 @@ TYPED_TEST(Histogram, ResetFromStats)
         }
     }
 
-    typename TestFixture::Hist_t hAccum(1, numLanes);
+    typename TestFixture::Hist_t hAccum(1, numLanes, nullptr);
     hAccum.Reset(std::move(metrics));
 
     auto hist = hAccum.Histogram();

@@ -26,6 +26,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DevicePulseAccumulator.cu
     DeviceSGCFrameLabeler.h
     DeviceSGCFrameLabeler.cu
+    DeviceTraceHistogramAccum.h
+    DeviceTraceHistogramAccum.cu
     DmeDiagnostics.h
     DmeDiagnostics.cpp
     DmeEmHost.h

@@ -200,7 +200,7 @@ public:
     // will also cause a data download if the data is device side and the synchronization scheme is
     // HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
     // the synchronization scheme was set incorrectly.
-    void DeactivateGpuMem()
+    void DeactivateGpuMem() const
     {
         if (!gpuData_) return;
 
