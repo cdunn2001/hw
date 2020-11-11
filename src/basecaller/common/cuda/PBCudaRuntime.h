@@ -4,6 +4,8 @@
 #include <driver_types.h>
 
 #include <cstdlib>
+#include <vector>
+#include <string>
 
 // This file serves two purposes.  The first is to be a firewall between the
 // rest of our code and the cuda_runtime, to avoid including their large
@@ -37,6 +39,11 @@ void  CudaRawCopyToSymbol(const void* dest, void* src, size_t count);
 
 void CudaHostRegister(void* ptr, size_t size);
 void CudaHostUnregister(void* ptr);
+
+/// \returns a vector device properties of all GPU devices on the machine. The index
+/// corresponds to the original device id.  If there is a problem with a device,
+/// the cudaDeviceProp::uuid field will be set to all zeros.
+std::vector<struct cudaDeviceProp> CudaAllGpuDevices();
 
 // Manually check if an error has occured.  Will capture
 // asynchronous errors that have not yet happened since
