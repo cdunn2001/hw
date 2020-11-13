@@ -43,11 +43,19 @@ SMART_ENUM(Source_t,
         OTHER_TBD // could add USB3, FRAME_GRABBER, PCIE
 );
 
+struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
+{
+    PB_CONFIG(WX2SourceConfig);
+    PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
+    PB_CONFIG_PARAM(std::string, platform, "Spider"); // FIXME I'm using a string here because it is portable at the moment. The Platform.h header has not been ported yet.
+};
+
 struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
 {
     PB_CONFIG(SourceConfig);
 
     PB_CONFIG_PARAM(Source_t, sourceType, Source_t::TRACE_FILE);
+    PB_CONFIG_OBJECT(WX2SourceConfig,wx2SourceConfig);
 };
 
 }}}     // namespace PacBio::Mongo::Data

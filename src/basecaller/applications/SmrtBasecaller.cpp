@@ -45,6 +45,7 @@
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
 #include <pacbio/datasource/SensorPacketsChunk.h>
+#include <pacbio/ipc/JSON.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
@@ -123,8 +124,16 @@ public:
                 MetaDataFromTraceFileSource(inputTargetFile_);
                 GroundTruthFromTraceFileSource(inputTargetFile_);
                 break;
+
+            case Source_t::WX2:
+                // FIXME An API to load metadata from ICS configuration is not finalized yet.
+                // FIXME In the interest of rapid development, we are just loading a precanned metadata snippet.
+                // TODO replace this call with the official command line API for loading metadata (JSON) from ICS.
+                LoadMetaDataFromSequelFormat(DummyMetaData());
+                break;
+
             default:
-                PBLOG_INFO << "Not using a trace file ";
+                PBLOG_INFO << "Meta data not initialized from source " << config_.source.sourceType;
                 break;
         }
 
@@ -138,6 +147,23 @@ public:
         PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
         PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) /
                                                         config_.layout.framesPerChunk;
+
+        auto devices = PacBio::Cuda::CudaAllGpuDevices();
+        if(devices.size() == 0)
+        {
+            throw PBException("No CUDA devices available on this computer");
+        }
+        PBLOG_INFO << "Found " << devices.size() << " CUDA devices";
+        int idevice = 0;
+        for(const auto& d : devices)
+        {
+            PBLOG_INFO << " CUDA GPU device: " << idevice;
+            PBLOG_INFO << "  Device Name:" << d.name;
+            PBLOG_INFO << "  Global memory:" << d.totalGlobalMem;
+            PBLOG_INFO << "  Constant memory:" << d.totalConstMem;
+            PBLOG_INFO << "  Warp size:" << d.warpSize;
+            idevice++;
+        }
     }
 
     void Run()
@@ -250,6 +276,157 @@ private:
         }
     }
 
+    // TODO remove this function. It is only here to aid in rapid debugging, avoiding an external file.
+    static Json::Value DummyMetaData()
+    {
+        // this was snipped from rt-dev01$ less /var/log/pacbio/pa-acq/pa-acq-20201001_032630_00000 just to get something
+        Json::Value dummyMetaData = PacBio::IPC::ParseJSON(R"JSON(
+            {
+        "analogs" :
+        [
+                {
+                        "base" : "C",
+                        "interPulseXsnCV" : 0.10000000149011612,
+                        "intraPulseXsnCV" : 0.10000000149011612,
+                        "ipdMeanSeconds" : 0.30799999833106995,
+                        "pulseWidthMeanSeconds" : 0.23199999332427979,
+                        "relativeAmplitude" : 1,
+                        "spectrumValues" :
+                        [
+                                1
+                        ]
+                },
+                {
+                        "base" : "A",
+                        "interPulseXsnCV" : 0.10000000149011612,
+                        "intraPulseXsnCV" : 0.10000000149011612,
+                        "ipdMeanSeconds" : 0.23399999737739563,
+                        "pulseWidthMeanSeconds" : 0.18500000238418579,
+                        "relativeAmplitude" : 0.68000000715255737,
+                        "spectrumValues" :
+                        [
+                                1
+                        ]
+                },
+                {
+                        "base" : "T",
+                        "interPulseXsnCV" : 0.10000000149011612,
+                        "intraPulseXsnCV" : 0.10000000149011612,
+                        "ipdMeanSeconds" : 0.23399999737739563,
+                        "pulseWidthMeanSeconds" : 0.1809999942779541,
+                        "relativeAmplitude" : 0.43000000715255737,
+                        "spectrumValues" :
+                        [
+                                1
+                        ]
+                },
+                {
+                        "base" : "G",
+                        "interPulseXsnCV" : 0.10000000149011612,
+                        "intraPulseXsnCV" : 0.10000000149011612,
+                        "ipdMeanSeconds" : 0.18799999356269836,
+                        "pulseWidthMeanSeconds" : 0.21400000154972076,
+                        "relativeAmplitude" : 0.27000001072883606,
+                        "spectrumValues" :
+                        [
+                                1
+                        ]
+                }
+        ],
+        "baseMap" : "CATG",
+        "basecaller" :
+        {
+                "algorithm" :
+                {
+                        "Metrics" :
+                        {
+                                "hqrfMethod" : "DEFAULT"
+                        }
+                }
+        },
+        "basecallerVersion" : "?",
+        "basewriter" :
+        {
+                "hqrfMethod" : "DEFAULT"
+        },
+        "bazfile" : "/data/pa/m54004_170200_000000.baz",
+        "cameraConfigKey" : 0,
+        "cellId" : "cell0",
+        "chipClass" : "Spider",
+        "chipId" : "cell0",
+        "chipLayoutName" : "Spider_1p0_NTO",
+        "crosstalkFilter" :
+        [
+                [
+                        1
+                ]
+        ],
+        "darkFrameCalFile" : "/data/pa/cal/cell0_dark_2020-10-01T033026Z.h5",
+        "dryrun" : false,
+        "expectedFrameRate" : 100,
+        "exposure" : 0.01,
+        "hdf5output" : "/data/pa/m54004_170200_000000.trc.h5",
+        "instrumentName" : "alpha4",
+        "metricsVerbosity" : "MINIMAL",
+        "movieContext" : "m54004_170200_000000",
+        "numFrames" : 720000,
+        "numPixelLanes" : [],
+        "numZmwLanes" : [],
+        "photoelectronSensitivity" : 1,
+        "psfs" :
+        [
+                [
+                        [
+                                1
+                        ]
+                ],
+                [
+                        [
+                                1
+                        ]
+                ]
+        ],
+        "readout" : "BASES_WITHOUT_QVS",
+        "refDwsSnr" : 20,
+        "refSpectrum" :
+        [
+                1
+        ]
+             }
+        )JSON");
+        return dummyMetaData;
+    }
+
+    /// In the interim of SequelOnKestrel, we may use metadata that was structured for Spider in JSON format.
+    /// This helper function loads that JSON in to the internal data format.
+    void LoadMetaDataFromSequelFormat(const Json::Value& metadata)
+    {
+        movieConfig_.frameRate = metadata["expectedFrameRate"].asFloat();
+        movieConfig_.photoelectronSensitivity = metadata["photoelectronSensitivity"].asFloat();
+        movieConfig_.refSnr = metadata["refDwsSnr"].asFloat();
+
+        auto baseMap = metadata["baseMap"].asString();
+
+        for (unsigned int i = 0; i < numAnalogs; i++)
+        {
+            const auto& analogJson = metadata["analogs"][i];
+            auto& analog = movieConfig_.analogs[i];
+
+            analog.baseLabel = analogJson["base"].asString()[0];
+            analog.relAmplitude = analogJson["relativeAmplitude"].asFloat();
+            analog.excessNoiseCV = analogJson["intraPulseXsnCV"].asFloat();
+            analog.interPulseDistance = analogJson["ipdMeanSeconds"].asFloat();
+            analog.pulseWidth = analogJson["pulseWidthMeanSeconds"].asFloat();
+            analog.ipd2SlowStepRatio = 0.15;
+            analog.pw2SlowStepRatio = 0.15;
+
+            if (analog.baseLabel != baseMap[i])
+            {
+                throw PBException("basemap in wrong order to analogs array");
+            }
+        }
+    }
+
     // TODO support wolverine and potentially other sources
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
@@ -281,7 +458,18 @@ private:
                                                               numChunksPreloadInputQueue_);
                 break;
             case Source_t::WX2:
-                dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(datasourceConfig) /*, wxconfig tbd*/);
+            {
+
+                // TODO this glue code is messy. It is gluing untyped strings to the strongly typed
+                // enums of WX2, but this was on purpose to avoid entangling the config with configs from WX2.
+                // I am not sure what the best next step is.  This is getting me going, so I am
+                // going to leave it. MTL
+                Mongo::DataSource::WXDataSourceConfig wxconfig;
+                wxconfig.dataPath = Mongo::DataSource::DataPath_t(config_.source.wx2SourceConfig.dataPath);
+                wxconfig.platform = PacBio::TemporarySequel::Platform(config_.source.wx2SourceConfig.platform);
+
+                dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(datasourceConfig), wxconfig);
+            }
                 break;
             default:
                 throw PBException("Data source " + config_.source.sourceType.toString() + " not supported");
@@ -399,6 +587,23 @@ private:
         const double chunkDurationMS = config_.layout.framesPerChunk
                                      / movieConfig_.frameRate
                                        * 1e3;
+
+        // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
+        // loopback paths (anything but Normal).
+        auto dsr = dynamic_cast<Mongo::DataSource::WXDataSource*>(&source->GetDataSource());
+        if (dsr && dsr->GetDataPath() != Mongo::DataSource::DataPath_t::Normal)
+        {
+            Mongo::DataSource::TransmitConfig config(dsr->GetChipClass());
+            config.condensed = true;
+            config.frames = frames_; // total number of frames to transmit
+            config.limitFileFrames = 512; // loop in coproc memory.
+            config.hdf5input = inputTargetFile_ == "" ? "constant" : inputTargetFile_; // "alpha", "random";
+            config.mode = Mongo::DataSource::TransmitConfig::Mode::Generated;
+            config.rate = 100.0;
+            PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
+            dsr->TransmitMovieSim(config);
+        }
+
         while (source->IsActive())
         {
             SensorPacketsChunk chunk;
