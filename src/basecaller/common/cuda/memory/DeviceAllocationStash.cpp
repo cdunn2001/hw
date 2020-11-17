@@ -92,7 +92,7 @@ void DeviceAllocationStash::PartitionData(size_t maxResidentMB)
                                                       return currSum + kv.second.size()*kvSizeMap.first;
                                                   });
 
-        if (bytesResident + bytesInLot < maxBytesResident)
+        if (bytesResident + bytesInLot <= maxBytesResident)
         {
             auto success = stationaryData_.emplace(std::move(kvSizeMap));
             if (!success.second)
