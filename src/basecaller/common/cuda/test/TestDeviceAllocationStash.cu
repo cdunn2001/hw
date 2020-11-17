@@ -44,7 +44,8 @@ using namespace PacBio::Cuda;
 //   we may blow out GPU memory
 TEST(StashableDeviceAllocation, Empty)
 {
-    StashableDeviceAllocation alloc(100, SOURCE_MARKER());
+    StashableDeviceAllocation alloc(100, SOURCE_MARKER(),
+                                    std::make_unique<SingleStreamMonitor>());
 
     EXPECT_FALSE(alloc.hasDeviceAlloc());
     EXPECT_FALSE(alloc.hasHostAlloc());
@@ -55,7 +56,8 @@ TEST(StashableDeviceAllocation, Empty)
 // Stashing an Empty allocation should effectively do nothing.
 TEST(StashableDeviceAllocation, HostFirst)
 {
-    StashableDeviceAllocation alloc(100, SOURCE_MARKER());
+    StashableDeviceAllocation alloc(100, SOURCE_MARKER(),
+                                    std::make_unique<SingleStreamMonitor>());
 
     alloc.Stash();
 
@@ -69,7 +71,8 @@ TEST(StashableDeviceAllocation, HostFirst)
 // we're going to need them.
 TEST(StashableDeviceAllocation, DeviceFirst)
 {
-    StashableDeviceAllocation alloc(100, SOURCE_MARKER());
+    StashableDeviceAllocation alloc(100, SOURCE_MARKER(),
+                                    std::make_unique<SingleStreamMonitor>());
     alloc.Retrieve();
 
     EXPECT_TRUE(alloc.hasDeviceAlloc());
@@ -82,7 +85,8 @@ TEST(StashableDeviceAllocation, DeviceFirst)
 // but the GPU memory has been released for re-use elsewhere.
 TEST(StashableDeviceAllocation, Stashed)
 {
-    StashableDeviceAllocation alloc(100, SOURCE_MARKER());
+    StashableDeviceAllocation alloc(100, SOURCE_MARKER(),
+                                    std::make_unique<SingleStreamMonitor>());
     alloc.Retrieve();
     alloc.Stash();
 
@@ -116,9 +120,21 @@ __global__ void RoundTripExtract(DeviceView<int> stashed, DeviceView<int> ret)
 // data intact
 TEST(StashableDeviceAllocation, RoundTrip)
 {
+    // Helper class, to get access to a typed version of the underlying
+    // data so we can actualy run a cuda kernel using it.
+    struct TestAlloc : StashableDeviceAllocation
+    {
+        using StashableDeviceAllocation::StashableDeviceAllocation;
 
-    StashableDeviceAllocation alloc(100, SOURCE_MARKER());
-    PBLauncher(RoundTripInit, 1,1)(alloc.GetDeviceHandle<int>());
+        DeviceView<int> GetDeviceHandle()
+        {
+            return StashableDeviceAllocation::GetDeviceHandle<int>(DataKey());
+        }
+    };
+
+    TestAlloc alloc(100, SOURCE_MARKER(),
+                    std::make_unique<SingleStreamMonitor>());
+    PBLauncher(RoundTripInit, 1,1)(alloc.GetDeviceHandle());
     CudaSynchronizeDefaultStream();
 
     // We've used the data in a kernel, it has better be present...!
@@ -147,7 +163,7 @@ TEST(StashableDeviceAllocation, RoundTrip)
 
     // Run a kernel to make sure the data remainded intact
     UnifiedCudaArray<int> result(25, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    PBLauncher(RoundTripExtract, 1,1)(alloc.GetDeviceHandle<int>(), result);
+    PBLauncher(RoundTripExtract, 1,1)(alloc.GetDeviceHandle(), result);
 
     auto view = result.GetHostView();
     for (size_t i = 0; i < result.Size(); ++i)
@@ -164,7 +180,9 @@ std::vector<std::shared_ptr<StashableDeviceAllocation>> CreateAllocPool(size_t c
     std::vector<std::shared_ptr<StashableDeviceAllocation>> allocPool;
     for (size_t i = 0; i < count; ++i)
     {
-        allocPool.push_back(std::make_shared<StashableDeviceAllocation>((i+1)<<20, SOURCE_MARKER()));
+        allocPool.push_back(std::make_shared<StashableDeviceAllocation>(
+                (i+1)<<20, SOURCE_MARKER(),
+                std::make_unique<SingleStreamMonitor>()));
     }
     return allocPool;
 }

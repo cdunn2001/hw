@@ -130,10 +130,11 @@ public:
                     const AllocationMarker& marker,
                     size_t count,
                     Args&&... args)
-        : data_(std::make_shared<StashableDeviceAllocation>(count*sizeof(T), marker))
+        : data_(std::make_shared<StashableDeviceAllocation>(
+              count*sizeof(T),
+              marker,std::make_unique<CheckerType>()))
         , count_(count)
         , lazyConstructor_(this, std::forward<Args>(args)...)
-        , checker_(std::make_unique<CheckerType>())
     {
         if (registrar)
         {
@@ -153,15 +154,13 @@ public:
     {
         lazyConstructor_.EnsureConstruction();
 
-        checker_->Update(info);
-        return data_->GetDeviceHandle<T>();
+        return data_->GetDeviceHandle<T>(info);
     }
     DeviceView<const T> GetDeviceView(const KernelLaunchInfo& info) const
     {
         lazyConstructor_.EnsureConstruction();
 
-        checker_->Update(info);
-        return data_->GetDeviceHandle<const T>();
+        return data_->GetDeviceHandle<const T>(info);
     }
 
     ~DeviceOnlyArray()
@@ -174,7 +173,7 @@ public:
                 using U = std::remove_const_t<T>;
                 auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
                 detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
-                    DeviceView<T>(data_->GetDeviceHandle<T>()));
+                        DeviceView<T>(data_->GetDeviceHandle<T>(DataKey())));
 
                 CudaSynchronizeDefaultStream();
             }
@@ -226,7 +225,7 @@ private:
                 using U = typename std::remove_const<T>::type;
                 auto launchParams = ComputeBlocksThreads(arr->count_, (void*)&detail::InitFilters<U, std::tuple_element_t<idxs, TupleArgs>...>);
                 detail::InitFilters<<<launchParams.first, launchParams.second>>>(
-                        DeviceView<U>(arr->data_->template GetDeviceHandle<U>()),
+                        DeviceView<U>(arr->data_->template GetDeviceHandle<U>(DataKey())),
                         std::get<idxs>(args)...);
             }
         }
@@ -240,7 +239,6 @@ private:
     using CheckerType = typename std::conditional<std::is_const<T>::value,
                                                   MultiStreamMonitor,
                                                   SingleStreamMonitor>::type;
-    std::unique_ptr<CheckerType> checker_;
 };
 
 template <typename T>

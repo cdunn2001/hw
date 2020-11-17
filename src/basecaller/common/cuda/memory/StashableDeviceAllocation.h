@@ -29,6 +29,7 @@
 #include <common/cuda/memory/AllocationViews.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
+#include <common/cuda/streams/StreamMonitors.h>
 
 #include <pacbio/memory/SmartAllocation.h>
 
@@ -56,8 +57,11 @@ public:
         DEVICE
     };
 
-    StashableDeviceAllocation(size_t size, const AllocationMarker& marker)
-        : size_(size)
+    StashableDeviceAllocation(size_t size,
+                              const AllocationMarker& marker,
+                              std::unique_ptr<StreamMonitorBase> monitor)
+        : monitor_(std::move(monitor))
+        , size_(size)
         , marker_(marker)
         , state_(NO_ALLOC)
     {}
@@ -66,6 +70,7 @@ public:
     StashableDeviceAllocation(StashableDeviceAllocation&& o)
         : device_(std::move(o.device_))
         , host_(std::move(o.host_))
+        , monitor_(std::move(o.monitor_))
         , size_(std::exchange(o.size_, 0))
         , marker_(std::exchange(o.marker_, AllocationMarker{""}))
         , state_(std::exchange(o.state_, NO_ALLOC))
@@ -76,6 +81,7 @@ public:
     {
         device_  = std::move(o.device_);
         host_    = std::move(o.host_);
+        monitor_ = std::move(o.monitor_);
         size_    = std::exchange(o.size_, 0);
         marker_  = std::exchange(o.marker_, AllocationMarker{""});
         state_   = std::exchange(o.state_, NO_ALLOC);
@@ -126,6 +132,7 @@ public:
             return;
         }
 
+        monitor_->Reset();
         CudaRawCopyHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
         CudaSynchronizeDefaultStream();
         IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
@@ -133,9 +140,19 @@ public:
     }
 
     template <typename T>
-    DeviceHandle<T> GetDeviceHandle()
+    DeviceHandle<T> GetDeviceHandle(const KernelLaunchInfo& info)
     {
         assert(size_ % sizeof(T) == 0);
+        monitor_->Update(info);
+
+        return GetDeviceHandle<T>(DataKey());
+    }
+
+    template <typename T>
+    DeviceHandle<T> GetDeviceHandle(detail::DataManagerKey)
+    {
+        assert(size_ % sizeof(T) == 0);
+
         Retrieve();
         return DeviceHandle<T>(device_.get<T>(DataKey()), size_/sizeof(T), DataKey());
     }
@@ -149,6 +166,7 @@ public:
 private:
     SmartDeviceAllocation device_;
     PacBio::Memory::SmartAllocation host_;
+    std::unique_ptr<StreamMonitorBase> monitor_;
 
     size_t size_;
     Memory::AllocationMarker marker_;

@@ -57,11 +57,27 @@ void AddStreamError();
 void ResetStreamErrors();
 size_t StreamErrorCount();
 
+// Virtual API that serves as the basis for the StreamMonitor concept
+// It is used a an automation and error checking class to make sure
+// we don't have synchronization errors between host and gpu code,
+// where we do something like delete/overwrite data actively in use
+// on the card.
+class StreamMonitorBase
+{
+public:
+    virtual ~StreamMonitorBase() = default;
+
+    // Registers a new kernel launch for this data.
+    virtual void Update(const KernelLaunchInfo& info) = 0;
+    // Blocks until all associated GPU work has completed
+    virtual void Reset() = 0;
+};
+
 // Class used to monitor and control execution for an object designed to be used
 // only on a *single* cuda stream at any one time.  The object can be used on
 // different streams, but only if assocated kernels on one stream have all
 // completed before any work on a separate stream commences.
-class SingleStreamMonitor
+class SingleStreamMonitor : public StreamMonitorBase
 {
 public:
     SingleStreamMonitor()
@@ -75,7 +91,7 @@ public:
 
     // Records the last seen cuda event.  It will throw if we are switching
     // streams while we are still being used on the previous stream
-    void Update(const KernelLaunchInfo& info)
+    void Update(const KernelLaunchInfo& info) override
     {
         std::lock_guard<std::mutex> lm(m_);
         // It's an error to use this type on two different streams concurrently
@@ -108,7 +124,7 @@ public:
     // Causes the current thread to wait until any and all associated GPU work is completed.
     // This function can be called by any thread, not just the thread tied to the GPU stream
     // we may be waiting on.
-    void Reset()
+    void Reset() override
     {
         WaitForCompletion(true);
     }
@@ -153,7 +169,7 @@ private:
 // in surprising fashions.  The main constraint in this class is to make sure
 // *all* kernels associated with this on *all* streams have completed before
 // we can destroy ourselves.
-class MultiStreamMonitor
+class MultiStreamMonitor : public StreamMonitorBase
 {
 public:
     MultiStreamMonitor() = default;
@@ -166,28 +182,42 @@ public:
     // Any number of threads/streams are allowed to use this type
     // concurrently.  We're just going to keep track of the latest
     // operation in each thread that comes through.
-    void Update(const KernelLaunchInfo& info)
+    void Update(const KernelLaunchInfo& info) override
     {
         std::lock_guard<std::mutex> lm(m_);
         eventMap_[info.ThreadId()] = info.Event();
     }
 
+    void Reset() override
+    {
+        return WaitForCompletion(true);
+    }
+
     ~MultiStreamMonitor()
+    {
+        WaitForCompletion(false);
+    }
+private:
+
+ void WaitForCompletion(bool expected)
     {
         std::lock_guard<std::mutex> lm(m_);
         for (auto& kv : eventMap_)
         {
             if (kv.second && !kv.second->IsCompleted())
             {
-                PBLOG_WARN << "Unexpectedly trying to destroy data while currently in use "
-                           << "on the gpu.  We'll automatically synchronize to avoid segmentation "
-                           << "violations, but this may indicate a developer bug.";
+                if (!expected)
+                {
+                    PBLOG_WARN << "Unexpectedly trying to reset stream monitor while currently in use "
+                               << "on the gpu.  We'll automatically synchronize to avoid segmentation "
+                               << "violations, but this may indicate a developer bug.";
+                    AddStreamError();
+                }
                 kv.second->WaitForCompletion();
-                AddStreamError();
             }
         }
     }
-private:
+
     std::unordered_map<uint32_t, std::shared_ptr<const CudaEvent>> eventMap_;
     std::mutex m_;
 };
