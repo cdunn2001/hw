@@ -12,10 +12,14 @@ set(CPP_LIST
     # PBCudaRuntimeNoCuda.cpp
     memory/AllocationViews.h
     memory/DataManagerKey.h
+    memory/DeviceAllocationStash.h
+    memory/DeviceAllocationStash.cpp
     memory/ManagedAllocations.h
     memory/ManagedAllocations.cpp
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
+    memory/StashableDeviceAllocation.h
+    memory/StashableDeviceAllocation.cpp
     memory/UnifiedCudaArray.h
     streams/CudaEvent.h
     streams/CudaEvent.cpp
