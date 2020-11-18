@@ -39,6 +39,7 @@
 #include <dataTypes/TrainedCartDevice.h>
 #include <common/StatAccumState.h>
 #include <common/AutocorrAccumState.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -56,7 +57,8 @@ public:
     class AccumImpl;
 
 public:
-    DeviceHFMetricsFilter(uint32_t poolId, uint32_t lanesPerPool);
+    DeviceHFMetricsFilter(uint32_t poolId, uint32_t lanesPerPool,
+                          Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
     DeviceHFMetricsFilter(const DeviceHFMetricsFilter&) = delete;
     DeviceHFMetricsFilter(DeviceHFMetricsFilter&&) = default;
     DeviceHFMetricsFilter& operator=(const DeviceHFMetricsFilter&) = delete;

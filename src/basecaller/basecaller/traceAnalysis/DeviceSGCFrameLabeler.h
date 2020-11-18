@@ -30,6 +30,8 @@
 #include "FrameLabeler.h"
 #include "dataTypes/BasicTypes.h"
 
+#include <common/cuda/memory/DeviceAllocationStash.h>
+
 namespace PacBio {
 namespace Cuda {
 // Forward declare of cuda type that cannot be directly included here
@@ -56,7 +58,9 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceSGCFrameLabeler(uint32_t poolId, uint32_t lanesPerPool);
+    DeviceSGCFrameLabeler(uint32_t poolId,
+                          uint32_t lanesPerPool,
+                          Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
     ~DeviceSGCFrameLabeler() override;
 
 private:    // Customizable implementation

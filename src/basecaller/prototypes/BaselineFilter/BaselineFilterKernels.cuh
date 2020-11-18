@@ -470,13 +470,15 @@ class ComposedFilter
     size_t numLanes_;
 
 public:
-    __host__ ComposedFilter(const Memory::AllocationMarker& marker, size_t numLanes, short val)
-        : lower1(marker, numLanes, val)
-        , lower2(marker, numLanes, val)
-        , upper1(marker, numLanes, val)
-        , upper2(marker, numLanes, val)
+
+    __host__ ComposedFilter(const Memory::AllocationMarker& marker, size_t numLanes,
+                            short val, Memory::StashableAllocRegistrar* registrar = nullptr)
+        : lower1(registrar, marker, numLanes, val)
+        , lower2(registrar, marker, numLanes, val)
+        , upper1(registrar, marker, numLanes, val)
+        , upper2(registrar, marker, numLanes, val)
         , numLanes_(numLanes)
-        , latent(marker, numLanes, 0.0f)
+        , latent(registrar, marker, numLanes, 0.0f)
     {}
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does

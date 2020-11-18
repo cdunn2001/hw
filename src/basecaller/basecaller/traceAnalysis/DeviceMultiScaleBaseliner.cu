@@ -36,6 +36,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+using namespace PacBio::Cuda::Memory;
 
 constexpr size_t DeviceMultiScaleBaseliner::width1;
 constexpr size_t DeviceMultiScaleBaseliner::width2;
@@ -58,8 +59,8 @@ DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTra
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
 
@@ -67,13 +68,16 @@ DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTra
     return out;
 }
 
-DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool)
+DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
+                                                     uint32_t lanesPerPool,
+                                                     StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
 {
     filter_ = std::make_unique<Filter>(
         SOURCE_MARKER(),
         lanesPerPool,
-        initVal);
+        initVal,
+        registrar);
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
