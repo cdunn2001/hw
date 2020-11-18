@@ -50,6 +50,11 @@ public:
     /// If true, the threads are bound to a particular set of cores for the
     /// Sequel Alpha machines when running on the host.
     PB_CONFIG_PARAM(bool, bindCores, false);
+
+    /// The maximum amount of gpu memory dedicated to permanently resident
+    /// algorithm state data.  Anything beyond this threshold will have to
+    /// be shuttled to-from the GPU on demand
+    PB_CONFIG_PARAM(size_t, maxPermGpuDataMB, 64000);
 };
 
 }}}     // namespace PacBio::Mongo::Data
