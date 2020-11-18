@@ -110,6 +110,7 @@ public:
         frames_ = options.get("frames");
         // TODO need validation or something, as this is probably a trace file input specific option
         cache_ = options.get("cache");
+        nop_ = options.get("nop");
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
@@ -445,6 +446,7 @@ private:
         DataSourceBase::Configuration datasourceConfig(
             layout,
             CreateAllocator(AllocatorMode::CUDA, AllocationMarker("TraceFileDataSource")));
+        datasourceConfig.numFrames = frames_;
 
         std::unique_ptr<DataSourceBase> dataSource;
         switch(config_.source.sourceType)
@@ -597,9 +599,9 @@ private:
             config.condensed = true;
             config.frames = frames_; // total number of frames to transmit
             config.limitFileFrames = 512; // loop in coproc memory.
-            config.hdf5input = inputTargetFile_ == "" ? "constant" : inputTargetFile_; // "alpha", "random";
+            config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
             config.mode = Mongo::DataSource::TransmitConfig::Mode::Generated;
-            config.rate = 100.0;
+            config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
             PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
             dsr->TransmitMovieSim(config);
         }
@@ -612,30 +614,49 @@ private:
                 PBLOG_INFO << "Analyzing chunk frames = ["
                     + std::to_string(chunk.StartFrame()) + ","
                     + std::to_string(chunk.StopFrame()) + ")";
-                for (auto& batch : chunk)
-                    repacker->ProcessInput(std::move(batch));
-                const auto& reports = graph.FlushAndReport(chunkDurationMS);
-
-                std::stringstream ss;
-                ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
-
-                for (auto& report: reports)
+                if (nop_)
                 {
-                    if (!report.realtime)
+                    int16_t expectedPixel = 123;
+                    for(const auto& x : chunk)
                     {
-                        PBLOG_WARN << report.stage.toString()
-                                   << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
-                                   << report.dutyCycle * 100 << "%, "
-                                   << report.avgDuration << "ms, "
-                                   << report.idlePercent << "%, "
-                                   << report.avgOccupancy;
+                        for(int iblock = 0; iblock < 1; iblock ++) // x.NumBlocks() ??
+                        {
+                            int16_t actualPixel = x.BlockData(iblock).Data()[0];
+                            if (expectedPixel != actualPixel)
+                            {
+                                PBLOG_ERROR << "Mismatched pixels, expected:" <<
+                                    expectedPixel << " != actual:" << actualPixel <<
+                                    " at " << x.ToString();
+                            }
+                        }
                     }
-                    ss << "\t\t" << report.stage.toString() << ": "
-                       << report.dutyCycle * 100 << "%, "
-                       << report.avgOccupancy << "\n";
                 }
-                PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+                else
+                {
+                    for (auto& batch : chunk)
+                        repacker->ProcessInput(std::move(batch));
+                    const auto& reports = graph.FlushAndReport(chunkDurationMS);
 
+                    std::stringstream ss;
+                    ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
+
+                    for (auto& report: reports)
+                    {
+                        if (!report.realtime)
+                        {
+                            PBLOG_WARN << report.stage.toString()
+                                       << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                                       << report.dutyCycle * 100 << "%, "
+                                       << report.avgDuration << "ms, "
+                                       << report.idlePercent << "%, "
+                                       << report.avgOccupancy;
+                        }
+                        ss << "\t\t" << report.stage.toString() << ": "
+                           << report.dutyCycle * 100 << "%, "
+                           << report.avgOccupancy << "\n";
+                    }
+                    PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+                }
                 numChunksAnalyzed++;
             }
             if (this->ExitRequested())
@@ -671,6 +692,7 @@ private:
     size_t numZmwLanes_ = 0;
     size_t frames_ = 0;
     bool cache_ = false;
+    bool nop_ = false; ///< if true, nothing is analyzed. The data is discarded.
 };
 
 int main(int argc, char* argv[])
@@ -703,6 +725,11 @@ int main(int argc, char* argv[])
                                   "Controls data throttling for BAZ file writing");
         group2.add_option("--zmwOutputStrideFactor").type_int().set_default(1).help("Throttle zmw writing data output");
         parser.add_option_group(group2);
+
+        auto group3 = OptionGroup(parser, "Developer options",
+                                  "For use by developers only");
+        group3.add_option("--nop").type_bool().set_default(false).action_store_true().help("Analyzer does nothing");
+        parser.add_option_group(group3);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
         ThreadedProcessBase::HandleGlobalOptions(options);

@@ -48,6 +48,7 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
     PB_CONFIG(WX2SourceConfig);
     PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
     PB_CONFIG_PARAM(std::string, platform, "Spider"); // FIXME I'm using a string here because it is portable at the moment. The Platform.h header has not been ported yet.
+    PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
 };
 
 struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
