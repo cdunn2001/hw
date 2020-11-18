@@ -27,6 +27,10 @@
 #ifndef PACBIO_CUDA_LAUNCH_MANAGER_CUH_
 #define PACBIO_CUDA_LAUNCH_MANAGER_CUH_
 
+#include <tuple>
+
+#include <common/cuda/streams/KernelLaunchInfo.h>
+
 namespace PacBio {
 namespace Cuda {
 
