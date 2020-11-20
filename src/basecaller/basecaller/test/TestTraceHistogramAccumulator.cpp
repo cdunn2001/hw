@@ -186,7 +186,8 @@ public:
 };
 
 using HistTypes = ::testing::Types<TraceHistogramAccumHost,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalInterleaved>>;
+                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalInterleaved>,
+                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalContig>>;
 TYPED_TEST_SUITE(Histogram, HistTypes);
 
 TYPED_TEST(Histogram, ResetFromStats)
@@ -250,7 +251,7 @@ TYPED_TEST(Histogram, SingleLaneConstant)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 0;
-    params.bounds.upperBounds = 300;
+    params.bounds.upperBounds = numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
@@ -287,7 +288,7 @@ TYPED_TEST(Histogram, MultiLaneConstant)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 0;
-    params.bounds.upperBounds = 300;
+    params.bounds.upperBounds = numBins;
 
     SimulatedDataSource::SimConfig simConfig(params.lanesPerPool*laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
@@ -327,7 +328,7 @@ TYPED_TEST(Histogram, MultiPoolConstant)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 0;
-    params.bounds.upperBounds = 300;
+    params.bounds.upperBounds = numBins;
 
     SimulatedDataSource::SimConfig simConfig(params.numPools*params.lanesPerPool*laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
@@ -371,13 +372,13 @@ TYPED_TEST(Histogram, SawtoothSimpleUniform)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 0;
-    params.bounds.upperBounds = 300;
+    params.bounds.upperBounds = numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     SawtoothGenerator::Config sawConfig;
     sawConfig.minAmp = 0;
-    sawConfig.maxAmp = 300;
-    sawConfig.periodFrames = 300;
+    sawConfig.maxAmp = numBins;
+    sawConfig.periodFrames = numBins;
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
@@ -414,13 +415,13 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 0;
-    params.bounds.upperBounds = 300;
+    params.bounds.upperBounds = numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     SawtoothGenerator::Config sawConfig;
     sawConfig.minAmp = 0;
-    sawConfig.maxAmp = 300;
-    sawConfig.periodFrames = 150;
+    sawConfig.maxAmp = numBins;
+    sawConfig.periodFrames = numBins/2;
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
@@ -428,6 +429,7 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
                                       simConfig,
                                       std::move(generator));
 
+    const uint16_t expect = params.numFrames / sawConfig.periodFrames;
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
         EXPECT_EQ(hists[pool]->FramesAdded(), params.numFrames);
@@ -444,7 +446,7 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
                 if (i % 2 == 0)
-                    EXPECT_TRUE(all(counts == 13u | counts == 14u));
+                    EXPECT_TRUE(all(counts == expect | counts == expect+1u));
                 else
                     EXPECT_TRUE(all(counts == 0u));
             }
@@ -460,7 +462,7 @@ TYPED_TEST(Histogram, SawtoothOutliersUniform)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 100;
-    params.bounds.upperBounds = 400;
+    params.bounds.upperBounds = 100+numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     SawtoothGenerator::Config sawConfig;
@@ -482,8 +484,8 @@ TYPED_TEST(Histogram, SawtoothOutliersUniform)
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == 112u*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == 100u*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
@@ -503,7 +505,7 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
     params.framesPerBlock = 512;
     params.numFrames = 2048;
     params.bounds.lowerBounds = 100;
-    params.bounds.upperBounds = 400;
+    params.bounds.upperBounds = 100+numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     SawtoothGenerator::Config sawConfig;
@@ -525,8 +527,8 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == 112u*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == 100u*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
