@@ -161,6 +161,59 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     hist.outlierCountHigh[threadIdx.x] = highOutlier;
 }
 
+__global__ void BinningGlobalContigAtomic(Data::GpuBatchData<const PBShort2> traces,
+                                          DeviceView<LaneHistogramTrans> hists)
+{
+    assert(traces.NumFrames() % blockDim.x == 0);
+    auto& hist = hists[blockIdx.x];
+
+    auto traceItrs = traces.NumFrames() / blockDim.x;
+    for (int zmw = 0; zmw < laneSize/2; ++zmw)
+    {
+        float2 lowBound = {hist.lowBound[2*zmw], hist.lowBound[2*zmw+1]};
+        float2 binSize = {hist.binSize[2*zmw], hist.binSize[2*zmw+1]};
+
+        auto dat = traces.ZmwData(blockIdx.x, zmw);
+        for (int i = threadIdx.x; i < traces.NumFrames(); i+=blockDim.x)
+        {
+            auto val = dat[i];
+            int bin = (val.X() - lowBound.x) / binSize.x;
+            if (bin < 0) bin = -1;
+            else if (bin > hist.numBins) bin = hist.numBins;
+
+            auto same = __match_any_sync(0xFFFFFFFF, bin);
+            // Number of threads with the same bin
+            auto count = __popc(same);
+            // Thread with the most significant bit gets to own the update
+            bool owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+            if (owner)
+            {
+                if (bin < 0) hist.outlierCountLow[2*zmw] += count;
+                else if (bin == hist.numBins) hist.outlierCountHigh[2*zmw] += count;
+                else hist.binCount[2*zmw][bin] += count;
+            }
+
+            bin = (val.Y() - lowBound.y) / binSize.y;
+            if (bin < 0) bin = -1;
+            else if (bin > hist.numBins) bin = hist.numBins;
+
+            same = __match_any_sync(0xFFFFFFFF, bin);
+            // Number of threads with the same bin
+            count = __popc(same);
+            // Thread with the most significant bit gets to own the update
+            owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+            if (owner)
+            {
+                if (bin < 0) hist.outlierCountLow[2*zmw+1] +=count;
+                else if (bin == hist.numBins) hist.outlierCountHigh[2*zmw+1] += count;
+                else hist.binCount[2*zmw+1][bin] += count;
+            }
+        }
+    }
+}
+
 
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
                                          DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
@@ -416,6 +469,40 @@ private:
     DeviceOnlyArray<LaneHistogramTrans> data_;
 };
 
+struct HistGlobalContigAtomic : public DeviceTraceHistogramAccumHidden::ImplBase
+{
+    HistGlobalContigAtomic(unsigned int poolSize,
+              Cuda::Memory::StashableAllocRegistrar* registrar)
+        : DeviceTraceHistogramAccumHidden::ImplBase(poolSize)
+        , data_(registrar, SOURCE_MARKER(), poolSize)
+    {}
+
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    {
+        PBLauncher(BinningGlobalContigAtomic, this->PoolSize(), laneSize/2)(traces, data_);
+    }
+
+    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
+    {
+        assert(bounds.Size() == PoolSize());
+        PBLauncher(ResetHistsContigBounds, PoolSize(), laneSize)(data_, bounds);
+    }
+
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override
+    {
+        assert(metrics.baselinerStats.Size() == PoolSize());
+        PBLauncher(ResetHistsContigStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+    }
+
+    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    {
+        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, dest.data);
+    }
+
+private:
+    DeviceOnlyArray<LaneHistogramTrans> data_;
+};
+
 void DeviceTraceHistogramAccumHidden::AddBatchImpl(const Data::TraceBatch<DataType>& traces)
 {
     impl_->AddBatchImpl(traces);
@@ -457,6 +544,11 @@ DeviceTraceHistogramAccumHidden::DeviceTraceHistogramAccumHidden(unsigned int po
     case DeviceHistogramTypes::GlobalContig:
         {
             impl_ = std::make_unique<HistGlobalContig>(poolSize, registrar);
+            break;
+        }
+    case DeviceHistogramTypes::GlobalContigAtomic:
+        {
+            impl_ = std::make_unique<HistGlobalContigAtomic>(poolSize, registrar);
             break;
         }
     default:
