@@ -145,13 +145,15 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     ushort lowOutlier = hist.outlierCountLow[threadIdx.x];
     ushort highOutlier = hist.outlierCountHigh[threadIdx.x];
 
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
+
     auto ptr = reinterpret_cast<const int16_t*>(traces.BlockData(blockIdx.x)) + threadIdx.x;
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto idx = threadIdx.x;
         int bin = (*ptr - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
-        else if (bin >= hist.numBins) highOutlier++;
+        else if (bin >= numBins) highOutlier++;
         else hist.binCount[idx][bin]++;
 
         ptr += blockDim.x;
@@ -161,12 +163,20 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     hist.outlierCountHigh[threadIdx.x] = highOutlier;
 }
 
+// Notes: This function isn't too hard to tweak so that multiple warps participate, each warp working
+//        on a disjoint subset of zmw.
+
+//        There is some slight evidece that having 2-4 warps active in the same block have a marginal
+//        benefit in some cases and a marginal detrement in others.  Having too many warps definitely
+//        does hurt performance, presumably because we're back to having a large enough portion of the
+//        histogram being accessed, causing more cache trashing.
 __global__ void BinningGlobalContigAtomic(Data::GpuBatchData<const PBShort2> traces,
                                           DeviceView<LaneHistogramTrans> hists)
 {
     assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
 
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
     auto traceItrs = traces.NumFrames() / blockDim.x;
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -179,7 +189,7 @@ __global__ void BinningGlobalContigAtomic(Data::GpuBatchData<const PBShort2> tra
             auto val = dat[i];
             int bin = (val.X() - lowBound.x) / binSize.x;
             if (bin < 0) bin = -1;
-            else if (bin > hist.numBins) bin = hist.numBins;
+            else if (bin > numBins) bin = numBins;
 
             auto same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
@@ -190,13 +200,13 @@ __global__ void BinningGlobalContigAtomic(Data::GpuBatchData<const PBShort2> tra
             if (owner)
             {
                 if (bin < 0) hist.outlierCountLow[2*zmw] += count;
-                else if (bin == hist.numBins) hist.outlierCountHigh[2*zmw] += count;
+                else if (bin == numBins) hist.outlierCountHigh[2*zmw] += count;
                 else hist.binCount[2*zmw][bin] += count;
             }
 
             bin = (val.Y() - lowBound.y) / binSize.y;
             if (bin < 0) bin = -1;
-            else if (bin > hist.numBins) bin = hist.numBins;
+            else if (bin > numBins) bin = numBins;
 
             same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
@@ -207,10 +217,85 @@ __global__ void BinningGlobalContigAtomic(Data::GpuBatchData<const PBShort2> tra
             if (owner)
             {
                 if (bin < 0) hist.outlierCountLow[2*zmw+1] +=count;
-                else if (bin == hist.numBins) hist.outlierCountHigh[2*zmw+1] += count;
+                else if (bin == numBins) hist.outlierCountHigh[2*zmw+1] += count;
                 else hist.binCount[2*zmw+1][bin] += count;
             }
         }
+    }
+}
+
+__global__ void BinningSharedContigAtomic(Data::GpuBatchData<const PBShort2> traces,
+                                          DeviceView<LaneHistogramTrans> hists)
+{
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
+    __shared__ uint16_t localHist[numBins+2][2];
+    assert(traces.NumFrames() % blockDim.x == 0);
+    auto& hist = hists[blockIdx.x];
+
+    for (int zmw = 0; zmw < laneSize/2; ++zmw)
+    {
+        float2 lowBound = {hist.lowBound[2*zmw], hist.lowBound[2*zmw+1]};
+        float2 binSize = {hist.binSize[2*zmw], hist.binSize[2*zmw+1]};
+
+        for (int i = threadIdx.x; i < numBins+2; i+=blockDim.x)
+        {
+            localHist[i][0] = 0;
+            localHist[i][1] = 0;
+        }
+        __syncwarp(0xFFFFFFFF);
+
+        auto dat = traces.ZmwData(blockIdx.x, zmw);
+        for (int i = threadIdx.x; i < traces.NumFrames(); i+=blockDim.x)
+        {
+            auto val = dat[i];
+            int bin = (val.X() - lowBound.x) / binSize.x;
+            if (bin >= numBins) bin = numBins+1;
+            else if (bin < 0) bin = numBins;
+
+            auto same = __match_any_sync(0xFFFFFFFF, bin);
+            // Number of threads with the same bin
+            auto count = __popc(same);
+            // Thread with the most significant bit gets to own the update
+            bool owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+            if (owner)
+            {
+                localHist[bin][0] += count;
+            }
+
+            bin = (val.Y() - lowBound.y) / binSize.y;
+            if (bin >= numBins) bin = numBins+1;
+            else if (bin < 0) bin = numBins;
+
+            same = __match_any_sync(0xFFFFFFFF, bin);
+            // Number of threads with the same bin
+            count = __popc(same);
+            // Thread with the most significant bit gets to own the update
+            owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+            if (owner)
+            {
+                localHist[bin][1] += count;
+            }
+            __syncwarp();
+        }
+
+        for (int i = threadIdx.x; i < numBins; i+=blockDim.x)
+        {
+            hist.binCount[2*zmw][i] += localHist[i][0];
+            hist.binCount[2*zmw+1][i] += localHist[i][1];
+        }
+        if (threadIdx.x == 0)
+        {
+            hist.outlierCountHigh[2*zmw] += localHist[numBins+1][0];
+            hist.outlierCountHigh[2*zmw+1] += localHist[numBins+1][1];
+        }
+        else if (threadIdx.x == 1)
+        {
+            hist.outlierCountLow[2*zmw] += localHist[numBins][0];
+            hist.outlierCountLow[2*zmw+1] += localHist[numBins][1];
+        }
+        __syncwarp(0xFFFFFFFF);
     }
 }
 
@@ -225,13 +310,15 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     ushort lowOutlier = hist.outlierCountLow[threadIdx.x];
     ushort highOutlier = hist.outlierCountHigh[threadIdx.x];
 
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
+
     auto ptr = reinterpret_cast<const int16_t*>(traces.BlockData(blockIdx.x)) + threadIdx.x;
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto idx = threadIdx.x;
         int bin = (*ptr - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
-        else if (bin >= hist.numBins) highOutlier++;
+        else if (bin >= numBins) highOutlier++;
         else hist.binCount[bin][idx]++;
 
         ptr += blockDim.x;
@@ -503,6 +590,40 @@ private:
     DeviceOnlyArray<LaneHistogramTrans> data_;
 };
 
+struct HistSharedContigAtomic : public DeviceTraceHistogramAccumHidden::ImplBase
+{
+    HistSharedContigAtomic(unsigned int poolSize,
+              Cuda::Memory::StashableAllocRegistrar* registrar)
+        : DeviceTraceHistogramAccumHidden::ImplBase(poolSize)
+        , data_(registrar, SOURCE_MARKER(), poolSize)
+    {}
+
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    {
+        PBLauncher(BinningSharedContigAtomic, this->PoolSize(), laneSize/2)(traces, data_);
+    }
+
+    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
+    {
+        assert(bounds.Size() == PoolSize());
+        PBLauncher(ResetHistsContigBounds, PoolSize(), laneSize)(data_, bounds);
+    }
+
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override
+    {
+        assert(metrics.baselinerStats.Size() == PoolSize());
+        PBLauncher(ResetHistsContigStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+    }
+
+    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    {
+        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, dest.data);
+    }
+
+private:
+    DeviceOnlyArray<LaneHistogramTrans> data_;
+};
+
 void DeviceTraceHistogramAccumHidden::AddBatchImpl(const Data::TraceBatch<DataType>& traces)
 {
     impl_->AddBatchImpl(traces);
@@ -549,6 +670,11 @@ DeviceTraceHistogramAccumHidden::DeviceTraceHistogramAccumHidden(unsigned int po
     case DeviceHistogramTypes::GlobalContigAtomic:
         {
             impl_ = std::make_unique<HistGlobalContigAtomic>(poolSize, registrar);
+            break;
+        }
+    case DeviceHistogramTypes::SharedContigAtomic:
+        {
+            impl_ = std::make_unique<HistSharedContigAtomic>(poolSize, registrar);
             break;
         }
     default:
