@@ -189,7 +189,8 @@ using HistTypes = ::testing::Types<TraceHistogramAccumHost,
                                    DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalInterleaved>,
                                    DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalContig>,
                                    DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalContigAtomic>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedContigAtomic>>;
+                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedContigAtomic>,
+                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedContigMulti>>;
 TYPED_TEST_SUITE(Histogram, HistTypes);
 
 TYPED_TEST(Histogram, ResetFromStats)

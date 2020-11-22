@@ -299,6 +299,92 @@ __global__ void BinningSharedContigAtomic(Data::GpuBatchData<const PBShort2> tra
     }
 }
 
+__global__ void BinningSharedContigMulti(Data::GpuBatchData<const PBShort2> traces,
+                                          DeviceView<LaneHistogramTrans> hists)
+{
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
+
+    struct SharedData
+    {
+        uint16_t localHist[32][numBins+2][2];
+        PBShort2 trans[32][33];
+    };
+
+    assert(blockDim.x == 32);
+    assert(blockDim.y == 32);
+    assert(blockDim.z == 1);
+
+    __shared__ SharedData shared;
+    assert(traces.NumFrames() % blockDim.x == 0);
+    auto& hist = hists[blockIdx.x];
+
+    const auto zmw = threadIdx.y;
+
+    float2 lowBound = {hist.lowBound[2*zmw], hist.lowBound[2*zmw+1]};
+    float2 binSize = {hist.binSize[2*zmw], hist.binSize[2*zmw+1]};
+
+    for (int i = threadIdx.x; i < numBins+2; i+=blockDim.x)
+    {
+        shared.localHist[zmw][i][0] = 0;
+        shared.localHist[zmw][i][1] = 0;
+    }
+    __syncwarp(0xFFFFFFFF);
+
+    auto dat = traces.ZmwData(blockIdx.x, threadIdx.x);
+    for (int i = threadIdx.y; i < traces.NumFrames(); i+=blockDim.y)
+    {
+        __syncthreads();
+        shared.trans[threadIdx.y][threadIdx.x] = dat[i];
+        __syncthreads();
+        auto val = shared.trans[threadIdx.x][threadIdx.y];
+
+        int bin = (val.X() - lowBound.x) / binSize.x;
+        if (bin >= numBins) bin = numBins+1;
+        else if (bin < 0) bin = numBins;
+
+        auto same = __match_any_sync(0xFFFFFFFF, bin);
+        // Number of threads with the same bin
+        auto count = __popc(same);
+        // Thread with the most significant bit gets to own the update
+        bool owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+        if (owner)
+        {
+            shared.localHist[zmw][bin][0] += count;
+        }
+
+        bin = (val.Y() - lowBound.y) / binSize.y;
+        if (bin >= numBins) bin = numBins+1;
+        else if (bin < 0) bin = numBins;
+
+        same = __match_any_sync(0xFFFFFFFF, bin);
+        // Number of threads with the same bin
+        count = __popc(same);
+        // Thread with the most significant bit gets to own the update
+        owner = (32 - __clz(same) -1 ) == threadIdx.x;
+
+        if (owner)
+        {
+            shared.localHist[zmw][bin][1] += count;
+        }
+    }
+
+    for (int i = threadIdx.x; i < numBins; i+=blockDim.x)
+    {
+        hist.binCount[2*zmw][i] += shared.localHist[zmw][i][0];
+        hist.binCount[2*zmw+1][i] += shared.localHist[zmw][i][1];
+    }
+    if (threadIdx.x == 0)
+    {
+        hist.outlierCountHigh[2*zmw] += shared.localHist[zmw][numBins+1][0];
+        hist.outlierCountHigh[2*zmw+1] += shared.localHist[zmw][numBins+1][1];
+    }
+    else if (threadIdx.x == 1)
+    {
+        hist.outlierCountLow[2*zmw] += shared.localHist[zmw][numBins][0];
+        hist.outlierCountLow[2*zmw+1] += shared.localHist[zmw][numBins][1];
+    }
+}
 
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
                                          DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
@@ -624,6 +710,40 @@ private:
     DeviceOnlyArray<LaneHistogramTrans> data_;
 };
 
+struct HistSharedContigMulti: public DeviceTraceHistogramAccumHidden::ImplBase
+{
+    HistSharedContigMulti(unsigned int poolSize,
+              Cuda::Memory::StashableAllocRegistrar* registrar)
+        : DeviceTraceHistogramAccumHidden::ImplBase(poolSize)
+        , data_(registrar, SOURCE_MARKER(), poolSize)
+    {}
+
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    {
+        PBLauncher(BinningSharedContigMulti, this->PoolSize(), dim3{laneSize/2, laneSize/2,1})(traces, data_);
+    }
+
+    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
+    {
+        assert(bounds.Size() == PoolSize());
+        PBLauncher(ResetHistsContigBounds, PoolSize(), laneSize)(data_, bounds);
+    }
+
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override
+    {
+        assert(metrics.baselinerStats.Size() == PoolSize());
+        PBLauncher(ResetHistsContigStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+    }
+
+    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    {
+        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, dest.data);
+    }
+
+private:
+    DeviceOnlyArray<LaneHistogramTrans> data_;
+};
+
 void DeviceTraceHistogramAccumHidden::AddBatchImpl(const Data::TraceBatch<DataType>& traces)
 {
     impl_->AddBatchImpl(traces);
@@ -675,6 +795,11 @@ DeviceTraceHistogramAccumHidden::DeviceTraceHistogramAccumHidden(unsigned int po
     case DeviceHistogramTypes::SharedContigAtomic:
         {
             impl_ = std::make_unique<HistSharedContigAtomic>(poolSize, registrar);
+            break;
+        }
+    case DeviceHistogramTypes::SharedContigMulti:
+        {
+            impl_ = std::make_unique<HistSharedContigMulti>(poolSize, registrar);
             break;
         }
     default:
