@@ -386,6 +386,61 @@ __global__ void BinningSharedContigMulti(Data::GpuBatchData<const PBShort2> trac
     }
 }
 
+__global__ void BinningSharedInterleaved(Data::GpuBatchData<const PBShort2> traces,
+                                         DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
+{
+    assert(blockDim.x == 32);
+    auto& ghist = hists[blockIdx.x];
+    const auto zmw = threadIdx.x;
+
+    float2 lowBound = {ghist.lowBound[2*zmw], ghist.lowBound[2*zmw+1]};
+    float2 binSize = {ghist.binSize[2*zmw], ghist.binSize[2*zmw+1]};
+    ushort2 lowOutlier = {0,0};
+    ushort2 highOutlier = {0,0};
+
+    constexpr int16_t numBins = LaneHistogramTrans::numBins;
+    __shared__ PBShort2 lhist[numBins][32];
+
+    for (int i = threadIdx.y; i < numBins; i+=blockDim.y)
+    {
+        lhist[i][threadIdx.x] = 0;
+    }
+
+    __syncthreads();
+
+    auto trace = traces.ZmwData(blockIdx.x, threadIdx.x);
+    for (int i = threadIdx.y; i < traces.NumFrames(); i+=blockDim.y)
+    {
+        auto val = trace[i];
+
+        int bin = (val.X() - lowBound.x) / binSize.x;
+        if (bin < 0) lowOutlier.x++;
+        else if (bin >= numBins) highOutlier.x++;
+        else {
+            atomicAdd(reinterpret_cast<uint32_t*>(&lhist[bin][threadIdx.x]), 1);
+        }
+
+        bin = (val.Y() - lowBound.y) / binSize.y;
+        if (bin < 0) lowOutlier.y++;
+        else if (bin >= numBins) highOutlier.y++;
+        else {
+            atomicAdd(reinterpret_cast<uint32_t*>(&lhist[bin][threadIdx.x]), 1<<16);
+        }
+
+    }
+
+    __syncthreads();
+
+    for (int i = threadIdx.y; i < numBins; i+=blockDim.y)
+    {
+        ghist.binCount[i][2*threadIdx.x] += lhist[i][threadIdx.x].X();
+        ghist.binCount[i][2*threadIdx.x+1] += lhist[i][threadIdx.x].Y();
+    }
+
+    atomicAdd(reinterpret_cast<uint32_t*>(&ghist.outlierCountLow[2*threadIdx.x]), *reinterpret_cast<uint32_t*>(&lowOutlier));
+    atomicAdd(reinterpret_cast<uint32_t*>(&ghist.outlierCountHigh[2*threadIdx.x]), *reinterpret_cast<uint32_t*>(&highOutlier));
+}
+
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
                                          DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
 {
@@ -608,6 +663,40 @@ private:
     DeviceOnlyArray<LaneHistogram<float, uint16_t>> data_;
 };
 
+struct HistSharedInterleaved : public DeviceTraceHistogramAccumHidden::ImplBase
+{
+    HistSharedInterleaved(unsigned int poolSize,
+              Cuda::Memory::StashableAllocRegistrar* registrar)
+        : DeviceTraceHistogramAccumHidden::ImplBase(poolSize)
+        , data_(registrar, SOURCE_MARKER(), poolSize)
+    {}
+
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    {
+        PBLauncher(BinningSharedInterleaved, this->PoolSize(), dim3{laneSize/2, 32, 1})(traces, data_);
+    }
+
+    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
+    {
+        assert(bounds.Size() == PoolSize());
+        PBLauncher(ResetHistsInterleavedBounds, PoolSize(), laneSize)(data_, bounds);
+    }
+
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override
+    {
+        assert(metrics.baselinerStats.Size() == PoolSize());
+        PBLauncher(ResetHistsInterleavedStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+    }
+
+    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    {
+        PBLauncher(CopyToInterleaved, this->PoolSize(), laneSize)(data_, dest.data);
+    }
+
+private:
+    DeviceOnlyArray<LaneHistogram<float, uint16_t>> data_;
+};
+
 struct HistGlobalContig : public DeviceTraceHistogramAccumHidden::ImplBase
 {
     HistGlobalContig(unsigned int poolSize,
@@ -780,6 +869,11 @@ DeviceTraceHistogramAccumHidden::DeviceTraceHistogramAccumHidden(unsigned int po
     case DeviceHistogramTypes::GlobalInterleaved:
         {
             impl_ = std::make_unique<HistGlobalInterleaved>(poolSize, registrar);
+            break;
+        }
+    case DeviceHistogramTypes::SharedInterleaved:
+        {
+            impl_ = std::make_unique<HistSharedInterleaved>(poolSize, registrar);
             break;
         }
     case DeviceHistogramTypes::GlobalContig:

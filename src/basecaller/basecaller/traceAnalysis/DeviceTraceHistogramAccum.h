@@ -43,7 +43,8 @@ enum class DeviceHistogramTypes
     GlobalCotigMulti,
     GlobalContigAtomic,
     SharedContigMulti,
-    SharedContigAtomic
+    SharedContigAtomic,
+    SharedInterleaved
 };
 
 class DeviceTraceHistogramAccumHidden : public TraceHistogramAccumulator
