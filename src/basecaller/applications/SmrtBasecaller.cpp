@@ -56,6 +56,8 @@ using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Graphs;
 using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
+using namespace PacBio::Mongo::DataSource;
+using namespace PacBio::Sensor;
 
 using namespace PacBio::Application;
 using namespace PacBio::Configuration;
@@ -65,7 +67,7 @@ using namespace PacBio::Primary;
 using namespace PacBio::TraceFile;
 
 ////////////
-// vvvv This could be cleaned up.
+// vvvv TODO This could be cleaned up.
 
 // Need a global to support CtrlC handling
 std::atomic<bool> globalHalt{false};
@@ -201,7 +203,6 @@ private:
         movieConfig_.refSnr = chipInfo.analogRefSnr;
 
         // Analog information
-        size_t traceNumAnalogs;
         std::string baseMap;
         std::vector<float> relativeAmpl;
         std::vector<float> excessNoiseCV;
@@ -210,9 +211,8 @@ private:
         std::vector<float> ipd2SlowStepRatio;
         std::vector<float> pw2SlowStepRatio;
 
-        traceNumAnalogs = TraceFile::DefaultNumAnalogs;
-        if (traceNumAnalogs != numAnalogs)
-            throw PBException("Trace file does not have 4 analogs!");
+        const constexpr size_t traceNumAnalogs = TraceFile::DefaultNumAnalogs;
+        static_assert (traceNumAnalogs == numAnalogs, "Trace file does not have 4 analogs!");
 
         baseMap = dyeSet.baseMap;
         relativeAmpl = dyeSet.relativeAmp;
@@ -466,11 +466,11 @@ private:
                 // enums of WX2, but this was on purpose to avoid entangling the config with configs from WX2.
                 // I am not sure what the best next step is.  This is getting me going, so I am
                 // going to leave it. MTL
-                Mongo::DataSource::WXDataSourceConfig wxconfig;
-                wxconfig.dataPath = Mongo::DataSource::DataPath_t(config_.source.wx2SourceConfig.dataPath);
-                wxconfig.platform = PacBio::TemporarySequel::Platform(config_.source.wx2SourceConfig.platform);
+                WXDataSourceConfig wxconfig;
+                wxconfig.dataPath = DataPath_t(config_.source.wx2SourceConfig.dataPath);
+                wxconfig.platform = Platform(config_.source.wx2SourceConfig.platform);
 
-                dataSource = std::make_unique<Mongo::DataSource::WXDataSource>(std::move(datasourceConfig), wxconfig);
+                dataSource = std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
             }
                 break;
             default:
@@ -592,15 +592,15 @@ private:
 
         // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
         // loopback paths (anything but Normal).
-        auto dsr = dynamic_cast<Mongo::DataSource::WXDataSource*>(&source->GetDataSource());
-        if (dsr && dsr->GetDataPath() != Mongo::DataSource::DataPath_t::Normal)
+        auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
+        if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
         {
-            Mongo::DataSource::TransmitConfig config(dsr->GetChipClass());
+            TransmitConfig config(dsr->GetChipClass());
             config.condensed = true;
             config.frames = frames_; // total number of frames to transmit
             config.limitFileFrames = 512; // loop in coproc memory.
             config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
-            config.mode = Mongo::DataSource::TransmitConfig::Mode::Generated;
+            config.mode = TransmitConfig::Mode::Generated;
             config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
             PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
             dsr->TransmitMovieSim(config);

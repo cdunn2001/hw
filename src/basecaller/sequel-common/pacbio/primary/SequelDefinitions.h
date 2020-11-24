@@ -33,7 +33,6 @@
 
 #include <stdint.h>
 #include <cmath>
-#include <pacbio/primary/Tile.h>
 
 #ifndef ATT_UNUSED
 #  ifdef __INTEL_COMPILER
