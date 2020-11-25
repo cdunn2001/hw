@@ -74,8 +74,7 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
 
 
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
-                                                 unsigned int poolSize,
-                                                 Cuda::Memory::StashableAllocRegistrar* /*registrar*/)
+                                                 unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
 { }
 

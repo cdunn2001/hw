@@ -30,6 +30,7 @@
 
 #include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
+#include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/streams/LaunchManager.cuh>
@@ -147,16 +148,15 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
 
-    auto ptr = reinterpret_cast<const int16_t*>(traces.BlockData(blockIdx.x)) + threadIdx.x;
+    auto zmw = traces.ZmwData(blockIdx.x, threadIdx.x/2);
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto idx = threadIdx.x;
-        int bin = (*ptr - lowBound) / binSize;
+        auto val = (threadIdx.x % 2 == 0 ? zmw[i].X() : zmw[i].Y());
+        int bin = (val - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
         else if (bin >= numBins) highOutlier++;
         else hist.binCount[idx][bin]++;
-
-        ptr += blockDim.x;
     }
 
     hist.outlierCountLow[threadIdx.x] = lowOutlier;
@@ -310,6 +310,7 @@ __global__ void BinningSharedContigMulti(Data::GpuBatchData<const PBShort2> trac
         PBShort2 trans[32][33];
     };
 
+    assert(traces.NumFrames() % blockDim.x == 0);
     assert(blockDim.x == 32);
     assert(blockDim.y == 32);
     assert(blockDim.z == 1);
@@ -393,15 +394,13 @@ __global__ void BinningSharedInterleaved(Data::GpuBatchData<const PBShort2> trac
     auto& ghist = hists[blockIdx.x];
     const auto zmw = threadIdx.x;
 
-    float2 lowBound = {ghist.lowBound[2*zmw], ghist.lowBound[2*zmw+1]};
-    float2 binSize = {ghist.binSize[2*zmw], ghist.binSize[2*zmw+1]};
-    ushort2 lowOutlier = {0,0};
-    ushort2 highOutlier = {0,0};
+    PBHalf2 lowBound = {ghist.lowBound[2*zmw], ghist.lowBound[2*zmw+1]};
+    PBHalf2 binSize = {ghist.binSize[2*zmw], ghist.binSize[2*zmw+1]};
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
-    __shared__ PBShort2 lhist[numBins][32];
+    __shared__ PBShort2 lhist[numBins+2][32];
 
-    for (int i = threadIdx.y; i < numBins; i+=blockDim.y)
+    for (int i = threadIdx.y; i < numBins+2; i+=blockDim.y)
     {
         lhist[i][threadIdx.x] = 0;
     }
@@ -413,20 +412,12 @@ __global__ void BinningSharedInterleaved(Data::GpuBatchData<const PBShort2> trac
     {
         auto val = trace[i];
 
-        int bin = (val.X() - lowBound.x) / binSize.x;
-        if (bin < 0) lowOutlier.x++;
-        else if (bin >= numBins) highOutlier.x++;
-        else {
-            atomicAdd(reinterpret_cast<uint32_t*>(&lhist[bin][threadIdx.x]), 1);
-        }
+        auto bin = (val - lowBound) / binSize;
+        bin = Blend(bin >= numBins, numBins+1, bin);
+        bin = Blend(bin < 0, numBins, bin);
 
-        bin = (val.Y() - lowBound.y) / binSize.y;
-        if (bin < 0) lowOutlier.y++;
-        else if (bin >= numBins) highOutlier.y++;
-        else {
-            atomicAdd(reinterpret_cast<uint32_t*>(&lhist[bin][threadIdx.x]), 1<<16);
-        }
-
+        atomicAdd(&lhist[bin.IntX()][threadIdx.x].data(), 1);
+        atomicAdd(&lhist[bin.IntY()][threadIdx.x].data(), 1<<16);
     }
 
     __syncthreads();
@@ -437,8 +428,16 @@ __global__ void BinningSharedInterleaved(Data::GpuBatchData<const PBShort2> trac
         ghist.binCount[i][2*threadIdx.x+1] += lhist[i][threadIdx.x].Y();
     }
 
-    atomicAdd(reinterpret_cast<uint32_t*>(&ghist.outlierCountLow[2*threadIdx.x]), *reinterpret_cast<uint32_t*>(&lowOutlier));
-    atomicAdd(reinterpret_cast<uint32_t*>(&ghist.outlierCountHigh[2*threadIdx.x]), *reinterpret_cast<uint32_t*>(&highOutlier));
+    if (threadIdx.y == 0)
+    {
+        ghist.outlierCountLow[2*threadIdx.x] += lhist[numBins][threadIdx.x].X();
+        ghist.outlierCountLow[2*threadIdx.x+1] += lhist[numBins][threadIdx.x].Y();
+    }
+    else if (threadIdx.y == 1 % blockDim.y)
+    {
+        ghist.outlierCountHigh[2*threadIdx.x] += lhist[numBins+1][threadIdx.x].X();
+        ghist.outlierCountHigh[2*threadIdx.x+1] += lhist[numBins+1][threadIdx.x].Y();
+    }
 }
 
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
@@ -453,16 +452,15 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
 
-    auto ptr = reinterpret_cast<const int16_t*>(traces.BlockData(blockIdx.x)) + threadIdx.x;
+    auto zmw = traces.ZmwData(blockIdx.x, threadIdx.x/2);
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto idx = threadIdx.x;
-        int bin = (*ptr - lowBound) / binSize;
+        auto val = (threadIdx.x % 2 == 0) ? zmw[i].X() : zmw[i].Y();
+        int bin = (val - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
         else if (bin >= numBins) highOutlier++;
         else hist.binCount[bin][idx]++;
-
-        ptr += blockDim.x;
     }
 
     hist.outlierCountLow[threadIdx.x] = lowOutlier;

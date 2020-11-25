@@ -123,13 +123,6 @@ public:
 
     __device__ uint32_t NumFrames() const { return availableFrames_; }
 
-    // TODO kill
-    __device__ T* BlockData(size_t idx)
-    {
-        Cuda::Memory::DeviceView<T> view(data_);
-        return view.Data() + idx * dims_.laneWidth * dims_.framesPerBatch;
-    }
-
 private:
     template <typename U>
     __device__ StridedBlockView<U> ZmwDataImpl(uint32_t laneIdx, uint32_t zmwIdx) const

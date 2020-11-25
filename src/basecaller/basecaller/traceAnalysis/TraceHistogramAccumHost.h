@@ -38,9 +38,6 @@
 
 #include "TraceHistogramAccumulator.h"
 
-// TODO remove
-#include <common/cuda/memory/DeviceAllocationStash.h>
-
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -66,9 +63,7 @@ public:     // Static functions
 
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
-                            unsigned int poolSize,
-                            // TODO this is only needed for test.  Is there a good way to eliminate?
-                            Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
+                            unsigned int poolSize);
 
 public:     // Const access (extensions to TraceHistogramAccumulator interface)
     const AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>>&

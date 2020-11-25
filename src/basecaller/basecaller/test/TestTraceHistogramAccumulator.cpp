@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
+#include <pacbio/utilities/Finally.h>
 
 #include <appModules/SimulatedDataSource.h>
 
@@ -59,27 +60,54 @@ struct TestParameters
     LaneHistBounds bounds;
 };
 
+// Factory class to unify histogram construction, since the host
+// host version doesn't know about StashAbleAllocRegistrar
+template <typename T>
+struct HistFactory
+{
+    static std::unique_ptr<T> Create(uint32_t poolId,
+                                     uint32_t lanesPerPool,
+                                     StashableAllocRegistrar* registrar)
+    {
+        return std::make_unique<T>(poolId, lanesPerPool, registrar);
+    }
+};
+template <>
+struct HistFactory<TraceHistogramAccumHost>
+{
+    static std::unique_ptr<TraceHistogramAccumHost> Create(uint32_t poolId,
+                                                           uint32_t lanesPerPool,
+                                                           StashableAllocRegistrar*)
+    {
+        return std::make_unique<TraceHistogramAccumHost>(poolId, lanesPerPool);
+    }
+};
+
 template <typename Hist>
 class Histogram : public testing::Test
 {
+    SMART_ENUM(Profiles, TRACE_UPLOAD, HIST_UPLOAD, HIST_DOWNLOAD, BINNING);
+    using Profiler = ScopedProfilerChain<Profiles>;
 public:
-    Histogram()
+    PacBio::Utilities::Finally EnablePerf()
     {
-        // TODO keep?  Only do for perf tests?
         Memory::SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+        monitorPerf = true;
+
+        return PacBio::Utilities::Finally([](){
+            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::CUDA);
+            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::MALLOC);
+            Profiler::FinalReport();
+        });
     }
-    ~Histogram()
-    {
-        Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::CUDA);
-        Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::MALLOC);
-    }
+
     using Hist_t = Hist;
 
-    static void BinData(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
-                        DeviceAllocationStash& stash,
-                        DataSourceBase::Configuration sourceConfig,
-                        const SimulatedDataSource::SimConfig& simConfig,
-                        std::unique_ptr<SignalGenerator> gen)
+    void BinData(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
+                 DeviceAllocationStash& stash,
+                 DataSourceBase::Configuration sourceConfig,
+                 const SimulatedDataSource::SimConfig& simConfig,
+                 std::unique_ptr<SignalGenerator> gen)
     {
         BatchDimensions dims;
         dims.laneWidth = laneSize;
@@ -92,9 +120,6 @@ public:
                                    std::move(gen));
 
         ASSERT_EQ(source.NumBatches(), hists.size());
-
-        SMART_ENUM(Profiles, TRACE_UPLOAD, HIST_UPLOAD, HIST_DOWNLOAD, BINNING);
-        using Profiler = ScopedProfilerChain<Profiles>;
 
         SensorPacketsChunk chunk;
         while (source.IsRunning())
@@ -113,7 +138,8 @@ public:
                                        packet.StartZmw());
                     TraceBatch<int16_t> batch(std::move(packet), meta, dims,
                                               SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
-                    Profiler profiler(Profiler::Mode::OBSERVE, 1000, 1000);
+                    typename Profiler::Mode mode = monitorPerf ? Profiler::Mode::OBSERVE : Profiler::Mode::IGNORE;
+                    Profiler profiler(mode, 1000, 1000);
 
                     auto bcopy = profiler.CreateScopedProfiler(Profiles::TRACE_UPLOAD);
                     (void)bcopy;
@@ -137,12 +163,11 @@ public:
                 }
             }
         }
-        Profiler::FinalReport();
     }
 
-    static auto RunTest(const TestParameters& params,
-                        const SimulatedDataSource::SimConfig& simConfig,
-                        std::unique_ptr<SignalGenerator> generator)
+    auto RunTest(const TestParameters& params,
+                 const SimulatedDataSource::SimConfig& simConfig,
+                 std::unique_ptr<SignalGenerator> generator)
     {
         DeviceAllocationStash stash;
 
@@ -150,7 +175,7 @@ public:
         for (size_t i = 0; i < params.numPools; ++i)
         {
             StashableAllocRegistrar registrar(i, stash);
-            hists.emplace_back(std::make_unique<Hist>(i, params.lanesPerPool, &registrar));
+            hists.emplace_back(HistFactory<Hist>::Create(i, params.lanesPerPool, &registrar));
 
             UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
                                                         SyncDirection::HostWriteDeviceRead,
@@ -168,11 +193,11 @@ public:
         return hists;
     }
 
-    static void RunTest(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
-                        DeviceAllocationStash& stash,
-                        const TestParameters& params,
-                        const SimulatedDataSource::SimConfig& simConfig,
-                        std::unique_ptr<SignalGenerator> generator)
+    void RunTest(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
+                 DeviceAllocationStash& stash,
+                 const TestParameters& params,
+                 const SimulatedDataSource::SimConfig& simConfig,
+                 std::unique_ptr<SignalGenerator> generator)
     {
 
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
@@ -183,6 +208,8 @@ public:
 
         BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator));
     }
+
+    bool monitorPerf = false;
 };
 
 using HistTypes = ::testing::Types<TraceHistogramAccumHost,
@@ -196,6 +223,8 @@ TYPED_TEST_SUITE(Histogram, HistTypes);
 
 TYPED_TEST(Histogram, ResetFromStats)
 {
+    PacBio::Logging::LogSeverityContext ls(PacBio::Logging::LogLevel::ERROR);
+
     Data::BasecallerTraceHistogramConfig config;
     TestFixture::Hist_t::Configure(config);
 
@@ -224,10 +253,10 @@ TYPED_TEST(Histogram, ResetFromStats)
         }
     }
 
-    typename TestFixture::Hist_t hAccum(1, numLanes, nullptr);
-    hAccum.Reset(std::move(metrics));
+    auto hAccum = HistFactory<typename TestFixture::Hist_t>::Create(1, numLanes, nullptr);
+    hAccum->Reset(std::move(metrics));
 
-    auto hist = hAccum.Histogram();
+    auto hist = hAccum->Histogram();
     auto hView = hist.data.GetHostView();
     for (size_t lane = 0; lane < numLanes; ++lane)
     {
@@ -544,8 +573,15 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
     }
 }
 
+// TODO it would be marginally more convenient if this was runtime enabled
+//      instead of compile time.
+static constexpr bool enablePerfTests = false;
+
 TYPED_TEST(Histogram, PerfPulseManySignals)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -572,6 +608,9 @@ TYPED_TEST(Histogram, PerfPulseManySignals)
 
 TYPED_TEST(Histogram, PerfPulseOneSignal)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -599,6 +638,9 @@ TYPED_TEST(Histogram, PerfPulseOneSignal)
 
 TYPED_TEST(Histogram, PerfSortedPulseManySignals)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -625,6 +667,9 @@ TYPED_TEST(Histogram, PerfSortedPulseManySignals)
 
 TYPED_TEST(Histogram, PerfSortedPulseOneSignal)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -652,6 +697,9 @@ TYPED_TEST(Histogram, PerfSortedPulseOneSignal)
 
 TYPED_TEST(Histogram, PerfRandomPulseManySignals)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -678,6 +726,9 @@ TYPED_TEST(Histogram, PerfRandomPulseManySignals)
 
 TYPED_TEST(Histogram, PerfRandomPulseOneSignal)
 {
+    if (!enablePerfTests) GTEST_SKIP();
+    auto finally = this->EnablePerf();
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
