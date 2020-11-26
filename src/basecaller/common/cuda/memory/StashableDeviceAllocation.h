@@ -61,6 +61,7 @@ public:
                               const AllocationMarker& marker,
                               std::unique_ptr<StreamMonitorBase> monitor)
         : monitor_(std::move(monitor))
+        , mutex_(std::make_unique<std::mutex>())
         , size_(size)
         , marker_(marker)
         , state_(NO_ALLOC)
@@ -71,6 +72,7 @@ public:
         : device_(std::move(o.device_))
         , host_(std::move(o.host_))
         , monitor_(std::move(o.monitor_))
+        , mutex_(std::move(o.mutex_))
         , size_(std::exchange(o.size_, 0))
         , marker_(std::exchange(o.marker_, AllocationMarker{""}))
         , state_(std::exchange(o.state_, NO_ALLOC))
@@ -82,6 +84,7 @@ public:
         device_  = std::move(o.device_);
         host_    = std::move(o.host_);
         monitor_ = std::move(o.monitor_);
+        mutex_   = std::move(o.mutex_);
         size_    = std::exchange(o.size_, 0);
         marker_  = std::exchange(o.marker_, AllocationMarker{""});
         state_   = std::exchange(o.state_, NO_ALLOC);
@@ -101,18 +104,20 @@ public:
     // to call if the data is already on the GPU
     void Retrieve()
     {
+        if (size_ == 0) return;
+        assert(mutex_);
+        std::lock_guard<std::mutex> lm(*mutex_);
+
         if (!device_)
             device_ = GetGlobalAllocator().GetDeviceAllocation(size_, marker_);
 
-        if (state_ != HOST)
+        if (state_ == HOST)
         {
-            state_ = DEVICE;
-            return;
+            assert(host_);
+            assert(state_);
+            CudaRawCopyDevice(device_.get<void>(DataKey()), host_.get<void>(), size_);
+            CudaSynchronizeDefaultStream();
         }
-
-        // State was HOST, we need to copy up the data
-        CudaRawCopyDevice(device_.get<void>(DataKey()), host_.get<void>(), size_);
-        CudaSynchronizeDefaultStream();
         state_ = DEVICE;
     }
 
@@ -120,22 +125,27 @@ public:
     // to call if data is already on the host.
     void Stash()
     {
-        if (state_ == NO_ALLOC)
-            return;
+        // Extra short-circuit, because it's not going to make sense to
+        // go straight from NO_ALLOC to HOST.  The memory is only visable
+        // and usable on the gpu, so that means if we allowed the copy we'd
+        // just be shuffling around uninitialized bits
+        if (size_ == 0 || state_ == NO_ALLOC) return;
+
+        assert(mutex_);
+        std::lock_guard<std::mutex> lm(*mutex_);
 
         if (!host_)
             host_ = GetGlobalAllocator().GetAllocation(size_, marker_);
 
-        if (state_ != DEVICE)
+        if (state_ == DEVICE)
         {
-            state_ = HOST;
-            return;
+            monitor_->Reset();
+            assert(host_);
+            assert(device_);
+            CudaRawCopyHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
+            CudaSynchronizeDefaultStream();
+            IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
         }
-
-        monitor_->Reset();
-        CudaRawCopyHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
-        CudaSynchronizeDefaultStream();
-        IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
         state_ = HOST;
     }
 
@@ -167,6 +177,7 @@ private:
     SmartDeviceAllocation device_;
     PacBio::Memory::SmartAllocation host_;
     std::unique_ptr<StreamMonitorBase> monitor_;
+    std::unique_ptr<std::mutex> mutex_;
 
     size_t size_;
     Memory::AllocationMarker marker_;

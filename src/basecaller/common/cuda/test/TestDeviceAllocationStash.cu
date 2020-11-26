@@ -137,7 +137,7 @@ TEST(StashableDeviceAllocation, RoundTrip)
     PBLauncher(RoundTripInit, 1,1)(alloc.GetDeviceHandle());
     CudaSynchronizeDefaultStream();
 
-    // We've used the data in a kernel, it has better be present...!
+    // We've used the data in a kernel, it had better be present...!
     EXPECT_TRUE(alloc.hasDeviceAlloc());
     EXPECT_FALSE(alloc.hasHostAlloc());
     EXPECT_EQ(alloc.size(), 100);
@@ -168,7 +168,7 @@ TEST(StashableDeviceAllocation, RoundTrip)
     auto view = result.GetHostView();
     for (size_t i = 0; i < result.Size(); ++i)
     {
-        EXPECT_EQ(view[i], i) << i;
+        EXPECT_EQ(view[i], i);
     }
 }
 

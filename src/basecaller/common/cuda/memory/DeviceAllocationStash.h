@@ -44,7 +44,7 @@ namespace Memory {
 class DeviceAllocationStash
 {
     using Allocation = std::weak_ptr<StashableDeviceAllocation>;
-    using BatchMap = std::map<size_t, std::vector<Allocation>>;
+    using PoolMap = std::map<uint32_t, std::vector<Allocation>>;
 public:
     DeviceAllocationStash(const DeviceAllocationStash&) = delete;
     DeviceAllocationStash(DeviceAllocationStash&&) = delete;
@@ -65,22 +65,26 @@ public:
     // Until PartitionData is subsequently called, the new allocation
     // will be stashed on the host rather than permanently resident
     // on the GPU.
-    void Register(size_t poolId, Allocation alloc);
+    void Register(uint32_t poolId, Allocation alloc);
 
     // Walks through all registered StashableDeviceAllocations associated
     // with a given poolID, and makes sure that they are moved to the GPU
     // and ready to be used.
-    void RetrievePool(size_t poolId);
+    void RetrievePool(uint32_t poolId);
 
     // Walks through all registered StashableDeviceAllocations associated
     // with a given poolID, and if they are marked for storage on the host,
     // copy them down and free up the GPU memory.
-    void StashPool(size_t poolId);
+    void StashPool(uint32_t poolId);
 
 private:
-    std::map<size_t, BatchMap, std::greater<size_t>> mobileData_;
-    std::map<size_t, BatchMap, std::greater<size_t>> stationaryData_;
-    std::unordered_set<size_t> poolsSeen_;
+    // Using std::greater as the sort predicate so that loops over the data
+    // are in descending order, which should hopefully make it easier to
+    // select a subset of allocations that add up as close as possible to
+    // a specified memory allotment.
+    std::map<size_t, PoolMap, std::greater<size_t>> mobileData_;
+    std::map<size_t, PoolMap, std::greater<size_t>> stationaryData_;
+    std::unordered_set<uint32_t> poolsSeen_;
 
     // Can only alter the maps if you hold this lock
     std::mutex mutateMutex_;
@@ -90,7 +94,7 @@ private:
     std::mutex uploadMutex_;
     std::mutex downloadMutex_;
 
-    size_t maxResidentMB_;
+    size_t maxResidentMiB_;
 };
 
 // Helper class used to facilitate registering a StashableDeviceAllocation
@@ -102,7 +106,7 @@ class StashableAllocRegistrar
 public:
     using Allocation = std::weak_ptr<StashableDeviceAllocation>;
 
-    StashableAllocRegistrar(size_t poolId, DeviceAllocationStash& manager)
+    StashableAllocRegistrar(uint32_t poolId, DeviceAllocationStash& manager)
         : manager_(manager)
         , poolId_(poolId)
     {}
@@ -119,7 +123,7 @@ public:
 
 private:
     DeviceAllocationStash& manager_;
-    size_t poolId_;
+    uint32_t poolId_;
 
 };
 

@@ -55,9 +55,9 @@ namespace Memory {
 //    can be surgical.  Just keep in mind that the function below either
 //    needs to be re-written entirely, or carefully gone through to make
 //    sure nothing remains that relies on simplifying assumptions.
-void DeviceAllocationStash::PartitionData(size_t maxResidentMB)
+void DeviceAllocationStash::PartitionData(size_t maxResidentMiB)
 {
-    const size_t maxBytesResident = maxResidentMB*(1<<20);
+    const size_t maxBytesResident = maxResidentMiB*(1<<20);
     // TODO this locking dance can be a single line in C++17...
     // std::scoped_lock sl(uploadMutex_, downloadMutex_, mutateMutex_);
     std::lock(uploadMutex_, downloadMutex_, mutateMutex_);
@@ -70,9 +70,10 @@ void DeviceAllocationStash::PartitionData(size_t maxResidentMB)
     // function a second time with a new value.
     for (auto& kvSizeData : stationaryData_)
     {
+        auto& destPoolMap = mobileData_[kvSizeData.first];
         for (auto& kvPoolVec : kvSizeData.second)
         {
-            auto& dest = mobileData_[kvSizeData.first][kvPoolVec.first];
+            auto& dest = destPoolMap[kvPoolVec.first];
             dest.insert(dest.end(),
                         std::make_move_iterator(kvPoolVec.second.begin()),
                         std::make_move_iterator(kvPoolVec.second.end()));
@@ -141,7 +142,7 @@ void DeviceAllocationStash::PartitionData(size_t maxResidentMB)
     eraseEmpty(mobileData_);
 }
 
-void DeviceAllocationStash::Register(size_t poolId, Allocation alloc)
+void DeviceAllocationStash::Register(uint32_t poolId, Allocation alloc)
 {
     // TODO this locking dance can be a single line in C++17...
     // std::scoped_lock sl(uploadMutex_, downloadMutex_, mutateMutex_);
@@ -151,12 +152,12 @@ void DeviceAllocationStash::Register(size_t poolId, Allocation alloc)
     std::lock_guard<std::mutex> lm3(mutateMutex_, std::adopt_lock);
 
     poolsSeen_.insert(poolId);
-    auto& batchMap = mobileData_[alloc.lock()->size()];
-    auto& allocList = batchMap[poolId];
+    auto& poolMap = mobileData_[alloc.lock()->size()];
+    auto& allocList = poolMap[poolId];
     allocList.emplace_back(alloc);
 }
 
-void DeviceAllocationStash::RetrievePool(size_t poolId)
+void DeviceAllocationStash::RetrievePool(uint32_t poolId)
 {
     std::lock_guard<std::mutex> lm(uploadMutex_);
 
@@ -164,18 +165,20 @@ void DeviceAllocationStash::RetrievePool(size_t poolId)
     // zero work, but we still need to ensure the data
     // ends up on the GPU since someone else might have
     // manually downloaded it for whatever reason...
-    for (auto& batchMap : stationaryData_)
+    for (const auto& poolMap : stationaryData_)
     {
-        for (const auto& val: batchMap.second[poolId])
+        if (poolMap.second.count(poolId) == 0) continue;
+        for (const auto& val : poolMap.second.at(poolId))
         {
             auto alloc = val.lock();
             alloc->Retrieve();
         }
     }
 
-    for (auto& batchMap : mobileData_)
+    for (const auto& poolMap : mobileData_)
     {
-        for (const auto& val: batchMap.second[poolId])
+        if (poolMap.second.count(poolId) == 0) continue;
+        for (const auto& val : poolMap.second.at(poolId))
         {
             auto alloc = val.lock();
             alloc->Retrieve();
@@ -183,13 +186,14 @@ void DeviceAllocationStash::RetrievePool(size_t poolId)
     }
 }
 
-void DeviceAllocationStash::StashPool(size_t poolId)
+void DeviceAllocationStash::StashPool(uint32_t poolId)
 {
     std::lock_guard<std::mutex> lm(downloadMutex_);
 
-    for (auto& batchMap : mobileData_)
+    for (const auto& poolMap : mobileData_)
     {
-        for (const auto& val : batchMap.second[poolId])
+        if (poolMap.second.count(poolId) == 0) continue;
+        for (const auto& val : poolMap.second.at(poolId))
         {
             auto alloc = val.lock();
             alloc->Stash();

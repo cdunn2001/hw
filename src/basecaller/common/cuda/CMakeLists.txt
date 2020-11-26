@@ -5,8 +5,6 @@ set(CPP_LIST
     CudaFunctionDecorators.h
     DisableBoostOnDevice.h
     PBCudaSimd.h
-    PBCudaSimd.cu
-    PBCudaSimd.cuh
     PBCudaRuntime.h
     PBCudaRuntime.cpp
     # PBCudaRuntimeNoCuda.cpp
@@ -30,6 +28,8 @@ set(CPP_LIST
 )
 
 set(CUDA_LIST
+    PBCudaSimd.cu
+    PBCudaSimd.cuh
     memory/AllocationViews.cuh
     memory/AllocationViews.cu
     memory/DeviceOnlyArray.cuh

@@ -58,7 +58,7 @@ void ResetStreamErrors();
 size_t StreamErrorCount();
 
 // Virtual API that serves as the basis for the StreamMonitor concept
-// It is used a an automation and error checking class to make sure
+// It is used as an automation and error checking class to make sure
 // we don't have synchronization errors between host and gpu code,
 // where we do something like delete/overwrite data actively in use
 // on the card.
