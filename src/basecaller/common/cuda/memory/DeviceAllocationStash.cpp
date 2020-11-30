@@ -167,8 +167,10 @@ void DeviceAllocationStash::RetrievePool(uint32_t poolId)
     // manually downloaded it for whatever reason...
     for (const auto& poolMap : stationaryData_)
     {
-        if (poolMap.second.count(poolId) == 0) continue;
-        for (const auto& val : poolMap.second.at(poolId))
+        auto itr = poolMap.second.find(poolId);
+        if (itr == poolMap.second.cend()) continue;
+
+        for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
             alloc->Retrieve();
@@ -177,8 +179,10 @@ void DeviceAllocationStash::RetrievePool(uint32_t poolId)
 
     for (const auto& poolMap : mobileData_)
     {
-        if (poolMap.second.count(poolId) == 0) continue;
-        for (const auto& val : poolMap.second.at(poolId))
+        auto itr = poolMap.second.find(poolId);
+        if (itr == poolMap.second.cend()) continue;
+
+        for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
             alloc->Retrieve();
@@ -192,8 +196,10 @@ void DeviceAllocationStash::StashPool(uint32_t poolId)
 
     for (const auto& poolMap : mobileData_)
     {
-        if (poolMap.second.count(poolId) == 0) continue;
-        for (const auto& val : poolMap.second.at(poolId))
+        auto itr = poolMap.second.find(poolId);
+        if (itr == poolMap.second.cend()) continue;
+
+        for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
             alloc->Stash();

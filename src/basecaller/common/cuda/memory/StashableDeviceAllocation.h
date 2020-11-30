@@ -104,9 +104,9 @@ public:
     // to call if the data is already on the GPU
     void Retrieve()
     {
-        if (size_ == 0) return;
         assert(mutex_);
         std::lock_guard<std::mutex> lm(*mutex_);
+        if (size_ == 0) return;
 
         if (!device_)
             device_ = GetGlobalAllocator().GetDeviceAllocation(size_, marker_);
@@ -125,14 +125,14 @@ public:
     // to call if data is already on the host.
     void Stash()
     {
+        assert(mutex_);
+        std::lock_guard<std::mutex> lm(*mutex_);
+
         // Extra short-circuit, because it's not going to make sense to
         // go straight from NO_ALLOC to HOST.  The memory is only visable
         // and usable on the gpu, so that means if we allowed the copy we'd
         // just be shuffling around uninitialized bits
         if (size_ == 0 || state_ == NO_ALLOC) return;
-
-        assert(mutex_);
-        std::lock_guard<std::mutex> lm(*mutex_);
 
         if (!host_)
             host_ = GetGlobalAllocator().GetAllocation(size_, marker_);
