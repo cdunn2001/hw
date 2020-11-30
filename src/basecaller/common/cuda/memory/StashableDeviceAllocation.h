@@ -61,30 +61,42 @@ public:
                               const AllocationMarker& marker,
                               std::unique_ptr<StreamMonitorBase> monitor)
         : monitor_(std::move(monitor))
-        , mutex_(std::make_unique<std::mutex>())
         , size_(size)
         , marker_(marker)
         , state_(NO_ALLOC)
     {}
 
     StashableDeviceAllocation(const StashableDeviceAllocation&) = delete;
-    StashableDeviceAllocation(StashableDeviceAllocation&& o)
+private:
+    // Private ctor, to help with the fact that when move constructing,
+    // we have to somehow lock the mutex in the other object before we
+    // can actually do anything.
+    StashableDeviceAllocation(StashableDeviceAllocation&& o,
+                              std::lock_guard<std::mutex>&&)
         : device_(std::move(o.device_))
         , host_(std::move(o.host_))
         , monitor_(std::move(o.monitor_))
-        , mutex_(std::move(o.mutex_))
         , size_(std::exchange(o.size_, 0))
         , marker_(std::exchange(o.marker_, AllocationMarker{""}))
         , state_(std::exchange(o.state_, NO_ALLOC))
+    {}
+public:
+    StashableDeviceAllocation(StashableDeviceAllocation&& o)
+        : StashableDeviceAllocation(std::move(o), std::lock_guard<std::mutex>{o.mutex_})
     {}
 
     StashableDeviceAllocation& operator=(const StashableDeviceAllocation&) = delete;
     StashableDeviceAllocation& operator=(StashableDeviceAllocation&& o)
     {
+        // TODO this locking dance can be a single line in C++17...
+        // std::scoped_lock sl(mutex_, o.mutex_);
+        std::lock(mutex_, o.mutex_);
+        std::lock_guard<std::mutex> lm1(mutex_, std::adopt_lock);
+        std::lock_guard<std::mutex> lm2(o.mutex_, std::adopt_lock);
+
         device_  = std::move(o.device_);
         host_    = std::move(o.host_);
         monitor_ = std::move(o.monitor_);
-        mutex_   = std::move(o.mutex_);
         size_    = std::exchange(o.size_, 0);
         marker_  = std::exchange(o.marker_, AllocationMarker{""});
         state_   = std::exchange(o.state_, NO_ALLOC);
@@ -104,8 +116,7 @@ public:
     // to call if the data is already on the GPU
     void Retrieve()
     {
-        assert(mutex_);
-        std::lock_guard<std::mutex> lm(*mutex_);
+        std::lock_guard<std::mutex> lm(mutex_);
         if (size_ == 0) return;
 
         if (!device_)
@@ -125,8 +136,7 @@ public:
     // to call if data is already on the host.
     void Stash()
     {
-        assert(mutex_);
-        std::lock_guard<std::mutex> lm(*mutex_);
+        std::lock_guard<std::mutex> lm(mutex_);
 
         // Extra short-circuit, because it's not going to make sense to
         // go straight from NO_ALLOC to HOST.  The memory is only visable
@@ -177,7 +187,7 @@ private:
     SmartDeviceAllocation device_;
     PacBio::Memory::SmartAllocation host_;
     std::unique_ptr<StreamMonitorBase> monitor_;
-    std::unique_ptr<std::mutex> mutex_;
+    std::mutex mutex_;
 
     size_t size_;
     Memory::AllocationMarker marker_;
