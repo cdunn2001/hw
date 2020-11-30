@@ -32,6 +32,7 @@
 #include <memory>
 
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/BatchResult.h>
@@ -58,7 +59,8 @@ public:
 public:     // Structors & assignment operators
     BatchAnalyzer(uint32_t poolId,
                   const Data::BatchDimensions& dims,
-                  const AlgoFactory& algoFac);
+                  const AlgoFactory& algoFac,
+                  Cuda::Memory::DeviceAllocationStash& stash);
 
     BatchAnalyzer(const BatchAnalyzer&) = delete;
     BatchAnalyzer(BatchAnalyzer&&) = default;
@@ -103,7 +105,8 @@ class SingleEstimateBatchAnalyzer : public BatchAnalyzer
 public:
     SingleEstimateBatchAnalyzer(uint32_t poolId,
                                 const Data::BatchDimensions& dims,
-                                const AlgoFactory& algoFac);
+                                const AlgoFactory& algoFac,
+                                Cuda::Memory::DeviceAllocationStash& stash);
 
     SingleEstimateBatchAnalyzer(const SingleEstimateBatchAnalyzer&) = delete;
     SingleEstimateBatchAnalyzer(SingleEstimateBatchAnalyzer&&) = default;
@@ -132,7 +135,8 @@ public:
                             const Data::BatchDimensions& dims,
                             const Data::StaticDetModelConfig& staticDetModelConfig,
                             const Data::MovieConfig& movieConfig,
-                            const AlgoFactory& algoFac);
+                            const AlgoFactory& algoFac,
+                            Cuda::Memory::DeviceAllocationStash& stash);
 
     FixedModelBatchAnalyzer(const FixedModelBatchAnalyzer&) = delete;
     FixedModelBatchAnalyzer(FixedModelBatchAnalyzer&&) = default;
@@ -155,7 +159,8 @@ public:
                                  uint32_t maxPoolId,
                                  const Data::BatchDimensions& dims,
                                  const Data::BasecallerDmeConfig& dmeConfig,
-                                 const AlgoFactory& algoFac);
+                                 const AlgoFactory& algoFac,
+                                 Cuda::Memory::DeviceAllocationStash& stash);
 
     DynamicEstimateBatchAnalyzer(const DynamicEstimateBatchAnalyzer&) = delete;
     DynamicEstimateBatchAnalyzer(DynamicEstimateBatchAnalyzer&&) = default;

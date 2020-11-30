@@ -30,6 +30,8 @@
 
 #include <common/cuda/streams/LaunchManager.cuh>
 
+using namespace PacBio::Cuda;
+using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
 using namespace PacBio::Mongo::Data;
@@ -175,7 +177,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
-                                   Memory::DeviceView<Cuda::Utility::CudaArray<float, laneSize>> viterbiScoreCache)
+                                   Memory::DeviceView<CudaArray<float, laneSize>> viterbiScore)
 {
     // When/if this changes, some of this kernel is going to have to be udpated or generalized
     static_assert(Subframe::numStates == 13,
@@ -301,8 +303,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     }
 
     // Now that we have an anchor state, save the associated viterbi score
-    viterbiScoreCache[blockIdx.x][2 * threadIdx.x]     = anchorLogLike[anchorState.X()].FloatX();
-    viterbiScoreCache[blockIdx.x][2 * threadIdx.x + 1] = anchorLogLike[anchorState.Y()].FloatY();
+    viterbiScore[blockIdx.x][2 * threadIdx.x]     = anchorLogLike[anchorState.X()].FloatX();
+    viterbiScore[blockIdx.x][2 * threadIdx.x + 1] = anchorLogLike[anchorState.Y()].FloatY();
 
     // Traceback
     auto traceState = anchorState;
@@ -349,8 +351,8 @@ static BatchDimensions LatBatchDims(size_t lanesPerPool)
     return ret;
 }
 
-FrameLabeler::FrameLabeler(size_t lanesPerPool)
-    : latent_(SOURCE_MARKER(), lanesPerPool)
+FrameLabeler::FrameLabeler(size_t lanesPerPool, StashableAllocRegistrar* registrar)
+    : latent_(registrar, SOURCE_MARKER(), lanesPerPool)
     , prevLat_(LatBatchDims(lanesPerPool), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
 {
     PBLauncher(InitLatent, lanesPerPool, BlockThreads)(prevLat_);
@@ -375,7 +377,7 @@ void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParamete
              output,
              metricsOutput.viterbiScore);
 
-    Cuda::CudaSynchronizeDefaultStream();
+    CudaSynchronizeDefaultStream();
     std::swap(prevLat_, latOut);
 }
 

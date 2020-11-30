@@ -349,7 +349,10 @@ private:
     std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims) const
     {
-        return std::make_unique<BasecallerBody>(poolDims, config_.algorithm, movieConfig_);
+        return std::make_unique<BasecallerBody>(poolDims,
+                                                config_.algorithm,
+                                                movieConfig_,
+                                                config_.system.maxPermGpuDataMB);
     }
 
     std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)

@@ -31,6 +31,8 @@ using std::make_unique;
 using std::ostringstream;
 using std::unique_ptr;
 
+using namespace PacBio::Cuda::Memory;
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -239,7 +241,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
 
 
 unique_ptr<Baseliner>
-AlgoFactory::CreateBaseliner(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreateBaseliner(unsigned int poolId,
+                             const Data::BatchDimensions& dims,
+                             StashableAllocRegistrar& registrar) const
 {
     // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
     // to represent both the baseliner method and param. When the GPU version
@@ -251,7 +255,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId, const Data::BatchDimensions& d
             return std::make_unique<HostNoOpBaseliner>(poolId);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch);
+            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch, &registrar);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
@@ -272,7 +276,9 @@ AlgoFactory::CreateBaseliner(unsigned int poolId, const Data::BatchDimensions& d
 }
 
 std::unique_ptr<FrameLabeler>
-AlgoFactory::CreateFrameLabeler(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreateFrameLabeler(unsigned int poolId,
+                                const Data::BatchDimensions& dims,
+                                StashableAllocRegistrar& registrar) const
 {
     switch (frameLabelerOpt_)
     {
@@ -280,7 +286,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId, const Data::BatchDimensions
         return std::make_unique<FrameLabeler>(poolId);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        return std::make_unique<DeviceSGCFrameLabeler>(poolId, dims.lanesPerBatch);
+        return std::make_unique<DeviceSGCFrameLabeler>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;
@@ -291,7 +297,8 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId, const Data::BatchDimensions
 }
 
 unique_ptr<TraceHistogramAccumulator>
-AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims,
+                                        StashableAllocRegistrar&) const
 {
     switch (histAccumOpt_)
     {
@@ -310,7 +317,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
 }
 
 std::unique_ptr<DetectionModelEstimator>
-AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
+                                           StashableAllocRegistrar&) const
 {
     switch (dmeOpt_)
     {
@@ -330,7 +338,9 @@ AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::Batc
 }
 
 std::unique_ptr<PulseAccumulator>
-AlgoFactory::CreatePulseAccumulator(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreatePulseAccumulator(unsigned int poolId,
+                                    const Data::BatchDimensions& dims,
+                                    StashableAllocRegistrar& registrar) const
 {
     switch (pulseAccumOpt_)
     {
@@ -344,7 +354,7 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId, const Data::BatchDimens
         return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
-        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch);
+        return std::make_unique<DevicePulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;
@@ -355,7 +365,9 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId, const Data::BatchDimens
 }
 
 std::unique_ptr<HFMetricsFilter>
-AlgoFactory::CreateHFMetricsFilter(unsigned int poolId, const Data::BatchDimensions& dims) const
+AlgoFactory::CreateHFMetricsFilter(unsigned int poolId,
+                                   const Data::BatchDimensions& dims,
+                                   StashableAllocRegistrar& registrar) const
 {
     switch (hfMetricsOpt_)
     {
@@ -366,7 +378,7 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId, const Data::BatchDimensi
         return std::make_unique<HostHFMetricsFilter>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        return std::make_unique<DeviceHFMetricsFilter>(poolId, dims.lanesPerBatch);
+        return std::make_unique<DeviceHFMetricsFilter>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;
