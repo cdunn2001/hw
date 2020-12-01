@@ -278,8 +278,9 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
 {
     static constexpr size_t blockThreads = laneSize / 2;
 public:
-    AccumImpl(size_t lanesPerPool)
-        : workingSegments_(SOURCE_MARKER(), lanesPerPool, LabelManager::BaselineLabel())
+    AccumImpl(size_t lanesPerPool, StashableAllocRegistrar* registrar)
+        : workingSegments_(registrar, SOURCE_MARKER(),
+                           lanesPerPool, LabelManager::BaselineLabel())
     {
     }
 
@@ -351,9 +352,12 @@ void DevicePulseAccumulator<LabelManager>::Finalize()
 }
 
 template <typename LabelManager>
-DevicePulseAccumulator<LabelManager>::DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool)
+DevicePulseAccumulator<LabelManager>::DevicePulseAccumulator(
+        uint32_t poolId,
+        uint32_t lanesPerPool,
+        StashableAllocRegistrar* registrar)
     : PulseAccumulator(poolId)
-    , impl_(std::make_unique<AccumImpl>(lanesPerPool))
+    , impl_(std::make_unique<AccumImpl>(lanesPerPool, registrar))
 {
 
 }

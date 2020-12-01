@@ -32,7 +32,6 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/MongoConstants.h>
 
 #include <dataTypes/BatchData.cuh>
@@ -226,7 +225,7 @@ public:
     static void Finalize();
 
 public:
-    FrameLabeler(size_t lanesPerPool);
+    FrameLabeler(size_t lanesPerPool, Memory::StashableAllocRegistrar* registrar= nullptr);
 
     FrameLabeler(const FrameLabeler&) = delete;
     FrameLabeler(FrameLabeler&&) = default;

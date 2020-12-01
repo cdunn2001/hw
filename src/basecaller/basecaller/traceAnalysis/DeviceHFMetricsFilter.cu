@@ -42,6 +42,7 @@
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Mongo::Data;
+using namespace PacBio::Cuda::Memory;
 
 namespace PacBio {
 namespace Mongo {
@@ -240,7 +241,7 @@ __device__ uint16_t traverseCart(const FeaturesT& features)
 // Necessary evil: we don't construct a new DeviceOnlyArray for each hfmetric
 // block, but rather re-initialize
 __global__ void InitializeMetrics(
-        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
+        DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
         bool initialize)
 {
     // Some members aren't accumulators, and don't need initialization. They
@@ -373,13 +374,13 @@ __device__ void processPulse(
 
 
 __global__ void ProcessChunk(
-        const Cuda::Memory::DeviceView<const DeviceHFMetricsFilter::BaselinerStatsT> baselinerStats,
-        const Cuda::Memory::DeviceView<const Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>> models,
+        const DeviceView<const DeviceHFMetricsFilter::BaselinerStatsT> baselinerStats,
+        const DeviceView<const Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>> models,
         const Data::GpuBatchVectors<const Data::Pulse> pulses,
-        const Cuda::Memory::DeviceView<const PacBio::Cuda::Utility::CudaArray<float, laneSize>> flMetrics,
-        const Cuda::Memory::DeviceView<const PacBio::Mongo::StatAccumState> pdMetrics,
+        const DeviceView<const PacBio::Cuda::Utility::CudaArray<float, laneSize>> flMetrics,
+        const DeviceView<const PacBio::Mongo::StatAccumState> pdMetrics,
         uint32_t numFrames,
-        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics)
+        DeviceView<BasecallingMetricsAccumulatorDevice> metrics)
 {
     auto& blockMetrics = metrics[blockIdx.x];
 
@@ -464,7 +465,7 @@ __global__ void ProcessChunk(
 __device__ PBShort2 labelBlock(
         const BasecallingMetricsAccumulatorDevice& blockMetrics,
         const BasecallingMetrics& outMetrics,
-        //const Cuda::Memory::DeviceView<const TrainedCartDevice> cartParams,
+        //const DeviceView<const TrainedCartDevice> cartParams,
         float frameRate)
 {
     using AnalogVals = Utility::CudaArray<PBHalf2, numAnalogs>;
@@ -580,8 +581,8 @@ __global__ void FinalizeMetrics(
         uint32_t autocorrAccumLag,
         bool realtimeActivityLabels,
         float frameRate,
-        Cuda::Memory::DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
-        Cuda::Memory::DeviceView<BasecallingMetrics> outBatchMetrics)
+        DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
+        DeviceView<BasecallingMetrics> outBatchMetrics)
 {
     auto& blockMetrics = metrics[blockIdx.x];
 
@@ -731,16 +732,16 @@ __global__ void FinalizeMetrics(
 class DeviceHFMetricsFilter::AccumImpl
 {
 public:
-    AccumImpl(size_t lanesPerPool)
-        : metrics_(SOURCE_MARKER(), lanesPerPool)
+    AccumImpl(size_t lanesPerPool, StashableAllocRegistrar* registrar)
+        : metrics_(registrar, SOURCE_MARKER(), lanesPerPool)
         , framesSeen_(0)
         , lanesPerBatch_(lanesPerPool)
     { };
 
-    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
+    std::unique_ptr<UnifiedCudaArray<Data::BasecallingMetrics>>
     Process(const Data::PulseBatch& pulseBatch,
             const Data::BaselinerMetrics& baselinerMetrics,
-            const Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>& models,
+            const UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>>& models,
             const Data::FrameLabelerMetrics& flMetrics,
             const Data::PulseDetectorMetrics& pdMetrics)
     {
@@ -781,14 +782,14 @@ public:
             return ret;
         }
         Cuda::CudaSynchronizeDefaultStream();
-        return std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>();
+        return std::unique_ptr<UnifiedCudaArray<Data::BasecallingMetrics>>();
     }
 
 private:
     static constexpr size_t threadsPerBlock_ = laneSize / 2;
 
 private:
-    Cuda::Memory::DeviceOnlyArray<BasecallingMetricsAccumulatorDevice> metrics_;
+    DeviceOnlyArray<BasecallingMetricsAccumulatorDevice> metrics_;
     uint32_t framesSeen_;
     uint32_t lanesPerBatch_;
     bool initialized_ = false;
@@ -798,16 +799,17 @@ private:
 constexpr size_t DeviceHFMetricsFilter::AccumImpl::threadsPerBlock_;
 
 DeviceHFMetricsFilter::DeviceHFMetricsFilter(uint32_t poolId,
-                                             uint32_t lanesPerPool)
+                                             uint32_t lanesPerPool,
+                                             StashableAllocRegistrar* registrar)
     : HFMetricsFilter(poolId)
-    , impl_(std::make_unique<AccumImpl>(lanesPerPool))
+    , impl_(std::make_unique<AccumImpl>(lanesPerPool, registrar))
 { };
 
-std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
+std::unique_ptr<UnifiedCudaArray<Data::BasecallingMetrics>>
 DeviceHFMetricsFilter::Process(
         const Data::PulseBatch& pulseBatch,
         const Data::BaselinerMetrics& baselinerMetrics,
-        const Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models,
+        const UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models,
         const Data::FrameLabelerMetrics& flMetrics,
         const Data::PulseDetectorMetrics& pdMetrics)
 {

@@ -30,6 +30,7 @@
 #define MONGO_BASECALLER_DEVICE_PULSE_ACCUMULATOR_H
 
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -47,7 +48,8 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool);
+    DevicePulseAccumulator(uint32_t poolId, uint32_t lanesPerPool,
+                           Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     ~DevicePulseAccumulator() override;
 

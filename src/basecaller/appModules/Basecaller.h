@@ -29,6 +29,7 @@
 #include <map>
 #include <vector>
 
+#include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/graphs/GraphNodeBody.h>
 
 #include <basecaller/analyzer/AlgoFactory.h>
@@ -48,8 +49,10 @@ class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::Tra
 public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
-                   const Mongo::Data::MovieConfig& movConfig)
-        : algoFactory_(algoConfig)
+                   const Mongo::Data::MovieConfig& movConfig,
+                   size_t maxPermGpuMemSize = std::numeric_limits<size_t>::max())
+        : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
+        , algoFactory_(algoConfig)
     {
         using namespace Mongo::Data;
 
@@ -77,15 +80,18 @@ public:
                 case BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations:
                     return std::make_unique<FixedModelBatchAnalyzer>(poolId, dims,
                                                                      algoConfig.staticDetModelConfig,
-                                                                     movConfig, algoFactory_);
+                                                                     movConfig, algoFactory_,
+                                                                     *gpuStash);
                 case BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations:
-                    return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_);
+                    return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_,
+                                                                         *gpuStash);
                 case BasecallerAlgorithmConfig::ModelEstimationMode::DynamicEstimations:
                     return std::make_unique<DynamicEstimateBatchAnalyzer>(poolId,
                                                                           maxPoolId,
                                                                           dims,
                                                                           algoConfig.dmeConfig,
-                                                                          algoFactory_);
+                                                                          algoFactory_,
+                                                                          *gpuStash);
                 default:
                     throw PBException("Unexpected model estimation mode: "
                                      + algoConfig.modelEstimationMode.toString());
@@ -94,6 +100,7 @@ public:
 
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
         }
+        gpuStash->PartitionData(maxPermGpuMemSize);
     }
 
     BasecallerBody(const BasecallerBody&) = delete;
@@ -112,10 +119,14 @@ public:
     Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatch<int16_t>& in) override
     {
         auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
-        return analyzer(std::move(in));
+        gpuStash->RetrievePool(in.GetMeta().PoolId());
+        auto ret = analyzer(std::move(in));
+        gpuStash->StashPool(in.GetMeta().PoolId());
+        return ret;
     }
 private:
 
+    std::unique_ptr<Cuda::Memory::DeviceAllocationStash> gpuStash;
     Mongo::Basecaller::AlgoFactory algoFactory_;
 
     // One analyzer for each pool. Key is pool id.

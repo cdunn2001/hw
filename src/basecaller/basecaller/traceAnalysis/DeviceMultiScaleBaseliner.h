@@ -31,6 +31,8 @@
 
 #include <stdint.h>
 
+#include <common/cuda/memory/DeviceAllocationStash.h>
+
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/TraceBatch.h>
@@ -81,7 +83,8 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool);
+    DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool,
+                              Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     ~DeviceMultiScaleBaseliner() override;
 

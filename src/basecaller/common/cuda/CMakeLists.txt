@@ -5,17 +5,19 @@ set(CPP_LIST
     CudaFunctionDecorators.h
     DisableBoostOnDevice.h
     PBCudaSimd.h
-    PBCudaSimd.cu
-    PBCudaSimd.cuh
     PBCudaRuntime.h
     PBCudaRuntime.cpp
     # PBCudaRuntimeNoCuda.cpp
     memory/AllocationViews.h
     memory/DataManagerKey.h
+    memory/DeviceAllocationStash.h
+    memory/DeviceAllocationStash.cpp
     memory/ManagedAllocations.h
     memory/ManagedAllocations.cpp
     memory/SmartDeviceAllocation.h
     memory/SmartDeviceAllocation.cpp
+    memory/StashableDeviceAllocation.h
+    memory/StashableDeviceAllocation.cpp
     memory/UnifiedCudaArray.h
     streams/CudaEvent.h
     streams/CudaEvent.cpp
@@ -26,6 +28,8 @@ set(CPP_LIST
 )
 
 set(CUDA_LIST
+    PBCudaSimd.cu
+    PBCudaSimd.cuh
     memory/AllocationViews.cuh
     memory/AllocationViews.cu
     memory/DeviceOnlyArray.cuh

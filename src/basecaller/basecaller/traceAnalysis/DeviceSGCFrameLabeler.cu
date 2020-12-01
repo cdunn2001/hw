@@ -61,9 +61,11 @@ void DeviceSGCFrameLabeler::Finalize()
     Cuda::FrameLabeler::Finalize();
 }
 
-DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId, uint32_t lanesPerPool)
+DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId,
+                                             uint32_t lanesPerPool,
+                                             StashableAllocRegistrar* registrar)
     : FrameLabeler(poolId)
-    , labeler_(std::make_unique<Cuda::FrameLabeler>(lanesPerPool))
+    , labeler_(std::make_unique<Cuda::FrameLabeler>(lanesPerPool, registrar))
 {}
 
 DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;

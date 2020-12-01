@@ -53,6 +53,7 @@
 #include "AlgoFactory.h"
 
 using namespace PacBio::Mongo::Data;
+using namespace PacBio::Cuda::Memory;
 
 namespace PacBio {
 namespace Mongo {
@@ -85,24 +86,28 @@ BatchAnalyzer::~BatchAnalyzer() = default;
 
 BatchAnalyzer::BatchAnalyzer(uint32_t poolId,
                              const Data::BatchDimensions& dims,
-                             const AlgoFactory& algoFac)
+                             const AlgoFactory& algoFac,
+                             DeviceAllocationStash& stash)
     : models_(dims.lanesPerBatch ,
               Cuda::Memory::SyncDirection::HostWriteDeviceRead,
               SOURCE_MARKER())
     , poolId_ (poolId)
 {
-    baseliner_ = algoFac.CreateBaseliner(poolId, dims);
-    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, dims);
-    dme_ = algoFac.CreateDetectionModelEstimator(poolId, dims);
-    frameLabeler_ = algoFac.CreateFrameLabeler(poolId, dims);
-    pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId, dims);
-    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId, dims);
+    Cuda::Memory::StashableAllocRegistrar registrar(poolId, stash);
+
+    baseliner_ = algoFac.CreateBaseliner(poolId, dims, registrar);
+    traceHistAccum_ = algoFac.CreateTraceHistAccumulator(poolId, dims, registrar);
+    dme_ = algoFac.CreateDetectionModelEstimator(poolId, dims, registrar);
+    frameLabeler_ = algoFac.CreateFrameLabeler(poolId, dims, registrar);
+    pulseAccumulator_ = algoFac.CreatePulseAccumulator(poolId, dims, registrar);
+    hfMetrics_ = algoFac.CreateHFMetricsFilter(poolId, dims, registrar);
 }
 
 SingleEstimateBatchAnalyzer::SingleEstimateBatchAnalyzer(uint32_t poolId,
                                                          const Data::BatchDimensions& dims,
-                                                         const AlgoFactory& algoFac)
-    : BatchAnalyzer(poolId, dims, algoFac)
+                                                         const AlgoFactory& algoFac,
+                                                         DeviceAllocationStash& stash)
+    : BatchAnalyzer(poolId, dims, algoFac, stash)
 {
 }
 
@@ -110,8 +115,9 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
                                                            uint32_t maxPoolId,
                                                            const Data::BatchDimensions& dims,
                                                            const Data::BasecallerDmeConfig& dmeConfig,
-                                                           const AlgoFactory& algoFac)
-    : BatchAnalyzer(poolId, dims, algoFac)
+                                                           const AlgoFactory& algoFac,
+                                                           DeviceAllocationStash& stash)
+    : BatchAnalyzer(poolId, dims, algoFac, stash)
 {
     // Set up a stagger pattern, such that we always estimate at the requested
     // interval, but estimates for individual batches are spread out evenly
@@ -131,8 +137,9 @@ FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
                                                  const Data::BatchDimensions& dims,
                                                  const Data::StaticDetModelConfig& staticDetModelConfig,
                                                  const Data::MovieConfig& movieConfig,
-                                                 const AlgoFactory& algoFac)
-    : BatchAnalyzer(poolId, dims, algoFac)
+                                                 const AlgoFactory& algoFac,
+                                                 DeviceAllocationStash& stash)
+    : BatchAnalyzer(poolId, dims, algoFac, stash)
 {
     // Not running DME, need to fake our model
     Data::LaneModelParameters<Cuda::PBHalf, laneSize> model;
