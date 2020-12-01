@@ -1,6 +1,5 @@
 # This exports 3 basic targets
 #  libBazio - all library code and dependencies of that code
-#  libSequelCommon - all library code and dependencies of that code
 #  libSequelCommon1 - just library code, no dependencies
 
 cmake_minimum_required (VERSION 3.13)
@@ -100,9 +99,6 @@ target_link_libraries(libBazio
         libJsoncpp
         libHalf
 )
-
-# libSequelCommon1 does not include dependencies. Use libSequelCommon if you want the dependencies automatically linked
-# in.
 
 add_library( libSequelCommon1
   STATIC

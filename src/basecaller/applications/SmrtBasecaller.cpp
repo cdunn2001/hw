@@ -595,7 +595,7 @@ private:
         auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
         if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
         {
-            TransmitConfig config(dsr->GetChipClass());
+            TransmitConfig config(dsr->GetPlatform());
             config.condensed = true;
             config.frames = frames_; // total number of frames to transmit
             config.limitFileFrames = 512; // loop in coproc memory.
