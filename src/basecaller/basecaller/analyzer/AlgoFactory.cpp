@@ -33,8 +33,9 @@
 #include "basecaller/traceAnalysis/BaselineStatsAggregatorDevice.h"
 #include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
 #include <basecaller/traceAnalysis/CoreDMEstimator.h>
-#include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DmeEmDevice.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
@@ -218,6 +219,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
         break;
+    case Data::BasecallerDmeConfig::MethodName::EmDevice:
+        DmeEmDevice::Configure(bcConfig.dmeConfig, movConfig);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for CoreDMEstimator: "
@@ -393,6 +397,9 @@ AlgoFactory::CreateCoreDMEstimator(unsigned int poolId, const Data::BatchDimensi
 
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         return make_unique<DmeEmHost>(poolId, dims.lanesPerBatch);
+
+    case Data::BasecallerDmeConfig::MethodName::EmDevice:
+        return make_unique<DmeEmDevice>(poolId, dims.lanesPerBatch);
 
     default:
         ostringstream msg;

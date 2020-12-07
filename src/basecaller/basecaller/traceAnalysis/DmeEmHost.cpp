@@ -28,6 +28,7 @@
 //  Defines members of class DmeEmHost.
 
 #include "DmeEmHost.h"
+#include <common/StatAccumulator.h>
 
 #include <limits>
 #include <boost/numeric/conversion/cast.hpp>
@@ -581,13 +582,13 @@ DmeEmHost::Gtest(const UHistType& histogram, const LaneDetModelHost& model)
 }
 
 // static
-AlignedVector<typename DmeEmHost::FloatVec>
+Cuda::Utility::CudaArray<DmeEmHost::FloatVec, DmeEmHost::NUM_CONF_FACTORS>
 DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
                              const LaneDetModelHost& refModel,
                              const LaneDetModelHost& modelEst)
 {
     const auto mldx = dmeDx.mldx;
-    AlignedVector<FloatVec> cf (NUM_CONF_FACTORS);
+    Cuda::Utility::CudaArray<FloatVec, DmeEmHost::NUM_CONF_FACTORS> cf;
 
     // Check EM convergence.
     cf[CONVERGED] = Blend(mldx.converged, FloatVec(1), FloatVec(0));
@@ -687,6 +688,67 @@ void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
                                          baselineCovar));
     }
     // TODO: Should we update updated_?
+}
+
+DmeEmHost::PoolDetModel
+DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
+{
+    PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+
+    auto pdmHost = pdm.GetHostView();
+    const auto& blStatsHost = blStats.GetHostView();
+    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    {
+        InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
+    }
+
+    return pdm;
+}
+
+
+void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+                                 LaneDetModel& ldm) const
+{
+    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
+    using LaneArr = LaneArray<ElementType>;
+
+    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
+
+    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
+    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / LaneArr(blStats.fullAutocorrState.basicStats.moment0);
+
+    ldm.BaselineMode().means = blMean;
+    ldm.BaselineMode().vars = blVar;
+    ldm.BaselineMode().weights = blWeight;
+    assert(numAnalogs <= analogs_.size());
+    const auto refSignal = refSnr_ * sqrt(blVar);
+    const auto& aWeight = 0.25f * (1.0f - blWeight);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        auto& aMode = ldm.AnalogMode(a);
+        aMode.means = aMean;
+
+        // This noise model assumes that the trace data have been converted to
+        // photoelectron units.
+        aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
+
+        aMode.weights = aWeight;
+    }
+}
+
+
+// static
+LaneArray<float> DmeEmHost::ModelSignalCovar(
+        const Data::AnalogMode& analog,
+        const LaneArray<float>& signalMean,
+        const LaneArray<float>& baselineVar)
+{
+    LaneArray<float> r {baselineVar};
+    r += signalMean;
+    r += pow2(analog.excessNoiseCV * signalMean);
+    return r;
 }
 
 

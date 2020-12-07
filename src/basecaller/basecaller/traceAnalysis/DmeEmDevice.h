@@ -1,7 +1,7 @@
-#ifndef mongo_basecaller_traceAnalysis_DmeEmHost_H_
-#define mongo_basecaller_traceAnalysis_DmeEmHost_H_
+#ifndef mongo_basecaller_traceAnalysis_DmeEmDevice_H_
+#define mongo_basecaller_traceAnalysis_DmeEmDevice_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -29,10 +29,6 @@
 //  Description:
 //  Defines class DmeEmHost.
 
-#include <common/LaneArray.h>
-#include <dataTypes/DetectionModelHost.h>
-#include <dataTypes/UHistogramSimd.h>
-
 #include "CoreDMEstimator.h"
 #include "DmeDiagnostics.h"
 
@@ -40,17 +36,48 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+struct ZmwAnalogMode
+{
+    template <int low>
+    CUDA_ENABLED void Assign(const Data::LaneAnalogMode<Cuda::PBHalf2, 32>& mode, int idx)
+    {
+        mean = mode.means[idx].Get<low>();
+        var = mode.vars[idx].Get<low>();
+        weight = mode.weights[idx].Get<low>();
+    }
+
+    float mean;
+    float var;
+    float weight;
+};
+
+struct ZmwDetectionModel
+{
+    static constexpr int numAnalogs = 4;
+
+    template <int low>
+    CUDA_ENABLED void Assign(const Data::LaneModelParameters<Cuda::PBHalf2, 32>& model, int idx)
+    {
+        for (int i = 0; i < numAnalogs; ++i)
+        {
+            analogs[i].Assign<low>(model.AnalogMode(i), idx);
+        }
+        baseline.Assign<low>(model.BaselineMode(), idx);
+    }
+
+    Cuda::Utility::CudaArray<ZmwAnalogMode, numAnalogs> analogs;
+    ZmwAnalogMode baseline;
+
+    // BENTODO not sure this is appropriate.  This doesn't make it into the full model
+    float confidence = 0;
+};
+
 /// Implements DetectionModelEstimator using a Expectation-Maximization (EM)
 /// approach for model estimation that runs on the CPU (as opposed to the GPU).
-class DmeEmHost : public CoreDMEstimator
+class DmeEmDevice : public CoreDMEstimator
 {
 public:     // Types
-    using FloatVec = LaneArray<float>;
-    using IntVec = LaneArray<int>;
-    using BoolVec = LaneMask<>;
-    using CountVec = LaneArray<LaneHist::CountType>;
-    using UHistType = Data::UHistogramSimd<FloatVec, CountVec>;
-    using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
+    using LaneDetModel = Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>;
 
     enum ZmwStatus : uint16_t
     {
@@ -74,35 +101,21 @@ public:     // Static functions
                           const Data::MovieConfig &movConfig);
 
     // If mask[i], a[i] |= bits.
-    static void SetBits(const BoolVec& mask, int32_t bits, IntVec* a)
+    // BENTODO eliminate?  Create a bit vector?
+    __device__ static void SetBits(const bool mask, int32_t bits, int32_t* a)
     {
+        if (mask) *a |= bits;
         // TODO: There is probably a more efficient way to implement this.
-        const IntVec b = *a | IntVec(bits);
-        *a = Blend(mask, b, *a);
+        //const IntVec b = *a | IntVec(bits);
+        //*a = Blend(mask, b, *a);
     }
-
-    /// Updates *detModel by increasing the amplitude of all detection modes by
-    /// \a scale. Also updates all detection mode covariances according
-    /// to the standard noise model. Ratios of amplitudes among detection modes
-    /// and properties of the background mode are preserved.
-    static void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel);
 
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 
-    /// The variance for \analog signal based on model including Poisson and
-    /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
-                                             const LaneArray<float>& signalMean,
-                                             const LaneArray<float>& baselineVar);
-
-
-private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 public:
-    DmeEmHost(uint32_t poolId, unsigned int poolSize);
+    DmeEmDevice(uint32_t poolId, unsigned int poolSize);
 
 private:    // Types
-    using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
 
     enum ConfFactor
     {
@@ -121,44 +134,41 @@ private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
                       PoolDetModel* detModel) const override;
 
-private:    // Static data
-    static float analogMixFracThresh_;
-    static unsigned short emIterLimit_;
-    static float gTestFactor_;
-    static bool iterToLimit_;
-    static float pulseAmpRegCoeff_;
-    static float snrDropThresh_;
-    static float snrThresh0_, snrThresh1_;
-    static float successConfThresh_;
-
 private:    // Static functions
     // Compute a preliminary scaling factor based on a fractile statistic.
-    static FloatVec PrelimScaleFactor(const LaneDetModelHost& model,
-                                      const UHistType& hist);
+
+    __device__ static float PrelimScaleFactor(const ZmwDetectionModel& model,
+                                              const LaneHist& hist);
 
     // Apply a G-test significance test to assess goodness of fit of the model
     // to the trace histogram.
-    static GoodnessOfFitTest<FloatVec> Gtest(const UHistType& histogram,
-                                             const LaneDetModelHost& model);
+    __device__ static GoodnessOfFitTest<float> Gtest(const LaneHist& histogram,
+                                                     const ZmwDetectionModel& model);
 
     // Compute the confidence factors of a model estimate, given the
     // diagnostics of the estimation, a reference model.
-    static Cuda::Utility::CudaArray<FloatVec, NUM_CONF_FACTORS>
-    ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
-                      const LaneDetModelHost& refModel,
-                      const LaneDetModelHost& modelEst);
+    static Cuda::Utility::CudaArray<float, NUM_CONF_FACTORS>
+    __device__ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
+                                 const ZmwDetectionModel& refModel,
+                                 const ZmwDetectionModel& modelEst);
 
-private:    // Functions
+    // BENTODO rethink access
+public:    // Functions
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateLaneDetModel(const UHistType& hist,
-                              LaneDetModelHost* detModel) const;
+    __device__ static void EstimateLaneDetModel(const LaneHist& hist,
+                                         LaneDetModel* detModel);
+private:
 
 
-
+    /// Updates *detModel by increasing the amplitude of all detection modes by
+    /// \a scale. Also updates all detection mode covariances according
+    /// to the standard noise model. Ratios of amplitudes among detection modes
+    /// and properties of the background mode are preserved.
+    __device__ static void ScaleModelSnr(const float& scale, ZmwDetectionModel* detModel);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif // mongo_basecaller_traceAnalysis_DmeEmHost_H_
+#endif // mongo_basecaller_traceAnalysis_DmeEmDevice_H_

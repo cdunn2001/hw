@@ -32,6 +32,8 @@
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 
+#include <common/cuda/CudaFunctionDecorators.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -45,7 +47,7 @@ struct alignas(VF) MaxLikelihoodDiagnostics
     using VB = Simd::BoolConv<VF>;
     using VI = Simd::IndexConv<VF>;
 
-    MaxLikelihoodDiagnostics()
+    CUDA_ENABLED MaxLikelihoodDiagnostics()
         : converged     {false}
         , iterCount     {0}
         , degOfFreedom  {-1}
@@ -80,17 +82,27 @@ struct alignas(VF) MaxLikelihoodDiagnostics
     /// Set the \c converged flag for elements indicated by \a aConverged and
     /// and record the iteration count, log likehood, and delta log likelihood
     /// for those elements.
-    void Converged(const VB& aConverged,
+    CUDA_ENABLED void Converged(const VB& aConverged,
                    const unsigned int aIter,
                    const VF& aLogLike,
                    const VF& aDeltaLogLike,
                    const VF& aGoodnessOfFit = VF(0.0f))
     {
+#ifdef __CUDA_ARCH__
+        static_assert(std::is_same<float, VF>::value, "cuda only supports scalar MaxLikelihoodDiagnostics");
+        if (!aConverged) return;
+        if (!converged) iterCount = aIter;
+        logLike = aLogLike;
+        deltaLogLike = aDeltaLogLike;
+        goodnessOfFit = aGoodnessOfFit;
+        converged |= aConverged;
+#else
         iterCount = Blend(aConverged & !converged, VI(aIter), iterCount);
         logLike = Blend(aConverged, aLogLike, logLike);
         deltaLogLike = Blend(aConverged, aDeltaLogLike, deltaLogLike);
         goodnessOfFit = Blend(aConverged, aGoodnessOfFit, goodnessOfFit);
         converged |= aConverged;
+#endif
     }
 
     /// Update the log likelihood and delta log likelihood for any element where

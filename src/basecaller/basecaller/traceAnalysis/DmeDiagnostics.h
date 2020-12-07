@@ -36,6 +36,7 @@
 //#include <common/AlignedNew.h>
 #include <common/AlignedVector.h>
 #include <common/simd/SimdTypeTraits.h>
+#include <common/cuda/utility/CudaArray.h>
 
 #include "MaxLikelihoodDiagnostics.h"
 
@@ -63,7 +64,7 @@ struct alignas(VF) GoodnessOfFitTest
 /// detection model parameters (a.k.a. DME).
 /// \tparam VF SIMD floating-point type.
 template <typename VF>
-struct alignas(VF) DmeDiagnostics
+struct alignas(VF) alignas(8) DmeDiagnostics
 {
 public:     // Types
     using FloatVec = VF;
@@ -73,7 +74,9 @@ public:     // Static constants
 
 public: // Data
     /// Factors of estimation confidence. Each element should in [0, 1].
-    AlignedVector<VF> confidFactors;
+    // BENTODO fix hardcode length
+    // BENTODO fix initialization
+    Cuda::Utility::CudaArray<VF, 8> confidFactors;
 
     /// Indicate frame range that produced the model for a given zmw.
     /// Vectorized since older models get carried forward if estimation for
@@ -98,9 +101,10 @@ public: // Data
     GoodnessOfFitTest<VF> gTest {0.0f, 0.0f, 1.0f};
 
 public:     // Structors
-    DmeDiagnostics()
+    CUDA_ENABLED DmeDiagnostics()
     {
-        assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
+        // BENTODO restore
+        //assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
     }
 
 public:     // Const functions

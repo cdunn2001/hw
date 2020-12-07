@@ -51,15 +51,17 @@ class AnalogMode
 {
 public: // Structors
 
-    AnalogMode()
-        : baseLabel(' ')
-        , relAmplitude(0.0f)
-        , excessNoiseCV(0.0f)
-        , interPulseDistance(0.0f)
-        , pulseWidth(0.0f)
-        , pw2SlowStepRatio(0.0f)
-        , ipd2SlowStepRatio(0.0f)
-    { }
+    // BENTODO
+    AnalogMode() = default;
+    //AnalogMode()
+    //    : baseLabel(' ')
+    //    , relAmplitude(0.0f)
+    //    , excessNoiseCV(0.0f)
+    //    , interPulseDistance(0.0f)
+    //    , pulseWidth(0.0f)
+    //    , pw2SlowStepRatio(0.0f)
+    //    , ipd2SlowStepRatio(0.0f)
+    //{ }
 
     AnalogMode(const AnalogMode& a) = default;
 

@@ -36,7 +36,6 @@
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
-#include <common/LaneArray.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -61,19 +60,17 @@ public:     // Static functions
     static const Data::AnalogMode& Analog(unsigned int i)
     { return analogs_[i]; }
 
-    /// The variance for \analog signal based on model including Poisson and
-    /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
-                                             const LaneArray<float>& signalMean,
-                                             const LaneArray<float>& baselineVar);
-
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
 
 public:     // Functions
     /// Initialize detection models based soley on baseline variance and
     /// reference SNR.
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const;
+    virtual PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const
+    {
+        // BENTODO I broke this
+        throw PBException("Implement me");
+    };
 
     /// Estimate detection model parameters based on existing values and
     /// trace histogram.
@@ -91,7 +88,8 @@ public:     // Functions
 protected:
     static PacBio::Logging::PBLogger logger_;
 
-private:    // Static data
+    // BENTOTO this was relaxed
+protected:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
     static bool fixedBaselineParams_;
@@ -108,9 +106,6 @@ private:    // Customization functions
         // Do nothing.
         // Derived implementation class should update detModel.
     }
-
-private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 };
 
 
