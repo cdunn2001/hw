@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,28 +24,29 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_BasecallerConfig_fwd_H_
-#define mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#ifndef mongo_basecaller_analyzer_AnalysisProfiler_H_
+#define mongo_basecaller_analyzer_AnalysisProfiler_H_
+
+#include <pacbio/dev/profile/ScopedProfilerChain.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-class BasecallerAlgorithmConfig;
-class BasecallerBaselinerConfig;
-class BasecallerFrameLabelerConfig;
-class BasecallerMetricsConfig;
-class BasecallerPulseAccumConfig;
-class BasecallerTraceHistogramConfig;
-class BasecallerSignalRangeEstimatorConfig;
-class BasecallerDmeConfig;
-class BatchLayoutConfig;
-class MovieConfig;
-class SmrtBasecallerConfig;
-class StaticDetModelConfig;
-class SystemsConfig;
+SMART_ENUM(
+    AnalysisStages,
+    Upload,
+    Download,
+    Baseline,
+    Histogram,
+    DME,
+    FrameLabeling,
+    PulseAccumulating,
+    Metrics
+);
 
-}}}     // namespace PacBio::Mongo::Data
+using AnalysisProfiler = PacBio::Dev::Profile::ScopedProfilerChain<AnalysisStages>;
 
+}}}
 
-#endif // mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#endif //mongo_basecaller_analyzer_AnalysisProfiler_H_

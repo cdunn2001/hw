@@ -85,7 +85,6 @@ protected:
     std::unique_ptr<Baseliner> baseliner_;
     std::unique_ptr<FrameLabeler> frameLabeler_;
     std::unique_ptr<PulseAccumulator> pulseAccumulator_;
-    std::unique_ptr<TraceHistogramAccumulator> traceHistAccum_;
     std::unique_ptr<DetectionModelEstimator> dme_;
     std::unique_ptr<HFMetricsFilter> hfMetrics_;
 
@@ -172,16 +171,8 @@ public:
 
     OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
 private:
-    enum class PoolStatus
-    {
-        STARTUP_DME_DELAY,  // Baseliner startup + DME delay
-        STARTUP_DME_INIT,   // Histogram trace + inital DME
-        SEQUENCING,         // Producing potentially useful results
-        STOPPED,            // Pool stopped for throughput limits.
-        ERROR               // Something went very wrong.
-    };
-    PoolStatus poolStatus_ {PoolStatus::STARTUP_DME_DELAY};
     uint32_t poolDmeDelayFrames_;
+    bool fullEstimationOccured_ {false};
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

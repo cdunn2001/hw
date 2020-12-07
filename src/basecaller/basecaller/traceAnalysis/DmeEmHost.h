@@ -33,7 +33,7 @@
 #include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 
-#include "DetectionModelEstimator.h"
+#include "CoreDMEstimator.h"
 #include "DmeDiagnostics.h"
 
 namespace PacBio {
@@ -42,7 +42,7 @@ namespace Basecaller {
 
 /// Implements DetectionModelEstimator using a Expectation-Maximization (EM)
 /// approach for model estimation that runs on the CPU (as opposed to the GPU).
-class DmeEmHost : public DetectionModelEstimator
+class DmeEmHost : public CoreDMEstimator
 {
 public:     // Types
     using FloatVec = LaneArray<float>;

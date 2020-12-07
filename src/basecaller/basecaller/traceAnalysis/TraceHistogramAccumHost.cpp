@@ -1,5 +1,5 @@
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -40,93 +40,31 @@ namespace Basecaller {
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
-    , stats_(poolSize)
-    , poolHist_ (poolId, poolSize)
-    , poolTraceStats_ (poolSize, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER())
+    , poolHist_ (poolId, poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead)
 { }
 
-void TraceHistogramAccumHost::ResetImpl()
+void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
 {
-    isHistInitialized_ = false;
-    const auto numLanes = stats_.size();
-    stats_.clear();
-    stats_.resize(numLanes);
-}
-
-void TraceHistogramAccumHost::ClearImpl()
-{
-    const auto numLanes = stats_.size();
+    constexpr unsigned int numBins = LaneHistType::numBins;
+    using Arr = LaneArray<TraceHistogramAccumHost::HistDataType, laneSize>;
     hist_.clear();
-    hist_.reserve(numLanes);
-    for(unsigned int lane = 0; lane < numLanes; lane++)
+    auto view = bounds.GetHostView();
+    for (size_t i = 0; i < view.Size(); ++i)
     {
-        InitHistogram(lane);
+        hist_.emplace_back(numBins, Arr(view[i].lowerBounds), Arr(view[i].upperBounds));
     }
-
-    stats_.clear();
-    stats_.resize(numLanes);
-    isHistInitialized_ = true;
 }
 
-void TraceHistogramAccumHost::AddBatchImpl(
-        const Data::TraceBatch<TraceElementType>& traces,
-        const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
+void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces)
 {
-    // TODO: Can some of this logic be lifted into the base class's AddBatch
-    // method (template method pattern)?
-
     const auto numLanes = traces.LanesPerBatch();
 
-    // Have we accumulated enough data for baseline statistics, which are
-    // needed to initialize the histograms?
-    const bool doInitHist = !isHistInitialized_
-            && FramesAdded() + traces.NumFrames() >= NumFramesPreAccumStats();
-    if (doInitHist)
-    {
-        Clear();
-    }
-
     // For each lane/block in the batch ...
-    const auto& statsView = stats.GetHostView();
     tbb::parallel_for((size_t){0}, numLanes, [&](size_t lane)
     {
-        // Accumulate baseliner stats.
-        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
-        if (isHistInitialized_) AddBlock(traces, lane);
+        AddBlock(traces, lane);
     });
-
-    if (isHistInitialized_) histFrameCount_ += traces.NumFrames();
 }
-
-
-void TraceHistogramAccumHost::InitHistogram(unsigned int lane)
-{
-    assert (hist_.size() == lane);
-
-    // Number of bins in the histogram is a compile-time constant!
-    constexpr unsigned int numBins = LaneHistType::numBins;
-
-    // Determine histogram parameters.
-    const auto& laneBlStats = stats_[lane].BaselineFramesStats();
-
-    const auto& blCount = laneBlStats.Count();
-    const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
-    const auto& blMean = Blend(sufficientData,
-                               laneBlStats.Mean(),
-                               LaneArray<float>(0.0f));
-    const auto& blSigma = Blend(sufficientData,
-                                sqrt(laneBlStats.Variance()),
-                                LaneArray<float>(FallBackBaselineSigma()));
-
-    const auto binSize = BinSizeCoeff() * blSigma;
-    const auto lowerBound = blMean - 4.0f*blSigma;
-    const auto upperBound = lowerBound + float(numBins)*binSize;
-
-    // TODO: Should we do anything if upperBound < stats_[lane].TraceMax()?
-
-    hist_.emplace_back(numBins, lowerBound, upperBound);
-}
-
 
 void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& traces,
                                        unsigned int lane)
@@ -145,14 +83,6 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
         h.AddDatum(LaneArray<float>(lfi.Extract()));
     }
 }
-
-
-void TraceHistogramAccumHost::InitStats(unsigned int numLanes)
-{
-    stats_.clear();
-    stats_.resize(numLanes);
-}
-
 
 const TraceHistogramAccumHost::PoolHistType&
 TraceHistogramAccumHost::HistogramImpl() const
@@ -180,18 +110,6 @@ TraceHistogramAccumHost::HistogramImpl() const
     }
 
     return poolHist_;
-}
-
-
-const TraceHistogramAccumulator::PoolTraceStatsType&
-TraceHistogramAccumHost::TraceStatsImpl() const
-{
-    auto ptsv = poolTraceStats_.GetHostView();
-    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
-    {
-        ptsv[lane] = stats_[lane].GetState();
-    }
-    return poolTraceStats_;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

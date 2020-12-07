@@ -24,28 +24,38 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_BasecallerConfig_fwd_H_
-#define mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#ifndef mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_
+#define mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_
+
+#include <pacbio/configuration/PBConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class BasecallerAlgorithmConfig;
-class BasecallerBaselinerConfig;
-class BasecallerFrameLabelerConfig;
-class BasecallerMetricsConfig;
-class BasecallerPulseAccumConfig;
-class BasecallerTraceHistogramConfig;
-class BasecallerSignalRangeEstimatorConfig;
-class BasecallerDmeConfig;
-class BatchLayoutConfig;
-class MovieConfig;
-class SmrtBasecallerConfig;
-class StaticDetModelConfig;
-class SystemsConfig;
+class BasecallerSignalRangeEstimatorConfig : public Configuration::PBConfig<BasecallerSignalRangeEstimatorConfig>
+{
+public:
+    PB_CONFIG(BasecallerSignalRangeEstimatorConfig);
+
+    SMART_ENUM(MethodName, Host, Gpu);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
+    PB_CONFIG_PARAM(unsigned int, NumFramesPreAccumStats, 1000u);
+
+    // Bin size of data histogram is nominally defined as initial estimate
+    // of baseline sigma multiplied by this coefficient.
+    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
+
+    // Use fall-back baseline sigma when number of baseline frames is
+    // less than this value.
+    PB_CONFIG_PARAM(unsigned int, BaselineStatMinFrameCount, 50u);
+
+    // Use this value as an estimate for baseline standard deviation when
+    // we have insufficient data.
+    PB_CONFIG_PARAM(float, FallBackBaselineSigma, 10.0f);
+};
 
 }}}     // namespace PacBio::Mongo::Data
 
-
-#endif // mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#endif //mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_

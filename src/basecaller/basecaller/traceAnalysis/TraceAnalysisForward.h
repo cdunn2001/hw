@@ -7,10 +7,12 @@ namespace Basecaller {
 
 class AlgoFactory;
 class Baseliner;
+class SignalRangeEstimator;
 class FrameLabeler;
 class PulseAccumulator;
 class TraceHistogramAccumulator;
 class DetectionModelEstimator;
+class CoreDMEstimator;
 class HFMetricsFilter;
 
 }}}     // namespace PacBio::Mongo::Basecaller

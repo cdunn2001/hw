@@ -41,19 +41,6 @@ public:
 
     SMART_ENUM(MethodName, Host, Gpu);
     PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
-    PB_CONFIG_PARAM(unsigned int, NumFramesPreAccumStats, 1000u);
-
-    // Bin size of data histogram is nominally defined as initial estimate
-    // of baseline sigma multiplied by this coefficient.
-    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
-
-    // Use fall-back baseline sigma when number of baseline frames is
-    // less than this value.
-    PB_CONFIG_PARAM(unsigned int, BaselineStatMinFrameCount, 50u);
-
-    // Use this value as an estimate for baseline standard deviation when
-    // we have insufficient data.
-    PB_CONFIG_PARAM(float, FallBackBaselineSigma, 10.0f);
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -12,6 +12,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     BlockFilterStage.cpp
     FrameLabeler.h
     FrameLabeler.cpp
+    CoreDMEstimator.h
+    CoreDMEstimator.cpp
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
     DeviceHFMetricsFilter.h
@@ -41,6 +43,10 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     MaxLikelihoodDiagnostics.h
     PulseAccumulator.h
     PulseAccumulator.cpp
+    SignalRangeEstimator.h
+    SignalRangeEstimator.cpp
+    SignalRangeEstimatorHost.h
+    SignalRangeEstimatorHost.cpp
     SubframeLabelManager.h
     SubframeLabelManager.cpp
     TraceAnalysisForward.h

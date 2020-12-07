@@ -1,5 +1,4 @@
-
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -27,55 +26,17 @@
 //  Description:
 //  Defines some members of class TraceHistogramAccumulator.
 
+#include "TraceHistogramAccumulator.h"
+
 #include <sstream>
+
 #include <pacbio/logging/Logger.h>
 #include <pacbio/PBException.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
-#include "TraceHistogramAccumulator.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
-
-// static
-unsigned int TraceHistogramAccumulator::numFramesPreAccumStats_;
-float TraceHistogramAccumulator::binSizeCoeff_;
-unsigned int TraceHistogramAccumulator::baselineStatMinFrameCount_;
-float TraceHistogramAccumulator::fallBackBaselineSigma_;
-
-// static
-void TraceHistogramAccumulator::Configure(
-        const Data::BasecallerTraceHistogramConfig& histConfig,
-        const Data::MovieConfig&)
-{
-    numFramesPreAccumStats_ = histConfig.NumFramesPreAccumStats;
-    PBLOG_INFO << "TraceHistogramAccumulator: NumFramesPreAccumStats = "
-               << numFramesPreAccumStats_ << '.';
-
-    binSizeCoeff_ = histConfig.BinSizeCoeff;
-    PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
-               << binSizeCoeff_ << '.';
-    if (binSizeCoeff_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "BinSizeCoeff must be positive.";
-        throw PBException(msg.str());
-    }
-
-    baselineStatMinFrameCount_ = histConfig.BaselineStatMinFrameCount;
-    PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
-               << baselineStatMinFrameCount_ << '.';
-
-    fallBackBaselineSigma_ = histConfig.FallBackBaselineSigma;
-    PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
-               << fallBackBaselineSigma_ << '.';
-    if (fallBackBaselineSigma_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "FallBackBaselineSigma must be positive.";
-        throw PBException(msg.str());
-    }
-}
 
 TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)

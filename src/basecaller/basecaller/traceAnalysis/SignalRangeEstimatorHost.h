@@ -1,5 +1,5 @@
-#ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
-#define mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
+#ifndef mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
+#define mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
 
 // Copyright (c) 2019,2020, Pacific Biosciences of California, Inc.
 //
@@ -27,8 +27,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class TraceHistogramAccumHost, which customizes
-//  TraceHistogramAccumulator.
+//  Defines class SignalRangeEstimatorHost, which customizes
+//  SignalRangeEstimator.
 
 
 #include <common/AlignedVector.h>
@@ -36,41 +36,39 @@
 #include <dataTypes/BaselinerStatAccumulator.h>
 #include <dataTypes/UHistogramSimd.h>
 
-#include "TraceHistogramAccumulator.h"
+#include "SignalRangeEstimator.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class TraceHistogramAccumHost : public TraceHistogramAccumulator
+class SignalRangeEstimatorHost : public SignalRangeEstimator
 {
-public:     // Types
-    using TraceElementType = Data::BaselinedTraceElement;
+public:
+    SignalRangeEstimatorHost(uint32_t poolId, unsigned int poolSize)
+        : SignalRangeEstimator(poolId, poolSize)
+        , stats_(poolSize)
+        , poolTraceStats_(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER())
+    {}
 
-public:     // Structors and assignment.
-    TraceHistogramAccumHost(unsigned int poolId,
-                            unsigned int poolSize);
+public:     // Const access (extensions to SignalRangeEstimatorHost interface)
 
-public:     // Const access (extensions to TraceHistogramAccumulator interface)
-    const AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>>&
-    HistogramHost() const
-    { return hist_; }
+    const AlignedVector<Data::BaselinerStatAccumulator<DataType>>&
+    TraceStatsHost() const
+    { return stats_; }
 
-private:    // TraceHistogramAccumulator implementation.
-    void AddBatchImpl(const Data::TraceBatch<TraceElementType>& ctb) override;
+private:    // SignalRangeEstimatorHost implementation.
+    void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
 
-    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
+    const Data::BaselinerMetrics& TraceStatsImpl() const override;
 
-    const PoolHistType& HistogramImpl() const override;
+    Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndResetImpl() override;
+
 private:    // Data
-    AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
-    mutable PoolHistType poolHist_;
-
-private:    // Functions
-    // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
-    void AddBlock(const Data::TraceBatch<TraceElementType>& ctb, unsigned int lane);
+    AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
+    mutable Data::BaselinerMetrics poolTraceStats_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif // mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
+#endif // mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_

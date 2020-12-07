@@ -48,9 +48,13 @@ public:
             unsigned int poolId,
             const Data::BatchDimensions& dims,
             Cuda::Memory::StashableAllocRegistrar& registrar) const;
-
-    std::unique_ptr<DetectionModelEstimator>
-    CreateDetectionModelEstimator(
+    std::unique_ptr<SignalRangeEstimator>
+    CreateBaselineStatsAggregator(
+            unsigned int poolId,
+            const Data::BatchDimensions& dims,
+            Cuda::Memory::StashableAllocRegistrar& registrar) const;
+    std::unique_ptr<CoreDMEstimator>
+    CreateCoreDMEstimator(
             unsigned int poolId,
             const Data::BatchDimensions& dims,
             Cuda::Memory::StashableAllocRegistrar& registrar) const;
@@ -61,6 +65,7 @@ private:
     Data::BasecallerBaselinerConfig::MethodName baselinerOpt_;
     Data::BasecallerFrameLabelerConfig::MethodName frameLabelerOpt_;
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
+    Data::BasecallerSignalRangeEstimatorConfig::MethodName signalRangeEstOpt_;
     Data::BasecallerDmeConfig::MethodName dmeOpt_;
     Data::BasecallerPulseAccumConfig::MethodName pulseAccumOpt_;
     Data::BasecallerMetricsConfig::MethodName hfMetricsOpt_;

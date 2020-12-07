@@ -43,10 +43,10 @@ namespace Data {
 
 struct BaselinerMetrics
 {
-    BaselinerMetrics(const BatchDimensions& dims,
+    BaselinerMetrics(uint32_t lanesPerBatch,
                      Cuda::Memory::SyncDirection syncDir,
                      const Cuda::Memory::AllocationMarker& marker)
-        : baselinerStats(dims.lanesPerBatch, syncDir, marker)
+        : baselinerStats(lanesPerBatch, syncDir, marker)
     { }
 
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> baselinerStats;

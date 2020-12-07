@@ -30,7 +30,7 @@ public:
     {
         const auto& marker = SOURCE_MARKER();
         return std::make_pair(TraceBatch<ElementType>(meta, dims, syncDirection_, marker),
-                              BaselinerMetrics(dims, syncDirection_, marker));
+                              BaselinerMetrics(dims.lanesPerBatch, syncDirection_, marker));
     }
 
 private:

@@ -18,6 +18,8 @@ set(CPP_LIST
     configs/BasecallerPulseToBaseConfig.h
     configs/BasecallerTraceHistogramConfig.cpp
     configs/BasecallerTraceHistogramConfig.h
+    configs/BasecallerSignalRangeEstimatorConfig.cpp
+    configs/BasecallerSignalRangeEstimatorConfig.h
     configs/BatchLayoutConfig.h
     configs/BatchLayoutConfig.cpp
     configs/ConfigForward.h

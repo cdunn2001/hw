@@ -1,6 +1,8 @@
 #ifndef mongo_dataTypes_BasicTypes_H_
 #define mongo_dataTypes_BasicTypes_H_
 
+#include <cstdint>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
