@@ -34,12 +34,14 @@
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <common/cuda/PBCudaSimd.h>
+#include <common/simd/SimdConvTraits.h>
 
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/MovieConfig.h>
-#include <dataTypes/StaticDetModelConfig.h>
-#include <dataTypes/BasecallerConfig.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/StaticDetModelConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -135,9 +137,12 @@ private:
         staticDetModel.baselineVariance = bgSigma * bgSigma;
         const auto& analogs = staticDetModel.SetupAnalogs(movieConfig);
 
+        const float bgWeight{0.5f};
         LaneDetectionModel ldm;
         ldm.BaselineMode().SetAllMeans(staticDetModel.baselineMean);
         ldm.BaselineMode().SetAllVars(staticDetModel.baselineVariance);
+        ldm.SetAllBaselineWeight(bgWeight);
+
         for (size_t i = 0; i < analogs.size(); i++)
         {
             ldm.AnalogMode(i).SetAllMeans(analogs[i].mean);
@@ -157,8 +162,11 @@ private:
         std::normal_distribution<float> normDist;
 
         // Construct camera track block and trace histogram.
-        ctbFactory = std::make_unique<Data::CameraBatchFactory>(totalFrames, poolSize,Cuda::Memory::SyncDirection::Symmetric);
-        auto ctb = ctbFactory->NewBatch(Data::BatchMetadata{poolId, 42, static_cast<uint32_t>(totalFrames)});
+        Data::BatchDimensions bd{poolSize, static_cast<uint32_t>(totalFrames)};
+        Data::BatchMetadata bm{poolId, 42, static_cast<uint32_t>(totalFrames), poolId};
+        ctbFactory = std::make_unique<Data::CameraBatchFactory>(Cuda::Memory::SyncDirection::Symmetric);
+        auto ctb = ctbFactory->NewBatch(bm, bd);
+
         auto& traces = ctb.first;
         auto& stats = ctb.second;
 
@@ -190,15 +198,10 @@ private:
                 const auto nFramesM = nFrames[m];
                 for (unsigned int t = 0; t < nFramesM; ++t)
                 {
-                    DmeEmHost::FloatVec x;
-                    for (unsigned int i = 0; i < laneSize; ++i)
-                    {
-                        x[i] = sqrt(vars[i]) * normDist(rng) + mean[i];
-                        (*frame)[i] = round_cast<Data::BaselinedTraceElement>(x[i]);
-                    }
-
+                    DmeEmHost::FloatVec x = floorCastInt(sqrt(vars) * normDist(rng) + mean);
+                    frame.Store(x);
                     // The traces have zero baseline so the raw trace and baselined trace are the same.
-                    bsa.AddSample(*frame, *frame, false);
+                    bsa.AddSample(frame.Extract(), frame.Extract(), false);
                     cdMean.at(m) += x;
                     mode.push_back(m);
                     frame++;
@@ -214,14 +217,9 @@ private:
                 const auto& vars = bm.SignalCovar();
                 for (unsigned int t = 0; t < nFramesBg; ++t)
                 {
-                    DmeEmHost::FloatVec x;
-                    for (unsigned int i = 0; i < laneSize; ++i)
-                    {
-                        x[i] = sqrt(vars[i]) * normDist(rng) + mean[i];
-                        (*frame)[i] = round_cast<Data::BaselinedTraceElement>(x[i]);
-                    }
-
-                    bsa.AddSample(*frame, *frame, true);
+                    DmeEmHost::FloatVec x = floorCastInt(sqrt(vars) * normDist(rng) + mean);
+                    frame.Store(x);
+                    bsa.AddSample(frame.Extract(), frame.Extract(), true);
                     cdMean.front() += x;
                     mode.push_back(0);
                     frame++;
@@ -235,12 +233,7 @@ private:
             for (unsigned int t = 0; t < totalFrames; ++t)
             {
                 const auto m = mode.at(t);
-                DmeEmHost::FloatVec vf;
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    vf[i] = (*frame)[i];
-                }
-                cdVar.at(m) += pow2(vf - cdMean.at(m));
+                cdVar.at(m) += pow2(frame.Extract() - cdMean.at(m));
                 frame++;
             }
             cdVar.front() /= boost::numeric_cast<float>(nFramesBg - 1);
@@ -307,7 +300,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
         detModelStart->ExportTo(&models.GetHostView()[l]);
     }
 
-    //models = dme->InitDetectionModels(completeData->traceHistAccum->TraceStats());
+    models = dme->InitDetectionModels(completeData->traceHistAccum->TraceStats());
 
     // TODO: The Estimate() method currently doesn't return the DME diagnostics
     // with which further unit tests can be written to verify its contents.
@@ -318,6 +311,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
                                     Data::FrameIntervalSizeType(0));
     const auto numFramesF = boost::numeric_cast<float>(numFrames);
 
+    using PacBio::Simd::MakeUnion;
     // Check the pool detection models that should be updated for each lane.
     for (unsigned int l = 0; l < poolSize; ++l)
     {
@@ -334,7 +328,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
                     sqrt(expected * (1.0f - expected) / numFramesF);
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad mixing fraction for i = " << i << '.';
             }
 
@@ -344,7 +338,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             absErrTol = DmeEmHost::FloatVec{5} * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad baseline mean for i = " << i << '.';
             }
 
@@ -354,7 +348,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             absErrTol = DmeEmHost::FloatVec{5} * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad baseline variance for i = " << i << '.';
             }
         }
@@ -370,7 +364,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             DmeEmHost::FloatVec absErrTol = max(0.015f, DmeEmHost::FloatVec{5} * sqrt(expected * (1.0f - expected) / numFramesF));
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad mixing fraction for analog " << a
                                     << " for i = " << i << '.';
             }
@@ -381,7 +375,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             absErrTol = DmeEmHost::FloatVec{5} * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad pulse mean for analog " << a
                                     << " for i = " << i << ".";
             }
@@ -392,8 +386,8 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             absErrTol = DmeEmHost::FloatVec{5} * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
             for (unsigned int i = 0; i < laneSize; ++i)
             {
-                if (isnan(expected[i])) continue;
-                EXPECT_NEAR(expected[i], result[i], absErrTol[i])
+                if (isnan(MakeUnion(expected)[i])) continue;
+                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
                                     << "Bad pulse variance for analog " << a
                                     << " for i = " << i << ".";
             }
@@ -404,7 +398,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
 const std::array<unsigned int,nModes> frameCountsBalanced = {500, 125, 125, 125, 125};
 const auto snrSweep = ::testing::Values(
         TestDmeEmHostParam{3.6f,  frameCountsBalanced,      0.0f,       0.0f},
-        //TestDmeEmHostParam{4.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmHostParam{4.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmHostParam{5.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmHostParam{6.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmHostParam{8.0f,  frameCountsBalanced,      0.0f,       0.0f},

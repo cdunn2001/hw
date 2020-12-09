@@ -287,6 +287,11 @@ public:     // Read Access
     template <typename VF2>
     void ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const;
 
+    /// Transcribe data to *lam.
+    /// lam != nullptr.
+    template <typename VF2>
+    void ExportTo(LaneAnalogMode<VF2, laneSize>* lam, Cuda::Utility::CudaArray<VF2, laneSize>* weight) const;
+
 public: // Modify Access
     void Weight(const FloatVec& w)
     {

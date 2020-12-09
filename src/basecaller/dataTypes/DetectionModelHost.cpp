@@ -31,6 +31,9 @@
 
 #include <common/LaneArray.h>
 #include <common/cuda/PBCudaSimd.h>
+#include <common/simd/SimdConvTraits.h>
+
+using PacBio::Simd::MakeUnion;
 
 namespace PacBio {
 namespace Mongo {
@@ -134,7 +137,6 @@ void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
     assert(lam);
     lam->means = mean_;
     lam->vars = var_;
-    // TODO: What about weight_?
 }
 
 
