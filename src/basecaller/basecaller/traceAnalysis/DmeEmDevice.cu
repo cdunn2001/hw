@@ -358,25 +358,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     // BENTODO was boost numeric_cast
     static constexpr auto nBins = static_cast<unsigned short>(LaneHist::numBins);
 
-    // Total probability density at the bin boundaries.
-    Array1D<float, nBins+1> boundaryProb__HUGE1;
-
-    // Probability of each bin.
-    Array1D<float, nBins> binProb__HUGE2;
-
-    // "Responsibility" (tau) of mode i at bin boundary x.
-    // CSMM2002, Equation 4.
-    Array2D<float, nModes, nBins+2> tau__HUGE3_7;
-
-    // Bin counts. CSMM2002, Equation 3.
-    Array1D<float, nBins> n_j__HUGE8;
-
     float n_j_sum = 0.0f;
-    for (int j = 0; j < nBins; ++j)
-    {
-        n_j__HUGE8[j] = hist.binCount[j][threadIdx.x];
-        n_j_sum += n_j__HUGE8[j];
-    }
 
     unsigned int it = 0;
     for (; it < iterLimit; ++it)
@@ -400,30 +382,38 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
 
         float probSum(0.0f);
         float weightedProbSum(0.0f);
+        float mom2 = 0.0f;   // Only needed for background mode.
+        float correct1 = 0.0f;
+        float correct2 = 0.0f;
 
-        auto cornerComp = [&](int b)
+        struct CornerVals
+        {
+            float tau[nModes];
+            float cProb;
+        };
+        auto cornerComp = [&](int b, CornerVals& cv)
         {
             // First compute the log of the component probabilities.
             auto x = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x];
             for (int i = 0; i < nModes; ++i)
             {
                 const auto& y = x - mu[i];
-                tau__HUGE3_7[i][b] = prefactors[i] - 0.5f*y*y*varinv[i];
+                cv.tau[i] = prefactors[i] - 0.5f*y*y*varinv[i];
             }
 
             // Next compute the log likelihood of each bin boundary, which is
             // the log of the sum of exp(tau_i_x) over modes (i).
             // Use log-sum-exp trick to avoid uniform underflow. (PTVF2007, Equation 16.1.9)
-            float tauMax = tau__HUGE3_7[0][b];
+            float tauMax = cv.tau[0];
             for (int i = 1; i < nModes; ++i)
             {
-                tauMax = max(tauMax, tau__HUGE3_7[i][b]);
+                tauMax = max(tauMax, cv.tau[i]);
             }
             float llb = [&](){
                 float ret = 0.f;
                 for (int i = 0; i < nModes; ++i)
                 {
-                    ret += exp(tau__HUGE3_7[i][b] - tauMax);
+                    ret += exp(cv.tau[i] - tauMax);
                 }
                 return log(ret) + tauMax;
             }();
@@ -431,22 +421,24 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             // Convert to likelihood ratio.
             for (int i = 0; i < nModes; ++i)
             {
-                tau__HUGE3_7[i][b] = exp(tau__HUGE3_7[i][b] - llb);
+                cv.tau[i] = exp(cv.tau[i] - llb);
             }
 
             // Record the total probability density at the bin boundaries.
-            boundaryProb__HUGE1[b]= exp(llb);
+            cv.cProb = exp(llb);
         };
 
-        auto centerComp = [&](int b)
+        auto centerComp = [&](int b, const CornerVals& c1, const CornerVals& c2)
         {
             // Constrain bin probability to a minimum positive value.
             // Avoids 0 * log(0) in computation of log likelihood.
-            binProb__HUGE2[b] = max(0.5f * binSize * (boundaryProb__HUGE1[b] + boundaryProb__HUGE1[b+1]), binProbMin);
-            probSum += binProb__HUGE2[b];
-            weightedProbSum += n_j__HUGE8[b] * log(binProb__HUGE2[b]);
+            auto binProb = max(0.5f * binSize * (c1.cProb + c2.cProb), binProbMin);
+            float binCount = hist.binCount[b][threadIdx.x];
+            n_j_sum += binCount;
+            probSum += binProb;
+            weightedProbSum += binCount * log(binProb);
 
-            auto factor = n_j__HUGE8[b] / binProb__HUGE2[b];
+            const auto factor = binCount / binProb;
 
             auto x0 = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x];
             auto x1 = x0 + hist.binSize[threadIdx.x];
@@ -454,20 +446,41 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             {
                 // Relative weight of each mode. CSMM2002, Equation 5.
                 // Use trapezoidal approximation of expectation of tau over each bin.
-                auto tmp1 = boundaryProb__HUGE1[b] * tau__HUGE3_7[m][b];
-                auto tmp2 = boundaryProb__HUGE1[b+1] * tau__HUGE3_7[m][b+1];
+                auto tmp1 = c1.cProb * c1.tau[m];
+                auto tmp2 = c2.cProb * c2.tau[m];
 
                 c_i[m] += (tmp1 + tmp2) * factor;
                 mom1[m] += (tmp1 * x0 + tmp2 * x1) * factor;
             }
+
+            x0 = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x] - mu[0];
+            x1 = x0 + hist.binSize[threadIdx.x];
+
+            float tmp = c1.cProb * c1.tau[0];
+            float co2 = tmp;
+            float co1 = x0 * tmp;
+            float m = x0*x0*tmp;
+
+            tmp = c2.cProb * c2.tau[0];
+            co2 += tmp;
+            co1 += x1 * tmp;
+            m += x1 * x1 * tmp;
+
+            tmp = factor;
+            mom2 += m * tmp;
+            correct2 += co2 * tmp;
+            correct1 += co1 * tmp;
         };
 
         // TODO: Check for bins where binProb == 0 but n_j > 0.
-        cornerComp(0);
+        CornerVals c1;
+        CornerVals c2;
+        cornerComp(0, c1);
         for (unsigned int b = 0; b < nBins; ++b)
         {
-            cornerComp(b+1);
-            centerComp(b);
+            cornerComp(b+1, c2);
+            centerComp(b, c1, c2);
+            c1 = c2;
         }
         // TODO: Note the cancellation of the (0.5f * binSize) factor. Possible minor optimization opportunity.
         // TODO: When used, tau is always multiplied by boundaryProb. So why bother dividing that factor out when first computing tau?
@@ -529,8 +542,11 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             rho[i] = c_i[i] / n_j_sum;
         }
 
+        auto oldMu = mu[0];
         // Background mean.
         mu[0] = mom1[0] / c_i[0];
+        // BENTODO check for sign error.  I think this makes the correction term positive later
+        auto muDiff = oldMu - mu[0];
 
         // Amplitude scale parameter.
         float numer = 0.0f;
@@ -563,21 +579,9 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         for (int i = 0; i < numAnalogs; ++i) mu[i+1] = s * static_cast<float>(rpa[i]);
 
         // Background variance.
-        // Could potentially be combined with the single pass loop above, but
-        // would require a correction term to be added (since this loop requires
-        // the updated rho), and combining this loop with the above didn't show
-        // any major speed gains.
-        float mom2 = 0.0f;   // Only needed for background mode.
-        for (unsigned int j = 0; j < nBins; ++j)
-        {
-            const auto k = j + 1;
-            auto x0 = hist.lowBound[threadIdx.x] + j * hist.binSize[threadIdx.x] - mu[0];
-            auto x1 = x0 + hist.binSize[threadIdx.x];
-            float tmp = boundaryProb__HUGE1[j] * x0 * x0 * tau__HUGE3_7[0][j];
-            tmp += boundaryProb__HUGE1[k] * x1 * x1 * tau__HUGE3_7[0][k];
-            tmp *= n_j__HUGE8[j] / binProb__HUGE2[j];
-            mom2 += tmp;
-        }
+        // Need to apply correction terms since it was computed above with the old
+        // mean instead of the newest update.
+        mom2 += muDiff * correct1 + muDiff * muDiff * correct2;
         mom2 *= 0.5f * binSize;
         var[0] = mom2 / c_i[0] + varQuant;
 
