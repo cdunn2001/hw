@@ -242,7 +242,8 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     const auto scaleFactor = PrelimScaleFactor(workModel, hist);
     ScaleModelSnr(scaleFactor, &workModel);
 
-    const auto& binSize = hist.binSize[threadIdx.x];
+    const auto binSize = hist.binSize[threadIdx.x];
+    const auto hBinSize = 0.5f * binSize;
 
     // Define working variables for model parameters.
     const auto nModes = numAnalogs + 1;
@@ -358,7 +359,14 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     // BENTODO was boost numeric_cast
     static constexpr auto nBins = static_cast<unsigned short>(LaneHist::numBins);
 
-    float n_j_sum = 0.0f;
+    const float n_j_sum = [&](){
+        float sum = 0;
+        for (int i = 0; i < nBins; ++i)
+        {
+            sum += hist.binCount[i][threadIdx.x];
+        }
+        return sum;
+    }();
 
     unsigned int it = 0;
     for (; it < iterLimit; ++it)
@@ -366,8 +374,8 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         // E-step
 
         // Inverses of variances.
-        ModeArray varinv = var;
-        for (auto& val : varinv) val = 1.f / val;
+        ModeArray hVarinv = var;
+        for (auto& val : hVarinv) val = 0.5f / val;
 
         const float log_2pi = log(2.0f * pi_f);
         ModeArray prefactors;
@@ -391,14 +399,13 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             float tau[nModes];
             float cProb;
         };
-        auto cornerComp = [&](int b, CornerVals& cv)
+        auto cornerComp = [&](int b, CornerVals& cv, float x)
         {
             // First compute the log of the component probabilities.
-            auto x = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x];
             for (int i = 0; i < nModes; ++i)
             {
                 const auto& y = x - mu[i];
-                cv.tau[i] = prefactors[i] - 0.5f*y*y*varinv[i];
+                cv.tau[i] = prefactors[i] - y*y*hVarinv[i];
             }
 
             // Next compute the log likelihood of each bin boundary, which is
@@ -413,35 +420,32 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
                 float ret = 0.f;
                 for (int i = 0; i < nModes; ++i)
                 {
-                    ret += exp(cv.tau[i] - tauMax);
+                    ret += __expf(cv.tau[i] - tauMax);
                 }
-                return log(ret) + tauMax;
+                return __logf(ret) + tauMax;
             }();
 
             // Convert to likelihood ratio.
             for (int i = 0; i < nModes; ++i)
             {
-                cv.tau[i] = exp(cv.tau[i] - llb);
+                cv.tau[i] = __expf(cv.tau[i] - llb);
             }
 
             // Record the total probability density at the bin boundaries.
-            cv.cProb = exp(llb);
+            cv.cProb = __expf(llb);
         };
 
-        auto centerComp = [&](int b, const CornerVals& c1, const CornerVals& c2)
+        auto centerComp = [&](int b, const CornerVals& c1, const CornerVals& c2, float x0, float x1)
         {
             // Constrain bin probability to a minimum positive value.
             // Avoids 0 * log(0) in computation of log likelihood.
-            auto binProb = max(0.5f * binSize * (c1.cProb + c2.cProb), binProbMin);
+            auto binProb = max(hBinSize * (c1.cProb + c2.cProb), binProbMin);
             float binCount = hist.binCount[b][threadIdx.x];
-            n_j_sum += binCount;
             probSum += binProb;
-            weightedProbSum += binCount * log(binProb);
+            weightedProbSum += binCount * __logf(binProb);
 
             const auto factor = binCount / binProb;
 
-            auto x0 = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x];
-            auto x1 = x0 + hist.binSize[threadIdx.x];
             for (unsigned int m = 0; m < nModes; ++m)
             {
                 // Relative weight of each mode. CSMM2002, Equation 5.
@@ -453,18 +457,18 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
                 mom1[m] += (tmp1 * x0 + tmp2 * x1) * factor;
             }
 
-            x0 = hist.lowBound[threadIdx.x] + b * hist.binSize[threadIdx.x] - mu[0];
-            x1 = x0 + hist.binSize[threadIdx.x];
+            x0 -= mu[0];
+            x1 -= mu[0];
 
-            float tmp = c1.cProb * c1.tau[0];
-            float co2 = tmp;
-            float co1 = x0 * tmp;
-            float m = x0*x0*tmp;
+            float co2 = c1.cProb * c1.tau[0];
+            float co1 = co2 * x0;
+            float m = x0 * co1;
 
-            tmp = c2.cProb * c2.tau[0];
+            float tmp = c2.cProb * c2.tau[0];
             co2 += tmp;
-            co1 += x1 * tmp;
-            m += x1 * x1 * tmp;
+            tmp *= x1;
+            co1 += tmp;
+            m += x1 * tmp;
 
             tmp = factor;
             mom2 += m * tmp;
@@ -475,12 +479,16 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         // TODO: Check for bins where binProb == 0 but n_j > 0.
         CornerVals c1;
         CornerVals c2;
-        cornerComp(0, c1);
+        float x0 = hist.lowBound[threadIdx.x];
+        float x1 = x0 + binSize;
+        cornerComp(0, c1, x0);
         for (unsigned int b = 0; b < nBins; ++b)
         {
-            cornerComp(b+1, c2);
-            centerComp(b, c1, c2);
+            cornerComp(b+1, c2, x1);
+            centerComp(b, c1, c2, x0, x1);
             c1 = c2;
+            x0 = x1;
+            x1 += binSize;
         }
         // TODO: Note the cancellation of the (0.5f * binSize) factor. Possible minor optimization opportunity.
         // TODO: When used, tau is always multiplied by boundaryProb. So why bother dividing that factor out when first computing tau?
@@ -554,8 +562,9 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         for (unsigned int a = 0; a < numAnalogs; ++a)
         {
             const auto i = a + 1;
-            numer += rpa[a] * varinv[i] * mom1[i];
-            denom += rpa[a] * rpa[a] * varinv[i] * c_i[i];
+            auto varinv = 2.0f * hVarinv[i];
+            numer += rpa[a] * varinv * mom1[i];
+            denom += rpa[a] * rpa[a] * varinv * c_i[i];
         }
 
         // Add regularization/prior terms.
@@ -582,7 +591,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         // Need to apply correction terms since it was computed above with the old
         // mean instead of the newest update.
         mom2 += muDiff * correct1 + muDiff * muDiff * correct2;
-        mom2 *= 0.5f * binSize;
+        mom2 *= hBinSize;
         var[0] = mom2 / c_i[0] + varQuant;
 
         // Each pulse mode variance is computed as a function of the background
