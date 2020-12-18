@@ -28,7 +28,6 @@
 
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
-#include <pacbio/tracefile/DataFileInterface.h>
 #include <pacbio/tracefile/TraceFile.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/sensor/SequelROI.h>

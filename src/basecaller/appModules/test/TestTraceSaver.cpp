@@ -12,7 +12,6 @@
 #include <appModules/Basecaller.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <dataTypes/TraceBatch.h>
-#include <pacbio/sensor/ChipLayoutSimple.h>
 #include <appModules/TraceSaver.h>
 #include <pacbio/tracefile/TraceFile.h>
 #include <pacbio/datasource/PacketLayout.h>
@@ -41,8 +40,8 @@ TEST(TestTraceSaver, TestA)
     {
         auto writer = std::make_unique<TraceFileWriter>(traceFile, numZmws, numFrames);
 
-        ChipLayoutSimple chipLayout(0, 0, 64, 64, "testlayout");
-        auto roi = std::make_unique<SequelRectangularROI>(chipLayout.GetSensorROI());
+        SequelSensorROI sensorROI(0,0,64,64,1,1);
+        auto roi = std::make_unique<SequelRectangularROI>(sensorROI);
         std::vector<uint32_t> blockIndices;
         blockIndices.push_back(0);
         TraceSaverBody traceSaver(std::move(writer), std::move(roi), blockIndices);
