@@ -47,6 +47,7 @@
 #include <pacbio/datasource/SensorPacketsChunk.h>
 #include <pacbio/ipc/JSON.h>
 #include <pacbio/logging/Logger.h>
+#include <pacbio/POSIX.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
@@ -147,6 +148,15 @@ public:
             PBLOG_INFO << "Output Target: " << outputBazFile_;
         }
 
+        if (options["outputtrcfile"] != "")
+        {
+            outputTrcFileName_ = options["outputtrcfile"];
+            size_t numZmws = numZmwLanes_ * config_.layout.zmwsPerLane;
+            outputTrcFile_ = std::make_unique<TraceFileWriter>(outputTrcFileName_,
+                                                               numZmws,
+                                                               frames_);
+        }
+
         PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
         PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) /
                                                         config_.layout.framesPerChunk;
@@ -193,7 +203,7 @@ public:
 private:
     void MetaDataFromTraceFileSource(const std::string& traceFileName)
     {
-        const auto& traceFile = TraceFile(traceFileName);
+        const auto& traceFile = PacBio::TraceFile::TraceFileReader(traceFileName);
         const auto& acqParams = traceFile.Scan().AcqParams();
         const auto& chipInfo = traceFile.Scan().ChipInfo();
         const auto& dyeSet = traceFile.Scan().DyeSet();
@@ -248,7 +258,7 @@ private:
                                     float& blCovar,
                                     const std::string& exceptMsg)
         {
-            const TraceFile traceFile{traceFileName};
+            const TraceFileReader traceFile{traceFileName};
             if (traceFile.IsSimulated())
             {
                 const auto groundTruth = traceFile.GroundTruth();
@@ -483,9 +493,9 @@ private:
     CreateRepacker(PacketLayout inputLayout) const
     {
         BatchDimensions requiredDims;
-        requiredDims.lanesPerBatch  = config_.layout.lanesPerPool;
+        requiredDims.lanesPerBatch = config_.layout.lanesPerPool;
         requiredDims.framesPerBatch = config_.layout.framesPerChunk;
-        requiredDims.laneWidth      = config_.layout.zmwsPerLane;
+        requiredDims.laneWidth = config_.layout.zmwsPerLane;
 
         if (inputLayout.Encoding() != PacketLayout::INT16)
         {
@@ -531,9 +541,25 @@ private:
                           + std::to_string(inputLayout.BlockWidth()));
     }
 
-    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver() const
+
+    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver(DataSourceBase& dataSource)
     {
-        return std::make_unique<NoopTraceSaverBody>();
+        if (outputTrcFile_)
+        {
+            // TODO. I think this roi selection might go elsewhere.
+            //
+            //             // Convert the hardened traceROI to a JSON representation, and then deserialize it immediately
+            //                         // into the SparseROI.
+            SequelSensorROI ridiculouslyBigSensor(0,0,99999999,99999999,1,1);
+            auto roi = std::make_unique<PacBio::Sensor::SequelSparseROI>(config_.traceROI.Serialize(),ridiculouslyBigSensor);
+            auto blocks = dataSource.BlocksWithinROI(config_.traceROI.roi);
+
+            return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), std::move(roi), blocks);
+        }
+        else
+        {
+            return std::make_unique<NoopTraceSaverBody>();
+        }
     }
 
     std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
@@ -582,7 +608,7 @@ private:
 
         GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
         auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
-        repacker->AddNode(CreateTraceSaver(), GraphProfiler::SAVE_TRACE);
+        repacker->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
         auto* analyzer = repacker->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
         analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
 
@@ -603,9 +629,17 @@ private:
             config.frames = frames_; // total number of frames to transmit
             config.limitFileFrames = 512; // loop in coproc memory.
             config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
-            config.mode = TransmitConfig::Mode::Generated;
+            if (PacBio::POSIX::IsFile(config.hdf5input))
+            {
+                config.mode = TransmitConfig::Mode::File;
+                PBLOG_NOTICE << "Trying to generate simulated loopback movie with file " << config.hdf5input;
+            }
+            else
+            {
+                config.mode = TransmitConfig::Mode::Generated;
+                PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
+            }
             config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
-            PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
             dsr->TransmitMovieSim(config);
         }
 
@@ -696,6 +730,8 @@ private:
     size_t frames_ = 0;
     bool cache_ = false;
     bool nop_ = false; ///< if true, nothing is analyzed. The data is discarded.
+    std::string outputTrcFileName_;
+    std::unique_ptr<DataFileWriterInterface> outputTrcFile_;
 };
 
 int main(int argc, char* argv[])
@@ -714,6 +750,7 @@ int main(int argc, char* argv[])
 
         parser.add_option("--inputfile").set_default("").help("input file (must be *.trc.h5)");
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
+        parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");
         parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");

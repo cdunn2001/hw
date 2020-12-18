@@ -24,33 +24,24 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_SmrtBasecallerConfig_H_
-#define mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#ifndef mongo_dataTypes_configs_roiConfig_H
+#define mongo_dataTypes_configs_roiConfig_H
+
+#include <array>
 
 #include <pacbio/configuration/PBConfig.h>
-
-#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/BatchLayoutConfig.h>
-#include <dataTypes/configs/SourceConfig.h>
-#include <dataTypes/configs/SystemsConfig.h>
-#include <dataTypes/configs/ROIConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig>
+struct ROIConfig  : public Configuration::PBConfig<ROIConfig>
 {
-    PB_CONFIG(SmrtBasecallerConfig);
+    PB_CONFIG(ROIConfig);
 
-    PB_CONFIG_OBJECT(SystemsConfig, system);
-    PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
-    PB_CONFIG_OBJECT(BatchLayoutConfig, layout);
-    PB_CONFIG_OBJECT(SourceConfig, source);
-    PB_CONFIG_OBJECT(ROIConfig, traceROI);
+    PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
 };
 
 }}}     // namespace PacBio::Mongo::Data
 
-
-#endif //mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#endif //mongo_dataTypes_configs_roiConfig_H

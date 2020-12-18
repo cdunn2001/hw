@@ -98,7 +98,7 @@ private:
     }
 
 private:
-    TraceFile::TraceFile traceFile_;
+    TraceFile::TraceFileReader traceFile_;
     size_t zmwsPerLane_;
     size_t framesPerChunk_;
     size_t numFrames_;

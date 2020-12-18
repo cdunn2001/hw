@@ -37,7 +37,7 @@ namespace Mongo {
 namespace Data {
 
 // Class that identifies the "location" of a batch of data
-// within an acuiqisition
+// within an acquisition
 class BatchMetadata
 {
 public:

@@ -127,7 +127,7 @@ private:
 
     std::string filename_;
 
-    TraceFile::TraceFile traceFile_;
+    TraceFile::TraceFileReader traceFile_;
     std::vector<int16_t> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;

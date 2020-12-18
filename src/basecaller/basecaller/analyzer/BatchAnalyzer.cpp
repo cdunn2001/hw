@@ -167,10 +167,13 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& t
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
 
+    if (Cuda::StreamErrorCount() > 0)
+        throw PBException("Unexpected stream synchronization issues were detected before analyze");
+
     auto ret = AnalyzeImpl(tbatch);
 
     if (Cuda::StreamErrorCount() > 0)
-        throw PBException("Unexpected stream synchronization issues were detected");
+        throw PBException("Unexpected stream synchronization issues were detected after analyze");
 
     nextFrameId_ = tbatch.Metadata().LastFrame();
 
