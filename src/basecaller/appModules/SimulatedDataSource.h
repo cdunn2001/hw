@@ -31,6 +31,8 @@
 namespace PacBio {
 namespace Application {
 
+// Virtual API for generating data.  Serves as a customization point for
+// SimulatedDataSource, allowing multiple implementations of data simulation
 class SignalGenerator
 {
 public:
@@ -38,10 +40,19 @@ public:
     virtual ~SignalGenerator() = default;
 };
 
+// DataSource implementation for simulated data.  Actual data generation
+// is handled by the SignalGenerator handed in, with this class primarily
+// concerned with data replication and satisfying the DataSourceBase API
 class SimulatedDataSource : public DataSource::DataSourceBase
 {
 public:
+    // Forward delaration for the class that will hold the generated data
+    // and replicate it out on demand.
     class DataCache;
+
+    // Describes the extents of data to simulate.  Both numSignals and
+    // numFrames are strictly minimums, and may be rounded up to more
+    // naturally fit chunk/lane boundaries.
     struct SimConfig {
         SimConfig(size_t numSignals, size_t numFrames)
             : numSignals_(numSignals)
@@ -118,6 +129,7 @@ private:
     DataSource::SensorPacketsChunk currChunk_;
 };
 
+// Generates a constant signal where the entire signal is the same as the signal index
 class ConstantGenerator : public SignalGenerator
 {
 public:
@@ -130,19 +142,33 @@ public:
     }
 };
 
+// Generates a crude sequence of baseline/pulses.
+// * Pulses are generated, either with a fixed width/ipd
+//   or with a poisson distrbution
+// * Pulse amplitudes are configurable (can be distinct or all the same)
+// * A noisy baseline is generated and added to *all* frames (so pulses have
+//   some amplitude variability as well)
+// Baseline (with noise) is generated
 class PicketFenceGenerator : public SignalGenerator
 {
 public:
     struct Config
     {
+        // Determines if fixed width/ipd or poisson distribution is used
         bool generatePoisson = true;
+        // If fixed, directly controls the pulse characteritics
         uint16_t pulseWidth = 5;
         uint16_t pulseIpd = 10;
+        // If generatePoisson==true controls the distrubtion
         float pulseWidthRate = 0.2f;
         float pulseIpdRate = 0.1f;
+        // Mean/sigma of the baseline noise
         short baselineSignalLevel = 200;
         short baselineSigma = 20;
+        // Pulse amplitudes, should be 1 or 4 elements long
         std::vector<short> pulseSignalLevels = { 200 };
+        // Optional function controlling rng seed.  Input will be the
+        // signal number.
         std::function<size_t(size_t)> seedFunc = [](size_t i) { return i; };
     };
     PicketFenceGenerator(const Config& config)
@@ -155,6 +181,8 @@ private:
     Config config_;
 };
 
+// Generates a sawtooth signal with configurable
+// peaks and period.
 class SawtoothGenerator : public SignalGenerator
 {
 public:
@@ -163,6 +191,8 @@ public:
         size_t periodFrames = 128;
         int16_t minAmp = 0;
         int16_t maxAmp = 200;
+        // A nonzero stagger means subsequent ZMW will start
+        // at a different point in the configured sequence.
         int16_t startFrameStagger = 0;
     };
     SawtoothGenerator(const Config& config)
@@ -178,6 +208,10 @@ private:
     Config config_;
 };
 
+// Meta generator, that takes another generator and sorts it's signal.
+// Mostly useful for niche cases, e.g. binning perf tests, where data
+// order doesn't actually matter, but a temporal correlations (or lack of)
+// in the data can affect the speed of some binning techniques.
 class SortedGenerator : public SignalGenerator
 {
 public:
@@ -195,6 +229,10 @@ private:
     std::unique_ptr<SignalGenerator> gen_;
 };
 
+// Meta generator, that takes another generator and randomizes it's signal.
+// Mostly useful for niche cases, e.g. binning perf tests, where data
+// order doesn't actually matter, but a temporal correlations (or lack of)
+// in the data can affect the speed of some binning techniques.
 class RandomizedGenerator : public SignalGenerator
 {
 public:
@@ -217,7 +255,6 @@ private:
     std::unique_ptr<SignalGenerator> gen_;
     Config config_;
 };
-
 
 }} // ::PacBio::Application
 

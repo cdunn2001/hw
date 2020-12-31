@@ -37,6 +37,17 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Memory;
 using namespace PacBio::Mongo;
 
+// Validation routine to check the output of an individual SensorPacket
+//
+// `ExpectedFunct will have a function operator that takes a zmw and frame and
+// returns an expected pixel value.
+//
+// ValidatePacket will return true iff all data in the packet matches expectations.
+// If there are any mismatches this function will directly trigger gtest failures
+// for the first small number of differences, after which it will stop trying
+// so as to not flood the output with failure data.  It is expected that the true/false
+// output of this function will also be tossed into a gtest assert, so that higher
+// level information about which batch is failing also gets output.
 template <typename ExpectedFunc>
 bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
 {
@@ -48,12 +59,12 @@ bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
     {
         auto data = reinterpret_cast<const int16_t*>(packet.BlockData(i).Data());
         auto chunkFrame = packet.StartFrame();
-        for (size_t frame = 0; frame < layout.NumFrames(); ++frame)
+        for (size_t frameIdx = 0; frameIdx < layout.NumFrames(); ++frameIdx)
         {
-            for (size_t zmw = 0; zmw < layout.BlockWidth(); ++zmw)
+            for (size_t zmwIdx = 0; zmwIdx < layout.BlockWidth(); ++zmwIdx)
             {
-                auto e = expected(blockZmw + zmw, chunkFrame + frame);
-                EXPECT_EQ(e, *data) << "zmw, frame: " << blockZmw + zmw << ", " << chunkFrame + frame;
+                auto e = expected(blockZmw + zmwIdx, chunkFrame + frameIdx);
+                EXPECT_EQ(e, *data) << "zmw, frame: " << blockZmw + zmwIdx << ", " << chunkFrame + frameIdx;
                 if (e != *data) errorCount++;
                 if (errorCount == maxErrors)
                 {
@@ -68,6 +79,11 @@ bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
     return errorCount == 0;
 }
 
+// Validation routine to check the output of a full SimulatedDataSource.  Uses the
+// above validation routine to check individual packets, and also adds some bits
+// of extra information to the output in the event of a failure.
+//
+// Returns the number of packets that failed validation.
 template <typename ExpectedFunc>
 size_t ValidateData(const ExpectedFunc& expected, SimulatedDataSource& source)
 {

@@ -47,16 +47,19 @@ public:
             return numQuanta * quantum;
         };
 
+        // Need to handle the case where the requested extents don't tile easily into
+        // the block size.  Just roudning them up as a simple solution that lets us only
+        // worry about data replication on the block level.
         const auto numSignals = RoundUp(config.NumSignals(), zmwPerBlock);
         const auto numFrames = RoundUp(config.NumFrames(), framesPerBlock);
 
-        // TODO these are ugly.  Construction is all messed up, and these duplicate
-        // the extents
         numChunks_ = numFrames / framesPerBlock;
         framesPerBlock_ = framesPerBlock;
         numLanes_ = numSignals / zmwPerBlock;
         zmwPerBlock_ = zmwPerBlock;
 
+        // Set up a data cache that is populated with integral blocks.  This makes it easy to
+        // replicate it out as requests for new blocks come in (you just modulo the lane/chunk idx)
         data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_]);
 
         size_t lane = 0;
@@ -78,6 +81,7 @@ public:
 
     }
 
+    // Takes a block from the cache and uses it to populate a block in a SensorPacket
     void FillBlock(size_t laneIdx, size_t chunkIdx, SensorPacket::DataView data)
     {
         auto cacheBlock = data_[chunkIdx % numChunks_][laneIdx % numLanes_].origin();
@@ -228,7 +232,7 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
         uint16_t nIpdFrames = std::min(numFrames - frame, static_cast<size_t>(pulseIpd));
         std::vector<short> baselineSignal = GetBaselineSignal(pulseIpd);
         signal.insert(std::end(signal), std::begin(baselineSignal),
-                              std::begin(baselineSignal) + nIpdFrames);
+                      std::begin(baselineSignal) + nIpdFrames);
         frame += nIpdFrames;
 
         uint16_t pulseWidth = GetPulseWidth();
