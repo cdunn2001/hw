@@ -47,6 +47,7 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
+// Just extracting this here to make it easier to type elsewhere
 static constexpr size_t numBins = LaneHistogram<float, int16_t>::numBins;
 
 }
@@ -83,6 +84,8 @@ struct HistFactory<TraceHistogramAccumHost>
     }
 };
 
+// Test fixture, which will also handle the logic for generating data and
+// getting it placed into the histograms
 template <typename Hist>
 class Histogram : public testing::Test
 {
@@ -103,6 +106,39 @@ public:
 
     using Hist_t = Hist;
 
+    // Creates histograms to span a chunk, and populates them with simulated data
+    std::vector<std::unique_ptr<TraceHistogramAccumulator>>
+    RunTest(const TestParameters& params,
+            const SimulatedDataSource::SimConfig& simConfig,
+            std::unique_ptr<SignalGenerator> generator)
+    {
+        DeviceAllocationStash stash;
+
+        std::vector<std::unique_ptr<TraceHistogramAccumulator>> hists;
+        for (size_t i = 0; i < params.numPools; ++i)
+        {
+            StashableAllocRegistrar registrar(i, stash);
+            hists.emplace_back(HistFactory<Hist>::Create(i, params.lanesPerPool, &registrar));
+
+            UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
+                                                        SyncDirection::HostWriteDeviceRead,
+                                                        SOURCE_MARKER());
+            auto boundsView = poolBounds.GetHostView();
+            for (size_t i = 0; i < boundsView.Size(); ++i)
+            {
+                boundsView[i] = params.bounds;
+            }
+            hists.back()->Reset(std::move(poolBounds));
+        }
+
+        GenerateAndBinData(hists, stash, params, simConfig, std::move(generator));
+
+        return hists;
+    }
+
+private:
+
+    // Generates simulated data and feeds it to the histograms passed in.
     void BinData(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
                  DeviceAllocationStash& stash,
                  DataSourceBase::Configuration sourceConfig,
@@ -138,6 +174,8 @@ public:
                                        packet.StartZmw());
                     TraceBatch<int16_t> batch(std::move(packet), meta, dims,
                                               SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+
+                    // Profiler will only do something if we're configured to enable profiling.
                     typename Profiler::Mode mode = monitorPerf ? Profiler::Mode::OBSERVE : Profiler::Mode::IGNORE;
                     Profiler profiler(mode, 1000, 1000);
 
@@ -165,39 +203,12 @@ public:
         }
     }
 
-    auto RunTest(const TestParameters& params,
-                 const SimulatedDataSource::SimConfig& simConfig,
-                 std::unique_ptr<SignalGenerator> generator)
-    {
-        DeviceAllocationStash stash;
-
-        std::vector<std::unique_ptr<TraceHistogramAccumulator>> hists;
-        for (size_t i = 0; i < params.numPools; ++i)
-        {
-            StashableAllocRegistrar registrar(i, stash);
-            hists.emplace_back(HistFactory<Hist>::Create(i, params.lanesPerPool, &registrar));
-
-            UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
-                                                        SyncDirection::HostWriteDeviceRead,
-                                                        SOURCE_MARKER());
-            auto boundsView = poolBounds.GetHostView();
-            for (size_t i = 0; i < boundsView.Size(); ++i)
-            {
-                boundsView[i] = params.bounds;
-            }
-            hists.back()->Reset(std::move(poolBounds));
-        }
-
-        RunTest(hists, stash, params, simConfig, std::move(generator));
-
-        return hists;
-    }
-
-    void RunTest(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
-                 DeviceAllocationStash& stash,
-                 const TestParameters& params,
-                 const SimulatedDataSource::SimConfig& simConfig,
-                 std::unique_ptr<SignalGenerator> generator)
+    // Sets up the SimulatedDataSource and feeds it's data into the histograms
+    void GenerateAndBinData(std::vector<std::unique_ptr<TraceHistogramAccumulator>>& hists,
+                            DeviceAllocationStash& stash,
+                            const TestParameters& params,
+                            const SimulatedDataSource::SimConfig& simConfig,
+                            std::unique_ptr<SignalGenerator> generator)
     {
 
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
@@ -573,8 +584,90 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
     }
 }
 
+TYPED_TEST(Histogram, Reset)
+{
+    TestParameters params;
+    params.lanesPerPool = 2;
+    params.numPools = 2;
+    params.framesPerBlock = 512;
+    params.numFrames = 2048;
+    params.bounds.lowerBounds = 100;
+    params.bounds.upperBounds = 100+numBins;
+
+    SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
+    SawtoothGenerator::Config sawConfig;
+    sawConfig.minAmp = 0;
+    sawConfig.maxAmp = 512;
+    sawConfig.periodFrames = 512;
+    sawConfig.startFrameStagger = 2;
+    auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
+
+    auto hists = TestFixture::RunTest(params,
+                                      simConfig,
+                                      std::move(generator));
+
+    for (size_t pool = 0; pool < params.numPools; ++pool)
+    {
+        EXPECT_EQ(hists[pool]->FramesAdded(), params.numFrames);
+
+        const auto& histdata = hists[pool]->Histogram();
+        for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
+        {
+            const auto& lanedata = histdata.data.GetHostView()[lane];
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
+
+            ArrayUnion<LaneArray<uint16_t>> expected;
+            for (size_t i = 0; i < numBins; ++i)
+            {
+                auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
+                EXPECT_TRUE(all(counts == 4u));
+            }
+        }
+    }
+
+    // Now reset all the hists to make sure they really are empty
+    for (auto& hist : hists)
+    {
+        UnifiedCudaArray<LaneHistBounds> bounds(params.numPools, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+        auto bview = bounds.GetHostView();
+        for (size_t i = 0; i < bview.Size(); ++i)
+        {
+            bview[i].lowerBounds = 5;
+            bview[i].upperBounds = 10;
+        }
+        hist->Reset(std::move(bounds));
+    }
+    for (size_t pool = 0; pool < params.numPools; ++pool)
+    {
+        EXPECT_EQ(hists[pool]->FramesAdded(), 0);
+
+        const auto& histdata = hists[pool]->Histogram();
+        for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
+        {
+            const auto& lanedata = histdata.data.GetHostView()[lane];
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == 0u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == 0u));
+
+            EXPECT_TRUE(all(LaneArray<float>(lanedata.lowBound) == 5.f));
+            EXPECT_TRUE(all(LaneArray<float>(lanedata.binSize) == 5.f/numBins));
+
+            ArrayUnion<LaneArray<uint16_t>> expected;
+            for (size_t i = 0; i < numBins; ++i)
+            {
+                auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
+                EXPECT_TRUE(all(counts == 0u));
+            }
+        }
+    }
+}
+
 // TODO it would be marginally more convenient if this was runtime enabled
 //      instead of compile time.
+// Flag to enable/disable the Perf tests.  They serve as a handy way to
+// get some profile information, but they don't actually check the
+// correctness of anything, and take a bit longer to run than we'd want
+// enabled by default in CI
 static constexpr bool enablePerfTests = false;
 
 TYPED_TEST(Histogram, PerfPulseManySignals)
