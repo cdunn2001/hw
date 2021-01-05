@@ -64,9 +64,9 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId,
 //    * Aggregation continues until we have enough histogram data for a full model estimation
 //    * Upon full model estimation the baseline stats are used to re-init the histograms, and
 //      the baseline stats are reset
-// * Until program termination, the we continue mostly as in the last phase, with the main
+// * Until program termination, we continue mostly as in the last phase, with the main
 //   difference being we don't update the models between estimation attempts any longer.
-//    * Future implemnetations likely will have a more lightweight update step between
+//    * Future implementations likely will have a more lightweight update step between
 //      estimations
 bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
                                        const Data::BaselinerMetrics& metrics,

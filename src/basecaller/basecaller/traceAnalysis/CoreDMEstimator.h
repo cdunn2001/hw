@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -120,6 +120,6 @@ private:    // Functions
 };
 
 
-}}}
+}}}     // namespace PacBio::Mongo::Basecaller
 
 #endif //mongo_basecaller_traceAnalysis_CoreDMEstimator.h_H_
