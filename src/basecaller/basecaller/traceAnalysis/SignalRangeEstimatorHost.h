@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
 #define mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
 
-// Copyright (c) 2019,2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -48,7 +48,6 @@ public:
     SignalRangeEstimatorHost(uint32_t poolId, unsigned int poolSize)
         : SignalRangeEstimator(poolId, poolSize)
         , stats_(poolSize)
-        , poolTraceStats_(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER())
     {}
 
 public:     // Const access (extensions to SignalRangeEstimatorHost interface)
@@ -60,13 +59,12 @@ public:     // Const access (extensions to SignalRangeEstimatorHost interface)
 private:    // SignalRangeEstimatorHost implementation.
     void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
 
-    const Data::BaselinerMetrics& TraceStatsImpl() const override;
+    Data::BaselinerMetrics TraceStatsImpl() const override;
 
     Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndResetImpl() override;
 
 private:    // Data
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
-    mutable Data::BaselinerMetrics poolTraceStats_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

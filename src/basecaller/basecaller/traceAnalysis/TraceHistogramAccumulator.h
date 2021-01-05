@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumulator_H_
 #define mongo_basecaller_traceAnalysis_TraceHistogramAccumulator_H_
 
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -65,10 +65,8 @@ public:     // Const functions
     size_t FramesAdded() const
     { return frameCount_; }
 
-    /// The accumulated histogram.
-    /// \note Calls to AddBatch may modify the referenced value.
-    /// \note Calling this function is not necessarily cheap.
-    const PoolHistType& Histogram() const
+    /// Returns a copy of the accumulated trace histogram
+    PoolHistType Histogram() const
     {
         return HistogramImpl();
     }
@@ -115,7 +113,7 @@ private:    // Customizable implementation.
     // Clears out current histogram data and resets histogram bounds
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
 
-    virtual const PoolHistType& HistogramImpl() const = 0;
+    virtual PoolHistType HistogramImpl() const = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

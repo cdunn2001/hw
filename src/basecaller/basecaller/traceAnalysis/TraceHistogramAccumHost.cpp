@@ -1,5 +1,5 @@
 
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -40,7 +40,6 @@ namespace Basecaller {
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
-    , poolHist_ (poolId, poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead)
 { }
 
 void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
@@ -84,13 +83,14 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     }
 }
 
-const TraceHistogramAccumHost::PoolHistType&
+TraceHistogramAccumHost::PoolHistType
 TraceHistogramAccumHost::HistogramImpl() const
 {
-    using std::copy;
-
+    PoolHistType poolHist(PoolId(),
+                          PoolSize(),
+                          Cuda::Memory::SyncDirection::HostWriteDeviceRead);
     assert(hist_.size() == PoolSize());
-    auto phv = poolHist_.data.GetHostView();
+    auto phv = poolHist.data.GetHostView();
 
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
@@ -109,7 +109,7 @@ TraceHistogramAccumHost::HistogramImpl() const
         }
     }
 
-    return poolHist_;
+    return poolHist;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_SignalRangeEstimator_H_
 #define mongo_basecaller_traceAnalysis_SignalRangeEstimator_H_
 
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -73,8 +73,8 @@ public:
     unsigned int PoolSize() const
     { return poolSize_; }
 
-    /// The accumulated trace statistics.
-    const Data::BaselinerMetrics& TraceStats() const
+    /// Returns a copy of the accumulated trace statistics.
+    Data::BaselinerMetrics TraceStats() const
     {
         return TraceStatsImpl();
     }
@@ -100,7 +100,7 @@ private:    // Static data
 private:
     virtual void AddMetricsImpl(const Data::BaselinerMetrics& stats) = 0;
 
-    virtual const Data::BaselinerMetrics& TraceStatsImpl() const = 0;
+    virtual Data::BaselinerMetrics TraceStatsImpl() const = 0;
 
     virtual Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndResetImpl() = 0;
 

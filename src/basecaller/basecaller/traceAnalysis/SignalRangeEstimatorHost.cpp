@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -48,14 +48,17 @@ void SignalRangeEstimatorHost::AddMetricsImpl(const Data::BaselinerMetrics& metr
     });
 }
 
-const Data::BaselinerMetrics& SignalRangeEstimatorHost::TraceStatsImpl() const
+Data::BaselinerMetrics SignalRangeEstimatorHost::TraceStatsImpl() const
 {
-    auto ptsv = poolTraceStats_.baselinerStats.GetHostView();
+    Data::BaselinerMetrics poolTraceStats(PoolSize(),
+                                          Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                          SOURCE_MARKER());
+    auto ptsv = poolTraceStats.baselinerStats.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
         ptsv[lane] = stats_[lane].GetState();
     }
-    return poolTraceStats_;
+    return poolTraceStats;
 }
 
 Cuda::Memory::UnifiedCudaArray<LaneHistBounds> SignalRangeEstimatorHost::EstimateRangeAndResetImpl()

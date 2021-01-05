@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
 #define mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
 
-// Copyright (c) 2019,2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -61,10 +61,9 @@ private:    // TraceHistogramAccumulator implementation.
 
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
 
-    const PoolHistType& HistogramImpl() const override;
+    PoolHistType HistogramImpl() const override;
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
-    mutable PoolHistType poolHist_;
 
 private:    // Functions
     // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
