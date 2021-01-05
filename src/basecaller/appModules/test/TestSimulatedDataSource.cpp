@@ -68,7 +68,7 @@ bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
                 if (e != *data) errorCount++;
                 if (errorCount == maxErrors)
                 {
-                    EXPECT_TRUE(false) << "Reached max errors per packet";
+                    ADD_FAILURE() << "Reached max errors per packet";
                     return false;
                 }
                 ++data;
@@ -194,7 +194,7 @@ TEST_P(SimDataSource, LongSawtooth)
         auto wrappedZmw = zmw % expectedSignals;
         auto wrappedFrame = frame % expectedSimFrames;
 
-        auto range = sawConfig.maxAmp - sawConfig.minAmp;
+        auto range = sawConfig.maxAmp - sawConfig.minAmp + 1;
         auto slope = range / static_cast<double>(sawConfig.periodFrames);
         return sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
     };
@@ -234,7 +234,7 @@ TEST_P(SimDataSource, ShortSawtooth)
         auto wrappedZmw = zmw % expectedSignals;
         auto wrappedFrame = frame % expectedSimFrames;
 
-        auto range = sawConfig.maxAmp - sawConfig.minAmp;
+        auto range = sawConfig.maxAmp - sawConfig.minAmp + 1;
         auto slope = range / static_cast<double>(sawConfig.periodFrames);
         return sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
     };
@@ -280,7 +280,7 @@ INSTANTIATE_TEST_SUITE_P(SingleChunkMultiBatch,
                                  512,  /* signalFrames */}));
 
 // Finally increase the number of frames so we have two chunks
-INSTANTIATE_TEST_SUITE_P(MuliChunkMultiBatch,
+INSTANTIATE_TEST_SUITE_P(MultiChunkMultiBatch,
                          SimDataSource,
                          testing::Values(TestingParams{
                                  512,  /* framesPerBlock */
@@ -347,3 +347,101 @@ INSTANTIATE_TEST_SUITE_P(TinyReplication,
                                  512 , /* numZmw */
                                  1,    /* numSignals */
                                  10 ,  /* signalFrames */}));
+
+//----------------------------Standalone tests for DataSource API---------------------------//
+
+TEST(SimDataSourceAPI, Layout)
+{
+    //PacBio::Logging::LogSeverityContext severity(PacBio::Logging::LogLevel::WARN);
+
+    uint32_t lanesPerPool = 8;
+    uint32_t framesPerBlock = 512;
+    uint32_t totalFrames = 2048;
+    uint32_t totalZmw = 4096;
+
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
+                        {lanesPerPool, framesPerBlock, laneSize});
+    // don't care how data is generated, this particular test won't even look at it
+    SimulatedDataSource::SimConfig simConf(1, 1);
+
+    DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
+    cfg.numFrames = totalFrames;
+    SimulatedDataSource source(totalZmw,
+                               simConf,
+                               std::move(cfg),
+                               std::make_unique<ConstantGenerator>());
+
+    auto providedLayout = source.Layout();
+    EXPECT_EQ(providedLayout.BlockWidth(), laneSize);
+    EXPECT_EQ(providedLayout.NumFrames(), framesPerBlock);
+    EXPECT_EQ(providedLayout.NumBlocks(), lanesPerPool);
+
+    EXPECT_EQ(source.NumFrames(), totalFrames);
+    EXPECT_EQ(source.NumZmw(), totalZmw);
+    EXPECT_EQ(source.NumBatches(), 8);
+
+    // The current implementation only provides an integral number of
+    // evenly sized batches.  This should change in the future,
+    // but for now make sure it's working consistently as expected
+
+    cfg = DataSourceBase::Configuration(layout, std::make_unique<MallocAllocator>());
+    // these subtractions should effectively do nothing once things get rounded up
+    cfg.numFrames = totalFrames - 256;
+    SimulatedDataSource source2(totalZmw - 256,
+                                simConf,
+                                std::move(cfg),
+                                std::make_unique<ConstantGenerator>());
+
+    providedLayout = source.Layout();
+    EXPECT_EQ(providedLayout.BlockWidth(), laneSize);
+    EXPECT_EQ(providedLayout.NumFrames(), framesPerBlock);
+    EXPECT_EQ(providedLayout.NumBlocks(), lanesPerPool);
+
+    EXPECT_EQ(source.NumFrames(), totalFrames);
+    EXPECT_EQ(source.NumZmw(), totalZmw);
+    EXPECT_EQ(source.NumBatches(), 8);
+}
+
+TEST(SimDataSourceAPI, ZmwInfo)
+{
+    //PacBio::Logging::LogSeverityContext severity(PacBio::Logging::LogLevel::WARN);
+
+    uint32_t lanesPerPool = 8;
+    uint32_t framesPerBlock = 512;
+    uint32_t totalFrames = 2048;
+    uint32_t totalZmw = 4096;
+
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
+                        {lanesPerPool, framesPerBlock, laneSize});
+    // don't care how data is generated, this particular test won't even look at it
+    SimulatedDataSource::SimConfig simConf(1, 1);
+
+    DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
+    cfg.numFrames = totalFrames;
+    SimulatedDataSource source(totalZmw,
+                               simConf,
+                               std::move(cfg),
+                               std::make_unique<ConstantGenerator>());
+    EXPECT_EQ(source.NumZmw(), totalZmw);
+    EXPECT_EQ(source.NumFrames(), totalFrames);
+
+    // Should check the values, but we've not actually defined what the UnitCellFeature values are yet
+    EXPECT_EQ(source.UnitCellFeatures().size(), totalZmw);
+
+    // ID's should have one unique value for each zmw
+    auto ids = source.UnitCellIds();
+    std::set<uint32_t> uniqueIds;
+    for (auto& val : ids) uniqueIds.insert(val);
+
+    EXPECT_EQ(ids.size(), totalZmw);
+    EXPECT_EQ(uniqueIds.size(), totalZmw);
+
+    // TODO I expect these to end up changing, they assume perfectly
+    // regular batches, which isn't going to work out in the long run
+    EXPECT_EQ(source.NumBatches(), totalZmw / lanesPerPool / laneSize);
+    auto poolIds = source.PoolIds();
+    std::set<uint32_t> uniquePoolIds;
+    for (auto& val : poolIds) uniquePoolIds.insert(val);
+    EXPECT_EQ(poolIds.size(), source.NumBatches());
+    EXPECT_EQ(uniquePoolIds.size(), source.NumBatches());
+}

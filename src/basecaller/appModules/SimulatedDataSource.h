@@ -159,7 +159,7 @@ public:
         // If fixed, directly controls the pulse characteritics
         uint16_t pulseWidth = 5;
         uint16_t pulseIpd = 10;
-        // If generatePoisson==true controls the distrubtion
+        // If generatePoisson==true controls the distribution
         float pulseWidthRate = 0.2f;
         float pulseIpdRate = 0.1f;
         // Mean/sigma of the baseline noise

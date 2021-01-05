@@ -157,7 +157,7 @@ std::vector<int16_t> SawtoothGenerator::GenerateSignal(size_t numFrames, size_t 
 {
     std::vector<int16_t> ret(numFrames);
 
-    const auto range = config_.maxAmp - config_.minAmp;
+    const auto range = config_.maxAmp - config_.minAmp + 1;
     const auto slope = static_cast<double>(range) / config_.periodFrames;
     for (size_t i = 0; i < numFrames; ++i)
     {
@@ -256,9 +256,9 @@ std::vector<int16_t> SortedGenerator::GenerateSignal(size_t numFrames, size_t id
 
 std::vector<int16_t> RandomizedGenerator::GenerateSignal(size_t numFrames, size_t idx)
 {
-    std::mt19937 gen(config_.seedFunc(idx));
+    std::mt19937 rng(config_.seedFunc(idx));
     auto signal = gen_->GenerateSignal(numFrames, idx);
-    std::shuffle(signal.begin(), signal.end(), gen);
+    std::shuffle(signal.begin(), signal.end(), rng);
     return signal;
 }
 
