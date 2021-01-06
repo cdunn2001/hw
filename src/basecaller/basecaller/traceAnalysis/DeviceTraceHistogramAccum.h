@@ -35,29 +35,35 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+// Several implementations were tried.  While
+// SharedInterleaved2DBlock was a clear winner
+// and will probably be the only flavor used in
+// production, the others are worth keeping around,
+// at least until they get in the way.  They may
+// prove useful when evaluating new hardware,
+// and/or when someone wants to see what optimization
+// ides where tried
 enum class DeviceHistogramTypes
 {
     GlobalInterleaved,
-    GlobalInterleavedMulti,
     GlobalContig,
-    GlobalCotigMulti,
-    GlobalContigAtomic,
-    SharedContigMulti,
-    SharedContigAtomic,
-    SharedInterleaved
+    GlobalContigCoopWarps,
+    SharedContig2DBlock,
+    SharedContigCoopWarps,
+    SharedInterleaved2DBlock
 };
 
-class DeviceTraceHistogramAccumHidden : public TraceHistogramAccumulator
+class DeviceTraceHistogramAccum : public TraceHistogramAccumulator
 {
 public:
     static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig);
 
-    DeviceTraceHistogramAccumHidden(unsigned int poolId,
-                                    unsigned int poolSize,
-                                    DeviceHistogramTypes type,
-                                    Cuda::Memory::StashableAllocRegistrar* registrar);
+    DeviceTraceHistogramAccum(unsigned int poolId,
+                             unsigned int poolSize,
+                             Cuda::Memory::StashableAllocRegistrar* registrar,
+                             DeviceHistogramTypes type = DeviceHistogramTypes::SharedInterleaved2DBlock);
 
-    ~DeviceTraceHistogramAccumHidden();
+    ~DeviceTraceHistogramAccum();
 
     void AddBatchImpl(const Data::TraceBatch<DataType>& traces) override;
 
@@ -67,26 +73,10 @@ public:
 
     PoolHistType HistogramImpl() const override;
 
-    struct ImplBase;
+    class ImplBase;
 private:
     std::unique_ptr<ImplBase> impl_;
 };
-
-template <DeviceHistogramTypes type>
-class DeviceTraceHistogramAccum : public DeviceTraceHistogramAccumHidden
-{
-public:
-    DeviceTraceHistogramAccum(unsigned int poolId,
-                              unsigned int poolSize,
-                              Cuda::Memory::StashableAllocRegistrar* registrar)
-        : DeviceTraceHistogramAccumHidden(poolId, poolSize, type, registrar)
-    {}
-
-    using DeviceTraceHistogramAccumHidden::ResetImpl;
-    using DeviceTraceHistogramAccumHidden::HistogramImpl;
-
-};
-
 
 }}}
 

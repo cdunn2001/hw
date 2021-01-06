@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
+#include <pacbio/process/OptionParser.h>
 #include <pacbio/utilities/Finally.h>
 
 #include <appModules/SimulatedDataSource.h>
@@ -61,41 +62,85 @@ struct TestParameters
     LaneHistBounds bounds;
 };
 
-// Factory class to unify histogram construction, since the host
-// host version doesn't know about StashAbleAllocRegistrar
-template <typename T>
-struct HistFactory
+enum class TestTypes
 {
-    static std::unique_ptr<T> Create(uint32_t poolId,
-                                     uint32_t lanesPerPool,
-                                     StashableAllocRegistrar* registrar)
-    {
-        return std::make_unique<T>(poolId, lanesPerPool, registrar);
-    }
+    TraceHistogramAccumHost,
+    DeviceGlobalInterleaved,
+    DeviceGlobalContig,
+    DeviceGlobalContigCoopWarps,
+    DeviceSharedContigCoopWarps,
+    DeviceSharedContig2DBlock,
+    DeviceSharedInterleaved2DBlock
 };
-template <>
-struct HistFactory<TraceHistogramAccumHost>
+
+// Factory method to unify histogram construction, converting
+// from an enum value to a trace histogram implementation
+std::unique_ptr<TraceHistogramAccumulator> HistFactory(TestTypes type,
+                                                       uint32_t poolId,
+                                                       uint32_t lanesPerPool,
+                                                       StashableAllocRegistrar* registrar)
 {
-    static std::unique_ptr<TraceHistogramAccumHost> Create(uint32_t poolId,
-                                                           uint32_t lanesPerPool,
-                                                           StashableAllocRegistrar*)
+    switch (type)
     {
+    case TestTypes::TraceHistogramAccumHost:
         return std::make_unique<TraceHistogramAccumHost>(poolId, lanesPerPool);
+    case TestTypes::DeviceGlobalInterleaved:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalInterleaved);
+    case TestTypes::DeviceGlobalContig:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContig);
+    case TestTypes::DeviceGlobalContigCoopWarps:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContigCoopWarps);
+    case TestTypes::DeviceSharedContigCoopWarps:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContigCoopWarps);
+    case TestTypes::DeviceSharedContig2DBlock:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContig2DBlock);
+    case TestTypes::DeviceSharedInterleaved2DBlock:
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedInterleaved2DBlock);
     }
-};
+    throw PBException("Not a valid test type");
+}
 
 // Test fixture, which will also handle the logic for generating data and
 // getting it placed into the histograms
-template <typename Hist>
-class Histogram : public testing::Test
+class Histogram : public testing::TestWithParam<TestTypes>
 {
     SMART_ENUM(Profiles, TRACE_UPLOAD, HIST_UPLOAD, HIST_DOWNLOAD, BINNING);
     using Profiler = ScopedProfilerChain<Profiles>;
 public:
-    PacBio::Utilities::Finally EnablePerf()
+
+    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& config)
+    {
+        switch (GetParam())
+        {
+        case TestTypes::TraceHistogramAccumHost:
+            TraceHistogramAccumHost::Configure(config);
+            break;
+        case TestTypes::DeviceGlobalInterleaved:
+        case TestTypes::DeviceGlobalContig:
+        case TestTypes::DeviceGlobalContigCoopWarps:
+        case TestTypes::DeviceSharedContigCoopWarps:
+        case TestTypes::DeviceSharedContig2DBlock:
+        case TestTypes::DeviceSharedInterleaved2DBlock:
+            DeviceTraceHistogramAccum::Configure(config);
+            break;
+        }
+    }
+
+    static void EnablePerfTests(bool b)
+    {
+        allowPerfTests_ = b;
+    }
+    static bool PerfTestsEnabled()
+    {
+        return allowPerfTests_;
+    }
+
+    // Sets up things for performance monitoring, and creates an RAII functor
+    // to tear it down again at the end of the test.
+    PacBio::Utilities::Finally SetupPerfMonitoring()
     {
         Memory::SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
-        monitorPerf = true;
+        monitorPerf_ = true;
 
         return PacBio::Utilities::Finally([](){
             Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::CUDA);
@@ -103,8 +148,6 @@ public:
             Profiler::FinalReport();
         });
     }
-
-    using Hist_t = Hist;
 
     // Creates histograms to span a chunk, and populates them with simulated data
     std::vector<std::unique_ptr<TraceHistogramAccumulator>>
@@ -118,7 +161,7 @@ public:
         for (size_t i = 0; i < params.numPools; ++i)
         {
             StashableAllocRegistrar registrar(i, stash);
-            hists.emplace_back(HistFactory<Hist>::Create(i, params.lanesPerPool, &registrar));
+            hists.emplace_back(HistFactory(GetParam(), i, params.lanesPerPool, &registrar));
 
             UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
                                                         SyncDirection::HostWriteDeviceRead,
@@ -176,7 +219,7 @@ private:
                                               SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
                     // Profiler will only do something if we're configured to enable profiling.
-                    typename Profiler::Mode mode = monitorPerf ? Profiler::Mode::OBSERVE : Profiler::Mode::IGNORE;
+                    typename Profiler::Mode mode = monitorPerf_ ? Profiler::Mode::OBSERVE : Profiler::Mode::IGNORE;
                     Profiler profiler(mode, 1000, 1000);
 
                     auto bcopy = profiler.CreateScopedProfiler(Profiles::TRACE_UPLOAD);
@@ -220,24 +263,20 @@ private:
         BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator));
     }
 
-    bool monitorPerf = false;
+    // Is the current test monitoring performance?
+    bool monitorPerf_ = false;
+    // Are tests that would want to monitor performance enabled?
+    static bool allowPerfTests_;
 };
 
-using HistTypes = ::testing::Types<TraceHistogramAccumHost,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalInterleaved>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalContig>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::GlobalContigAtomic>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedContigAtomic>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedContigMulti>,
-                                   DeviceTraceHistogramAccum<DeviceHistogramTypes::SharedInterleaved>>;
-TYPED_TEST_SUITE(Histogram, HistTypes);
+bool Histogram::allowPerfTests_ = false;
 
-TYPED_TEST(Histogram, ResetFromStats)
+TEST_P(Histogram, ResetFromStats)
 {
     PacBio::Logging::LogSeverityContext ls(PacBio::Logging::LogLevel::ERROR);
 
     Data::BasecallerTraceHistogramConfig config;
-    TestFixture::Hist_t::Configure(config);
+    ConfigureHists(config);
 
     const uint32_t numLanes = 2;
     Data::BaselinerMetrics metrics(numLanes,
@@ -264,7 +303,7 @@ TYPED_TEST(Histogram, ResetFromStats)
         }
     }
 
-    auto hAccum = HistFactory<typename TestFixture::Hist_t>::Create(1, numLanes, nullptr);
+    auto hAccum = HistFactory(GetParam(), 1, numLanes, nullptr);
     hAccum->Reset(std::move(metrics));
 
     auto hist = hAccum->Histogram();
@@ -287,7 +326,7 @@ TYPED_TEST(Histogram, ResetFromStats)
     }
 }
 
-TYPED_TEST(Histogram, SingleLaneConstant)
+TEST_P(Histogram, SingleLaneConstant)
 {
     TestParameters params;
     params.lanesPerPool = 1;
@@ -300,9 +339,9 @@ TYPED_TEST(Histogram, SingleLaneConstant)
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     EXPECT_EQ(hists[0]->FramesAdded(), params.numFrames);
 
@@ -324,7 +363,7 @@ TYPED_TEST(Histogram, SingleLaneConstant)
     }
 }
 
-TYPED_TEST(Histogram, MultiLaneConstant)
+TEST_P(Histogram, MultiLaneConstant)
 {
     TestParameters params;
     params.lanesPerPool = 4;
@@ -337,9 +376,9 @@ TYPED_TEST(Histogram, MultiLaneConstant)
     SimulatedDataSource::SimConfig simConfig(params.lanesPerPool*laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     EXPECT_EQ(hists[0]->FramesAdded(), params.numFrames);
 
@@ -364,7 +403,7 @@ TYPED_TEST(Histogram, MultiLaneConstant)
     }
 }
 
-TYPED_TEST(Histogram, MultiPoolConstant)
+TEST_P(Histogram, MultiPoolConstant)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -377,9 +416,9 @@ TYPED_TEST(Histogram, MultiPoolConstant)
     SimulatedDataSource::SimConfig simConfig(params.numPools*params.lanesPerPool*laneSize, params.numFrames);
     auto generator = std::make_unique<ConstantGenerator>();
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -408,7 +447,7 @@ TYPED_TEST(Histogram, MultiPoolConstant)
     }
 }
 
-TYPED_TEST(Histogram, SawtoothSimpleUniform)
+TEST_P(Histogram, SawtoothSimpleUniform)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -426,9 +465,9 @@ TYPED_TEST(Histogram, SawtoothSimpleUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -445,13 +484,13 @@ TYPED_TEST(Histogram, SawtoothSimpleUniform)
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all(counts == 6u | counts == 7u));
+                EXPECT_TRUE(all((counts == 6u) | (counts == 7u)));
             }
         }
     }
 }
 
-TYPED_TEST(Histogram, SawtoothSkipUniform)
+TEST_P(Histogram, SawtoothSkipUniform)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -469,9 +508,9 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     const uint16_t expect = params.numFrames / sawConfig.periodFrames;
     for (size_t pool = 0; pool < params.numPools; ++pool)
@@ -490,7 +529,7 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
                 if (i % 2 == 0)
-                    EXPECT_TRUE(all(counts == expect | counts == expect+1u));
+                    EXPECT_TRUE(all((counts == expect) | (counts == expect+1u)));
                 else
                     EXPECT_TRUE(all(counts == 0u));
             }
@@ -498,7 +537,7 @@ TYPED_TEST(Histogram, SawtoothSkipUniform)
     }
 }
 
-TYPED_TEST(Histogram, SawtoothOutliersUniform)
+TEST_P(Histogram, SawtoothOutliersUniform)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -516,9 +555,9 @@ TYPED_TEST(Histogram, SawtoothOutliersUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -541,7 +580,7 @@ TYPED_TEST(Histogram, SawtoothOutliersUniform)
     }
 }
 
-TYPED_TEST(Histogram, SawtoothOutliersStagger)
+TEST_P(Histogram, SawtoothOutliersStagger)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -559,9 +598,9 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
     sawConfig.startFrameStagger = 2;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -584,7 +623,7 @@ TYPED_TEST(Histogram, SawtoothOutliersStagger)
     }
 }
 
-TYPED_TEST(Histogram, Reset)
+TEST_P(Histogram, Reset)
 {
     TestParameters params;
     params.lanesPerPool = 2;
@@ -602,9 +641,9 @@ TYPED_TEST(Histogram, Reset)
     sawConfig.startFrameStagger = 2;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -662,18 +701,10 @@ TYPED_TEST(Histogram, Reset)
     }
 }
 
-// TODO it would be marginally more convenient if this was runtime enabled
-//      instead of compile time.
-// Flag to enable/disable the Perf tests.  They serve as a handy way to
-// get some profile information, but they don't actually check the
-// correctness of anything, and take a bit longer to run than we'd want
-// enabled by default in CI
-static constexpr bool enablePerfTests = false;
-
-TYPED_TEST(Histogram, PerfPulseManySignals)
+TEST_P(Histogram, PerfPulseManySignals)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -693,16 +724,16 @@ TYPED_TEST(Histogram, PerfPulseManySignals)
     picketConfig.generatePoisson = true;
     auto generator = std::make_unique<PicketFenceGenerator>(picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
 }
 
-TYPED_TEST(Histogram, PerfPulseOneSignal)
+TEST_P(Histogram, PerfPulseOneSignal)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -723,16 +754,16 @@ TYPED_TEST(Histogram, PerfPulseOneSignal)
     picketConfig.seedFunc = [](size_t) { return 0; };
     auto generator = std::make_unique<PicketFenceGenerator>(picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
 }
 
-TYPED_TEST(Histogram, PerfSortedPulseManySignals)
+TEST_P(Histogram, PerfSortedPulseManySignals)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -752,16 +783,16 @@ TYPED_TEST(Histogram, PerfSortedPulseManySignals)
     picketConfig.generatePoisson = true;
     auto generator = SortedGenerator::Create<PicketFenceGenerator>(picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
 }
 
-TYPED_TEST(Histogram, PerfSortedPulseOneSignal)
+TEST_P(Histogram, PerfSortedPulseOneSignal)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -782,16 +813,16 @@ TYPED_TEST(Histogram, PerfSortedPulseOneSignal)
     picketConfig.seedFunc = [](size_t) { return 0; };
     auto generator = SortedGenerator::Create<PicketFenceGenerator>(picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
 }
 
-TYPED_TEST(Histogram, PerfRandomPulseManySignals)
+TEST_P(Histogram, PerfRandomPulseManySignals)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -811,16 +842,16 @@ TYPED_TEST(Histogram, PerfRandomPulseManySignals)
     picketConfig.generatePoisson = true;
     auto generator = RandomizedGenerator::Create<PicketFenceGenerator>(RandomizedGenerator::Config{}, picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
 }
 
-TYPED_TEST(Histogram, PerfRandomPulseOneSignal)
+TEST_P(Histogram, PerfRandomPulseOneSignal)
 {
-    if (!enablePerfTests) GTEST_SKIP();
-    auto finally = this->EnablePerf();
+    if (!PerfTestsEnabled()) GTEST_SKIP();
+    auto finally = this->SetupPerfMonitoring();
 
     TestParameters params;
     params.lanesPerPool = 8192;
@@ -844,8 +875,57 @@ TYPED_TEST(Histogram, PerfRandomPulseOneSignal)
     randConfig.seedFunc = [](size_t) { return 0; };
     auto generator = RandomizedGenerator::Create<PicketFenceGenerator>(randConfig, picketConfig);
 
-    auto hists = TestFixture::RunTest(params,
-                                      simConfig,
-                                      std::move(generator));
+    auto hists = RunTest(params,
+                         simConfig,
+                         std::move(generator));
 
+}
+
+INSTANTIATE_TEST_SUITE_P(TraceHistogramAccumHost,
+                         Histogram,
+                         testing::Values(TestTypes::TraceHistogramAccumHost));
+
+INSTANTIATE_TEST_SUITE_P(DeviceGlobalInterleaved,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceGlobalInterleaved));
+
+INSTANTIATE_TEST_SUITE_P(DeviceGlobalContig,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceGlobalContig));
+
+INSTANTIATE_TEST_SUITE_P(DeviceGlobalContigCoopWarps,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceGlobalContigCoopWarps));
+
+INSTANTIATE_TEST_SUITE_P(DeviceSharedContigCoopWarps,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceSharedContigCoopWarps));
+
+INSTANTIATE_TEST_SUITE_P(DeviceSharedContig2DBlock,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceSharedContig2DBlock));
+
+INSTANTIATE_TEST_SUITE_P(DeviceSharedInterleaved2DBlock,
+                         Histogram,
+                         testing::Values(TestTypes::DeviceSharedInterleaved2DBlock));
+
+// Setting up our own main so we can have runtime configuration to enable performance tests
+// They are too long to leave enabled by default, but may prove useful when/if we evaluate
+// new hardware
+int main(int argc, char **argv)
+{
+    using namespace PacBio::Process;
+    ::testing::InitGoogleTest(&argc, argv);
+
+    OptionParser parser;
+    parser.version("0");
+    parser.add_option("--enablePerfHistTests").action_store_true().type_bool().set_default(false)
+          .help("Enable longer running histogram tests that collect performance metrics");
+    Values& options = parser.parse_args(argc, argv);
+    std::vector<std::string> args = parser.args();
+
+    Histogram::EnablePerfTests(options.get("enablePerfHistTests"));
+
+    auto stat = RUN_ALL_TESTS();
+    return stat;
 }
