@@ -352,8 +352,6 @@ INSTANTIATE_TEST_SUITE_P(TinyReplication,
 
 TEST(SimDataSourceAPI, Layout)
 {
-    //PacBio::Logging::LogSeverityContext severity(PacBio::Logging::LogLevel::WARN);
-
     uint32_t lanesPerPool = 8;
     uint32_t framesPerBlock = 512;
     uint32_t totalFrames = 2048;
@@ -404,8 +402,6 @@ TEST(SimDataSourceAPI, Layout)
 
 TEST(SimDataSourceAPI, ZmwInfo)
 {
-    //PacBio::Logging::LogSeverityContext severity(PacBio::Logging::LogLevel::WARN);
-
     uint32_t lanesPerPool = 8;
     uint32_t framesPerBlock = 512;
     uint32_t totalFrames = 2048;
