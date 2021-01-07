@@ -72,12 +72,11 @@ struct TestDmeEmHost : public ::testing::TestWithParam<TestDmeEmHostParam>
 public: // Types and static constants
     using LaneDetectionModel = Data::LaneDetectionModel<Cuda::PBHalf>;
     using LaneDetectionModelHost = DmeEmHost::LaneDetModelHost;
-    using TraceHistogramAccumulator = TraceHistogramAccumHost;
 public:
     struct CompleteData
     {
         // The simulated trace data histogram
-        std::unique_ptr<TraceHistogramAccumulator> traceHistAccum;
+        std::unique_ptr<TraceHistogramAccumHost> traceHistAccum;
 
         // The complete-data estimates of the model
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
@@ -88,13 +87,13 @@ public:
         // Constructors
         CompleteData() = default;
 
-        CompleteData(TraceHistogramAccumulator&& tha,
+        CompleteData(TraceHistogramAccumHost&& tha,
                      std::vector<std::unique_ptr<LaneDetectionModelHost>>&& dms,
                      std::vector<std::vector<unsigned short>>&& fm)
-            : traceHistAccum{new TraceHistogramAccumulator(std::move(tha))}
+            : traceHistAccum{new TraceHistogramAccumHost(std::move(tha))}
             , detectionModels{std::move(dms)}
             , frameMode{std::move(fm)}
-        { assert(tha.HistogramFrameCount() == frameMode.front().size()); }
+        { assert(traceHistAccum->HistogramFrameCount() == frameMode.front().size()); }
 
         CompleteData(CompleteData&&) = default;
         CompleteData& operator=(CompleteData&&) = default;
@@ -105,7 +104,7 @@ public: // Structors
 
 public: // Data
     unsigned int poolId = 0;
-    unsigned int poolSize = 1;
+    unsigned int poolSize = 100;
 
     std::unique_ptr<LaneDetectionModelHost> detModelStart;
     std::unique_ptr<LaneDetectionModelHost> detModelSim;
@@ -120,21 +119,8 @@ private:
     // Constructs and initializes a fixed detection model used as an initial model for the DME.
     LaneDetectionModel MakeInitialModel(void)
     {
-        movieConfig.frameRate = 100.0f;
-        movieConfig.photoelectronSensitivity = 0.5f;
-        movieConfig.refSnr = 5.0f;
-
-        // Construct analog set.
-        const float excessNoiseCV = 0.1f;
-        movieConfig.analogs[0] = Data::AnalogMode{'C', 3.70f, excessNoiseCV};
-        movieConfig.analogs[1] = Data::AnalogMode{'A', 2.55f, excessNoiseCV};
-        movieConfig.analogs[2] = Data::AnalogMode{'T', 1.68f, excessNoiseCV};
-        movieConfig.analogs[3] = Data::AnalogMode{'G', 1.00f, excessNoiseCV};
-
-        // Construct and initialize detection model provided to DmeEmHost as the initial model.
-        const float bgSigma{10.0f};
+        movieConfig = PacBio::Mongo::Data::MockMovieConfig();
         Data::StaticDetModelConfig staticDetModel;
-        staticDetModel.baselineVariance = bgSigma * bgSigma;
         const auto& analogs = staticDetModel.SetupAnalogs(movieConfig);
 
         const float bgWeight{0.5f};
@@ -161,19 +147,21 @@ private:
         // Standard normal distribution.
         std::normal_distribution<float> normDist;
 
-        // Construct camera track block and trace histogram.
+        // Construct camera trace block and trace histogram.
         Data::BatchDimensions bd{poolSize, static_cast<uint32_t>(totalFrames)};
-        Data::BatchMetadata bm{poolId, 42, static_cast<uint32_t>(totalFrames), poolId};
+        Data::BatchMetadata batchMeta{poolId, 0, static_cast<uint32_t>(totalFrames), poolId};
         ctbFactory = std::make_unique<Data::CameraBatchFactory>(Cuda::Memory::SyncDirection::Symmetric);
-        auto ctb = ctbFactory->NewBatch(bm, bd);
+        auto ctb = ctbFactory->NewBatch(batchMeta, bd);
 
         auto& traces = ctb.first;
         auto& stats = ctb.second;
 
-        histConfig.NumFramesPreAccumStats = 100;
-        TraceHistogramAccumulator::Configure(histConfig, movieConfig);
+        // Start histogramming with first frame.
+        histConfig.NumFramesPreAccumStats = 0;
+        TraceHistogramAccumHost::Configure(histConfig, movieConfig);
 
-        TraceHistogramAccumulator tha{poolId, poolSize};
+        TraceHistogramAccumHost tha{poolId, poolSize};
+        tha.Reset();
         std::vector<std::vector<unsigned short>> frameMode(poolSize);
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
@@ -278,8 +266,8 @@ private:
         const float simRefSnr = GetParam().simSnr;
         const auto startRefSnr = movieConfig.refSnr;
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
-        DmeEmHost::ScaleModelSnr(DmeEmHost::FloatVec{simRefSnr/startRefSnr}, &(*detModelSim));
-        completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames,*detModelSim));
+        DmeEmHost::ScaleModelSnr(DmeEmHost::FloatVec{simRefSnr/startRefSnr}, detModelSim.get());
+        completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));
     }
 };
 
@@ -324,7 +312,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             const auto& cdbm = completeDataModel.BaselineMode();
             DmeEmHost::FloatVec result = rbm.Weight();
             DmeEmHost::FloatVec expected = cdbm.Weight();
-            DmeEmHost::FloatVec absErrTol = DmeEmHost::FloatVec{5} *
+            DmeEmHost::FloatVec absErrTol = 5.0f *
                     sqrt(expected * (1.0f - expected) / numFramesF);
             for (unsigned int i = 0; i < laneSize; ++i)
             {
@@ -335,7 +323,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             // Check baseline estimated means.
             result = rbm.SignalMean();
             expected = cdbm.SignalMean();
-            absErrTol = DmeEmHost::FloatVec{5} * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
+            absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
             for (unsigned int i = 0; i < laneSize; ++i)
             {
                 EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
@@ -345,7 +333,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             // Check baseline estimated variance.
             result = rbm.SignalCovar();
             expected = cdbm.SignalCovar();
-            absErrTol = DmeEmHost::FloatVec{5} * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
+            absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
             for (unsigned int i = 0; i < laneSize; ++i)
             {
                 EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
@@ -361,7 +349,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             const auto& cdbm = completeDataModel.DetectionModes()[a];
             DmeEmHost::FloatVec result = rbm.Weight();
             DmeEmHost::FloatVec expected = cdbm.Weight();
-            DmeEmHost::FloatVec absErrTol = max(0.015f, DmeEmHost::FloatVec{5} * sqrt(expected * (1.0f - expected) / numFramesF));
+            DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFramesF));
             for (unsigned int i = 0; i < laneSize; ++i)
             {
                 EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
@@ -372,7 +360,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             // Check estimated means.
             result = rbm.SignalMean();
             expected = cdbm.SignalMean();
-            absErrTol = DmeEmHost::FloatVec{5} * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
+            absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
             for (unsigned int i = 0; i < laneSize; ++i)
             {
                 EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
@@ -383,7 +371,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
             // Check estimated variances.
             result = rbm.SignalCovar();
             expected = cdbm.SignalCovar();
-            absErrTol = DmeEmHost::FloatVec{5} * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
+            absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
             for (unsigned int i = 0; i < laneSize; ++i)
             {
                 if (isnan(MakeUnion(expected)[i])) continue;

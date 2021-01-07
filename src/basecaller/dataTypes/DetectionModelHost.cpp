@@ -106,7 +106,7 @@ template <typename VF2>
 void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
 {
     assert(ldm);
-    baselineMode_.ExportTo(&ldm->BaselineMode());
+    baselineMode_.ExportTo(&ldm->BaselineMode(), &ldm->BaselineWeight());
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
@@ -137,6 +137,19 @@ void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
     assert(lam);
     lam->means = mean_;
     lam->vars = var_;
+}
+
+template <typename VF>
+template <typename VF2>
+void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam, Cuda::Utility::CudaArray<VF2, laneSize>* weight) const
+{
+    assert(lam);
+    lam->means =  mean_;
+    lam->vars = var_;
+    for (size_t i = 0; i < laneSize; i++)
+    {
+        weight[i] = MakeUnion(weight_)[i];
+    }
 }
 
 

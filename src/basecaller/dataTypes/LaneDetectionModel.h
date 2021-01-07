@@ -122,9 +122,9 @@ struct __align__(128) LaneModelParameters
     {
         return analogs_[i];
     }
-    CUDA_ENABLED void SetAllBaselineWeight(float val)
+    void SetAllBaselineWeight(float val)
     {
-        std::fill(baselineWeight_.data(), baselineWeight_.data() + laneWidth, T(val));
+        baselineWeight_ = T(val);
     }
 
  private:
