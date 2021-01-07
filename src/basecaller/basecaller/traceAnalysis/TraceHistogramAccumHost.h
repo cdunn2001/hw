@@ -47,6 +47,20 @@ class TraceHistogramAccumHost : public TraceHistogramAccumulator
 public:     // Types
     using TraceElementType = Data::BaselinedTraceElement;
 
+public:     // Static functions
+
+    static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig);
+
+    static float BinSizeCoeff()
+    { return binSizeCoeff_; }
+
+    static unsigned int BaselineStatMinFrameCount()
+    { return baselineStatMinFrameCount_; }
+
+    static float FallBackBaselineSigma()
+    { return fallBackBaselineSigma_; }
+
+
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
                             unsigned int poolSize);
@@ -61,7 +75,15 @@ private:    // TraceHistogramAccumulator implementation.
 
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
 
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override;
+
     PoolHistType HistogramImpl() const override;
+
+private: // Static data
+    static float binSizeCoeff_;
+    static unsigned int baselineStatMinFrameCount_;
+    static float fallBackBaselineSigma_;
+
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
 

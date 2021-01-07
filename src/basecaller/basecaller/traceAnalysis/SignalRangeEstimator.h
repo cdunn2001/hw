@@ -47,21 +47,6 @@ public:     // Types
     using DataType = Data::BaselinedTraceElement;
 
 public:
-    static void Configure(const Data::BasecallerSignalRangeEstimatorConfig& sigConfig);
-
-    static unsigned int NumFramesPreAccumStats()
-    { return numFramesPreAccumStats_; }
-
-    static float BinSizeCoeff()
-    { return binSizeCoeff_; }
-
-    static unsigned int BaselineStatMinFrameCount()
-    { return baselineStatMinFrameCount_; }
-
-    static float FallBackBaselineSigma()
-    { return fallBackBaselineSigma_; }
-
-public:
     SignalRangeEstimator(uint32_t poolId, unsigned int poolSize);
     virtual ~SignalRangeEstimator() = default;
 
@@ -84,25 +69,17 @@ public:
         AddMetricsImpl(stats);
     }
 
-    Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndReset()
+    void Reset()
     {
-        return EstimateRangeAndResetImpl();
+        return ResetImpl();
     }
-
-private:    // Static data
-    // Number of frames to accumulate baseliner statistics before initializing
-    // histograms.
-    static unsigned int numFramesPreAccumStats_;
-    static float binSizeCoeff_;
-    static unsigned int baselineStatMinFrameCount_;
-    static float fallBackBaselineSigma_;
 
 private:
     virtual void AddMetricsImpl(const Data::BaselinerMetrics& stats) = 0;
 
     virtual Data::BaselinerMetrics TraceStatsImpl() const = 0;
 
-    virtual Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndResetImpl() = 0;
+    virtual void ResetImpl() = 0;
 
 private:
     uint32_t poolId_;

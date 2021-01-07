@@ -33,9 +33,45 @@
 
 #include <tbb/parallel_for.h>
 
+#include <common/StatAccumulator.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
+
+// static data
+float TraceHistogramAccumHost::binSizeCoeff_;
+unsigned int TraceHistogramAccumHost::baselineStatMinFrameCount_;
+float TraceHistogramAccumHost::fallBackBaselineSigma_;
+
+void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConfig& sigConfig)
+{
+    binSizeCoeff_ = sigConfig.BinSizeCoeff;
+    PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
+               << binSizeCoeff_ << '.';
+    if (binSizeCoeff_ <= 0.0f)
+    {
+        std::ostringstream msg;
+        msg << "BinSizeCoeff must be positive.";
+        throw PBException(msg.str());
+    }
+
+    baselineStatMinFrameCount_ = sigConfig.BaselineStatMinFrameCount;
+    PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
+               << baselineStatMinFrameCount_ << '.';
+
+    fallBackBaselineSigma_ = sigConfig.FallBackBaselineSigma;
+    PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
+               << fallBackBaselineSigma_ << '.';
+    if (fallBackBaselineSigma_ <= 0.0f)
+    {
+        std::ostringstream msg;
+        msg << "FallBackBaselineSigma must be positive.";
+        throw PBException(msg.str());
+    }
+}
+
 
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
@@ -51,6 +87,32 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
     for (size_t i = 0; i < view.Size(); ++i)
     {
         hist_.emplace_back(numBins, Arr(view[i].lowerBounds), Arr(view[i].upperBounds));
+    }
+}
+
+void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
+{
+    constexpr unsigned int numBins = LaneHistType::numBins;
+
+    auto view = metrics.baselinerStats.GetHostView();
+    for (size_t lane = 0; lane < view.Size(); ++lane)
+    {
+        // Determine histogram parameters.
+        const auto& laneBlStats = StatAccumulator<LaneArray<float>>(view[lane].baselineStats);
+
+        const auto& blCount = laneBlStats.Count();
+        const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
+        const auto& blMean = Blend(sufficientData,
+                                   laneBlStats.Mean(),
+                                   LaneArray<float>(0.0f));
+        const auto& blSigma = Blend(sufficientData,
+                                    sqrt(laneBlStats.Variance()),
+                                    LaneArray<float>(FallBackBaselineSigma()));
+
+        const auto binSize = BinSizeCoeff() * blSigma;
+        const auto lower = blMean - 4.0f*blSigma;
+        const auto upper = lower + float(numBins)*binSize;
+        hist_.emplace_back(numBins, lower, upper);
     }
 }
 

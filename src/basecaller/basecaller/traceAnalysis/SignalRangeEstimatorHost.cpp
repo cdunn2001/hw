@@ -61,42 +61,11 @@ Data::BaselinerMetrics SignalRangeEstimatorHost::TraceStatsImpl() const
     return poolTraceStats;
 }
 
-Cuda::Memory::UnifiedCudaArray<LaneHistBounds> SignalRangeEstimatorHost::EstimateRangeAndResetImpl()
+void SignalRangeEstimatorHost::ResetImpl()
 {
-    // Number of bins in the histogram is a compile-time constant!
-    using LaneHistType = Data::LaneHistogram<float, uint16_t>;
-    constexpr unsigned int numBins = LaneHistType::numBins;
-
-    Cuda::Memory::UnifiedCudaArray<LaneHistBounds> ret(stats_.size(),
-                                                       Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                                                       SOURCE_MARKER());
-    auto view = ret.GetHostView();
-    for (size_t lane = 0; lane < view.Size(); ++lane)
-    {
-        // Determine histogram parameters.
-        const auto& laneBlStats = stats_[lane].BaselineFramesStats();
-
-        const auto& blCount = laneBlStats.Count();
-        const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
-        const auto& blMean = Blend(sufficientData,
-                                   laneBlStats.Mean(),
-                                   LaneArray<float>(0.0f));
-        const auto& blSigma = Blend(sufficientData,
-                                    sqrt(laneBlStats.Variance()),
-                                    LaneArray<float>(FallBackBaselineSigma()));
-
-        const auto binSize = BinSizeCoeff() * blSigma;
-        auto lower = blMean - 4.0f*blSigma;
-        view[lane].lowerBounds = lower;
-        view[lane].upperBounds = lower + float(numBins)*binSize;
-
-    }
-
     // Reset for the next aggregation
     stats_.clear();
     stats_.resize(PoolSize());
-
-    return ret;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

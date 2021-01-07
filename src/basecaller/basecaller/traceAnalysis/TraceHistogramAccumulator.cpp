@@ -32,7 +32,6 @@
 
 #include <pacbio/logging/Logger.h>
 #include <pacbio/PBException.h>
-#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 namespace PacBio {
 namespace Mongo {

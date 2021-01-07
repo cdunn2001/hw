@@ -16,7 +16,6 @@ CoreDMEstimator::analogs_;
 PacBio::Logging::PBLogger CoreDMEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
 
 float CoreDMEstimator::refSnr_;
-uint32_t CoreDMEstimator::minFramesForEstimate_ = 0;
 bool CoreDMEstimator::fixedBaselineParams_ = false;
 float CoreDMEstimator::fixedBaselineMean_ = 0;
 float CoreDMEstimator::fixedBaselineVar_ = 0;
@@ -25,8 +24,6 @@ float CoreDMEstimator::fixedBaselineVar_ = 0;
 void CoreDMEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig,
                                         const Data::MovieConfig& movConfig)
 {
-    minFramesForEstimate_ = dmeConfig.MinFramesForEstimate;
-
     refSnr_ = movConfig.refSnr;
     for (size_t i = 0; i < movConfig.analogs.size(); i++)
     {
@@ -78,7 +75,7 @@ CoreDMEstimator::InitDetectionModels(const PoolBaselineStats& blStats) const
 
 
 void CoreDMEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
-                                               LaneDetModel& ldm) const
+                                       LaneDetModel& ldm) const
 {
     using ElementType = typename Data::BaselinerStatAccumState::StatElement;
     using LaneArr = LaneArray<ElementType>;
@@ -91,7 +88,7 @@ void CoreDMEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blSt
     // fullAutocorrState is not yet populated by the GPU baseliner. For now, we just use the
     // minimum frames for estimating.
     //const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / CLanArrRef(blStats.TotalFrames());
-    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / static_cast<float>(minFramesForEstimate_);
+    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / LaneArr(blStats.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;

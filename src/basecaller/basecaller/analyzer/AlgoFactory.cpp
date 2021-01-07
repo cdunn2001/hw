@@ -8,6 +8,7 @@
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <basecaller/traceAnalysis/CoreDMEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
@@ -166,19 +167,21 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
-    switch (signalRangeEstOpt_)
+    switch (histAccumOpt_)
     {
-    case Data::BasecallerSignalRangeEstimatorConfig::MethodName::Host:
-        SignalRangeEstimatorHost::Configure(bcConfig.signalRangeEstimatorConfig);
+    case Data::BasecallerTraceHistogramConfig::MethodName::Host:
+        TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
         break;
-    case Data::BasecallerSignalRangeEstimatorConfig::MethodName::Gpu:
+    case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
         throw PBException("Not implemented");
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for SignalRangeEstimator: " << signalRangeEstOpt_.toString() << '.';
+        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_.toString() << '.';
         throw PBException(msg.str());
         break;
     }
+
+    DetectionModelEstimator::Configure(bcConfig.dmeConfig);
 
     switch (dmeOpt_)
     {

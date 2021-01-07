@@ -53,12 +53,6 @@ struct TestSignalRangeEstimatorHost : public ::testing::Test
     Data::BasecallerSignalRangeEstimatorConfig sigConfig;
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
-    void SetUp()
-    {
-        sigConfig.NumFramesPreAccumStats = 100;
-        SignalRangeEstimator::Configure(sigConfig);
-    }
-
     // Produces a baseliner stats defined by blMean and blVar.
     Data::BaselinerMetrics GenerateStats(float blMean, float blVar)
     {

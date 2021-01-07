@@ -61,7 +61,7 @@ private:    // SignalRangeEstimatorHost implementation.
 
     Data::BaselinerMetrics TraceStatsImpl() const override;
 
-    Cuda::Memory::UnifiedCudaArray<LaneHistBounds> EstimateRangeAndResetImpl() override;
+    void ResetImpl() override;
 
 private:    // Data
     AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;

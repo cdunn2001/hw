@@ -132,6 +132,10 @@ public:
     // 1 will round up to a single full chunk.
     PB_CONFIG_PARAM(uint32_t, MinFramesForEstimate, 4000);
 
+    // Frames required to estimate histogram bounds from
+    // basline stats
+    PB_CONFIG_PARAM(uint32_t, NumFramesPreAccumStats, 1000u);
+
     // Coefficient for the reduction of model confidence triggered by laser
     // power changes.
     // Set less than zero to preserve prior behavior, described by comment

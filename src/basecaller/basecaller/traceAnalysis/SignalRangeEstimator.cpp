@@ -38,44 +38,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// static
-unsigned int SignalRangeEstimator::numFramesPreAccumStats_;
-float SignalRangeEstimator::binSizeCoeff_;
-unsigned int SignalRangeEstimator::baselineStatMinFrameCount_;
-float SignalRangeEstimator::fallBackBaselineSigma_;
-
-// static
-void SignalRangeEstimator::Configure(const Data::BasecallerSignalRangeEstimatorConfig& sigConfig)
-{
-    numFramesPreAccumStats_ = sigConfig.NumFramesPreAccumStats;
-    PBLOG_INFO << "TraceHistogramAccumulator: NumFramesPreAccumStats = "
-               << numFramesPreAccumStats_ << '.';
-
-    binSizeCoeff_ = sigConfig.BinSizeCoeff;
-    PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
-               << binSizeCoeff_ << '.';
-    if (binSizeCoeff_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "BinSizeCoeff must be positive.";
-        throw PBException(msg.str());
-    }
-
-    baselineStatMinFrameCount_ = sigConfig.BaselineStatMinFrameCount;
-    PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
-               << baselineStatMinFrameCount_ << '.';
-
-    fallBackBaselineSigma_ = sigConfig.FallBackBaselineSigma;
-    PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
-               << fallBackBaselineSigma_ << '.';
-    if (fallBackBaselineSigma_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "FallBackBaselineSigma must be positive.";
-        throw PBException(msg.str());
-    }
-}
-
 SignalRangeEstimator::SignalRangeEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
     , poolSize_ (poolSize)

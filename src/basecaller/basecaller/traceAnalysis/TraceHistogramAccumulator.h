@@ -30,6 +30,7 @@
 //  Defines abstract class TraceHistogramAccumulator.
 
 #include <dataTypes/BasicTypes.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
@@ -38,7 +39,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-struct alignas(64) LaneHistBounds
+struct alignas(cacheLineSize) LaneHistBounds
 {
     Cuda::Utility::CudaArray<float, laneSize> upperBounds;
     Cuda::Utility::CudaArray<float, laneSize> lowerBounds;
@@ -92,12 +93,21 @@ public:     // Non-const functions
         frameCount_ += traces.NumFrames();
     }
 
-    // Clears out the bins and resets the histogram bounds
+    // Clears out current histogram data and resets histogram with given bounds
     void Reset(Cuda::Memory::UnifiedCudaArray<LaneHistBounds> bounds)
     {
         initialized_ = true;
         frameCount_ = 0;
         ResetImpl(bounds);
+    }
+
+    // Clears out current histogram data and resets histogram with
+    // bounds derived from baseline information
+    void Reset(Data::BaselinerMetrics metrics)
+    {
+        initialized_ = true;
+        frameCount_ = 0;
+        ResetImpl(metrics);
     }
 
 private:    // Data
@@ -110,8 +120,12 @@ private:    // Customizable implementation.
     // Bins frames in traces and updates poolHist_.
     virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces) = 0;
 
-    // Clears out current histogram data and resets histogram bounds
+    // Clears out current histogram data and resets histogram with given bounds
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
+
+    // Clears out current histogram data and resets histogram with
+    // bounds derived from baseline information
+    virtual void ResetImpl(const Data::BaselinerMetrics& metrics) = 0;
 
     virtual PoolHistType HistogramImpl() const = 0;
 };

@@ -29,10 +29,32 @@
 #include <basecaller/traceAnalysis/CoreDMEstimator.h>
 #include <basecaller/traceAnalysis/SignalRangeEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
+
+// static
+uint32_t DetectionModelEstimator::numFramesPreAccumStats_ = 0;
+uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
+
+// static
+void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig)
+{
+    numFramesPreAccumStats_ = dmeConfig.NumFramesPreAccumStats;
+    PBLOG_INFO << "DetectionModelEstimator: NumFramesPreAccumStats = "
+               << numFramesPreAccumStats_ << '.';
+
+    minFramesForEstimate_ = dmeConfig.MinFramesForEstimate;
+    PBLOG_INFO << "DetectionModelEstimator: MinFramesForEstimate= "
+               << minFramesForEstimate_ << '.';
+
+    if (minFramesForEstimate_ < numFramesPreAccumStats_)
+        PBLOG_WARN << "minFramesForEstimate_ less than numFramesPreAccumStats_.  "
+                   << "Only the first histogram will respect numFramesPreAccumStats_";
+}
+
 
 // Need destructor definition here since the header file only has forward
 // declaration for things like the CoreDMEstimator.
@@ -47,7 +69,7 @@ DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId,
     , baselineAggregator_(algoFac.CreateBaselineStatsAggregator(poolId, dims, registrar))
     , coreEstimator_(algoFac.CreateCoreDMEstimator(poolId, dims, registrar))
 {
-    framesRemaining_ = baselineAggregator_->NumFramesPreAccumStats();
+    framesRemaining_ = NumFramesPreAccumStats();
 }
 
 // Successive calls to this function will move this class through
@@ -105,8 +127,8 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
             }
         case PoolStatus::STARTUP_HIST_INIT:
             {
-                auto histBounds = baselineAggregator_->EstimateRangeAndReset();
-                traceAccumulator_->Reset(std::move(histBounds));
+                traceAccumulator_->Reset(baselineAggregator_->TraceStats());
+                baselineAggregator_->Reset();
                 break;
             }
         default:
@@ -125,13 +147,8 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
 uint32_t DetectionModelEstimator::StartupLatency() const
 {
     auto RoundToChunk = [&](size_t frames) { return (frames + framesPerBatch_ - 1) / framesPerBatch_ * framesPerBatch_; };
-    return RoundToChunk(baselineAggregator_->NumFramesPreAccumStats())
+    return RoundToChunk(NumFramesPreAccumStats())
          + RoundToChunk(MinFramesForEstimate());
-}
-uint32_t DetectionModelEstimator::MinFramesForEstimate() const
-{
-    return std::max(baselineAggregator_->NumFramesPreAccumStats(),
-                    coreEstimator_->MinFramesForEstimate());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

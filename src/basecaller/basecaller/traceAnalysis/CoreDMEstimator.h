@@ -61,11 +61,6 @@ public:     // Static functions
     static const Data::AnalogMode& Analog(unsigned int i)
     { return analogs_[i]; }
 
-    /// Minimum number of frames added to trace histograms before we estimate
-    /// model parameters.
-    static uint32_t MinFramesForEstimate()
-    { return minFramesForEstimate_; }
-
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
     static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
@@ -99,7 +94,6 @@ protected:
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
-    static uint32_t minFramesForEstimate_;
     static bool fixedBaselineParams_;
     static float fixedBaselineMean_;
     static float fixedBaselineVar_;

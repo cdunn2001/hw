@@ -37,6 +37,7 @@
 #include <common/cuda/PBCudaSimd.h>
 
 #include <dataTypes/BatchMetrics.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 
@@ -50,6 +51,20 @@ namespace Basecaller {
 // BaselineStatsAggregator to perform the actual computations
 class DetectionModelEstimator
 {
+public: // static functions
+    static void Configure(const Data::BasecallerDmeConfig& dmeConfig);
+
+    /// Minimum number of frames in baseline stats aggregation before
+    /// estimating histogram bounds
+    static unsigned int NumFramesPreAccumStats()
+    { return numFramesPreAccumStats_; }
+
+    /// Minimum number of frames added to trace histograms before we estimate
+    /// model parameters.
+    static uint32_t MinFramesForEstimate()
+    { return minFramesForEstimate_; }
+
+
 public:
     using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
     using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
@@ -73,8 +88,14 @@ public:
 
     // Number of frames before the first full estimation attempt
     uint32_t StartupLatency() const;
-    // Number of frames between full estimation attempts
-    uint32_t MinFramesForEstimate() const;
+
+private:    // Static data
+    // Number of frames to accumulate baseliner statistics before initializing
+    // histograms.
+    static uint32_t numFramesPreAccumStats_;
+    // Number of frames between runs of coreEstimator
+    static uint32_t minFramesForEstimate_;
+
 private:
 
     enum class PoolStatus
