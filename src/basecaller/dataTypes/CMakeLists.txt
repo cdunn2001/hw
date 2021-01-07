@@ -6,6 +6,8 @@ set(CPP_LIST
     configs/BasecallerAlgorithmConfig.h
     configs/BasecallerBaselinerConfig.cpp
     configs/BasecallerBaselinerConfig.h
+    configs/BasecallerBaselineStatsAggregatorConfig.cpp
+    configs/BasecallerBaselineStatsAggregatorConfig.h
     configs/BasecallerDmeConfig.cpp
     configs/BasecallerDmeConfig.h
     configs/BasecallerFrameLabelerConfig.cpp
@@ -18,8 +20,6 @@ set(CPP_LIST
     configs/BasecallerPulseToBaseConfig.h
     configs/BasecallerTraceHistogramConfig.cpp
     configs/BasecallerTraceHistogramConfig.h
-    configs/BasecallerSignalRangeEstimatorConfig.cpp
-    configs/BasecallerSignalRangeEstimatorConfig.h
     configs/BatchLayoutConfig.h
     configs/BatchLayoutConfig.cpp
     configs/ConfigForward.h

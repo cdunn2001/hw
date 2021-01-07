@@ -7,7 +7,7 @@ namespace Basecaller {
 
 class AlgoFactory;
 class Baseliner;
-class SignalRangeEstimator;
+class BaselineStatsAggregator;
 class FrameLabeler;
 class PulseAccumulator;
 class TraceHistogramAccumulator;

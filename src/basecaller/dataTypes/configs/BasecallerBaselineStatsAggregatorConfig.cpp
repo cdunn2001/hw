@@ -24,4 +24,4 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include <dataTypes/configs/BasecallerSignalRangeEstimatorConfig.h>
+#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>

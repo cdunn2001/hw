@@ -49,7 +49,7 @@ public:     // Types
 
 public:     // Static functions
 
-    static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig);
+    static void Configure(const Data::BasecallerTraceHistogramConfig& traceConfig);
 
     static float BinSizeCoeff()
     { return binSizeCoeff_; }

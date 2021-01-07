@@ -45,9 +45,9 @@ float TraceHistogramAccumHost::binSizeCoeff_;
 unsigned int TraceHistogramAccumHost::baselineStatMinFrameCount_;
 float TraceHistogramAccumHost::fallBackBaselineSigma_;
 
-void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConfig& sigConfig)
+void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
 {
-    binSizeCoeff_ = sigConfig.BinSizeCoeff;
+    binSizeCoeff_ = traceConfig.BinSizeCoeff;
     PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
                << binSizeCoeff_ << '.';
     if (binSizeCoeff_ <= 0.0f)
@@ -57,11 +57,11 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
         throw PBException(msg.str());
     }
 
-    baselineStatMinFrameCount_ = sigConfig.BaselineStatMinFrameCount;
+    baselineStatMinFrameCount_ = traceConfig.BaselineStatMinFrameCount;
     PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
                << baselineStatMinFrameCount_ << '.';
 
-    fallBackBaselineSigma_ = sigConfig.FallBackBaselineSigma;
+    fallBackBaselineSigma_ = traceConfig.FallBackBaselineSigma;
     PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
                << fallBackBaselineSigma_ << '.';
     if (fallBackBaselineSigma_ <= 0.0f)

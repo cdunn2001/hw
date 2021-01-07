@@ -32,13 +32,13 @@
 #include <pacbio/configuration/PBConfig.h>
 
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
-#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
-#include <dataTypes/configs/BasecallerSignalRangeEstimatorConfig.h>
+#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 #include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 #include <dataTypes/configs/BasecallerPulseToBaseConfig.h>
 #include <dataTypes/configs/BasecallerMetricsConfig.h>
+#include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 #include <dataTypes/configs/SimulatedFaults.h>
 #include <dataTypes/configs/StaticDetModelConfig.h>
 
@@ -53,7 +53,7 @@ public:
 
     PB_CONFIG_OBJECT(BasecallerBaselinerConfig, baselinerConfig);
     PB_CONFIG_OBJECT(BasecallerTraceHistogramConfig, traceHistogramConfig);
-    PB_CONFIG_OBJECT(BasecallerSignalRangeEstimatorConfig, signalRangeEstimatorConfig);
+    PB_CONFIG_OBJECT(BasecallerBaselineStatsAggregatorConfig, baselineStatsAggregatorConfig);
     PB_CONFIG_OBJECT(BasecallerDmeConfig, dmeConfig);
     PB_CONFIG_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
     PB_CONFIG_OBJECT(BasecallerPulseAccumConfig, pulseAccumConfig);

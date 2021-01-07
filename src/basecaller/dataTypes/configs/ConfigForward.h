@@ -37,7 +37,7 @@ class BasecallerFrameLabelerConfig;
 class BasecallerMetricsConfig;
 class BasecallerPulseAccumConfig;
 class BasecallerTraceHistogramConfig;
-class BasecallerSignalRangeEstimatorConfig;
+class BasecallerBaselineStatsAggregatorConfig;
 class BasecallerDmeConfig;
 class BatchLayoutConfig;
 class MovieConfig;

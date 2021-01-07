@@ -113,7 +113,7 @@ private:
     // level data, that should all be done by these classes, which potentially can have either
     // CPU or GPU implementations
     std::unique_ptr<TraceHistogramAccumulator> traceAccumulator_;
-    std::unique_ptr<SignalRangeEstimator> baselineAggregator_;
+    std::unique_ptr<BaselineStatsAggregator> baselineAggregator_;
     std::unique_ptr<CoreDMEstimator> coreEstimator_;
 };
 

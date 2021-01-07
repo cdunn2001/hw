@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Pacific Biosciences of California, Inc.
+// Copyright (c) 2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,48 +24,25 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines some members of class SignalRangeEstimatorHost.
+//  Defines some members of class BaselineStatsAggregator
 
-#include "SignalRangeEstimatorHost.h"
+#include "BaselineStatsAggregator.h"
 
-#include <algorithm>
+#include <sstream>
 
-#include <tbb/parallel_for.h>
+#include <pacbio/logging/Logger.h>
+#include <pacbio/PBException.h>
+#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void SignalRangeEstimatorHost::AddMetricsImpl(const Data::BaselinerMetrics& metrics)
+BaselineStatsAggregator::BaselineStatsAggregator(uint32_t poolId, unsigned int poolSize)
+    : poolId_ (poolId)
+    , poolSize_ (poolSize)
 {
-    assert(stats_.size() == metrics.baselinerStats.Size());
 
-    const auto& statsView = metrics.baselinerStats.GetHostView();
-    tbb::parallel_for((size_t){0}, stats_.size(), [&](size_t lane)
-    {
-        // Accumulate baseliner stats.
-        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
-    });
-}
-
-Data::BaselinerMetrics SignalRangeEstimatorHost::TraceStatsImpl() const
-{
-    Data::BaselinerMetrics poolTraceStats(PoolSize(),
-                                          Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                                          SOURCE_MARKER());
-    auto ptsv = poolTraceStats.baselinerStats.GetHostView();
-    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
-    {
-        ptsv[lane] = stats_[lane].GetState();
-    }
-    return poolTraceStats;
-}
-
-void SignalRangeEstimatorHost::ResetImpl()
-{
-    // Reset for the next aggregation
-    stats_.clear();
-    stats_.resize(PoolSize());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

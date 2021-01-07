@@ -27,7 +27,7 @@
 
 #include <basecaller/analyzer/AlgoFactory.h>
 #include <basecaller/traceAnalysis/CoreDMEstimator.h>
-#include <basecaller/traceAnalysis/SignalRangeEstimator.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 

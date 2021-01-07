@@ -1,5 +1,5 @@
-#ifndef mongo_basecaller_traceAnalysis_SignalRangeEstimator_H_
-#define mongo_basecaller_traceAnalysis_SignalRangeEstimator_H_
+#ifndef mongo_basecaller_traceAnalysis_BaselineStatsAggregator_H_
+#define mongo_basecaller_traceAnalysis_BaselineStatsAggregator_H_
 
 // Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
@@ -27,7 +27,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines abstract class SignalRangeEstimator.
+//  Defines abstract class BaselineStatsAggregator.
 
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/BatchMetrics.h>
@@ -41,14 +41,14 @@ namespace Basecaller {
 
 // Used to aggregate baseline statistics over multiple chunks and
 // predict a range of future data suitable for use as histogram bounds
-class SignalRangeEstimator
+class BaselineStatsAggregator
 {
 public:     // Types
     using DataType = Data::BaselinedTraceElement;
 
 public:
-    SignalRangeEstimator(uint32_t poolId, unsigned int poolSize);
-    virtual ~SignalRangeEstimator() = default;
+    BaselineStatsAggregator(uint32_t poolId, unsigned int poolSize);
+    virtual ~BaselineStatsAggregator() = default;
 
     /// The ZMW pool associated with this instance.
     uint32_t PoolId() const
@@ -88,4 +88,4 @@ private:
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif // mongo_basecaller_traceAnalysis_SignalRangeEstimator_H_
+#endif // mongo_basecaller_traceAnalysis_BaselineStatsAggregator_H_

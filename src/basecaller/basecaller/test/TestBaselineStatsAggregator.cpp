@@ -25,9 +25,9 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines unit tests for class SignalRangeEstimatorHost
+//  Defines unit tests for class BaselineStatsAggregatorHost
 
-#include <basecaller/traceAnalysis/SignalRangeEstimatorHost.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
 
 #include <algorithm>
 #include <map>
@@ -35,7 +35,7 @@
 
 #include <pacbio/logging/Logger.h>
 
-#include <dataTypes/configs/BasecallerSignalRangeEstimatorConfig.h>
+#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>
 
 #include <gtest/gtest.h>
 
@@ -43,14 +43,14 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-struct TestSignalRangeEstimatorHost : public ::testing::Test
+struct TestBaselineStatsAggregatorHost : public ::testing::Test
 {
     using TraceElementType = Data::BaselinedTraceElement;
 
     const unsigned int chunkSize = 64;  // frames per chunk
     const unsigned int poolSize = 6;    // lanes per pool
 
-    Data::BasecallerSignalRangeEstimatorConfig sigConfig;
+    Data::BasecallerBaselineStatsAggregatorConfig sigConfig;
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
     // Produces a baseliner stats defined by blMean and blVar.
@@ -75,16 +75,16 @@ struct TestSignalRangeEstimatorHost : public ::testing::Test
 };
 
 
-TEST_F(TestSignalRangeEstimatorHost, UniformSimple)
+TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
 {
-    SignalRangeEstimatorHost bha (7, poolSize);
+    BaselineStatsAggregatorHost bha (7, poolSize);
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
     const uint32_t nChunks = mPar.size();
     ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
 
-    // Feed mock data to SignalRangeEstimator under test.
+    // Feed mock data to BaselineStatsAggregator under test.
     for (unsigned int i = 0; i < nChunks; ++i)
     {
         auto stats = GenerateStats(mPar[i], s2Par[i]);

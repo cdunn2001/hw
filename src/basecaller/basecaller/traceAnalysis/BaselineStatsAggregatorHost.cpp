@@ -1,7 +1,4 @@
-#ifndef mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
-#define mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_
-
-// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -27,46 +24,48 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines class SignalRangeEstimatorHost, which customizes
-//  SignalRangeEstimator.
+//  Defines some members of class BaselineStatsAggregatorHost.
 
+#include "BaselineStatsAggregatorHost.h"
 
-#include <common/AlignedVector.h>
-#include <common/LaneArray.h>
-#include <dataTypes/BaselinerStatAccumulator.h>
-#include <dataTypes/UHistogramSimd.h>
+#include <algorithm>
 
-#include "SignalRangeEstimator.h"
+#include <tbb/parallel_for.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class SignalRangeEstimatorHost : public SignalRangeEstimator
+void BaselineStatsAggregatorHost::AddMetricsImpl(const Data::BaselinerMetrics& metrics)
 {
-public:
-    SignalRangeEstimatorHost(uint32_t poolId, unsigned int poolSize)
-        : SignalRangeEstimator(poolId, poolSize)
-        , stats_(poolSize)
-    {}
+    assert(stats_.size() == metrics.baselinerStats.Size());
 
-public:     // Const access (extensions to SignalRangeEstimatorHost interface)
+    const auto& statsView = metrics.baselinerStats.GetHostView();
+    tbb::parallel_for((size_t){0}, stats_.size(), [&](size_t lane)
+    {
+        // Accumulate baseliner stats.
+        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
+    });
+}
 
-    const AlignedVector<Data::BaselinerStatAccumulator<DataType>>&
-    TraceStatsHost() const
-    { return stats_; }
+Data::BaselinerMetrics BaselineStatsAggregatorHost::TraceStatsImpl() const
+{
+    Data::BaselinerMetrics poolTraceStats(PoolSize(),
+                                          Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                          SOURCE_MARKER());
+    auto ptsv = poolTraceStats.baselinerStats.GetHostView();
+    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    {
+        ptsv[lane] = stats_[lane].GetState();
+    }
+    return poolTraceStats;
+}
 
-private:    // SignalRangeEstimatorHost implementation.
-    void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
-
-    Data::BaselinerMetrics TraceStatsImpl() const override;
-
-    void ResetImpl() override;
-
-private:    // Data
-    AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
-};
+void BaselineStatsAggregatorHost::ResetImpl()
+{
+    // Reset for the next aggregation
+    stats_.clear();
+    stats_.resize(PoolSize());
+}
 
 }}}     // namespace PacBio::Mongo::Basecaller
-
-#endif // mongo_basecaller_traceAnalysis_SignalRangeEstimatorHost_H_

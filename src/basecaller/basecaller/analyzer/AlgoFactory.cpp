@@ -24,7 +24,7 @@
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <basecaller/traceAnalysis/SignalRangeEstimatorHost.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
@@ -46,7 +46,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
-    signalRangeEstOpt_ = bcConfig.signalRangeEstimatorConfig.Method;
+    baselineStatsAggregatorOpt_ = bcConfig.baselineStatsAggregatorConfig.Method;
 
     // Detection model estimator
     dmeOpt_ = bcConfig.dmeConfig.Method;
@@ -332,22 +332,22 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
     }
 }
 
-unique_ptr<SignalRangeEstimator>
+unique_ptr<BaselineStatsAggregator>
 AlgoFactory::CreateBaselineStatsAggregator(unsigned int poolId,
                                            const Data::BatchDimensions& dims,
                                            Cuda::Memory::StashableAllocRegistrar& registrar) const
 {
-    switch (signalRangeEstOpt_)
+    switch (baselineStatsAggregatorOpt_)
     {
-    case Data::BasecallerSignalRangeEstimatorConfig::MethodName::Host:
-        return std::make_unique<SignalRangeEstimatorHost>(poolId, dims.lanesPerBatch);
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Host:
+        return std::make_unique<BaselineStatsAggregatorHost>(poolId, dims.lanesPerBatch);
         break;
-    case Data::BasecallerSignalRangeEstimatorConfig::MethodName::Gpu:
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Gpu:
         // TODO: For now fall through to throw exception.
     default:
         ostringstream msg;
         msg << "Unrecognized method option for BaselineStatsAggregator: "
-            << signalRangeEstOpt_ << '.';
+            << baselineStatsAggregatorOpt_ << '.';
         throw PBException(msg.str());
         break;
     }

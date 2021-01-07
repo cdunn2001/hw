@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_
-#define mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_
+#ifndef mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
+#define mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
@@ -34,10 +34,10 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class BasecallerSignalRangeEstimatorConfig : public Configuration::PBConfig<BasecallerSignalRangeEstimatorConfig>
+class BasecallerBaselineStatsAggregatorConfig : public Configuration::PBConfig<BasecallerBaselineStatsAggregatorConfig>
 {
 public:
-    PB_CONFIG(BasecallerSignalRangeEstimatorConfig);
+    PB_CONFIG(BasecallerBaselineStatsAggregatorConfig);
 
     SMART_ENUM(MethodName, Host, Gpu);
     PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
@@ -45,4 +45,4 @@ public:
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif //mongo_dataTypes_configs_BasecallerSignalRangeEstimatorConfig_H_
+#endif //mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
