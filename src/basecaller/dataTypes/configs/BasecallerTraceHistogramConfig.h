@@ -57,5 +57,30 @@ public:
 
 }}}     // namespace PacBio::Mongo::Data
 
+// Define validation specialization.  Specializations must happen in the
+// same namespace as the generic declaration.
+namespace PacBio {
+namespace Configuration {
+
+using PacBio::Mongo::Data::BasecallerTraceHistogramConfig;
+
+template <>
+inline void ValidateConfig<BasecallerTraceHistogramConfig>(const BasecallerTraceHistogramConfig& config,
+                                                           ValidationResults* results)
+{
+    if (config.BinSizeCoeff <= 0.0f)
+    {
+        results->AddError("BinSizeCoeff must be positive");
+    }
+
+    if (config.FallBackBaselineSigma <= 0.0f)
+    {
+        results->AddError("FallBackBaselineSigma must be positive.");
+    }
+}
+
+}}
+
+
 #endif //mongo_dataTypes_configs_BasecallerTraceHistogramConfig_H_
 

@@ -718,33 +718,22 @@ private:
     DeviceOnlyArray<LaneHistogramTrans> data_;
 };
 
-void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramConfig& sigConfig)
+void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
 {
     StaticConfig config;
 
-    config.binSizeCoeff_ = sigConfig.BinSizeCoeff;
+    config.binSizeCoeff_ = traceConfig.BinSizeCoeff;
     PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
                << config.binSizeCoeff_ << '.';
-    if (config.binSizeCoeff_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "BinSizeCoeff must be positive.";
-        throw PBException(msg.str());
-    }
 
-    config.baselineStatMinFrameCount_ = sigConfig.BaselineStatMinFrameCount;
+    config.baselineStatMinFrameCount_ = traceConfig.BaselineStatMinFrameCount;
     PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
                << config.baselineStatMinFrameCount_ << '.';
 
-    config.fallBackBaselineSigma_ = sigConfig.FallBackBaselineSigma;
+    config.fallBackBaselineSigma_ = traceConfig.FallBackBaselineSigma;
     PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
                << config.fallBackBaselineSigma_ << '.';
-    if (config.fallBackBaselineSigma_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "FallBackBaselineSigma must be positive.";
-        throw PBException(msg.str());
-    }
+
     CudaRawCopyToSymbol(&staticConfig, &config, sizeof(StaticConfig));
 }
 
