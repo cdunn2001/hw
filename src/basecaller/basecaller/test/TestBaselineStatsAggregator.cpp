@@ -65,6 +65,7 @@ struct TestBaselineStatsAggregatorHost : public ::testing::Test
             Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
             bls = bsa.GetState();
 
+            // Hack the baseline statistics.
             bls.baselineStats.moment0 = n0;
             bls.baselineStats.moment1 = n0 * blMean;
             bls.baselineStats.moment2 = (n0 - 1)*blVar + n0*pow2(blMean);
@@ -77,7 +78,7 @@ struct TestBaselineStatsAggregatorHost : public ::testing::Test
 
 TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
 {
-    BaselineStatsAggregatorHost bha (7, poolSize);
+    BaselineStatsAggregatorHost bsa (7, poolSize);
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
@@ -88,7 +89,7 @@ TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
     for (unsigned int i = 0; i < nChunks; ++i)
     {
         auto stats = GenerateStats(mPar[i], s2Par[i]);
-        bha.AddMetrics(stats);
+        bsa.AddMetrics(stats);
     }
 
     // Expected accumulated baseline statistics.
@@ -102,7 +103,7 @@ TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
     s2Expect /= (nChunks*n0 - 1);
 
     // Check the accumulated baseline statistics.
-    const auto& tsPool = bha.TraceStatsHost();
+    const auto& tsPool = bsa.TraceStatsHost();
     for (const auto& tsLane : tsPool)
     {
         const auto& bls = tsLane.BaselineFramesStats();
