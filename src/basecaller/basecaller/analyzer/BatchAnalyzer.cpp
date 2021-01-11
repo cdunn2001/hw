@@ -306,7 +306,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     static const unsigned int nFramesDmeStartUp = dme_->StartupLatency();
 
     // Minimum number of frames needed for estimating the detection model.
-    static const auto minFramesForDme = dme_->MinFramesForEstimate();
+    static const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
 
     auto roundToChunkMultiple = [&](size_t val)
     {
