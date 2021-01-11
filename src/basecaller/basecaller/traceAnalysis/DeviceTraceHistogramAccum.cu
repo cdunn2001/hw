@@ -445,7 +445,7 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
     }
 }
 
-__global__ void CopyToContig(DeviceView<LaneHistogramTrans> source,
+__global__ void CopyToContig(DeviceView<const LaneHistogramTrans> source,
                              DeviceView<Data::LaneHistogram<float, uint16_t>> dest)
 {
     assert(blockDim.x == 64);
@@ -455,23 +455,6 @@ __global__ void CopyToContig(DeviceView<LaneHistogramTrans> source,
     for (int i = 0; i < dBlock.numBins; ++i)
     {
         dBlock.binCount[i][threadIdx.x] = sBlock.binCount[threadIdx.x][i];
-    }
-    dBlock.outlierCountHigh[threadIdx.x] = sBlock.outlierCountHigh[threadIdx.x];
-    dBlock.outlierCountLow[threadIdx.x] = sBlock.outlierCountLow[threadIdx.x];
-    dBlock.lowBound[threadIdx.x] = sBlock.lowBound[threadIdx.x];
-    dBlock.binSize[threadIdx.x] = sBlock.binSize[threadIdx.x];
-}
-
-__global__ void CopyToInterleaved(DeviceView<Data::LaneHistogram<float, uint16_t>> source,
-                                  DeviceView<Data::LaneHistogram<float, uint16_t>> dest)
-{
-    assert(blockDim.x == 64);
-    auto& sBlock = source[blockIdx.x];
-    auto& dBlock = dest[blockIdx.x];
-
-    for (int i = 0; i < dBlock.numBins; ++i)
-    {
-        dBlock.binCount[i][threadIdx.x] = sBlock.binCount[i][threadIdx.x];
     }
     dBlock.outlierCountHigh[threadIdx.x] = sBlock.outlierCountHigh[threadIdx.x];
     dBlock.outlierCountLow[threadIdx.x] = sBlock.outlierCountLow[threadIdx.x];
@@ -586,8 +569,12 @@ __global__ void ResetHistsContigStats(DeviceView<LaneHistogramTrans> hists,
 class DeviceTraceHistogramAccum::ImplBase
 {
 public:
-    ImplBase(size_t poolSize, DeviceHistogramTypes type)
-        : poolSize_(poolSize)
+    using HistDataType = TraceHistogramAccumulator::HistDataType;
+    using HistCountType = TraceHistogramAccumulator::HistCountType;
+
+    ImplBase(uint32_t poolId, uint32_t poolSize, DeviceHistogramTypes type)
+        : poolId_(poolId)
+        , poolSize_(poolSize)
         , type_(type)
     {}
 
@@ -599,22 +586,25 @@ public:
 
     virtual void ResetImpl(const Data::BaselinerMetrics& metrics) = 0;
 
-    virtual void Copy(Data::PoolHistogram<HistDataType, HistCountType>& dest) = 0;
+    virtual Data::PoolHistogram<HistDataType, HistCountType> HistogramImpl() const = 0;
 
-    size_t PoolSize() const { return poolSize_; }
+    uint32_t PoolSize() const { return poolSize_; }
+    uint32_t PoolId() const { return poolId_; }
     DeviceHistogramTypes Type() const { return type_; }
 private:
-    size_t poolSize_;
+    uint32_t poolId_;
+    uint32_t poolSize_;
     DeviceHistogramTypes type_;
 };
 
 class HistInterleavedZmw : public DeviceTraceHistogramAccum::ImplBase
 {
 public:
-    HistInterleavedZmw(unsigned int poolSize,
+    HistInterleavedZmw(unsigned int poolId,
+                       unsigned int poolSize,
                        Cuda::Memory::StashableAllocRegistrar* registrar,
                        DeviceHistogramTypes type)
-        : DeviceTraceHistogramAccum::ImplBase(poolSize, type)
+        : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
     {}
 
@@ -649,9 +639,10 @@ public:
         PBLauncher(ResetHistsInterleavedStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
     }
 
-    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    Data::PoolHistogram<HistDataType, HistCountType> HistogramImpl() const override
     {
-        PBLauncher(CopyToInterleaved, this->PoolSize(), laneSize)(data_, dest.data);
+        auto rawHist = data_.CopyAsUnifiedCudaArray(SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+        return Data::PoolHistogram<HistDataType, HistCountType>(PoolId(), std::move(rawHist));
     }
 
 private:
@@ -661,10 +652,11 @@ private:
 class HistContigZmw : public DeviceTraceHistogramAccum::ImplBase
 {
 public:
-    HistContigZmw(unsigned int poolSize,
+    HistContigZmw(unsigned int poolId,
+                  unsigned int poolSize,
                   Cuda::Memory::StashableAllocRegistrar* registrar,
                   DeviceHistogramTypes type)
-        : DeviceTraceHistogramAccum::ImplBase(poolSize, type)
+        : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
     {}
 
@@ -709,9 +701,13 @@ public:
         PBLauncher(ResetHistsContigStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
     }
 
-    void Copy(Data::PoolHistogram<float, uint16_t>& dest) override
+    Data::PoolHistogram<HistDataType, HistCountType> HistogramImpl() const override
     {
-        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, dest.data);
+        Data::PoolHistogram<HistDataType, HistCountType> ret(PoolId(),
+                                                             PoolSize(),
+                                                             SyncDirection::HostReadDeviceWrite);
+        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, ret.data);
+        return ret;
     }
 
 private:
@@ -758,9 +754,7 @@ void DeviceTraceHistogramAccum::ResetImpl(const Data::BaselinerMetrics& metrics)
 
 DeviceTraceHistogramAccum::PoolHistType DeviceTraceHistogramAccum::HistogramImpl() const
 {
-    PoolHistType hists(PoolId(), PoolSize(), SyncDirection::HostReadDeviceWrite);
-    impl_->Copy(hists);
-    return hists;
+    return impl_->HistogramImpl();
 }
 
 DeviceTraceHistogramAccum::DeviceTraceHistogramAccum(unsigned int poolId,
@@ -774,7 +768,7 @@ DeviceTraceHistogramAccum::DeviceTraceHistogramAccum(unsigned int poolId,
     case DeviceHistogramTypes::GlobalInterleaved:
     case DeviceHistogramTypes::SharedInterleaved2DBlock:
         {
-            impl_ = std::make_unique<HistInterleavedZmw>(poolSize, registrar, type);
+            impl_ = std::make_unique<HistInterleavedZmw>(poolId, poolSize, registrar, type);
             break;
         }
     case DeviceHistogramTypes::GlobalContig:
@@ -782,7 +776,7 @@ DeviceTraceHistogramAccum::DeviceTraceHistogramAccum(unsigned int poolId,
     case DeviceHistogramTypes::SharedContigCoopWarps:
     case DeviceHistogramTypes::SharedContig2DBlock:
         {
-            impl_ = std::make_unique<HistContigZmw>(poolSize, registrar, type);
+            impl_ = std::make_unique<HistContigZmw>(poolId, poolSize, registrar, type);
             break;
         }
     default:

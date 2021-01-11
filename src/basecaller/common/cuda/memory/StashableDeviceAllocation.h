@@ -117,6 +117,14 @@ public:
     void Retrieve()
     {
         std::lock_guard<std::mutex> lm(mutex_);
+        RetrieveImpl();
+    }
+private:
+    // Non-locking private implementation.  Needed so that multiple public functions that
+    // cannot call each other (because they all want to hold the lock) can share
+    // this implementation.
+    void RetrieveImpl()
+    {
         if (size_ == 0) return;
 
         if (!device_)
@@ -126,11 +134,12 @@ public:
         {
             assert(host_);
             assert(state_);
-            CudaRawCopyDevice(device_.get<void>(DataKey()), host_.get<void>(), size_);
+            CudaRawCopyHostToDevice(device_.get<void>(DataKey()), host_.get<void>(), size_);
             CudaSynchronizeDefaultStream();
         }
         state_ = DEVICE;
     }
+public:
 
     // Copy data to the host and free up the GPU memory.  This is cheap
     // to call if data is already on the host.
@@ -152,7 +161,7 @@ public:
             monitor_->Reset();
             assert(host_);
             assert(device_);
-            CudaRawCopyHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
+            CudaRawCopyDeviceToHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
             CudaSynchronizeDefaultStream();
             IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
         }
@@ -175,6 +184,15 @@ public:
 
         Retrieve();
         return DeviceHandle<T>(device_.get<T>(DataKey()), size_/sizeof(T), DataKey());
+    }
+
+    void Copy(SmartDeviceAllocation& dest)
+    {
+        std::lock_guard<std::mutex> lm(mutex_);
+        RetrieveImpl();
+
+        CudaRawCopyDeviceToDevice(dest.get<void>(DataKey()), device_.get<void>(DataKey()), size());
+        CudaSynchronizeDefaultStream();
     }
 
     bool empty() const { return !device_ && !host_; }
