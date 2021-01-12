@@ -257,9 +257,6 @@ public:     // Structors
     template <typename VF2>
     SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam);
 
-    template <typename VF2>
-    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam, const FloatVec& weight);
-
     ~SignalModeHost() = default;
 
 public:     // Vectorized comparisons

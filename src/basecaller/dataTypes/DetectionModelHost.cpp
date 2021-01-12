@@ -46,11 +46,10 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     , updated_ (false)  // TODO: Is this right?
 {
     static_assert(numAnalogs == ldm.numAnalogs, "Mismatch in number of analogs.");
-    auto analogWeight = 0.25f * (1.0f - FloatVec{ldm.BaselineMode().weights});
     detectionModes_.reserve(numAnalogs);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
-        detectionModes_.emplace_back(ldm.AnalogMode(a), analogWeight);
+        detectionModes_.emplace_back(ldm.AnalogMode(a));
     }
 
     // TODO: What about confid_ and frameInterval_?
@@ -118,14 +117,6 @@ template <typename VF>
 template <typename FloatT>
 SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam)
     : weight_ (lam.weights)
-    , mean_ (lam.means)
-    , var_ (lam.vars)
-{ }
-
-template <typename VF>
-template <typename FloatT>
-SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam, const FloatVec& weight)
-    : weight_ (weight)
     , mean_ (lam.means)
     , var_ (lam.vars)
 { }
