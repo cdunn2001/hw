@@ -42,11 +42,11 @@ namespace Data {
 template <typename VF>
 template <typename VF2>
 DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
-    : baselineMode_ (ldm.BaselineMode(), ldm.BaselineWeight())
+    : baselineMode_ (ldm.BaselineMode())
     , updated_ (false)  // TODO: Is this right?
 {
     static_assert(numAnalogs == ldm.numAnalogs, "Mismatch in number of analogs.");
-    auto analogWeight = 0.25f * (1.0f - FloatVec(ldm.BaselineWeight()));
+    auto analogWeight = 0.25f * (1.0f - FloatVec{ldm.BaselineMode().weights});
     detectionModes_.reserve(numAnalogs);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
@@ -106,7 +106,7 @@ template <typename VF2>
 void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
 {
     assert(ldm);
-    baselineMode_.ExportTo(&ldm->BaselineMode(), &ldm->BaselineWeight());
+    baselineMode_.ExportTo(&ldm->BaselineMode());
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
@@ -116,8 +116,8 @@ void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
 
 template <typename VF>
 template <typename FloatT>
-SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam, const Cuda::Utility::CudaArray<FloatT, laneSize>& weight)
-    : weight_ (weight)
+SignalModeHost<VF>::SignalModeHost(const LaneAnalogMode<FloatT, laneSize>& lam)
+    : weight_ (lam.weights)
     , mean_ (lam.means)
     , var_ (lam.vars)
 { }
@@ -135,21 +135,9 @@ template <typename VF2>
 void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
 {
     assert(lam);
-    lam->means = mean_;
-    lam->vars = var_;
-}
-
-template <typename VF>
-template <typename VF2>
-void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam, Cuda::Utility::CudaArray<VF2, laneSize>* weight) const
-{
-    assert(lam);
     lam->means =  mean_;
     lam->vars = var_;
-    for (size_t i = 0; i < laneSize; i++)
-    {
-        weight[i] = MakeUnion(weight_)[i];
-    }
+    lam->weights = weight_;
 }
 
 
@@ -157,7 +145,6 @@ void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam, Cuda::Util
 template class DetectionModelHost<LaneArray<float>>;
 template DetectionModelHost<LaneArray<float>>::DetectionModelHost(const LaneDetectionModel<Cuda::PBHalf>& ldm);
 template void DetectionModelHost<LaneArray<float>>::ExportTo(LaneDetectionModel<Cuda::PBHalf>* ldm) const;
-template SignalModeHost<LaneArray<float>>::SignalModeHost(const LaneAnalogMode<Cuda::PBHalf, laneSize>& lam,
-                                                          const Cuda::Utility::CudaArray<Cuda::PBHalf, laneSize>& weight);
+template SignalModeHost<LaneArray<float>>::SignalModeHost(const LaneAnalogMode<Cuda::PBHalf, laneSize>& lam);
 
 }}}     // namespace PacBio::Mongo::Data

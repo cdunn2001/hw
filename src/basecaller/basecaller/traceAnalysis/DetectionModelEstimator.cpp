@@ -96,7 +96,7 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
-    ldm.BaselineWeight() = blWeight;
+    ldm.BaselineMode().weights = blWeight;
     assert(numAnalogs <= analogs_.size());
     const auto refSignal = refSnr_ * sqrt(blVar);
     for (unsigned int a = 0; a < numAnalogs; ++a)
