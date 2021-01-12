@@ -40,7 +40,7 @@ public:
     PB_CONFIG(BasecallerTraceHistogramConfig);
 
     SMART_ENUM(MethodName, Host, Gpu);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::Gpu);
 
     // Bin size of data histogram is nominally defined as initial estimate
     // of baseline sigma multiplied by this coefficient.

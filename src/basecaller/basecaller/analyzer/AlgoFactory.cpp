@@ -25,6 +25,7 @@
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
@@ -173,7 +174,8 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        throw PBException("Not implemented");
+        DeviceTraceHistogramAccum::Configure(bcConfig.traceHistogramConfig);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_.toString() << '.';
@@ -314,7 +316,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
 
 unique_ptr<TraceHistogramAccumulator>
 AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims,
-                                        StashableAllocRegistrar&) const
+                                        StashableAllocRegistrar& registrar) const
 {
     switch (histAccumOpt_)
     {
@@ -322,7 +324,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
         return std::make_unique<TraceHistogramAccumHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        // TODO: For now fall through to throw exception.
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, dims.lanesPerBatch, &registrar);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: "
