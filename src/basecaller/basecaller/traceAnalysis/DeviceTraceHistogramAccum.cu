@@ -462,108 +462,81 @@ __global__ void CopyToContig(DeviceView<const LaneHistogramTrans> source,
     dBlock.binSize[threadIdx.x] = sBlock.binSize[threadIdx.x];
 }
 
-__global__ void ResetHistsContigBounds(DeviceView<LaneHistogramTrans> hists,
-                                       DeviceView<const LaneHistBounds> bounds)
+struct ZmwBinsInfo
+{
+    float lowerBound;
+    float binSize;
+};
+
+__device__ ZmwBinsInfo ComputeBounds(const StatAccumState& laneBlStats)
+{
+    const auto blCount = laneBlStats.moment0[threadIdx.x];
+    const auto mom1 = laneBlStats.moment1[threadIdx.x];
+    auto blMean = mom1 / blCount + laneBlStats.offset[threadIdx.x];
+    auto blSigma = laneBlStats.moment2[threadIdx.x] - blMean * mom1;
+    blSigma = sqrt(blSigma / (blCount - 1));
+
+    if (blCount < staticConfig.baselineStatMinFrameCount_)
+    {
+        blMean = 0.0f;
+        blSigma = staticConfig.fallBackBaselineSigma_;
+    }
+
+    const auto lower = blMean - 4.0f*blSigma;
+    const auto binSize = staticConfig.binSizeCoeff_ * blSigma;
+    return {lower, binSize};
+}
+
+__device__ void ResetHist(Data::LaneHistogram<float, uint16_t>* hist, const ZmwBinsInfo& binInfo)
+{
+    assert(blockDim.x == 64);
+
+    for (int i = 0; i < hist->numBins; ++i)
+    {
+        hist->binCount[i][threadIdx.x] = 0;
+    }
+    hist->outlierCountHigh[threadIdx.x] = 0;
+    hist->outlierCountLow[threadIdx.x] = 0;
+    hist->lowBound[threadIdx.x] = binInfo.lowerBound;
+    hist->binSize[threadIdx.x] = binInfo.binSize;
+}
+
+__device__ void ResetHist(LaneHistogramTrans* hist, const ZmwBinsInfo& binInfo)
+{
+    assert(blockDim.x == 64);
+
+    for (int i = 0; i < hist->numBins; ++i)
+    {
+        hist->binCount[threadIdx.x][i] = 0;
+    }
+    hist->outlierCountHigh[threadIdx.x] = 0;
+    hist->outlierCountLow[threadIdx.x] = 0;
+    hist->lowBound[threadIdx.x] = binInfo.lowerBound;
+    hist->binSize[threadIdx.x] = binInfo.binSize;
+}
+
+
+template <typename Hist>
+__global__ void ResetHistsBounds(DeviceView<Hist> hists,
+                                 DeviceView<const LaneHistBounds> bounds)
 {
     assert(blockDim.x == 64);
     auto& hist = hists[blockIdx.x];
-    auto& bound = bounds[blockIdx.x];
-
-    for (int i = 0; i < hist.numBins; ++i)
-    {
-        hist.binCount[threadIdx.x][i] = 0;
-    }
-    hist.outlierCountHigh[threadIdx.x] = 0;
-    hist.outlierCountLow[threadIdx.x] = 0;
-    hist.lowBound[threadIdx.x] = bound.lowerBounds[threadIdx.x];
-    hist.binSize[threadIdx.x] = (bound.upperBounds[threadIdx.x] - bound.lowerBounds[threadIdx.x])
-                              / static_cast<float>(hist.numBins);
+    const auto& bound = bounds[blockIdx.x];
+    ZmwBinsInfo binInfo {
+        bound.lowerBounds[threadIdx.x],
+        (bound.upperBounds[threadIdx.x] - bound.lowerBounds[threadIdx.x])
+            / static_cast<float>(hist.numBins)
+    };
+    ResetHist(&hists[blockIdx.x], binInfo);
 }
 
-__global__ void ResetHistsInterleavedBounds(DeviceView<Data::LaneHistogram<float, uint16_t>> hists,
-                                            DeviceView<const LaneHistBounds> bounds)
-{
-    assert(blockDim.x == 64);
-    auto& hist = hists[blockIdx.x];
-    auto& bound = bounds[blockIdx.x];
-
-    for (int i = 0; i < hist.numBins; ++i)
-    {
-        hist.binCount[i][threadIdx.x] = 0;
-    }
-    hist.outlierCountHigh[threadIdx.x] = 0;
-    hist.outlierCountLow[threadIdx.x] = 0;
-    hist.lowBound[threadIdx.x] = bound.lowerBounds[threadIdx.x];
-    hist.binSize[threadIdx.x] = (bound.upperBounds[threadIdx.x] - bound.lowerBounds[threadIdx.x])
-                              / static_cast<float>(hist.numBins);
-}
-
-__global__ void ResetHistsInterleavedStats(DeviceView<Data::LaneHistogram<float, uint16_t>> hists,
+template <typename Hist>
+__global__ void ResetHistsStats(DeviceView<Hist> hists,
                                            DeviceView<const Data::BaselinerStatAccumState> stats)
 {
-    // Determine histogram parameters.
-    const auto& laneBlStats = stats[blockIdx.x].baselineStats;
-
-    const auto blCount = laneBlStats.moment0[threadIdx.x];
-    const auto mom1 = laneBlStats.moment1[threadIdx.x];
-    auto blMean = mom1 / blCount + laneBlStats.offset[threadIdx.x];
-    auto blSigma = laneBlStats.moment2[threadIdx.x] - blMean * mom1;
-    blSigma = sqrt(blSigma / (blCount - 1));
-
-    if (blCount < staticConfig.baselineStatMinFrameCount_)
-    {
-        blMean = 0.0f;
-        blSigma = staticConfig.fallBackBaselineSigma_;
-    }
-
-    const auto binSize = staticConfig.binSizeCoeff_ * blSigma;
-    const auto lower = blMean - 4.0f*blSigma;
-
-    assert(blockDim.x == 64);
-    auto& hist = hists[blockIdx.x];
-
-    for (int i = 0; i < hist.numBins; ++i)
-    {
-        hist.binCount[i][threadIdx.x] = 0;
-    }
-    hist.outlierCountHigh[threadIdx.x] = 0;
-    hist.outlierCountLow[threadIdx.x] = 0;
-    hist.lowBound[threadIdx.x] = lower;
-    hist.binSize[threadIdx.x] = binSize;
-}
-
-__global__ void ResetHistsContigStats(DeviceView<LaneHistogramTrans> hists,
-                                      DeviceView<const Data::BaselinerStatAccumState> stats)
-{
-    // Determine histogram parameters.
-    const auto& laneBlStats = stats[blockIdx.x].baselineStats;
-
-    const auto blCount = laneBlStats.moment0[threadIdx.x];
-    const auto mom1 = laneBlStats.moment1[threadIdx.x];
-    auto blMean = mom1 / blCount + laneBlStats.offset[threadIdx.x];
-    auto blSigma = laneBlStats.moment2[threadIdx.x] - blMean * mom1;
-    blSigma = sqrt(blSigma / (blCount - 1));
-
-    if (blCount < staticConfig.baselineStatMinFrameCount_)
-    {
-        blMean = 0.0f;
-        blSigma = staticConfig.fallBackBaselineSigma_;
-    }
-
-    const auto binSize = staticConfig.binSizeCoeff_ * blSigma;
-    const auto lower = blMean - 4.0f*blSigma;
-
-    assert(blockDim.x == 64);
-    auto& hist = hists[blockIdx.x];
-
-    for (int i = 0; i < hist.numBins; ++i)
-    {
-        hist.binCount[threadIdx.x][i] = 0;
-    }
-    hist.outlierCountHigh[threadIdx.x] = 0;
-    hist.outlierCountLow[threadIdx.x] = 0;
-    hist.lowBound[threadIdx.x] = lower;
-    hist.binSize[threadIdx.x] = binSize;
+    const auto& binInfo = ComputeBounds(stats[blockIdx.x].baselineStats);
+    ResetHist(&hists[blockIdx.x], binInfo);
 }
 
 class DeviceTraceHistogramAccum::ImplBase
@@ -614,12 +587,12 @@ public:
         {
         case DeviceHistogramTypes::GlobalInterleaved:
             {
-                PBLauncher(BinningGlobalInterleaved, this->PoolSize(), laneSize)(traces, data_);
+                PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize)(traces, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedInterleaved2DBlock:
             {
-                PBLauncher(BinningSharedInterleaved2DBlock, this->PoolSize(), dim3{laneSize/2, 32, 1})(traces, data_);
+                PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1})(traces, data_);
                 break;
             }
         default:
@@ -630,13 +603,13 @@ public:
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
     {
         assert(bounds.Size() == PoolSize());
-        PBLauncher(ResetHistsInterleavedBounds, PoolSize(), laneSize)(data_, bounds);
+        PBLauncher(ResetHistsBounds<HistogramType>, PoolSize(), laneSize)(data_, bounds);
     }
 
     void ResetImpl(const Data::BaselinerMetrics& metrics) override
     {
         assert(metrics.baselinerStats.Size() == PoolSize());
-        PBLauncher(ResetHistsInterleavedStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+        PBLauncher(ResetHistsStats<HistogramType>, PoolSize(), laneSize)(data_, metrics.baselinerStats);
     }
 
     Data::PoolHistogram<HistDataType, HistCountType> HistogramImpl() const override
@@ -646,7 +619,8 @@ public:
     }
 
 private:
-    DeviceOnlyArray<LaneHistogram<float, uint16_t>> data_;
+    using HistogramType = LaneHistogram<float, uint16_t>;
+    DeviceOnlyArray<HistogramType> data_;
 };
 
 class HistContigZmw : public DeviceTraceHistogramAccum::ImplBase
@@ -666,22 +640,22 @@ public:
         {
         case DeviceHistogramTypes::GlobalContig:
             {
-                PBLauncher(BinningGlobalContig, this->PoolSize(), laneSize)(traces, data_);
+                PBLauncher(BinningGlobalContig, PoolSize(), laneSize)(traces, data_);
                 break;
             }
         case DeviceHistogramTypes::GlobalContigCoopWarps:
             {
-                PBLauncher(BinningGlobalContigCoopWarps, this->PoolSize(), laneSize/2)(traces, data_);
+                PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2)(traces, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedContigCoopWarps:
             {
-                PBLauncher(BinningSharedContigCoopWarps, this->PoolSize(), laneSize/2)(traces, data_);
+                PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2)(traces, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedContig2DBlock:
             {
-                PBLauncher(BinningSharedContig2DBlock, this->PoolSize(), dim3{laneSize/2, laneSize/2,1})(traces, data_);
+                PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1})(traces, data_);
                 break;
             }
         default:
@@ -692,13 +666,13 @@ public:
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override
     {
         assert(bounds.Size() == PoolSize());
-        PBLauncher(ResetHistsContigBounds, PoolSize(), laneSize)(data_, bounds);
+        PBLauncher(ResetHistsBounds<LaneHistogramTrans>, PoolSize(), laneSize)(data_, bounds);
     }
 
     void ResetImpl(const Data::BaselinerMetrics& metrics) override
     {
         assert(metrics.baselinerStats.Size() == PoolSize());
-        PBLauncher(ResetHistsContigStats, this->PoolSize(), laneSize)(data_, metrics.baselinerStats);
+        PBLauncher(ResetHistsStats<LaneHistogramTrans>, PoolSize(), laneSize)(data_, metrics.baselinerStats);
     }
 
     Data::PoolHistogram<HistDataType, HistCountType> HistogramImpl() const override
@@ -706,7 +680,7 @@ public:
         Data::PoolHistogram<HistDataType, HistCountType> ret(PoolId(),
                                                              PoolSize(),
                                                              SyncDirection::HostReadDeviceWrite);
-        PBLauncher(CopyToContig, this->PoolSize(), laneSize)(data_, ret.data);
+        PBLauncher(CopyToContig, PoolSize(), laneSize)(data_, ret.data);
         return ret;
     }
 
