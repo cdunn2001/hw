@@ -96,9 +96,10 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
-    ldm.BaselineWeight() = blWeight;
+    ldm.BaselineMode().weights = blWeight;
     assert(numAnalogs <= analogs_.size());
     const auto refSignal = refSnr_ * sqrt(blVar);
+    const auto& aWeight = 0.25f * (1.0f - blWeight);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
@@ -108,6 +109,8 @@ void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumSta
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
+
+        aMode.weights = aWeight;
     }
 }
 
