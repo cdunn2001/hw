@@ -30,6 +30,7 @@
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
+#include "basecaller/traceAnalysis/BaselineStatsAggregatorDevice.h"
 #include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
 #include <basecaller/traceAnalysis/CoreDMEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
@@ -370,7 +371,8 @@ AlgoFactory::CreateBaselineStatsAggregator(unsigned int poolId,
         return std::make_unique<BaselineStatsAggregatorHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Gpu:
-        // TODO: For now fall through to throw exception.
+        return std::make_unique<BaselineStatsAggregatorDevice>(poolId, dims.lanesPerBatch, &registrar);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for BaselineStatsAggregator: "
