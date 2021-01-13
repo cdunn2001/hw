@@ -672,7 +672,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
 
 // static
 void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
-                              LaneDetModelHost* detModel) const
+                              LaneDetModelHost* detModel)
 {
     assert (all(scale > 0.0f));
     const auto baselineCovar = detModel->BaselineMode().SignalCovar();

@@ -94,7 +94,7 @@ public:     // Non-const functions
     }
 
     // Clears out current histogram data and resets histogram with given bounds
-    void Reset(Cuda::Memory::UnifiedCudaArray<LaneHistBounds> bounds)
+    void Reset(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
     {
         initialized_ = true;
         frameCount_ = 0;
@@ -103,7 +103,7 @@ public:     // Non-const functions
 
     // Clears out current histogram data and resets histogram with
     // bounds derived from baseline information
-    void Reset(Data::BaselinerMetrics metrics)
+    void Reset(const Data::BaselinerMetrics& metrics)
     {
         initialized_ = true;
         frameCount_ = 0;

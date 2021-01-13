@@ -84,17 +84,14 @@ void CoreDMEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blSt
 
     const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
     const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
-    // TODO: We want to pull the total number of frames from the blStats object but the
-    // fullAutocorrState is not yet populated by the GPU baseliner. For now, we just use the
-    // minimum frames for estimating.
-    //const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / CLanArrRef(blStats.TotalFrames());
     const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / LaneArr(blStats.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
-    ldm.BaselineWeight() = blWeight;
+    ldm.BaselineMode().weights = blWeight;
     assert(numAnalogs <= analogs_.size());
     const auto refSignal = refSnr_ * sqrt(blVar);
+    const auto& aWeight = 0.25f * (1.0f - blWeight);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
@@ -104,6 +101,8 @@ void CoreDMEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blSt
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
+
+        aMode.weights = aWeight;
     }
 }
 

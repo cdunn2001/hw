@@ -248,17 +248,14 @@ public:     // Structors
 
     SignalModeHost(const SignalModeHost&) = default;
 
-    SignalModeHost(const FloatVec& mean, const FloatVec& variance)
-        : mean_ (mean)
+    SignalModeHost(const FloatVec& weight, const FloatVec& mean, const FloatVec& variance)
+        : weight_ (weight)
+        , mean_ (mean)
         , var_ (variance)
     { }
 
     template <typename VF2>
-    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam, const Cuda::Utility::CudaArray<VF2, laneSize>& weight);
-
-    template <typename VF2>
-    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam, const FloatVec& weight);
-
+    SignalModeHost(const LaneAnalogMode<VF2, laneSize>& lam);
 
     ~SignalModeHost() = default;
 
@@ -296,12 +293,13 @@ public: // Modify Access
 
     /// Update the mean signal vector to a new value
     void SignalMean(const FloatVec& x)
-    { mean_ = x; }
+    {
+        mean_ = x;
+    }
 
     /// Update the signal covariance matrix to a new value
     void SignalCovar(const FloatVec& v)
     {
-        assert(all(v >= 0.0f));
         var_ = v;
     }
 
