@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -49,6 +49,8 @@ namespace Basecaller {
 
 namespace {
 
+// static/global data is annoying to get to the GPU.  Bundle it in a
+// struct so we can have a single transfer.
 struct StaticConfig
 {
     float binSizeCoeff_;
@@ -101,9 +103,13 @@ struct LaneHistogramTrans
     Array<CudaArray<CountT, numBins>> binCount;
 };
 
+// Simple initial attempt, with data kept in global memory and the histogram
+// laid out in the usual fashion where each bin has all zmw stored
+// contiguously (e.g. the histograms for each zmw are interleaved)
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
                                          DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
 {
+    assert(blockDim.x == 64);
     auto& hist = hists[blockIdx.x];
 
     float lowBound = hist.lowBound[threadIdx.x];
@@ -116,6 +122,9 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     auto zmw = traces.ZmwData(blockIdx.x, threadIdx.x/2);
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
+        // We're doing one thread per zmw, which means we have to do
+        // a little dance here since traces automatically come over as
+        // a paired PBShort2
         auto idx = threadIdx.x;
         auto val = (threadIdx.x % 2 == 0) ? zmw[i].X() : zmw[i].Y();
         int bin = (val - lowBound) / binSize;
@@ -129,6 +138,9 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
 }
 
 
+// Switches storage order of the histograms, so that all data for a given ZMW is contiguous.
+// The different access pattern will interact with the caches differently.
+//
 // Notes: I had been hoping that un-coallesced reads would still trigger a whole cacheline
 //        load into L2 (and maybe even L1).  Thus by having bins contiguous I was hoping I'd
 //        have better cache hits since the series is generally time correlated.
@@ -168,9 +180,13 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     hist.outlierCountHigh[threadIdx.x] = highOutlier;
 }
 
+// Still doing contiguous historgrams, but this time having the whole warp work on one ZMW at a time.
+// The intent is to lower the footprint of our hot memory at any one point in time, to minimize
+// cache misses.
+//
 // Notes: This function isn't too hard to tweak so that multiple warps participate, each warp working
 //        on a disjoint subset of zmw.
-
+//
 //        There is some slight evidece that having 2-4 warps active in the same block have a marginal
 //        benefit in some cases and a marginal detrement in others.  Having too many warps definitely
 //        does hurt performance, presumably because we're back to having a large enough portion of the
@@ -196,6 +212,7 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             if (bin < 0) bin = -1;
             else if (bin > numBins) bin = numBins;
 
+            // Get bit flag with each thread that has the same bin as us.
             auto same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
             auto count = __popc(same);
@@ -213,6 +230,7 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             if (bin < 0) bin = -1;
             else if (bin > numBins) bin = numBins;
 
+            // Get bit flag with each thread that has the same bin as us.
             same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
             count = __popc(same);
@@ -229,6 +247,9 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
     }
 }
 
+
+// Same strategy as the last attempt, just moving the active histogram to shared memory
+// for the faster data access speeds
 __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> traces,
                                              DeviceView<LaneHistogramTrans> hists)
 {
@@ -257,6 +278,7 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             if (bin >= numBins) bin = numBins+1;
             else if (bin < 0) bin = numBins;
 
+            // Get bit flag with each thread that has the same bin as us.
             auto same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
             auto count = __popc(same);
@@ -272,6 +294,7 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             if (bin >= numBins) bin = numBins+1;
             else if (bin < 0) bin = numBins;
 
+            // Get bit flag with each thread that has the same bin as us.
             same = __match_any_sync(0xFFFFFFFF, bin);
             // Number of threads with the same bin
             count = __popc(same);
@@ -304,6 +327,12 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
     }
 }
 
+// Now trying 2D parallelism.  A weakness in the last attempt was that reads of the
+// trace data were not coallesced.  Here we have 32 warps.  First each warp does
+// a coallesced read of 32 frames of data.  Then they use shared memory to transpose
+// the data, so a warp goes from holding 1 frame of all zmw, to 32 frames of a pair
+// of zmw.  Finally once a warp has data from the same ZMW, we all back to the previous
+// strategy for cooperative binning.
 __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> traces,
                                            DeviceView<LaneHistogramTrans> hists)
 {
@@ -348,6 +377,7 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         if (bin >= numBins) bin = numBins+1;
         else if (bin < 0) bin = numBins;
 
+        // Get bit flag with each thread that has the same bin as us.
         auto same = __match_any_sync(0xFFFFFFFF, bin);
         // Number of threads with the same bin
         auto count = __popc(same);
@@ -363,6 +393,7 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         if (bin >= numBins) bin = numBins+1;
         else if (bin < 0) bin = numBins;
 
+        // Get bit flag with each thread that has the same bin as us.
         same = __match_any_sync(0xFFFFFFFF, bin);
         // Number of threads with the same bin
         count = __popc(same);
@@ -392,6 +423,11 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
     }
 }
 
+// The last attempt was good, but this one is better.  We still use the same 2D
+// block of threads, but now the histogram data is stored interleaved.  We no
+// longer have to transpose the data after reading it, though we now have to rely
+// on explicit atomic operations to prevent different warps from stomping on each
+// other.  The use of atomics turns out to be a big win in this case.
 __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort2> traces,
                                                 DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
 {
@@ -445,6 +481,8 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
     }
 }
 
+// Small kernel to un-transpose LaneHistogramTrans when sharing it out to the rest
+// of the world.
 __global__ void CopyToContig(DeviceView<const LaneHistogramTrans> source,
                              DeviceView<Data::LaneHistogram<float, uint16_t>> dest)
 {
@@ -487,6 +525,8 @@ __device__ ZmwBinsInfo ComputeBounds(const StatAccumState& laneBlStats)
     return {lower, binSize};
 }
 
+// These two functions really only differ in the typeof histogram they accept, and the
+// order of indexing for the binCount member.
 __device__ void ResetHist(Data::LaneHistogram<float, uint16_t>* hist, const ZmwBinsInfo& binInfo)
 {
     assert(blockDim.x == 64);
@@ -570,6 +610,8 @@ private:
     DeviceHistogramTypes type_;
 };
 
+// Handles trace histograms for strategies that interleave zmw data
+// e.g. all data for a given bin is contiguous in memory
 class HistInterleavedZmw : public DeviceTraceHistogramAccum::ImplBase
 {
 public:
@@ -623,6 +665,8 @@ private:
     DeviceOnlyArray<HistogramType> data_;
 };
 
+// Handles trace histograms for strategies that have contiguous histograms
+// e.g. all data for a given zmw is contiguous in memory
 class HistContigZmw : public DeviceTraceHistogramAccum::ImplBase
 {
 public:

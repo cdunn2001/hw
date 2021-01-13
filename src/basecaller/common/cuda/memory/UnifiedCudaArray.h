@@ -60,14 +60,13 @@ template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 template <typename T, bool allow_expensive_types = false>
 class UnifiedCudaArray : private detail::DataManager
 {
-
 public:
     using HostType = T;
     using GpuType = typename gpu_type<T>::type;
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
     static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
 
-    // Constructor for creating UCA from a pre-existing host allocation.  Predominantly
+    // Constructor for creating UCA from a pre-existing device allocation.  Predominantly
     // designed to allow a DeviceOnlyArray to copy out it's contents into something that
     // can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
     // meant for 1-off random usage.
