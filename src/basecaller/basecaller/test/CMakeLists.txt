@@ -8,7 +8,7 @@ add_library(libMongoBasecallerTest OBJECT
     TestBaseliner.cpp
     TestDmeEmHost.cpp
     TestHFMetricsFilter.cpp
-    TestTraceHistogramAccumHost.cpp
+    TestBaselineStatsAggregator.cpp
     TestPulseAccumulator.cpp
 )
 

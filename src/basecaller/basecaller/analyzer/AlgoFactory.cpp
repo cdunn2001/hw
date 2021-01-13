@@ -6,8 +6,10 @@
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
-#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
+#include <basecaller/traceAnalysis/CoreDMEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
@@ -44,6 +46,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
+    baselineStatsAggregatorOpt_ = bcConfig.baselineStatsAggregatorConfig.Method;
 
     // Detection model estimator
     dmeOpt_ = bcConfig.dmeConfig.Method;
@@ -164,17 +167,33 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
+    switch (histAccumOpt_)
+    {
+    case Data::BasecallerTraceHistogramConfig::MethodName::Host:
+        TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
+        break;
+    case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
+        throw PBException("Not implemented");
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_.toString() << '.';
+        throw PBException(msg.str());
+        break;
+    }
+
+    DetectionModelEstimator::Configure(bcConfig.dmeConfig);
+
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
+        CoreDMEstimator::Configure(bcConfig.dmeConfig, movConfig);
         break;
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
         break;
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: "
+        msg << "Unrecognized method option for CoreDMEstimator: "
             << dmeOpt_.toString() << '.';
         throw PBException(msg.str());
         break;
@@ -234,9 +253,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                                    movConfig.frameRate,
                                    bcConfig.Metrics.realtimeActivityLabels);
     }
-
-    // TODO: Configure other algorithms according to options.
-    TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
 }
 
 
@@ -316,21 +332,42 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
     }
 }
 
-std::unique_ptr<DetectionModelEstimator>
-AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
+unique_ptr<BaselineStatsAggregator>
+AlgoFactory::CreateBaselineStatsAggregator(unsigned int poolId,
+                                           const Data::BatchDimensions& dims,
+                                           Cuda::Memory::StashableAllocRegistrar& registrar) const
+{
+    switch (baselineStatsAggregatorOpt_)
+    {
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Host:
+        return std::make_unique<BaselineStatsAggregatorHost>(poolId, dims.lanesPerBatch);
+        break;
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Gpu:
+        // TODO: For now fall through to throw exception.
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for BaselineStatsAggregator: "
+            << baselineStatsAggregatorOpt_ << '.';
+        throw PBException(msg.str());
+        break;
+    }
+}
+
+std::unique_ptr<CoreDMEstimator>
+AlgoFactory::CreateCoreDMEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
                                            StashableAllocRegistrar&) const
 {
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        return make_unique<DetectionModelEstimator>(poolId, dims.lanesPerBatch);
+        return make_unique<CoreDMEstimator>(poolId, dims.lanesPerBatch);
 
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         return make_unique<DmeEmHost>(poolId, dims.lanesPerBatch);
 
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: "
+        msg << "Unrecognized method option for CoreDMEstimator: "
             << dmeOpt_ << '.';
         throw PBException(msg.str());
         break;

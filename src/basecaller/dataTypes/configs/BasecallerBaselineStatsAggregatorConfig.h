@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,25 +23,26 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines some members of class TraceHistogramAccumulator.
 
-#include "TraceHistogramAccumulator.h"
+#ifndef mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
+#define mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
 
-#include <sstream>
-
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
+#include <pacbio/configuration/PBConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Basecaller {
+namespace Data {
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
+class BasecallerBaselineStatsAggregatorConfig : public Configuration::PBConfig<BasecallerBaselineStatsAggregatorConfig>
 {
+public:
+    PB_CONFIG(BasecallerBaselineStatsAggregatorConfig);
 
-}
+    SMART_ENUM(MethodName, Host, Gpu);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::Host);
+};
 
-}}}     // namespace PacBio::Mongo::Basecaller
+}}}     // namespace PacBio::Mongo::Data
+
+#endif //mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_

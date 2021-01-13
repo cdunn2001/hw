@@ -8,10 +8,14 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     Baseliner.cpp
     BaselinerParams.h
     BaselinerParams.cpp
+    BaselineStatsAggregator.h
+    BaselineStatsAggregator.cpp
+    BaselineStatsAggregatorHost.h
+    BaselineStatsAggregatorHost.cpp
     BlockFilterStage.h
     BlockFilterStage.cpp
-    FrameLabeler.h
-    FrameLabeler.cpp
+    CoreDMEstimator.h
+    CoreDMEstimator.cpp
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
     DeviceHFMetricsFilter.h
@@ -26,6 +30,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DmeDiagnostics.cpp
     DmeEmHost.h
     DmeEmHost.cpp
+    FrameLabeler.h
+    FrameLabeler.cpp
     HFMetricsFilter.h
     HFMetricsFilter.cpp
     HostHFMetricsFilter.h

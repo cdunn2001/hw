@@ -93,7 +93,7 @@ public:
             : traceHistAccum{new TraceHistogramAccumHost(std::move(tha))}
             , detectionModels{std::move(dms)}
             , frameMode{std::move(fm)}
-        { assert(traceHistAccum->HistogramFrameCount() == frameMode.front().size()); }
+        { assert(traceHistAccum->FramesAdded() == frameMode.front().size()); }
 
         CompleteData(CompleteData&&) = default;
         CompleteData& operator=(CompleteData&&) = default;
@@ -158,12 +158,6 @@ private:
         auto& traces = ctb.first;
         auto& stats = ctb.second;
 
-        // Start histogramming with first frame.
-        histConfig.NumFramesPreAccumStats = 0;
-        TraceHistogramAccumHost::Configure(histConfig, movieConfig);
-
-        TraceHistogramAccumHost tha{poolId, poolSize};
-        tha.Reset();
         std::vector<std::vector<unsigned short>> frameMode(poolSize);
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
@@ -257,7 +251,12 @@ private:
 
             detectionModels.push_back(std::move(detModelCD));
         }
-        tha.AddBatch(ctb.first, ctb.second.baselinerStats);
+
+        // Configure and fill the histogram.
+        TraceHistogramAccumHost::Configure(histConfig);
+        TraceHistogramAccumHost tha{poolId, poolSize};
+        tha.Reset(ctb.second);
+        tha.AddBatch(ctb.first);
 
         return CompleteData{std::move(tha), std::move(detectionModels), std::move(frameMode)};
     }
@@ -280,7 +279,7 @@ TEST_P(TestDmeEmHost, EstimateFiniteMixture)
     dmeConfig.PulseAmpRegularization = GetParam().pulseAmpReg;
     DmeEmHost::Configure(dmeConfig, movieConfig);
 
-    std::unique_ptr<DetectionModelEstimator> dme = std::make_unique<DmeEmHost>(poolId, poolSize);
+    std::unique_ptr<CoreDMEstimator> dme = std::make_unique<DmeEmHost>(poolId, poolSize);
     Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,
                                                               Cuda::Memory::SyncDirection::Symmetric,
                                                               SOURCE_MARKER());

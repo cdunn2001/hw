@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,25 +23,30 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines some members of class TraceHistogramAccumulator.
 
-#include "TraceHistogramAccumulator.h"
+#ifndef mongo_basecaller_analyzer_AnalysisProfiler_H_
+#define mongo_basecaller_analyzer_AnalysisProfiler_H_
 
-#include <sstream>
-
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
+#include <pacbio/dev/profile/ScopedProfilerChain.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
-{
+SMART_ENUM(
+    AnalysisStages,
+    Upload,
+    Download,
+    Baseline,
+    Histogram,
+    DME,
+    FrameLabeling,
+    PulseAccumulating,
+    Metrics
+);
 
-}
+using AnalysisProfiler = PacBio::Dev::Profile::ScopedProfilerChain<AnalysisStages>;
 
-}}}     // namespace PacBio::Mongo::Basecaller
+}}}
+
+#endif //mongo_basecaller_analyzer_AnalysisProfiler_H_

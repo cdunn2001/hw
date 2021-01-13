@@ -6,6 +6,8 @@ set(CPP_LIST
     configs/BasecallerAlgorithmConfig.h
     configs/BasecallerBaselinerConfig.cpp
     configs/BasecallerBaselinerConfig.h
+    configs/BasecallerBaselineStatsAggregatorConfig.cpp
+    configs/BasecallerBaselineStatsAggregatorConfig.h
     configs/BasecallerDmeConfig.cpp
     configs/BasecallerDmeConfig.h
     configs/BasecallerFrameLabelerConfig.cpp

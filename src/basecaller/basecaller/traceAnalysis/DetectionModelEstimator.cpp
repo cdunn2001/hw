@@ -1,117 +1,154 @@
-
-#include <common/LaneArray.h>
-#include <common/StatAccumulator.h>
-#include <dataTypes/configs/BasecallerDmeConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "DetectionModelEstimator.h"
+
+#include <basecaller/analyzer/AlgoFactory.h>
+#include <basecaller/traceAnalysis/CoreDMEstimator.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregator.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
 // static
-Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
-DetectionModelEstimator::analogs_;
-
-PacBio::Logging::PBLogger DetectionModelEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
-
-float DetectionModelEstimator::refSnr_;
+uint32_t DetectionModelEstimator::numFramesPreAccumStats_ = 0;
 uint32_t DetectionModelEstimator::minFramesForEstimate_ = 0;
-bool DetectionModelEstimator::fixedBaselineParams_ = false;
-float DetectionModelEstimator::fixedBaselineMean_ = 0;
-float DetectionModelEstimator::fixedBaselineVar_ = 0;
 
 // static
-void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig,
-                                        const Data::MovieConfig& movConfig)
+void DetectionModelEstimator::Configure(const Data::BasecallerDmeConfig& dmeConfig)
 {
+    numFramesPreAccumStats_ = dmeConfig.NumFramesPreAccumStats;
+    PBLOG_INFO << "DetectionModelEstimator: NumFramesPreAccumStats = "
+               << numFramesPreAccumStats_ << '.';
+
     minFramesForEstimate_ = dmeConfig.MinFramesForEstimate;
+    PBLOG_INFO << "DetectionModelEstimator: MinFramesForEstimate= "
+               << minFramesForEstimate_ << '.';
 
-    refSnr_ = movConfig.refSnr;
-    for (size_t i = 0; i < movConfig.analogs.size(); i++)
-    {
-        analogs_[i] = movConfig.analogs[i];
-    }
-
-    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed &&
-        dmeConfig.SimModel.useSimulatedBaselineParams == true)
-    {
-        fixedBaselineParams_ = true;
-        fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
-        fixedBaselineVar_ = dmeConfig.SimModel.baselineVar;
-    }
-}
-
-// static
-LaneArray<float> DetectionModelEstimator::ModelSignalCovar(
-        const Data::AnalogMode& analog,
-        const LaneArray<float>& signalMean,
-        const LaneArray<float>& baselineVar)
-{
-    LaneArray<float> r {baselineVar};
-    r += signalMean;
-    r += pow2(analog.excessNoiseCV * signalMean);
-    return r;
-}
-
-DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
-{
+    if (minFramesForEstimate_ < numFramesPreAccumStats_)
+        PBLOG_WARN << "minFramesForEstimate_ less than numFramesPreAccumStats_.  "
+                   << "Only the first histogram will respect numFramesPreAccumStats_";
 }
 
 
-DetectionModelEstimator::PoolDetModel
-DetectionModelEstimator::InitDetectionModels(const PoolBaselineStats& blStats) const
+// Need destructor definition here since the header file only has forward
+// declaration for things like the CoreDMEstimator.
+DetectionModelEstimator::~DetectionModelEstimator() = default;
+
+DetectionModelEstimator::DetectionModelEstimator(uint32_t poolId,
+                                                 const Data::BatchDimensions& dims,
+                                                 Cuda::Memory::StashableAllocRegistrar& registrar,
+                                                 const AlgoFactory& algoFac)
+    : framesPerBatch_(dims.framesPerBatch)
+    , traceAccumulator_(algoFac.CreateTraceHistAccumulator(poolId, dims, registrar))
+    , baselineAggregator_(algoFac.CreateBaselineStatsAggregator(poolId, dims, registrar))
+    , coreEstimator_(algoFac.CreateCoreDMEstimator(poolId, dims, registrar))
 {
-    PoolDetModel pdm (poolSize_, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
-
-    auto pdmHost = pdm.GetHostView();
-    const auto& blStatsHost = blStats.GetHostView();
-    for (unsigned int lane = 0; lane < poolSize_; ++lane)
-    {
-        InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
-    }
-
-    return pdm;
+    framesRemaining_ = NumFramesPreAccumStats();
 }
 
-
-void DetectionModelEstimator::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
-                                               LaneDetModel& ldm) const
+// Successive calls to this function will move this class through
+// a state machine that handles the progression of various initialization
+// phases leading up towards actual estimatins.  Namely:
+// * Accumulate baseline statistics until we have a more robust baseline estimate
+//   Once this stage finishes we will
+//    * Use the aggregated stats to compute hist bounds and initialize the histograms
+//    * Reset the baseline stats
+// * In the next phase we accumulate both the next round of baseline stats as well
+//   as histograms of the data.
+//    * With each new piece of data we re-initialize the models using the latest
+//      baseline information (but no actual estimation occurs)
+//    * Aggregation continues until we have enough histogram data for a full model estimation
+//    * Upon full model estimation the baseline stats are used to re-init the histograms, and
+//      the baseline stats are reset
+// * Until program termination, we continue mostly as in the last phase, with the main
+//   difference being we don't update the models between estimation attempts any longer.
+//    * Future implementations likely will have a more lightweight update step between
+//      estimations
+bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
+                                       const Data::BaselinerMetrics& metrics,
+                                       PoolDetModel* models,
+                                       AnalysisProfiler& profiler)
 {
-    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
-    using LaneArr = LaneArray<ElementType>;
+    baselineAggregator_->AddMetrics(metrics);
+    if (poolStatus_ != PoolStatus::STARTUP_HIST_INIT)
+        traceAccumulator_->AddBatch(traces);
 
-    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
-
-    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
-    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
-    // TODO: We want to pull the total number of frames from the blStats object but the
-    // fullAutocorrState is not yet populated by the GPU baseliner. For now, we just use the
-    // minimum frames for estimating.
-    //const auto& blWeight = CLanArrRef(blStats.NumBaselineFrames()) / CLanArrRef(blStats.TotalFrames());
-    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / static_cast<float>(minFramesForEstimate_);
-
-    ldm.BaselineMode().means = blMean;
-    ldm.BaselineMode().vars = blVar;
-    ldm.BaselineMode().weights = blWeight;
-    assert(numAnalogs <= analogs_.size());
-    const auto refSignal = refSnr_ * sqrt(blVar);
-    const auto& aWeight = 0.25f * (1.0f - blWeight);
-    for (unsigned int a = 0; a < numAnalogs; ++a)
+    if (poolStatus_ == PoolStatus::STARTUP_DME_INIT)
     {
-        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
-        auto& aMode = ldm.AnalogMode(a);
-        aMode.means = aMean;
-
-        // This noise model assumes that the trace data have been converted to
-        // photoelectron units.
-        aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
-
-        aMode.weights = aWeight;
+        const auto& runningStats = baselineAggregator_->TraceStats();
+        *models = coreEstimator_->InitDetectionModels(runningStats.baselinerStats);
     }
+
+    bool ranEstimation = false;
+
+    framesRemaining_ -= traces.NumFrames();
+    if (framesRemaining_ <= 0)
+    {
+        switch(poolStatus_)
+        {
+        case PoolStatus::STARTUP_DME_INIT:
+            {
+                poolStatus_ = PoolStatus::SEQUENCING;
+                // Intentional fallthrough, we want an estimate now
+            }
+        case PoolStatus::SEQUENCING:
+            {
+                ranEstimation = true;
+                const auto& hists = traceAccumulator_->Histogram();
+                coreEstimator_->Estimate(hists, models);
+                // Intentional fallthrough, we want to reset our
+                // histograms and baseline stats
+            }
+        case PoolStatus::STARTUP_HIST_INIT:
+            {
+                traceAccumulator_->Reset(baselineAggregator_->TraceStats());
+                baselineAggregator_->Reset();
+                break;
+            }
+        default:
+            throw PBException("Unexpected DetectionModelEstimator PoolStatus");
+        }
+
+        if (poolStatus_ == PoolStatus::STARTUP_HIST_INIT)
+            poolStatus_ = PoolStatus::STARTUP_DME_INIT;
+
+        framesRemaining_ = MinFramesForEstimate();
+    }
+
+    return ranEstimation;
+}
+
+uint32_t DetectionModelEstimator::StartupLatency() const
+{
+    auto RoundToChunk = [&](size_t frames) { return (frames + framesPerBatch_ - 1) / framesPerBatch_ * framesPerBatch_; };
+    return RoundToChunk(NumFramesPreAccumStats())
+         + RoundToChunk(MinFramesForEstimate());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

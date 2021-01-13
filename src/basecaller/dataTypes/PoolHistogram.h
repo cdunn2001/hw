@@ -50,12 +50,10 @@ struct LaneHistogram
 template <typename DataT, typename CountT>
 struct PoolHistogram
 {
-    static constexpr auto cudaSyncMode = Cuda::Memory::SyncDirection::Symmetric;
-
     Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> data;
     uint32_t poolId;
 
-    PoolHistogram(uint32_t aPoolId, unsigned int numLanes)
+    PoolHistogram(uint32_t aPoolId, unsigned int numLanes, Cuda::Memory::SyncDirection cudaSyncMode)
         : data (numLanes, cudaSyncMode, SOURCE_MARKER())
         , poolId (aPoolId)
     { }

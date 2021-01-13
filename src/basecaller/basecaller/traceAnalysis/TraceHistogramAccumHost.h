@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
 #define mongo_basecaller_traceAnalysis_TraceHistogramAccumHost_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -47,6 +47,20 @@ class TraceHistogramAccumHost : public TraceHistogramAccumulator
 public:     // Types
     using TraceElementType = Data::BaselinedTraceElement;
 
+public:     // Static functions
+
+    static void Configure(const Data::BasecallerTraceHistogramConfig& traceConfig);
+
+    static float BinSizeCoeff()
+    { return binSizeCoeff_; }
+
+    static unsigned int BaselineStatMinFrameCount()
+    { return baselineStatMinFrameCount_; }
+
+    static float FallBackBaselineSigma()
+    { return fallBackBaselineSigma_; }
+
+
 public:     // Structors and assignment.
     TraceHistogramAccumHost(unsigned int poolId,
                             unsigned int poolSize);
@@ -56,38 +70,24 @@ public:     // Const access (extensions to TraceHistogramAccumulator interface)
     HistogramHost() const
     { return hist_; }
 
-    const AlignedVector<Data::BaselinerStatAccumulator<DataType>>&
-    TraceStatsHost() const
-    { return stats_; }
-
 private:    // TraceHistogramAccumulator implementation.
-    void AddBatchImpl(
-            const Data::TraceBatch<TraceElementType>& ctb,
-            const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) override;
+    void AddBatchImpl(const Data::TraceBatch<TraceElementType>& ctb) override;
 
-    void ClearImpl() override;
-    void ResetImpl() override;
+    void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
 
-    const PoolHistType& HistogramImpl() const override;
+    void ResetImpl(const Data::BaselinerMetrics& metrics) override;
 
-    const PoolTraceStatsType& TraceStatsImpl() const override;
+    PoolHistType HistogramImpl() const override;
+
+private: // Static data
+    static float binSizeCoeff_;
+    static unsigned int baselineStatMinFrameCount_;
+    static float fallBackBaselineSigma_;
 
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
-    AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
-    mutable PoolHistType poolHist_;
-    mutable PoolTraceStatsType poolTraceStats_;
-    bool isHistInitialized_ {false};
 
 private:    // Functions
-    // Compute histogram parameters (e.g., bin size, lower bound, etc.),
-    // construct empty histogram, and add it to hist_.
-    void InitHistogram(unsigned int lane);
-
-    // Allocates, if necessary, and initializes all the baseliner statistics
-    // accumulators contained in stats_.
-    void InitStats(unsigned int numLanes);
-
     // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
     void AddBlock(const Data::TraceBatch<TraceElementType>& ctb, unsigned int lane);
 };

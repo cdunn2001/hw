@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumulator_H_
 #define mongo_basecaller_traceAnalysis_TraceHistogramAccumulator_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -29,18 +29,25 @@
 //  Description:
 //  Defines abstract class TraceHistogramAccumulator.
 
+#include <dataTypes/BasicTypes.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/PoolHistogram.h>
-#include <dataTypes/BasicTypes.h>
-#include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/TraceBatch.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-/// A non-virtual interface for accumulation of trace histograms and statistics
-/// produced by the baseline estimator.
+struct alignas(cacheLineSize) LaneHistBounds
+{
+    Cuda::Utility::CudaArray<float, laneSize> upperBounds;
+    Cuda::Utility::CudaArray<float, laneSize> lowerBounds;
+};
+
+// Handles the aggregation of trace data into histograms.  This class
+// is not robustly initialized upon construction, and need to be supplied
+// with histogram bounds before aggregating any data
 class TraceHistogramAccumulator
 {
 public:     // Types
@@ -49,23 +56,6 @@ public:     // Types
     using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
-    using PoolTraceStatsType = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
-
-public:     // Static functions
-    static void Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
-                          const Data::MovieConfig& movConfig);
-
-    static unsigned int NumFramesPreAccumStats()
-    { return numFramesPreAccumStats_; }
-
-    static float BinSizeCoeff()
-    { return binSizeCoeff_; }
-
-    static unsigned int BaselineStatMinFrameCount()
-    { return baselineStatMinFrameCount_; }
-
-    static float FallBackBaselineSigma()
-    { return fallBackBaselineSigma_; }
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
@@ -76,24 +66,10 @@ public:     // Const functions
     size_t FramesAdded() const
     { return frameCount_; }
 
-    /// Number of frames added to histograms.
-    /// Total of counts in each zmw histogram will typically be somewhat
-    /// smaller due to filtering of edge frames.
-    size_t HistogramFrameCount() const
-    { return histFrameCount_; }
-
-    /// The accumulated histogram.
-    /// \note Calls to AddBatch will modify the referenced value.
-    /// \note Calling this function is not necessarily cheap.
-    const PoolHistType& Histogram() const
+    /// Returns a copy of the accumulated trace histogram
+    PoolHistType Histogram() const
     {
         return HistogramImpl();
-    }
-
-    /// The accumulated trace statistics.
-    const PoolTraceStatsType& TraceStats() const
-    {
-        return TraceStatsImpl();
     }
 
     /// The ZMW pool associated with this instance.
@@ -107,61 +83,51 @@ public:     // Const functions
 public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
-    void AddBatch(
-            const Data::TraceBatch<DataType>& traces,
-            const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats)
+    void AddBatch(const Data::TraceBatch<DataType>& traces)
     {
+        if (!initialized_)
+            throw PBException("Cannot aggregate trace data into histograms "
+                              "before calling Reset with the desired histogram bounds");
         assert (traces.GetMeta().PoolId() == poolId_);
-        AddBatchImpl(traces, stats);
+        AddBatchImpl(traces);
         frameCount_ += traces.NumFrames();
     }
 
-    // Clears out the current batch of histogram data and starts a new
-    // histogram
-    void Clear()
+    // Clears out current histogram data and resets histogram with given bounds
+    void Reset(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
     {
-        histFrameCount_ = 0;
-        ClearImpl();
-    }
-
-    // Fully resets the class to pristine initial conditions, including
-    // nixing all current aggregate baseline statistics
-    void Reset()
-    {
-        histFrameCount_ = 0;
+        initialized_ = true;
         frameCount_ = 0;
-        ResetImpl();
+        ResetImpl(bounds);
     }
 
-protected:  // Data
-    // Number of frames added to histograms.
-    size_t histFrameCount_ = 0;
-
-private:    // Static data
-    // Number of frames to accumulate baseliner statistics before initializing
-    // histograms.
-    static unsigned int numFramesPreAccumStats_;
-    static float binSizeCoeff_;
-    static unsigned int baselineStatMinFrameCount_;
-    static float fallBackBaselineSigma_;
+    // Clears out current histogram data and resets histogram with
+    // bounds derived from baseline information
+    void Reset(const Data::BaselinerMetrics& metrics)
+    {
+        initialized_ = true;
+        frameCount_ = 0;
+        ResetImpl(metrics);
+    }
 
 private:    // Data
     size_t frameCount_ = 0;  // Total number of frames added via AddBatch.
     uint32_t poolId_;
     unsigned int poolSize_;  // Number of lanes in this pool.
+    bool initialized_ = false; // Do we have histogram bounds yet?
 
 private:    // Customizable implementation.
     // Bins frames in traces and updates poolHist_.
-    virtual void AddBatchImpl(
-        const Data::TraceBatch<DataType>& traces,
-        const Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>& stats) = 0;
+    virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces) = 0;
 
-    virtual void ClearImpl() = 0;
-    virtual void ResetImpl() = 0;
+    // Clears out current histogram data and resets histogram with given bounds
+    virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
 
-    virtual const PoolHistType& HistogramImpl() const = 0;
+    // Clears out current histogram data and resets histogram with
+    // bounds derived from baseline information
+    virtual void ResetImpl(const Data::BaselinerMetrics& metrics) = 0;
 
-    virtual const PoolTraceStatsType& TraceStatsImpl() const = 0;
+    virtual PoolHistType HistogramImpl() const = 0;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

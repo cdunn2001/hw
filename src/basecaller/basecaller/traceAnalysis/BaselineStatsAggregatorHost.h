@@ -1,4 +1,7 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+#ifndef mongo_basecaller_traceAnalysis_BaselineStatsAggregatorHost_H_
+#define mongo_basecaller_traceAnalysis_BaselineStatsAggregatorHost_H_
+
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,24 +27,46 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines some members of class TraceHistogramAccumulator.
+//  Defines class BaselineStatsAggregatorHost, which customizes
+//  BaselineStatsAggregator.
 
-#include "TraceHistogramAccumulator.h"
 
-#include <sstream>
+#include <common/AlignedVector.h>
+#include <common/LaneArray.h>
+#include <dataTypes/BaselinerStatAccumulator.h>
+#include <dataTypes/UHistogramSimd.h>
 
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
+#include "BaselineStatsAggregator.h"
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
+class BaselineStatsAggregatorHost : public BaselineStatsAggregator
 {
+public:
+    BaselineStatsAggregatorHost(uint32_t poolId, unsigned int poolSize)
+        : BaselineStatsAggregator(poolId, poolSize)
+        , stats_(poolSize)
+    {}
 
-}
+public:     // Const access (extensions to BaselineStatsAggregatorHost interface)
+
+    const AlignedVector<Data::BaselinerStatAccumulator<DataType>>&
+    TraceStatsHost() const
+    { return stats_; }
+
+private:    // BaselineStatsAggregatorHost implementation.
+    void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
+
+    Data::BaselinerMetrics TraceStatsImpl() const override;
+
+    void ResetImpl() override;
+
+private:    // Data
+    AlignedVector<Data::BaselinerStatAccumulator<DataType>> stats_;
+};
 
 }}}     // namespace PacBio::Mongo::Basecaller
+
+#endif // mongo_basecaller_traceAnalysis_BaselineStatsAggregatorHost_H_
