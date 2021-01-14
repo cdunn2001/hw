@@ -26,7 +26,7 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "" FORCE)
 # 1419 External declaration in primary source file
 # 2547 Header specified as both system and non-system include
 # 3346 Dynamic exception specifications are deprecated
-set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr\
+set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_80,code=sm_80 -gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr\
  --default-stream per-thread --compiler-options=\"${CMAKE_CXX_FLAGS}\"\
  --compiler-options=\"-wd82 -wd177 -wd869 -wd1419 -wd2547 -wd3346\""
  CACHE STRING "" FORCE)
