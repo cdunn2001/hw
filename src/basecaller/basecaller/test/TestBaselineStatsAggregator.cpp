@@ -25,9 +25,10 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines unit tests for class BaselineStatsAggregatorHost
+//  Defines unit tests for class BaselineStatsAggregator
 
 #include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregatorDevice.h>
 
 #include <algorithm>
 #include <map>
@@ -43,12 +44,13 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-struct TestBaselineStatsAggregatorHost : public ::testing::Test
+template <typename T>
+struct TestBaselineStatsAggregator : public ::testing::Test
 {
     using TraceElementType = Data::BaselinedTraceElement;
 
-    const unsigned int chunkSize = 64;  // frames per chunk
-    const unsigned int poolSize = 6;    // lanes per pool
+    static constexpr unsigned int chunkSize = 64;  // frames per chunk
+    static constexpr unsigned int poolSize = 6;    // lanes per pool
 
     Data::BasecallerBaselineStatsAggregatorConfig sigConfig;
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
@@ -75,10 +77,31 @@ struct TestBaselineStatsAggregatorHost : public ::testing::Test
     }
 };
 
+using TestTypes = ::testing::Types<BaselineStatsAggregatorHost,
+                                   BaselineStatsAggregatorDevice>;
+TYPED_TEST_SUITE(TestBaselineStatsAggregator, TestTypes);
 
-TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
+template <typename T>
+std::unique_ptr<T> CreateAggregator(uint32_t poolId, uint32_t numLanes);
+
+template <>
+std::unique_ptr<BaselineStatsAggregatorHost> CreateAggregator<BaselineStatsAggregatorHost>(uint32_t poolId, uint32_t numLanes)
 {
-    BaselineStatsAggregatorHost bsa (7, poolSize);
+    return std::make_unique<BaselineStatsAggregatorHost>(poolId, numLanes);
+}
+template <>
+std::unique_ptr<BaselineStatsAggregatorDevice> CreateAggregator<BaselineStatsAggregatorDevice>(uint32_t poolId, uint32_t numLanes)
+{
+    return std::make_unique<BaselineStatsAggregatorDevice>(poolId, numLanes, nullptr);
+}
+
+// TODO: This is a repackaging of an existing test after the baseline stats aggregation
+//       was pulled out separate from TraceHistogramAccumulator, but this stats
+//       aggregator does more than this function tests.  We need a more comprehensive
+//       test.
+TYPED_TEST(TestBaselineStatsAggregator, UniformSimple)
+{
+    auto bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
@@ -88,12 +111,12 @@ TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
     // Feed mock data to BaselineStatsAggregator under test.
     for (unsigned int i = 0; i < nChunks; ++i)
     {
-        auto stats = GenerateStats(mPar[i], s2Par[i]);
-        bsa.AddMetrics(stats);
+        auto stats = TestFixture::GenerateStats(mPar[i], s2Par[i]);
+        bsa->AddMetrics(stats);
     }
 
     // Expected accumulated baseline statistics.
-    const auto n0 = chunkSize/2;
+    const auto n0 = TestFixture::chunkSize/2;
     const float mExpect = std::accumulate(mPar.begin(), mPar.end(), 0.0f) / nChunks;
     float s2Expect = (n0-1) * std::accumulate(s2Par.begin(), s2Par.end(), 0.0f);
     for (unsigned int i = 0; i < nChunks; ++i)
@@ -103,10 +126,10 @@ TEST_F(TestBaselineStatsAggregatorHost, UniformSimple)
     s2Expect /= (nChunks*n0 - 1);
 
     // Check the accumulated baseline statistics.
-    const auto& tsPool = bsa.TraceStatsHost();
-    for (const auto& tsLane : tsPool)
+    const auto& tsPool = bsa->TraceStats();
+    for (const auto& tsLane : tsPool.baselinerStats.GetHostView())
     {
-        const auto& bls = tsLane.BaselineFramesStats();
+        auto bls = Data::BaselinerStatAccumulator<uint16_t>(tsLane).BaselineFramesStats();
         const auto n = bls.Count().ToArray();
         const auto m = bls.Mean().ToArray();
         const auto s2 = bls.Variance().ToArray();

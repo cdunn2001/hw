@@ -42,7 +42,7 @@ namespace Basecaller {
 class BaselineStatsAggregatorDevice : public BaselineStatsAggregator
 {
 public:
-    BaselineStatsAggregatorDevice(uint32_t poolId, unsigned int poolSize,
+    BaselineStatsAggregatorDevice(uint32_t poolId, uint32_t poolSize,
                                   Cuda::Memory::StashableAllocRegistrar* registrar);
     ~BaselineStatsAggregatorDevice();
 
