@@ -37,6 +37,7 @@
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/StashableDeviceAllocation.h>
 #include <common/cuda/memory/SmartDeviceAllocation.h>
+#include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/PBCudaRuntime.h>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/streams/StreamMonitors.h>
@@ -163,6 +164,14 @@ public:
         return data_->GetDeviceHandle<const T>(info);
     }
 
+    template <typename U = T, std::enable_if_t<std::is_trivially_copyable<U>::value, int> dummy = 0>
+    UnifiedCudaArray<T> CopyAsUnifiedCudaArray(SyncDirection dir, const AllocationMarker& marker) const
+    {
+        auto alloc = GetGlobalAllocator().GetDeviceAllocation(count_*sizeof(T), marker);
+        data_->Copy(alloc);
+        return UnifiedCudaArray<T>(std::move(alloc), count_, dir, marker, DataKey());
+    }
+
     ~DeviceOnlyArray()
     {
         if (!data_->empty())
@@ -188,7 +197,7 @@ private:
     // The DeviceOnlyArray won't necessarily have any associated GPU memory upon construction.
     // This class is used to defer construction until a later point where we know memory
     // has been reserved.
-    class LazyConstructor
+    mutable class LazyConstructor
     {
     public:
         template <typename...Args>

@@ -30,10 +30,11 @@ void* CudaRawMallocHostZero(size_t size);
 void* CudaRawHostGetDevicePtr(void* p);
 void  CudaFree(void* t);
 void  CudaFreeHost(void* t);
-void  CudaRawCopyHost(void* dest, void* src, size_t count);
-void  CudaRawCopyDevice(void* dest, void* src, size_t count);
+void  CudaRawCopyDeviceToHost(void* dest, const void* src, size_t count);
+void  CudaRawCopyHostToDevice(void* dest, const void* src, size_t count);
+void  CudaRawCopyDeviceToDevice(void* dest, const void* src, size_t count);
 void  CudaSynchronizeDefaultStream();
-void  CudaRawCopyToSymbol(const void* dest, void* src, size_t count);
+void  CudaRawCopyToSymbol(const void* dest, const void* src, size_t count);
 
 void CudaHostRegister(void* ptr, size_t size);
 void CudaHostUnregister(void* ptr);
@@ -55,11 +56,13 @@ T* CudaHostGetDevicePtr(T* p) { return static_cast<T*>(CudaRawHostGetDevicePtr(p
 template <typename T>
 T* CudaMallocManaged(size_t count) { return static_cast<T*>(CudaRawMallocManaged(count*sizeof(T))); }
 template <typename T>
-void CudaCopyHost(T* dest, T* src, size_t count) { CudaRawCopyHost(dest, src, count*sizeof(T)); }
+void CudaCopyDeviceToHost(T* dest, const T* src, size_t count) { CudaRawCopyDeviceToHost(dest, src, count*sizeof(T)); }
 template <typename T>
-void CudaCopyDevice(T* dest, T* src, size_t count) { CudaRawCopyDevice(dest, src, count*sizeof(T)); }
+void CudaCopyHostToDevice(T* dest, const T* src, size_t count) { CudaRawCopyHostToDevice(dest, src, count*sizeof(T)); }
 template <typename T>
-void CudaCopyToSymbol(const T& dest, T* src) { CudaRawCopyToSymbol(&dest, src, sizeof(T)); }
+void CudaCopyDeviceToDevice(T* dest, const T* src, size_t count) { CudaRawCopyDeviceToDevice(dest, src, count*sizeof(T)); }
+template <typename T>
+void CudaCopyToSymbol(const T& dest, const T* src) { CudaRawCopyToSymbol(&dest, src, sizeof(T)); }
 
 }} // ::Pacbio::Cuda
 

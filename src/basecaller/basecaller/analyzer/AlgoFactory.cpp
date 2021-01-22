@@ -1,3 +1,27 @@
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "AlgoFactory.h"
 
@@ -25,6 +49,7 @@
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
@@ -173,7 +198,8 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        throw PBException("Not implemented");
+        DeviceTraceHistogramAccum::Configure(bcConfig.traceHistogramConfig);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_.toString() << '.';
@@ -314,7 +340,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
 
 unique_ptr<TraceHistogramAccumulator>
 AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims,
-                                        StashableAllocRegistrar&) const
+                                        StashableAllocRegistrar& registrar) const
 {
     switch (histAccumOpt_)
     {
@@ -322,7 +348,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
         return std::make_unique<TraceHistogramAccumHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        // TODO: For now fall through to throw exception.
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, dims.lanesPerBatch, &registrar);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: "

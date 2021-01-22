@@ -50,12 +50,6 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
     binSizeCoeff_ = traceConfig.BinSizeCoeff;
     PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
                << binSizeCoeff_ << '.';
-    if (binSizeCoeff_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "BinSizeCoeff must be positive.";
-        throw PBException(msg.str());
-    }
 
     baselineStatMinFrameCount_ = traceConfig.BaselineStatMinFrameCount;
     PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
@@ -64,12 +58,6 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
     fallBackBaselineSigma_ = traceConfig.FallBackBaselineSigma;
     PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
                << fallBackBaselineSigma_ << '.';
-    if (fallBackBaselineSigma_ <= 0.0f)
-    {
-        std::ostringstream msg;
-        msg << "FallBackBaselineSigma must be positive.";
-        throw PBException(msg.str());
-    }
 }
 
 

@@ -93,6 +93,7 @@ public:
     }
 
     uint32_t CUDA_ENABLED data() const { return data_; }
+    uint32_t& CUDA_ENABLED data() { return data_; }
 
 private:
     uint32_t data_;
@@ -126,6 +127,16 @@ public:
     CUDA_ENABLED void Y(float f) {data_.y = __float2half(f); }
     CUDA_ENABLED float FloatX() const { return __half2float(data_.x); }
     CUDA_ENABLED float FloatY() const { return __half2float(data_.y); }
+    // I have no clue why these intrinsics are only supplied by the cuda
+    // compiler itself, when others like the __half2float above are fine
+    // with direct use in gcc/etc.
+#if defined(__CUDACC__)
+    CUDA_ENABLED int IntX() const { return __half2int_rz(data_.x); }
+    CUDA_ENABLED int IntY() const { return __half2int_rz(data_.y); }
+#else
+    CUDA_ENABLED int IntX() const { return static_cast<int>(FloatX()); }
+    CUDA_ENABLED int IntY() const { return static_cast<int>(FloatY()); }
+#endif
 
     template <int id>
     CUDA_ENABLED float Get() const
@@ -136,6 +147,7 @@ public:
     }
 
     half2 CUDA_ENABLED data() const { return data_; }
+    half2& CUDA_ENABLED data() { return data_; }
 private:
     half2 data_;
 };
@@ -169,6 +181,7 @@ public:
     }
 
     CUDA_ENABLED const float2& data() const { return data_; }
+    CUDA_ENABLED float2& data() { return data_; }
 
     friend CUDA_ENABLED PBFloat2 operator+(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x + r.data().x, l.data().y + r.data().y);}
     friend CUDA_ENABLED PBFloat2 operator-(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x - r.data().x, l.data().y - r.data().y);}
@@ -200,7 +213,9 @@ public:
 #endif
 
     CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
+
     half2 CUDA_ENABLED data() const { return data_; }
+    half2& CUDA_ENABLED data() { return data_; }
 private:
     half2 data_;
 };
