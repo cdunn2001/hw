@@ -114,6 +114,10 @@ public:
         Data::BasecallerDmeConfig dmeConfig;
         dmeConfig.PulseAmpRegularization = GetParam().pulseAmpReg;
         Filter::Configure(dmeConfig, movieConfig);
+        // Hacky, but we have to configure the host dme regardless, since we'll
+        // use ScaleModelSNR as part of our validation
+        // TODO: Find a way for host and gpu to share the same Configure?
+        DmeEmHost::Configure(dmeConfig, movieConfig);
 
         std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
         Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,

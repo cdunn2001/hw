@@ -47,43 +47,8 @@ namespace Mongo {
 namespace Data {
 
 /// Input or calibration properties describing an analog detection mode.
-class AnalogMode
+struct AnalogMode
 {
-public: // Structors
-
-    // BENTODO
-    AnalogMode() = default;
-    //AnalogMode()
-    //    : baseLabel(' ')
-    //    , relAmplitude(0.0f)
-    //    , excessNoiseCV(0.0f)
-    //    , interPulseDistance(0.0f)
-    //    , pulseWidth(0.0f)
-    //    , pw2SlowStepRatio(0.0f)
-    //    , ipd2SlowStepRatio(0.0f)
-    //{ }
-
-    AnalogMode(const AnalogMode& a) = default;
-
-    AnalogMode& operator=(const AnalogMode& a) = default;
-
-    /// support label,[spectrum],relAmplitude constructor, xsNoiseCV=0, ipd=0 and pw=0
-    /// In general, I am not a fan of these long anonymous argument lists for constructors because
-    /// they are fragile if you accidentally slip one argument. While it is verbose, I recommend constructing
-    /// the object with some default values, then overwriting each member by name.
-    AnalogMode(char label,
-               float amplitude, float xsNoiseCV = 0.0f,
-               float ipdSeconds = 0.0f, float pwSeconds = 0.0f)
-            : baseLabel(label)
-            , relAmplitude(amplitude)
-            , excessNoiseCV(xsNoiseCV)
-            , interPulseDistance(ipdSeconds)
-            , pulseWidth(pwSeconds)
-            , pw2SlowStepRatio(0.0)
-            , ipd2SlowStepRatio(0.0)
-    { }
-
-public:
     char baseLabel;
     float relAmplitude;                     // Relative amplitude
     float excessNoiseCV;

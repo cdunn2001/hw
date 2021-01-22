@@ -73,6 +73,9 @@ public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig);
 
+    static const Data::AnalogMode& Analog(unsigned int i)
+    { return analogs_[i]; }
+
     // If mask[i], a[i] |= bits.
     static void SetBits(const BoolVec& mask, int32_t bits, IntVec* a)
     {
@@ -104,24 +107,18 @@ public:
 private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
 
-    enum ConfFactor
-    {
-        CONVERGED = 0,
-        BL_FRACTION,
-        BL_CV,
-        BL_VAR_STABLE,
-        ANALOG_REP,
-        SNR_SUFFICIENT,
-        SNR_DROP,
-        G_TEST,
-        NUM_CONF_FACTORS
-    };
-
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
                       PoolDetModel* detModel) const override;
 
 private:    // Static data
+    static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
+    static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
+    static bool fixedModel_;
+    static bool fixedBaselineParams_;
+    static float fixedBaselineMean_;
+    static float fixedBaselineVar_;
+
     static float analogMixFracThresh_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
@@ -143,7 +140,7 @@ private:    // Static functions
 
     // Compute the confidence factors of a model estimate, given the
     // diagnostics of the estimation, a reference model.
-    static Cuda::Utility::CudaArray<FloatVec, NUM_CONF_FACTORS>
+    static Cuda::Utility::CudaArray<FloatVec, ConfFactor::NUM_CONF_FACTORS>
     ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);

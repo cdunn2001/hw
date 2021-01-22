@@ -28,7 +28,9 @@
 //  Defines members of class DmeEmHost.
 
 #include "DmeEmHost.h"
+
 #include <common/StatAccumulator.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <limits>
 #include <boost/numeric/conversion/cast.hpp>
@@ -64,6 +66,14 @@ constexpr unsigned short DmeEmHost::nModelParams;
 constexpr unsigned int DmeEmHost::nFramesMin;
 
 // Static configuration parameters
+Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
+DmeEmHost::analogs_;
+float DmeEmHost::refSnr_;
+bool DmeEmHost::fixedModel_ = false;
+bool DmeEmHost::fixedBaselineParams_ = false;
+float DmeEmHost::fixedBaselineMean_ = 0;
+float DmeEmHost::fixedBaselineVar_ = 0;
+
 float DmeEmHost::analogMixFracThresh_ = 0.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
 float DmeEmHost::gTestFactor_ = 1.0f;
@@ -82,7 +92,24 @@ DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig)
 {
-    CoreDMEstimator::Configure(dmeConfig, movConfig);
+    refSnr_ = movConfig.refSnr;
+    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    {
+        analogs_[i] = movConfig.analogs[i];
+    }
+
+    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed)
+        fixedModel_ = true;
+    else
+        fixedModel_ = false;
+
+    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed &&
+        dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    {
+        fixedBaselineParams_ = true;
+        fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
+        fixedBaselineVar_ = dmeConfig.SimModel.baselineVar;
+    }
 
     // TODO: Validate values.
     // TODO: Log settings.
@@ -100,6 +127,8 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 
 void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
 {
+    if (fixedModel_) return;
+
     const auto& hView = hist.data.GetHostView();
     auto dmView = detModel->GetHostView();
     tbb::parallel_for((unsigned int){0}, PoolSize(), [&](unsigned int lane)
@@ -582,16 +611,16 @@ DmeEmHost::Gtest(const UHistType& histogram, const LaneDetModelHost& model)
 }
 
 // static
-Cuda::Utility::CudaArray<DmeEmHost::FloatVec, DmeEmHost::NUM_CONF_FACTORS>
+Cuda::Utility::CudaArray<DmeEmHost::FloatVec, ConfFactor::NUM_CONF_FACTORS>
 DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
                              const LaneDetModelHost& refModel,
                              const LaneDetModelHost& modelEst)
 {
     const auto mldx = dmeDx.mldx;
-    Cuda::Utility::CudaArray<FloatVec, DmeEmHost::NUM_CONF_FACTORS> cf;
+    Cuda::Utility::CudaArray<FloatVec, ConfFactor::NUM_CONF_FACTORS> cf;
 
     // Check EM convergence.
-    cf[CONVERGED] = Blend(mldx.converged, FloatVec(1), FloatVec(0));
+    cf[ConfFactor::CONVERGED] = Blend(mldx.converged, FloatVec(1), FloatVec(0));
 
     // Check for missing baseline component.
     const auto& bg = modelEst.BaselineMode();
@@ -600,7 +629,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     static const float bgFracThresh0 = 0.05f;
     static const float bgFracThresh1 = 0.15f;
     FloatVec x = satlin<FloatVec>(bgFracThresh0, bgFracThresh1, bg.Weight());
-    cf[BL_FRACTION] = x;
+    cf[ConfFactor::BL_FRACTION] = x;
 
     // Check magnitude of residual baseline mean.
     x = pow2(bg.SignalMean()) / bg.SignalCovar();
@@ -608,7 +637,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     static const float bgMeanTol = 1.0f;
     assert(bgMeanTol > 0.0f);
     x = exp(-x / (2*pow2(bgMeanTol)));
-    cf[BL_CV] = x;
+    cf[ConfFactor::BL_CV] = x;
 
     // Check for large deviation of baseline variance from reference variance.
     const auto& refBgVar = refModel.BaselineMode().SignalCovar();
@@ -616,7 +645,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     // TODO: Make this configurable.
     static const float bgVarTol = 1.0f;
     x = exp(-x*x / (2*pow2(bgVarTol)));
-    cf[BL_VAR_STABLE] = x;
+    cf[ConfFactor::BL_VAR_STABLE] = x;
 
     // Check for missing pulse components.
     // Require that the first (brightest) and last (dimmest) are not absent.
@@ -628,21 +657,21 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     assert(detModes.size() > 0);
     x = satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.front().Weight());
     x *= satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.back().Weight());
-    cf[ANALOG_REP] = x;
+    cf[ConfFactor::ANALOG_REP] = x;
 
     // Check for low SNR.
     x = detModes.back().SignalMean();  // Assumes last analog is dimmest.
     const auto bgSigma = sqrt(bg.SignalCovar());
     x /= bgSigma;
     x = satlin<FloatVec>(snrThresh0_, snrThresh1_, x);
-    cf[SNR_SUFFICIENT] = x;
+    cf[ConfFactor::SNR_SUFFICIENT] = x;
 
     // Check for large decrease in SNR.
     // This factor is specifically designed to catch registration errors in the
     // fit when the brightest analog is absent. In such cases, the weight of
     // the dimmest fraction can be substantial (the fit presumably robs some
     // weight from the background component)
-    if (snrDropThresh_ < 0.0f) cf[SNR_DROP] = 1.0f;
+    if (snrDropThresh_ < 0.0f) cf[ConfFactor::SNR_DROP] = 1.0f;
     else
     {
         const auto snrEst = detModes.front().SignalMean() / bgSigma;
@@ -661,11 +690,11 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
         PBAssert(all(refSnr1 < refSnr0),
                  "Bad threshold in SNR Drop confidence factor.");
         x = satlin(refSnr1, sqrt(refSnr0*refSnr1), snrEst);
-        cf[SNR_DROP] = x;
+        cf[ConfFactor::SNR_DROP] = x;
     }
 
     // The G-test as a goodness-of-fit score.
-    cf[G_TEST] = dmeDx.gTest.pValue;
+    cf[ConfFactor::G_TEST] = dmeDx.gTest.pValue;
 
     return cf;
 }

@@ -59,6 +59,24 @@ struct alignas(VF) GoodnessOfFitTest
     VF pValue;
 };
 
+struct ConfFactor {
+
+    // Would use an enum class, but these are all used as indexes
+    // and it would be annoying to constantly cast them to integers
+    enum Values
+    {
+        CONVERGED = 0,
+        BL_FRACTION,
+        BL_CV,
+        BL_VAR_STABLE,
+        ANALOG_REP,
+        SNR_SUFFICIENT,
+        SNR_DROP,
+        G_TEST,
+        NUM_CONF_FACTORS
+    };
+
+};
 
 /// A collection of diagnostics that characterize an estimation of the
 /// detection model parameters (a.k.a. DME).
@@ -74,9 +92,7 @@ public:     // Static constants
 
 public: // Data
     /// Factors of estimation confidence. Each element should in [0, 1].
-    // BENTODO fix hardcode length
-    // BENTODO fix initialization
-    Cuda::Utility::CudaArray<VF, 8> confidFactors;
+    Cuda::Utility::CudaArray<VF, ConfFactor::NUM_CONF_FACTORS> confidFactors{VF(0)};
 
     /// Indicate frame range that produced the model for a given zmw.
     /// Vectorized since older models get carried forward if estimation for
@@ -88,7 +104,7 @@ public: // Data
     unsigned short laneEventCode {0};
 
     /// Bit sets indicating ZMW-level issues encountered during model estimation.
-    std::array<unsigned short, vecSize> zmwEventCode {};
+    Cuda::Utility::CudaArray<unsigned short, vecSize> zmwEventCode {};
 
     /// Indicates whether a full estimation was attempted in the detection
     /// model filter.
@@ -103,8 +119,7 @@ public: // Data
 public:     // Structors
     CUDA_ENABLED DmeDiagnostics()
     {
-        // BENTODO restore
-        //assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
+        assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
     }
 
 public:     // Const functions

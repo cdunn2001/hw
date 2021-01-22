@@ -214,8 +214,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        CoreDMEstimator::Configure(bcConfig.dmeConfig, movConfig);
-        break;
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
         break;
@@ -387,14 +385,13 @@ AlgoFactory::CreateBaselineStatsAggregator(unsigned int poolId,
 }
 
 std::unique_ptr<CoreDMEstimator>
-AlgoFactory::CreateCoreDMEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
-                                           StashableAllocRegistrar&) const
+AlgoFactory::CreateCoreDMEstimator(unsigned int poolId,
+                                   const Data::BatchDimensions& dims,
+                                   StashableAllocRegistrar&) const
 {
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        return make_unique<CoreDMEstimator>(poolId, dims.lanesPerBatch);
-
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         return make_unique<DmeEmHost>(poolId, dims.lanesPerBatch);
 

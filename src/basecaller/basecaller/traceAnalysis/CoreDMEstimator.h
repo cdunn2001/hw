@@ -53,24 +53,13 @@ public:     // Types
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
-public:     // Static functions
-    static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
-                          const Data::MovieConfig& movConfig);
-
-    static const Data::AnalogMode& Analog(unsigned int i)
-    { return analogs_[i]; }
-
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
 
 public:     // Functions
     /// Initialize detection models based soley on baseline variance and
     /// reference SNR.
-    virtual PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const
-    {
-        // BENTODO I broke this
-        throw PBException("Implement me");
-    };
+    virtual PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const = 0;
 
     /// Estimate detection model parameters based on existing values and
     /// trace histogram.
@@ -87,14 +76,6 @@ public:     // Functions
 
 protected:
     static PacBio::Logging::PBLogger logger_;
-
-    // BENTOTO this was relaxed
-protected:    // Static data
-    static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
-    static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
-    static bool fixedBaselineParams_;
-    static float fixedBaselineMean_;
-    static float fixedBaselineVar_;
 
 private:
     uint32_t poolId_;

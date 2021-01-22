@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,23 +24,33 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines members of class DmeEmHost.
+//  Defines members of class DmeEmDevice.
 
 #include "DmeEmDevice.h"
 
 #include <limits>
 
 #include <common/cuda/memory/AllocationViews.cuh>
+#include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 
+///////////////////////////////////////////////////////////////////
+// TODO There are a lot of commented out PBAssert statements below,
+//      as they will not work on the GPU.  PTSD-267 will hopefully
+//      result in a replacement that can be slotted in
+///////////////////////////////////////////////////////////////////
+
 using std::numeric_limits;
+using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo::Data;
 
 
+// Wrapping all the static configurations into a single struct,
+// as that will be easier to upload to the GPU.
 struct StaticConfig{
     CudaArray<AnalogMode, 4> analogs;
     float analogMixFracThresh_;
@@ -52,9 +62,6 @@ struct StaticConfig{
     float snrThresh0_;
     float snrThresh1_;
     float successConfThresh_;
-    float fixedBaselineParams_;
-    float fixedBaselineMean_;
-    float fixedBaselineVar_;
     float refSnr_;
 };
 
@@ -65,27 +72,14 @@ __device__ const AnalogMode& Analog(int i)
     return staticConfig.analogs[i];
 }
 
-namespace {
-
-//template <typename T>
-//using DynamicArray1 = Eigen::Array<T, 1, Eigen::Dynamic>;
-//
-//template <typename T>
-//using DynamicArray2 = Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic>;
-
-template <typename T, size_t len>
-using Array1D = CudaArray<T, len>;
-
-template <typename T, size_t len1, size_t len2>
-using Array2D = CudaArray<CudaArray<T, len2>, len1>;
-
-}   // anonymous
-
-
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
+
+// Functions to Move data from a Zmw based structure to the appropriate slot in a
+// Lane based structure
 template <int low>
 __device__ void UpdateTo(const ZmwAnalogMode& from, LaneAnalogMode<Cuda::PBHalf2, 32>& to, int idx, float fraction)
 {
@@ -98,19 +92,19 @@ __device__ void UpdateTo(const ZmwAnalogMode& from, LaneAnalogMode<Cuda::PBHalf2
 template <int low>
 __device__ void UpdateTo(const ZmwDetectionModel& from, LaneModelParameters<Cuda::PBHalf2, 32>& to, int idx, float fraction)
 {
-    // BENTODO no updated boolean
     UpdateTo<low>(from.baseline, to.BaselineMode(), idx, fraction);
     for (int i = 0; i < to.numAnalogs; ++i)
     {
         UpdateTo<low>(from.analogs[i], to.AnalogMode(i), idx, fraction);
     }
-    // BENTODO no frame interval to update
+    // TODO no updated boolean
+    // TODO no frame interval to update
 }
 
 template <int low>
-__device__ void UpdateTo(const ZmwDetectionModel& from, LaneModelParameters<Cuda::PBHalf2, 32>& to, int idx)
+__device__ void UpdateTo(const ZmwDetectionModel& from,
+                         LaneModelParameters<Cuda::PBHalf2, 32>& to, int idx)
 {
-    // BENTODO no confidence stored in LaneModelParamters
     float toConfidence = 0;
     assert (from.confidence >= 0.0f);
     assert (toConfidence >= 0.0f);
@@ -123,7 +117,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from, LaneModelParameters<Cuda
     //assert ((fraction > 0) | (confSum == Confidence())));
 
     UpdateTo<low>(from, to, idx, fraction);
-    // BENTODO no confidence stored in LaneModelParamters
+    // TODO no confidence stored in LaneModelParamters
     //Confidence(confSum);
 }
 
@@ -131,19 +125,17 @@ __device__ void UpdateTo(const ZmwDetectionModel& from, LaneModelParameters<Cuda
 constexpr unsigned short DmeEmDevice::nModelParams;
 constexpr unsigned int DmeEmDevice::nFramesMin;
 
-// BENTODO clean duplication?
-// Duplication used to live in DetectionModelEstimator, but now lives in DmeEmHost
-__device__ float ModelSignalCovar(
+template <typename VF>
+__device__ VF ModelSignalCovar(
         const Data::AnalogMode& analog,
-        float signalMean,
-        float baselineVar)
+        VF signalMean,
+        VF baselineVar)
 {
     baselineVar += signalMean;
     auto tmp = analog.excessNoiseCV * signalMean;
     baselineVar+= tmp*tmp;
     return baselineVar;
 }
-
 
 DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
     : CoreDMEstimator(poolId, poolSize)
@@ -153,8 +145,6 @@ DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
 void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig)
 {
-    CoreDMEstimator::Configure(dmeConfig, movConfig);
-
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
@@ -172,52 +162,374 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.refSnr_ = movConfig.refSnr;
-    // BENTODO this duplicates DetectionModelFilter class?
-    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed &&
-        dmeConfig.SimModel.useSimulatedBaselineParams == true)
-    {
-        config.fixedBaselineParams_ = true;
-        config.fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
-        config.fixedBaselineVar_ = dmeConfig.SimModel.baselineVar;
-    } else
-    {
-        config.fixedBaselineParams_ = false;
-        config.fixedBaselineMean_ = 0;
-        config.fixedBaselineVar_ = 0;
-    }
+
     Cuda::CudaCopyToSymbol(staticConfig, &config);
-}
-
-__global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
-                               Cuda::Memory::DeviceView<DmeEmDevice::LaneDetModel> models)
-{
-
-    DmeEmDevice::EstimateLaneDetModel(hists[blockIdx.x], &models[blockIdx.x]);
-}
-
-
-void DmeEmDevice::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
-{
-    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)(hist.data, *detModel);
-    Cuda::CudaSynchronizeDefaultStream();
 }
 
 __device__ int TotalCount(const DmeEmDevice::LaneHist& hist)
 {
     int count = hist.outlierCountHigh[threadIdx.x] + hist.outlierCountLow[threadIdx.x];
-    for (int i = 0; i < DmeEmDevice::LaneHist::numBins; ++i)
+    for (int i = 0; i < numBins; ++i)
     {
         count += hist.binCount[i][threadIdx.x];
     }
     return count;
 }
 
+__device__ float Fractile(const DmeEmDevice::LaneHist& hist, float frac)
+{
+    assert(frac >= 0.f);
+    assert(frac <= 1.0f);
+
+    static constexpr auto inf = std::numeric_limits<float>::infinity();
+
+    int totalCount = hist.outlierCountHigh[threadIdx.x] + hist.outlierCountLow[threadIdx.x];
+    for (int i = 0; i < numBins; ++i) totalCount += hist.binCount[i][threadIdx.x];
+
+    float ret;
+    const auto nf = frac * totalCount;
+    // Find the critical bin.
+    auto n = hist.outlierCountLow[threadIdx.x];
+    if (n > 0 && n >= nf)
+    {
+        // The precise fractile is in the low-outlier bin.
+        // Since this bin is unbounded below, ...
+        ret = -inf;
+        return ret;
+    }
+
+    int i = 0;
+    while ((n == 0 || n < nf) && i < numBins)
+    {
+        n += hist.binCount[i++][threadIdx.x];
+    }
+
+    if (n < nf)
+    {
+        // The precise fractile is in the high-outlier bin.
+        // Since this bin is unbounded above, ...
+        ret = +inf;
+        return ret;
+    }
+
+    // Otherwise, the precise fractile is in a normal bin.
+    // Interpolate within the critical bin.
+    assert(i > 0);
+    assert(n >= nf);
+    i -= 1;     // Back up to the bin that pushed us over the target.
+    auto x0 = hist.lowBound[threadIdx.x] + i * hist.binSize[threadIdx.x];
+    const auto ni = hist.binCount[i][threadIdx.x];
+    auto m = n - ni;
+    assert(m < nf || (m == 0 && nf == 0));
+    ret = x0 + hist.binSize[threadIdx.x] * (nf - m) / (ni + 1);
+
+    return ret;
+}
+
+
+// Compute a preliminary scaling factor based on a fractile statistic.
+__device__ float PrelimScaleFactor(const ZmwDetectionModel& model,
+                                   const DmeEmDevice::LaneHist& hist)
+{
+    using std::max;  using std::min;
+    using std::sqrt;
+
+    // Define a fractile that includes all of the background and half of the pulse frames.
+    const auto& bgMode = model.baseline;
+    const float& bgVar = bgMode.var;
+    const float bgSigma = sqrt(bgVar);
+    const float& bgMean = bgMode.mean;
+    const float thresh = 2.5f * bgSigma + bgMean;
+    const float binSize = hist.binSize[threadIdx.x];
+
+    // Note: This replicates the host original, which never ever included upper
+    //       outliers and always includes lower outliers?
+    float bgCount = 0;
+    float totalCount = hist.outlierCountLow[threadIdx.x];
+    {
+        int i = 0;
+        float binX = hist.lowBound[threadIdx.x];
+        float rem = thresh - binX;
+        while (rem > binSize)
+        {
+            totalCount += hist.binCount[i][threadIdx.x];
+            binX += hist.binSize[threadIdx.x];
+            rem = thresh - binX;
+            i++;
+        }
+        bgCount = totalCount + rem / binSize * hist.binCount[i][threadIdx.x];
+        for (; i < numBins; ++i)
+        {
+            totalCount += hist.binCount[i][threadIdx.x];
+        }
+    }
+    const float fractile = 0.5f * (bgCount + totalCount) / totalCount;
+
+    // Define the scale factor as the ratio between this fractile and the
+    // average of the pulse signal means.
+    float avgSignalMean = 0.0f;
+    assert(model.analogs.size() == numAnalogs);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        avgSignalMean += model.analogs[a].mean;
+    }
+    avgSignalMean /= static_cast<float>(numAnalogs);
+
+    auto scaleFactor = Fractile(hist, fractile) / avgSignalMean;
+
+    // Moderate scaling by the clamped confidence.
+    const auto cc = min(model.confidence, 1.0f);
+    scaleFactor = (1.0f - cc) * scaleFactor + cc;
+
+    // Make sure that scaleFactor > 0.
+    scaleFactor = max(scaleFactor, 0.1f);
+
+    return scaleFactor;
+}
+
+/// Updates *detModel by increasing the amplitude of all detection modes by
+/// \a scale. Also updates all detection mode covariances according
+/// to the standard noise model. Ratios of amplitudes among detection modes
+/// and properties of the background mode are preserved.
+void __device__ ScaleModelSnr(const float& scale,
+                              ZmwDetectionModel* detModel)
+{
+    assert (scale > 0.0f);
+    const auto baselineCovar = detModel->baseline.var;
+    auto& detectionModes_ = detModel->analogs;
+    assert (detectionModes_.size() == numAnalogs);
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& dmi = detectionModes_[a];
+        dmi.mean *= scale;
+        dmi.var = Basecaller::ModelSignalCovar(::Analog(a),
+                                               dmi.mean,
+                                               baselineCovar);
+    }
+    // TODO: Should we update updated_?
+}
+
 // Constants
-// BENTODO remove duplication (was from NumericUtil.h)
+// TODO remove duplication (was from NumericUtil.h)
 constexpr float pi_f = 3.1415926536f;
 
-__device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
-                                                  LaneDetModel* detModel)
+/// The cumulative probability of the standard normal distribution (mean=0,
+/// variance=1).
+// TODO this duplicated NumericalUtil.h
+__device__ float normalStdCdf(float x)
+{
+    float s = 1.f / sqrt(2.f);
+    x *= s;
+    const float r = 0.5f * erfc(-x);
+    assert((r >= 0.0f) && (r <= 1.0f) || isnan(x));
+    return r;
+}
+
+/// The cumulative probability at \a x of the normal distribution with \mean
+/// and standard deviation \a stdDev.
+/// \tparam FP a floating-point numeric type (including m512f).
+// TODO this duplicated NumericalUtil.h
+__device__ float normalCdf(float x, float mean = 0.0f, float stdDev = 1.0f)
+{
+    assert(stdDev > 0);
+    const float y = (x - mean) / stdDev;
+    return normalStdCdf(y);
+}
+
+// Apply a G-test significance test to assess goodness of fit of the model
+// to the trace histogram.
+//
+// Note: This is a mostly-complete port of the host version, but it is
+//       currently non-functional because it relies on the chi squared
+//       distribution which we don't have access to on the GPU.
+__device__ GoodnessOfFitTest<float>
+Gtest(const DmeEmDevice::LaneHist& histogram, const ZmwDetectionModel& model)
+{
+    assert(blockDim.x == 64);
+    //const auto& bb = histogram.BinBoundaries();
+    auto bb = [&](int idx){
+        return histogram.lowBound[threadIdx.x] + idx*histogram.binSize[threadIdx.x];
+    };
+    const auto& bg = model.baseline;
+
+    // Cache the standard deviations.
+    const auto bgStdDev = sqrt(bg.var);
+    CudaArray<float, numAnalogs> dmStdDev;
+    assert(model.analogs.size() == numAnalogs);
+    for (unsigned int j = 0; j < numAnalogs; ++j)
+    {
+        dmStdDev[j] = sqrt(model.analogs[j].var);
+    }
+
+    // Compute the bin probabilities according to the model.
+    // TODO: Improve accuracy when normalCdf is close to 1.0.
+    CudaArray<float, numBins+1> p;
+    for (unsigned int i = 0; i < numBins+1; ++i)
+    {
+        p[i] = Basecaller::normalCdf(bb(i), bg.mean, bgStdDev) * bg.weight;
+        for (unsigned int j = 0; j < numAnalogs; ++j)
+        {
+            const auto& dmj = model.analogs[j];
+            p[i] += Basecaller::normalCdf(bb(i), dmj.mean, dmStdDev[j]) * dmj.weight;
+        }
+    }
+
+    // TODO: By splitting out the first iteration, should be able to fuse the
+    // loop in adjacent_difference with the loop above.
+    //std::adjacent_difference(p.cbegin(), p.cend(), p.begin());
+    float tmp = p[0];
+    float diff;
+    for (int i = 0; i < numBins; ++i)
+    {
+        diff = p[i+1] - tmp;
+        tmp = p[i+1];
+        p[i+1] = diff;
+    }
+
+    assert(p[0] >= 0.0f);
+    assert(p[0] <= 1.0f);
+    assert(p[numBins] >= 0.0f);
+    assert(p[numBins] <= 1.0f);
+
+    // Compute the G test statistic.
+    const auto n = [&](){
+        int n = 0;
+        for (int i = 0; i < numBins; ++i)
+        {
+            n += histogram.binCount[i][threadIdx.x];
+        }
+        return n;
+    }();
+    //const auto n = FloatVec(histogram.InRangeCount());
+    float g = 0.0f;
+    for (int i = 0; i < numBins; ++i)
+    {
+        const auto obs = histogram.binCount[i][threadIdx.x];
+        const auto mod = n * p[i+1];
+        const auto t = obs * log(obs/mod);
+        if (obs > 0.f) g += t;
+    }
+    g *= 2.0f;
+
+    // Compute the p-value.
+    assert(DmeEmDevice::nModelParams + 1 < static_cast<unsigned int>(numBins));
+    const auto dof = numBins - DmeEmDevice::nModelParams - 1;
+    // TODO disabled because I don't have access to a gpu chi2 distribution on the GPU.
+    assert(false);
+    const auto pval = 0.f;
+    //const auto pval = chi2CdfComp(g * gTestFactor_, dof);
+
+    return {g, static_cast<float>(dof), pval};
+}
+
+/// Saturated linear activation function.
+/// A fuzzy threshold that ramps from 0 at a to 1 at b.
+/// \returns (x - a)/(b - a) clamped to [0, 1] range.
+// TODO fix duplication?
+__device__ float satlin(float a, float b, float x)
+{
+    const auto r = (x - a) / (b - a);
+    return min(max(r, 0.f), 1.f);
+}
+
+
+// Compute the confidence factors of a model estimate, given the
+// diagnostics of the estimation, a reference model.
+__device__ PacBio::Cuda::Utility::CudaArray<float, ConfFactor::NUM_CONF_FACTORS>
+ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
+                  const ZmwDetectionModel& refModel,
+                  const ZmwDetectionModel& modelEst)
+{
+    const auto mldx = dmeDx.mldx;
+    CudaArray<float, ConfFactor::NUM_CONF_FACTORS> cf;
+    for (auto val : cf) val = 1.f;
+
+    // Check EM convergence.
+    cf[ConfFactor::CONVERGED] = mldx.converged;
+
+    // Check for missing baseline component.
+    const auto& bg = modelEst.baseline;
+    // TODO: Make this configurable.
+    // Threshold level for background fraction.
+    static const float bgFracThresh0 = 0.05f;
+    static const float bgFracThresh1 = 0.15f;
+    float x = satlin(bgFracThresh0, bgFracThresh1, bg.weight);
+    cf[ConfFactor::BL_FRACTION] = x;
+
+    // Check magnitude of residual baseline mean.
+    x = bg.mean * bg.mean / bg.var;
+    // TODO: Make this configurable.
+    static const float bgMeanTol = 1.0f;
+    assert(bgMeanTol > 0.0f);
+    x = exp(-x / (2*bgMeanTol*bgMeanTol));
+    cf[ConfFactor::BL_CV] = x;
+
+    // Check for large deviation of baseline variance from reference variance.
+    const auto& refBgVar = refModel.baseline.var;
+    x = log2(bg.var / refBgVar);
+    // TODO: Make this configurable.
+    static const float bgVarTol = 1.0f;
+    x = exp(-x*x / (2*bgVarTol*bgVarTol));
+    cf[ConfFactor::BL_VAR_STABLE] = x;
+
+    // Check for missing pulse components.
+    // Require that the first (brightest) and last (dimmest) are not absent.
+    // TODO: Make this configurable. Should this threshold be defined in terms
+    // of data count instead of fraction?
+    const float dmFracThresh1 = staticConfig.analogMixFracThresh_;
+    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
+    const auto& detModes = modelEst.analogs;
+    assert(detModes.size() == 4);
+    x = satlin(dmFracThresh0, dmFracThresh1, detModes.front().weight);
+    x *= satlin(dmFracThresh0, dmFracThresh1, detModes.back().weight);
+    cf[ConfFactor::ANALOG_REP] = x;
+
+    // Check for low SNR.
+    x = detModes.back().mean;  // Assumes last analog is dimmest.
+    const auto bgSigma = sqrt(bg.var);
+    x /= bgSigma;
+    x = satlin(staticConfig.snrThresh0_, staticConfig.snrThresh1_, x);
+    cf[ConfFactor::SNR_SUFFICIENT] = x;
+
+    // Check for large decrease in SNR.
+    // This factor is specifically designed to catch registration errors in the
+    // fit when the brightest analog is absent. In such cases, the weight of
+    // the dimmest fraction can be substantial (the fit presumably robs some
+    // weight from the background component)
+    if (staticConfig.snrDropThresh_ < 0.0f) cf[ConfFactor::SNR_DROP] = 1.0f;
+    else
+    {
+        const auto snrEst = detModes[0].mean / bgSigma;
+        const auto& refDetModes = refModel.analogs;
+        assert(refDetModes.size() >= 2);
+        const auto& refSignal0 = refDetModes[0].mean;
+        //PBAssert(all(refSignal0 >= 0.0f), "Bad SignalMean.");
+        const auto& refSignal1 = refDetModes[1].mean;
+        //PBAssert(all(refSignal1 >= 0.0f), "Bad SignalMean.");
+        const auto refBgSigma = sqrt(refModel.baseline.var);
+        //PBAssert(all(refBgSigma >= 0.0f), "Bad baseline sigma.");
+        const auto refSnr0 = refSignal0 / refBgSigma;
+        auto refSnr1 = refSignal1 / refBgSigma;
+        refSnr1 *= staticConfig.snrDropThresh_;
+        refSnr1 *= min(refModel.confidence, 1.0f);
+        //PBAssert(all(refSnr1 < refSnr0),
+        //         "Bad threshold in SNR Drop confidence factor.");
+        x = satlin(refSnr1, sqrt(refSnr0*refSnr1), snrEst);
+        cf[ConfFactor::SNR_DROP] = x;
+    }
+
+    // The G-test as a goodness-of-fit score.
+    cf[ConfFactor::G_TEST] = dmeDx.gTest.pValue;
+
+    return cf;
+}
+
+
+// Use the trace histogram and the input detection model to compute a new
+// estimate for the detection model. Mix the new estimate with the input
+// model, weighted by confidence scores. That result is returned in detModel.
+__device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
+                                     DmeEmDevice::LaneDetModel* detModel)
 {
     // TODO: Evolve model. Use trace autocorrelation to adjust confidence
     // half-life.
@@ -253,10 +565,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     ModeArray var;     // Variance of each mode.
 
     // Variance associated with data binning.
-    // BENTODO restore to const?
-    auto varQuant = hist.binSize[threadIdx.x];
-    varQuant = varQuant*varQuant / 12.f;
-    //const auto& varQuant = pow2(hist.BinSize()) / 12.0f;
+    const auto varQuant = binSize * binSize / 12.f;
 
     rho[0] = bgMode.weight;
     mu[0] = bgMode.mean;
@@ -264,7 +573,6 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto k = a + 1;
-        // BENTODO error handling, all PBAsserts commented out
         //PBAssert(k < nModes, "k < nModes");
         const auto& pma = pulseModes[a];
         rho[k] = pma.weight;
@@ -296,7 +604,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         rpa[a] = ::Analog(a).relAmplitude;
-        // BENTODO data error handling
+        // TODO data error handling
         //if (rpa[a] <= 0.0f)
         //{
         //    throw PBException("Bad relative amplitude in analog properties."
@@ -340,8 +648,8 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             * numeric_limits<float>::min();
 
     // Initialize intra-lane failure codes.
-    int32_t zStatus = OK;
-    SetBits(numFrames < nFramesMin, INSUF_DATA, &zStatus);
+    int32_t zStatus = DmeEmDevice::OK;
+    if (numFrames < DmeEmDevice::nFramesMin) zStatus |= DmeEmDevice::INSUF_DATA;
 
     DmeDiagnostics<float> dmeDx {};
     dmeDx.fullEstimation = true;
@@ -351,17 +659,14 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<float>& mldx = dmeDx.mldx;
-    mldx.degOfFreedom = numFrames - nModelParams;
+    mldx.degOfFreedom = numFrames - DmeEmDevice::nModelParams;
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]
 
-    // BENTODO was boost numeric_cast
-    static constexpr auto nBins = static_cast<unsigned short>(LaneHist::numBins);
-
     const float n_j_sum = [&](){
         float sum = 0;
-        for (int i = 0; i < nBins; ++i)
+        for (int i = 0; i < numBins; ++i)
         {
             sum += hist.binCount[i][threadIdx.x];
         }
@@ -391,6 +696,9 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         float probSum(0.0f);
         float weightedProbSum(0.0f);
         float mom2 = 0.0f;   // Only needed for background mode.
+        // correction terms to account for the fact that we'll use the
+        // current mu in the loop below, while the math really wants
+        // the updated mu not computed until later.
         float correct1 = 0.0f;
         float correct2 = 0.0f;
 
@@ -482,7 +790,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         float x0 = hist.lowBound[threadIdx.x];
         float x1 = x0 + binSize;
         cornerComp(0, c1, x0);
-        for (unsigned int b = 0; b < nBins; ++b)
+        for (unsigned int b = 0; b < numBins; ++b)
         {
             cornerComp(b+1, c2, x1);
             centerComp(b, c1, c2, x0, x1);
@@ -535,8 +843,17 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
             varEst[k] = var[k];
         }
 
-        // BENTODO do we need to keep warps in sync here?
-        if (!staticConfig.iterToLimit_ && __all_sync(0xFFFFFFFF, mldx.converged || (zStatus != static_cast<int>(OK))))
+        // Note: This __all_sync is a bit weird.  It was put in place to match the host
+        //       impl where the SIMD approach required all ZMW in a lane to converge if
+        //       we're going to break early.  However here:
+        //       * This sync is only for a warp, which really is only 32 ZMW not 64, so
+        //         we're already inconsistent
+        //       * With the CUDA SIMT model we could have threads break
+        //         and exit individually when they are done with no
+        //       Ideally we'd match perfectly and do a whole lane-level synchronization,
+        //       but that's nontrivial to write since it involves coordination between
+        //       two warps
+        if (!staticConfig.iterToLimit_ && __all_sync(0xFFFFFFFF, mldx.converged || (zStatus != static_cast<int>(DmeEmDevice::OK))))
         {
             // TODO: Maybe count how many times we achieve this?
             break;
@@ -553,7 +870,6 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         auto oldMu = mu[0];
         // Background mean.
         mu[0] = mom1[0] / c_i[0];
-        // BENTODO check for sign error.  I think this makes the correction term positive later
         auto muDiff = oldMu - mu[0];
 
         // Amplitude scale parameter.
@@ -581,8 +897,11 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
 
         // Constrain s > sMin.
         const auto veryLowSignal = (s < sMin);
-        if (veryLowSignal) s = sMin;
-        SetBits(veryLowSignal, VLOW_SIGNAL, &zStatus);
+        if (veryLowSignal)
+        {
+            s = sMin;
+            zStatus |= DmeEmDevice::VLOW_SIGNAL;
+        }
 
         // Pulse mode means.
         for (int i = 0; i < numAnalogs; ++i) mu[i+1] = s * static_cast<float>(rpa[i]);
@@ -590,6 +909,11 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         // Background variance.
         // Need to apply correction terms since it was computed above with the old
         // mean instead of the newest update.
+        // So far we've only run on "friendly" data, in which case it appears
+        // that these correction terms make no practical difference.  Their
+        // utility needs to be evaluated on more realistic data, as we will
+        // run measurably faster if we can skip the computation of one or even
+        // both of these terms.
         mom2 += muDiff * correct1 + muDiff * muDiff * correct2;
         mom2 *= hBinSize;
         var[0] = mom2 / c_i[0] + varQuant;
@@ -605,7 +929,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         }
     }
 
-    SetBits(!mldx.converged, NO_CONVERGE, &zStatus);
+    if (!mldx.converged) zStatus |= DmeEmDevice::NO_CONVERGE;
 
     using std::isfinite;
 
@@ -628,7 +952,7 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
         pda.var = varEst[i];
     }
 
-    // BENTODO this is disabled until I get a chi squared cfd.
+    // Note: this is disabled until we have a chi squared cfd on the gpu.
     assert (staticConfig.gTestFactor_ < 0.);
     if (staticConfig.gTestFactor_ >= 0.0f) dmeDx.gTest = Gtest(hist, workModel);
     else assert(dmeDx.gTest.pValue == 1.0f);
@@ -652,346 +976,24 @@ __device__ void DmeEmDevice::EstimateLaneDetModel(const LaneHist& hist,
     //    }
 
     // Blend the estimate into the output model.
-    if (threadIdx.x % 2 == 0) UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
-    else UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
-}
-
-
-// static
-
-__device__ float Fractile(const DmeEmDevice::LaneHist& hist, float frac)
-{
-    assert(frac >= 0.f);
-    assert(frac <= 1.0f);
-
-    static constexpr auto inf = std::numeric_limits<float>::infinity();
-    static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
-
-    int totalCount = hist.outlierCountHigh[threadIdx.x] + hist.outlierCountLow[threadIdx.x];
-    for (int i = 0; i < numBins; ++i) totalCount += hist.binCount[i][threadIdx.x];
-
-    float ret;
-    const auto nf = frac * totalCount;
-    // Find the critical bin.
-    auto n = hist.outlierCountLow[threadIdx.x];
-    if (n > 0 && n >= nf)
-    {
-        // The precise fractile is in the low-outlier bin.
-        // Since this bin is unbounded below, ...
-        ret = -inf;
-        return ret;
-    }
-
-    int i = 0;
-    while ((n == 0 || n < nf) && i < numBins)
-    {
-        n += hist.binCount[i++][threadIdx.x];
-    }
-
-    if (n < nf)
-    {
-        // The precise fractile is in the high-outlier bin.
-        // Since this bin is unbounded above, ...
-        ret = +inf;
-        return ret;
-    }
-
-    // Otherwise, the precise fractile is in a normal bin.
-    // Interpolate within the critical bin.
-    assert(i > 0);
-    assert(n >= nf);
-    i -= 1;     // Back up to the bin that pushed us over the target.
-    auto x0 = hist.lowBound[threadIdx.x] + i * hist.binSize[threadIdx.x];
-    const auto ni = hist.binCount[i][threadIdx.x];
-    auto m = n - ni;
-    assert(m < nf || (m == 0 && nf == 0));
-    ret = x0 + hist.binSize[threadIdx.x] * (nf - m) / (ni + 1);
-
-    return ret;
-}
-
-__device__ float DmeEmDevice::PrelimScaleFactor(const ZmwDetectionModel& model,
-                                                const LaneHist& hist)
-{
-    using std::max;  using std::min;
-    using std::sqrt;
-
-    // Define a fractile that includes all of the background and half of the pulse frames.
-    const auto& bgMode = model.baseline;
-    const float& bgVar = bgMode.var;
-    const float bgSigma = sqrt(bgVar);
-    const float& bgMean = bgMode.mean;
-    const float thresh = 2.5f * bgSigma + bgMean;
-    float bgCount = 0;
-    float totalCount = hist.outlierCountLow[threadIdx.x];
-    // BENTODO verify this
-    int i = 0;
-    float binX = hist.lowBound[threadIdx.x];
-    // BENTODO warp convergence issues?
-    while (binX < thresh)
-    {
-        totalCount += hist.binCount[i][threadIdx.x];
-        binX += hist.binSize[threadIdx.x];
-        i++;
-    }
-    bgCount = totalCount;
-    // BENTODO original never ever included upper outliers and always includes
-    //         lower outliers?
-    for (; i < LaneHist::numBins; ++i)
-    {
-        totalCount += hist.binCount[i][threadIdx.x];
-    }
-    const float fractile = 0.5f * (bgCount + totalCount) / totalCount;
-
-    // Define the scale factor as the ratio between this fractile and the
-    // average of the pulse signal means.
-    float avgSignalMean = 0.0f;
-    assert(model.analogs.size() == numAnalogs);
-    for (unsigned int a = 0; a < numAnalogs; ++a)
-    {
-        avgSignalMean += model.analogs[a].mean;
-    }
-    avgSignalMean /= static_cast<float>(numAnalogs);
-
-    auto scaleFactor = Fractile(hist, fractile) / avgSignalMean;
-
-    // Moderate scaling by the clamped confidence.
-    const auto cc = min(model.confidence, 1.0f);
-    scaleFactor = (1.0f - cc) * scaleFactor + cc;
-
-    // Make sure that scaleFactor > 0.
-    scaleFactor = max(scaleFactor, 0.1f);
-
-    return scaleFactor;
-}
-
-/// The cumulative probability of the standard normal distribution (mean=0,
-/// variance=1).
-// BENTODO this duplicated NumericalUtil.h
-__device__ float normalStdCdf(float x)
-{
-    float s = 1.f / sqrt(2.f);
-    x *= s;
-    // BENTODO this used a boost numeric cast.  Was that caution or need?
-    const float r = 0.5f * erfc(-x);
-    // BENTODO better error handling?
-    assert((r >= 0.0f) && (r <= 1.0f) || isnan(x));
-    return r;
-}
-
-/// The cumulative probability at \a x of the normal distribution with \mean
-/// and standard deviation \a stdDev.
-/// \tparam FP a floating-point numeric type (including m512f).
-// BENTODO this duplicated NumericalUtil.h
-__device__ float normalCdf(float x, float mean = 0.0f, float stdDev = 1.0f)
-{
-    assert(stdDev > 0);
-    const float y = (x - mean) / stdDev;
-    return normalStdCdf(y);
-}
-
-// static
-__device__ GoodnessOfFitTest<float>
-DmeEmDevice::Gtest(const LaneHist& histogram, const ZmwDetectionModel& model)
-{
-    assert(blockDim.x == 64);
-    //const auto& bb = histogram.BinBoundaries();
-    auto bb = [&](int idx){
-        return histogram.lowBound[threadIdx.x] + idx*histogram.binSize[threadIdx.x];
-    };
-    const auto& bg = model.baseline;
-
-    // Cache the standard deviations.
-    const auto bgStdDev = sqrt(bg.var);
-    CudaArray<float, numAnalogs> dmStdDev;
-    assert(model.analogs.size() == numAnalogs);
-    for (unsigned int j = 0; j < numAnalogs; ++j)
-    {
-        dmStdDev[j] = sqrt(model.analogs[j].var);
-    }
-
-    // Compute the bin probabilities according to the model.
-    // TODO: Improve accuracy when normalCdf is close to 1.0.
-    CudaArray<float, LaneHist::numBins+1> p;
-    for (unsigned int i = 0; i < LaneHist::numBins+1; ++i)
-    {
-        p[i] = Basecaller::normalCdf(bb(i), bg.mean, bgStdDev) * bg.weight;
-        for (unsigned int j = 0; j < numAnalogs; ++j)
-        {
-            const auto& dmj = model.analogs[j];
-            p[i] += normalCdf(bb(i), dmj.mean, dmStdDev[j]) * dmj.weight;
-        }
-    }
-
-    // TODO: By splitting out the first iteration, should be able to fuse the
-    // loop in adjacent_difference with the loop above.
-    //std::adjacent_difference(p.cbegin(), p.cend(), p.begin());
-    float tmp = p[0];
-    float diff;
-    for (int i = 0; i < LaneHist::numBins; ++i)
-    {
-        diff = p[i+1] - tmp;
-        tmp = p[i+1];
-        p[i+1] = diff;
-    }
-
-    assert(p[0] >= 0.0f);
-    assert(p[0] <= 1.0f);
-    assert(p[LaneHist::numBins] >= 0.0f);
-    assert(p[LaneHist::numBins] <= 1.0f);
-
-    // Compute the G test statistic.
-    const auto n = [&](){
-        int n = 0;
-        for (int i = 0; i < LaneHist::numBins; ++i)
-        {
-            n += histogram.binCount[i][threadIdx.x];
-        }
-        return n;
-    }();
-    //const auto n = FloatVec(histogram.InRangeCount());
-    float g = 0.0f;
-    for (int i = 0; i < LaneHist::numBins; ++i)
-    {
-        const auto obs = histogram.binCount[i][threadIdx.x];
-        const auto mod = n * p[i+1];
-        const auto t = obs * log(obs/mod);
-        if (obs > 0.f) g += t;
-    }
-    g *= 2.0f;
-
-    // Compute the p-value.
-    assert(nModelParams + 1 < static_cast<unsigned int>(LaneHist::numBins));
-    const auto dof = LaneHist::numBins - nModelParams - 1;
-    // BENTODO I don't have access to a gpu chi2 distribution on the GPU.
-    assert(false);
-    const auto pval = 0.f;
-    //const auto pval = chi2CdfComp(g * gTestFactor_, dof);
-
-    return {g, static_cast<float>(dof), pval};
-}
-
-/// Saturated linear activation function.
-/// A fuzzy threshold that ramps from 0 at a to 1 at b.
-/// \returns (x - a)/(b - a) clamped to [0, 1] range.
-// BENTODO fix duplication?
-__device__ float satlin(float a, float b, float x)
-{
-    const auto r = (x - a) / (b - a);
-    return min(max(r, 0.f), 1.f);
-}
-
-// static
-__device__ PacBio::Cuda::Utility::CudaArray<float, DmeEmDevice::NUM_CONF_FACTORS>
-DmeEmDevice::ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
-                               const ZmwDetectionModel& refModel,
-                               const ZmwDetectionModel& modelEst)
-{
-    const auto mldx = dmeDx.mldx;
-    CudaArray<float, DmeEmDevice::NUM_CONF_FACTORS> cf;
-    for (auto val : cf) val = 1.f;
-
-    // Check EM convergence.
-    cf[CONVERGED] = mldx.converged;
-
-    // Check for missing baseline component.
-    const auto& bg = modelEst.baseline;
-    // TODO: Make this configurable.
-    // Threshold level for background fraction.
-    static const float bgFracThresh0 = 0.05f;
-    static const float bgFracThresh1 = 0.15f;
-    float x = satlin(bgFracThresh0, bgFracThresh1, bg.weight);
-    cf[BL_FRACTION] = x;
-
-    // Check magnitude of residual baseline mean.
-    x = bg.mean * bg.mean / bg.var;
-    // TODO: Make this configurable.
-    static const float bgMeanTol = 1.0f;
-    assert(bgMeanTol > 0.0f);
-    x = exp(-x / (2*bgMeanTol*bgMeanTol));
-    cf[BL_CV] = x;
-
-    // Check for large deviation of baseline variance from reference variance.
-    const auto& refBgVar = refModel.baseline.var;
-    x = log2(bg.var / refBgVar);
-    // TODO: Make this configurable.
-    static const float bgVarTol = 1.0f;
-    x = exp(-x*x / (2*bgVarTol*bgVarTol));
-    cf[BL_VAR_STABLE] = x;
-
-    // Check for missing pulse components.
-    // Require that the first (brightest) and last (dimmest) are not absent.
-    // TODO: Make this configurable. Should this threshold be defined in terms
-    // of data count instead of fraction?
-    const float dmFracThresh1 = staticConfig.analogMixFracThresh_;
-    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
-    const auto& detModes = modelEst.analogs;
-    assert(detModes.size() == 4);
-    // BENTODO hard code index uses to be front/back
-    x = satlin(dmFracThresh0, dmFracThresh1, detModes[0].weight);
-    x *= satlin(dmFracThresh0, dmFracThresh1, detModes[3].weight);
-    cf[ANALOG_REP] = x;
-
-    // Check for low SNR.
-    // BENTODO hard coded index
-    x = detModes[3].mean;  // Assumes last analog is dimmest.
-    const auto bgSigma = sqrt(bg.var);
-    x /= bgSigma;
-    x = satlin(staticConfig.snrThresh0_, staticConfig.snrThresh1_, x);
-    cf[SNR_SUFFICIENT] = x;
-
-    // Check for large decrease in SNR.
-    // This factor is specifically designed to catch registration errors in the
-    // fit when the brightest analog is absent. In such cases, the weight of
-    // the dimmest fraction can be substantial (the fit presumably robs some
-    // weight from the background component)
-    if (staticConfig.snrDropThresh_ < 0.0f) cf[SNR_DROP] = 1.0f;
+    if (threadIdx.x % 2 == 0)
+        UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
     else
-    {
-        const auto snrEst = detModes[0].mean / bgSigma;
-        const auto& refDetModes = refModel.analogs;
-        assert(refDetModes.size() >= 2);
-        const auto& refSignal0 = refDetModes[0].mean;
-        // BENTODO need something to replace PBAssert
-        //PBAssert(all(refSignal0 >= 0.0f), "Bad SignalMean.");
-        const auto& refSignal1 = refDetModes[1].mean;
-        //PBAssert(all(refSignal1 >= 0.0f), "Bad SignalMean.");
-        const auto refBgSigma = sqrt(refModel.baseline.var);
-        //PBAssert(all(refBgSigma >= 0.0f), "Bad baseline sigma.");
-        const auto refSnr0 = refSignal0 / refBgSigma;
-        auto refSnr1 = refSignal1 / refBgSigma;
-        refSnr1 *= staticConfig.snrDropThresh_;
-        refSnr1 *= min(refModel.confidence, 1.0f);
-        //PBAssert(all(refSnr1 < refSnr0),
-        //         "Bad threshold in SNR Drop confidence factor.");
-        x = satlin(refSnr1, sqrt(refSnr0*refSnr1), snrEst);
-        cf[SNR_DROP] = x;
-    }
-    __syncwarp();
-
-    // The G-test as a goodness-of-fit score.
-    cf[G_TEST] = dmeDx.gTest.pValue;
-
-    return cf;
+        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
 }
 
-// static
-void __device__ DmeEmDevice::ScaleModelSnr(const float& scale,
-                                           ZmwDetectionModel* detModel)
+__global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
+                               Cuda::Memory::DeviceView<DmeEmDevice::LaneDetModel> models)
 {
-    assert (scale > 0.0f);
-    const auto baselineCovar = detModel->baseline.var;
-    auto& detectionModes_ = detModel->analogs;
-    assert (detectionModes_.size() == numAnalogs);
-    for (unsigned int a = 0; a < numAnalogs; ++a)
-    {
-        auto& dmi = detectionModes_[a];
-        dmi.mean *= scale;
-        dmi.var = Basecaller::ModelSignalCovar(::Analog(a),
-                                               dmi.mean,
-                                               baselineCovar);
-    }
-    // TODO: Should we update updated_?
+
+    EstimateLaneDetModel(hists[blockIdx.x], &models[blockIdx.x]);
+}
+
+
+void DmeEmDevice::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
+{
+    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)(hist.data, *detModel);
+    Cuda::CudaSynchronizeDefaultStream();
 }
 
 __global__ void InitModel(Cuda::Memory::DeviceView<const Data::BaselinerStatAccumState> stats,
@@ -1003,63 +1005,53 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const Data::BaselinerStatAccu
 
     auto& blsa = blStats.baselineStats;
 
-    // BENTODO this replicates host stat accumulator
-    auto Mean = [](const auto& stats)
+    // TODO this code replicates host stat accumulator
+    auto Mean = [](const auto& stats) -> PBHalf2
     {
-        return stats.moment1[threadIdx.x]/stats.moment0[threadIdx.x];
+        return { stats.moment1[threadIdx.x*2]/stats.moment0[threadIdx.x*2],
+                 stats.moment1[threadIdx.x*2+1]/stats.moment0[threadIdx.x*2+1]
+        };
     };
 
     /// The unbiased sample variance of the aggregated samples.
     /// NaN if Count() < 2.
-    auto Variance = [](const auto& stats)
+    auto Variance = [](const auto& stats) -> PBHalf2
     {
-        static const float nan = std::numeric_limits<float>::quiet_NaN();
-        auto var = stats.moment1[threadIdx.x] * stats.moment1[threadIdx.x] / stats.moment0[threadIdx.x];
-        var = (stats.moment2[threadIdx.x] - var) / (stats.moment0[threadIdx.x] - 1.0f);
-        var = max(var, 0.0f);
-        return stats.moment0[threadIdx.x] > 1.0f ? var : nan;
+        const PBHalf2 nan = std::numeric_limits<float>::quiet_NaN();
+        const PBHalf2 mom0 { stats.moment0[2*threadIdx.x], stats.moment0[2*threadIdx.x+1]};
+        const PBFloat2 mom1 { stats.moment1[2*threadIdx.x], stats.moment1[2*threadIdx.x+1]};
+        const PBFloat2 mom2 { stats.moment2[2*threadIdx.x], stats.moment2[2*threadIdx.x+1]};
+
+        PBFloat2 tmp = mom1 * mom1 / mom0;
+        tmp = (mom2 - tmp) / (mom0 - 1.0f);
+        PBHalf2 var = max(PBHalf2{tmp.X(), tmp.Y()}, 0.0f);
+        return Blend(mom0 > 1.0f, var, nan);
     };
 
-    const auto& blMean = staticConfig.fixedBaselineParams_ ? staticConfig.fixedBaselineMean_ : Mean(blsa);
-    const auto& blVar = staticConfig.fixedBaselineParams_ ? staticConfig.fixedBaselineVar_ : Variance(blsa);
-    const auto& blWeight = blsa.moment0[threadIdx.x] / blStats.fullAutocorrState.basicStats.moment0[threadIdx.x];
+    const auto& basicStats = blStats.fullAutocorrState.basicStats;
+    const PBHalf2& blMean =  Mean(blsa);
+    const PBHalf2& blVar = Variance(blsa);
+    const PBHalf2 blWeight = {
+        blsa.moment0[2*threadIdx.x] / basicStats.moment0[2*threadIdx.x],
+        blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]
+    };
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);
-    // BENTODO rethink all this pattern, it could be done better
-    if (threadIdx.x % 2 == 0)
+    model.BaselineMode().means[threadIdx.x] = blMean;
+    model.BaselineMode().vars[threadIdx.x] = blVar;
+    model.BaselineMode().weights[threadIdx.x] = blWeight;
+    for (int a = 0; a < numAnalogs; ++a)
     {
-        model.BaselineMode().means[threadIdx.x/2].Set<0>(blMean);
-        model.BaselineMode().vars[threadIdx.x/2].Set<0>(blVar);
-        model.BaselineMode().weights[threadIdx.x/2].Set<0>(blWeight);
-        for (int a = 0; a < numAnalogs; ++a)
-        {
-            const auto aMean = blMean + staticConfig.analogs[a].relAmplitude * refSignal;
-            auto& aMode = model.AnalogMode(a);
-            aMode.means[threadIdx.x/2].Set<0>(aMean);
+        const auto aMean = blMean + staticConfig.analogs[a].relAmplitude * refSignal;
+        auto& aMode = model.AnalogMode(a);
+        aMode.means[threadIdx.x] = aMean;
 
-            // This noise model assumes that the trace data have been converted to
-            // photoelectron units.
-            aMode.vars[threadIdx.x/2].Set<0>(ModelSignalCovar(Analog(a), aMean, blVar));
+        // This noise model assumes that the trace data have been converted to
+        // photoelectron units.
+        aMode.vars[threadIdx.x] = ModelSignalCovar(Analog(a), aMean, blVar);
 
-            aMode.weights[threadIdx.x/2].Set<0>(aWeight);
-        }
-    } else {
-        model.BaselineMode().means[threadIdx.x/2].Set<1>(blMean);
-        model.BaselineMode().vars[threadIdx.x/2].Set<1>(blVar);
-        model.BaselineMode().weights[threadIdx.x/2].Set<1>(blWeight);
-        for (int a = 0; a < numAnalogs; ++a)
-        {
-            const auto aMean = blMean + staticConfig.analogs[a].relAmplitude * refSignal;
-            auto& aMode = model.AnalogMode(a);
-            aMode.means[threadIdx.x/2].Set<1>(aMean);
-
-            // This noise model assumes that the trace data have been converted to
-            // photoelectron units.
-            aMode.vars[threadIdx.x/2].Set<1>(ModelSignalCovar(Analog(a), aMean, blVar));
-
-            aMode.weights[threadIdx.x/2].Set<1>(aWeight);
-        }
+        aMode.weights[threadIdx.x] = aWeight;
     }
 }
 
@@ -1068,7 +1060,7 @@ DmeEmDevice::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    Cuda::PBLauncher(InitModel, PoolSize(), laneSize)(blStats, pdm);
+    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm);
 
     return pdm;
 }

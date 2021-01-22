@@ -36,6 +36,11 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+// This class and the next could probably be unified with the Lane versions via
+// a little template work, but first we need to iron out issues relating to
+// how/if we share code between the host and the GPU.  If for example we created
+// a LaneArray class that worked on the GPU, some of this complexity would maybe
+// be easier to manange
 struct ZmwAnalogMode
 {
     template <int low>
@@ -68,7 +73,8 @@ struct ZmwDetectionModel
     Cuda::Utility::CudaArray<ZmwAnalogMode, numAnalogs> analogs;
     ZmwAnalogMode baseline;
 
-    // BENTODO not sure this is appropriate.  This doesn't make it into the full model
+    // TODO: Even the host version does not have a way to propogate the confidence between
+    //       estimations
     float confidence = 0;
 };
 
@@ -100,73 +106,13 @@ public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig);
 
-    // If mask[i], a[i] |= bits.
-    // BENTODO eliminate?  Create a bit vector?
-    __device__ static void SetBits(const bool mask, int32_t bits, int32_t* a)
-    {
-        if (mask) *a |= bits;
-        // TODO: There is probably a more efficient way to implement this.
-        //const IntVec b = *a | IntVec(bits);
-        //*a = Blend(mask, b, *a);
-    }
-
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
-
 public:
     DmeEmDevice(uint32_t poolId, unsigned int poolSize);
 
-private:    // Types
-
-    enum ConfFactor
-    {
-        CONVERGED = 0,
-        BL_FRACTION,
-        BL_CV,
-        BL_VAR_STABLE,
-        ANALOG_REP,
-        SNR_SUFFICIENT,
-        SNR_DROP,
-        G_TEST,
-        NUM_CONF_FACTORS
-    };
-
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
                       PoolDetModel* detModel) const override;
-
-private:    // Static functions
-    // Compute a preliminary scaling factor based on a fractile statistic.
-
-    __device__ static float PrelimScaleFactor(const ZmwDetectionModel& model,
-                                              const LaneHist& hist);
-
-    // Apply a G-test significance test to assess goodness of fit of the model
-    // to the trace histogram.
-    __device__ static GoodnessOfFitTest<float> Gtest(const LaneHist& histogram,
-                                                     const ZmwDetectionModel& model);
-
-    // Compute the confidence factors of a model estimate, given the
-    // diagnostics of the estimation, a reference model.
-    static Cuda::Utility::CudaArray<float, NUM_CONF_FACTORS>
-    __device__ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
-                                 const ZmwDetectionModel& refModel,
-                                 const ZmwDetectionModel& modelEst);
-
-    // BENTODO rethink access
-public:    // Functions
-    // Use the trace histogram and the input detection model to compute a new
-    // estimate for the detection model. Mix the new estimate with the input
-    // model, weighted by confidence scores. That result is returned in detModel.
-    __device__ static void EstimateLaneDetModel(const LaneHist& hist,
-                                         LaneDetModel* detModel);
-private:
-
-
-    /// Updates *detModel by increasing the amplitude of all detection modes by
-    /// \a scale. Also updates all detection mode covariances according
-    /// to the standard noise model. Ratios of amplitudes among detection modes
-    /// and properties of the background mode are preserved.
-    __device__ static void ScaleModelSnr(const float& scale, ZmwDetectionModel* detModel);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
