@@ -173,9 +173,17 @@ std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
     return unitCellNumbers;
 }
 
-std::vector<uint32_t> TraceFileDataSource::UnitCellFeatures() const
+std::vector<DataSourceBase::UnitCellFeature> TraceFileDataSource::UnitCellFeatures() const
 {
-    return std::vector<uint32_t>(numZmwLanes_ * BlockWidth(), 0);
+    std::vector<DataSourceBase::UnitCellFeature> features(numZmwLanes_ * BlockWidth());
+    boost::multi_array<int16_t,2> holexy = traceFile_.Traces().HoleXY(); 
+    for(uint32_t i=0; i < holexy.shape()[0]; i++)
+    {
+        features[i].flags = 0; // fixme
+        features[i].x = holexy[i][0];
+        features[i].y = holexy[i][1];
+    }
+    return features;
 }
 
 void TraceFileDataSource::PreloadInputQueue(size_t chunks)

@@ -65,7 +65,7 @@ public:
 
     std::vector<uint32_t> PoolIds() const override;
     std::vector<uint32_t> UnitCellIds() const override;
-    std::vector<uint32_t> UnitCellFeatures() const override;
+    std::vector<UnitCellFeature> UnitCellFeatures() const override;
 
     size_t BlockWidth() const { return GetConfig().layout.BlockWidth(); }
     size_t BlockLen() const { return GetConfig().layout.NumFrames(); }
@@ -127,7 +127,7 @@ private:
 
     std::string filename_;
 
-    TraceFile::TraceFileReader traceFile_;
+    TraceFile::TraceFile traceFile_;
     std::vector<int16_t> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
