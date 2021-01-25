@@ -7,6 +7,7 @@ include(pacbio-gtest)
 add_library(libMongoCommonCudaTest OBJECT
     TestCudaEvents.cu
     TestDeviceAllocationStash.cu
+    TestManagedAllocations.cpp
     TestPBCudaSimd.cpp
     TestStreamMonitors.cu
 )

@@ -74,11 +74,12 @@ private:
 };
 
 // Creates an AllocationMarker tied to the source code file and line number.
-// Automatically strips out portions of the path outside of the repository
-#define SOURCE_MARKER()                                                        \
-        PacBio::Cuda::Memory::AllocationMarker(                                \
-                std::string(__FILE__  ":" + std::to_string(__LINE__))          \
-                .substr(strlen(PacBio::Primary::MongoConfig::workspaceDir)+1))
+// Only uses the basename() of the source file name, or the whole __FILE__ if / is not found.
+#define SOURCE_MARKER()                                                                 \
+        PacBio::Cuda::Memory::AllocationMarker(                                         \
+                [](){const char*x=strrchr(__FILE__,'/'); return std::string(x?x:__FILE__);}() \
+                + ":" + std::to_string(__LINE__))
+// Note: POSIX/GNU versions of baseline require the path argument to be read/write, so it can't be used.
 
 // Extension of the IAllocator interface, which provides two new piece
 // of functionality:
