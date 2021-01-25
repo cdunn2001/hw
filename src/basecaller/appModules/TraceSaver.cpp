@@ -94,7 +94,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
             const auto blockIdx = laneIdx - laneBegin;
             Mongo::Data::BlockView<const int16_t> blockView = traceBatch.GetBlockView(blockIdx);
 #if 1
-            // do the transpose here.
+            // do the transpose here.  All of this is a bit ugly and could be compartmentalized I think. TODO
             boost::const_multi_array_ref<int16_t, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
@@ -109,7 +109,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
             }
 
             // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
-            // the trace file.
+            // the trace file. TODO
             auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
             const int64_t traceFileLane = position - laneSelector_.begin();
 

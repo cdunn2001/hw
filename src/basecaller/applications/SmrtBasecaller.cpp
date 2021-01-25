@@ -437,6 +437,8 @@ private:
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
+        size_t numPreallocatedPackets = 0;
+
         std::array<size_t, 3> layoutDims;
         switch(config_.source.sourceType)
         {
@@ -451,6 +453,7 @@ private:
                 layoutDims[0] = 1;
                 layoutDims[1] = Tile::NumFrames;
                 layoutDims[2] = Tile::NumPixels;
+                numPreallocatedPackets = 800000;
             }
             else
             {
@@ -467,9 +470,27 @@ private:
 
         // TODO need a way to let trace file specify numZmw and num frames
         const auto numZmw = numZmwLanes_ * laneSize;
-        DataSourceBase::Configuration datasourceConfig(
-            layout,
-            CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()))); // FIXME. change to AllocatorMode::HUGE_CUDA
+
+        /// MTL/BB hack.begin
+        /// We manually loaded the allocator with allocations. This greatly improves handling of lots of Packets.
+        /// TODO: clean up this ugliness.
+        auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()));
+        if (numPreallocatedPackets>0)
+        {
+            std::vector<PacBio::Memory::SmartAllocation> allocations;
+            allocations.reserve(numPreallocatedPackets);
+            for(int i=0;i<numPreallocatedPackets;i++)
+            {
+                allocations.emplace_back(allo->GetAllocation(sizeof(Tile)));
+            }
+            for(int i=0;i<numPreallocatedPackets;i++)
+            {
+                allo->ReturnHostAllocation(std::move(allocations[i]));
+            }
+        }        
+        /// MTL/BB hack.end
+
+        DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
         std::unique_ptr<DataSourceBase> dataSource;
@@ -769,8 +790,13 @@ private:
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
                     }
+                    for(auto&& packet : chunk)
+                    {
+                        PacBio::Cuda::Memory::GetGlobalAllocator().ReturnHostAllocation(std::move(packet).RelinquishAllocation());
+                    }
                     numChunksAnalyzed++;
                 }
+
                 if (this->ExitRequested())
                 {
                     source->RequestExit();
@@ -849,7 +875,7 @@ int main(int argc, char* argv[])
 
         auto group3 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");
-        group3.add_option("--nop").type_int().set_default(0).action_store_true().help("Ways of making the analyzer do less");
+        group3.add_option("--nop").type_int().set_default(0).help("Ways of making the analyzer do less");
         parser.add_option_group(group3);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
