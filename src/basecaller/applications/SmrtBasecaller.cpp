@@ -38,7 +38,6 @@
 #include <common/graphs/GraphNode.h>
 
 #include <pacbio/PBException.h>
-#include <pacbio/configuration/ParseCombined.h>
 #include <pacbio/configuration/MergeConfigs.h>
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/DataSourceRunner.h>
@@ -50,7 +49,7 @@
 #include <pacbio/POSIX.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
-
+#include <pacbio/sensor/SparseROI.h>
 #include <mongo/datasource/WXDataSource.h>
 
 using namespace PacBio::Cuda::Memory;
@@ -151,10 +150,6 @@ public:
         if (options["outputtrcfile"] != "")
         {
             outputTrcFileName_ = options["outputtrcfile"];
-            size_t numZmws = numZmwLanes_ * config_.layout.zmwsPerLane;
-            outputTrcFile_ = std::make_unique<TraceFileWriter>(outputTrcFileName_,
-                                                               numZmws,
-                                                               frames_);
         }
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
@@ -203,7 +198,7 @@ public:
 private:
     void MetaDataFromTraceFileSource(const std::string& traceFileName)
     {
-        const auto& traceFile = PacBio::TraceFile::TraceFileReader(traceFileName);
+        const auto& traceFile = PacBio::TraceFile::TraceFile(traceFileName);
         const auto& acqParams = traceFile.Scan().AcqParams();
         const auto& chipInfo = traceFile.Scan().ChipInfo();
         const auto& dyeSet = traceFile.Scan().DyeSet();
@@ -258,7 +253,7 @@ private:
                                     float& blCovar,
                                     const std::string& exceptMsg)
         {
-            const TraceFileReader traceFile{traceFileName};
+            const TraceFile traceFile{traceFileName};
             if (traceFile.IsSimulated())
             {
                 const auto groundTruth = traceFile.GroundTruth();
@@ -438,15 +433,34 @@ private:
         }
     }
 
-    // TODO support wolverine and potentially other sources
+    // TODO fix this up. It is too specialized for WX2 or TraceFile datasources.
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
         // TODO need to handle sparse as well
-        std::array<size_t, 3> layoutDims{
-                config_.layout.lanesPerPool,
-                config_.layout.framesPerChunk,
-                config_.layout.zmwsPerLane
-        };
+        std::array<size_t, 3> layoutDims;
+        switch(config_.source.sourceType)
+        {
+        case Source_t::TRACE_FILE:
+            layoutDims[0] = config_.layout.lanesPerPool;
+            layoutDims[1] = config_.layout.framesPerChunk;
+            layoutDims[2] = config_.layout.zmwsPerLane;
+            break;
+        case Source_t::WX2:
+            if (config_.source.wx2SourceConfig.platform == PacBio::Sensor::Platform::Sequel2Lvl1)
+            {
+                layoutDims[0] = 1;
+                layoutDims[1] = Tile::NumFrames;
+                layoutDims[2] = Tile::NumPixels;
+            }
+            else
+            {
+                throw PBException("Not implemented");
+            }
+            break;
+        default:
+            throw PBException("CreateSource not supported: " + config_.source.sourceType.toString());
+        }
+
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
                             layoutDims);
@@ -455,7 +469,7 @@ private:
         const auto numZmw = numZmwLanes_ * laneSize;
         DataSourceBase::Configuration datasourceConfig(
             layout,
-            CreateAllocator(AllocatorMode::CUDA, AllocationMarker("TraceFileDataSource")));
+            CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()))); // FIXME. change to AllocatorMode::HUGE_CUDA
         datasourceConfig.numFrames = frames_;
 
         std::unique_ptr<DataSourceBase> dataSource;
@@ -479,6 +493,8 @@ private:
                 WXDataSourceConfig wxconfig;
                 wxconfig.dataPath = DataPath_t(config_.source.wx2SourceConfig.dataPath);
                 wxconfig.platform = Platform(config_.source.wx2SourceConfig.platform);
+                wxconfig.sleepDebug = config_.source.wx2SourceConfig.sleepDebug;
+                wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
 
                 dataSource = std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
             }
@@ -544,17 +560,57 @@ private:
 
     std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver(DataSourceBase& dataSource)
     {
-        if (outputTrcFile_)
+        if (outputTrcFileName_ != "")
         {
-            // TODO. I think this roi selection might go elsewhere.
-            //
-            //             // Convert the hardened traceROI to a JSON representation, and then deserialize it immediately
-            //                         // into the SparseROI.
-            SequelSensorROI ridiculouslyBigSensor(0,0,99999999,99999999,1,1);
-            auto roi = std::make_unique<PacBio::Sensor::SequelSparseROI>(config_.traceROI.Serialize(),ridiculouslyBigSensor);
-            auto blocks = dataSource.BlocksWithinROI(config_.traceROI.roi);
+            auto tiles = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
+            const size_t numZmws = tiles.size() * Tile::NumPixels;
+            std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numZmws);
+            {
+                // FIXME. This is Tile (32 wide) versus Lane (64 wide) centric.
+                // Tile centric portion.
 
-            return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), std::move(roi), blocks);
+                // currate the features of the ROI ZMWs
+                const auto allFeatures = dataSource.UnitCellFeatures();
+                size_t k=0;
+                for(const auto tileOffset : tiles)
+                {
+                    const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
+                    for(uint32_t j =0;j<Tile::NumPixels;j++)
+                    {
+                        roiFeatures[k] = allFeatures[zmwIndex+j];
+                        k++;
+                    }
+                }
+                if (k != numZmws)
+                {
+                    throw PBException("ROI selection algorithm is buggy");
+                }
+            }
+            // conversion of Tile to Lane
+            std::unordered_set<DataSourceBase::LaneIndex> laneSet;
+            std::vector<DataSourceBase::LaneIndex> lanes;
+            for(const DataSourceBase::LaneIndex tileOffset : tiles)
+            {
+                const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
+                const DataSourceBase::LaneIndex laneIndex = zmwIndex / laneSize;
+                if (laneSet.find(laneIndex) == laneSet.end())
+                {
+                    lanes.push_back(laneIndex);
+                    laneSet.insert(laneIndex);
+                }
+            }
+            if (lanes.size() != numZmws / laneSize)
+            {
+                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << lanes.size() << " numZmws/laneSize:" << numZmws/laneSize;
+                PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
+            }
+            DataSourceBase::LaneSelector blocks(lanes);
+            PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
+            outputTrcFile_ = std::make_unique<TraceFileWriter>(outputTrcFileName_,
+                                                               numZmws,
+                                                               frames_);
+
+            return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), roiFeatures, std::move(blocks));
         }
         else
         {
@@ -575,10 +631,14 @@ private:
     {
         if (hasBazFile_)
         {
+            auto features1 = source.UnitCellFeatures();
+            std::vector<uint32_t> features2;            
+            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellFeature x){return x.flags;});
+
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
                                                    source.UnitCellIds(),
-                                                   source.UnitCellFeatures(),
+                                                   features2,
                                                    config_,
                                                    zmwOutputStrideFactor_);
         } else
@@ -595,125 +655,146 @@ private:
 
         auto source = CreateSource();
         const auto& poolIds = source->PoolIds();
-        // TODO Some negotation between the source and repacker needs to happen,
-        // which results in the creation of this map.  For now, hard code all
-        // batches to be uniform dimensions.  In reality, the number of lanes
-        // per pool may vary
-        std::map<uint32_t, Data::BatchDimensions> poolDims;
-        Data::BatchDimensions dims;
-        dims.framesPerBatch = config_.layout.framesPerChunk;
-        dims.laneWidth = config_.layout.zmwsPerLane;
-        dims.lanesPerBatch = config_.layout.lanesPerPool;
-        for (auto id : poolIds) poolDims[id] = dims;
 
-        GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
-        auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
-        repacker->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
-        auto* analyzer = repacker->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
-        analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
+        try
+        { 
+          // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
+          // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
-        size_t numChunksAnalyzed = 0;
-        PacBio::Dev::QuietAutoTimer timer(0);
+            // TODO Some negotation between the source and repacker needs to happen,
+            // which results in the creation of this map.  For now, hard code all
+            // batches to be uniform dimensions.  In reality, the number of lanes
+            // per pool may vary
+            std::map<uint32_t, Data::BatchDimensions> poolDims;
+            Data::BatchDimensions dims;
+            dims.framesPerBatch = config_.layout.framesPerChunk;
+            dims.laneWidth = config_.layout.zmwsPerLane;
+            dims.lanesPerBatch = config_.layout.lanesPerPool;
+            for (auto id : poolIds) poolDims[id] = dims;
 
-        const double chunkDurationMS = config_.layout.framesPerChunk
-                                     / movieConfig_.frameRate
-                                       * 1e3;
-
-        // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
-        // loopback paths (anything but Normal).
-        auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
-        if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
-        {
-            TransmitConfig config(dsr->GetPlatform());
-            config.condensed = true;
-            config.frames = frames_; // total number of frames to transmit
-            config.limitFileFrames = 512; // loop in coproc memory.
-            config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
-            if (PacBio::POSIX::IsFile(config.hdf5input))
+            GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
+            auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
+            repacker->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
+            if (nop_ != 2)
             {
-                config.mode = TransmitConfig::Mode::File;
-                PBLOG_NOTICE << "Trying to generate simulated loopback movie with file " << config.hdf5input;
+                auto* analyzer = repacker->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
+                analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
             }
-            else
-            {
-                config.mode = TransmitConfig::Mode::Generated;
-                PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
-            }
-            config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
-            dsr->TransmitMovieSim(config);
-        }
 
-        while (source->IsActive())
-        {
-            SensorPacketsChunk chunk;
-            if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
+            size_t numChunksAnalyzed = 0;
+            PacBio::Dev::QuietAutoTimer timer(0);
+
+            const double chunkDurationMS = config_.layout.framesPerChunk
+                                        / movieConfig_.frameRate
+                                        * 1e3;
+
+            // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
+            // loopback paths (anything but Normal).
+            auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
+            if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
             {
-                PBLOG_INFO << "Analyzing chunk frames = ["
-                    + std::to_string(chunk.StartFrame()) + ","
-                    + std::to_string(chunk.StopFrame()) + ")";
-                if (nop_)
+                TransmitConfig config(dsr->GetPlatform());
+                config.condensed = true;
+                config.frames = frames_; // total number of frames to transmit
+                config.limitFileFrames = 512; // loop in coproc memory.
+                config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
+                if (PacBio::POSIX::IsFile(config.hdf5input))
                 {
-                    int16_t expectedPixel = 123;
-                    for(const auto& x : chunk)
-                    {
-                        for(int iblock = 0; iblock < 1; iblock ++) // x.NumBlocks() ??
-                        {
-                            int16_t actualPixel = x.BlockData(iblock).Data()[0];
-                            if (expectedPixel != actualPixel)
-                            {
-                                PBLOG_ERROR << "Mismatched pixels, expected:" <<
-                                    expectedPixel << " != actual:" << actualPixel <<
-                                    " at " << x.ToString();
-                            }
-                        }
-                    }
+                    config.mode = TransmitConfig::Mode::File;
+                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with file " << config.hdf5input;
                 }
                 else
                 {
-                    for (auto& batch : chunk)
-                        repacker->ProcessInput(std::move(batch));
-                    const auto& reports = graph.FlushAndReport(chunkDurationMS);
-
-                    std::stringstream ss;
-                    ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
-
-                    for (auto& report: reports)
-                    {
-                        if (!report.realtime)
-                        {
-                            PBLOG_WARN << report.stage.toString()
-                                       << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
-                                       << report.dutyCycle * 100 << "%, "
-                                       << report.avgDuration << "ms, "
-                                       << report.idlePercent << "%, "
-                                       << report.avgOccupancy;
-                        }
-                        ss << "\t\t" << report.stage.toString() << ": "
-                           << report.dutyCycle * 100 << "%, "
-                           << report.avgOccupancy << "\n";
-                    }
-                    PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+                    config.mode = TransmitConfig::Mode::Generated;
+                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
                 }
-                numChunksAnalyzed++;
+                config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
+                dsr->TransmitMovieSim(config);
             }
-            if (this->ExitRequested())
+
+            uint64_t nopSuccesses = 0;
+
+            while (source->IsActive())
             {
-                source->RequestExit();
-                break;
+                SensorPacketsChunk chunk;
+                if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
+                {
+                    PBLOG_INFO << "Analyzing chunk frames = ["
+                        + std::to_string(chunk.StartFrame()) + ","
+                        + std::to_string(chunk.StopFrame()) + ")";
+                    if (nop_ == 1)
+                    {
+                        int16_t expectedPixel = 123;
+                        for(const auto& batch : chunk)
+                        {
+                            for(int iblock = 0; iblock < 1; iblock ++) // x.NumBlocks() ??
+                            {
+                                int16_t actualPixel = batch.BlockData(iblock).Data()[0];
+                                if (expectedPixel != actualPixel)
+                                {
+                                    PBLOG_ERROR << "Mismatched pixels, expected:" <<
+                                        expectedPixel << " != actual:" << actualPixel <<
+                                        " at " << batch.ToString();
+                                }
+                                else
+                                {
+                                    nopSuccesses++;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (auto& batch : chunk)
+                            repacker->ProcessInput(std::move(batch));
+                        const auto& reports = graph.FlushAndReport(chunkDurationMS);
+
+                        std::stringstream ss;
+                        ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
+
+                        for (auto& report: reports)
+                        {
+                            if (!report.realtime)
+                            {
+                                PBLOG_WARN << report.stage.toString()
+                                        << " is currently slower than budgeted:  Duty Cycle%, Duration MS, Idle %, Occupancy -- "
+                                        << report.dutyCycle * 100 << "%, "
+                                        << report.avgDuration << "ms, "
+                                        << report.idlePercent << "%, "
+                                        << report.avgOccupancy;
+                            }
+                            ss << "\t\t" << report.stage.toString() << ": "
+                            << report.dutyCycle * 100 << "%, "
+                            << report.avgOccupancy << "\n";
+                        }
+                        PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+                    }
+                    numChunksAnalyzed++;
+                }
+                if (this->ExitRequested())
+                {
+                    source->RequestExit();
+                    break;
+                }
             }
+            graph.Flush();
+
+            PBLOG_INFO << "All chunks analyzed.";
+            PBLOG_INFO << "Total frames analyzed = "
+                    << source->NumFrames();
+            PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
+            timer.SetCount(numChunksAnalyzed);
+            double chunkAnalyzeRate = timer.GetRate();
+            PBLOG_INFO << "Analyzed " << numChunksAnalyzed
+                    << " chunks at " << chunkAnalyzeRate << " chunks/sec"
+                    << " (" << (source->NumZmw() * chunkAnalyzeRate)
+                    << " zmws/sec)";
         }
-        graph.Flush();
-
-        PBLOG_INFO << "All chunks analyzed.";
-        PBLOG_INFO << "Total frames analyzed = "
-                   << source->NumFrames();
-
-        timer.SetCount(numChunksAnalyzed);
-        double chunkAnalyzeRate = timer.GetRate();
-        PBLOG_INFO << "Analyzed " << numChunksAnalyzed
-                   << " chunks at " << chunkAnalyzeRate << " chunks/sec"
-                   << " (" << (source->NumZmw() * chunkAnalyzeRate)
-                   << " zmws/sec)";
+        catch(const std::exception& ex)
+        {
+            PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
+            throw;
+        }
     }
 
 private:
@@ -729,7 +810,7 @@ private:
     size_t numZmwLanes_ = 0;
     size_t frames_ = 0;
     bool cache_ = false;
-    bool nop_ = false; ///< if true, nothing is analyzed. The data is discarded.
+    int nop_ = 0; ///< 0 = normal. 1 = don't process any SensorPackets at all. 2 =dont instantiate the basecaller, but allow repacker and tracesaver
     std::string outputTrcFileName_;
     std::unique_ptr<DataFileWriterInterface> outputTrcFile_;
 };
@@ -768,7 +849,7 @@ int main(int argc, char* argv[])
 
         auto group3 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");
-        group3.add_option("--nop").type_bool().set_default(false).action_store_true().help("Analyzer does nothing");
+        group3.add_option("--nop").type_int().set_default(0).action_store_true().help("Ways of making the analyzer do less");
         parser.add_option_group(group3);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
