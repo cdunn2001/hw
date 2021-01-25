@@ -23,4 +23,118 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <appModules/TraceFileWriter.h>
 #include <appModules/TraceSaver.h>
+
+namespace PacBio {
+namespace Application {
+
+using namespace PacBio::DataSource;
+
+TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWriterInterface>&& writer,
+                               const std::vector<PacBio::DataSource::DataSourceBase::UnitCellFeature>& features,
+                               PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector)
+    : writer_(std::move(writer))
+    , laneSelector_(std::move(laneSelector))
+{
+    auto* tracewriter = dynamic_cast<PacBio::Application::TraceFileWriter*>(writer_.get());
+    if (tracewriter)
+    {
+        const uint32_t numZMWs = tracewriter->Traces().NumZmws();
+        if (numZMWs != features.size())
+        {
+            PBLOG_ERROR << "ROI ZMWS is not equal to trace file ZMWs. Something is not right. "
+                        << "trace.NumZmws:" << numZMWs << " feature ZMWS:" <<  features.size();
+            throw PBException("ROI miscalculation");
+        }
+        boost::multi_array<int16_t, 2> holexy(boost::extents[numZMWs][2]);
+        std::vector<uint8_t> holeType(numZMWs);
+        for(uint32_t i=0;i<numZMWs;i++)
+        {
+            holexy[i][0] = features[i].x;
+            holexy[i][1] = features[i].y;
+            holeType[i] = features[i].flags; // FIXME there should be a conversion between bits and enumeration
+        }
+        tracewriter->Traces().HoleXY(holexy);
+        tracewriter->Traces().HoleType(holeType);
+
+#if 0
+        std::vector<uint32_t> holeNumber;
+        tracewriter->Traces().HoleNumber(holeNumber);
+#endif
+    }
+    PBLOG_INFO << "TraceSaverBody created with ";
+    PacBio::Logging::LogStream logstream;
+    writer_->OutputSummary(logstream);
+}
+
+
+void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
+{
+    auto* tracewriter = dynamic_cast<PacBio::Application::TraceFileWriter*>(writer_.get());
+    if (tracewriter)
+    {
+        const auto zmwOffset = traceBatch.Metadata().FirstZmw();
+        const auto frameOffset = traceBatch.Metadata().FirstFrame();
+        const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
+        const DataSourceBase::LaneIndex laneEnd = laneBegin + traceBatch.LanesPerBatch();
+
+#if 0
+        if (zmwOffset < 10000)
+        {
+            PBLOG_INFO << "TraceSaverBody::Process, zmwOffset:" << zmwOffset << " frameOffset:" << frameOffset << " laneBegin:" << laneBegin << " laneEnd:" << laneEnd;
+        }
+#endif
+
+        for (const auto laneIdx : laneSelector_.SelectedLanes(laneBegin, laneEnd))
+        {
+#if 1
+            PBLOG_INFO << "TraceSaverBody::Process, laneIdx" << laneIdx;
+#endif
+            const auto blockIdx = laneIdx - laneBegin;
+            Mongo::Data::BlockView<const int16_t> blockView = traceBatch.GetBlockView(blockIdx);
+#if 1
+            // do the transpose here.
+            boost::const_multi_array_ref<int16_t, 2> data {
+                blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
+
+            typedef boost::multi_array<int16_t, 2> array_ref;
+            array_ref transpose {boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
+            for (uint32_t iframe = 0; iframe < blockView.NumFrames(); iframe++)
+            {
+                for (uint32_t izmw = 0; izmw < blockView.LaneWidth(); izmw++)
+                {
+                    transpose[izmw][iframe] = data[iframe][izmw];
+                }
+            }
+
+            // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
+            // the trace file.
+            auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
+            const int64_t traceFileLane = position - laneSelector_.begin();
+
+            const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
+            boost::array<array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
+            transpose.reindex(bases);
+            tracewriter->Traces().WriteTraceBlock<int16_t>(transpose);
+#else
+            // no transpose
+            {
+                typedef boost::const_multi_array_ref<int16_t, 2> array_ref;
+                array_ref data {blockView.Data(), boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
+                boost::array<array_ref::index, 2> bases = {{laneOffset + laneIdx, frameOffset}};
+                data.reindex(bases);
+                tracewriter->Traces().WriteTraceBlock(data);
+            }
+#endif
+        }
+    }
+    else
+    {
+        throw PBException("fix me, the tracwriter was not constructed");
+    }
+}
+
+
+}  // namespace Application
+}  // namespace PacBio

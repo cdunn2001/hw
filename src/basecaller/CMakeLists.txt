@@ -54,9 +54,9 @@ set(MONGO_PROJECT_DIR ${CMAKE_CURRENT_LIST_DIR})
 include(mongo-tbb)
 
 include(pacbio-cplusplus-api)
-include(mongo-config)
+include(pacbio-cmake-config-vars)
 
-create_config_header(mongo-config.h MongoConfig)
+generate_config_header(mongo-config.h MongoConfig)
 
 include(pacbio-hw-mongo)
 

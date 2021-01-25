@@ -2,20 +2,20 @@
 // Created by mlakata on 12/3/20.
 //
 
-#include <vector>
 #include <gtest/gtest.h>
 
-#include <pacbio/dev/gtest-extras.h>
-#include <pacbio/logging/Logger.h>
 #include <pacbio/dev/TemporaryDirectory.h>
+#include <pacbio/dev/gtest-extras.h>
 
 #include <appModules/Basecaller.h>
-#include <dataTypes/configs/MovieConfig.h>
-#include <dataTypes/TraceBatch.h>
 #include <appModules/TraceSaver.h>
-#include <pacbio/tracefile/TraceFile.h>
-#include <pacbio/datasource/PacketLayout.h>
+#include <pacbio/ipc/JSON.h>
 #include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/datasource/PacketLayout.h>
+#include <pacbio/sensor/RectangularROI.h>
+#include <pacbio/sensor/SparseROI.h>
+#include <pacbio/tracefile/TraceFile.h>
+#include <vector>
 
 using std::vector;
 
@@ -24,27 +24,61 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Sensor;
 using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
-using namespace PacBio::TraceFile;
+// using namespace PacBio::TraceFile;
 using namespace PacBio::DataSource;
 
 
 TEST(TestTraceSaver, TestA)
 {
-    const size_t startZmw = 0;
-    const size_t startFrame = 0;
-    const size_t numZmws = 128;
+    // The plan of this test is to create a fake sensor of 256 ZMWs (2 rows, 2 lanes = 128 columns), have a trace ROI
+    // that only selects the first two columns, and simulate running the smrt-basecaller until completion. Each
+    // TraceBatch spans the entire chip and 128 frames. We want to simulate a movie of 1024 frames, so there will need
+    // to be several TraceBatches.
+    //
     const size_t laneWidth = 64;
-    const size_t numFrames = 512;
-    PacBio::Dev::TemporaryDirectory tmpDir;
-    const std::string traceFile = tmpDir.DirName()+"/testA.trc.h5";
-    {
-        auto writer = std::make_unique<TraceFileWriter>(traceFile, numZmws, numFrames);
+    const size_t numFrames = 1024;
+    SensorSize sensorROI(0, 0, 2, laneWidth * 2, 1, 1);
+    const uint64_t numSensorZmws = sensorROI.NumUnitCells();
+    const uint64_t numSelectedZmws = 128;
 
-        SequelSensorROI sensorROI(0,0,64,64,1,1);
-        auto roi = std::make_unique<SequelRectangularROI>(sensorROI);
-        std::vector<uint32_t> blockIndices;
-        blockIndices.push_back(0);
-        TraceSaverBody traceSaver(std::move(writer), std::move(roi), blockIndices);
+    const uint32_t numCols = sensorROI.PhysicalCols();
+    auto alpha = [](uint32_t row, uint32_t col, uint64_t frame) {
+        const int16_t value = (col + row * 10 + frame * 100) % 2048;
+        return value;
+    };
+    auto alphaPrime = [&numCols, &alpha](uint64_t zmwOffset, uint64_t frame) {
+        const uint32_t col = zmwOffset % numCols;
+        const uint32_t row = zmwOffset / numCols;
+        return alpha(row, col, frame);
+    };
+
+    PacBio::Dev::TemporaryDirectory tmpDir;
+    const std::string traceFile = tmpDir.DirName() + "/testA.trc.h5";
+    {
+        std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
+        ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
+
+        auto writer = std::make_unique<PacBio::Application::TraceFileWriter>(traceFile, numSelectedZmws, numFrames);
+
+        std::vector<DataSourceBase::LaneIndex> lanes;
+        lanes.push_back(0);  // starting at (0,0)
+        lanes.push_back(2);  // starting at (1,0)
+
+        std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numSelectedZmws);
+        size_t k=0;
+        for(const DataSourceBase::LaneIndex lane : lanes)
+        {
+            for(uint32_t j =0;j<laneWidth; j++)
+            {
+                roiFeatures[k].flags = 0;
+                roiFeatures[k].x = (lane ==0) ? 0 : 1;
+                roiFeatures[k].y = (lane ==0) ? j : j;
+                k++;
+            }
+        }
+        // which skip (0,64) and (1,64)
+        DataSourceBase::LaneSelector laneSelector(lanes);
+        TraceSaverBody traceSaver(std::move(writer), roiFeatures, std::move(laneSelector));
 
         BatchDimensions dims;
         dims.lanesPerBatch = 1;
@@ -53,19 +87,17 @@ TEST(TestTraceSaver, TestA)
 
         PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
                                   PacketLayout::EncodingFormat::INT16,
-                                  std::array<size_t,3>{1, dims.framesPerBatch, dims.laneWidth});
+                                  std::array<size_t, 3> {1, dims.framesPerBatch, dims.laneWidth});
 
         PacBio::Memory::MallocAllocator allocator;
 
 
-        auto FillTraceBatch = [&](DataSource::SensorPacket& packet, std::function<int16_t(void)> pattern)
-        {
-            // fill in the tracebatch with sawtooth test patterns.
-            // SPECIAL NOTE. The trace*BATCH* (output from the DataSource)
-            // has opposite transpose from trace*BLOCK* (input to the
-            // tracefile API). This test checks that
-            // the transpose is done correctly.
-            for(uint32_t iblock=0; iblock < packet.Layout().NumBlocks(); iblock++)
+        // fill each packet with the "alpha" test pattern, which is based on row and column
+        auto FillTraceBatch = [&](uint64_t zmwOffset,
+                                  uint64_t frameOffset,
+                                  DataSource::SensorPacket& packet,
+                                  std::function<int16_t(uint64_t zmw, uint64_t frame)> pattern) {
+            for (uint32_t iblock = 0; iblock < packet.Layout().NumBlocks(); iblock++)
             {
                 int16_t* ptr = reinterpret_cast<int16_t*>(packet.BlockData(iblock).Data());
                 for (uint32_t zmw = 0; zmw < dims.laneWidth; zmw++)
@@ -74,90 +106,143 @@ TEST(TestTraceSaver, TestA)
                     {
                         uint32_t j = zmw + frame * dims.laneWidth;
                         ASSERT_LT(j, packet.BlockData(iblock).Count() / sizeof(*ptr));
-                        ptr[j] = pattern();
+                        ptr[j] = pattern(zmw + zmwOffset, frame + frameOffset);
                     }
                 }
             }
         };
 
+        // create all the packets, convert each one to a TraceBatch and process it.
+        for (uint64_t iframe = 0; iframe < numFrames; iframe += dims.framesPerBatch)
         {
-            // first SensorPacket
-            const BatchMetadata meta(0 /* poolid*/,
-                                     0 /* firstFrame */,
-                                     dims.framesPerBatch - 1 /* lastFrame */,
-                                     0 /* firstZmw */
-            );
+            for (uint64_t izmw = 0; izmw < numSensorZmws; izmw += dims.laneWidth)
+            {
+                const BatchMetadata meta(0 /* poolid*/,  // don't care
+                                         iframe /* firstFrame */,
+                                         iframe + dims.framesPerBatch - 1 /* lastFrame */,
+                                         izmw /* firstZmw */
+                );
 
-            DataSource::SensorPacket packet(packetLayout,
-                                            startZmw,
-                                            startFrame,
-                                            allocator
-            );
-            ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BytesInBlock());
-            ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BlockData(0).Count());
-            ASSERT_EQ(dims.laneWidth, packet.Layout().BlockWidth());
+                DataSource::SensorPacket packet(packetLayout, izmw, iframe, allocator);
+                ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BytesInBlock());
+                ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BlockData(0).Count());
+                ASSERT_EQ(dims.laneWidth, packet.Layout().BlockWidth());
 
-            int16_t pattern = 0;
-            FillTraceBatch(packet, [&pattern](){ return pattern++; });
+                FillTraceBatch(izmw, iframe, packet, alphaPrime);
 
-            Mongo::Data::TraceBatch<int16_t> traceBatch(std::move(packet), meta, dims,
-                                                        Cuda::Memory::SyncDirection::Symmetric,
-                                                        SOURCE_MARKER());
+#if 0
+                auto dataView = packet.BlockData(0);
+                std::stringstream ss;
+                ss << "packet for zmw:" << izmw << " frame:" << iframe << "\n";
+                const int16_t* pixel = reinterpret_cast<int16_t*>(dataView.Data());
+                for (uint64_t iframe2 = 0; iframe2 < dims.framesPerBatch; iframe2++)
+                {
+                    ss << "[" << iframe2 << "]";
+                    for (uint64_t izmw2 = 0; izmw2 < dims.laneWidth; izmw2++)
+                    {
+                        ss << *pixel++ << " ";
+                    }
+                    ss << std::endl;
+                }
+                ss << "----" << std::endl;
+                TEST_COUT << ss.str();
+#endif
 
-            traceSaver.Process(traceBatch);
-        }
-        {
-            //second SensorPacket
-            const BatchMetadata meta(0 /* poolid*/,
-                                     dims.framesPerBatch /* firstFrame */,
-                                     dims.framesPerBatch + dims.framesPerBatch - 1 /* lastFrame */,
-                                     0 /* firstZmw */
-            );
+                Mongo::Data::TraceBatch<int16_t> traceBatch(
+                    std::move(packet), meta, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
 
-            DataSource::SensorPacket packet(packetLayout,
-                                            startZmw,
-                                            startFrame,
-                                            allocator
-            );
-            int16_t pattern = 0;
-            FillTraceBatch(packet, [&pattern](){ return pattern--; });
-            Mongo::Data::TraceBatch<int16_t> traceBatch(std::move(packet), meta, dims,
-                                                        Cuda::Memory::SyncDirection::Symmetric,
-                                                        SOURCE_MARKER());
-
-            traceSaver.Process(traceBatch);
+                traceSaver.Process(traceBatch);  // blah
+            }
         }
     }
     {
-        TraceFileReader reader(traceFile);
+        PacBio::TraceFile::TraceFile reader(traceFile);
 
-        boost::multi_array<int16_t,1> zmwTrace(boost::extents[numFrames]); // read entire ZMW
-        ASSERT_EQ(numFrames,zmwTrace.num_elements());
-        reader.Traces().ReadZmw(zmwTrace, 0);
-        EXPECT_EQ(0,     zmwTrace[0]);
-        EXPECT_EQ(1,     zmwTrace[1]);
-        EXPECT_EQ(127,   zmwTrace[127]);
-        EXPECT_EQ(0,     zmwTrace[128]);
-        EXPECT_EQ(-1,    zmwTrace[129]);
-        EXPECT_EQ(-127,  zmwTrace[255]);
-
-        reader.Traces().ReadZmw(zmwTrace, 1);
-        EXPECT_EQ(128,   zmwTrace[0]);
-
-        reader.Traces().ReadZmw(zmwTrace, 63);
-        EXPECT_EQ(-8191, zmwTrace[255]);
+        boost::multi_array<int16_t, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
+        ASSERT_EQ(numFrames, zmwTrace.num_elements());
 
         const auto holexy = reader.Traces().HoleXY();
-        ASSERT_EQ(holexy.shape()[0], numZmws);
+        ASSERT_EQ(holexy.shape()[0], numSelectedZmws);
         ASSERT_EQ(holexy.shape()[1], 2);
-        EXPECT_EQ(holexy[0][0], 0);
-        EXPECT_EQ(holexy[0][1], 0);
-        EXPECT_EQ(holexy[1][0], 0);
-        EXPECT_EQ(holexy[1][1], 1);
-        EXPECT_EQ(holexy[63][0], 0);
-        EXPECT_EQ(holexy[63][1], 63);
-        EXPECT_EQ(holexy[numZmws-1][0], 1);
-        EXPECT_EQ(holexy[numZmws-1][1], 63);
+
+        int failures = 0;
+        for (uint64_t izmw = 0; izmw < numSelectedZmws; izmw++)
+        {
+            const uint32_t row = holexy[izmw][0];
+            const uint32_t col = holexy[izmw][1];
+
+            const uint32_t expectedRow = (izmw < 64) ? 0 : 1;
+            const uint32_t expectedCol = (izmw % 64);
+            ASSERT_EQ(row, expectedRow);
+            ASSERT_EQ(col, expectedCol);
+
+            reader.Traces().ReadZmw(zmwTrace, izmw);
+            for (uint64_t iframe = 0; iframe < numFrames; iframe++)
+            {
+                int16_t expectedPixel = alpha(row, col, iframe);
+                EXPECT_EQ(expectedPixel, zmwTrace[iframe])
+                    << "zmw:" << izmw << " frame:" << iframe << " row:" << row << " col:" << col;
+                if (expectedPixel != zmwTrace[iframe])
+                    failures++;
+                ASSERT_LT(failures, 10) << " too many failures";
+            }
+        }
     }
     tmpDir.Keep();
+}
+
+TEST(Sanity,UpperBound)
+{
+    std::vector<uint64_t> lanes;
+
+    lanes.push_back(0);
+    lanes.push_back(2);
+    auto begin = std::lower_bound(lanes.begin(),lanes.end(), 0);
+    auto end   = std::upper_bound(begin,lanes.end(), 0);
+    EXPECT_EQ(begin , lanes.begin());
+    EXPECT_EQ(end, lanes.begin() + 1);
+}
+
+TEST(Sanity,ROI)
+{
+    std::vector<DataSourceBase::LaneIndex> dummy(2);
+    dummy.push_back(0);
+    dummy.push_back(4); // ??
+    DataSourceBase::LaneSelector blocks(dummy);
+    EXPECT_EQ(blocks.size(), dummy.size());
+    const size_t numZmws = blocks.size() * laneSize;
+
+    std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numZmws);
+    size_t k=0;
+    for(const DataSourceBase::LaneIndex lane : blocks)
+    {
+        for(uint32_t j =0;j<laneSize;j++)
+        {
+            roiFeatures[k].flags = 0;;
+            roiFeatures[k].x = (lane ==0) ? 0 : 2;
+            roiFeatures[k].y = (lane ==0) ? j : j;
+            k++;
+        }
+    }
+
+    PacBio::Dev::TemporaryDirectory tmpDir;
+    const std::string traceFile = tmpDir.DirName() + "/testB.trc.h5";
+    PBLOG_INFO << "Opening TraceSaver with output file " << traceFile << ", " << numZmws << " ZMWS.";
+    const uint64_t frames=1024;
+    auto outputTrcFile = std::make_unique<TraceFileWriter>(traceFile,
+                                                        numZmws,
+                                                        frames);
+
+    {
+        TraceSaverBody body(std::move(outputTrcFile), roiFeatures, std::move(blocks));
+    }
+    {
+        PacBio::TraceFile::TraceFile reader(traceFile);
+        auto holexy = reader.Traces().HoleXY();
+        for(uint32_t i=0;i<numZmws;i++)
+        {
+            EXPECT_EQ(holexy[i][0],i<64 ? 0 : 2);
+            EXPECT_EQ(holexy[i][1],i%64);
+        }
+    }
 }
