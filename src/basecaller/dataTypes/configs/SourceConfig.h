@@ -31,6 +31,7 @@
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
+#include <pacbio/sensor/Platform.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -47,8 +48,9 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
 {
     PB_CONFIG(WX2SourceConfig);
     PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
-    PB_CONFIG_PARAM(std::string, platform, "Spider"); // FIXME I'm using a string here because it is portable at the moment. The Platform.h header has not been ported yet.
+    PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::Sequel2Lvl1);
     PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
+    PB_CONFIG_PARAM(uint64_t, sleepDebug, 0.0);
 };
 
 struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
