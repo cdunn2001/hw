@@ -28,6 +28,12 @@
 
 #include <common/simd/BaseArray.h>
 #include <common/simd/LaneMaskImpl.h>
+#include <common/simd/m512b.h>
+#include <common/simd/m512i.h>
+#include <common/simd/m512f.h>
+#include <common/simd/m512s.h>
+#include <common/simd/m512ui.h>
+#include <common/simd/m512us.h>
 
 namespace PacBio {
 namespace Simd {

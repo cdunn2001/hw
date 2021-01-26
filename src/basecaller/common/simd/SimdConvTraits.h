@@ -29,15 +29,9 @@
 //  Description:
 //  Defines templates do define relationships among SIMD types.
 
+#include <cstdint>
 
-#include "ArrayUnion.h"
-#include "m32s.h"
-#include "m512b.h"
-#include "m512f.h"
-#include "m512i.h"
-#include "m512s.h"
-#include "m512ui.h"
-#include "m512us.h"
+#include "SimdFwd.h"
 
 namespace PacBio {
 namespace Simd {
