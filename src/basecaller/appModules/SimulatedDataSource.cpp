@@ -161,7 +161,8 @@ std::vector<int16_t> SawtoothGenerator::GenerateSignal(size_t numFrames, size_t 
     const auto slope = static_cast<double>(range) / config_.periodFrames;
     for (size_t i = 0; i < numFrames; ++i)
     {
-        ret[i] = config_.minAmp + static_cast<int16_t>(slope*(i+idx*config_.startFrameStagger)) % range;
+        ret[i] = static_cast<int16_t>(config_.minAmp +
+                                      static_cast<int16_t>(slope*(i+idx*config_.startFrameStagger)) % range);
     }
 
     return ret;
@@ -185,7 +186,7 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
     auto GetPulseSignal = [&](uint16_t frames)
     {
         std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
-        short pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
+        auto pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
         std::vector<short> baselineSignal = GetBaselineSignal(frames);
 
         std::vector<short> pulseSignal;

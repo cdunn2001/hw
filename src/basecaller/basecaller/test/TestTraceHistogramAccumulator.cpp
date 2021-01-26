@@ -158,18 +158,18 @@ public:
         DeviceAllocationStash stash;
 
         std::vector<std::unique_ptr<TraceHistogramAccumulator>> hists;
-        for (size_t i = 0; i < params.numPools; ++i)
+        for (size_t pool = 0; pool < params.numPools; ++pool)
         {
-            StashableAllocRegistrar registrar(i, stash);
-            hists.emplace_back(HistFactory(GetParam(), i, params.lanesPerPool, &registrar));
+            StashableAllocRegistrar registrar(pool, stash);
+            hists.emplace_back(HistFactory(GetParam(), pool, params.lanesPerPool, &registrar));
 
             UnifiedCudaArray<LaneHistBounds> poolBounds(params.lanesPerPool,
                                                         SyncDirection::HostWriteDeviceRead,
                                                         SOURCE_MARKER());
             auto boundsView = poolBounds.GetHostView();
-            for (size_t i = 0; i < boundsView.Size(); ++i)
+            for (size_t lane = 0; lane < boundsView.Size(); ++lane)
             {
-                boundsView[i] = params.bounds;
+                boundsView[lane] = params.bounds;
             }
             hists.back()->Reset(std::move(poolBounds));
         }
@@ -295,7 +295,7 @@ TEST_P(Histogram, ResetFromStats)
             // the same scaling and a variance that is the square of that,
             // mostly because that gives us zmw dependant data that is
             // easy to generate.
-            float tmp = zmw + lane*laneSize + 2;
+            auto tmp = static_cast<float>(zmw + lane*laneSize + 2);
             mView[lane].baselineStats.offset[zmw] = 0;
             mView[lane].baselineStats.moment0[zmw] = tmp;
             mView[lane].baselineStats.moment1[zmw] = tmp*tmp;
@@ -312,7 +312,7 @@ TEST_P(Histogram, ResetFromStats)
     {
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
-            const float baselineFrames = zmw + lane*laneSize + 2;
+            const float baselineFrames = static_cast<float>(zmw + lane*laneSize + 2);
             const float baselineMean = baselineFrames;
             const float baselineSig = (baselineFrames >= config.BaselineStatMinFrameCount)
                 ? std::sqrt(baselineMean * baselineMean * baselineMean / (baselineMean - 1.f))

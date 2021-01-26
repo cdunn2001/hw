@@ -155,7 +155,7 @@ TEST_P(SimDataSource, Constant)
                                std::move(cfg),
                                std::make_unique<ConstantGenerator>());
 
-    auto Expected = [&](size_t zmw, size_t frame) -> int16_t {
+    auto Expected = [&](size_t zmw, size_t) -> int16_t {
         auto expectedSignals = (params.numSignals + laneSize - 1) / laneSize * laneSize;
         return zmw % expectedSignals;
     };
@@ -196,7 +196,8 @@ TEST_P(SimDataSource, LongSawtooth)
 
         auto range = sawConfig.maxAmp - sawConfig.minAmp + 1;
         auto slope = range / static_cast<double>(sawConfig.periodFrames);
-        return sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
+        auto ret = sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
+        return static_cast<int16_t>(ret);
     };
 
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
@@ -236,7 +237,8 @@ TEST_P(SimDataSource, ShortSawtooth)
 
         auto range = sawConfig.maxAmp - sawConfig.minAmp + 1;
         auto slope = range / static_cast<double>(sawConfig.periodFrames);
-        return sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
+        auto ret = sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
+        return static_cast<int16_t>(ret);
     };
 
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
