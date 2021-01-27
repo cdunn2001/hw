@@ -755,6 +755,7 @@ private:
             }
 
             uint64_t nopSuccesses = 0;
+            uint64_t framesAnalyzed = 0;
 
             while (source->IsActive())
             {
@@ -811,6 +812,7 @@ private:
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
                     }
+                    framesAnalyzed += chunk.NumFrames();
                     for(auto&& packet : chunk)
                     {
                         PacBio::Cuda::Memory::GetGlobalAllocator().ReturnHostAllocation(std::move(packet).RelinquishAllocation());
@@ -827,8 +829,9 @@ private:
             graph.Flush();
 
             PBLOG_INFO << "All chunks analyzed.";
-            PBLOG_INFO << "Total frames analyzed = "
-                    << source->NumFrames();
+            PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
+                    << " out of " << source->NumFrames() << " requested from source. ("
+                    << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
             PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
             timer.SetCount(numChunksAnalyzed);
             double chunkAnalyzeRate = timer.GetRate();

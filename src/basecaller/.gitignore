@@ -6,4 +6,6 @@ hw-mongo/
 **/build/
 .idea/
 .run/
+.clang-format
+.vscode
 cmake-build-*/
