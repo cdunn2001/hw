@@ -8,16 +8,18 @@ BUILD=${BUILD:-Release_gcc}
 LOGFILTER=${LOGFILTER:-info}
 FRAMES=${FRAMES:-1024}
 RATE=${RATE:-100}
-TRACE_OUTPUT=${TRACE_OUTPUT:-/data/pa/test.trc.h5}
+TRACE_OUTPUT=${TRACE_OUTPUT:-}
 INPUT=${INPUT:-alpha}
 VSC=${VSC:-1}
 NOP=${NOP:-0}
 
 
+if [[ $INPUT == "designer" ]]
+then
+    INPUT=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
+fi
 
-INPUT=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 # --numZmwLanes 1 --config layout.lanesPerPool=1 --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024
-
 
 
 if [[ $GDBSERVER ]]
@@ -35,26 +37,35 @@ fi
 
 if [[ $TRACE_OUTPUT != "" ]]
 then
-    if [[ $NOP == ! ]]
+    if [[ $NOP == 1 ]]
     then  
-       echo "NOP=1 can't be used with TRACE_OUTPUT"
+       echo "NOP=1 can't be used with TRACE_OUTPUT = $TRACE_OUTPUT."
        exit 1
     fi
     trc_output="--outputtrcfile $TRACE_OUTPUT"
 fi
-nopoption="--nop=${NOP}"
+nop_option="--nop=${NOP}"
 
 rows=2756
 cols=2912
 numZmws=$(( $rows * $cols ))
 numZmwLanes=$(( numZmws / 64 ))
 
+# maxCallsPerZmw should be increased because packet depth is 512 frames vs 128 frames
+
 cat <<HERE > /tmp/config.json
 {
+  "algorithm": 
+  {
+    "pulseAccumConfig": 
+    { 
+      "maxCallsPerZmw":48 
+    }
+  },
   "layout" :
   {
       "framesPerChunk": 512,
-      "lanesPerPool" : 8,
+      "lanesPerPool" : 4096,
       "zmwsPerLane": 64
   },
   "source":
@@ -65,7 +76,12 @@ cat <<HERE > /tmp/config.json
          "dataPath": "HardLoop",
          "platform": "Sequel2Lvl1",
          "simulatedFrameRate": $RATE,
-         "sleepDebug": 600
+         "sleepDebug": 600,
+         "wxlayout": {
+           "lanesPerPacket" : 1024,
+           "framesPerPacket":  512,
+           "zmwsPerLane" : 32
+          }
     }
   },
   "traceROI": {
@@ -73,6 +89,7 @@ cat <<HERE > /tmp/config.json
   }
 } 
 HERE
+
 
 cat /tmp/config.json
 

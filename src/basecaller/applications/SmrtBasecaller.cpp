@@ -450,10 +450,10 @@ private:
         case Source_t::WX2:
             if (config_.source.wx2SourceConfig.platform == PacBio::Sensor::Platform::Sequel2Lvl1)
             {
-                layoutDims[0] = 1;
-                layoutDims[1] = Tile::NumFrames;
-                layoutDims[2] = Tile::NumPixels;
-                numPreallocatedPackets = 800000;
+                layoutDims[0] = config_.source.wx2SourceConfig.wxlayout.lanesPerPacket;
+                layoutDims[1] = config_.source.wx2SourceConfig.wxlayout.framesPerPacket;
+                layoutDims[2] = config_.source.wx2SourceConfig.wxlayout.zmwsPerLane;
+                numPreallocatedPackets = 800000 / layoutDims[0]; // FIXME. this should depend on the number of tiles on the chip, which is hardwired to Spider size right now...
             }
             else
             {
@@ -479,11 +479,11 @@ private:
         {
             std::vector<PacBio::Memory::SmartAllocation> allocations;
             allocations.reserve(numPreallocatedPackets);
-            for(int i=0;i<numPreallocatedPackets;i++)
+            for(uint32_t i=0;i<numPreallocatedPackets;i++)
             {
                 allocations.emplace_back(allo->GetAllocation(sizeof(Tile)));
             }
-            for(int i=0;i<numPreallocatedPackets;i++)
+            for(uint32_t i=0;i<numPreallocatedPackets;i++)
             {
                 allo->ReturnHostAllocation(std::move(allocations[i]));
             }
@@ -567,7 +567,7 @@ private:
             {
                 PBLOG_INFO << "Instantiating BlockRepacker";
                 const size_t numZmw = numZmwLanes_ * laneSize;
-                const size_t numThreads = 3;
+                const size_t numThreads = 6;
                 return std::make_unique<BlockRepacker>(inputLayout, requiredDims, numZmw, numThreads);
             }
         }
@@ -675,8 +675,24 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, BAZWRITER);
 
         auto source = CreateSource();
-        const auto& poolIds = source->PoolIds();
+#define POOLID_FIX
+#ifdef POOLID_FIX
+        std::vector<uint32_t> poolIds;
+        uint32_t zmwsPerPool = config_.layout.zmwsPerLane * config_.layout.lanesPerPool;
+        uint32_t numPools = source->NumZmw()/zmwsPerPool;
+        for(uint32_t i=0; i<numPools;i++)
+        {
+            poolIds.push_back(i);
+        }
+        uint32_t runts = (source->NumZmw() % zmwsPerPool);
+        if (runts)
+        {
+            poolIds.push_back(numPools);
 
+        }
+#else
+        const auto& poolIds = source->PoolIds();
+#endif
         try
         { 
           // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
@@ -692,7 +708,12 @@ private:
             dims.laneWidth = config_.layout.zmwsPerLane;
             dims.lanesPerBatch = config_.layout.lanesPerPool;
             for (auto id : poolIds) poolDims[id] = dims;
-
+#ifdef POOLID_FIX
+            if (runts)
+            {
+                poolDims[numPools].lanesPerBatch = runts/dims.laneWidth;
+            }
+#endif
             GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
             repacker->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);

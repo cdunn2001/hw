@@ -530,7 +530,7 @@ public:
         if(!currBatches_.empty() || !packetsToWrite_.Empty())
         {
             PBLOG_ERROR << "BasicBlockRepacker Error";
-            PBLOG_ERROR << "entries in Write queue: startFrame, startZme";
+            PBLOG_ERROR << "entries in Write queue: startFrame, startZmw";
             while (!packetsToWrite_.Empty())
             {
                 auto pdata = packetsToWrite_.Pop();

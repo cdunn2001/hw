@@ -44,6 +44,15 @@ SMART_ENUM(Source_t,
         OTHER_TBD // could add USB3, FRAME_GRABBER, PCIE
 );
 
+struct WX2LayoutConfig  : public Configuration::PBConfig<WX2LayoutConfig>
+{
+    PB_CONFIG(WX2LayoutConfig);
+    PB_CONFIG_PARAM(uint32_t, lanesPerPacket, 2);
+    PB_CONFIG_PARAM(uint32_t, framesPerPacket, 512); // PacBio::Mongo::DataSource::Tile::NumFrames);
+    PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 32); // PacBio::Mongo::DataSource::Tile::NumPixels);
+};
+
+
 struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
 {
     PB_CONFIG(WX2SourceConfig);
@@ -51,6 +60,7 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
     PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::Sequel2Lvl1);
     PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
     PB_CONFIG_PARAM(uint64_t, sleepDebug, 0.0);
+    PB_CONFIG_OBJECT(WX2LayoutConfig, wxlayout);
 };
 
 struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
