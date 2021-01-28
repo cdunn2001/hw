@@ -37,6 +37,7 @@ SMART_ENUM(
     AnalysisStages,
     Upload,
     Download,
+    AggregateStats,
     Baseline,
     Histogram,
     DME,
