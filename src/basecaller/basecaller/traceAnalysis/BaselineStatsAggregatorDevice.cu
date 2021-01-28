@@ -72,10 +72,10 @@ __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
 }
 
 template <typename T>
-__device__ void ResetArray(CudaArray<T, laneSize>& arr)
+__device__ void ResetArray(CudaArray<T, laneSize>& arr, T val = 0)
 {
     assert(blockDim.x == laneSize);
-    arr[threadIdx.x] = 0;
+    arr[threadIdx.x] = val;
 }
 __device__ void ResetStat(StatAccumState& stat)
 {
@@ -95,8 +95,8 @@ __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)
 {
     auto& blockStats = stats[blockIdx.x];
     ResetAutoCorr(blockStats.fullAutocorrState);
-    ResetArray(blockStats.traceMin);
-    ResetArray(blockStats.traceMax);
+    ResetArray(blockStats.traceMin, std::numeric_limits<int16_t>::max());
+    ResetArray(blockStats.traceMax, std::numeric_limits<int16_t>::lowest());
     ResetStat(blockStats.baselineStats);
     ResetArray(blockStats.rawBaselineSum);
 }
@@ -112,12 +112,15 @@ class BaselineStatsAggregatorDevice::Impl
 public:
     Impl(unsigned int poolSize,
          StashableAllocRegistrar* registrar)
-        // The 4th argument is there so that we initialize the array by
-        // copying to each entry a value initialized `BaselinerStatAccumState`.
-        // Otherwise the DeviceOnlyArray will do "default initialization" of each
-        // entry.  Value initialization is necessary so that all the data is zeroed
-        // out
-        : data_(registrar, SOURCE_MARKER(), poolSize, Data::BaselinerStatAccumState{})
+        : data_(registrar, SOURCE_MARKER(), poolSize, [](){
+            // Set up the initial value for all array entries.  We
+            // just want most things zero filled, but the two min/max
+            // values need special handling
+            Data::BaselinerStatAccumState ret{};
+            ret.traceMax = std::numeric_limits<int16_t>::lowest();
+            ret.traceMin = std::numeric_limits<int16_t>::max();
+            return ret;
+        }())
         , poolSize_(poolSize)
     {}
 
