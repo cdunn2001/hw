@@ -1,4 +1,7 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+#ifndef mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_
+#define mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_
+
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,26 +26,38 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//  Description:
+//  Defines class BaselineStatsAggregatorDevice, which customizes
+//  BaselineStatsAggregator.
 
-#ifndef mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
-#define mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
 
-#include <pacbio/configuration/PBConfig.h>
-#include <pacbio/utilities/SmartEnum.h>
+#include <basecaller/traceAnalysis/BaselineStatsAggregator.h>
+
+#include <common/cuda/memory/DeviceAllocationStash.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-class BasecallerBaselineStatsAggregatorConfig : public Configuration::PBConfig<BasecallerBaselineStatsAggregatorConfig>
+class BaselineStatsAggregatorDevice : public BaselineStatsAggregator
 {
 public:
-    PB_CONFIG(BasecallerBaselineStatsAggregatorConfig);
+    BaselineStatsAggregatorDevice(uint32_t poolId, uint32_t poolSize,
+                                  Cuda::Memory::StashableAllocRegistrar* registrar);
+    ~BaselineStatsAggregatorDevice();
 
-    SMART_ENUM(MethodName, Host, Gpu);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Gpu);
+private:    // BaselineStatsAggregatorDevice implementation.
+    void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
+
+    Data::BaselinerMetrics TraceStatsImpl() const override;
+
+    void ResetImpl() override;
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
-}}}     // namespace PacBio::Mongo::Data
+}}}     // namespace PacBio::Mongo::Basecaller
 
-#endif //mongo_dataTypes_configs_BasecallerBaselineStatsAggregatorConfig_H_
+#endif // mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_

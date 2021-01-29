@@ -49,6 +49,10 @@ struct BaselinerMetrics
         : baselinerStats(lanesPerBatch, syncDir, marker)
     { }
 
+    BaselinerMetrics(Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> stats)
+        : baselinerStats(std::move(stats))
+    { }
+
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> baselinerStats;
 };
 

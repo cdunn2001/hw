@@ -11,6 +11,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     BaselineStatsAggregator.h
     BaselineStatsAggregator.cpp
     BaselineStatsAggregatorHost.h
+    BaselineStatsAggregatorDevice.cu
+    BaselineStatsAggregatorDevice.h
     BaselineStatsAggregatorHost.cpp
     BlockFilterStage.h
     BlockFilterStage.cpp
