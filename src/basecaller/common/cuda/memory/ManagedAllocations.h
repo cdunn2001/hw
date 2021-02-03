@@ -161,6 +161,8 @@ std::unique_ptr<IMongoCachedAllocator> CreateAllocator(
     AllocatorMode alloc,
     const AllocationMarker& marker);
 
+void ReportAllMemoryStats();
+
 // Toggles caching for the individual allocator modes
 void EnableHostCaching(AllocatorMode mode);
 void EnableGpuCaching();
