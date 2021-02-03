@@ -32,7 +32,7 @@ namespace Application {
 using namespace PacBio::DataSource;
 
 TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWriterInterface>&& writer,
-                               const std::vector<PacBio::DataSource::DataSourceBase::UnitCellFeature>& features,
+                               const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
                                PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector)
     : writer_(std::move(writer))
     , laneSelector_(std::move(laneSelector))

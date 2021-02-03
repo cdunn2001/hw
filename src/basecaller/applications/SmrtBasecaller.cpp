@@ -515,6 +515,8 @@ private:
                 wxconfig.dataPath = DataPath_t(config_.source.wx2SourceConfig.dataPath);
                 wxconfig.platform = Platform(config_.source.wx2SourceConfig.platform);
                 wxconfig.sleepDebug = config_.source.wx2SourceConfig.sleepDebug;
+                wxconfig.maxPopLoops = config_.source.wx2SourceConfig.maxPopLoops;
+                wxconfig.tilePoolFactor = config_.source.wx2SourceConfig.tilePoolFactor;
                 wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
 
                 dataSource = std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
@@ -585,13 +587,13 @@ private:
         {
             auto tiles = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
             const size_t numZmws = tiles.size() * Tile::NumPixels;
-            std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numZmws);
+            std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
             {
                 // FIXME. This is Tile (32 wide) versus Lane (64 wide) centric.
                 // Tile centric portion.
 
                 // currate the features of the ROI ZMWs
-                const auto allFeatures = dataSource.UnitCellFeatures();
+                const auto allFeatures = dataSource.GetUnitCellProperties();
                 size_t k=0;
                 for(const auto tileOffset : tiles)
                 {
@@ -652,9 +654,9 @@ private:
     {
         if (hasBazFile_)
         {
-            auto features1 = source.UnitCellFeatures();
+            auto features1 = source.GetUnitCellProperties();
             std::vector<uint32_t> features2;            
-            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellFeature x){return x.flags;});
+            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
@@ -733,6 +735,17 @@ private:
             // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
             // loopback paths (anything but Normal).
             auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
+            if (dsr)
+            {
+                // wait for wxshim
+                uint32_t waitCount = 0;
+                while(! dsr->WXShimReady())
+                {
+                    if (waitCount++ > 100) throw PBException("WXShim was not ready");
+                    PBLOG_NOTICE << "WX Shim not ready, waiting ...";
+                    PacBio::POSIX::Sleep(1.0);
+                }
+            }
             if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
             {
                 TransmitConfig config(dsr->GetPlatform());
@@ -812,6 +825,8 @@ private:
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
                     }
+                    PacBio::Cuda::Memory::ReportAllMemoryStats();
+
                     framesAnalyzed += chunk.NumFrames();
                     for(auto&& packet : chunk)
                     {

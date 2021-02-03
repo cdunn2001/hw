@@ -64,7 +64,7 @@ TEST(TestTraceSaver, TestA)
         lanes.push_back(0);  // starting at (0,0)
         lanes.push_back(2);  // starting at (1,0)
 
-        std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numSelectedZmws);
+        std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numSelectedZmws);
         size_t k=0;
         for(const DataSourceBase::LaneIndex lane : lanes)
         {
@@ -212,7 +212,7 @@ TEST(Sanity,ROI)
     EXPECT_EQ(blocks.size(), dummy.size());
     const size_t numZmws = blocks.size() * laneSize;
 
-    std::vector<DataSourceBase::UnitCellFeature> roiFeatures(numZmws);
+    std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
     size_t k=0;
     for(const DataSourceBase::LaneIndex lane : blocks)
     {

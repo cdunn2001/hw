@@ -12,7 +12,8 @@ TRACE_OUTPUT=${TRACE_OUTPUT:-}
 INPUT=${INPUT:-alpha}
 VSC=${VSC:-1}
 NOP=${NOP:-0}
-
+MAXPOPLOOPS=${MAXPOPLOOPS:-10}
+TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
 
 if [[ $INPUT == "designer" ]]
 then
@@ -81,7 +82,9 @@ cat <<HERE > /tmp/config.json
            "lanesPerPacket" : 1024,
            "framesPerPacket":  512,
            "zmwsPerLane" : 32
-          }
+          },
+          "maxPopLoops": ${MAXPOPLOOPS},
+          "tilePoolFactor" : ${TILEPOOLFACTOR}
     }
   },
   "traceROI": {

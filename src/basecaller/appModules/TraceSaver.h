@@ -61,7 +61,7 @@ class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBat
 {
 public:
     TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWriterInterface>&& writer,
-                   const std::vector<PacBio::DataSource::DataSourceBase::UnitCellFeature>& features,
+                   const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
                    PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
