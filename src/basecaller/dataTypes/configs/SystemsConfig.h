@@ -29,6 +29,8 @@
 
 #include <pacbio/configuration/PBConfig.h>
 
+#include <basecaller/traceAnalysis/ComputeDevices.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -56,6 +58,12 @@ public:
     /// algorithm state data.  Anything beyond this threshold will have to
     /// be shuttled to-from the GPU on demand
     PB_CONFIG_PARAM(size_t, maxPermGpuDataMB, std::numeric_limits<uint32_t>::max());
+
+    /// Specifies the expected compute resource to use for basecalling.  Not currently
+    /// a binding configuration, but will control various secondary behavior like the
+    /// defaults between host vs gpu filter implementations, and whether we try to measure
+    /// PCIe utilization or not.
+    PB_CONFIG_PARAM(Basecaller::ComputeDevices, analyzerHardware, Basecaller::ComputeDevices::V100);
 };
 
 }}}     // namespace PacBio::Mongo::Data
