@@ -66,6 +66,7 @@ public:
     PB_CONFIG_OBJECT(Data::BatchLayoutConfig, layout);
     PB_CONFIG_OBJECT(Data::BasecallerMetricsConfig, metrics);
     PB_CONFIG_OBJECT(Data::BasecallerPulseAccumConfig, pulses);
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
 };
 
 // We simulate each base per zmw per block according to the following scheme:

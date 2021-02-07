@@ -35,8 +35,6 @@
 
 #include <pacbio/logging/Logger.h>
 
-#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>
-
 #include <gtest/gtest.h>
 
 namespace PacBio {
@@ -51,7 +49,6 @@ struct TestBaselineStatsAggregator : public ::testing::Test
     static constexpr unsigned int chunkSize = 64;  // frames per chunk
     static constexpr unsigned int poolSize = 6;    // lanes per pool
 
-    Data::BasecallerBaselineStatsAggregatorConfig sigConfig;
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
     // Produces a baseliner stats defined by blMean and blVar.

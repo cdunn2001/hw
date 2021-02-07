@@ -29,6 +29,8 @@
 
 #include <pacbio/configuration/PBConfig.h>
 
+#include <basecaller/traceAnalysis/ComputeDevices.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -50,7 +52,15 @@ public:
     PB_CONFIG(BasecallerDmeConfig);
 
     SMART_ENUM(MethodName, Fixed, EmHost, EmDevice);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::EmDevice);
+    PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
+                        [](Basecaller::ComputeDevices device) -> MethodName
+                        {
+                            return device == Basecaller::ComputeDevices::Host ?
+                                MethodName::EmHost:
+                                MethodName::EmDevice;
+                        },
+                        {"analyzerHardware"}
+    ));
 
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);

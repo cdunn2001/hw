@@ -30,6 +30,8 @@
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
 
+#include <basecaller/traceAnalysis/ComputeDevices.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -40,7 +42,15 @@ public:
     PB_CONFIG(BasecallerPulseAccumConfig);
 
     SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses)
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::GpuPulses);
+    PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
+                        [](Basecaller::ComputeDevices device) -> MethodName
+                        {
+                            return device == Basecaller::ComputeDevices::Host ?
+                                MethodName::HostPulses :
+                                MethodName::GpuPulses;
+                        },
+                        {"analyzerHardware"}
+    ));
 
     // Increasing this number will directly increase memory usage, even if
     // we don't saturate the allowed number of calls, so be conservative.

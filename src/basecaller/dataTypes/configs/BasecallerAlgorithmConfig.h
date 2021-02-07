@@ -64,7 +64,7 @@ public:
     PB_CONFIG_OBJECT(StaticDetModelConfig, staticDetModelConfig);
 
     SMART_ENUM(ModelEstimationMode, FixedEstimations, InitialEstimations, DynamicEstimations);
-    PB_CONFIG_PARAM(ModelEstimationMode, modelEstimationMode, ModelEstimationMode::FixedEstimations);
+    PB_CONFIG_PARAM(ModelEstimationMode, modelEstimationMode, ModelEstimationMode::DynamicEstimations);
 
 public:
     std::string CombinedMethodName() const

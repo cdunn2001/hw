@@ -29,6 +29,7 @@
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
+#include <basecaller/traceAnalysis/ComputeDevices.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -44,7 +45,15 @@ public:
                TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
                DeviceMultiScale,
                NoOp);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::DeviceMultiScale);
+    PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
+                        [](Basecaller::ComputeDevices device) -> MethodName
+                        {
+                            return device == Basecaller::ComputeDevices::Host ?
+                                MethodName::TwoScaleMedium :
+                                MethodName::DeviceMultiScale;
+                        },
+                        {"analyzerHardware"}
+    ));
 };
 
 }}}     // namespace PacBio::Mongo::Data

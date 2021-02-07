@@ -42,14 +42,38 @@
 
 #include <gtest/gtest.h>
 
+using namespace PacBio::Mongo::Data;
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+namespace {
+
+struct TestConfig : public Configuration::PBConfig<TestConfig>
+{
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(Data::BasecallerBaselinerConfig, baselineConfig);
+
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
+
+    static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::MethodName method)
+    {
+        Json::Value json;
+        json["baselineConfig"]["Method"] = method.toString();
+        TestConfig cfg{json};
+
+        return cfg.baselineConfig;
+    }
+};
+
+}
+
 TEST(TestNoOpBaseliner, Run)
 {
     Data::MovieConfig movConfig;
-    Data::BasecallerBaselinerConfig baselinerConfig;
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -117,8 +141,7 @@ TEST(TestNoOpBaseliner, Run)
 TEST(TestHostMultiScaleBaseliner, Zeros)
 {
     Data::MovieConfig movConfig;
-    Data::BasecallerBaselinerConfig baselinerConfig;
-    baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -173,8 +196,7 @@ TEST(TestHostMultiScaleBaseliner, Zeros)
 TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
 {
     Data::MovieConfig movConfig;
-    Data::BasecallerBaselinerConfig baselinerConfig;
-    baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -266,8 +288,8 @@ TEST(TestHostMultiScaleBaseliner, DISABLED_AllBaselineFrames)
 TEST(TestHostMultiScaleBaseliner, DISABLED_OneSignalLevel)
 {
     Data::MovieConfig movConfig;
-    Data::BasecallerBaselinerConfig baselinerConfig;
-    baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge;
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
+
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
