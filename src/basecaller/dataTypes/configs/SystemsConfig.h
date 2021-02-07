@@ -37,19 +37,20 @@ class SystemsConfig : public Configuration::PBConfig<SystemsConfig>
 {
 public:
     PB_CONFIG(SystemsConfig);
-    /// The number of host worker threads to use.  Most parallelism should be
-    /// handled internal to the GPU, so this does not need to be large.
-    /// A minimum of 3 will allow efficient overlap of upload/download/compute,
-    /// but beyond that it shouldn't really be any higher than what is necessary
-    /// for active host stages to keep up with the gpu
-
-    // TODO add hooks so that we can switch between gpu and host centric defaults
-    // without manually specifying a million parameters
+    /// The number of host worker threads to use.  For the most part we only
+    /// need enough to satisfy the basecallerConcurrencyRequest below, but if
+    /// any host computation stages are active then the more worker threades
+    /// allowed the more TBB will be able to leverage any parallelism.
     PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 8);
 
-    /// If true, the threads are bound to a particular set of cores for the
-    /// Sequel Alpha machines when running on the host.
-    PB_CONFIG_PARAM(bool, bindCores, false);
+    /// The number of threads allowed to be working in the basecaller at any given
+    /// time.  This will also correspond to the number of cuda streams in play.
+    /// A minimum of 3 will allow efficient overlap of upload/download/compute,
+    /// and anything beyond that can be used to smooth over any scheduling gaps
+    /// that arrise from irregular compute/IO.  Shouldn't really need that
+    /// many additional streams, though dropping down to 1 is necessary when
+    /// measuring a robust compute budget breakdown.
+    PB_CONFIG_PARAM(uint32_t, basecallerConcurrency, 5);
 
     /// The maximum amount of gpu memory dedicated to permanently resident
     /// algorithm state data.  Anything beyond this threshold will have to

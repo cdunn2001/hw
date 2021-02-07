@@ -530,6 +530,7 @@ private:
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
                                                 movieConfig_,
+                                                config_.system.basecallerConcurrency,
                                                 config_.system.maxPermGpuDataMB);
     }
 

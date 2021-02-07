@@ -181,7 +181,7 @@ public:
                 // Even if we are an array of const types, we need to be non-const during destruction
                 using U = std::remove_const_t<T>;
                 auto launchParams = ComputeBlocksThreads(count_, (void*)&detail::DestroyFilters<U>);
-                detail::DestroyFilters<<<launchParams.first, launchParams.second>>>(
+                detail::DestroyFilters<<<launchParams.first, launchParams.second, 0, Cuda::ThreadStream()>>>(
                         DeviceView<T>(data_->GetDeviceHandle<T>(DataKey())));
 
                 CudaSynchronizeDefaultStream();
@@ -233,7 +233,7 @@ private:
                 // Even if we are an array of const types, we need to be non-const during construction
                 using U = typename std::remove_const<T>::type;
                 auto launchParams = ComputeBlocksThreads(arr->count_, (void*)&detail::InitFilters<U, std::tuple_element_t<idxs, TupleArgs>...>);
-                detail::InitFilters<<<launchParams.first, launchParams.second>>>(
+                detail::InitFilters<<<launchParams.first, launchParams.second, 0, Cuda::ThreadStream()>>>(
                         DeviceView<U>(arr->data_->template GetDeviceHandle<U>(DataKey())),
                         std::get<idxs>(args)...);
             }

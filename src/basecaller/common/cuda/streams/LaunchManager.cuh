@@ -92,7 +92,7 @@ private:
     template <size_t... Is, typename... Args>
     void Invoke(std::index_sequence<Is...>, Args&&... args) const
     {
-        std::get<0>(params_)<<<std::get<Is+1>(params_)...>>>(std::forward<Args>(args)...);
+        std::get<0>(params_)<<<std::get<Is+1>(params_)..., 0, Cuda::ThreadStream()>>>(std::forward<Args>(args)...);
     }
 
     std::tuple<FT, LaunchParams...> params_;

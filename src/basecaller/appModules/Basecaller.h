@@ -30,7 +30,10 @@
 #include <vector>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
+#include <common/cuda/streams/CudaStream.h>
 #include <common/graphs/GraphNodeBody.h>
+
+#include <pacbio/ipc/ThreadSafeQueue.h>
 
 #include <basecaller/analyzer/AlgoFactory.h>
 #include <basecaller/analyzer/BatchAnalyzer.h>
@@ -50,10 +53,24 @@ public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
                    const Mongo::Data::MovieConfig& movConfig,
+                   size_t numStreams,
                    size_t maxPermGpuMemSize = std::numeric_limits<size_t>::max())
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
+        , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
+        , numStreams_(numStreams)
     {
+        auto priorityRange = Cuda::StreamPriorityRange();
+        assert(priorityRange.greatestPriority < priorityRange.leastPriority);
+        PBLOG_INFO << "Assigning priority range " << priorityRange.greatestPriority << ":" << priorityRange.leastPriority
+                   << " round robbin amongst " << numStreams_ << " streams";
+        auto priority = priorityRange.greatestPriority;
+        for (size_t i = 0; i < numStreams; ++i)
+        {
+            streams_->Push(std::make_unique<Cuda::CudaStream>(priority));
+            priority++;
+            if (priority > priorityRange.leastPriority) priority = priorityRange.greatestPriority;
+        }
         using namespace Mongo::Data;
 
         algoFactory_.Configure(algoConfig, movConfig);
@@ -113,11 +130,17 @@ public:
         BatchAnalyzer::ReportPerformance();
     }
 
-    size_t ConcurrencyLimit() const override { return 4; }
+    size_t ConcurrencyLimit() const override { return numStreams_; }
     float MaxDutyCycle() const override { return .8; }
 
     Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatch<int16_t>& in) override
     {
+        auto stream = streams_->Pop();
+        auto f1 = stream->SetAsDefaultStream();
+        Utilities::Finally f2([&, this](){
+            streams_->Push(std::move(stream));
+        });
+
         auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
         gpuStash->RetrievePool(in.GetMeta().PoolId());
         auto ret = analyzer(std::move(in));
@@ -131,6 +154,10 @@ private:
 
     // One analyzer for each pool. Key is pool id.
     std::map<uint32_t, std::unique_ptr<BatchAnalyzer>> bAnalyzer_;
+
+    std::unique_ptr<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>> streams_;
+
+    uint32_t numStreams_;
 };
 
 }}
