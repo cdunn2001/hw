@@ -117,10 +117,7 @@ public: // Data
     GoodnessOfFitTest<VF> gTest {0.0f, 0.0f, 1.0f};
 
 public:     // Structors
-    CUDA_ENABLED DmeDiagnostics()
-    {
-        assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
-    }
+    DmeDiagnostics() = default;
 
 public:     // Const functions
     /// Overall confidence score for the estimate of the detection model.
