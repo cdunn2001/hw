@@ -29,6 +29,7 @@
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
+#include <basecaller/traceAnalysis/AnalysisProfiler.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
@@ -653,7 +654,7 @@ private:
 
             uint64_t nopSuccesses = 0;
             uint64_t framesAnalyzed = 0;
-
+            uint64_t framesSinceBigReports = 0;
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -709,14 +710,21 @@ private:
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
                     }
-                    PacBio::Cuda::Memory::ReportAllMemoryStats();
-
+                    numChunksAnalyzed++;
+                    framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
+
+                    if (framesSinceBigReports > config_.monitoringReportInterval)
+                    {
+                        PacBio::Cuda::Memory::ReportAllMemoryStats();
+                        Basecaller::AnalysisProfiler::IntermediateReport();
+                        framesSinceBigReports = 0;
+                    }
+
                     for(auto&& packet : chunk)
                     {
                         PacBio::Cuda::Memory::GetGlobalAllocator().ReturnHostAllocation(std::move(packet).RelinquishAllocation());
                     }
-                    numChunksAnalyzed++;
                 }
 
                 if (this->ExitRequested())
