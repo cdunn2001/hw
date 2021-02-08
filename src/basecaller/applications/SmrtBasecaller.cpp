@@ -531,7 +531,9 @@ private:
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
                                                 movieConfig_,
-                                                config_.system.basecallerConcurrency,
+                                                // TODO resolve this, should only hand in sys cofig,
+                                                // or only hand in desired elements.  Need to see why maxPermGpuDataMB was optional
+                                                config_.system,
                                                 config_.system.maxPermGpuDataMB);
     }
 
@@ -718,6 +720,8 @@ private:
                     {
                         PacBio::Cuda::Memory::ReportAllMemoryStats();
                         Basecaller::AnalysisProfiler::IntermediateReport();
+                        if (config_.system.analyzerHardware != Basecaller::ComputeDevices::Host)
+                            Basecaller::IOProfiler::IntermediateReport();
                         framesSinceBigReports = 0;
                     }
 
@@ -740,7 +744,7 @@ private:
                     << " out of " << source->NumFrames() << " requested from source. ("
                     << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
             if (nop_ == 1)
-            {        
+            {
                 PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
             }
             timer.SetCount(numChunksAnalyzed);

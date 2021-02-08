@@ -176,15 +176,6 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
     if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*2+1)  mode = AnalysisProfiler::Mode::IGNORE;
     AnalysisProfiler profiler(mode, 3.0, 100.0);
 
-    // TODO baseliner should have a virtual "PrepareData" function or something.
-    //      Having an explicitly measurable upload step makes the profiles
-    //      more meaningful, but these explicit gpu calls means we can't run
-    //      on a system without a gpu even if we're using purely host modules.
-    auto upload = profiler.CreateScopedProfiler(AnalysisStages::Upload);
-    (void)upload;
-    tbatch.CopyToDevice();
-    Cuda::CudaSynchronizeDefaultStream();
-
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
     auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
@@ -209,8 +200,6 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
     auto basecallingMetrics = (*hfMetrics_)(
             pulses, baselinerMetrics, models_, frameLabelerMetrics, pulseDetectorMetrics);
 
-    auto download = profiler.CreateScopedProfiler(AnalysisStages::Download);
-    (void)download;
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
@@ -224,15 +213,6 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
         if (framesSince > tbatch.NumFrames()*10) mode = AnalysisProfiler::Mode::REPORT;
     }
     AnalysisProfiler profiler(mode, 3.0, 100.0);
-
-    // TODO baseliner should have a virtual "PrepareData" function or something.
-    //      Having an explicitly measurable upload step makes the profiles
-    //      more meaningful, but these explicit gpu calls means we can't run
-    //      on a system without a gpu even if we're using purely host modules.
-    auto upload = profiler.CreateScopedProfiler(AnalysisStages::Upload);
-    (void)upload;
-    tbatch.CopyToDevice();
-    Cuda::CudaSynchronizeDefaultStream();
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
@@ -298,8 +278,6 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
             pulses, baselinerMetrics, models_, frameLabelerMetrics,
             pulseDetectorMetrics);
 
-    auto download = profiler.CreateScopedProfiler(AnalysisStages::Download);
-    (void)download;
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
@@ -337,15 +315,6 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
         if (framesSince > 10*minFramesForDme) mode = AnalysisProfiler::Mode::REPORT;
     }
     AnalysisProfiler profiler(mode, 3.0, 100.0);
-
-    // TODO baseliner should have a virtual "PrepareData" function or something.
-    //      Having an explicitly measurable upload step makes the profiles
-    //      more meaningful, but these explicit gpu calls means we can't run
-    //      on a system without a gpu even if we're using purely host modules.
-    auto upload = profiler.CreateScopedProfiler(AnalysisStages::Upload);
-    (void)upload;
-    tbatch.CopyToDevice();
-    Cuda::CudaSynchronizeDefaultStream();
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
@@ -390,9 +359,6 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // Do not need to be aligned over pools (or lanes).
 
     // TODO: When metrics are produced, use them to update detection models.
-
-    auto download = profiler.CreateScopedProfiler(AnalysisStages::Download);
-    (void)download;
     if (!fullEstimationOccured_)
     {
         auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),

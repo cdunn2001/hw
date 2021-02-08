@@ -157,9 +157,10 @@ void DeviceAllocationStash::Register(uint32_t poolId, Allocation alloc)
     allocList.emplace_back(alloc);
 }
 
-void DeviceAllocationStash::RetrievePool(uint32_t poolId)
+size_t DeviceAllocationStash::RetrievePool(uint32_t poolId)
 {
     std::lock_guard<std::mutex> lm(uploadMutex_);
+    size_t bytes = 0;
 
     // Most of the time this loop should essentially be
     // zero work, but we still need to ensure the data
@@ -173,7 +174,7 @@ void DeviceAllocationStash::RetrievePool(uint32_t poolId)
         for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
-            alloc->Retrieve();
+            bytes += alloc->Retrieve();
         }
     }
 
@@ -185,15 +186,17 @@ void DeviceAllocationStash::RetrievePool(uint32_t poolId)
         for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
-            alloc->Retrieve();
+            bytes += alloc->Retrieve();
         }
     }
+    return bytes;
 }
 
-void DeviceAllocationStash::StashPool(uint32_t poolId)
+size_t DeviceAllocationStash::StashPool(uint32_t poolId)
 {
     std::lock_guard<std::mutex> lm(downloadMutex_);
 
+    size_t bytes = 0;
     for (const auto& poolMap : mobileData_)
     {
         auto itr = poolMap.second.find(poolId);
@@ -202,9 +205,11 @@ void DeviceAllocationStash::StashPool(uint32_t poolId)
         for (const auto& val : itr->second)
         {
             auto alloc = val.lock();
-            alloc->Stash();
+            bytes += alloc->Stash();
         }
     }
+
+    return bytes;
 }
 
 }}}

@@ -69,13 +69,14 @@ public:
 
     // Walks through all registered StashableDeviceAllocations associated
     // with a given poolID, and makes sure that they are moved to the GPU
-    // and ready to be used.
-    void RetrievePool(uint32_t poolId);
+    // and ready to be used.  Returns total number of bytes transfered
+    size_t RetrievePool(uint32_t poolId);
 
     // Walks through all registered StashableDeviceAllocations associated
     // with a given poolID, and if they are marked for storage on the host,
-    // copy them down and free up the GPU memory.
-    void StashPool(uint32_t poolId);
+    // copy them down and free up the GPU memory. Returns total number of
+    // bytes transfered
+    size_t StashPool(uint32_t poolId);
 
 private:
     // Using std::greater as the sort predicate so that loops over the data

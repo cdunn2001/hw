@@ -229,16 +229,19 @@ public:
     // will also cause a data download if the data is device side and the synchronization scheme is
     // HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
     // the synchronization scheme was set incorrectly.
-    void DeactivateGpuMem()
+    size_t DeactivateGpuMem()
     {
-        if (!gpuData_) return;
+        if (!gpuData_) return 0;
 
+        size_t ret = 0;
         if (!activeOnHost_)
         {
+            ret = gpuData_.size();
             GetHostView();
         }
 
         IMongoCachedAllocator::ReturnDeviceAllocation(std::move(gpuData_));
+        return ret;
     }
 
     // Calling these functions may cause
@@ -291,13 +294,13 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
-    void CopyToDevice() const
+    size_t CopyToDevice() const
     {
-        CopyImpl(false, true);
+        return CopyImpl(false, true);
     }
-    void CopyToHost() const
+    size_t CopyToHost() const
     {
-        CopyImpl(true, true);
+        return CopyImpl(true, true);
     }
 
 private:
@@ -311,15 +314,16 @@ private:
         gpuData_ = GetGlobalAllocator().GetDeviceAllocation(hostData_.size(), marker_);
     }
 
-    void CopyImpl(bool toHost, bool manual) const
+    size_t CopyImpl(bool toHost, bool manual) const
     {
+        size_t bytes = 0;
         // This is primarily to guard against a parallel host filter following
         // a GPU filter.  If multiple threads are requesting the host data, we
         // want to make sure only a single download is triggered.
         std::lock_guard<std::mutex> lg(*transferMutex_);
         if (toHost)
         {
-            if (activeOnHost_) return; // Another thread performed the download.
+            if (activeOnHost_) return 0; // Another thread performed the download.
 
             activeOnHost_ = true;
             if (manual || syncDir_ != SyncDirection::HostWriteDeviceRead)
@@ -337,15 +341,20 @@ private:
                 CudaSynchronizeDefaultStream();
                 CudaCopyDeviceToHost(hostData_.get<HostType>(), gpuData_.get<HostType>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
+                bytes += gpuData_.size();
             }
         } else {
-            if (!activeOnHost_) return; // Another thread performed the upload
+            if (!activeOnHost_) return 0; // Another thread performed the upload
 
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
+            {
                 CudaCopyHostToDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(), Size());
+                bytes += gpuData_.size();
+            }
         }
+        return bytes;
     }
 
     // NOTE: `const` in c++ normally implies bitwise const, not necessarily logical const

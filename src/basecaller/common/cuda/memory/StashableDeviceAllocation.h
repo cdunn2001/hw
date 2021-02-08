@@ -113,37 +113,42 @@ public:
     }
 
     // Makes sure the data currently resides on the GPU.  This is cheap
-    // to call if the data is already on the GPU
-    void Retrieve()
+    // to call if the data is already on the GPU.  Returns number of bytes
+    // transfered
+    size_t Retrieve()
     {
         std::lock_guard<std::mutex> lm(mutex_);
-        RetrieveImpl();
+        return RetrieveImpl();
     }
 private:
     // Non-locking private implementation.  Needed so that multiple public functions that
     // cannot call each other (because they all want to hold the lock) can share
     // this implementation.
-    void RetrieveImpl()
+    size_t RetrieveImpl()
     {
-        if (size_ == 0) return;
+        if (size_ == 0) return 0;
 
         if (!device_)
             device_ = GetGlobalAllocator().GetDeviceAllocation(size_, marker_);
 
+        size_t ret = 0;
         if (state_ == HOST)
         {
             assert(host_);
             assert(state_);
             CudaRawCopyHostToDevice(device_.get<void>(DataKey()), host_.get<void>(), size_);
             CudaSynchronizeDefaultStream();
+            ret = size_;
         }
         state_ = DEVICE;
+        return ret;
     }
 public:
 
     // Copy data to the host and free up the GPU memory.  This is cheap
-    // to call if data is already on the host.
-    void Stash()
+    // to call if data is already on the host. Returns number of bytes
+    // transfered
+    size_t Stash()
     {
         std::lock_guard<std::mutex> lm(mutex_);
 
@@ -151,11 +156,12 @@ public:
         // go straight from NO_ALLOC to HOST.  The memory is only visable
         // and usable on the gpu, so that means if we allowed the copy we'd
         // just be shuffling around uninitialized bits
-        if (size_ == 0 || state_ == NO_ALLOC) return;
+        if (size_ == 0 || state_ == NO_ALLOC) return 0;
 
         if (!host_)
             host_ = GetGlobalAllocator().GetAllocation(size_, marker_);
 
+        size_t ret = 0;
         if (state_ == DEVICE)
         {
             monitor_->Reset();
@@ -164,8 +170,10 @@ public:
             CudaRawCopyDeviceToHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
             CudaSynchronizeDefaultStream();
             IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
+            ret += size_;
         }
         state_ = HOST;
+        return ret;
     }
 
     template <typename T>
