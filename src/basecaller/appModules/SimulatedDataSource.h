@@ -73,9 +73,10 @@ public:
 
     ~SimulatedDataSource();
 
-    std::vector<uint32_t> UnitCellFeatures() const override
+    std::vector<UnitCellProperties> GetUnitCellProperties() const override
     {
-        return std::vector<uint32_t>(NumZmw(), 0);
+        // TODO. the struct is default initialized.
+        return std::vector<UnitCellProperties>(NumZmw());
     }
 
     std::vector<uint32_t> UnitCellIds() const override

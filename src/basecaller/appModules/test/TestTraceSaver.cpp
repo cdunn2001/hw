@@ -205,7 +205,7 @@ TEST(Sanity,UpperBound)
 
 TEST(Sanity,ROI)
 {
-    std::vector<DataSourceBase::LaneIndex> dummy(2);
+    std::vector<DataSourceBase::LaneIndex> dummy;
     dummy.push_back(0);
     dummy.push_back(4); // ??
     DataSourceBase::LaneSelector blocks(dummy);
@@ -219,8 +219,8 @@ TEST(Sanity,ROI)
         for(uint32_t j =0;j<laneSize;j++)
         {
             roiFeatures[k].flags = 0;;
-            roiFeatures[k].x = (lane ==0) ? 0 : 2;
-            roiFeatures[k].y = (lane ==0) ? j : j;
+            roiFeatures[k].x = (lane == 0) ? 0 : 2;
+            roiFeatures[k].y = (lane == 0) ? j : j;
             k++;
         }
     }
