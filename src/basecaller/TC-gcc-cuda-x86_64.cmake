@@ -16,7 +16,7 @@ set(CMAKE_CXX_FLAGS_RELEASE         "-O3 -DNDEBUG "    CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_ASAN            "-O0 -g -fsanitize=address -fno-omit-frame-pointer" CACHE STRING "" FORCE)
 
-set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr\
+set(CMAKE_CUDA_FLAGS                "-gencode arch=compute_80,code=sm_80 -gencode arch=compute_70,code=sm_70 --expt-relaxed-constexpr\
  --default-stream per-thread --compiler-options=\"${CMAKE_CXX_FLAGS}\""
  CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_RELEASE        "-O3 -DNDEBUG -lineinfo" CACHE STRING "" FORCE)

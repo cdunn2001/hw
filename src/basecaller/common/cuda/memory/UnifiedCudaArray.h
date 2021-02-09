@@ -64,6 +64,37 @@ public:
     using HostType = T;
     using GpuType = typename gpu_type<T>::type;
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
+    static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
+
+    // Constructor for creating UCA from a pre-existing device allocation.  Predominantly
+    // designed to allow a DeviceOnlyArray to copy out it's contents into something that
+    // can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
+    // meant for 1-off random usage.
+    UnifiedCudaArray(PacBio::Cuda::Memory::SmartDeviceAllocation alloc,
+                     size_t count,
+                     SyncDirection dir,
+                     const AllocationMarker& marker,
+                     detail::DataManagerKey)
+        : activeOnHost_(false)
+        , hostData_{GetGlobalAllocator().GetAllocation(count*sizeof(HostType), marker)}
+        , gpuData_{std::move(alloc)}
+        , syncDir_(dir)
+        , marker_(marker)
+        , checker_(std::make_unique<SingleStreamMonitor>())
+        , transferMutex_(std::make_unique<std::mutex>())
+    {
+        if (dir == SyncDirection::HostWriteDeviceRead)
+            throw PBException("Invalid SyncDirection for UnifiedCudaArray with manual gpu allocation");
+        if (count != gpuData_.size() / sizeof(HostType))
+            throw PBException("Incorrectly sized host allocation");
+        if (count % (sizeof(GpuType) / sizeof(HostType)) != 0)
+        {
+            // If we're doing something special like using int16_t on the host and
+            // PBShort2 on the gpu, we need to make sure things tile evenly, else the
+            // last gpu element will walk off the array
+            throw PBException("Invalid array length.");
+        }
+    }
 
     UnifiedCudaArray(PacBio::Memory::SmartAllocation alloc,
                      size_t count,
@@ -107,8 +138,6 @@ public:
         , checker_(std::make_unique<SingleStreamMonitor>())
         , transferMutex_(std::make_unique<std::mutex>())
     {
-        static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
-
         // Preferrably we'd ensure GpuType is trivially copyable as well, but for whatever reason
         // the half2 type is not implemented as such, which casues problems.  Best we can do is
         // try and ensure binary compatability on our end as much as we can.
@@ -306,7 +335,7 @@ private:
                 //      This should not be necessary on normal (non-integrated) nvidia
                 //      systems, but I still need to do a quick experiment to prove that
                 CudaSynchronizeDefaultStream();
-                CudaCopyHost(hostData_.get<HostType>(), gpuData_.get<HostType>(DataKey()), Size());
+                CudaCopyDeviceToHost(hostData_.get<HostType>(), gpuData_.get<HostType>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
             }
         } else {
@@ -315,7 +344,7 @@ private:
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
-                CudaCopyDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(), Size());
+                CudaCopyHostToDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(), Size());
         }
     }
 

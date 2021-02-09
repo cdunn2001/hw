@@ -1,4 +1,7 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+#ifndef mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_
+#define mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_
+
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,24 +27,37 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines some members of class TraceHistogramAccumulator.
+//  Defines class BaselineStatsAggregatorDevice, which customizes
+//  BaselineStatsAggregator.
 
-#include "TraceHistogramAccumulator.h"
 
-#include <sstream>
+#include <basecaller/traceAnalysis/BaselineStatsAggregator.h>
 
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
+class BaselineStatsAggregatorDevice : public BaselineStatsAggregator
 {
+public:
+    BaselineStatsAggregatorDevice(uint32_t poolId, uint32_t poolSize,
+                                  Cuda::Memory::StashableAllocRegistrar* registrar);
+    ~BaselineStatsAggregatorDevice();
 
-}
+private:    // BaselineStatsAggregatorDevice implementation.
+    void AddMetricsImpl(const Data::BaselinerMetrics& metrics) override;
+
+    Data::BaselinerMetrics TraceStatsImpl() const override;
+
+    void ResetImpl() override;
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 }}}     // namespace PacBio::Mongo::Basecaller
+
+#endif // mongo_basecaller_traceAnalysis_BaselineStatsAggregatorDevice_H_

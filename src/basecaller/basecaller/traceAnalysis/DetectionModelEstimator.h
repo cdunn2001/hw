@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_DetectionModelEstimator_H_
 #define mongo_basecaller_traceAnalysis_DetectionModelEstimator_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -29,97 +29,92 @@
 //  Description:
 //  Defines class DetectionModelEstimator.
 
-#include <stdint.h>
+#include <basecaller/traceAnalysis/TraceAnalysisForward.h>
+#include <basecaller/traceAnalysis/AnalysisProfiler.h>
 
+#include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/PBCudaSimd.h>
-#include <common/LaneArray.h>
 
-#include <dataTypes/AnalogMode.h>
-#include <dataTypes/BaselinerStatAccumState.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
+#include <dataTypes/TraceBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/PoolHistogram.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-/// Defines the interface and trivial implementation for estimation of
-/// detection model parameters.
+// Top level class that coordinates detection model estimation.
+// Most of what it does is bookkeeping, using it's
+// constituent CoreDMEstimator, TraceHistogramAccumulator and
+// BaselineStatsAggregator to perform the actual computations
 class DetectionModelEstimator
 {
-public:     // Types
-    using DetModelElementType = Cuda::PBHalf;
-    using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
-    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
-    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
-    using PoolHist = Data::PoolHistogram<float, unsigned short>;
-    using LaneHist = Data::LaneHistogram<float, unsigned short>;
+public: // static functions
+    static void Configure(const Data::BasecallerDmeConfig& dmeConfig);
 
-public:     // Static functions
-    static void Configure(const Data::BasecallerDmeConfig& dmeConfig,
-                          const Data::MovieConfig& movConfig);
-
-    static const Data::AnalogMode& Analog(unsigned int i)
-    { return analogs_[i]; }
+    /// Minimum number of frames in baseline stats aggregation before
+    /// estimating histogram bounds
+    static unsigned int NumFramesPreAccumStats()
+    { return numFramesPreAccumStats_; }
 
     /// Minimum number of frames added to trace histograms before we estimate
     /// model parameters.
     static uint32_t MinFramesForEstimate()
     { return minFramesForEstimate_; }
 
-    /// The variance for \analog signal based on model including Poisson and
-    /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const Data::AnalogMode& analog,
-                                             const LaneArray<float>& signalMean,
-                                             const LaneArray<float>& baselineVar);
 
-public:     // Structors and assignment
-    DetectionModelEstimator(uint32_t poolId, unsigned int poolSize);
+public:
+    using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
+    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
 
-public:     // Functions
-    /// Initialize detection models based soley on baseline variance and
-    /// reference SNR.
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const;
+    DetectionModelEstimator(uint32_t poolId,
+                            const Data::BatchDimensions& dims,
+                            Cuda::Memory::StashableAllocRegistrar& registrar,
+                            const AlgoFactory& algoFac);
 
-    /// Estimate detection model parameters based on existing values and
-    /// trace histogram.
-    void Estimate(const PoolHist& hist, PoolDetModel* detModel) const
-    {
-        assert(detModel);
-        assert(hist.data.Size() == poolSize_);
-        assert(detModel->Size() == poolSize_);
-        EstimateImpl(hist, detModel);
-    }
 
-    unsigned int PoolSize() const
-    { return poolSize_; }
+    ~DetectionModelEstimator();
 
-protected:
-    static PacBio::Logging::PBLogger logger_;
+    // Returns true if adding this batch caused the dme to run a full estimation
+    // attempt and possibly update the models.
+    // Note: The models can still be updated even if there was not a full
+    //       estimation performed
+    bool AddBatch(const Data::TraceBatch<int16_t>& traces,
+                  const Data::BaselinerMetrics& metrics,
+                  PoolDetModel* models,
+                  AnalysisProfiler& profiler);
+
+    // Number of frames before the first full estimation attempt
+    uint32_t StartupLatency() const;
 
 private:    // Static data
-    static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
-    static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
+    // Number of frames to accumulate baseliner statistics before initializing
+    // histograms.
+    static uint32_t numFramesPreAccumStats_;
+    // Number of frames between runs of coreEstimator
     static uint32_t minFramesForEstimate_;
-    static bool fixedBaselineParams_;
-    static float fixedBaselineMean_;
-    static float fixedBaselineVar_;
 
 private:
-    uint32_t poolId_;
-    unsigned int poolSize_;
 
-private:    // Customization functions
-    virtual void EstimateImpl(const PoolHist&, PoolDetModel*) const
+    enum class PoolStatus
     {
-        // Do nothing.
-        // Derived implementation class should update detModel.
-    }
+        STARTUP_HIST_INIT,  // Gathering of baseline stats leading towards intial historam setup
+        STARTUP_DME_INIT,   // Gathering of the first histogram leading toward initial estimation
+        SEQUENCING,         // Producing potentially useful results
+    };
+    PoolStatus poolStatus_ {PoolStatus::STARTUP_HIST_INIT};
+    // Number of frames before the next event (e.g. state machine transition, or full estimation)
+    int32_t framesRemaining_;
+    uint32_t framesPerBatch_;
 
-private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
+    // Actual worker classes.  Nothing in DetectionModelEstimator should actually examine lane
+    // level data, that should all be done by these classes, which potentially can have either
+    // CPU or GPU implementations
+    std::unique_ptr<TraceHistogramAccumulator> traceAccumulator_;
+    std::unique_ptr<BaselineStatsAggregator> baselineAggregator_;
+    std::unique_ptr<CoreDMEstimator> coreEstimator_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

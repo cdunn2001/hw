@@ -23,6 +23,8 @@ add_library(libAppModules STATIC
         TraceSaver.cpp
         TraceFileDataSource.h
         TraceFileDataSource.cpp
+        SimulatedDataSource.h
+        SimulatedDataSource.cpp
 )
 
 target_include_directories(libAppModules

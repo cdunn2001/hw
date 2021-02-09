@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,24 +24,48 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-//  Defines some members of class TraceHistogramAccumulator.
+//  Defines some members of class BaselineStatsAggregatorHost.
 
-#include "TraceHistogramAccumulator.h"
+#include "BaselineStatsAggregatorHost.h"
 
-#include <sstream>
+#include <algorithm>
 
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
+#include <tbb/parallel_for.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
+void BaselineStatsAggregatorHost::AddMetricsImpl(const Data::BaselinerMetrics& metrics)
 {
+    assert(stats_.size() == metrics.baselinerStats.Size());
 
+    const auto& statsView = metrics.baselinerStats.GetHostView();
+    tbb::parallel_for((size_t){0}, stats_.size(), [&](size_t lane)
+    {
+        // Accumulate baseliner stats.
+        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
+    });
+}
+
+Data::BaselinerMetrics BaselineStatsAggregatorHost::TraceStatsImpl() const
+{
+    Data::BaselinerMetrics poolTraceStats(PoolSize(),
+                                          Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                          SOURCE_MARKER());
+    auto ptsv = poolTraceStats.baselinerStats.GetHostView();
+    for (unsigned int lane = 0; lane < PoolSize(); ++lane)
+    {
+        ptsv[lane] = stats_[lane].GetState();
+    }
+    return poolTraceStats;
+}
+
+void BaselineStatsAggregatorHost::ResetImpl()
+{
+    // Reset for the next aggregation
+    stats_.clear();
+    stats_.resize(PoolSize());
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

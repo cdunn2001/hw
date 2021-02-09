@@ -74,14 +74,14 @@ float DmeEmHost::snrThresh1_ = 0.0f;
 float DmeEmHost::successConfThresh_ = 0.0f;
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
-    : DetectionModelEstimator(poolId, poolSize)
+    : CoreDMEstimator(poolId, poolSize)
 { }
 
 // static
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig)
 {
-    DetectionModelEstimator::Configure(dmeConfig, movConfig);
+    CoreDMEstimator::Configure(dmeConfig, movConfig);
 
     // TODO: Validate values.
     // TODO: Log settings.
@@ -672,7 +672,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
 
 // static
 void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
-                              LaneDetModelHost* detModel) const
+                              LaneDetModelHost* detModel)
 {
     assert (all(scale > 0.0f));
     const auto baselineCovar = detModel->BaselineMode().SignalCovar();

@@ -156,17 +156,22 @@ void CudaSynchronizeDefaultStream()
     cudaCheckErrors(::cudaStreamSynchronize(cudaStreamPerThread));
 }
 
-void CudaRawCopyHost(void* dest, void* src, size_t count)
+void CudaRawCopyDeviceToHost(void* dest, const void* src, size_t count)
 {
     cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToHost));
 }
 
-void CudaRawCopyDevice(void* dest, void* src, size_t count)
+void CudaRawCopyHostToDevice(void* dest, const void* src, size_t count)
 {
     cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyHostToDevice, cudaStreamPerThread));
 }
 
-void CudaRawCopyToSymbol(const void* dest, void* src, size_t count)
+void CudaRawCopyDeviceToDevice(void* dest, const void* src, size_t count)
+{
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToDevice, cudaStreamPerThread));
+}
+
+void CudaRawCopyToSymbol(const void* dest, const void* src, size_t count)
 {
     cudaCheckErrors(::cudaMemcpyToSymbol(dest, src, count));
 }

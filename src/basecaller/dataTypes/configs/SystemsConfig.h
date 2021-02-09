@@ -54,7 +54,7 @@ public:
     /// The maximum amount of gpu memory dedicated to permanently resident
     /// algorithm state data.  Anything beyond this threshold will have to
     /// be shuttled to-from the GPU on demand
-    PB_CONFIG_PARAM(size_t, maxPermGpuDataMB, std::numeric_limits<size_t>::max());
+    PB_CONFIG_PARAM(size_t, maxPermGpuDataMB, std::numeric_limits<uint32_t>::max());
 };
 
 }}}     // namespace PacBio::Mongo::Data

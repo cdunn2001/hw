@@ -1,3 +1,27 @@
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "AlgoFactory.h"
 
@@ -6,8 +30,11 @@
 
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
-#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
+#include "basecaller/traceAnalysis/BaselineStatsAggregatorDevice.h"
+#include <basecaller/traceAnalysis/BaselineStatsAggregatorHost.h>
+#include <basecaller/traceAnalysis/CoreDMEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
@@ -23,6 +50,7 @@
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
@@ -44,6 +72,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
+    baselineStatsAggregatorOpt_ = bcConfig.baselineStatsAggregatorConfig.Method;
 
     // Detection model estimator
     dmeOpt_ = bcConfig.dmeConfig.Method;
@@ -164,17 +193,34 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     }
 
+    switch (histAccumOpt_)
+    {
+    case Data::BasecallerTraceHistogramConfig::MethodName::Host:
+        TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
+        break;
+    case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
+        DeviceTraceHistogramAccum::Configure(bcConfig.traceHistogramConfig);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for TraceHistogramAccumulator: " << histAccumOpt_.toString() << '.';
+        throw PBException(msg.str());
+        break;
+    }
+
+    DetectionModelEstimator::Configure(bcConfig.dmeConfig);
+
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        DetectionModelEstimator::Configure(bcConfig.dmeConfig, movConfig);
+        CoreDMEstimator::Configure(bcConfig.dmeConfig, movConfig);
         break;
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
         break;
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: "
+        msg << "Unrecognized method option for CoreDMEstimator: "
             << dmeOpt_.toString() << '.';
         throw PBException(msg.str());
         break;
@@ -234,9 +280,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
                                    movConfig.frameRate,
                                    bcConfig.Metrics.realtimeActivityLabels);
     }
-
-    // TODO: Configure other algorithms according to options.
-    TraceHistogramAccumulator::Configure(bcConfig.traceHistogramConfig, movConfig);
 }
 
 
@@ -298,7 +341,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
 
 unique_ptr<TraceHistogramAccumulator>
 AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDimensions& dims,
-                                        StashableAllocRegistrar&) const
+                                        StashableAllocRegistrar& registrar) const
 {
     switch (histAccumOpt_)
     {
@@ -306,7 +349,8 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
         return std::make_unique<TraceHistogramAccumHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        // TODO: For now fall through to throw exception.
+        return std::make_unique<DeviceTraceHistogramAccum>(poolId, dims.lanesPerBatch, &registrar);
+        break;
     default:
         ostringstream msg;
         msg << "Unrecognized method option for TraceHistogramAccumulator: "
@@ -316,21 +360,43 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
     }
 }
 
-std::unique_ptr<DetectionModelEstimator>
-AlgoFactory::CreateDetectionModelEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
+unique_ptr<BaselineStatsAggregator>
+AlgoFactory::CreateBaselineStatsAggregator(unsigned int poolId,
+                                           const Data::BatchDimensions& dims,
+                                           Cuda::Memory::StashableAllocRegistrar& registrar) const
+{
+    switch (baselineStatsAggregatorOpt_)
+    {
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Host:
+        return std::make_unique<BaselineStatsAggregatorHost>(poolId, dims.lanesPerBatch);
+        break;
+    case Data::BasecallerBaselineStatsAggregatorConfig::MethodName::Gpu:
+        return std::make_unique<BaselineStatsAggregatorDevice>(poolId, dims.lanesPerBatch, &registrar);
+        break;
+    default:
+        ostringstream msg;
+        msg << "Unrecognized method option for BaselineStatsAggregator: "
+            << baselineStatsAggregatorOpt_ << '.';
+        throw PBException(msg.str());
+        break;
+    }
+}
+
+std::unique_ptr<CoreDMEstimator>
+AlgoFactory::CreateCoreDMEstimator(unsigned int poolId, const Data::BatchDimensions& dims,
                                            StashableAllocRegistrar&) const
 {
     switch (dmeOpt_)
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
-        return make_unique<DetectionModelEstimator>(poolId, dims.lanesPerBatch);
+        return make_unique<CoreDMEstimator>(poolId, dims.lanesPerBatch);
 
     case Data::BasecallerDmeConfig::MethodName::EmHost:
         return make_unique<DmeEmHost>(poolId, dims.lanesPerBatch);
 
     default:
         ostringstream msg;
-        msg << "Unrecognized method option for DetectionModelEstimator: "
+        msg << "Unrecognized method option for CoreDMEstimator: "
             << dmeOpt_ << '.';
         throw PBException(msg.str());
         break;

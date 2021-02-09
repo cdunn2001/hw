@@ -60,7 +60,7 @@ BaselinerStatAccumulator<T>::Merge(const BaselinerStatAccumulator& other)
     traceMin = min(traceMin, other.traceMin);
     traceMax = max(traceMax, other.traceMax);
     baselineStats_.Merge(other.BaselineFramesStats());
-    rawBaselineSum_ += rawBaselineSum_;
+    rawBaselineSum_ += other.rawBaselineSum_;
     return *this;
 }
 

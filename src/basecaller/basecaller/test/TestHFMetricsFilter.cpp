@@ -171,7 +171,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
 Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
 {
     Data::BaselinerMetrics ret(
-            config.dims,
+            config.dims.lanesPerBatch,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
             SOURCE_MARKER());
     Data::BaselinerStatAccumulator<Data::BaselinedTraceElement> bsa{};

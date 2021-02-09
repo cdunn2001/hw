@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2020 Pacific Biosciences of California, Inc.
+// Copyright (c) 2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,25 +23,5 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines some members of class TraceHistogramAccumulator.
 
-#include "TraceHistogramAccumulator.h"
-
-#include <sstream>
-
-#include <pacbio/logging/Logger.h>
-#include <pacbio/PBException.h>
-
-namespace PacBio {
-namespace Mongo {
-namespace Basecaller {
-
-TraceHistogramAccumulator::TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize)
-    : poolId_ (poolId)
-    , poolSize_ (poolSize)
-{
-
-}
-
-}}}     // namespace PacBio::Mongo::Basecaller
+#include <dataTypes/configs/BasecallerBaselineStatsAggregatorConfig.h>

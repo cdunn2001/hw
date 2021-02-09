@@ -6,8 +6,10 @@ include(pacbio-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoBasecallerTest OBJECT
     TestBaseliner.cpp
+    TestDmeEmHost.cpp
     TestHFMetricsFilter.cpp
-    TestTraceHistogramAccumHost.cpp
+    TestBaselineStatsAggregator.cpp
+    TestTraceHistogramAccumulator.cpp
     TestPulseAccumulator.cpp
 )
 
@@ -16,6 +18,7 @@ target_link_libraries(libMongoBasecallerTest
     libProtoCommon
     libTbb
     libGtest
+    libAppModules
 )
 
 # Define the test executable specific to mongo basecaller analyzer.
