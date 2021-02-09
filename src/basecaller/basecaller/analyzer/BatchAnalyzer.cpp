@@ -112,9 +112,7 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
     const auto framesPerChunk = dims.framesPerBatch;
     const auto chunksPerEstimate = (dmeConfig.MinFramesForEstimate + framesPerChunk - 1)
                                  / framesPerChunk;
-    const auto fraction = static_cast<float>(poolId) / (maxPoolId+1);
-    poolDmeDelayFrames_ = static_cast<uint32_t>(fraction * chunksPerEstimate)
-                  * dims.framesPerBatch;
+    poolDmeDelayFrames_ = (poolId % chunksPerEstimate) * dims.framesPerBatch;
 }
 
 FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
