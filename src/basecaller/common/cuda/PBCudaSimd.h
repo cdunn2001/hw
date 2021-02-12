@@ -145,6 +145,13 @@ public:
         if (id == 0) return FloatX();
         else return FloatY();
     }
+    template <int id>
+    CUDA_ENABLED void Set(float val)
+    {
+        static_assert(id < 2, "Out of bounds access in PBHalf2");
+        if (id == 0) X(val);
+        else Y(val);
+    }
 
     half2 CUDA_ENABLED data() const { return data_; }
     half2& CUDA_ENABLED data() { return data_; }
@@ -204,7 +211,7 @@ public:
     CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
     CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
                                                                       b2 ? 1.0f : 0.0f)} {}
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__)
     __device__ bool X() const { return data_.x != __short_as_half(0); }
     __device__ bool Y() const { return data_.y != __short_as_half(0); }
 #else

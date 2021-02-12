@@ -36,6 +36,7 @@
 //#include <common/AlignedNew.h>
 #include <common/AlignedVector.h>
 #include <common/simd/SimdTypeTraits.h>
+#include <common/cuda/utility/CudaArray.h>
 
 #include "MaxLikelihoodDiagnostics.h"
 
@@ -58,12 +59,30 @@ struct alignas(VF) GoodnessOfFitTest
     VF pValue;
 };
 
+struct ConfFactor {
+
+    // Would use an enum class, but these are all used as indexes
+    // and it would be annoying to constantly cast them to integers
+    enum Values
+    {
+        CONVERGED = 0,
+        BL_FRACTION,
+        BL_CV,
+        BL_VAR_STABLE,
+        ANALOG_REP,
+        SNR_SUFFICIENT,
+        SNR_DROP,
+        G_TEST,
+        NUM_CONF_FACTORS
+    };
+
+};
 
 /// A collection of diagnostics that characterize an estimation of the
 /// detection model parameters (a.k.a. DME).
 /// \tparam VF SIMD floating-point type.
 template <typename VF>
-struct alignas(VF) DmeDiagnostics
+struct alignas(VF) alignas(std::max_align_t) DmeDiagnostics
 {
 public:     // Types
     using FloatVec = VF;
@@ -73,7 +92,7 @@ public:     // Static constants
 
 public: // Data
     /// Factors of estimation confidence. Each element should in [0, 1].
-    AlignedVector<VF> confidFactors;
+    Cuda::Utility::CudaArray<VF, ConfFactor::NUM_CONF_FACTORS> confidFactors{VF(0)};
 
     /// Indicate frame range that produced the model for a given zmw.
     /// Vectorized since older models get carried forward if estimation for
@@ -85,7 +104,7 @@ public: // Data
     unsigned short laneEventCode {0};
 
     /// Bit sets indicating ZMW-level issues encountered during model estimation.
-    std::array<unsigned short, vecSize> zmwEventCode {};
+    Cuda::Utility::CudaArray<unsigned short, vecSize> zmwEventCode {};
 
     /// Indicates whether a full estimation was attempted in the detection
     /// model filter.
@@ -98,10 +117,7 @@ public: // Data
     GoodnessOfFitTest<VF> gTest {0.0f, 0.0f, 1.0f};
 
 public:     // Structors
-    DmeDiagnostics()
-    {
-        assert(std::count(zmwEventCode.cbegin(), zmwEventCode.cend(), 0) == static_cast<int64_t>(zmwEventCode.size()));
-    }
+    DmeDiagnostics() = default;
 
 public:     // Const functions
     /// Overall confidence score for the estimate of the detection model.

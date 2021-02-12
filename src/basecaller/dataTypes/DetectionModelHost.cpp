@@ -53,6 +53,8 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     }
 
     // TODO: What about confid_ and frameInterval_?
+    // Note: If this TODO is fixed, the ZmwDetectionModel defined in DmeEmDevice
+    //       will probably need a similar update.
 }
 
 
