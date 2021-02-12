@@ -44,7 +44,13 @@ void CudaHostUnregister(void* ptr);
 /// \returns a vector device properties of all GPU devices on the machine. The index
 /// corresponds to the original device id.  If there is a problem with a device,
 /// the cudaDeviceProp::uuid field will be set to all zeros.
-std::vector<struct cudaDeviceProp> CudaAllGpuDevices();
+struct CudaDeviceProperties 
+{
+    struct cudaDeviceProp deviceProperties;
+    std::string errorMessage;
+};
+
+std::vector<CudaDeviceProperties> CudaAllGpuDevices();
 
 // Manually check if an error has occured.  Will capture
 // asynchronous errors that have not yet happened since

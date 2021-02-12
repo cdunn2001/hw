@@ -24,7 +24,6 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Sensor;
 using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
-// using namespace PacBio::TraceFile;
 using namespace PacBio::DataSource;
 
 
@@ -58,7 +57,7 @@ TEST(TestTraceSaver, TestA)
         std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
         ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
 
-        auto writer = std::make_unique<PacBio::Application::TraceFileWriter>(traceFile, numSelectedZmws, numFrames);
+        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, numSelectedZmws, numFrames);
 
         std::vector<DataSourceBase::LaneIndex> lanes;
         lanes.push_back(0);  // starting at (0,0)
@@ -226,18 +225,16 @@ TEST(Sanity,ROI)
     }
 
     PacBio::Dev::TemporaryDirectory tmpDir;
-    const std::string traceFile = tmpDir.DirName() + "/testB.trc.h5";
-    PBLOG_INFO << "Opening TraceSaver with output file " << traceFile << ", " << numZmws << " ZMWS.";
+    const std::string traceFileName = tmpDir.DirName() + "/testB.trc.h5";
     const uint64_t frames=1024;
-    auto outputTrcFile = std::make_unique<TraceFileWriter>(traceFile,
-                                                        numZmws,
-                                                        frames);
-
+    PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
+        auto outputTrcFile = std::make_unique<PacBio::TraceFile::TraceFile>(traceFileName, numZmws, frames);
         TraceSaverBody body(std::move(outputTrcFile), roiFeatures, std::move(blocks));
     }
     {
-        PacBio::TraceFile::TraceFile reader(traceFile);
+        PacBio::TraceFile::TraceFile reader(traceFileName);
+        EXPECT_EQ(frames, reader.Traces().NumFrames());
         auto holexy = reader.Traces().HoleXY();
         for(uint32_t i=0;i<numZmws;i++)
         {

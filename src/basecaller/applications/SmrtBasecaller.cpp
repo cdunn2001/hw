@@ -114,6 +114,11 @@ public:
         cache_ = options.get("cache");
         nop_ = options.get("nop");
 
+        if (nop_ == 1 && inputTargetFile_ != "constant/123")
+        {
+            throw PBException("--nop=1 must be used with --inputfile=constant/123 to get correct validation pattern.");
+        }
+
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
         switch (config_.source.sourceType)
@@ -165,11 +170,15 @@ public:
         int idevice = 0;
         for(const auto& d : devices)
         {
+            const auto& dd(d.deviceProperties);
             PBLOG_INFO << " CUDA GPU device: " << idevice;
-            PBLOG_INFO << "  Device Name:" << d.name;
-            PBLOG_INFO << "  Global memory:" << d.totalGlobalMem;
-            PBLOG_INFO << "  Constant memory:" << d.totalConstMem;
-            PBLOG_INFO << "  Warp size:" << d.warpSize;
+            PBLOG_INFO << "  Device Name:" << dd.name;
+            PBLOG_INFO << "  Global memory:" << dd.totalGlobalMem;
+            // PBLOG_INFO << "  Constant memory:" << dd.totalConstMem;
+            // PBLOG_INFO << "  Warp size:" << dd.warpSize;
+            PBLOG_INFO << "  sharedMemPerBlock:" << dd.sharedMemPerBlock;
+            PBLOG_INFO << "  major/minog:" << dd.major << "/" << dd.minor;
+            PBLOG_INFO << "  Error Message:" << d.errorMessage;
             idevice++;
         }
     }
@@ -585,8 +594,8 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto tiles = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const size_t numZmws = tiles.size() * Tile::NumPixels;
+            auto laneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
+            const size_t numZmws = laneOffsets.size() * Tile::NumPixels;
             std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
             {
                 // FIXME. This is Tile (32 wide) versus Lane (64 wide) centric.
@@ -595,7 +604,7 @@ private:
                 // currate the features of the ROI ZMWs
                 const auto allFeatures = dataSource.GetUnitCellProperties();
                 size_t k=0;
-                for(const auto tileOffset : tiles)
+                for(const auto tileOffset : laneOffsets)
                 {
                     const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
                     for(uint32_t j =0;j<Tile::NumPixels;j++)
@@ -612,7 +621,7 @@ private:
             // conversion of Tile to Lane
             std::unordered_set<DataSourceBase::LaneIndex> laneSet;
             std::vector<DataSourceBase::LaneIndex> lanes;
-            for(const DataSourceBase::LaneIndex tileOffset : tiles)
+            for(const DataSourceBase::LaneIndex tileOffset : laneOffsets)
             {
                 const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
                 const DataSourceBase::LaneIndex laneIndex = zmwIndex / laneSize;
@@ -629,9 +638,9 @@ private:
             }
             DataSourceBase::LaneSelector blocks(lanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
-            outputTrcFile_ = std::make_unique<TraceFileWriter>(outputTrcFileName_,
-                                                               numZmws,
-                                                               frames_);
+            outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
+                                                         numZmws,
+                                                         frames_);
 
             return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), roiFeatures, std::move(blocks));
         }
@@ -783,7 +792,7 @@ private:
                         int16_t expectedPixel = 123;
                         for(const auto& batch : chunk)
                         {
-                            for(int iblock = 0; iblock < 1; iblock ++) // x.NumBlocks() ??
+                            for(int iblock = 0; iblock < 1; iblock ++)
                             {
                                 int16_t actualPixel = batch.BlockData(iblock).Data()[0];
                                 if (expectedPixel != actualPixel)
@@ -847,7 +856,10 @@ private:
             PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
                     << " out of " << source->NumFrames() << " requested from source. ("
                     << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
-            PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
+            if (nop_ == 1)
+            {        
+                PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
+            }
             timer.SetCount(numChunksAnalyzed);
             double chunkAnalyzeRate = timer.GetRate();
             PBLOG_INFO << "Analyzed " << numChunksAnalyzed
@@ -877,7 +889,7 @@ private:
     bool cache_ = false;
     int nop_ = 0; ///< 0 = normal. 1 = don't process any SensorPackets at all. 2 =dont instantiate the basecaller, but allow repacker and tracesaver
     std::string outputTrcFileName_;
-    std::unique_ptr<DataFileWriterInterface> outputTrcFile_;
+    std::unique_ptr<TraceFile> outputTrcFile_;
 };
 
 int main(int argc, char* argv[])

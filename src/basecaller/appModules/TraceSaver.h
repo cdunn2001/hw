@@ -36,7 +36,7 @@
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/configs/ROIConfig.h>
 #include <appModules/DataFileWriter.h>
-#include <appModules/TraceFileWriter.h>
+#include <pacbio/tracefile/TraceFile.h>
 
 #include <boost/multi_array.hpp>
 
@@ -60,7 +60,7 @@ public:
 class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatch<int16_t>>
 {
 public:
-    TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWriterInterface>&& writer,
+    TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
                    const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
                    PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector);
 
@@ -74,7 +74,7 @@ public:
 
     void Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch) override;
 private:
-    std::unique_ptr<PacBio::Application::DataFileWriterInterface> writer_;
+    std::unique_ptr<PacBio::TraceFile::TraceFile> writer_;
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
 };
 

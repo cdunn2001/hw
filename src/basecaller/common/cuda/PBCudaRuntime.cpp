@@ -186,23 +186,23 @@ void CudaHostUnregister(void* ptr)
     cudaCheckErrors(::cudaHostUnregister(ptr));
 }
 
-std::vector<struct cudaDeviceProp> CudaAllGpuDevices()
+std::vector<CudaDeviceProperties> CudaAllGpuDevices()
 {
-    std::vector<struct cudaDeviceProp> devices;
+    std::vector<CudaDeviceProperties> devices;
     int count = 0;
     if (cudaGetDeviceCount(&count) != cudaSuccess) count = 0;
 
     for(int idevice=0;idevice<count;idevice++)
     {
-        cudaDeviceProp properties;
-        cudaError_t result = cudaGetDeviceProperties(&properties, idevice);
+        CudaDeviceProperties properties;
+        cudaError_t result = cudaGetDeviceProperties(&properties.deviceProperties, idevice);
 
         if (result != cudaSuccess)
         {
             // something needs to be pushed to the devices vector because
             // the index of the vector elements corresponds to the idevice ordinal number.
-            memset(&properties.uuid,0,sizeof(properties.uuid));
-            strncpy(properties.name,cudaGetErrorName(result),sizeof(properties.name));
+            memset(&properties.deviceProperties.uuid,0,sizeof(properties.deviceProperties.uuid));
+            properties.errorMessage = cudaGetErrorName(result);
         }
         devices.push_back(properties);
     }

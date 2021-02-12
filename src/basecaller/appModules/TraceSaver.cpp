@@ -23,7 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <appModules/TraceFileWriter.h>
+#include <pacbio/tracefile/TraceFile.h>
 #include <appModules/TraceSaver.h>
 
 namespace PacBio {
@@ -31,16 +31,15 @@ namespace Application {
 
 using namespace PacBio::DataSource;
 
-TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWriterInterface>&& writer,
+TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
                                const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
                                PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector)
     : writer_(std::move(writer))
     , laneSelector_(std::move(laneSelector))
 {
-    auto* tracewriter = dynamic_cast<PacBio::Application::TraceFileWriter*>(writer_.get());
-    if (tracewriter)
+    if (writer_)
     {
-        const uint32_t numZMWs = tracewriter->Traces().NumZmws();
+        const uint32_t numZMWs = writer_->Traces().NumZmws();
         if (numZMWs != features.size())
         {
             PBLOG_ERROR << "ROI ZMWS is not equal to trace file ZMWs. Something is not right. "
@@ -55,24 +54,21 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::Application::DataFileWrit
             holexy[i][1] = features[i].y;
             holeType[i] = features[i].flags; // FIXME there should be a conversion between bits and enumeration
         }
-        tracewriter->Traces().HoleXY(holexy);
-        tracewriter->Traces().HoleType(holeType);
+        writer_->Traces().HoleXY(holexy);
+        writer_->Traces().HoleType(holeType);
 
 #if 0
         std::vector<uint32_t> holeNumber;
-        tracewriter->Traces().HoleNumber(holeNumber);
+        writer_->Traces().HoleNumber(holeNumber);
 #endif
     }
-    PBLOG_INFO << "TraceSaverBody created with ";
-    PacBio::Logging::LogStream logstream;
-    writer_->OutputSummary(logstream);
+    PBLOG_INFO << "TraceSaverBody created";
 }
 
 
 void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
 {
-    auto* tracewriter = dynamic_cast<PacBio::Application::TraceFileWriter*>(writer_.get());
-    if (tracewriter)
+    if (writer_)
     {
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();
         const auto frameOffset = traceBatch.Metadata().FirstFrame();
@@ -116,7 +112,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
             const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
             boost::array<array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
             transpose.reindex(bases);
-            tracewriter->Traces().WriteTraceBlock<int16_t>(transpose);
+            writer_->Traces().WriteTraceBlock<int16_t>(transpose);
 #else
             // no transpose
             {
@@ -124,7 +120,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
                 array_ref data {blockView.Data(), boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
                 boost::array<array_ref::index, 2> bases = {{laneOffset + laneIdx, frameOffset}};
                 data.reindex(bases);
-                tracewriter->Traces().WriteTraceBlock(data);
+                writer_->Traces().WriteTraceBlock(data);
             }
 #endif
         }
