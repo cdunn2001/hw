@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_DmeEmHost_H_
 #define mongo_basecaller_traceAnalysis_DmeEmHost_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -40,8 +40,11 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-/// Implements DetectionModelEstimator using a Expectation-Maximization (EM)
-/// approach for model estimation that runs on the CPU (as opposed to the GPU).
+/// Implements DetectionModelEstimator for host side compute.
+/// Primary implementation uses a Expectation-Maximization (EM)
+/// approach for model estimation, but a trivial mode is also
+/// available that initializes the model off of baseline statistics
+/// and then never updates it
 class DmeEmHost : public CoreDMEstimator
 {
 public:     // Types

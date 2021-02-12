@@ -32,6 +32,13 @@
 namespace PacBio {
 namespace Cuda {
 
+/// Overload SIMD Blend for scalar types.
+/// Simply wraps ternary operator (?:).
+/// TODO unify with host version
+template <typename T>
+__device__ T Blend(bool tf, const T& a, const T& b)
+{ return tf ? a : b; }
+
 inline __device__ PBHalf2 Blend(PBBool2 cond, PBHalf2 l, PBHalf2 r)
 {
     half zero = __float2half(0.0f);

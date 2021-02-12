@@ -88,21 +88,11 @@ struct alignas(VF) MaxLikelihoodDiagnostics
                    const VF& aDeltaLogLike,
                    const VF& aGoodnessOfFit = VF(0.0f))
     {
-#ifdef __CUDA_ARCH__
-        static_assert(std::is_same<float, VF>::value, "cuda only supports scalar MaxLikelihoodDiagnostics");
-        if (!aConverged) return;
-        if (!converged) iterCount = aIter;
-        logLike = aLogLike;
-        deltaLogLike = aDeltaLogLike;
-        goodnessOfFit = aGoodnessOfFit;
-        converged |= aConverged;
-#else
         iterCount = Blend(aConverged & !converged, VI(aIter), iterCount);
         logLike = Blend(aConverged, aLogLike, logLike);
         deltaLogLike = Blend(aConverged, aDeltaLogLike, deltaLogLike);
         goodnessOfFit = Blend(aConverged, aGoodnessOfFit, goodnessOfFit);
         converged |= aConverged;
-#endif
     }
 
     /// Update the log likelihood and delta log likelihood for any element where

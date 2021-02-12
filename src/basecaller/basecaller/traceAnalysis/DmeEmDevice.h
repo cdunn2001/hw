@@ -30,7 +30,6 @@
 //  Defines class DmeEmHost.
 
 #include "CoreDMEstimator.h"
-#include "DmeDiagnostics.h"
 
 namespace PacBio {
 namespace Mongo {

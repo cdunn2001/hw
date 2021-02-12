@@ -41,8 +41,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-/// Defines the interface and trivial implementation for estimation of
-/// detection model parameters.
+/// Defines the interface for estimation of detection model parameters.
 class CoreDMEstimator
 {
 public:     // Types

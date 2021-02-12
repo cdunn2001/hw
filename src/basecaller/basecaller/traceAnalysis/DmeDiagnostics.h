@@ -82,7 +82,7 @@ struct ConfFactor {
 /// detection model parameters (a.k.a. DME).
 /// \tparam VF SIMD floating-point type.
 template <typename VF>
-struct alignas(VF) alignas(8) DmeDiagnostics
+struct alignas(VF) alignas(std::max_align_t) DmeDiagnostics
 {
 public:     // Types
     using FloatVec = VF;

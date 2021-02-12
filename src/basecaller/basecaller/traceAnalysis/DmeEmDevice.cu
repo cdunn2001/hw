@@ -36,6 +36,7 @@
 
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
+#include <basecaller/traceAnalysis/DmeDiagnostics.h>
 
 ///////////////////////////////////////////////////////////////////
 // TODO There are a lot of commented out PBAssert statements below,
