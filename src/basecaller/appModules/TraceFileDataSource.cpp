@@ -184,9 +184,25 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     }
     for(uint32_t i=0; i < features.size(); i++)
     {
+        // i is ZMW position in chunk.
+        // The chunk is filled with lanes from the tracefile, modulo the size of the trace file. It is 
+        // possible that the trace file ZMW count is not modulo the BlockWidth. In other words, the final
+        // ZMWs could be ragged in the last trace file lane. So to calculate the ZMW position in the trace file,
+        // we have to down convert to chunk lanes, then modulo that with the number of tracelanes, then scale back up.
+        // Thankfully the blocks are the same size in the chunk as in the trace file.
+        const auto chunkLane = i / BlockWidth();
+        const auto offset = i % BlockWidth();
+        const auto traceLane = chunkLane % NumTraceLanes();
+        const auto traceZmw = traceLane * BlockWidth() + offset; // position in trace file
+
+        if (traceZmw >= holexy.shape()[0])
+        {
+            throw PBException("internally calculated traceZmw position is larger than trace file dimension");
+        }
         features[i].flags = 0; // fixme
-        features[i].x = holexy[i][0];
-        features[i].y = holexy[i][1];
+        features[i].x = holexy[traceZmw][0];
+        features[i].y = holexy[traceZmw][1];
+        // features[i].holeNumber = holeNumber[traceZmw]; TODO
     }
     return features;
 }

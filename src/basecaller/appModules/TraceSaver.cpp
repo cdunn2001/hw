@@ -48,19 +48,18 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
         }
         boost::multi_array<int16_t, 2> holexy(boost::extents[numZMWs][2]);
         std::vector<uint8_t> holeType(numZMWs);
+        // TODO: add holeNumber to the UnitCellProperties, then uncomment the related lines below.
+        // std::vector<uint32_t> holeNumber;
         for(uint32_t i=0;i<numZMWs;i++)
         {
             holexy[i][0] = features[i].x;
             holexy[i][1] = features[i].y;
             holeType[i] = features[i].flags; // FIXME there should be a conversion between bits and enumeration
+            // holeNumber[i] = features[i].holeNumber;
         }
         writer_->Traces().HoleXY(holexy);
         writer_->Traces().HoleType(holeType);
-
-#if 0
-        std::vector<uint32_t> holeNumber;
-        writer_->Traces().HoleNumber(holeNumber);
-#endif
+        // writer_->Traces().HoleNumber(holeNumber);
     }
     PBLOG_INFO << "TraceSaverBody created";
 }
@@ -75,22 +74,14 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
         const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
         const DataSourceBase::LaneIndex laneEnd = laneBegin + traceBatch.LanesPerBatch();
 
-#if 0
-        if (zmwOffset < 10000)
-        {
-            PBLOG_INFO << "TraceSaverBody::Process, zmwOffset:" << zmwOffset << " frameOffset:" << frameOffset << " laneBegin:" << laneBegin << " laneEnd:" << laneEnd;
-        }
-#endif
-
         for (const auto laneIdx : laneSelector_.SelectedLanes(laneBegin, laneEnd))
         {
-#if 1
-            PBLOG_INFO << "TraceSaverBody::Process, laneIdx" << laneIdx;
-#endif
+            PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
             const auto blockIdx = laneIdx - laneBegin;
             Mongo::Data::BlockView<const int16_t> blockView = traceBatch.GetBlockView(blockIdx);
-#if 1
-            // do the transpose here.  All of this is a bit ugly and could be compartmentalized I think. TODO
+
+            // The TraceFile::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
+            // work with the API.  TODO: perform this transpose inside the TraceFile::Traces() class.
             boost::const_multi_array_ref<int16_t, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
@@ -106,6 +97,10 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
 
             // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
             // the trace file. TODO
+            // (MTL) I think this would better be implemented by having the laneSelector_.SelectedLanes() return a
+            // std::pair<int,int> where the first index is the index within the selected lanes container, and the second
+            // is the actual lane.  Then the `traceFileLane` just below is `iterator->first`, and `laneIdx = iterator->second`.
+            // This will allow laneSelector_.SelectedLanes() to randomly interate.
             auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
             const int64_t traceFileLane = position - laneSelector_.begin();
 
@@ -113,16 +108,6 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
             boost::array<array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
             transpose.reindex(bases);
             writer_->Traces().WriteTraceBlock<int16_t>(transpose);
-#else
-            // no transpose
-            {
-                typedef boost::const_multi_array_ref<int16_t, 2> array_ref;
-                array_ref data {blockView.Data(), boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
-                boost::array<array_ref::index, 2> bases = {{laneOffset + laneIdx, frameOffset}};
-                data.reindex(bases);
-                writer_->Traces().WriteTraceBlock(data);
-            }
-#endif
         }
     }
     else

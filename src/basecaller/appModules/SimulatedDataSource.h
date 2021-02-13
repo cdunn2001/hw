@@ -75,8 +75,7 @@ public:
 
     std::vector<UnitCellProperties> GetUnitCellProperties() const override
     {
-        // TODO. the struct is default initialized.
-        return std::vector<UnitCellProperties>(NumZmw());
+        return std::vector<UnitCellProperties>(NumZmw()); // note that all coordinates are reported as (0,0).
     }
 
     std::vector<uint32_t> UnitCellIds() const override
