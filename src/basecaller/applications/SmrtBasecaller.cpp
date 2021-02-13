@@ -208,7 +208,7 @@ public:
 private:
     void MetaDataFromTraceFileSource(const std::string& traceFileName)
     {
-        const auto& traceFile = PacBio::TraceFile::TraceFile(traceFileName);
+        const TraceFile traceFile(traceFileName);
         const auto& acqParams = traceFile.Scan().AcqParams();
         const auto& chipInfo = traceFile.Scan().ChipInfo();
         const auto& dyeSet = traceFile.Scan().DyeSet();
@@ -326,33 +326,11 @@ private:
     // TODO fix this up. It is too specialized for WX2 or TraceFile datasources.
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
-        // TODO need to handle sparse as well
-        size_t numPreallocatedPackets = 0;
 
         std::array<size_t, 3> layoutDims;
-        switch(config_.source.sourceType)
-        {
-        case Source_t::TRACE_FILE:
-            layoutDims[0] = config_.layout.lanesPerPool;
-            layoutDims[1] = config_.layout.framesPerChunk;
-            layoutDims[2] = config_.layout.zmwsPerLane;
-            break;
-        case Source_t::WX2:
-            if (config_.source.wx2SourceConfig.platform == PacBio::Sensor::Platform::Sequel2Lvl1)
-            {
-                layoutDims[0] = config_.source.wx2SourceConfig.wxlayout.lanesPerPacket;
-                layoutDims[1] = config_.source.wx2SourceConfig.wxlayout.framesPerPacket;
-                layoutDims[2] = config_.source.wx2SourceConfig.wxlayout.zmwsPerLane;
-                numPreallocatedPackets = 800000 / layoutDims[0]; // FIXME. this should depend on the number of tiles on the chip, which is hardwired to Spider size right now...
-            }
-            else
-            {
-                throw PBException("Not implemented");
-            }
-            break;
-        default:
-            throw PBException("CreateSource not supported: " + config_.source.sourceType.toString());
-        }
+        layoutDims[0] = config_.layout.lanesPerPool;
+        layoutDims[1] = config_.layout.framesPerChunk;
+        layoutDims[2] = config_.layout.zmwsPerLane;
 
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
@@ -364,6 +342,21 @@ private:
         /// MTL/BB hack.begin
         /// We manually loaded the allocator with allocations. This greatly improves handling of lots of Packets.
         /// TODO: clean up this ugliness.
+        // TODO need to handle sparse as well
+        size_t numPreallocatedPackets = 0;
+        switch(config_.source.sourceType)
+        {
+            case Source_t::TRACE_FILE:
+                numPreallocatedPackets = 0;
+                break;
+            case Source_t::WX2:
+                numPreallocatedPackets = 800000 /
+                    config_.source.wx2SourceConfig.wxlayout.lanesPerPacket; // FIXME. this should depend on the number of tiles on the chip, which is hardwired to Spider size right now...
+                break;
+            default:
+                numPreallocatedPackets = 0;
+                break;
+        }
         auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()));
         if (numPreallocatedPackets>0)
         {
@@ -408,7 +401,9 @@ private:
                 wxconfig.maxPopLoops = config_.source.wx2SourceConfig.maxPopLoops;
                 wxconfig.tilePoolFactor = config_.source.wx2SourceConfig.tilePoolFactor;
                 wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
-
+                wxconfig.layoutDims[0] = config_.source.wx2SourceConfig.wxlayout.lanesPerPacket;
+                wxconfig.layoutDims[1] = config_.source.wx2SourceConfig.wxlayout.framesPerPacket;
+                wxconfig.layoutDims[2] = config_.source.wx2SourceConfig.wxlayout.zmwsPerLane;
                 dataSource = std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
             }
                 break;
@@ -475,23 +470,33 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto laneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const size_t numZmws = laneOffsets.size() * Tile::NumPixels;
-            std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
-            {
-                // FIXME. This is Tile (32 wide) versus Lane (64 wide) centric.
-                // Tile centric portion.
+            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
+            const auto sourceLaneWidth = dataSource.Layout().BlockWidth();
+            const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
 
+            // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
+            // The lane widths may be different.
+            std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
+            std::unordered_set<DataSourceBase::LaneIndex> destLaneSeen;
+            std::vector<DataSourceBase::LaneIndex> destLanes;
+            {
                 // currate the features of the ROI ZMWs
                 const auto allFeatures = dataSource.GetUnitCellProperties();
                 size_t k=0;
-                for(const auto tileOffset : laneOffsets)
+                for(const auto laneOffset : sourceLaneOffsets)
                 {
-                    const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
-                    for(uint32_t j =0;j<Tile::NumPixels;j++)
+                    const uint64_t zmwIndex = laneOffset * sourceLaneWidth;
+                    for(uint32_t j =0; j < sourceLaneWidth; j++)
                     {
                         roiFeatures[k] = allFeatures[zmwIndex+j];
                         k++;
+                    }
+
+                    const DataSourceBase::LaneIndex destLaneIndex = zmwIndex / laneSize;
+                    if (destLaneSeen.find(destLaneIndex) == destLaneSeen.end())
+                    {
+                        destLanes.push_back(destLaneIndex);
+                        destLaneSeen.insert(destLaneIndex);
                     }
                 }
                 if (k != numZmws)
@@ -499,25 +504,13 @@ private:
                     throw PBException("ROI selection algorithm is buggy");
                 }
             }
-            // conversion of Tile to Lane
-            std::unordered_set<DataSourceBase::LaneIndex> laneSet;
-            std::vector<DataSourceBase::LaneIndex> lanes;
-            for(const DataSourceBase::LaneIndex tileOffset : laneOffsets)
+            if (destLanes.size() != numZmws / laneSize)
             {
-                const uint64_t zmwIndex = tileOffset * Tile::NumPixels;
-                const DataSourceBase::LaneIndex laneIndex = zmwIndex / laneSize;
-                if (laneSet.find(laneIndex) == laneSet.end())
-                {
-                    lanes.push_back(laneIndex);
-                    laneSet.insert(laneIndex);
-                }
-            }
-            if (lanes.size() != numZmws / laneSize)
-            {
-                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << lanes.size() << " numZmws/laneSize:" << numZmws/laneSize;
+                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size() 
+                    << " numZmws/laneSize:" << numZmws/laneSize;
                 PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
             }
-            DataSourceBase::LaneSelector blocks(lanes);
+            DataSourceBase::LaneSelector blocks(destLanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
             outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
                                                          numZmws,
