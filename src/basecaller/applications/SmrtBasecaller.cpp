@@ -137,7 +137,8 @@ public:
                 // FIXME An API to load metadata from ICS configuration is not finalized yet.
                 // FIXME In the interest of rapid development, we are just loading a precanned metadata snippet.
                 // TODO replace this call with the official command line API for loading metadata (JSON) from ICS.
-                LoadMetaDataFromSequelFormat(DummyMetaData());
+                // for example, LoadMetaDataFromSequelFormat(json value of metadata);
+                movieConfig_ = PacBio::Mongo::Data::MockMovieConfig();
                 break;
 
             default:
@@ -291,129 +292,9 @@ private:
         }
     }
 
-    // TODO remove this function. It is only here to aid in rapid debugging, avoiding an external file.
-    static Json::Value DummyMetaData()
-    {
-        // this was snipped from rt-dev01$ less /var/log/pacbio/pa-acq/pa-acq-20201001_032630_00000 just to get something
-        Json::Value dummyMetaData = PacBio::IPC::ParseJSON(R"JSON(
-            {
-        "analogs" :
-        [
-                {
-                        "base" : "C",
-                        "interPulseXsnCV" : 0.10000000149011612,
-                        "intraPulseXsnCV" : 0.10000000149011612,
-                        "ipdMeanSeconds" : 0.30799999833106995,
-                        "pulseWidthMeanSeconds" : 0.23199999332427979,
-                        "relativeAmplitude" : 1,
-                        "spectrumValues" :
-                        [
-                                1
-                        ]
-                },
-                {
-                        "base" : "A",
-                        "interPulseXsnCV" : 0.10000000149011612,
-                        "intraPulseXsnCV" : 0.10000000149011612,
-                        "ipdMeanSeconds" : 0.23399999737739563,
-                        "pulseWidthMeanSeconds" : 0.18500000238418579,
-                        "relativeAmplitude" : 0.68000000715255737,
-                        "spectrumValues" :
-                        [
-                                1
-                        ]
-                },
-                {
-                        "base" : "T",
-                        "interPulseXsnCV" : 0.10000000149011612,
-                        "intraPulseXsnCV" : 0.10000000149011612,
-                        "ipdMeanSeconds" : 0.23399999737739563,
-                        "pulseWidthMeanSeconds" : 0.1809999942779541,
-                        "relativeAmplitude" : 0.43000000715255737,
-                        "spectrumValues" :
-                        [
-                                1
-                        ]
-                },
-                {
-                        "base" : "G",
-                        "interPulseXsnCV" : 0.10000000149011612,
-                        "intraPulseXsnCV" : 0.10000000149011612,
-                        "ipdMeanSeconds" : 0.18799999356269836,
-                        "pulseWidthMeanSeconds" : 0.21400000154972076,
-                        "relativeAmplitude" : 0.27000001072883606,
-                        "spectrumValues" :
-                        [
-                                1
-                        ]
-                }
-        ],
-        "baseMap" : "CATG",
-        "basecaller" :
-        {
-                "algorithm" :
-                {
-                        "Metrics" :
-                        {
-                                "hqrfMethod" : "DEFAULT"
-                        }
-                }
-        },
-        "basecallerVersion" : "?",
-        "basewriter" :
-        {
-                "hqrfMethod" : "DEFAULT"
-        },
-        "bazfile" : "/data/pa/m54004_170200_000000.baz",
-        "cameraConfigKey" : 0,
-        "cellId" : "cell0",
-        "chipClass" : "Spider",
-        "chipId" : "cell0",
-        "chipLayoutName" : "Spider_1p0_NTO",
-        "crosstalkFilter" :
-        [
-                [
-                        1
-                ]
-        ],
-        "darkFrameCalFile" : "/data/pa/cal/cell0_dark_2020-10-01T033026Z.h5",
-        "dryrun" : false,
-        "expectedFrameRate" : 100,
-        "exposure" : 0.01,
-        "hdf5output" : "/data/pa/m54004_170200_000000.trc.h5",
-        "instrumentName" : "alpha4",
-        "metricsVerbosity" : "MINIMAL",
-        "movieContext" : "m54004_170200_000000",
-        "numFrames" : 720000,
-        "numPixelLanes" : [],
-        "numZmwLanes" : [],
-        "photoelectronSensitivity" : 1,
-        "psfs" :
-        [
-                [
-                        [
-                                1
-                        ]
-                ],
-                [
-                        [
-                                1
-                        ]
-                ]
-        ],
-        "readout" : "BASES_WITHOUT_QVS",
-        "refDwsSnr" : 20,
-        "refSpectrum" :
-        [
-                1
-        ]
-             }
-        )JSON");
-        return dummyMetaData;
-    }
-
     /// In the interim of SequelOnKestrel, we may use metadata that was structured for Spider in JSON format.
     /// This helper function loads that JSON in to the internal data format.
+    /// TODO: using this as a starting point, support Kestrel runmeta data.
     void LoadMetaDataFromSequelFormat(const Json::Value& metadata)
     {
         movieConfig_.frameRate = metadata["expectedFrameRate"].asFloat();
