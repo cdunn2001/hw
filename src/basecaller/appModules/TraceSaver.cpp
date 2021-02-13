@@ -52,14 +52,16 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
         // std::vector<uint32_t> holeNumber;
         for(uint32_t i=0;i<numZMWs;i++)
         {
-            holexy[i][0] = features[i].x;
-            holexy[i][1] = features[i].y;
-            holeType[i] = features[i].flags; // FIXME there should be a conversion between bits and enumeration
-            // holeNumber[i] = features[i].holeNumber;
+            holexy[i][0] = static_cast<int16_t>(features[i].x); // TODO change UnitCellProperties.x and y to be 16 bits to get rid of these casts
+            holexy[i][1] = static_cast<int16_t>(features[i].y);
+            // TODO: a conversion from "flags" to "holeType". The connection needs to be made here:
+            (void) features[i].flags;
+            holeType[i] = 0; 
+            // TODO: holeNumber[i] = features[i].holeNumber;
         }
         writer_->Traces().HoleXY(holexy);
         writer_->Traces().HoleType(holeType);
-        // writer_->Traces().HoleNumber(holeNumber);
+        // TODO: writer_->Traces().HoleNumber(holeNumber);
     }
     PBLOG_INFO << "TraceSaverBody created";
 }
