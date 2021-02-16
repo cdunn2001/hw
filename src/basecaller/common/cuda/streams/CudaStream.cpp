@@ -27,3 +27,10 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include "CudaStream.h"
+
+namespace PacBio {
+namespace Cuda {
+
+thread_local cudaStream_t CudaStream::threadStream_ = cudaStreamPerThread;
+
+}}

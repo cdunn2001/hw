@@ -107,8 +107,11 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
     // interval, but estimates for individual batches are spread out evenly
     // between chunks.  For instance if it takes 4 chunks to get enough data
     // for an estimate, then once all startup latencies are finally finished,
-    // we'll estimate the first quarter of batches during one chunk, the next
-    // quarter during the next chunk, and so on.
+    // we'll estimate one quarter of batches during one chunk, the another
+    // quarter during the next chunk, and so on.  We'll also arrange things such
+    // that we don't do dme estimation on consecutive batches (assuming batches are
+    // processed in poolID order), so that the computational workload is a bit more
+    // evenly spread out
     const auto framesPerChunk = dims.framesPerBatch;
     const auto chunksPerEstimate = (dmeConfig.MinFramesForEstimate + framesPerChunk - 1)
                                  / framesPerChunk;

@@ -222,14 +222,16 @@ public:
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
-    // Retires the gpu memory, so it can be used again elsewhere
+    // Retires the gpu memory, so it can be used again elsewhere.  This operation
+    // will return the number of bytes downloaded from the GPU (which may be 0 if
+    // it was previously downloaded already)
     //
     // This is a blocking operation, and will not complete until all kernels run by this thread have
     // completed (to make sure no kernel that could know the gpu side address is still running). It
     // will also cause a data download if the data is device side and the synchronization scheme is
     // HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
     // the synchronization scheme was set incorrectly.
-    size_t DeactivateGpuMem()
+    size_t DeactivateGpuMem() const
     {
         if (!gpuData_) return 0;
 
@@ -294,10 +296,14 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
+    // Manually coppies the data to the device if necessary.  Returns number
+    // of bytes actually transfered
     size_t CopyToDevice() const
     {
         return CopyImpl(false, true);
     }
+    // Manually coppies the data to the host if necessary.  Returns number
+    // of bytes actually transfered
     size_t CopyToHost() const
     {
         return CopyImpl(true, true);

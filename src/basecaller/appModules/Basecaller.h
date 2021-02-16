@@ -26,7 +26,6 @@
 #ifndef PACBIO_APPLICATION_ANALYZER_H
 #define PACBIO_APPLICATION_ANALYZER_H
 
-#include "pacbio/dev/AutoTimer.h"
 #include <map>
 #include <vector>
 
@@ -57,8 +56,7 @@ public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
                    const Mongo::Data::MovieConfig& movConfig,
-                   const Mongo::Data::SystemsConfig& sysConfig,
-                   size_t maxPermGpuMemSize = std::numeric_limits<size_t>::max())
+                   const Mongo::Data::SystemsConfig& sysConfig)
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
@@ -122,7 +120,7 @@ public:
 
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
         }
-        gpuStash->PartitionData(maxPermGpuMemSize);
+        gpuStash->PartitionData(sysConfig.maxPermGpuDataMB);
     }
 
     BasecallerBody(const BasecallerBody&) = delete;
@@ -139,18 +137,55 @@ public:
     size_t ConcurrencyLimit() const override { return numStreams_; }
     float MaxDutyCycle() const override { return .8; }
 
+    // Notes:
+    //   There are a couple work scheduling concerns that the below code is being
+    //   a touch careful about.  In general, most of what you need is taken care of
+    //   by throwing 3+ cuda streams at the problem, and things will automatically tend
+    //   towards one stream uploading data, one stream doing compute, another stream
+    //   downloading (and any extra streams filling in scheduling gaps).
+    //
+    //   That said, the simple thing only works robustly when there is a single data
+    //   upload/download and a single kernel invocation.  When there are multiple pieces
+    //   of data to upload, you can occasionally work yourself into a situation where every
+    //   stream is taking turns uploading data and no one is overlapping that with compute.
+    //   Similarly you can get multiple streams fighting over the compute resources with
+    //   no one overlapping that with IO.  This introduces "bubbles" in the work scheduling
+    //   that make our overal compute more inefficient than otherwise possible.
+    //
+    //   To combat this, the below code does two things:
+    //     * The main upload and download are hidden behind a lock and mutex, reducing contention
+    //       over IO resources and allowing a thread to finish it's data movement as fast as
+    //       possible so it can proceed to compute
+    //     * The streams have been given a "priority", which can serve as a sort of tie breaker
+    //       when multiple streams are doing simultaneous compute.  We actually do want some
+    //       ammount of compute overlap, but using priorities helps ensure one thread is working as
+    //       fast as possible and getting to it's next IO stage quickly, and the rest are relegated
+    //       to "filling in the gaps" so to speak.
+    //
+    //   Final note: There are not that many uniuque stream priorities.  On the A100 and V100
+    //               there are only three.  As we expect 4-5 streams to be in play, this
+    //               mechanism only serves as an imperfect tie breaker.  For now this is OK
+    //               as the IO mutexes on their own are enough to mostly fix the problem.  If
+    //               that ever proves insuficcient we can have dedicated upload/download streams
+    //               and only use the priority streams for compute, which would allow us to get to
+    //               5 total active streams without reusing priority values.  The main reason
+    //               this wasn't done this round is that approach does make the timelines a bit
+    //               harder to parse in the cuda profilers.
     Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatch<int16_t>& in) override
     {
         using IOProfiler = Mongo::Basecaller::IOProfiler;
         using IOStages = Mongo::Basecaller::IOStages;
         IOProfiler profiler(IOProfiler::Mode::OBSERVE, 100, 100);
 
+        // top level profiler to keep an eye on how long we are stuck in
+        // overhead things like lock acquiring
         auto lockProfiler = profiler.CreateScopedProfiler(IOStages::Locks);
         (void) lockProfiler;
 
         {
             static std::mutex reportMutex;
             std::lock_guard<std::mutex> lm(reportMutex);
+
             if (in.Metadata().FirstFrame() < currFrame_)
                 throw PBException("Received an out-of-order batch");
             if (in.Metadata().FirstFrame() > currFrame_ && measurePCIeBandwidth_)
@@ -172,10 +207,15 @@ public:
             }
         }
 
-        auto stream = streams_->Pop();
-        auto f1 = stream->SetAsDefaultStream();
-        Utilities::Finally f2([&, this](){
-            streams_->Push(std::move(stream));
+        // Grab a cuda stream from the queue.  We'll set up
+        // a couple "Finally" statements to make sure we
+        // robustly undo our change to the default stream and
+        // put the stream back in the queue, even if there
+        // is an exception
+        auto threadStream = streams_->Pop();
+        auto finally1 = threadStream->SetAsDefaultStream();
+        Utilities::Finally finally2([&, this](){
+            streams_->Push(std::move(threadStream));
         });
         auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
 

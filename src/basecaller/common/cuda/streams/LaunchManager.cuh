@@ -29,6 +29,7 @@
 
 #include <tuple>
 
+#include <common/cuda/streams/CudaStream.h>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 
 namespace PacBio {
@@ -58,53 +59,43 @@ const T* KernelArgConvert(const T* t, const KernelLaunchInfo&)
 
 // Class for managing kernel invokations.  This is implemeted as a class so that we can keep the
 // arguments for the kernel invocation itself (number of threads, grid layout, etc) separate
-// from the actual kernel args.  Both need to be variadic templates, so some level
-// of separation is necessary.
-template <typename FT, typename... LaunchParams>
+// from the actual kernel args.
+template <typename FT>
 class LaunchManager
 {
-    // Need to ensure some constraints on LaunchParams.  The most common invocation will be
-    // with two arguments, specifying the layout of threads in a block, and blocks in a grid.
-    // They need to be templated because for each we can hand in either raw integers, or a dim3 or
-    // an initializer list.  The third (optional) argument is how much shared memory space the
-    // kernel needs to reserve if that is being done dynamically.  The 4th (optional) argument
-    // is for specifying which stream to execute on, but in our case specifying this is
-    // not allowed, as we maintain a 1-1 correlation between cpu threads and gpu streams
-    static_assert(sizeof...(LaunchParams) > 1, "Must specify kernel threading parameters");
-    static_assert(sizeof...(LaunchParams) < 4,
-                  "Cannot specify stream, usage of per-thread default stream is enforced");
 public:
-    LaunchManager(FT f, LaunchParams... params) : params_{f, params...} {}
+
+    LaunchManager(FT f, const dim3& gridDim, const dim3& blockDim, size_t dynamicSharedMem = 0)
+        : kernel_(f)
+        , gridDim_(gridDim)
+        , blockDim_(blockDim)
+        , dynamicSharedMemory_(dynamicSharedMem)
+    {}
 
     template <typename... Args>
     void operator()(Args&&... args) const
     {
         auto event = std::make_shared<CudaEvent>();
         KernelLaunchInfo info(event);
-        Invoke(std::make_index_sequence<sizeof...(LaunchParams)>{}, KernelArgConvert(std::forward<Args>(args), info)...);
+        kernel_<<<gridDim_, blockDim_, dynamicSharedMemory_, CudaStream::ThreadStream()>>>(KernelArgConvert(std::forward<Args>(args), info)...);
         ThrowIfCudaError();
         event->RecordEvent();
     }
 
 private:
-    // Helper function, just exists to get the Is... template pack
-    // so we can extract from the tuple
-    template <size_t... Is, typename... Args>
-    void Invoke(std::index_sequence<Is...>, Args&&... args) const
-    {
-        std::get<0>(params_)<<<std::get<Is+1>(params_)..., 0, Cuda::ThreadStream()>>>(std::forward<Args>(args)...);
-    }
-
-    std::tuple<FT, LaunchParams...> params_;
+    FT kernel_;
+    dim3 gridDim_;
+    dim3 blockDim_;
+    size_t dynamicSharedMemory_;
 };
 
 // This is the main intended entry point.  Wouldn't be necessary
 // in c++17 where you can have class argument deduction guides, but
 // for now we'll have to make do with a free function
-template <typename FT, typename... Params>
-auto PBLauncher(FT f, Params&&... params)
+template <typename FT>
+auto PBLauncher(FT f, dim3 gridDim, dim3 blockDim, size_t dynamicSharedMem = 0)
 {
-    return LaunchManager<FT, Params...>(f, std::forward<Params>(params)...);
+    return LaunchManager<FT>(f, gridDim, blockDim, dynamicSharedMem);
 }
 
 }}

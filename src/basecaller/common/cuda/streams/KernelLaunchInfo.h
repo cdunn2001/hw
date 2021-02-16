@@ -54,7 +54,7 @@ public:
     static constexpr uint32_t NoThreadId = 0;
 
 private:
-    template <typename FT, typename... LaunchParams>
+    template <typename FT>
     friend class LaunchManager;
 
     KernelLaunchInfo(std::shared_ptr<CudaEvent> event)

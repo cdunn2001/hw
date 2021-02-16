@@ -33,10 +33,8 @@ struct SupportedStreamPriorities
     int greatestPriority;
 };
 SupportedStreamPriorities StreamPriorityRange();
-cudaStream_t& ThreadStream();
 cudaStream_t CreateStream(int priority);
 void DestroyStream(cudaStream_t stream);
-void SetDefaultStream(cudaStream_t stream);
 
 void* CudaRawMalloc(size_t size);
 void* CudaRawMallocHost(size_t size);

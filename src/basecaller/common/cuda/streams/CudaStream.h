@@ -29,10 +29,10 @@
 #ifndef PACBIO_CUDA_CUDA_STREAM_H
 #define PACBIO_CUDA_CUDA_STREAM_H
 
-#include <atomic>
-
 #include <common/cuda/PBCudaRuntime.h>
 
+#include <pacbio/logging/Logger.h>
+#include <pacbio/PBException.h>
 #include <pacbio/utilities/Finally.h>
 
 namespace PacBio {
@@ -48,11 +48,15 @@ public:
 
     Utilities::Finally SetAsDefaultStream() const
     {
+        if (threadStream_ != cudaStreamPerThread)
+            throw PBException("Setting CudaStream as the thread default "
+                              "stream when another instance already is!");
+
         CudaSynchronizeDefaultStream();
-        Cuda::SetDefaultStream(stream_);
+        threadStream_ = stream_;
         return Utilities::Finally([](){
             CudaSynchronizeDefaultStream();
-            Cuda::SetDefaultStream(cudaStreamPerThread);
+            threadStream_ = cudaStreamPerThread;
         });
     }
 
@@ -61,7 +65,10 @@ public:
     // a pointer.  A copy doesn't make much sense
     // while preserving RAII semantics, and if you
     // want to enable move semantics, be sure to
-    // null out the moved-from pointer.
+    // null out the moved-from "pointer", though in
+    // this case be aware that the "null pointer" in
+    // this context also specificall overloaded to
+    // mean "cudaStreamPerThread"
     CudaStream(const CudaStream&) = delete;
     CudaStream(CudaStream&& o) = delete;
     CudaStream& operator=(const CudaStream&) = delete;
@@ -69,6 +76,9 @@ public:
 
     ~CudaStream()
     {
+        if (stream_ && threadStream_ == stream_)
+            PBLOG_ERROR << "Destroying a cuda stream that is actively"
+                        << " being used as the per-thread default!";
         if (stream_) Cuda::DestroyStream(stream_);
     }
 
@@ -77,10 +87,17 @@ public:
         return stream_;
     }
 
+    static cudaStream_t ThreadStream()
+    {
+        return threadStream_;
+    }
+
 private:
-    // raw cuda event.  This is just a typedef over a pointer
+    // raw cuda stream.  This is just a typedef over a pointer
     // so treat it as such.
     cudaStream_t stream_;
+
+    static thread_local cudaStream_t threadStream_;
 };
 
 }} // ::PacBio::Cuda

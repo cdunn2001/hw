@@ -531,10 +531,7 @@ private:
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
                                                 movieConfig_,
-                                                // TODO resolve this, should only hand in sys cofig,
-                                                // or only hand in desired elements.  Need to see why maxPermGpuDataMB was optional
-                                                config_.system,
-                                                config_.system.maxPermGpuDataMB);
+                                                config_.system);
     }
 
     std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)

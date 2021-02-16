@@ -40,9 +40,10 @@ class SystemsConfig : public Configuration::PBConfig<SystemsConfig>
 public:
     PB_CONFIG(SystemsConfig);
     /// The number of host worker threads to use.  For the most part we only
-    /// need enough to satisfy the basecallerConcurrencyRequest below, but if
+    /// need enough to satisfy the potential concurrency of the TBB graph,
+    /// (which includes the basecallerConcurrencyRequest below), but if
     /// any host computation stages are active then the more worker threades
-    /// allowed the more TBB will be able to leverage any parallelism.
+    /// allowed, the more TBB will be able to leverage any nested parallelism.
     PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 8);
 
     /// The number of threads allowed to be working in the basecaller at any given

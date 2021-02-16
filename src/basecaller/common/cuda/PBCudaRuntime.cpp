@@ -27,13 +27,13 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include "PBCudaRuntime.h"
-#include <pacbio/PBException.h>
 
 #include <cuda_runtime.h>
 
-#include <thread>
 #include <vector>
-#include <string.h>
+
+#include <common/cuda/streams/CudaStream.h>
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -86,18 +86,12 @@ void DestroyEvent(cudaEvent_t event)
 
 void RecordEvent(cudaEvent_t event)
 {
-    cudaCheckErrors(::cudaEventRecord(event, ThreadStream()));
+    cudaCheckErrors(::cudaEventRecord(event, CudaStream::ThreadStream()));
 }
 
 void SyncEvent(cudaEvent_t event)
 {
     cudaCheckErrors(::cudaEventSynchronize(event));
-}
-
-cudaStream_t& ThreadStream()
-{
-    static thread_local cudaStream_t stream = cudaStreamPerThread;
-    return stream;
 }
 
 SupportedStreamPriorities StreamPriorityRange()
@@ -117,11 +111,6 @@ cudaStream_t CreateStream(int priority)
 void DestroyStream(cudaStream_t stream)
 {
     cudaCheckErrors(::cudaStreamDestroy(stream));
-}
-
-void SetDefaultStream(cudaStream_t stream)
-{
-    ThreadStream() = stream;
 }
 
 bool CompletedEvent(cudaEvent_t event)
@@ -183,22 +172,22 @@ void CudaFreeHost(void* t)
 
 void CudaSynchronizeDefaultStream()
 {
-    cudaCheckErrors(::cudaStreamSynchronize(ThreadStream()));
+    cudaCheckErrors(::cudaStreamSynchronize(CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyDeviceToHost(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToHost, ThreadStream()));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToHost, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyHostToDevice(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyHostToDevice, ThreadStream()));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyHostToDevice, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyDeviceToDevice(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToDevice, ThreadStream()));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToDevice, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyToSymbol(const void* dest, const void* src, size_t count)
