@@ -1,6 +1,4 @@
-#ifndef Mongo_Common_HQRFPhysicalStates_H_
-#define Mongo_Common_HQRFPhysicalStates_H_
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -25,24 +23,25 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Description:
-/// \brief HQRFPhysicalStates
 
-#include <cstdint>
+#ifndef mongo_dataTypes_configs_roiConfig_H
+#define mongo_dataTypes_configs_roiConfig_H
+
+#include <array>
+
+#include <pacbio/configuration/PBConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-enum class HQRFPhysicalStates : std::uint16_t
+struct ROIConfig  : public Configuration::PBConfig<ROIConfig>
 {
-    EMPTY = 0,
-    SINGLE,
-    MULTI,
-    LOW,
+    PB_CONFIG(ROIConfig);
 
-    NUM_PHYS_STATES
+    PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
 };
 
-}}} // ::PacBio::Mongo::Data
-#endif // Mongo_Common_HQRFPhysicalStates_H_
+}}}     // namespace PacBio::Mongo::Data
+
+#endif //mongo_dataTypes_configs_roiConfig_H

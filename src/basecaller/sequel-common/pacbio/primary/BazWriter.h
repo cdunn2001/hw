@@ -417,6 +417,12 @@ protected:
             overheadBytes_ += 4;
         }
     }
+
+    /// Write the header to the fileHandle_. Because the header can be big, this method may loop
+    /// over Fwrite as needed.
+    /// \param accumulate - if true, then aggregate the bytes written into the statistics
+    void WriteJsonFileHeader(bool accumulate);
+
 };
 
 }}

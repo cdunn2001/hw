@@ -407,14 +407,31 @@ void BazWriter<TMetric>::Align(size_t alignmentSize, bool accumulate)
     }
 }
 
+template <typename TMetric>
+void BazWriter<TMetric>::WriteJsonFileHeader(bool accumulate)
+{
+    /// Fwrite doesn't allow to write really big buffers. The write is broken into multiple smaller pieces.
+    size_t bytesToWrite = jsonFileHeader_.size();
+    const auto* ptr = jsonFileHeader_.data();
+    while(bytesToWrite >0)
+    {
+        size_t bytesToWriteNow = (1UL << 20); // let's try 1 MiB each loop. 2GiB was too much.
+        if (bytesToWriteNow > bytesToWrite) bytesToWriteNow = bytesToWrite;
+        const auto justWrote = Fwrite(ptr,bytesToWriteNow, accumulate);
+        if (accumulate) headerBytes_ += justWrote;
+        bytesToWrite -= bytesToWriteNow;
+        ptr += bytesToWriteNow;
+    }
+}
+
 /// This is essentially the thread function that writes the entire baz file
 /// from header to footer.
 /// To end the thread, stop adding new baz buffers and then call WaitForTermination()
 template <typename TMetric>
 void BazWriter<TMetric>::WriteToDiskLoop()
 {
-    PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() header ";
-    headerBytes_ += Fwrite(jsonFileHeader_.data(), jsonFileHeader_.size());
+    PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() header, length: " << jsonFileHeader_.size();
+    WriteJsonFileHeader(true /* accumulate bytes in statistics */);
     WriteSanity();
 
     Align(blocksize);
@@ -502,7 +519,7 @@ void BazWriter<TMetric>::WriteToDiskLoop()
     // Rewrite header
     FseekAbsolute(0);
     jsonFileHeader_ = fhb_.CreateJSONCharVector();
-    Fwrite(jsonFileHeader_.data(), jsonFileHeader_.size(), false);
+    WriteJsonFileHeader(false /* don't double count the Fwrite bytes*/);
     WriteSanity(false);
     Align(blocksize,false);
 

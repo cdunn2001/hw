@@ -31,6 +31,7 @@
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
+#include <pacbio/sensor/Platform.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -43,11 +44,35 @@ SMART_ENUM(Source_t,
         OTHER_TBD // could add USB3, FRAME_GRABBER, PCIE
 );
 
+struct WX2LayoutConfig  : public Configuration::PBConfig<WX2LayoutConfig>
+{
+    PB_CONFIG(WX2LayoutConfig);
+    PB_CONFIG_PARAM(uint32_t, lanesPerPacket, 2);
+    PB_CONFIG_PARAM(uint32_t, framesPerPacket, 512); // PacBio::Mongo::DataSource::Tile::NumFrames);
+    PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 32); // PacBio::Mongo::DataSource::Tile::NumPixels);
+};
+
+// WARNING
+// This is a shadow struct. Also modify WXDataSourceConfig.h and adjust the constructor in std::make_unique<WXDataSource> in SmrtBasecaller.h
+// TODO: remove the shadow structs.
+struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
+{
+    PB_CONFIG(WX2SourceConfig);
+    PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
+    PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::Sequel2Lvl1);
+    PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
+    PB_CONFIG_PARAM(double, sleepDebug, 0.0);
+    PB_CONFIG_PARAM(uint32_t, maxPopLoops, 10);
+    PB_CONFIG_PARAM(double, tilePoolFactor, 3.0);
+    PB_CONFIG_OBJECT(WX2LayoutConfig, wxlayout);
+};
+
 struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
 {
     PB_CONFIG(SourceConfig);
 
     PB_CONFIG_PARAM(Source_t, sourceType, Source_t::TRACE_FILE);
+    PB_CONFIG_OBJECT(WX2SourceConfig,wx2SourceConfig);
 };
 
 }}}     // namespace PacBio::Mongo::Data

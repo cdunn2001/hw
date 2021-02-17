@@ -2,8 +2,8 @@ set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 set(CMAKE_SYSTEM_VERSION 1)
 
-set(CMAKE_C_COMPILER cc)
-set(CMAKE_CXX_COMPILER c++)
+set(CMAKE_C_COMPILER cc CACHE STRING "" FORCE)
+set(CMAKE_CXX_COMPILER c++ CACHE STRING "" FORCE)
 
 # CUDA_API_PER_THREAD_DEFAULT_STREAM is the equivalent of `--default-stream per thread` for nvcc.  Necessary if any pure
 # C++ code is going to call any cuda runtime functions.

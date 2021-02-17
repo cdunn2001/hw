@@ -5,4 +5,7 @@ pa-common/
 hw-mongo/
 **/build/
 .idea/
-cmake-build-debug/
+.run/
+.clang-format
+.vscode
+cmake-build-*/

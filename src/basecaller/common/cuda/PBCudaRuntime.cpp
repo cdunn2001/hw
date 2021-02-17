@@ -32,6 +32,8 @@
 #include <cuda_runtime.h>
 
 #include <thread>
+#include <vector>
+#include <string.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -184,4 +186,29 @@ void CudaHostUnregister(void* ptr)
     cudaCheckErrors(::cudaHostUnregister(ptr));
 }
 
-}}
+std::vector<CudaDeviceProperties> CudaAllGpuDevices()
+{
+    std::vector<CudaDeviceProperties> devices;
+    int count = 0;
+    if (cudaGetDeviceCount(&count) != cudaSuccess) count = 0;
+
+    for(int idevice=0;idevice<count;idevice++)
+    {
+        CudaDeviceProperties properties;
+        cudaError_t result = cudaGetDeviceProperties(&properties.deviceProperties, idevice);
+
+        if (result != cudaSuccess)
+        {
+            // something needs to be pushed to the devices vector because
+            // the index of the vector elements corresponds to the idevice ordinal number.
+            memset(&properties.deviceProperties.uuid,0,sizeof(properties.deviceProperties.uuid));
+            properties.errorMessage = cudaGetErrorName(result);
+        }
+        devices.push_back(properties);
+    }
+
+    return devices;
+}
+
+}} // end of namespace
+

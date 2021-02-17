@@ -418,6 +418,8 @@ const auto snrSweep = ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost, snrSweep);
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmDevice, snrSweep);
 
+#if 0
+// This #if/#endif block is necessary to avoid compiler warnings about unused variables (snrSweep2)
 const std::array<unsigned int,nModes> frameCountsUnBalanced = {600, 200, 125, 300, 75};
 const auto snrSweep2 = ::testing::Values(
         TestDmeEmParam{14.4f,  frameCountsUnBalanced,      0.0f,       0.0f},
@@ -429,16 +431,21 @@ const auto snrSweep2 = ::testing::Values(
 );
 // TODO: Both the test with unbalanced frame counts and missing
 // analog currently fail and need to be further investigated.
-//INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmHost, snrSweep2);
-//INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmDevice, snrSweep2);
+INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmHost, snrSweep2);
+INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmDevice, snrSweep2);
+#endif
 
+
+#if 0
+// This #if/#endif block is necessary to avoid compiler warnings about unused variables (noAnalog0)
 const std::array<unsigned int,nModes> frameCountsNoBrightest = {600, 0, 200, 200, 200};
 const auto noAnalog0 = ::testing::Values(
         TestDmeEmParam{18.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
         TestDmeEmParam{20.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
         TestDmeEmParam{21.0f,  frameCountsNoBrightest,   1.0f,       0.1f}
 );
-//INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmHost, noAnalog0);
-//INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmDevice, noAnalog0);
+INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmHost, noAnalog0);
+INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmDevice, noAnalog0);
+#endif
 
 }}} // namespace PacBio::Mongo::Basecaller

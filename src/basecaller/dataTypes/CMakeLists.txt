@@ -1,6 +1,8 @@
 
 cmake_minimum_required(VERSION 3.13)
 
+add_subdirectory(test)
+
 set(CPP_LIST
     configs/BasecallerAlgorithmConfig.cpp
     configs/BasecallerAlgorithmConfig.h

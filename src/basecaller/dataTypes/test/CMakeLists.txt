@@ -4,25 +4,22 @@ cmake_minimum_required(VERSION 3.13)
 include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
-add_library(libTestAppModules OBJECT
-    TestBlockRepacker.cpp
-    TestBasecaller.cpp
-    TestSimulatedDataSource.cpp
-    TestTraceSaver.cpp
+add_library(libMongoDataTypesTest OBJECT
+    TestLabelsBatch.cpp
 )
 
-target_link_libraries(libTestAppModules
-    libAppModules
+target_link_libraries(libMongoDataTypesTest
+    libMongoDataTypes
     libGtest
 )
 
 # Define the test executable specific to mongo basecaller analyzer.
-set(exec testAppModules)
+set(exec testMongoDataTypesTest)
 
 add_executable(${exec})
 
 target_link_libraries(${exec}
-    libTestAppModules
+    libMongoDataTypesTest
     libGtestWithMain
 )
 
