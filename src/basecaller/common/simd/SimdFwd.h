@@ -1,5 +1,4 @@
-
-// Copyright (c) 2018, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,19 +22,23 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//  Description:
-//  Defines some members of DmeDiagnostics.
 
-#include "DmeDiagnostics.h"
-
-#include <common/LaneArray.h>
+#ifndef mongo_common_simd_SimdFwd_H_
+#define mongo_common_simd_SimdFwd_H_
 
 namespace PacBio {
-namespace Mongo {
-namespace Basecaller {
+namespace Simd {
 
-template struct DmeDiagnostics<LaneArray<float>>;
-template struct DmeDiagnostics<float>;
+template <typename T>
+union ArrayUnion;
+class m32s;
+class m512b;
+class m512f;
+class m512i;
+class m512s;
+class m512ui;
+class m512us;
 
-}}}     // namespace PacBio::Mongo::Basecaller
+}}
+
+#endif //mongo_common_simd_SimdFwd_H_

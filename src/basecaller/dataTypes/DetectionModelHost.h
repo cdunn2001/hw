@@ -32,6 +32,7 @@
 #include <array>
 #include <common/AlignedVector.h>
 #include <common/simd/SimdConvTraits.h>
+#include <common/simd/SimdTypeTraits.h>
 #include <dataTypes/LaneDetectionModel.h>
 
 namespace PacBio {

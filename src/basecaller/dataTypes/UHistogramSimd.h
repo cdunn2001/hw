@@ -206,8 +206,6 @@ public:     // Modifying methods
     /// Adds elements of \a x only when correspond elements of \a select are true.
     UHistogramSimd& AddDatum(const DataType& x, const BoolType& select = BoolType(true))
     {
-        using PacBio::inc;
-
         // This function can return an index that is out of bounds
         auto bin = Simd::MakeUnion(BinIndex(x));
 

@@ -49,8 +49,8 @@ class BasecallerDmeConfig : public Configuration::PBConfig<BasecallerDmeConfig>
 public:
     PB_CONFIG(BasecallerDmeConfig);
 
-    SMART_ENUM(MethodName, Fixed, EmHost);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::EmHost);
+    SMART_ENUM(MethodName, Fixed, EmHost, EmDevice);
+    PB_CONFIG_PARAM(MethodName, Method, MethodName::EmDevice);
 
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);
