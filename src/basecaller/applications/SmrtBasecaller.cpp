@@ -178,7 +178,7 @@ public:
             // PBLOG_INFO << "  Constant memory:" << dd.totalConstMem;
             // PBLOG_INFO << "  Warp size:" << dd.warpSize;
             PBLOG_INFO << "  sharedMemPerBlock:" << dd.sharedMemPerBlock;
-            PBLOG_INFO << "  major/minog:" << dd.major << "/" << dd.minor;
+            PBLOG_INFO << "  major/minor:" << dd.major << "/" << dd.minor;
             PBLOG_INFO << "  Error Message:" << d.errorMessage;
             idevice++;
         }
