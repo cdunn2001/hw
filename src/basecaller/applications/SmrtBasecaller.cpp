@@ -780,7 +780,7 @@ int main(int argc, char* argv[])
         parser.add_option("--strict").action_store_true().help("Strictly check all configuration options. Do not allow unrecognized configuration options");
         parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace and exits");
 
-        parser.add_option("--inputfile").set_default("").help("input file (must be *.trc.h5)");
+        parser.add_option("--inputfile").set_default("").help("input file (can be *.h5 or name of a test pattern)");
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");

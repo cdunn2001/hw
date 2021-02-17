@@ -6,8 +6,6 @@ module purge
 module use /pbi/dept/primary/modulefiles
 module use /mnt/software/modulefiles
 module load devtoolset/6
-# module load convey/OpenHT/2.1.35
-module load openht/git
 module load composer_xe/2017.4.196
 module load pacbio-devtools
 module load patchelf
