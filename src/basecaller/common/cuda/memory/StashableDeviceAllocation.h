@@ -119,8 +119,8 @@ public:
     }
 
     /// Makes sure the data currently resides on the GPU.  This is cheap
-    /// to call if the data is already on the GPU.  Returns number of bytes
-    /// transfered
+    /// to call if the data is already on the GPU.
+    /// \return number of bytes transfered
     size_t Retrieve()
     {
         std::lock_guard<std::mutex> lm(mutex_);
