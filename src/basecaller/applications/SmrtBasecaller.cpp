@@ -713,7 +713,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-                    if (framesSinceBigReports > config_.monitoringReportInterval)
+                    if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
                         PacBio::Cuda::Memory::ReportAllMemoryStats();
                         Basecaller::AnalysisProfiler::IntermediateReport();

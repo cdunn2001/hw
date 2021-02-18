@@ -50,7 +50,7 @@ public:
     /// time.  This will also correspond to the number of cuda streams in play.
     /// A minimum of 3 will allow efficient overlap of upload/download/compute,
     /// and anything beyond that can be used to smooth over any scheduling gaps
-    /// that arrise from irregular compute/IO.  Shouldn't really need that
+    /// that arise from irregular compute/IO.  Shouldn't really need that
     /// many additional streams, though dropping down to 1 is necessary when
     /// measuring a robust compute budget breakdown.
     PB_CONFIG_PARAM(uint32_t, basecallerConcurrency, 5);

@@ -29,11 +29,11 @@
 #include <map>
 #include <vector>
 
+#include <pacbio/ipc/ThreadSafeQueue.h>
+
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/streams/CudaStream.h>
 #include <common/graphs/GraphNodeBody.h>
-
-#include <pacbio/ipc/ThreadSafeQueue.h>
 
 #include <basecaller/analyzer/AlgoFactory.h>
 #include <basecaller/analyzer/BatchAnalyzer.h>
@@ -64,7 +64,7 @@ public:
         , numStreams_(sysConfig.basecallerConcurrency)
     {
         auto priorityRange = Cuda::StreamPriorityRange();
-        assert(priorityRange.greatestPriority < priorityRange.leastPriority);
+        assert(priorityRange.greatestPriority <= priorityRange.leastPriority);
         PBLOG_INFO << "Assigning priority range " << priorityRange.greatestPriority << ":" << priorityRange.leastPriority
                    << " round robbin amongst " << numStreams_ << " streams";
         auto priority = priorityRange.greatestPriority;
@@ -190,12 +190,20 @@ public:
                 throw PBException("Received an out-of-order batch");
             if (in.Metadata().FirstFrame() > currFrame_ && measurePCIeBandwidth_)
             {
+                // These shouldn't be able to trigger unless there is an outright bug
+                // in the timing code. These variables are in units of miliseconds, but
+                // have double precision and accumulate data from full resolution timers.
+                // Just setup/teardown should be enough to give us a nonzero interval even
+                // if for some reason we transfer no data.
+                assert(msUpload > 0);
+                assert(msDownload > 0);
+
                 auto gbUpload = bytesUploaded_ >> 30;
-                auto secUpload = msUpload / 1000;
+                auto secUpload = msUpload / 1000.;
                 PBLOG_INFO << "Uploaded " << gbUpload
                            << "GiB to GPU in " << secUpload << "s (" << gbUpload/secUpload << "GiB/s)";
                 auto gbDownload = bytesDownloaded_ >> 30;
-                auto secDownload = msDownload / 1000;
+                auto secDownload = msDownload / 1000.;
                 PBLOG_INFO << "Downloaded " << gbDownload
                            << "GiB from GPU in " << secDownload << "s (" << gbDownload/secDownload << "GiB/s)";
 
@@ -213,10 +221,10 @@ public:
         // put the stream back in the queue, even if there
         // is an exception
         auto threadStream = streams_->Pop();
-        auto finally1 = threadStream->SetAsDefaultStream();
-        Utilities::Finally finally2([&, this](){
+        Utilities::Finally finally1([&, this](){
             streams_->Push(std::move(threadStream));
         });
+        auto finally2 = threadStream->SetAsDefaultStream();
         auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
 
         {
@@ -227,6 +235,12 @@ public:
             (void) uploadProfiler;
 
             PacBio::Dev::Profile::FastTimer timer;
+            // TODO need to have a robust check if there is a GPU
+            //      present on this system.  CopyToDevice will
+            //      have an error if that is the case.  This flag
+            //      can serve as an imperfect proxy for now, but
+            //      certain (presumably uncommon) config settings
+            //      can break this.
             if (measurePCIeBandwidth_)
                 bytesUploaded_ += in.CopyToDevice();
             bytesUploaded_ += gpuStash->RetrievePool(in.GetMeta().PoolId());
@@ -247,8 +261,7 @@ public:
             (void) downloadProfiler;
 
             PacBio::Dev::Profile::FastTimer timer;
-            if (measurePCIeBandwidth_)
-                bytesDownloaded_ += ret.DeactivateGpuMem();
+            bytesDownloaded_ += ret.DeactivateGpuMem();
             bytesDownloaded_ += gpuStash->StashPool(in.GetMeta().PoolId());
             msDownload += timer.GetElapsedMilliseconds();
         }

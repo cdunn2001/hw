@@ -50,7 +50,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_OBJECT(ROIConfig, traceROI);
 
     /// Minimum duration (in frames) between intermediate reports
-    /// for both memory and compute statistics.  Repports will happen
+    /// for both memory and compute statistics.  Reports will happen
     /// only on chunk boundaries
     PB_CONFIG_OBJECT(size_t, monitoringReportInterval, 8192);
 };

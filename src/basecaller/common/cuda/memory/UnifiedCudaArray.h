@@ -296,13 +296,13 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
-    // Manually coppies the data to the device if necessary.  Returns number
+    // Manually copies the data to the device if necessary.  Returns number
     // of bytes actually transfered
     size_t CopyToDevice() const
     {
         return CopyImpl(false, true);
     }
-    // Manually coppies the data to the host if necessary.  Returns number
+    // Manually copies the data to the host if necessary.  Returns number
     // of bytes actually transfered
     size_t CopyToHost() const
     {

@@ -113,9 +113,9 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
     // processed in poolID order), so that the computational workload is a bit more
     // evenly spread out
     const auto framesPerChunk = dims.framesPerBatch;
-    const auto chunksPerEstimate = (dmeConfig.MinFramesForEstimate + framesPerChunk - 1)
+    const auto chunksPerEstimate = (std::max(dmeConfig.MinFramesForEstimate,1u) + framesPerChunk - 1)
                                  / framesPerChunk;
-    poolDmeDelayFrames_ = (poolId % chunksPerEstimate) * dims.framesPerBatch;
+    poolDmeDelayFrames_ = (poolId % chunksPerEstimate) * framesPerChunk;
 }
 
 FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,

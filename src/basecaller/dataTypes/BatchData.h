@@ -403,7 +403,7 @@ public:
     // Relinquishes the device allocation, after downloading the data if necessary.
     // Returns the number of bytes actually downloaded
     size_t DeactivateGpuMem() const { return data_.DeactivateGpuMem(); }
-    // Manually uploades the data to the GPU if not already present.  Returns
+    // Manually uploads the data to the GPU if not already present.  Returns
     // the number of bytes actually uploaded
     size_t CopyToDevice() const { return data_.CopyToDevice(); }
 
