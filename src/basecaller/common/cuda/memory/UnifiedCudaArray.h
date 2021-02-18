@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -66,10 +66,16 @@ public:
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
     static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
 
-    // Constructor for creating UCA from a pre-existing device allocation.  Predominantly
-    // designed to allow a DeviceOnlyArray to copy out it's contents into something that
-    // can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
-    // meant for 1-off random usage.
+    /// Constructor for creating UCA from a pre-existing device allocation.  Predominantly
+    /// designed to allow a DeviceOnlyArray to copy out it's contents into something that
+    /// can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
+    /// meant for 1-off random usage.
+    ///
+    /// \param alloc The SmrtDeviceAllocation we will canibalize
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(PacBio::Cuda::Memory::SmartDeviceAllocation alloc,
                      size_t count,
                      SyncDirection dir,
@@ -96,6 +102,15 @@ public:
         }
     }
 
+    /// Constructor for creating UCA from a pre-existing host allocation.  Predominantly
+    /// designed to allow external code to directly populate a memory buffer that we
+    /// will upload to the GPU
+    ///
+    /// \param alloc The SmrtAllocation we will canibalize
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(PacBio::Memory::SmartAllocation alloc,
                      size_t count,
                      SyncDirection dir,
@@ -127,6 +142,11 @@ public:
         }
     }
 
+
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
                      const AllocationMarker& marker)
@@ -222,15 +242,15 @@ public:
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
-    // Retires the gpu memory, so it can be used again elsewhere.  This operation
-    // will return the number of bytes downloaded from the GPU (which may be 0 if
-    // it was previously downloaded already)
-    //
-    // This is a blocking operation, and will not complete until all kernels run by this thread have
-    // completed (to make sure no kernel that could know the gpu side address is still running). It
-    // will also cause a data download if the data is device side and the synchronization scheme is
-    // HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
-    // the synchronization scheme was set incorrectly.
+    /// Retires the gpu memory, so it can be used again elsewhere.
+    ///
+    /// This is a blocking operation, and will not complete until all kernels run by this thread have
+    /// completed (to make sure no kernel that could know the gpu side address is still running). It
+    /// will also cause a data download if the data is device side and the synchronization scheme is
+    /// HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
+    /// the synchronization scheme was set incorrectly.
+    ///
+    /// \return the number of bytes downloaded from the GPU
     size_t DeactivateGpuMem() const
     {
         if (!gpuData_) return 0;
@@ -296,14 +316,14 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
-    // Manually copies the data to the device if necessary.  Returns number
-    // of bytes actually transfered
+    /// Manually copies the data to the device if necessary.
+    /// \return number of bytes actually transfered
     size_t CopyToDevice() const
     {
         return CopyImpl(false, true);
     }
-    // Manually copies the data to the host if necessary.  Returns number
-    // of bytes actually transfered
+    /// Manually copies the data to the host if necessary.
+    /// \return number of bytes actually transfered
     size_t CopyToHost() const
     {
         return CopyImpl(true, true);

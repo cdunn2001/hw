@@ -122,11 +122,28 @@ class DeviceOnlyArray : private detail::DataManager
         return std::make_pair(numBlocks, threadsPerBlock);
     }
 public:
+    /// Constructor primarily intended for testing paths, as it bypasses
+    /// the allocation stashing mechanism
+    ///
+    /// \param marker AllocationMarker describing the source code location
+    ///        used to instantiate this object
+    /// \param count Number of array elements to construct
+    /// \param args optional variadic pack of arguments that will be used to
+    ///        construct each array element
     template <typename... Args>
     DeviceOnlyArray(const AllocationMarker& marker, size_t count, Args&&... args)
         : DeviceOnlyArray(nullptr, marker, count, std::forward<Args>(args)...)
     {}
 
+    /// Constructs an array of device objects
+    ///
+    /// \param registrar A pointer to the StashableAllocRegistrar that will be
+    ///        in charge of stashing (or not) our underlying allocation.
+    /// \param marker AllocationMarker describing the source code location
+    ///        used to instantiate this object
+    /// \param count Number of array elements to construct
+    /// \param args optional variadic pack of arguments that will be used to
+    ///        construct each array element
     template <typename... Args>
     DeviceOnlyArray(StashableAllocRegistrar* registrar,
                     const AllocationMarker& marker,
@@ -165,9 +182,17 @@ public:
         return data_->GetDeviceHandle<const T>(info);
     }
 
+    /// Coppies the data in this array to a UnifiedCudaArray
+    ///
+    /// \param dir The SyncDirection to be used in the UnifiedCudaArray
+    /// \param marker An AllocationMarker describing the source code location
+    ///        calling this function
+    /// \return A UnifiedCudaArray that has a copy of this data.
     template <typename U = T, std::enable_if_t<std::is_trivially_copyable<U>::value, int> dummy = 0>
     UnifiedCudaArray<T> CopyAsUnifiedCudaArray(SyncDirection dir, const AllocationMarker& marker) const
     {
+        if (dir == SyncDirection::HostWriteDeviceRead)
+            throw PBException("Nonsensical SyncDirection selected when copying DeviceOnlyArray to UnifiedCudaArray");
         auto alloc = GetGlobalAllocator().GetDeviceAllocation(count_*sizeof(T), marker);
         data_->Copy(alloc);
         return UnifiedCudaArray<T>(std::move(alloc), count_, dir, marker, DataKey());

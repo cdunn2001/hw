@@ -57,6 +57,12 @@ public:
         DEVICE
     };
 
+    /// \param size Number of bytes for the new allocation
+    /// \param marker AllocationMarker indicating which source line
+    ///        created this allocation
+    /// \param monitor A stream monitor suitable for the intended useage
+    ///        of this allocation (essentially if it is for multi-thread
+    ///        access or not)
     StashableDeviceAllocation(size_t size,
                               const AllocationMarker& marker,
                               std::unique_ptr<StreamMonitorBase> monitor)
@@ -112,9 +118,9 @@ public:
             IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
     }
 
-    // Makes sure the data currently resides on the GPU.  This is cheap
-    // to call if the data is already on the GPU.  Returns number of bytes
-    // transfered
+    /// Makes sure the data currently resides on the GPU.  This is cheap
+    /// to call if the data is already on the GPU.  Returns number of bytes
+    /// transfered
     size_t Retrieve()
     {
         std::lock_guard<std::mutex> lm(mutex_);
@@ -145,9 +151,10 @@ private:
     }
 public:
 
-    // Copy data to the host and free up the GPU memory.  This is cheap
-    // to call if data is already on the host. Returns number of bytes
-    // transfered
+    /// Copy data to the host and free up the GPU memory.  This is cheap
+    /// to call if data is already on the host.
+    ///
+    /// \return number of bytes transfered
     size_t Stash()
     {
         std::lock_guard<std::mutex> lm(mutex_);
@@ -194,6 +201,9 @@ public:
         return DeviceHandle<T>(device_.get<T>(DataKey()), size_/sizeof(T), DataKey());
     }
 
+    /// Coppies the data to a specified gpu allocation
+    ///
+    /// \param dest The destination SmartDeviceAllocationj
     void Copy(SmartDeviceAllocation& dest)
     {
         std::lock_guard<std::mutex> lm(mutex_);

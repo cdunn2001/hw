@@ -53,29 +53,40 @@ public:
 
     DeviceAllocationStash() = default;
 
-    // Goes through all currently registered data and segregates them into
-    // two groups:
-    // 1. Data that will always reside on the GPU
-    // 2. Data that will be uploaded just in time for use and moved back
-    //    to the host afterwards.
-    // maxResidentMB controls how large the first group is.
+    /// Goes through all currently registered data and segregates them into
+    /// two groups:
+    /// 1. Data that will always reside on the GPU
+    /// 2. Data that will be uploaded just in time for use and moved back
+    ///    to the host afterwards.
+    /// maxResidentMB controls how large the first group is.
+    ///
+    /// \param maxResidentMB maximum space to use on the GPU for permanent
+    ///        algorithm state data storage
     void PartitionData(size_t maxResidentMB);
 
-    // Registers a new StashableDeviceAllocation with this stash.
-    // Until PartitionData is subsequently called, the new allocation
-    // will be stashed on the host rather than permanently resident
-    // on the GPU.
+    /// Registers a new StashableDeviceAllocation with this stash.
+    /// Until PartitionData is subsequently called, the new allocation
+    /// will be stashed on the host rather than permanently resident
+    /// on the GPU.
+    ///
+    /// \param poolId the pool associated with the provided allocation
+    /// \param alloc a weak_ptr to a StashableDeviceAllocation
     void Register(uint32_t poolId, Allocation alloc);
 
-    // Walks through all registered StashableDeviceAllocations associated
-    // with a given poolID, and makes sure that they are moved to the GPU
-    // and ready to be used.  Returns total number of bytes transfered
+    /// Walks through all registered StashableDeviceAllocations associated
+    /// with a given poolID, and makes sure that they are moved to the GPU
+    /// and ready to be used.
+    ///
+    /// \param poolId the pool for which we want to upload all stashed data
+    /// \return total number of bytes transfered
     size_t RetrievePool(uint32_t poolId);
 
-    // Walks through all registered StashableDeviceAllocations associated
-    // with a given poolID, and if they are marked for storage on the host,
-    // copy them down and free up the GPU memory. Returns total number of
-    // bytes transfered
+    /// Walks through all registered StashableDeviceAllocations associated
+    /// with a given poolID, and if they are marked for storage on the host,
+    /// copy them down and free up the GPU memory.
+    ///
+    /// \param poolId the pool for which we can stash data back on the host
+    /// \return total number of bytes transfered
     size_t StashPool(uint32_t poolId);
 
 private:
