@@ -43,8 +43,10 @@ public:
     PB_CONFIG_PARAM(MethodName, Method, MethodName::GpuPulses);
 
     // Increasing this number will directly increase memory usage, even if
-    // we don't saturate the allowed number of calls, so be conservative
-    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 12);
+    // we don't saturate the allowed number of calls, so be conservative.
+    // Hard-coded for now to correspond to 512-frame chunk, 100 fps, with
+    // max pulse rate of 10 pulses per second.
+    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 52);
 };
 
 }}}     // namespace PacBio::Mongo::Data

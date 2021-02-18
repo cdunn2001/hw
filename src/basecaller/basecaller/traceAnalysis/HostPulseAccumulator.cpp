@@ -109,6 +109,10 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
     currSegment.ResetSegment(boundaryMask, absFrameIndex, label, signal);
     currSegment.AddSignal(!boundaryMask, signal);
 
+    // TODO: The below excludes the baseline frame succeeding a pulse
+    // but we also want to exclude the baseline frame preceding a pulse
+    // to not contaminate the baseline statistics by frames that
+    // might be partially influenced by an adjacent pulse frame.
     const auto& isBaseline = (!pulseMask) & (!boundaryMask);
     if (any(isBaseline))
     {

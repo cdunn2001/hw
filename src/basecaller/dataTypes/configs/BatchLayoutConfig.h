@@ -43,7 +43,7 @@ class BatchLayoutConfig :  public Configuration::PBConfig<BatchLayoutConfig>
     // In many places we use the constexpr laneSize defined in MongoConstants.h.
     PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 64);
     PB_CONFIG_PARAM(uint32_t, lanesPerPool, 4096);
-    PB_CONFIG_PARAM(uint32_t, framesPerChunk, 128);
+    PB_CONFIG_PARAM(uint32_t, framesPerChunk, 512);
 };
 
 }}}     // namespace PacBio::Mongo::Data

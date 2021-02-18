@@ -209,7 +209,8 @@ void TestPulseAccumulator()
     const short latTraceVal = 40;
     const short curTraceVal = 50;
 
-    size_t baselineFrames = 0;
+    // Count the very first baseline frame.
+    size_t baselineFrames = 1;
     {
         size_t frameNum = 0;
         size_t base = 0;
@@ -220,16 +221,16 @@ void TestPulseAccumulator()
                 simTrc.push_back(std::round(d(gen)));
             }
             simLabels.insert(simLabels.end(), ipd, 0);
-            if (frameNum < framesPerChunk - 16u)
-            {
-                baselineFrames += ipd;
-            }
+            // Don't count frame preceding pulse.
+            baselineFrames += (ipd - 1);
+
             frameNum += ipd;
 
-            // Insert pulse down states and final pulse up state to complete pulse.
-            assert(pw > 2);
+            // Insert pulse up state and final pulse down state to complete pulse.
+            assert(pw >= 2);
             simLabels.insert(simLabels.end(), 1, (base % 4) + 5);
-            simLabels.insert(simLabels.end(), pw-1, (base % 4 ) + 9);
+            simLabels.insert(simLabels.end(), pw-2, (base % 4) + 1);
+            simLabels.insert(simLabels.end(), 1, (base % 4 ) + 9);
 
             // Hardcode latency for now.
             simTrc.insert(simTrc.end(), pw, frameNum < 16u ? latTraceVal : curTraceVal);
@@ -292,7 +293,7 @@ void TestPulseAccumulator()
         const auto var = stats.Variance().ToArray();
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
-            EXPECT_EQ(baselineFrames-1, count[zmwIdx]);
+            EXPECT_EQ(baselineFrames, count[zmwIdx]);
             EXPECT_NEAR(baselineMean, mean[zmwIdx], 2*baselineStd);
             // Variance of sample variance for normally distributed random variable should be (2*sigma^4)/(n-1)
             EXPECT_NEAR(baselineStd*baselineStd, var[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));

@@ -356,19 +356,19 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                     // so we'll just use it here for readability:
                     // Also note that we are subtracting out the partial frames
                     // (thus -2).
-                    EXPECT_EQ(2944, mb.pkMidSignal[0][z]);
-                    EXPECT_EQ(5632, mb.pkMidSignal[1][z]);
-                    EXPECT_EQ(3776, mb.pkMidSignal[2][z]);
-                    EXPECT_EQ(4608, mb.pkMidSignal[3][z]);
+                    EXPECT_EQ(736, mb.pkMidSignal[0][z]);
+                    EXPECT_EQ(1408, mb.pkMidSignal[1][z]);
+                    EXPECT_EQ(944, mb.pkMidSignal[2][z]);
+                    EXPECT_EQ(1152, mb.pkMidSignal[3][z]);
                     ASSERT_EQ(25, mb.pkMax[0][z]);
                     ASSERT_EQ(45, mb.pkMax[1][z]);
                     ASSERT_EQ(15, mb.pkMax[2][z]);
                     ASSERT_EQ(35, mb.pkMax[3][z]);
-                    EXPECT_NEAR(0.0160583, mb.bpZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0171916, mb.bpZvar[0][z], 0.001);
                     EXPECT_NEAR(0.0043878, mb.bpZvar[1][z], 0.001);
                     EXPECT_NEAR(0.0192236, mb.bpZvar[2][z], 0.001);
                     EXPECT_NEAR(0.0065546, mb.bpZvar[3][z], 0.001);
-                    EXPECT_NEAR(0.0694064, mb.pkZvar[0][z], 0.001);
+                    EXPECT_NEAR(0.0706076, mb.pkZvar[0][z], 0.001);
                     EXPECT_NEAR(0.0451073, mb.pkZvar[1][z], 0.001);
                     EXPECT_NEAR(0.0744171, mb.pkZvar[2][z], 0.001);
                     EXPECT_NEAR(0.0960086, mb.pkZvar[3][z], 0.001);
@@ -389,7 +389,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
                     EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
-                    EXPECT_NEAR(0.008516, mb.pulseDetectionScore[z], 0.0001);
+                    EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     // TODO: These aren't expected to be "correct", and should
                     // be replaced when these metrics are expected to be
                     // correct. The values themselves may need to be helped
