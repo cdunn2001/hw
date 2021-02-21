@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <functional>
 #include <memory>
 #include <mutex>
 
@@ -56,8 +57,33 @@ namespace Memory {
 class SmartDeviceAllocation
 {
 public:
-    SmartDeviceAllocation(size_t size = 0, size_t allocID = 0)
-        : data_(size ? CudaRawMalloc(size) : nullptr)
+    SmartDeviceAllocation()
+        : SmartDeviceAllocation(0, 0)
+    {}
+
+    SmartDeviceAllocation(size_t size, size_t allocID)
+        : SmartDeviceAllocation(size, allocID, &CudaRawMalloc, &CudaFree)
+    {}
+
+    template <typename Allocate, typename Deallocate>
+    SmartDeviceAllocation(size_t size,
+                          size_t allocID,
+                          Allocate&& allocate,
+                          Deallocate&& deallocate,
+                          detail::DataManagerKey)
+        : SmartDeviceAllocation(size,
+                                allocID,
+                                std::forward<Allocate>(allocate),
+                                std::forward<Deallocate>(deallocate))
+    {}
+
+private:
+    template <typename Allocate, typename Deallocate>
+    SmartDeviceAllocation(size_t size,
+                          size_t allocID,
+                          Allocate&& allocate,
+                          Deallocate&& deallocate)
+        : data_(size ? allocate(size) : nullptr, std::forward<Deallocate>(deallocate))
         , size_(size)
         , allocID_(allocID)
     {
@@ -77,6 +103,7 @@ public:
             assert(curMax <= peakBytesAllocated_);
         }
     }
+public:
 
     SmartDeviceAllocation(const SmartDeviceAllocation&) = delete;
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
@@ -127,11 +154,7 @@ public:
     }
 
 private:
-    struct Deleter
-    {
-        void operator()(void* ptr) { CudaFree(ptr); }
-    };
-    std::unique_ptr<void, Deleter> data_;
+    std::unique_ptr<void, std::function<void(void*)>> data_;
     size_t size_;
     size_t allocID_;
 
