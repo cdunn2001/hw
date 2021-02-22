@@ -88,42 +88,6 @@ private:
     std::unique_ptr<std::mutex> m_;
 };
 
-// Helper RAII class to make sure SensorPackets return
-// their allocation to the allocation pools.
-//
-// TODO: This could be avoided with a bit of a refactor.
-// Right now SmartAllocation has an internal RAII object
-// to return the allocation to a custom deleter function.
-// If that was tweaked so the "custom deleter" accepted
-// a bit of metadata (like allocation location), then
-// we could automatically hand things back to the
-// allocation caching framework, instead of having to
-// do things manually.
-class CachedPacket
-{
-public:
-    CachedPacket(PacBio::DataSource::SensorPacket packet)
-        : packet_(std::move(packet))
-    {}
-
-    CachedPacket(const CachedPacket&) = delete;
-    CachedPacket(CachedPacket&&) = default;
-    CachedPacket& operator=(const CachedPacket&) = delete;
-    CachedPacket& operator=(CachedPacket&&) = default;
-
-    ~CachedPacket()
-    {
-        IMongoCachedAllocator::ReturnHostAllocation(std::move(packet_).RelinquishAllocation());
-    }
-
-    operator PacBio::DataSource::SensorPacket&() { return packet_; }
-    operator const PacBio::DataSource::SensorPacket&() const { return packet_; }
-
-private:
-    PacBio::DataSource::SensorPacket packet_;
-};
-
-
 // Thread safe priority queue for ordering Packets.  Packets
 // are ordered by ascending start zmw, and within the same
 // start zmw by ascending start frame.
@@ -137,7 +101,7 @@ public:
     PacketPriorityQueue& operator=(const PacketPriorityQueue&) = delete;
     PacketPriorityQueue& operator=(PacketPriorityQueue&&) = default;
 
-    void Push(std::shared_ptr<CachedPacket> packet)
+    void Push(std::shared_ptr<SensorPacket> packet)
     {
         assert(packet);
         std::lock_guard<std::mutex> lm(m_);
@@ -151,15 +115,15 @@ public:
     // pointer is returned.
     //
     // `f` should have the callable signature
-    // bool operator()(const CachedPacket& p)
+    // bool operator()(const SensorPacket& p)
     template <typename Func>
-    std::shared_ptr<CachedPacket> PopIf(Func&& f)
+    std::shared_ptr<SensorPacket> PopIf(Func&& f)
     {
-        std::shared_ptr<CachedPacket> ret;
+        std::shared_ptr<SensorPacket> ret;
         std::lock_guard<std::mutex> lm(m_);
         if (!data_.empty())
         {
-            if (f(const_cast<const CachedPacket&>(*data_.top())))
+            if (f(const_cast<const SensorPacket&>(*data_.top())))
             {
                 ret = data_.top();
                 data_.pop();
@@ -171,9 +135,9 @@ public:
     // Returns and pops the top of the queue,
     // unless the queue is empty in which case
     // an empty shared_ptr is returned.
-    std::shared_ptr<CachedPacket> Pop()
+    std::shared_ptr<SensorPacket> Pop()
     {
-        std::shared_ptr<CachedPacket> ret;
+        std::shared_ptr<SensorPacket> ret;
         std::lock_guard<std::mutex> lm(m_);
         if (!data_.empty())
         {
@@ -192,23 +156,21 @@ private:
     // If operator() returns false, then `left` will be ordered before `right`
     struct Compare
     {
-        bool operator()(const std::shared_ptr<CachedPacket>& left,
-                        const std::shared_ptr<CachedPacket>& right) const
+        bool operator()(const std::shared_ptr<SensorPacket>& left,
+                        const std::shared_ptr<SensorPacket>& right) const
         {
-            const SensorPacket& l = *left;
-            const SensorPacket& r = *right;
-            if (l.StartZmw() == r.StartZmw())
+            if (left->StartZmw() == right->StartZmw())
             {
-                return l.StartFrame() > r.StartFrame();
+                return left->StartFrame() > right->StartFrame();
             } else
             {
-                return l.StartZmw() > r.StartZmw();
+                return left->StartZmw() > right->StartZmw();
             }
         }
     };
 
-    using Queue = std::priority_queue<std::shared_ptr<CachedPacket>,
-                                      std::deque<std::shared_ptr<CachedPacket>>,
+    using Queue = std::priority_queue<std::shared_ptr<SensorPacket>,
+                                      std::deque<std::shared_ptr<SensorPacket>>,
                                       Compare>;
     Queue data_;
     mutable MovableMutex m_;
@@ -440,11 +402,11 @@ public:
     // that thread can see and handle this new data (assuming
     // this Arena is ready to process it) without that thread
     // having to return and re-enter.
-    void AddPacket(std::shared_ptr<CachedPacket> packet)
+    void AddPacket(std::shared_ptr<SensorPacket> packet)
     {
         assert(OverlapsWith(*packet));
-        assert(static_cast<SensorPacket&>(*packet).NumZmw() != 0);
-        assert(static_cast<SensorPacket&>(*packet).BlockData(0));
+        assert(packet->NumZmw() != 0);
+        assert(packet->BlockData(0));
 
         packetsToWrite_.Push(packet);
     }
@@ -482,8 +444,8 @@ public:
         if (currBatches_.empty()) PrepareNext();
 
         bool didSomething = false;
-        std::shared_ptr<CachedPacket> packet;
-        auto ReadyPredicate = [this](const CachedPacket& p)
+        std::shared_ptr<SensorPacket> packet;
+        auto ReadyPredicate = [this](const SensorPacket& p)
                               {
                                   return currBatches_.front().ReadyFor(p);
                               };
@@ -671,13 +633,7 @@ public:
     //    then we'll exit.
     void Process(SensorPacket packet) override
     {
-        // Need to turn things into a CachedPacket while
-        // we're at it, to make sure the underlying allocation
-        // get's returned to the allocation pools.
-        //
-        // TODO the allocation pools can be refactored to make
-        //      this unecessary.
-        auto sharedPacket = std::make_shared<CachedPacket>(std::move(packet));
+        auto sharedPacket = std::make_shared<SensorPacket>(std::move(packet));
         for (auto& worker : arenas_)
         {
             if (worker.OverlapsWith(*sharedPacket))

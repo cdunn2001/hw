@@ -411,6 +411,13 @@ public:
         return PacBio::Memory::SmartAllocation{size,
             [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
             [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+                static thread_local size_t counter = 0;
+                counter++;
+                auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+                Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
+                auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
+                (void)tmp;
+
                 auto m = mngr.lock();
                 if (m)
                 {
@@ -435,6 +442,13 @@ public:
         return SmartDeviceAllocation{size, 0 /*TODO kill*/,
             [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
             [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+                static thread_local size_t counter = 0;
+                counter++;
+                auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+                Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
+                auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
+                (void)tmp;
+
                 auto m = mngr.lock();
                 if (m)
                 {
@@ -493,27 +507,6 @@ void VisitHostManager(AllocatorMode mode, F&& f)
         }
     }
     throw PBException("Unexpected AllocationMode");
-}
-
-void IMongoCachedAllocator::ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc)
-{
-    // TODO recover timers?
-    static thread_local size_t counter = 0;
-    counter++;
-    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
-    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
-}
-
-void IMongoCachedAllocator::ReturnDeviceAllocation(SmartDeviceAllocation alloc)
-{
-    // TODO recover timers?
-    static thread_local size_t counter = 0;
-    counter++;
-    auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
-    Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-
-    auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
 }
 
 void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc)
