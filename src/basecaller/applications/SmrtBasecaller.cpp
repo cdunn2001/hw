@@ -29,6 +29,7 @@
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
+#include <basecaller/traceAnalysis/AnalysisProfiler.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
@@ -530,7 +531,7 @@ private:
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
                                                 movieConfig_,
-                                                config_.system.maxPermGpuDataMB);
+                                                config_.system);
     }
 
     std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
@@ -652,7 +653,7 @@ private:
 
             uint64_t nopSuccesses = 0;
             uint64_t framesAnalyzed = 0;
-
+            uint64_t framesSinceBigReports = 0;
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -708,14 +709,23 @@ private:
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
                     }
-                    PacBio::Cuda::Memory::ReportAllMemoryStats();
-
+                    numChunksAnalyzed++;
+                    framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
+
+                    if (framesSinceBigReports >= config_.monitoringReportInterval)
+                    {
+                        PacBio::Cuda::Memory::ReportAllMemoryStats();
+                        Basecaller::AnalysisProfiler::IntermediateReport();
+                        if (config_.system.analyzerHardware != Basecaller::ComputeDevices::Host)
+                            Basecaller::IOProfiler::IntermediateReport();
+                        framesSinceBigReports = 0;
+                    }
+
                     for(auto&& packet : chunk)
                     {
                         PacBio::Cuda::Memory::GetGlobalAllocator().ReturnHostAllocation(std::move(packet).RelinquishAllocation());
                     }
-                    numChunksAnalyzed++;
                 }
 
                 if (this->ExitRequested())
@@ -731,7 +741,7 @@ private:
                     << " out of " << source->NumFrames() << " requested from source. ("
                     << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
             if (nop_ == 1)
-            {        
+            {
                 PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
             }
             timer.SetCount(numChunksAnalyzed);

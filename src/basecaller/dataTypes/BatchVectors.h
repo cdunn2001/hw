@@ -204,10 +204,14 @@ public:
     UnifiedCudaArray<uint32_t>& Overflows(PassKey<GpuBatchVectors<T>>) { return overflows_; }
     const UnifiedCudaArray<uint32_t>& Overflows(PassKey<GpuBatchVectors<const T>>) const { return overflows_; }
 
-    void DeactivateGpuMem()
+    // Relinquishes all device allocations, after downloading the data if
+    // necessary.  Returns the total number of bytes actually transfered
+    size_t DeactivateGpuMem()
     {
-        data_.DeactivateGpuMem();
-        lens_.DeactivateGpuMem();
+        size_t ret = 0;
+        ret += data_.DeactivateGpuMem();
+        ret += lens_.DeactivateGpuMem();
+        return ret;
     }
 
 private:

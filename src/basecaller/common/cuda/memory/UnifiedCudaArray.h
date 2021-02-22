@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -66,10 +66,16 @@ public:
     static constexpr size_t size_ratio = sizeof(GpuType) / sizeof(HostType);
     static_assert(std::is_trivially_copyable<HostType>::value, "Host type must be trivially copyable to support CudaMemcpy transfer");
 
-    // Constructor for creating UCA from a pre-existing device allocation.  Predominantly
-    // designed to allow a DeviceOnlyArray to copy out it's contents into something that
-    // can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
-    // meant for 1-off random usage.
+    /// Constructor for creating UCA from a pre-existing device allocation.  Predominantly
+    /// designed to allow a DeviceOnlyArray to copy out it's contents into something that
+    /// can be downloaded to the host, and thus requires a DataManagerKey to invoke.  Not
+    /// meant for 1-off random usage.
+    ///
+    /// \param alloc The SmrtDeviceAllocation we will canibalize
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(PacBio::Cuda::Memory::SmartDeviceAllocation alloc,
                      size_t count,
                      SyncDirection dir,
@@ -96,6 +102,15 @@ public:
         }
     }
 
+    /// Constructor for creating UCA from a pre-existing host allocation.  Predominantly
+    /// designed to allow external code to directly populate a memory buffer that we
+    /// will upload to the GPU
+    ///
+    /// \param alloc The SmrtAllocation we will canibalize
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(PacBio::Memory::SmartAllocation alloc,
                      size_t count,
                      SyncDirection dir,
@@ -127,6 +142,11 @@ public:
         }
     }
 
+
+    /// \param count The number of array elements
+    /// \param dir a SyncDirection indicating when automatic data transfers should occur
+    /// \param marker An AllocationMarker describing the source code where this object
+    ///        is instantiated
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
                      const AllocationMarker& marker)
@@ -222,23 +242,28 @@ public:
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
-    // Retires the gpu memory, so it can be used again elsewhere
-    //
-    // This is a blocking operation, and will not complete until all kernels run by this thread have
-    // completed (to make sure no kernel that could know the gpu side address is still running). It
-    // will also cause a data download if the data is device side and the synchronization scheme is
-    // HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
-    // the synchronization scheme was set incorrectly.
-    void DeactivateGpuMem()
+    /// Retires the gpu memory, so it can be used again elsewhere.
+    ///
+    /// This is a blocking operation, and will not complete until all kernels run by this thread have
+    /// completed (to make sure no kernel that could know the gpu side address is still running). It
+    /// will also cause a data download if the data is device side and the synchronization scheme is
+    /// HostWriteDeviceRead.  This situation is not strictly an error, but does indicate perhaps
+    /// the synchronization scheme was set incorrectly.
+    ///
+    /// \return the number of bytes downloaded from the GPU
+    size_t DeactivateGpuMem() const
     {
-        if (!gpuData_) return;
+        if (!gpuData_) return 0;
 
+        size_t ret = 0;
         if (!activeOnHost_)
         {
+            ret = gpuData_.size();
             GetHostView();
         }
 
         IMongoCachedAllocator::ReturnDeviceAllocation(std::move(gpuData_));
+        return ret;
     }
 
     // Calling these functions may cause
@@ -291,13 +316,17 @@ public:
         return DeviceHandle<const GpuType>(gpuData_.get<GpuType>(DataKey()), Size()/size_ratio, DataKey());
     }
 
-    void CopyToDevice() const
+    /// Manually copies the data to the device if necessary.
+    /// \return number of bytes actually transfered
+    size_t CopyToDevice() const
     {
-        CopyImpl(false, true);
+        return CopyImpl(false, true);
     }
-    void CopyToHost() const
+    /// Manually copies the data to the host if necessary.
+    /// \return number of bytes actually transfered
+    size_t CopyToHost() const
     {
-        CopyImpl(true, true);
+        return CopyImpl(true, true);
     }
 
 private:
@@ -311,15 +340,16 @@ private:
         gpuData_ = GetGlobalAllocator().GetDeviceAllocation(hostData_.size(), marker_);
     }
 
-    void CopyImpl(bool toHost, bool manual) const
+    size_t CopyImpl(bool toHost, bool manual) const
     {
+        size_t bytes = 0;
         // This is primarily to guard against a parallel host filter following
         // a GPU filter.  If multiple threads are requesting the host data, we
         // want to make sure only a single download is triggered.
         std::lock_guard<std::mutex> lg(*transferMutex_);
         if (toHost)
         {
-            if (activeOnHost_) return; // Another thread performed the download.
+            if (activeOnHost_) return 0; // Another thread performed the download.
 
             activeOnHost_ = true;
             if (manual || syncDir_ != SyncDirection::HostWriteDeviceRead)
@@ -337,15 +367,20 @@ private:
                 CudaSynchronizeDefaultStream();
                 CudaCopyDeviceToHost(hostData_.get<HostType>(), gpuData_.get<HostType>(DataKey()), Size());
                 CudaSynchronizeDefaultStream();
+                bytes += gpuData_.size();
             }
         } else {
-            if (!activeOnHost_) return; // Another thread performed the upload
+            if (!activeOnHost_) return 0; // Another thread performed the upload
 
             ActivateGpuMem();
             activeOnHost_ = false;
             if (manual || syncDir_ != SyncDirection::HostReadDeviceWrite)
+            {
                 CudaCopyHostToDevice(gpuData_.get<HostType>(DataKey()), hostData_.get<HostType>(), Size());
+                bytes += gpuData_.size();
+            }
         }
+        return bytes;
     }
 
     // NOTE: `const` in c++ normally implies bitwise const, not necessarily logical const

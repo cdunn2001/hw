@@ -25,6 +25,17 @@ void RecordEvent(cudaEvent_t event);
 bool CompletedEvent(cudaEvent_t event);
 void SyncEvent(cudaEvent_t event);
 
+struct SupportedStreamPriorities
+{
+    // Note: Numerically, lower integer values
+    //       are *higher* priority
+    int leastPriority;
+    int greatestPriority;
+};
+SupportedStreamPriorities StreamPriorityRange();
+cudaStream_t CreateStream(int priority);
+void DestroyStream(cudaStream_t stream);
+
 void* CudaRawMalloc(size_t size);
 void* CudaRawMallocHost(size_t size);
 void* CudaRawMallocManaged(size_t size);

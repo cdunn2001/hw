@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020,2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -35,8 +35,6 @@ namespace Basecaller {
 
 SMART_ENUM(
     AnalysisStages,
-    Upload,
-    Download,
     AggregateStats,
     Baseline,
     Histogram,
@@ -46,7 +44,16 @@ SMART_ENUM(
     Metrics
 );
 
+SMART_ENUM(
+    IOStages,
+    Upload,
+    Download,
+    Compute,
+    Locks
+);
+
 using AnalysisProfiler = PacBio::Dev::Profile::ScopedProfilerChain<AnalysisStages>;
+using IOProfiler = PacBio::Dev::Profile::ScopedProfilerChain<IOStages>;
 
 }}}
 

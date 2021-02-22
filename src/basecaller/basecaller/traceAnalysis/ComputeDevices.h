@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,38 +24,20 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_SmrtBasecallerConfig_H_
-#define mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#ifndef mongo_basecaller_analyzer_ComputeDevices_H_
+#define mongo_basecaller_analyzer_ComputeDevices_H_
 
-#include <pacbio/configuration/PBConfig.h>
-
-#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/BatchLayoutConfig.h>
-#include <dataTypes/configs/SourceConfig.h>
-#include <dataTypes/configs/SystemsConfig.h>
-#include <dataTypes/configs/ROIConfig.h>
+#include <pacbio/utilities/SmartEnum.h>
 
 namespace PacBio {
 namespace Mongo {
-namespace Data {
+namespace Basecaller {
 
-class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig>
-{
-    PB_CONFIG(SmrtBasecallerConfig);
+SMART_ENUM(ComputeDevices,
+           Host,
+           V100,
+           A100);
 
-    PB_CONFIG_OBJECT(SystemsConfig, system);
-    PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
-    PB_CONFIG_OBJECT(BatchLayoutConfig, layout);
-    PB_CONFIG_OBJECT(SourceConfig, source);
-    PB_CONFIG_OBJECT(ROIConfig, traceROI);
+}}}
 
-    /// Minimum duration (in frames) between intermediate reports
-    /// for both memory and compute statistics.  Reports will happen
-    /// only on chunk boundaries
-    PB_CONFIG_OBJECT(size_t, monitoringReportInterval, 8192);
-};
-
-}}}     // namespace PacBio::Mongo::Data
-
-
-#endif //mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#endif //mongo_basecaller_analyzer_ComputeDevices_H_
