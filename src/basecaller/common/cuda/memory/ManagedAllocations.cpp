@@ -81,14 +81,13 @@ struct MallocAllocator
     static constexpr uint32_t supportedIAllocatorFlags = IAllocator::ALIGN_64B;
     static constexpr const char* description = "Standard Host Memory";
 
-    using AllocationT = SmartAllocation;
-    static SmartAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
+    static void* allocate(size_t size)
     {
-        return SmartAllocation(size,
-                               [](size_t size) { return aligned_alloc(64, size); },
-                               &free,
-                               AllocationID{marker.AsHash()},
-                               AllocationType{static_cast<size_t>(AllocatorMode::MALLOC)});
+        return aligned_alloc(64, size);
+    }
+    static void deallocate(void* ptr)
+    {
+        free(ptr);
     }
 };
 
@@ -99,14 +98,13 @@ struct PinnedAllocator
         | IAllocator::ALIGN_64B;
     static constexpr const char* description = "Pinned Host Memory";
 
-    using AllocationT = SmartAllocation;
-    static SmartAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
+    static void* allocate(size_t size)
     {
-        return SmartAllocation(size,
-                               &CudaRawMallocHost,
-                               &CudaFreeHost,
-                               AllocationID{marker.AsHash()},
-                               AllocationType{static_cast<size_t>(AllocatorMode::CUDA)});
+        return CudaRawMallocHost(size);
+    }
+    static void deallocate(void* ptr)
+    {
+        CudaFreeHost(ptr);
     }
 };
 
@@ -119,27 +117,17 @@ struct HugePinnedAllocator
 
     static constexpr const char* description = "Pinned HugePage Host Memory";
 
-    using AllocationT = SmartAllocation;
-    static SmartAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
-    {
-        return SmartAllocation(size,
-                               &Allocate,
-                               &Deallocate,
-                               AllocationID{marker.AsHash()},
-                               AllocationType{static_cast<size_t>(AllocatorMode::HUGE_CUDA)});
-    }
-
-private:
-    static void* Allocate(size_t size)
+    static void* allocate(size_t size)
     {
         return Allocator().Allocate(size);
     }
 
-    static void Deallocate(void* ptr)
+    static void deallocate(void* ptr)
     {
         Allocator().Deallocate(ptr);
     }
 
+private:
     // Helper class, to do the extra work required to unify huge
     // page allocations with the cuda runtime
     struct HugePinnedHelper
@@ -176,10 +164,14 @@ private:
 struct GpuAllocator
 {
     static constexpr const char* description = "Gpu Memory";
-    using AllocationT = SmartDeviceAllocation;
-    static SmartDeviceAllocation CreateAllocation(size_t size, const AllocationMarker& marker)
+
+    static void* allocate(size_t size)
     {
-        return SmartDeviceAllocation(size, marker.AsHash());
+        return CudaRawMalloc(size);
+    }
+    static void deallocate(void* ptr)
+    {
+        CudaFree(ptr);
     }
 };
 
@@ -217,24 +209,31 @@ private:
         // an allocation here during the ctor, we ensure that all static/global
         // infrastructure required to free allocations will live longer than
         // this object, making destruction of the contained allocations safe.
-        Allocator::CreateAllocation(1, AllocationMarker(""));
+        Allocator::deallocate(Allocator::allocate(1));
     }
 
     AllocationManager(const AllocationManager&) = delete;
     AllocationManager(AllocationManager&&) = delete;
     AllocationManager& operator=(const AllocationManager&) = delete;
     AllocationManager& operator=(AllocationManager&&) = delete;
-public:
 
-    using AllocationT = typename Allocator::AllocationT;
+    struct Deleter
+    {
+        void operator()(void* ptr)
+        {
+            Allocator::deallocate(ptr);
+        }
+    };
+    using Ptr_t = std::unique_ptr<void, Deleter>;
+public:
 
     // Singleton access function.  Static variables in a function have
     // a well defined and sane initialization guarantee, while actual
     // global variables do not (since the ordering of initialization
     // between different translation units is indeterminate)
-    static AllocationManager& GetManager()
+    static std::shared_ptr<AllocationManager> GetManager()
     {
-        static AllocationManager manager;
+        static auto manager = std::shared_ptr<AllocationManager>(new AllocationManager{});
         return manager;
     };
 
@@ -265,39 +264,40 @@ public:
     }
 
     // Return type is either SmartAllocation or SmartDeviceAllocation
-    auto GetAlloc(size_t size, const AllocationMarker& marker)
+    void* GetAlloc(size_t size, const AllocationMarker& marker)
     {
-        AllocationT ptr;
-        if (size == 0) return ptr;
+        if (size == 0) return nullptr;
 
         std::lock_guard<std::mutex> lm(m_);
-        auto& queue = allocs_[size];
-        if (queue.size() > 0)
-        {
-            ptr = std::move(queue.front());
-            queue.pop_front();
-            ptr.AllocID(marker.AsHash());
-        } else {
-            ptr = Allocator::CreateAllocation(size, marker);
-        }
-
         assert(allocMarkers_.count(marker.AsHash()) == 0
                || allocMarkers_.at(marker.AsHash()) == marker);
         allocMarkers_.emplace(marker.AsHash(), marker);
         stats_[marker.AsHash()].AllocationSize(size);
 
-        return ptr;
+        auto& queue = allocs_[size];
+        if (queue.size() > 0)
+        {
+            auto alloc = std::move(queue.front());
+            queue.pop_front();
+            return alloc.release();
+        } else {
+            return Allocator::allocate(size);
+        }
     }
 
-    void ReturnAlloc(AllocationT alloc)
+    void ReturnAlloc(void* alloc, size_t size, size_t allocID)
     {
         std::lock_guard<std::mutex> lm(m_);
 
-        if (!cache_) return;
+        if (!cache_)
+        {
+            Allocator::deallocate(alloc);
+            return;
+        }
 
-        if (alloc.AllocID() != 0)
-            stats_[alloc.AllocID()].DeallocationSize(alloc.size());
-        allocs_[alloc.size()].push_front(std::move(alloc));
+        if (allocID != 0)
+            stats_[allocID].DeallocationSize(size);
+        allocs_[size].push_front(Ptr_t{alloc});
     }
 
     void FlushPools()
@@ -376,7 +376,7 @@ private:
     }
 
 
-    std::map<size_t, std::deque<AllocationT>> allocs_;
+    std::map<size_t, std::deque<Ptr_t>> allocs_;
     std::map<size_t, AllocStat> stats_;
     std::map<size_t, AllocationMarker> allocMarkers_;
 
@@ -385,7 +385,7 @@ private:
 };
 
 template <typename HostAllocator>
-class MongoCachedAllocator final : public IMongoCachedAllocator
+class MongoCachedAllocator final : public IMongoCachedAllocator, private detail::DataManager
 {
     using HostManager = AllocationManager<HostAllocator>;
     using GpuManager = AllocationManager<GpuAllocator>;
@@ -406,7 +406,20 @@ public:
         Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
 
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
-        return HostManager::GetManager().GetAlloc(size, marker);
+        (void)tmp;
+        auto mngr = HostManager::GetManager();
+        return PacBio::Memory::SmartAllocation{size,
+            [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
+            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+                auto m = mngr.lock();
+                if (m)
+                {
+                    m->ReturnAlloc(ptr, size, id);
+                } else {
+                    // TODO Risky??
+                    PBLOG_ERROR << "No allocation manager, things are torn down?";
+                }
+            }};
     }
 
     SmartDeviceAllocation GetDeviceAllocation(size_t size, const AllocationMarker& marker) override
@@ -417,7 +430,21 @@ public:
         Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
 
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
-        return GpuManager::GetManager().GetAlloc(size, marker);
+        (void)tmp;
+        auto mngr = GpuManager::GetManager();
+        return SmartDeviceAllocation{size, 0 /*TODO kill*/,
+            [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
+            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+                auto m = mngr.lock();
+                if (m)
+                {
+                    m->ReturnAlloc(ptr, size, id);
+                } else {
+                    // TODO Risky??
+                    PBLOG_ERROR << "No allocation manager, things are torn down?";
+                }
+            },
+            DataKey()};
     }
 
     bool SupportsAllFlags(uint32_t flags) const override
@@ -450,17 +477,18 @@ void VisitHostManager(AllocatorMode mode, F&& f)
     {
     case AllocatorMode::MALLOC:
         {
-            f(AllocationManager<MallocAllocator>::GetManager());
+            // TODO think about dereference
+            f(*AllocationManager<MallocAllocator>::GetManager());
             return;
         }
     case AllocatorMode::CUDA:
         {
-            f(AllocationManager<PinnedAllocator>::GetManager());
+            f(*AllocationManager<PinnedAllocator>::GetManager());
             return;
         }
     case AllocatorMode::HUGE_CUDA:
         {
-            f(AllocationManager<HugePinnedAllocator>::GetManager());
+            f(*AllocationManager<HugePinnedAllocator>::GetManager());
             return;
         }
     }
@@ -469,31 +497,23 @@ void VisitHostManager(AllocatorMode mode, F&& f)
 
 void IMongoCachedAllocator::ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc)
 {
-    if (alloc.size() == 0) return;
+    // TODO recover timers?
     static thread_local size_t counter = 0;
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
-
-    auto allocMode = static_cast<AllocatorMode>(alloc.AllocatorType());
-    VisitHostManager(allocMode,
-                 [alloc = std::move(alloc)](auto& manager) mutable
-                 {
-                     manager.ReturnAlloc(std::move(alloc));
-                 });
 }
 
 void IMongoCachedAllocator::ReturnDeviceAllocation(SmartDeviceAllocation alloc)
 {
-    if (alloc.size() == 0) return;
+    // TODO recover timers?
     static thread_local size_t counter = 0;
     counter++;
     auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
     Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
 
     auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuDeallocate);
-    AllocationManager<GpuAllocator>::GetManager().ReturnAlloc(std::move(alloc));
 }
 
 void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc)
@@ -540,10 +560,11 @@ IMongoCachedAllocator& GetGlobalAllocator()
 
 void ReportAllMemoryStats()
 {
-    AllocationManager<MallocAllocator>::GetManager().Report();
-    AllocationManager<PinnedAllocator>::GetManager().Report();
-    AllocationManager<HugePinnedAllocator>::GetManager().Report();
-    AllocationManager<GpuAllocator>::GetManager().Report();
+    // TODO think about dereference
+    AllocationManager<MallocAllocator>::GetManager()->Report();
+    AllocationManager<PinnedAllocator>::GetManager()->Report();
+    AllocationManager<HugePinnedAllocator>::GetManager()->Report();
+    AllocationManager<GpuAllocator>::GetManager()->Report();
 }
 
 void EnableHostCaching(AllocatorMode mode)
@@ -556,7 +577,8 @@ void EnableHostCaching(AllocatorMode mode)
 }
 void EnableGpuCaching()
 {
-    AllocationManager<GpuAllocator>::GetManager().EnableCaching();
+    // TODO think about dereference
+    AllocationManager<GpuAllocator>::GetManager()->EnableCaching();
 }
 
 void DisableHostCaching(AllocatorMode mode)
@@ -569,7 +591,8 @@ void DisableHostCaching(AllocatorMode mode)
 }
 void DisableGpuCaching()
 {
-    AllocationManager<GpuAllocator>::GetManager().DisableCaching();
+    // TODO think about dereference
+    AllocationManager<GpuAllocator>::GetManager()->DisableCaching();
 }
 
 void DisableAllCaching()
