@@ -162,7 +162,7 @@ public:
     //       fast as possible and getting to it's next IO stage quickly, and the rest are relegated
     //       to "filling in the gaps" so to speak.
     //
-    //   Final note: There are not that many uniuque stream priorities.  On the A100 and V100
+    //   Final note: There are not that many unique stream priorities.  On the A100 and V100
     //               there are only three.  As we expect 4-5 streams to be in play, this
     //               mechanism only serves as an imperfect tie breaker.  For now this is OK
     //               as the IO mutexes on their own are enough to mostly fix the problem.  If
