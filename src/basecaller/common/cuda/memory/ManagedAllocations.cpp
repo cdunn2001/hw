@@ -439,7 +439,7 @@ public:
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
         (void)tmp;
         auto mngr = GpuManager::GetManager();
-        return SmartDeviceAllocation{size, 0 /*TODO kill*/,
+        return SmartDeviceAllocation{size,
             [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
             [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
                 static thread_local size_t counter = 0;
