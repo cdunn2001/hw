@@ -65,7 +65,7 @@ public:
 
     std::vector<uint32_t> PoolIds() const override;
     std::vector<uint32_t> UnitCellIds() const override;
-    std::vector<uint32_t> UnitCellFeatures() const override;
+    std::vector<UnitCellProperties> GetUnitCellProperties() const override;
 
     size_t BlockWidth() const { return GetConfig().layout.BlockWidth(); }
     size_t BlockLen() const { return GetConfig().layout.NumFrames(); }

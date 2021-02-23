@@ -64,9 +64,9 @@ struct TestBaselineStatsAggregator : public ::testing::Test
     {
         Data::BaselinerMetrics stats(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         ArrayUnion<LaneArray<float>> addVec;
-        for (size_t i = 0; i < laneSize; ++i)
+        for (uint32_t i = 0; i < laneSize; ++i)
         {
-            addVec[i] = i*zmwAddition;
+            addVec[i] = static_cast<float>(i*zmwAddition);
         }
 
         for (unsigned int l = 0; l < poolSize; ++l)

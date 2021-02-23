@@ -27,11 +27,13 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include "PBCudaRuntime.h"
-#include <pacbio/PBException.h>
 
 #include <cuda_runtime.h>
 
-#include <thread>
+#include <vector>
+
+#include <common/cuda/streams/CudaStream.h>
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -84,12 +86,31 @@ void DestroyEvent(cudaEvent_t event)
 
 void RecordEvent(cudaEvent_t event)
 {
-    cudaCheckErrors(::cudaEventRecord(event, cudaStreamPerThread));
+    cudaCheckErrors(::cudaEventRecord(event, CudaStream::ThreadStream()));
 }
 
 void SyncEvent(cudaEvent_t event)
 {
     cudaCheckErrors(::cudaEventSynchronize(event));
+}
+
+SupportedStreamPriorities StreamPriorityRange()
+{
+    SupportedStreamPriorities ret;
+    cudaCheckErrors(::cudaDeviceGetStreamPriorityRange(&ret.leastPriority, &ret.greatestPriority));
+    return ret;
+}
+
+cudaStream_t CreateStream(int priority)
+{
+    cudaStream_t ret;
+    cudaCheckErrors(::cudaStreamCreateWithPriority(&ret, cudaStreamNonBlocking, priority));
+    return ret;
+}
+
+void DestroyStream(cudaStream_t stream)
+{
+    cudaCheckErrors(::cudaStreamDestroy(stream));
 }
 
 bool CompletedEvent(cudaEvent_t event)
@@ -151,22 +172,22 @@ void CudaFreeHost(void* t)
 
 void CudaSynchronizeDefaultStream()
 {
-    cudaCheckErrors(::cudaStreamSynchronize(cudaStreamPerThread));
+    cudaCheckErrors(::cudaStreamSynchronize(CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyDeviceToHost(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToHost));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToHost, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyHostToDevice(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyHostToDevice, cudaStreamPerThread));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyHostToDevice, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyDeviceToDevice(void* dest, const void* src, size_t count)
 {
-    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToDevice, cudaStreamPerThread));
+    cudaCheckErrors(::cudaMemcpyAsync(dest, src, count, cudaMemcpyDeviceToDevice, CudaStream::ThreadStream()));
 }
 
 void CudaRawCopyToSymbol(const void* dest, const void* src, size_t count)
@@ -184,4 +205,29 @@ void CudaHostUnregister(void* ptr)
     cudaCheckErrors(::cudaHostUnregister(ptr));
 }
 
-}}
+std::vector<CudaDeviceProperties> CudaAllGpuDevices()
+{
+    std::vector<CudaDeviceProperties> devices;
+    int count = 0;
+    if (cudaGetDeviceCount(&count) != cudaSuccess) count = 0;
+
+    for(int idevice=0;idevice<count;idevice++)
+    {
+        CudaDeviceProperties properties;
+        cudaError_t result = cudaGetDeviceProperties(&properties.deviceProperties, idevice);
+
+        if (result != cudaSuccess)
+        {
+            // something needs to be pushed to the devices vector because
+            // the index of the vector elements corresponds to the idevice ordinal number.
+            memset(&properties.deviceProperties.uuid,0,sizeof(properties.deviceProperties.uuid));
+            properties.errorMessage = cudaGetErrorName(result);
+        }
+        devices.push_back(properties);
+    }
+
+    return devices;
+}
+
+}} // end of namespace
+

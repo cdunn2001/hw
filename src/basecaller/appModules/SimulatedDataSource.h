@@ -73,9 +73,9 @@ public:
 
     ~SimulatedDataSource();
 
-    std::vector<uint32_t> UnitCellFeatures() const override
+    std::vector<UnitCellProperties> GetUnitCellProperties() const override
     {
-        return std::vector<uint32_t>(NumZmw(), 0);
+        return std::vector<UnitCellProperties>(NumZmw()); // note that all coordinates are reported as (0,0).
     }
 
     std::vector<uint32_t> UnitCellIds() const override

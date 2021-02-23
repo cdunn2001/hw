@@ -49,7 +49,7 @@ TEST(SignalGeneratorTest, CompareData)
     std::mt19937 eng(rd());
     std::uniform_int_distribution<> distr(0, dataParams.kernelLanes);
 
-    const TraceFile traceFile{traceParams.traceFileName};
+    const PacBio::TraceFile::TraceFile traceFile{traceParams.traceFileName};
     std::vector<int16_t> truth(dataParams.laneWidth * dataParams.blockLength);
 
     while (manager.MoreData())

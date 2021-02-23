@@ -26,12 +26,21 @@
 #ifndef PACBIO_APPLICATION_TRACE_SAVER_H
 #define PACBIO_APPLICATION_TRACE_SAVER_H
 
+#include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
+#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/logging/Logger.h>
 
 #include <common/graphs/GraphNodeBody.h>
-
 #include <dataTypes/TraceBatch.h>
+#include <dataTypes/configs/ROIConfig.h>
+#include <appModules/DataFileWriter.h>
+#include <pacbio/tracefile/TraceFile.h>
+
+#include <boost/multi_array.hpp>
+
+#include <vector>
 
 namespace PacBio {
 namespace Application {
@@ -46,6 +55,27 @@ public:
     {
 
     }
+};
+
+class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatch<int16_t>>
+{
+public:
+    TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
+                   const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
+                   PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector);
+
+    TraceSaverBody(const TraceSaverBody&) = delete;
+    TraceSaverBody(TraceSaverBody&&) = delete;
+    TraceSaverBody& operator=(const TraceSaverBody&) = delete;
+    TraceSaverBody& operator==(TraceSaverBody&&) = delete;
+
+    size_t ConcurrencyLimit() const override { return 1; }
+    float MaxDutyCycle() const override { return 0.01; }
+
+    void Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch) override;
+private:
+    std::unique_ptr<PacBio::TraceFile::TraceFile> writer_;
+    PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
 };
 
 }}

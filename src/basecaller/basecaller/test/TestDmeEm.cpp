@@ -33,6 +33,7 @@
 
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
+#include <basecaller/traceAnalysis/DmeEmDevice.h>
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
 
@@ -56,7 +57,7 @@ static constexpr unsigned int nModes = nAnalogs + 1;
 } // anonymous namespace
 
 // Testing parameters
-struct TestDmeEmHostParam
+struct TestDmeEmParam
 {
     float simSnr;
     std::array<Data::FrameIntervalSizeType,nModes> nFrames;
@@ -67,9 +68,11 @@ struct TestDmeEmHostParam
 // Test fixture that simulates trace data for the trace histogram with the
 // number of frames for each component background and four analogs drawn
 // from a baseline distribution and analog distribution.
-struct TestDmeEmHost : public ::testing::TestWithParam<TestDmeEmHostParam>
+template <typename T>
+struct TestDmeEm : public ::testing::TestWithParam<TestDmeEmParam>
 {
 public: // Types and static constants
+    using Filter = T;
     using LaneDetectionModel = Data::LaneDetectionModel<Cuda::PBHalf>;
     using LaneDetectionModelHost = DmeEmHost::LaneDetModelHost;
 public:
@@ -100,7 +103,126 @@ public:
     };
 
 public: // Structors
-    TestDmeEmHost() = default;
+    TestDmeEm() = default;
+
+public:
+    // The main test.  Ideally this should just be in the usual TEST_P macro, but we
+    // need to parameterize both over type as well as value, which gtest does not make
+    // easy to do.
+    void RunTest()
+    {
+        Data::BasecallerDmeConfig dmeConfig;
+        dmeConfig.PulseAmpRegularization = GetParam().pulseAmpReg;
+        Filter::Configure(dmeConfig, movieConfig);
+        // Hacky, but we have to configure the host dme regardless, since we'll
+        // use ScaleModelSNR as part of our validation
+        // TODO: Find a way for host and gpu to share the same Configure?
+        DmeEmHost::Configure(dmeConfig, movieConfig);
+
+        std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
+        Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,
+                                                                  Cuda::Memory::SyncDirection::Symmetric,
+                                                                  SOURCE_MARKER());
+
+        // Initialize the model using the initial fixed detection model host.
+        for (unsigned int l = 0; l < poolSize; ++l)
+        {
+            detModelStart->ExportTo(&models.GetHostView()[l]);
+        }
+
+        // TODO: The Estimate() method currently doesn't return the DME diagnostics
+        // with which further unit tests can be written to verify its contents.
+        dme->Estimate(completeData->traceHistAccum->Histogram(), &models);
+
+        const auto& nFrames = GetParam().nFrames;
+        const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
+                                        Data::FrameIntervalSizeType(0));
+        const auto numFramesF = boost::numeric_cast<float>(numFrames);
+
+        using PacBio::Simd::MakeUnion;
+        // Check the pool detection models that should be updated for each lane.
+        for (unsigned int l = 0; l < poolSize; ++l)
+        {
+            LaneDetectionModelHost resultModel{models.GetHostView()[l]};
+            LaneDetectionModelHost completeDataModel{*completeData->detectionModels[l]};
+
+            {
+                // Check baseline modes and mixture fractions.
+                const auto& rbm = resultModel.BaselineMode();
+                const auto& cdbm = completeDataModel.BaselineMode();
+                DmeEmHost::FloatVec result = rbm.Weight();
+                DmeEmHost::FloatVec expected = cdbm.Weight();
+                DmeEmHost::FloatVec absErrTol = 5.0f * sqrt(expected * (1.0f - expected) / numFramesF);
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad mixing fraction for i = " << i << '.';
+                }
+
+                // Check baseline estimated means.
+                result = rbm.SignalMean();
+                expected = cdbm.SignalMean();
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad baseline mean for i = " << i << '.';
+                }
+
+                // Check baseline estimated variance.
+                result = rbm.SignalCovar();
+                expected = cdbm.SignalCovar();
+                absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad baseline variance for i = " << i << '.';
+                }
+            }
+
+            // Check detection modes.
+            for (unsigned int a = 0; a < 4; ++a)
+            {
+                // Check mixture fraction.
+                const auto& rbm = resultModel.DetectionModes()[a];
+                const auto& cdbm = completeDataModel.DetectionModes()[a];
+                DmeEmHost::FloatVec result = rbm.Weight();
+                DmeEmHost::FloatVec expected = cdbm.Weight();
+                DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFramesF));
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    if (MakeUnion(expected)[i] == 0) continue;
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad mixing fraction for analog " << a
+                                        << " for i = " << i << '.';
+                }
+
+                // Check estimated means.
+                result = rbm.SignalMean();
+                expected = cdbm.SignalMean();
+                absErrTol = 5.1f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    if (isnan(MakeUnion(expected)[i])) continue;
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad pulse mean for analog " << a
+                                        << " for i = " << i << ".";
+                }
+
+                // Check estimated variances.
+                result = rbm.SignalCovar();
+                expected = cdbm.SignalCovar();
+                absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
+                for (unsigned int i = 0; i < laneSize; ++i)
+                {
+                    if (isnan(MakeUnion(expected)[i])) continue;
+                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
+                                        << "Bad pulse variance for analog " << a
+                                        << " for i = " << i << ".";
+                }
+            }
+        }
+    }
 
 public: // Data
     unsigned int poolId = 0;
@@ -272,148 +394,58 @@ private:
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));
     }
 };
+using EmHost = TestDmeEm<DmeEmHost>;
+using EmDevice = TestDmeEm<DmeEmDevice>;
 
-TEST_P(TestDmeEmHost, EstimateFiniteMixture)
+TEST_P(EmHost, EstimateFiniteMixture)
 {
-    Data::BasecallerDmeConfig dmeConfig;
-    dmeConfig.PulseAmpRegularization = GetParam().pulseAmpReg;
-    DmeEmHost::Configure(dmeConfig, movieConfig);
-
-    std::unique_ptr<CoreDMEstimator> dme = std::make_unique<DmeEmHost>(poolId, poolSize);
-    Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,
-                                                              Cuda::Memory::SyncDirection::Symmetric,
-                                                              SOURCE_MARKER());
-
-    // Initialize the model using the initial fixed detection model host.
-    for (unsigned int l = 0; l < poolSize; ++l)
-    {
-        detModelStart->ExportTo(&models.GetHostView()[l]);
-    }
-
-    // TODO: The Estimate() method currently doesn't return the DME diagnostics
-    // with which further unit tests can be written to verify its contents.
-    dme->Estimate(completeData->traceHistAccum->Histogram(), &models);
-
-    const auto& nFrames = GetParam().nFrames;
-    const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
-                                    Data::FrameIntervalSizeType(0));
-    const auto numFramesF = boost::numeric_cast<float>(numFrames);
-
-    using PacBio::Simd::MakeUnion;
-    // Check the pool detection models that should be updated for each lane.
-    for (unsigned int l = 0; l < poolSize; ++l)
-    {
-        LaneDetectionModelHost resultModel{models.GetHostView()[l]};
-        LaneDetectionModelHost completeDataModel{*completeData->detectionModels[l]};
-
-        {
-            // Check baseline modes and mixture fractions.
-            const auto& rbm = resultModel.BaselineMode();
-            const auto& cdbm = completeDataModel.BaselineMode();
-            DmeEmHost::FloatVec result = rbm.Weight();
-            DmeEmHost::FloatVec expected = cdbm.Weight();
-            DmeEmHost::FloatVec absErrTol = 5.0f * sqrt(expected * (1.0f - expected) / numFramesF);
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad mixing fraction for i = " << i << '.';
-            }
-
-            // Check baseline estimated means.
-            result = rbm.SignalMean();
-            expected = cdbm.SignalMean();
-            absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad baseline mean for i = " << i << '.';
-            }
-
-            // Check baseline estimated variance.
-            result = rbm.SignalCovar();
-            expected = cdbm.SignalCovar();
-            absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad baseline variance for i = " << i << '.';
-            }
-        }
-
-        // Check detection modes.
-        for (unsigned int a = 0; a < 4; ++a)
-        {
-            // Check mixture fraction.
-            const auto& rbm = resultModel.DetectionModes()[a];
-            const auto& cdbm = completeDataModel.DetectionModes()[a];
-            DmeEmHost::FloatVec result = rbm.Weight();
-            DmeEmHost::FloatVec expected = cdbm.Weight();
-            DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFramesF));
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                if (MakeUnion(expected)[i] == 0) continue;
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad mixing fraction for analog " << a
-                                    << " for i = " << i << '.';
-            }
-
-            // Check estimated means.
-            result = rbm.SignalMean();
-            expected = cdbm.SignalMean();
-            absErrTol = 5.1f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                if (isnan(MakeUnion(expected)[i])) continue;
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad pulse mean for analog " << a
-                                    << " for i = " << i << ".";
-            }
-
-            // Check estimated variances.
-            result = rbm.SignalCovar();
-            expected = cdbm.SignalCovar();
-            absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
-            for (unsigned int i = 0; i < laneSize; ++i)
-            {
-                if (isnan(MakeUnion(expected)[i])) continue;
-                EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                    << "Bad pulse variance for analog " << a
-                                    << " for i = " << i << ".";
-            }
-        }
-    }
+    RunTest();
+}
+TEST_P(EmDevice, EstimateFiniteMixture)
+{
+    RunTest();
 }
 
 const std::array<unsigned int,nModes> frameCountsBalanced = {500, 125, 125, 125, 125};
 const auto snrSweep = ::testing::Values(
-        TestDmeEmHostParam{14.4f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{16.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{20.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{24.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{32.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{40.0f,  frameCountsBalanced,      0.0f,       0.0f}
+        TestDmeEmParam{14.4f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{16.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{20.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{24.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{32.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{40.0f,  frameCountsBalanced,      0.0f,       0.0f}
         );
-INSTANTIATE_TEST_SUITE_P(SnrSweep, TestDmeEmHost, snrSweep);
+INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost, snrSweep);
+INSTANTIATE_TEST_SUITE_P(SnrSweep, EmDevice, snrSweep);
 
+#if 0
+// This #if/#endif block is necessary to avoid compiler warnings about unused variables (snrSweep2)
 const std::array<unsigned int,nModes> frameCountsUnBalanced = {600, 200, 125, 300, 75};
 const auto snrSweep2 = ::testing::Values(
-        TestDmeEmHostParam{14.4f,  frameCountsUnBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{16.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{20.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{24.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{32.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
-        TestDmeEmHostParam{40.0f,  frameCountsUnBalanced,      0.0f,       0.0f}
+        TestDmeEmParam{14.4f,  frameCountsUnBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{16.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{20.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{24.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{32.0f,  frameCountsUnBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{40.0f,  frameCountsUnBalanced,      0.0f,       0.0f}
 );
 // TODO: Both the test with unbalanced frame counts and missing
 // analog currently fail and need to be further investigated.
-//INSTANTIATE_TEST_SUITE_P(SnrSweep2, TestDmeEmHost, snrSweep2);
+INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmHost, snrSweep2);
+INSTANTIATE_TEST_SUITE_P(SnrSweep2, EmDevice, snrSweep2);
+#endif
 
+
+#if 0
+// This #if/#endif block is necessary to avoid compiler warnings about unused variables (noAnalog0)
 const std::array<unsigned int,nModes> frameCountsNoBrightest = {600, 0, 200, 200, 200};
 const auto noAnalog0 = ::testing::Values(
-        TestDmeEmHostParam{18.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
-        TestDmeEmHostParam{20.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
-        TestDmeEmHostParam{21.0f,  frameCountsNoBrightest,   1.0f,       0.1f}
+        TestDmeEmParam{18.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
+        TestDmeEmParam{20.0f,  frameCountsNoBrightest,   1.0f,       0.1f},
+        TestDmeEmParam{21.0f,  frameCountsNoBrightest,   1.0f,       0.1f}
 );
-//INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, TestDmeEmHost, noAnalog0);
+INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmHost, noAnalog0);
+INSTANTIATE_TEST_SUITE_P(NoBrightestAnalog, EmDevice, noAnalog0);
+#endif
 
 }}} // namespace PacBio::Mongo::Basecaller

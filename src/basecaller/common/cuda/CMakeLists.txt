@@ -21,6 +21,8 @@ set(CPP_LIST
     memory/UnifiedCudaArray.h
     streams/CudaEvent.h
     streams/CudaEvent.cpp
+    streams/CudaStream.h
+    streams/CudaStream.cpp
     streams/KernelLaunchInfo.h
     streams/KernelLaunchInfo.cpp
     streams/StreamMonitors.h

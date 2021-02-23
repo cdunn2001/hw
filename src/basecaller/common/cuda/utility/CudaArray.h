@@ -47,6 +47,12 @@ struct CudaArray
 
     CudaArray() = default;
 
+    explicit CUDA_ENABLED CudaArray(const T& val)
+    {
+        for (auto& d : data_) d = val;
+    }
+
+
     // implicit conversion from std::array intentional
     CudaArray(const std::array<T, len>& data)
     {
@@ -69,6 +75,12 @@ struct CudaArray
 
     CUDA_ENABLED T* begin()  { return data_; }
     CUDA_ENABLED T* end()  { return data_ + len; }
+
+    CUDA_ENABLED T& front() { return data_[0]; }
+    CUDA_ENABLED T& back() { return data_[len-1]; }
+
+    CUDA_ENABLED const T& front() const { return data_[0]; }
+    CUDA_ENABLED const T& back() const { return data_[len-1]; }
 
     CUDA_ENABLED const T* begin() const  { return data_; }
     CUDA_ENABLED const T* end() const  { return data_ + len; }

@@ -26,7 +26,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Description:
-/// \brief HQRFPhsyicalStates
+/// \brief HQRFPhysicalStates
 
 #include <cstdint>
 

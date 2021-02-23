@@ -307,9 +307,15 @@ public:
         FlushPoolsImpl();
     }
 
+    void Report()
+    {
+        std::lock_guard<std::mutex> lm(m_);
+
+        ReportImpl();
+    }
+
 private:
-    // Clears out all allocation pools (and generates a usage report)
-    void FlushPoolsImpl()
+    void ReportImpl()
     {
         // Generate reports, to see what sections of code are allocating
         // the most memory
@@ -357,6 +363,11 @@ private:
                        << "The sum of high water marks for individual high watermarks won't "
                        << "be quite the same as the high watermark for the application as a whole";
         }
+    }
+    // Clears out all allocation pools (and generates a usage report)
+    void FlushPoolsImpl()
+    {
+        ReportImpl();
 
         // Delete all allocations (and statistics) we're currently holding on to.
         allocs_.clear();
@@ -525,6 +536,14 @@ std::unique_ptr<IMongoCachedAllocator> CreateAllocator(AllocatorMode alloc, cons
 IMongoCachedAllocator& GetGlobalAllocator()
 {
     return *AllocInstance().second;
+}
+
+void ReportAllMemoryStats()
+{
+    AllocationManager<MallocAllocator>::GetManager().Report();
+    AllocationManager<PinnedAllocator>::GetManager().Report();
+    AllocationManager<HugePinnedAllocator>::GetManager().Report();
+    AllocationManager<GpuAllocator>::GetManager().Report();
 }
 
 void EnableHostCaching(AllocatorMode mode)

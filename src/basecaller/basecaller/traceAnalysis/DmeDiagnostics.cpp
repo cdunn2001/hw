@@ -36,5 +36,6 @@ namespace Mongo {
 namespace Basecaller {
 
 template struct DmeDiagnostics<LaneArray<float>>;
+template struct DmeDiagnostics<float>;
 
 }}}     // namespace PacBio::Mongo::Basecaller

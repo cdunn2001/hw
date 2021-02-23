@@ -46,15 +46,22 @@ struct BatchResult
     BatchResult(PulseBatchT&& pulsesIn, std::unique_ptr<MetricsT> metricsPtr)
         : pulses(std::move(pulsesIn))
         , metrics(std::move(metricsPtr))
+    {}
+
+    // Relinquishes all device allocations, after downloading the data if
+    // necessary.  Returns the total number of bytes actually transfered
+    size_t DeactivateGpuMem()
     {
+        size_t ret = 0;
         // We have fully analyzed results now.
         // Force data downloads to host, and release
         // any gpu memory we may have
-        pulses.Pulses().DeactivateGpuMem();
+        ret += pulses.Pulses().DeactivateGpuMem();
         if (metrics)
         {
-            metrics->DeactivateGpuMem();
+            ret += metrics->DeactivateGpuMem();
         }
+        return ret;
     }
 
     PulseBatchT pulses;

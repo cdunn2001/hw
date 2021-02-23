@@ -16,6 +16,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     BaselineStatsAggregatorHost.cpp
     BlockFilterStage.h
     BlockFilterStage.cpp
+    ComputeDevices.h
+    ComputeDevices.cpp
     CoreDMEstimator.h
     CoreDMEstimator.cpp
     DetectionModelEstimator.h
@@ -32,6 +34,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DeviceTraceHistogramAccum.cu
     DmeDiagnostics.h
     DmeDiagnostics.cpp
+    DmeEmDevice.h
+    DmeEmDevice.cu
     DmeEmHost.h
     DmeEmHost.cpp
     FrameLabeler.h

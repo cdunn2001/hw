@@ -424,7 +424,7 @@ TEST(SimDataSourceAPI, ZmwInfo)
     EXPECT_EQ(source.NumFrames(), totalFrames);
 
     // Should check the values, but we've not actually defined what the UnitCellFeature values are yet
-    EXPECT_EQ(source.UnitCellFeatures().size(), totalZmw);
+    EXPECT_EQ(source.GetUnitCellProperties().size(), totalZmw);
 
     // ID's should have one unique value for each zmw
     auto ids = source.UnitCellIds();

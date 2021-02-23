@@ -32,6 +32,8 @@
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 
+#include <common/cuda/CudaFunctionDecorators.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -45,7 +47,7 @@ struct alignas(VF) MaxLikelihoodDiagnostics
     using VB = Simd::BoolConv<VF>;
     using VI = Simd::IndexConv<VF>;
 
-    MaxLikelihoodDiagnostics()
+    CUDA_ENABLED MaxLikelihoodDiagnostics()
         : converged     {false}
         , iterCount     {0}
         , degOfFreedom  {-1}
@@ -80,7 +82,7 @@ struct alignas(VF) MaxLikelihoodDiagnostics
     /// Set the \c converged flag for elements indicated by \a aConverged and
     /// and record the iteration count, log likehood, and delta log likelihood
     /// for those elements.
-    void Converged(const VB& aConverged,
+    CUDA_ENABLED void Converged(const VB& aConverged,
                    const unsigned int aIter,
                    const VF& aLogLike,
                    const VF& aDeltaLogLike,

@@ -395,13 +395,17 @@ public:
         return GpuBatchDataHandle<const GpuType>(gpuDims, NumFrames(), data_.GetDeviceHandle(info), DataKey());
     }
 
-    void DeactivateGpuMem() { data_.DeactivateGpuMem(); }
     // Note: For this class (and UnifiedCudaArray) `const` implies that the contents of the data stays the same,
     //       but not necessarily the location.  `mutable` has been applied in a few select places such that
     //       we can copy data to (or from) the GPU even for a const object (On the gpu you'll only be able to
     //       get a const view of the data, but we still have to technically modify things in order to get
     //       the payload up there in the first place).
-    void CopyToDevice() const { data_.CopyToDevice(); }
+    // Relinquishes the device allocation, after downloading the data if necessary.
+    // Returns the number of bytes actually downloaded
+    size_t DeactivateGpuMem() const { return data_.DeactivateGpuMem(); }
+    // Manually uploads the data to the GPU if not already present.  Returns
+    // the number of bytes actually uploaded
+    size_t CopyToDevice() const { return data_.CopyToDevice(); }
 
     BlockView<T> GetBlockView(size_t laneIdx)
     {
