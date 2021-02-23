@@ -251,6 +251,10 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
         segment.ResetSegment(boundaryMask, frame, label, signal);
         segment.AddSignal(!boundaryMask, signal);
 
+        // TODO: The below excludes the baseline frame succeeding a pulse
+        // but we also want to exclude the baseline frame preceding a pulse
+        // to not contaminate the baseline statistics by frames that
+        // might be partially influenced by an adjacent pulse frame.
         auto baseline = (!pulseMask) && (!boundaryMask);
         segment.AddBaseline(baseline, signal);
     };
