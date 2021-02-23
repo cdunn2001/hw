@@ -535,7 +535,7 @@ private:
         if (hasBazFile_)
         {
             auto features1 = source.GetUnitCellProperties();
-            std::vector<uint32_t> features2;            
+            std::vector<uint32_t> features2;
             transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
@@ -576,7 +576,7 @@ private:
         const auto& poolIds = source->PoolIds();
 #endif
         try
-        { 
+        {
           // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
           // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
@@ -612,45 +612,10 @@ private:
                                         / movieConfig_.frameRate
                                         * 1e3;
 
-            // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
-            // loopback paths (anything but Normal).
-            auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
-            if (dsr)
-            {
-                // wait for wxshim
-                uint32_t waitCount = 0;
-                while(! dsr->WXShimReady())
-                {
-                    if (waitCount++ > 100) throw PBException("WXShim was not ready");
-                    PBLOG_NOTICE << "WX Shim not ready, waiting ...";
-                    PacBio::POSIX::Sleep(1.0);
-                }
-            }
-            if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
-            {
-                TransmitConfig config(dsr->GetPlatform());
-                config.condensed = true;
-                config.frames = frames_; // total number of frames to transmit
-                config.limitFileFrames = 512; // loop in coproc memory.
-                config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
-                if (PacBio::POSIX::IsFile(config.hdf5input))
-                {
-                    config.mode = TransmitConfig::Mode::File;
-                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with file " << config.hdf5input;
-                }
-                else
-                {
-                    config.mode = TransmitConfig::Mode::Generated;
-                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
-                }
-                config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
-                config.enablePadding = true;
-                dsr->TransmitMovieSim(config);
-            }
-
             uint64_t nopSuccesses = 0;
             uint64_t framesAnalyzed = 0;
             uint64_t framesSinceBigReports = 0;
+
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
