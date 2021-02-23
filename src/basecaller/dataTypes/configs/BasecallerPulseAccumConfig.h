@@ -46,7 +46,7 @@ public:
     // we don't saturate the allowed number of calls, so be conservative.
     // Hard-coded for now to correspond to 512-frame chunk, 100 fps, with
     // max pulse rate of 10 pulses per second.
-    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 52);
+    PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 48);
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -6,9 +6,9 @@
   65
 
   $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
-  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTAC
+  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
   $ bazviewer --silent -d -n 63 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
-  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTAC
+  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
   $ smrt-basecaller --inputfile ${TRCFILE} --zmwOutputStrideFactor 4 --numZmwLanes 1 --config layout.lanesPerPool=1 --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
@@ -16,7 +16,7 @@
   65
 
   $ bazviewer --silent -d -n 4 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
-  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTAC
+  ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
   $ bazviewer --silent -d -n 2 ${CRAMTMP}/test.baz  | tail -n +2
   {

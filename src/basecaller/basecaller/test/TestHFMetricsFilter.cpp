@@ -294,7 +294,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                 pulses, baselinerStats, models, flMetrics, pdMetrics);
         if (basecallingMetrics)
         {
-            ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx); // = 31, HFMB is complete
+            ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx);
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
