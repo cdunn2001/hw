@@ -231,6 +231,9 @@ public:
     // a well defined and sane initialization guarantee, while actual
     // global variables do not (since the ordering of initialization
     // between different translation units is indeterminate)
+    // We're returning a shared_pointer here so that judicious useage
+    // of weak_ptr can help detect lifetime issues resulting from static
+    // teardown order.
     static std::shared_ptr<AllocationManager> GetManager()
     {
         static auto manager = std::shared_ptr<AllocationManager>(new AllocationManager{});
@@ -263,7 +266,6 @@ public:
         FlushPoolsImpl();
     }
 
-    // Return type is either SmartAllocation or SmartDeviceAllocation
     void* GetAlloc(size_t size, const AllocationMarker& marker)
     {
         if (size == 0) return nullptr;
@@ -287,17 +289,16 @@ public:
 
     void ReturnAlloc(void* alloc, size_t size, size_t allocID)
     {
+        Utilities::Finally f([&]{ if(alloc) Allocator::deallocate(alloc);});
         std::lock_guard<std::mutex> lm(m_);
 
-        if (!cache_)
+        if (cache_)
         {
-            Allocator::deallocate(alloc);
-            return;
+            if (allocID != 0)
+                stats_[allocID].DeallocationSize(size);
+            allocs_[size].push_front(Ptr_t{alloc});
+            alloc = nullptr;
         }
-
-        if (allocID != 0)
-            stats_[allocID].DeallocationSize(size);
-        allocs_[size].push_front(Ptr_t{alloc});
     }
 
     void FlushPools()
@@ -410,7 +411,14 @@ public:
         auto mngr = HostManager::GetManager();
         return PacBio::Memory::SmartAllocation{size,
             [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
-            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+            // Storing mngr as a weak pointer to help sniff out static teardown issues
+            // where this allocation is beying returned after the Manager is already
+            // dead.  There is no robust promise of recovery, but we'll at least
+            // avoid some obvious and definite sources of UB.
+            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr},
+             size,
+             id = marker.AsHash()]
+            (void* ptr){
                 static thread_local size_t counter = 0;
                 counter++;
                 auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
@@ -423,8 +431,12 @@ public:
                 {
                     m->ReturnAlloc(ptr, size, id);
                 } else {
-                    // TODO Risky??
-                    PBLOG_ERROR << "No allocation manager, things are torn down?";
+                    // Logging might be risky to do??  Tossing in an assert to at least
+                    // give a convenient breakpoint for a debugger before we do anything
+                    // blatantly UB.
+                    assert(false);
+                    PBLOG_ERROR << "No allocation manager, things are torn down?"
+                                << " Intentionally leaking allocation...";
                 }
             }};
     }
@@ -441,6 +453,10 @@ public:
         auto mngr = GpuManager::GetManager();
         return SmartDeviceAllocation{size,
             [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
+            // Storing mngr as a weak pointer to help sniff out static teardown issues
+            // where this allocation is beying returned after the Manager is already
+            // dead.  There is no robust promise of recovery, but we'll at least
+            // avoid some obvious and definite sources of UB.
             [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
                 static thread_local size_t counter = 0;
                 counter++;
@@ -454,8 +470,12 @@ public:
                 {
                     m->ReturnAlloc(ptr, size, id);
                 } else {
-                    // TODO Risky??
-                    PBLOG_ERROR << "No allocation manager, things are torn down?";
+                    // Logging might be risky to do??  Tossing in an assert to at least
+                    // give a convenient breakpoint for a debugger before we do anything
+                    // blatantly UB.
+                    assert(false);
+                    PBLOG_ERROR << "No allocation manager, things are torn down?"
+                                << " Intentionally leaking allocation...";
                 }
             },
             DataKey()};
@@ -487,22 +507,30 @@ std::pair<AllocatorMode, std::unique_ptr<IMongoCachedAllocator>>& AllocInstance(
 template <typename F>
 void VisitHostManager(AllocatorMode mode, F&& f)
 {
+    // Putting this in a small lambda to avoid repeating the
+    // null check.  I can't imagine this function will get called
+    // after the static managers are destroyed, but might as well
+    // be safe;
+    auto Invoke = [&](auto&& mgr)
+    {
+        assert(mgr);
+        f(*mgr);
+    };
     switch (mode)
     {
     case AllocatorMode::MALLOC:
         {
-            // TODO think about dereference
-            f(*AllocationManager<MallocAllocator>::GetManager());
+            Invoke(AllocationManager<MallocAllocator>::GetManager());
             return;
         }
     case AllocatorMode::CUDA:
         {
-            f(*AllocationManager<PinnedAllocator>::GetManager());
+            Invoke(AllocationManager<PinnedAllocator>::GetManager());
             return;
         }
     case AllocatorMode::HUGE_CUDA:
         {
-            f(*AllocationManager<HugePinnedAllocator>::GetManager());
+            Invoke(AllocationManager<HugePinnedAllocator>::GetManager());
             return;
         }
     }
@@ -553,11 +581,15 @@ IMongoCachedAllocator& GetGlobalAllocator()
 
 void ReportAllMemoryStats()
 {
-    // TODO think about dereference
-    AllocationManager<MallocAllocator>::GetManager()->Report();
-    AllocationManager<PinnedAllocator>::GetManager()->Report();
-    AllocationManager<HugePinnedAllocator>::GetManager()->Report();
-    AllocationManager<GpuAllocator>::GetManager()->Report();
+    auto Report = [](auto&& mgr)
+    {
+        if (mgr) mgr->Report();
+    };
+
+    Report(AllocationManager<MallocAllocator>::GetManager());
+    Report(AllocationManager<PinnedAllocator>::GetManager());
+    Report(AllocationManager<HugePinnedAllocator>::GetManager());
+    Report(AllocationManager<GpuAllocator>::GetManager());
 }
 
 void EnableHostCaching(AllocatorMode mode)
@@ -570,8 +602,8 @@ void EnableHostCaching(AllocatorMode mode)
 }
 void EnableGpuCaching()
 {
-    // TODO think about dereference
-    AllocationManager<GpuAllocator>::GetManager()->EnableCaching();
+    auto mngr = AllocationManager<GpuAllocator>::GetManager();
+    mngr->EnableCaching();
 }
 
 void DisableHostCaching(AllocatorMode mode)
@@ -584,8 +616,8 @@ void DisableHostCaching(AllocatorMode mode)
 }
 void DisableGpuCaching()
 {
-    // TODO think about dereference
-    AllocationManager<GpuAllocator>::GetManager()->DisableCaching();
+    auto mngr = AllocationManager<GpuAllocator>::GetManager();
+    mngr->DisableCaching();
 }
 
 void DisableAllCaching()

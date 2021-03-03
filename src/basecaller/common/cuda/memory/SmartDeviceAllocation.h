@@ -61,6 +61,10 @@ public:
         : SmartDeviceAllocation(size, &CudaRawMalloc, &CudaFree)
     {}
 
+    // Advanced ctor, only usable by classes that inherit from
+    // DataManager.  We don't want any normal host allocations
+    // slipping into this type, and most people have no buisiness
+    // calling this function
     template <typename Allocate, typename Deallocate>
     SmartDeviceAllocation(size_t size,
                           Allocate&& allocate,
