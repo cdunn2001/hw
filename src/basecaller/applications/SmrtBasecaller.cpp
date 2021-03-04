@@ -648,6 +648,7 @@ private:
                     PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
                 }
                 config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
+                config.enablePadding = true;
                 dsr->TransmitMovieSim(config);
             }
 
