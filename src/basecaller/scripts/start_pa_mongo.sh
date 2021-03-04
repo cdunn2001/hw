@@ -10,7 +10,7 @@ FRAMES=${FRAMES:-1024}
 RATE=${RATE:-100}
 TRACE_OUTPUT=${TRACE_OUTPUT:-}
 INPUT=${INPUT:-alpha}
-VSC=${VSC:-1}
+VSC=${VSC:-0}
 NOP=${NOP:-0}
 MAXPOPLOOPS=${MAXPOPLOOPS:-10}
 TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
@@ -52,9 +52,18 @@ cols=2912
 numZmws=$(( $rows * $cols ))
 numZmwLanes=$(( numZmws / 64 ))
 
+if false
+then
+    numZmwLanes=1
+    sourceType=TRACE_FILE
+else
+    sourceType=WX2
+fi
+
 # maxCallsPerZmw should be increased because packet depth is 512 frames vs 128 frames
 
-cat <<HERE > /tmp/config.json
+tmpjson=$(mktemp)
+cat <<HERE > $tmpjson
 {
   "algorithm": 
   {
@@ -71,7 +80,7 @@ cat <<HERE > /tmp/config.json
   },
   "source":
   {
-    "sourceType": "WX2",
+    "sourceType": "${sourceType}",
     "wx2SourceConfig":
     {
          "dataPath": "HardLoop",
@@ -94,7 +103,8 @@ cat <<HERE > /tmp/config.json
 HERE
 
 
-cat /tmp/config.json
+cat $tmpjson
+
 
 if [[ $VSC == 0 ]]
 then
@@ -103,6 +113,7 @@ else
   cd ../build
 fi
 
-# sudo $cmd ./applications/smrt-basecaller --outputbazfile=/data/pa/bogus.baz --frames=${FRAMES} --inputfile=constant/123 --logfilter=${LOGFILTER} --config /tmp/config.json ${nop_option} ${trc_output}
+# sudo $cmd ./applications/smrt-basecaller --outputbazfile=/data/pa/bogus.baz --frames=${FRAMES} --inputfile=constant/123 --logfilter=${LOGFILTER} --config ${tmpjson} ${nop_option} ${trc_output}
 set -x
-$cmd ./applications/smrt-basecaller --frames=${FRAMES} --numZmwLanes=${numZmwLanes}  --inputfile=${INPUT} --logfilter=${LOGFILTER} --config /tmp/config.json ${nop_option} ${trc_output}
+pwd
+$cmd ./applications/smrt-basecaller --frames=${FRAMES} --numZmwLanes=${numZmwLanes}  --inputfile=${INPUT} --logfilter=${LOGFILTER} --config $tmpjson ${nop_option} ${trc_output}
