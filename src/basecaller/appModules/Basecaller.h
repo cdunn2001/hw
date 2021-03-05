@@ -242,7 +242,10 @@ public:
             //      certain (presumably uncommon) config settings
             //      can break this.
             if (measurePCIeBandwidth_)
+            {
                 bytesUploaded_ += in.CopyToDevice();
+                Cuda::CudaSynchronizeDefaultStream();
+            }
             bytesUploaded_ += gpuStash->RetrievePool(in.GetMeta().PoolId());
             msUpload += timer.GetElapsedMilliseconds();
         }
