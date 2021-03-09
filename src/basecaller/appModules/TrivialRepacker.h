@@ -29,6 +29,8 @@
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
 
+#include <appModules/Repacker.h>
+
 #include <common/graphs/GraphNodeBody.h>
 
 #include <dataTypes/TraceBatch.h>
@@ -38,46 +40,70 @@ namespace Application {
 
 // Repacker implementation that does nothing but repackage a SensorPacket into a
 // trace batch.  Requires the SensorPacket to have the correct dimensions
-class TrivialRepackerBody final : public Graphs::MultiTransformBody<DataSource::SensorPacket, const Mongo::Data::TraceBatch<int16_t>>
+class TrivialRepackerBody final : public RepackerBody
 {
 public:
-    TrivialRepackerBody(Mongo::Data::BatchDimensions expectedDims)
-        : expectedDims_(expectedDims)
-    {}
+    TrivialRepackerBody(const std::map<uint32_t, DataSource::PacketLayout>& expectedLayouts)
+    {
+        for (const auto& kv : expectedLayouts)
+        {
+            auto id = kv.first;
+            const auto& layout = kv.second;
+            if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
+                throw PBException("Frame layout not supported");
+            if (layout.Encoding() != DataSource::PacketLayout::INT16)
+                throw PBException("Only int16 is supported");
+            if (layout.BlockWidth() != Mongo::laneSize)
+                throw PBException("Invalid block width");
+            Mongo::Data::BatchDimensions dims;
+            dims.framesPerBatch = layout.NumFrames();
+            dims.laneWidth = layout.BlockWidth();
+            dims.lanesPerBatch = layout.NumBlocks();
+
+            expectedDims_[id] = dims;
+        }
+
+    }
+
+    std::map<uint32_t, Mongo::Data::BatchDimensions> BatchLayouts() const override
+    {
+        return expectedDims_;
+    }
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
     void Process(DataSource::SensorPacket packet) override
     {
+        const auto& dims = expectedDims_[packet.PacketID()];
         // Make sure packet is valid
         if (packet.Layout().Encoding() != DataSource::PacketLayout::INT16)
             throw PBException("TrivialRepacker only supports INT16 encoding");
         if (packet.Layout().Type() != DataSource::PacketLayout::BLOCK_LAYOUT_DENSE)
             throw PBException("TrivialRepacker only supports BLOCK_LAYOUT_DENSE");
-        if (expectedDims_.lanesPerBatch != packet.Layout().NumBlocks())
-            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.lanesPerBatch) +
+        if (dims.lanesPerBatch != packet.Layout().NumBlocks())
+            throw PBException("TrivialRepacker expected " + std::to_string(dims.lanesPerBatch) +
                               " blocks but received " + std::to_string(packet.Layout().NumBlocks()));
-        if (expectedDims_.framesPerBatch != packet.Layout().NumFrames())
-            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.framesPerBatch) +
+        if (dims.framesPerBatch != packet.Layout().NumFrames())
+            throw PBException("TrivialRepacker expected " + std::to_string(dims.framesPerBatch) +
                               " frames but received " + std::to_string(packet.Layout().NumFrames()));
-        if (expectedDims_.laneWidth != packet.Layout().BlockWidth())
-            throw PBException("TrivialRepacker expected " + std::to_string(expectedDims_.laneWidth) +
+        if (dims.laneWidth != packet.Layout().BlockWidth())
+            throw PBException("TrivialRepacker expected " + std::to_string(dims.laneWidth) +
                               " blockWidth but received " + std::to_string(packet.Layout().BlockWidth()));
 
         Mongo::Data::BatchMetadata meta(
-            packet.StartZmw() / (expectedDims_.lanesPerBatch * expectedDims_.laneWidth),
+            packet.PacketID(),
             packet.StartFrame(),
             packet.StartFrame() + packet.NumFrames(),
             packet.StartZmw());
         PushOut(Mongo::Data::TraceBatch<int16_t>(std::move(packet),
                                     meta,
-                                    expectedDims_,
+                                    dims,
                                     PacBio::Cuda::Memory::SyncDirection::HostWriteDeviceRead,
                                     SOURCE_MARKER()));
     }
 private:
-    Mongo::Data::BatchDimensions expectedDims_;
+    std::map<uint32_t, Mongo::Data::BatchDimensions> expectedDims_;
 };
 
 }}

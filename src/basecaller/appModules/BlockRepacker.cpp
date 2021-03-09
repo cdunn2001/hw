@@ -590,12 +590,17 @@ public:
         // Figure out number of batches required to span all the zmw, with care
         // taken for integer division.
         const auto numBatches = (numZmw + batchDims.ZmwsPerBatch() - 1) / batchDims.ZmwsPerBatch();
+        for (size_t i = 0; i < numBatches; ++i)
+            dims_[i] = batchDims;
+        const auto runtBlocks = numZmw % batchDims.ZmwsPerBatch() / batchDims.laneWidth;
+        dims_[numBatches-1].lanesPerBatch = runtBlocks;
+
         // Statically chunk the batches into arenas.  Again take care for
         // integer division, and keep the arenas as close in size as possible
         // (i.e. we'll opt for several arenas 1 smaller than the norm, rather
         // that one single runt arena that can be arbitrarily small)
         const auto minBatchesPerArena = numBatches / numWorkers;
-        const auto numSmallBatches = numWorkers - numBatches % numWorkers;
+        const auto numSmallArenas = numWorkers - numBatches % numWorkers;
 
         // Create all the arenas.  Need to take care, both because not all
         // arenas have the same number of batches, but there will potentially
@@ -604,14 +609,14 @@ public:
         size_t startZmw = 0;
         if (minBatchesPerArena > 0)
         {
-            for (size_t i = 0; i < numSmallBatches; ++i)
+            for (size_t i = 0; i < numSmallArenas; ++i)
             {
                 size_t endZmw = std::min(startZmw + minBatchesPerArena * batchDims.ZmwsPerBatch(), numZmw);
                 arenas_.emplace_back(batchDims, startZmw, endZmw, parent);
                 startZmw = endZmw;
             }
         }
-        for (size_t i = numSmallBatches; i < numWorkers; ++i)
+        for (size_t i = numSmallArenas; i < numWorkers; ++i)
         {
             size_t endZmw = std::min(startZmw + (minBatchesPerArena+1) * batchDims.ZmwsPerBatch(), numZmw);
             arenas_.emplace_back(batchDims, startZmw, endZmw, parent);
@@ -655,8 +660,14 @@ public:
         } while(didSomething);
     }
 
+    std::map<uint32_t, BatchDimensions> BatchLayouts() const override
+    {
+        return dims_;
+    }
+
 private:
     std::vector<PoolArena<mode>> arenas_;
+    std::map<uint32_t, BatchDimensions> dims_;
 };
 
 } // anonymous namespace
@@ -664,21 +675,39 @@ private:
 namespace PacBio {
 namespace Application {
 
-BlockRepacker::BlockRepacker(PacketLayout /*expectedInputLayout*/,
+BlockRepacker::BlockRepacker(const std::map<uint32_t, DataSource::PacketLayout>& expectedInputLayouts,
                              BatchDimensions outputDims,
                              size_t numZmw,
                              size_t concurrencyLimit)
     : concurrencyLimit_(concurrencyLimit)
 {
-    // When/If multiple modes are implemented, the runtime switch
-    // will go here.  We'll instantiate a special mode as appropriate
-    // and fall back to DEFAULT if there is no applicable special
-    // implementation
+    if (numZmw % Mongo::laneSize != 0)
+        throw PBException("Number of zmw must be a multiple of the lane size");
+
+    const auto expectedFrames = expectedInputLayouts.begin()->second.NumFrames();
+    for (const auto& kv : expectedInputLayouts)
+    {
+        const auto& layout = kv.second;
+        if (layout.Encoding() != PacketLayout::INT16)
+            throw PBException("BlockRepacker only supports 16 bit data");
+        if (layout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
+            throw PBException("BlockRepacker only supports dense block layouts");
+        if (layout.NumFrames() != expectedFrames)
+            throw PBException("BlockRepacker requires uniform frame counts");
+        if (layout.BlockWidth() % 32 != 0)
+            throw PBException("BlockRepacker requires blocks that are a multiple of 32 pixels");
+    }
+
     impl_ = std::make_unique<ImplChild<RepackerMode::DEFAULT>>(
                 outputDims,
                 numZmw,
                 this,
                 concurrencyLimit);
+}
+
+std::map<uint32_t, BatchDimensions> BlockRepacker::BatchLayouts() const
+{
+    return impl_->BatchLayouts();
 }
 
 void BlockRepacker::Process(SensorPacket packet)

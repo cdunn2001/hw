@@ -29,6 +29,8 @@
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
 
+#include <appModules/Repacker.h>
+
 #include <common/graphs/GraphNodeBody.h>
 
 #include <dataTypes/TraceBatch.h>
@@ -42,8 +44,6 @@ namespace Application {
 // - inbound SensorPackets: have a uniform frame count
 // - inbound SensorPackets: have a frame count that is equal to, or an even divisor of,
 //                          the output TraceBatch frame count
-// - inbound SensorPackets: have a uniform block size.  That is they can vary the number
-//                          of blocks, but not the shape of blocks.
 //
 // The input SensorPackets do *not* have to:
 // - Have multiple blocks
@@ -56,21 +56,18 @@ namespace Application {
 //   possibly do better for more limited scenarios.  The implementation file
 //   provides a mechanism for re-writing the low-level implementation for specific
 //   target cases, without having to re-write the higher level multi-threading logic
-class BlockRepacker final : public Graphs::MultiTransformBody<DataSource::SensorPacket,
-                                                              const Mongo::Data::TraceBatch<int16_t>>
+class BlockRepacker final : public RepackerBody
 {
 public:
-    /// \param expectedInputLayout a nominal layout expected for input packets.  In
-    ///                            practice the number of blocks can change, but
-    ///                            the incoming packets must match the expected block
-    ///                            dimensions
-    /// \param outputLayout        The output layout that this repacker will produce.
-    ///                            All output batches will be of the same shape, save
-    ///                            perhaps the last one which might have fewer blocks
-    /// \param numZmw              The number of ZMW in a chip
-    /// \param concurrencyLimit    The maximum number of threads allowed to work at
-    ///                            once in this node of the analysis graph.
-    BlockRepacker(DataSource::PacketLayout expectedInputLayout,
+    /// \param expectedInputLayouts The expected input packet layouts.  It is required
+    ///                             that all blocks have the same number of frames.
+    /// \param outputLayout         The desired output layout for this repacker.
+    ///                             All output batches will be of the same shape, save
+    ///                             perhaps the last one which might have fewer blocks
+    /// \param numZmw               The number of ZMW in a chip
+    /// \param concurrencyLimit     The maximum number of threads allowed to work at
+    ///                             once in this node of the analysis graph.
+    BlockRepacker(const std::map<uint32_t, DataSource::PacketLayout>& expectedInputLayouts,
                   Mongo::Data::BatchDimensions outputDims,
                   size_t numZmw,
                   size_t concurrencyLimit);
@@ -79,6 +76,8 @@ public:
     float MaxDutyCycle() const override { return 1.0; }
 
     void Process(DataSource::SensorPacket packet) override;
+
+    std::map<uint32_t, Mongo::Data::BatchDimensions> BatchLayouts() const override;
 
     ~BlockRepacker() override;
 
@@ -91,6 +90,7 @@ public:
     {
     public:
         virtual void Process(DataSource::SensorPacket packet) = 0;
+        virtual std::map<uint32_t, Mongo::Data::BatchDimensions> BatchLayouts() const = 0;
         virtual ~Impl() = default;
     };
 

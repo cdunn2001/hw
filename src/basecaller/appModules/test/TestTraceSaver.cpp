@@ -84,28 +84,21 @@ TEST(TestTraceSaver, TestA)
         dims.framesPerBatch = 128;
         dims.laneWidth = laneWidth;
 
-        PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
-                                  PacketLayout::EncodingFormat::INT16,
-                                  std::array<size_t, 3> {1, dims.framesPerBatch, dims.laneWidth});
-
-        PacBio::Memory::MallocAllocator allocator;
-
-
-        // fill each packet with the "alpha" test pattern, which is based on row and column
+        // fill each batch with the "alpha" test pattern, which is based on row and column
         auto FillTraceBatch = [&](uint64_t zmwOffset,
                                   uint64_t frameOffset,
-                                  DataSource::SensorPacket& packet,
+                                  TraceBatch<int16_t>& batch,
                                   std::function<int16_t(uint64_t zmw, uint64_t frame)> pattern) {
-            for (uint32_t iblock = 0; iblock < packet.Layout().NumBlocks(); iblock++)
+            for (uint32_t iblock = 0; iblock < batch.LanesPerBatch(); iblock++)
             {
-                int16_t* ptr = reinterpret_cast<int16_t*>(packet.BlockData(iblock).Data());
+                auto blockView = batch.GetBlockView(iblock);
                 for (uint32_t zmw = 0; zmw < dims.laneWidth; zmw++)
                 {
                     for (uint32_t frame = 0; frame < dims.framesPerBatch; frame++)
                     {
                         uint32_t j = zmw + frame * dims.laneWidth;
-                        ASSERT_LT(j, packet.BlockData(iblock).Count() / sizeof(*ptr));
-                        ptr[j] = pattern(zmw + zmwOffset, frame + frameOffset);
+                        ASSERT_LT(j , blockView.Size());
+                        blockView[j] = pattern(zmw + zmwOffset, frame + frameOffset);
                     }
                 }
             }
@@ -122,18 +115,18 @@ TEST(TestTraceSaver, TestA)
                                          izmw /* firstZmw */
                 );
 
-                DataSource::SensorPacket packet(packetLayout, izmw, iframe, allocator);
-                ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BytesInBlock());
-                ASSERT_EQ(dims.framesPerBatch * laneWidth * sizeof(int16_t), packet.BlockData(0).Count());
-                ASSERT_EQ(dims.laneWidth, packet.Layout().BlockWidth());
+                Mongo::Data::TraceBatch<int16_t> traceBatch(
+                    meta, dims,
+                    Cuda::Memory::SyncDirection::Symmetric,
+                    SOURCE_MARKER());
 
-                FillTraceBatch(izmw, iframe, packet, alphaPrime);
+                FillTraceBatch(izmw, iframe, traceBatch, alphaPrime);
 
 #if 0
-                auto dataView = packet.BlockData(0);
+                auto dataView = traceBatch.GetBlockView(0);
                 std::stringstream ss;
-                ss << "packet for zmw:" << izmw << " frame:" << iframe << "\n";
-                const int16_t* pixel = reinterpret_cast<int16_t*>(dataView.Data());
+                ss << "batch for zmw:" << izmw << " frame:" << iframe << "\n";
+                const int16_t* pixel = dataView.Data();
                 for (uint64_t iframe2 = 0; iframe2 < dims.framesPerBatch; iframe2++)
                 {
                     ss << "[" << iframe2 << "]";
@@ -146,9 +139,6 @@ TEST(TestTraceSaver, TestA)
                 ss << "----" << std::endl;
                 TEST_COUT << ss.str();
 #endif
-
-                Mongo::Data::TraceBatch<int16_t> traceBatch(
-                    std::move(packet), meta, dims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
 
                 traceSaver.Process(traceBatch);  // blah
             }

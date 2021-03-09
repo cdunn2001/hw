@@ -84,16 +84,10 @@ public:
         iota(ret.begin(), ret.end(), 0);
         return ret;
     }
-    std::vector<uint32_t> PoolIds() const override
-    {
-        std::vector<uint32_t> ret(NumBatches());
-        iota(ret.begin(), ret.end(), 0);
-        return ret;
-    }
 
-    size_t NumBatches() const override
+    std::map<uint32_t, DataSource::PacketLayout> PacketLayouts() const override
     {
-        return numZmw_ / GetConfig().layout.NumZmw();
+        return layouts_;
     }
 
     size_t NumFrames() const override
@@ -123,9 +117,11 @@ private:
     std::unique_ptr<DataCache> cache_;
     size_t numZmw_;
 
+    size_t currZmw_ = 0;
     size_t batchIdx_ = 0;
     size_t chunkIdx_ = 0;
 
+    std::map<uint32_t, DataSource::PacketLayout> layouts_;
     DataSource::SensorPacketsChunk currChunk_;
 };
 

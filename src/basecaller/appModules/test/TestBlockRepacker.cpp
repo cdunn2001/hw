@@ -86,6 +86,7 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
     ret.SetZmwRange(0, numZmw);
 
     const size_t numTimePackets = numFrames / defaultLayout.NumFrames();
+    size_t packetID = 0;
     for (size_t i = 0; i < numTimePackets; ++i)
     {
         size_t currZmw = 0;
@@ -105,7 +106,8 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
 
             PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                                 {numBlocks, defaultLayout.NumFrames(), defaultLayout.BlockWidth()});
-            SensorPacket packet(layout, currZmw, startFrame + i * defaultLayout.NumFrames(), alloc);
+            SensorPacket packet(layout, packetID, currZmw, startFrame + i * defaultLayout.NumFrames(), alloc);
+            packetID++;
 
             //populate data
             for (size_t b = 0; b < numBlocks; ++b)
@@ -333,8 +335,13 @@ TEST_P(TestBlockRepacker, ParamSweep)
     // Set up a toy graph, which just repacks a packet
     // and puts the resulting batch through some
     // validation code
+    std::map<uint32_t, PacketLayout> layoutMap;
+    for (const auto& p : chunk1)
+    {
+        layoutMap[p.PacketID()] = p.Layout();
+    }
     GraphManager <GraphProfiler> graph(numThreads);
-    auto* repacker = graph.AddNode(std::make_unique<BlockRepacker>(inputLayout, outputDims, numZmw, numThreads), GraphProfiler::REPACKER);
+    auto* repacker = graph.AddNode(std::make_unique<BlockRepacker>(layoutMap, outputDims, numZmw, numThreads), GraphProfiler::REPACKER);
     repacker->AddNode(std::make_unique<ValidatorBody>(&validator), GraphProfiler::VALIDATOR);
 
     for (auto& packet : chunk1)
