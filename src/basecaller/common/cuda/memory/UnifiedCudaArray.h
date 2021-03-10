@@ -234,9 +234,6 @@ public:
                 ptr[i].~HostType();
             }
         }
-
-        //recycle our allocation
-        IMongoCachedAllocator::ReturnHostAllocation(std::move(hostData_));
     }
 
     size_t Size() const { return hostData_.size() / sizeof(HostType); }
@@ -262,7 +259,7 @@ public:
             GetHostView();
         }
 
-        IMongoCachedAllocator::ReturnDeviceAllocation(std::move(gpuData_));
+        gpuData_ = SmartDeviceAllocation();
         return ret;
     }
 

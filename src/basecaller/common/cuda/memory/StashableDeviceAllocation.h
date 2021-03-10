@@ -110,13 +110,7 @@ public:
         return *this;
     }
 
-    ~StashableDeviceAllocation()
-    {
-        if (host_)
-            IMongoCachedAllocator::ReturnHostAllocation(std::move(host_));
-        if (device_)
-            IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
-    }
+    ~StashableDeviceAllocation() = default;
 
     /// Makes sure the data currently resides on the GPU.  This is cheap
     /// to call if the data is already on the GPU.
@@ -176,7 +170,7 @@ public:
             assert(device_);
             CudaRawCopyDeviceToHost(host_.get<void>(),device_.get<void>(DataKey()),  size_);
             CudaSynchronizeDefaultStream();
-            IMongoCachedAllocator::ReturnDeviceAllocation(std::move(device_));
+            device_ = SmartDeviceAllocation();
             ret += size_;
         }
         state_ = HOST;

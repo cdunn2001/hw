@@ -367,11 +367,7 @@ private:
             {
                 allocations.emplace_back(allo->GetAllocation(sizeof(Tile)));
             }
-            for(uint32_t i=0;i<numPreallocatedPackets;i++)
-            {
-                allo->ReturnHostAllocation(std::move(allocations[i]));
-            }
-        }        
+        }
         /// MTL/BB hack.end
 
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
@@ -721,11 +717,6 @@ private:
                         if (config_.system.analyzerHardware != Basecaller::ComputeDevices::Host)
                             Basecaller::IOProfiler::IntermediateReport();
                         framesSinceBigReports = 0;
-                    }
-
-                    for(auto&& packet : chunk)
-                    {
-                        PacBio::Cuda::Memory::GetGlobalAllocator().ReturnHostAllocation(std::move(packet).RelinquishAllocation());
                     }
                 }
 

@@ -81,13 +81,39 @@ private:
                 + ":" + std::to_string(__LINE__))
 // Note: POSIX/GNU versions of baseline require the path argument to be read/write, so it can't be used.
 
-// Extension of the IAllocator interface, which provides two new piece
-// of functionality:
-// 1. Allows cuda allocations (which are a fundamentally different type from
-//    host allocations)
-// 2. Facilitates allocation caching, which in some situations can be significantly
-//    faster than allocating/deallocating individual allocations each time they are
-//    needed
+/// Extension of the IAllocator interface, which adds the notion of a GPU
+/// allocations (which for safety reasons are a fundamentally different
+/// type from host allocations)
+///
+/// Children implementations will also use allocation caching,
+/// which is significantly faster than allocating/deallocating
+/// individual allocations each time they are needed as the CUDA
+/// allocators seem to be painfully slow
+///
+/// \note Allocation caching can be disabled on an application wide basis via
+///       SetGlobalAllocationMode
+/// \note Different instances of IMongoCachedAllocator may share the same allocation cache.
+///       Certain things cannot be mixed (like huge pages and normal system allocations),
+///       but otherwise the implementation will share allocation pools between instances
+/// \note The allocation caching scheme is currently very simple.  Allocations of irregular
+///       size will probably result never be recycled, and they will live until the cache
+///       is manually cleared (probably not until the end of execution).  In this situation
+///       it will effectively appear to be a memory leak.
+///
+/// \warn There is an inherant risk in storing any allocation in a static variable and allowing
+///       it to be destroyed automatically as part of runtime teardown.  It is notoriously
+///       difficult to control the relative order of construction/destruction, and if you do
+///       something like deallocate a cuda allocation after the cuda runtime itself is down
+///       down, things will die gracelessly.  Great care has been done to make sure that the
+///       caching infrastructure can always destroy itself without issue, but there is only so
+///       much that can be done for any allocations that are created and outlive the allocation
+///       cache.  We will be able to detect if we are destroying an allocation after the cache
+///       is destroyed, but since the cache has static storage duration, if it's destroyed we
+///       are already in the midst of application teardown.  At that point we don't even know
+///       if calls to functions like cudaFree are safe to call.  Moral of the story is that if
+///       you need to store data in static variables for visibility purposes or something,
+///       you'll either need to either be very careful about the nuances of object lifetimes,
+///       or have an explicit cleanup operation that destroys things before main exits.
 class IMongoCachedAllocator : public PacBio::Memory::IAllocator
 {
 public:
@@ -95,35 +121,6 @@ public:
     virtual PacBio::Memory::SmartAllocation GetAllocation(size_t count, const AllocationMarker& marker) = 0;
     virtual SmartDeviceAllocation GetDeviceAllocation(size_t count, const AllocationMarker& marker) = 0;
 
-    // Opt-in routines that allow allocation caching.  If you let a SmartAllocation expire it will
-    // be deallocated, but if instead you return it via one of these functions, it may be recycled
-    // to satisfy future allocation requests.
-    // Note: Allocation caching can be disabled application wide.  If allocation is disabled,
-    //       then calling these functions will simply free the memory
-    // Note: Different instances of IMongoCachedAllocator may share the same allocation cache.
-    //       Certain things cannot be mixed (like huge pages and normal system allocations),
-    //       but otherwise the implementation will share allocation pools between instances
-    // Note: The allocation caching scheme is currently very simple.  Calling these "Return"
-    //       functions for frequent one-off allocations of irregular size will probably result
-    //       in them never being recycled, and they will live until the cache is manually
-    //       cleared (probably not until the end of execution).  In this situation it will
-    //       effectively appear to be a memory leak.
-    // WARN: These routines will not be safe to call after the exit of main.  The caching
-    //       involves static storage duration data structures, which the runtime will start
-    //       destroying once main exits.  Care has been taken to make sure any allocations
-    //       already returned will be safely deallocated, but if you have a static member
-    //       variable somewhere that may contain an allocation, it's entirely possible that
-    //       by the time it's destroyed, the cuda runtime itself has been torn down and
-    //       any attempts to deallocate cuda memory will crash the program.
-    //
-    //       It's possible with a little work to make the caching part of the RAII setup
-    //       of SmartAllocation and SmartDeviceAllocation, in which case it's possible to
-    //       inject a mechanism to detect if the necessary global data has been destroyed
-    //       before attempting to use it. (e.g. via std::weak_ptr or something similar)
-    //       This would still leave it an error to deallocate memory after main exits, just
-    //       one we could have cleaner logging/teardown for.
-    static void ReturnHostAllocation(PacBio::Memory::SmartAllocation alloc);
-    static void ReturnDeviceAllocation(SmartDeviceAllocation alloc);
 };
 
 enum class CachingMode

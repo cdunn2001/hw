@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <functional>
 #include <memory>
 #include <mutex>
 
@@ -56,10 +57,31 @@ namespace Memory {
 class SmartDeviceAllocation
 {
 public:
-    SmartDeviceAllocation(size_t size = 0, size_t allocID = 0)
-        : data_(size ? CudaRawMalloc(size) : nullptr)
+    SmartDeviceAllocation(size_t size = 0)
+        : SmartDeviceAllocation(size, &CudaRawMalloc, &CudaFree)
+    {}
+
+    // Advanced ctor, only usable by classes that inherit from
+    // DataManager.  We don't want any normal host allocations
+    // slipping into this type, and most people have no buisiness
+    // calling this function
+    template <typename Allocate, typename Deallocate>
+    SmartDeviceAllocation(size_t size,
+                          Allocate&& allocate,
+                          Deallocate&& deallocate,
+                          detail::DataManagerKey)
+        : SmartDeviceAllocation(size,
+                                std::forward<Allocate>(allocate),
+                                std::forward<Deallocate>(deallocate))
+    {}
+
+private:
+    template <typename Allocate, typename Deallocate>
+    SmartDeviceAllocation(size_t size,
+                          Allocate&& allocate,
+                          Deallocate&& deallocate)
+        : data_(size ? allocate(size) : nullptr, std::forward<Deallocate>(deallocate))
         , size_(size)
-        , allocID_(allocID)
     {
         if (size_ > 0)
         {
@@ -77,12 +99,12 @@ public:
             assert(curMax <= peakBytesAllocated_);
         }
     }
+public:
 
     SmartDeviceAllocation(const SmartDeviceAllocation&) = delete;
     SmartDeviceAllocation(SmartDeviceAllocation&& other)
         : data_(std::move(other.data_))
         , size_(other.size_)
-        , allocID_(other.allocID_)
     {
         other.size_ = 0;
     }
@@ -92,7 +114,6 @@ public:
     {
         data_ = std::move(other.data_);
         size_ = other.size_;
-        allocID_ = other.allocID_;
         other.size_ = 0;
         return *this;
     }
@@ -105,9 +126,6 @@ public:
             bytesAllocated_ -= size_;
         }
     }
-
-    size_t AllocID() const { return allocID_; }
-    void AllocID(size_t val) { allocID_ = val; }
 
     template <typename T>
     T* get(detail::DataManagerKey) { return static_cast<T*>(data_.get()); }
@@ -127,13 +145,8 @@ public:
     }
 
 private:
-    struct Deleter
-    {
-        void operator()(void* ptr) { CudaFree(ptr); }
-    };
-    std::unique_ptr<void, Deleter> data_;
+    std::unique_ptr<void, std::function<void(void*)>> data_;
     size_t size_;
-    size_t allocID_;
 
     static std::atomic<size_t> bytesAllocated_;
     static std::atomic<size_t> peakBytesAllocated_;

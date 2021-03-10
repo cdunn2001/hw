@@ -1062,6 +1062,7 @@ DmeEmDevice::InitDetectionModels(const PoolBaselineStats& blStats) const
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
     Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm);
+    Cuda::CudaSynchronizeDefaultStream();
 
     return pdm;
 }
