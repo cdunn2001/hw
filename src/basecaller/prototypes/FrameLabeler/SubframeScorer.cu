@@ -33,7 +33,8 @@ namespace Cuda {
 namespace Subframe {
 
 
-TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
+template <typename T>
+TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
 {
     // We only have access to single precision math on the host, so populate data as float for now,
     // and at the end we'll convert it and populate our actual half precision data member;
@@ -214,9 +215,12 @@ TransitionMatrix::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> me
         for (int j = 0; j < numStates; ++j)
         {
             if (dataFloat[i][j] > 0.0f)
-                Entry(i,j, map) = std::log(dataFloat[i][j]);
+                this->Entry(i,j, map) = std::log(dataFloat[i][j]);
         }
     }
 }
+
+template class TransitionMatrix<float>;
+template class TransitionMatrix<half>;
 
 }}}

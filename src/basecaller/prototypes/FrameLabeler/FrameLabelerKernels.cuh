@@ -29,6 +29,7 @@
 
 #include <pacbio/ipc/ThreadSafeQueue.h>
 
+#include <common/cuda/CudaLaneArray.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
@@ -51,13 +52,12 @@ struct __align__(128) LatentViterbi
     using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
  public:
     __device__ LatentViterbi()
+        : boundary_(0, SerialConstruct{})
     {
         auto SetAll = [](auto& arr, const auto& val) {
             for (int i = 0; i < laneWidth; ++i)
                 arr[i] = val;
         };
-
-        SetAll(boundary_, PBShort2(0));
 
         // I'm a little uncertain how to initialize this model.  I'm tryin to
         // make it work with latent data that we are guaranteed to be all zeroes,
@@ -78,8 +78,8 @@ struct __align__(128) LatentViterbi
         }
     }
 
-    __device__ void SetBoundary(PBShort2 boundary) { boundary_[threadIdx.x] = boundary; }
-    __device__ PBShort2 GetBoundary() const { return boundary_[threadIdx.x]; }
+    __device__ void SetBoundary(PBShort2 boundary) { boundary_ = boundary; }
+    __device__ PBShort2 GetBoundary() const { return boundary_; }
 
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
@@ -89,7 +89,7 @@ struct __align__(128) LatentViterbi
 
 private:
     LaneModelParameters oldModel;
-    Utility::CudaArray<PBShort2, laneWidth> boundary_;
+    CudaLaneArray<PBShort2, laneWidth> boundary_;
 };
 
 // This class represents compressed frame labels, where
