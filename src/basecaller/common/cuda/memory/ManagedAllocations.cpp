@@ -410,11 +410,21 @@ public:
         (void)tmp;
         auto mngr = HostManager::GetManager();
         return PacBio::Memory::SmartAllocation{size,
-            [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
-            // Storing mngr as a weak pointer to help sniff out static teardown issues
-            // where this allocation is beying returned after the Manager is already
+            // Storing mngr as a weak pointer in these lambdas to help
+            // sniff out static teardown issues.  It's a bit of cautious
+            // paranoia for the first lambda since the current implemntation
+            // evaluates it immediately, but it's more important for the second
+            // when the allocation might be returned after the Manager is already
             // dead.  There is no robust promise of recovery, but we'll at least
             // avoid some obvious and definite sources of UB.
+            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr},
+             &marker](size_t sz){
+                auto manager = mngr.lock();
+                if (manager)
+                    return manager->GetAlloc(sz, marker);
+                else
+                    return static_cast<void*>(nullptr);
+            },
             [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr},
              size,
              id = marker.AsHash()]
@@ -452,12 +462,24 @@ public:
         (void)tmp;
         auto mngr = GpuManager::GetManager();
         return SmartDeviceAllocation{size,
-            [&mngr, &marker](size_t sz){ return mngr->GetAlloc(sz, marker); },
-            // Storing mngr as a weak pointer to help sniff out static teardown issues
-            // where this allocation is beying returned after the Manager is already
+            // Storing mngr as a weak pointer in these lambdas to help
+            // sniff out static teardown issues.  It's a bit of cautious
+            // paranoia for the first lambda since the current implemntation
+            // evaluates it immediately, but it's more important for the second
+            // when the allocation might be returned after the Manager is already
             // dead.  There is no robust promise of recovery, but we'll at least
             // avoid some obvious and definite sources of UB.
-            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr}, size, id = marker.AsHash()](void* ptr){
+            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr},
+             &marker](size_t sz){
+                auto manager = mngr.lock();
+                if (manager)
+                    return manager->GetAlloc(sz, marker);
+                else
+                    return static_cast<void*>(nullptr);
+            },
+            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr},
+             size,
+             id = marker.AsHash()](void* ptr){
                 static thread_local size_t counter = 0;
                 counter++;
                 auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
