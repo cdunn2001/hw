@@ -53,6 +53,8 @@
 #include <pacbio/sensor/SparseROI.h>
 #include <mongo/datasource/WXDataSource.h>
 
+#include <git-rev.h>
+
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Graphs;
 using namespace PacBio::Mongo;
@@ -773,8 +775,15 @@ int main(int argc, char* argv[])
     try
     {
         auto parser = ProcessBase::OptionParserFactory();
-        parser.description("Prototype to demonstrate mongo basecaller");
-        parser.version("0.1");
+        std::stringstream ss;
+        ss << "Prototype to demonstrate mongo basecaller"
+           << "\n git branch: " << cmakeGitBranch()
+           << "\n git hash: " << cmakeGitHash()
+           << "\n git commit date: " << cmakeGitCommitDate();
+        parser.description(ss.str());
+
+        const std::string version = "0.1";
+        parser.version(version);
 
         parser.epilog("");
 
@@ -824,6 +833,11 @@ int main(int argc, char* argv[])
             return 0;
         }
 
+        PBLOG_INFO << "Version " << version;
+        PBLOG_INFO << "git branch: " << cmakeGitBranch();
+        PBLOG_INFO << "git commit hash: " << cmakeGitHash();
+        PBLOG_INFO << "git commit date: " << cmakeGitCommitDate();
+
         if (options.is_set_by_user("numWorkerThreads"))
         {
             configs.system.numWorkerThreads = options.get("numWorkerThreads");
@@ -838,6 +852,7 @@ int main(int argc, char* argv[])
         }
 
         bc->HandleProcessOptions(options);
+
 
         bc->Run();
 
