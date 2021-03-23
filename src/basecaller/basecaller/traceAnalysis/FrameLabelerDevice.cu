@@ -24,7 +24,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "DeviceSGCFrameLabeler.h"
+#include "FrameLabelerDevice.h"
 
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
 #include <dataTypes/configs/MovieConfig.h>
@@ -38,7 +38,7 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig)
+void FrameLabelerDevice::Configure(const Data::MovieConfig& movieConfig)
 {
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
@@ -56,23 +56,23 @@ void DeviceSGCFrameLabeler::Configure(const Data::MovieConfig& movieConfig)
     Cuda::FrameLabeler::Configure(meta);
 }
 
-void DeviceSGCFrameLabeler::Finalize()
+void FrameLabelerDevice::Finalize()
 {
     Cuda::FrameLabeler::Finalize();
 }
 
-DeviceSGCFrameLabeler::DeviceSGCFrameLabeler(uint32_t poolId,
-                                             uint32_t lanesPerPool,
-                                             StashableAllocRegistrar* registrar)
+FrameLabelerDevice::FrameLabelerDevice(uint32_t poolId,
+                                       uint32_t lanesPerPool,
+                                       StashableAllocRegistrar* registrar)
     : FrameLabeler(poolId)
     , labeler_(std::make_unique<Cuda::FrameLabeler>(lanesPerPool, registrar))
 {}
 
-DeviceSGCFrameLabeler::~DeviceSGCFrameLabeler() = default;
+FrameLabelerDevice::~FrameLabelerDevice() = default;
 
 std::pair<LabelsBatch, FrameLabelerMetrics>
-DeviceSGCFrameLabeler::Process(TraceBatch<Data::BaselinedTraceElement> trace,
-                               const PoolModelParameters& models)
+FrameLabelerDevice::Process(TraceBatch<Data::BaselinedTraceElement> trace,
+                            const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
     labeler_->ProcessBatch(

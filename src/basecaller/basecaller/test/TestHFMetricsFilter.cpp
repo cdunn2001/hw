@@ -30,7 +30,6 @@
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
-#include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
