@@ -20,13 +20,7 @@ TEST(LabelsBatch,Constructor)
     BatchDimensions dims;
     dims.lanesPerBatch = 10;
     dims.framesPerBatch = 1024;
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                        PacketLayout::INT16,
-                        std::array<size_t, 3>{10,1024,64});
-    PacBio::Memory::MallocAllocator alloc;
-    SensorPacket packet(layout, 5, 6, alloc);
-    TraceBatch<LabelsBatch::ElementType> trace(std::move(packet),
-                                               meta,
+    TraceBatch<LabelsBatch::ElementType> trace(meta,
                                                dims,
                                                PacBio::Cuda::Memory::SyncDirection::Symmetric,
                                                SOURCE_MARKER());
@@ -49,13 +43,7 @@ TEST(LabelsBatch,Factory)
     BatchDimensions dims;
     dims.lanesPerBatch = 10;
     dims.framesPerBatch = 1024;
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                        PacketLayout::INT16,
-                        std::array<size_t, 3>{10,1024,64});
-    PacBio::Memory::MallocAllocator alloc;
-    SensorPacket packet(layout, 5, 6, alloc);
-    TraceBatch<LabelsBatch::ElementType> trace(std::move(packet),
-                                               meta,
+    TraceBatch<LabelsBatch::ElementType> trace(meta,
                                                dims,
                                                PacBio::Cuda::Memory::SyncDirection::Symmetric,
                                                SOURCE_MARKER());

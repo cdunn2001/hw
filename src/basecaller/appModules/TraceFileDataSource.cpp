@@ -48,11 +48,12 @@ TraceFileDataSource::TraceFileDataSource(
     : DataSourceBase(std::move(cfg))
     , chunkIndex_{0}
     , batchIndex_{0}
+    , currZmw_{0}
     , maxQueueSize_(maxQueueSize)
     , filename_(file)
     , traceFile_(filename_)
     , cache_(cache)
-    , currChunk_(0, GetConfig().layout.NumFrames())
+    , currChunk_(0, GetConfig().requestedLayout.NumFrames())
 {
     const auto& config = GetConfig();
     if (config.darkFrame != nullptr)
@@ -62,28 +63,50 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.decimationMask != nullptr)
         throw PBException("Decimation mask not currently supported for trace files");
 
-    if (config.layout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
+    // SPARSE will be appropriate to allow once we fully support TraceFile Re-Analysis
+    if (config.requestedLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
         throw PBException("Trace file source currently only supports dense block layout");
-    if (config.layout.Encoding() != PacketLayout::INT16)
+    if (config.requestedLayout.Encoding() != PacketLayout::INT16)
         throw PBException("Trace file source currently only supports 16 bit encoding");
 
-    if (config.layout.BlockWidth() != laneSize)
+    if (config.requestedLayout.BlockWidth() != laneSize)
         throw PBException("Unexpected lane width requested");
 
     if (maxQueueSize_ == 0) maxQueueSize_ = preloadChunks + 1;
 
-    // TODO should be able to handle both eventually
-    assert(config.layout.Type() == PacketLayout::BLOCK_LAYOUT_DENSE);
-    assert(config.layout.Encoding() == PacketLayout::INT16);
-    assert(config.layout.BlockWidth() == laneSize);
+    // TODO should be able to handle all types eventually
+    assert(config.requestedLayout.Type() == PacketLayout::BLOCK_LAYOUT_DENSE);
+    assert(config.requestedLayout.Encoding() == PacketLayout::INT16);
+    assert(config.requestedLayout.BlockWidth() == laneSize);
 
-    // TODO this restriction should be lifted
-    assert(numZmw % config.layout.BlockWidth() == 0);
-    assert(numZmw / config.layout.BlockWidth() % config.layout.NumBlocks() == 0);
+    // Could potentially round up to the nearest lane size, but no matter
+    // what we require 64 zmw lanes, both in the trace file and in our
+    // analysis pipeline
+    if (numZmw % config.requestedLayout.BlockWidth() != 0)
+    {
+        throw PBException("Requested numZmw must be an even multiple of laneSize (64)");
+    }
 
-    numZmwLanes_ = numZmw / (config.layout.BlockWidth());
+    numZmwLanes_ = numZmw / (config.requestedLayout.BlockWidth());
     numChunks_ = (frames + BlockLen() - 1) / BlockLen();
 
+    const auto numFullPools = numZmwLanes_ / config.requestedLayout.NumBlocks();
+    for (size_t i = 0; i < numFullPools; ++i)
+    {
+        layouts_[i] = config.requestedLayout;
+    }
+    size_t stubBlocks = numZmwLanes_ % config.requestedLayout.NumBlocks();
+    if (stubBlocks != 0)
+    {
+        PacketLayout stub(config.requestedLayout.Type(),
+                          config.requestedLayout.Encoding(),
+                          {stubBlocks,
+                           config.requestedLayout.NumFrames(),
+                           config.requestedLayout.BlockWidth()});
+        layouts_[numFullPools] = stub;
+    }
+
+    frameRate_ = traceFile_.Scan().AcqParams().frameRate;
     numTraceZmws_ = traceFile_.Traces().NumZmws();
     numTraceFrames_ = traceFile_.Traces().NumFrames();
     numTraceLanes_ = (numTraceZmws_ + BlockWidth() - 1) / BlockWidth();
@@ -126,14 +149,14 @@ void TraceFileDataSource::ContinueProcessing()
 {
     if (ChunksReady() >= maxQueueSize_) return;
 
-    uint32_t traceStartZmwLane = (batchIndex_ * BatchLanes()) % NumTraceLanes();
+    uint32_t traceStartZmwLane = currZmw_ / BlockWidth();
     uint32_t wrappedChunkIndex = chunkIndex_ % NumTraceChunks();
 
-    const auto startZmw = batchIndex_ * BatchLanes() * BlockWidth();
+    const auto& currLayout = layouts_[batchIndex_];
     const auto startFrame = chunkIndex_ * BlockLen();
-    SensorPacket batchData(GetConfig().layout, startZmw, startFrame, *GetConfig().allocator);
+    SensorPacket batchData(currLayout, batchIndex_, currZmw_, startFrame, *GetConfig().allocator);
 
-    for (size_t lane = 0; lane < BatchLanes(); lane++)
+    for (size_t lane = 0; lane < currLayout.NumBlocks(); lane++)
     {
         auto block = batchData.BlockData(lane);
         assert(block.Count() * BlockWidth()*BlockLen()*sizeof(int16_t));
@@ -145,25 +168,19 @@ void TraceFileDataSource::ContinueProcessing()
     currChunk_.AddPacket(std::move(batchData));
 
     batchIndex_++;
-    if (batchIndex_ == NumBatches())
+    currZmw_ += currLayout.NumZmw();
+    if (currZmw_ == NumZmw())
     {
-        auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), NumBatches());
+        auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), layouts_.size());
         std::swap(chunk, currChunk_);
         this->PushChunk(std::move(chunk));
         batchIndex_ = 0;
+        currZmw_ = 0;
         chunkIndex_++;
     }
 
     if (chunkIndex_ == NumChunks())
         this->SetDone();
-}
-
-std::vector<uint32_t> TraceFileDataSource::PoolIds() const
-{
-    // TODO needs to change to support sparse data
-    std::vector<uint32_t> poolIds(NumBatches());
-    for (size_t i = 0; i < NumBatches(); ++i) poolIds[i] = i;
-    return poolIds;
 }
 
 std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const

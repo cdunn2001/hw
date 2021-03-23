@@ -190,15 +190,15 @@ private:
     {
         BatchDimensions dims;
         dims.laneWidth = laneSize;
-        dims.lanesPerBatch = sourceConfig.layout.NumBlocks();
-        dims.framesPerBatch = sourceConfig.layout.NumFrames();
+        dims.lanesPerBatch = sourceConfig.requestedLayout.NumBlocks();
+        dims.framesPerBatch = sourceConfig.requestedLayout.NumFrames();
 
-        SimulatedDataSource source(hists.size() * sourceConfig.layout.NumZmw(),
+        SimulatedDataSource source(hists.size() * sourceConfig.requestedLayout.NumZmw(),
                                    simConfig,
                                    std::move(sourceConfig),
                                    std::move(gen));
 
-        ASSERT_EQ(source.NumBatches(), hists.size());
+        ASSERT_EQ(source.PacketLayouts().size(), hists.size());
 
         SensorPacketsChunk chunk;
         while (source.IsRunning())

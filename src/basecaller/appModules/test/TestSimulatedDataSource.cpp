@@ -371,35 +371,54 @@ TEST(SimDataSourceAPI, Layout)
                                std::move(cfg),
                                std::make_unique<ConstantGenerator>());
 
-    auto providedLayout = source.Layout();
-    EXPECT_EQ(providedLayout.BlockWidth(), laneSize);
-    EXPECT_EQ(providedLayout.NumFrames(), framesPerBlock);
-    EXPECT_EQ(providedLayout.NumBlocks(), lanesPerPool);
+    const auto& layouts = source.PacketLayouts();
+    EXPECT_EQ(layouts.size(), 8);
+    std::set<size_t> seenIds;
+    for (const auto& kv: layouts)
+    {
+        seenIds.insert(kv.first);
+        const auto& providedLayout = kv.second;
+        EXPECT_EQ(providedLayout.BlockWidth(), laneSize);
+        EXPECT_EQ(providedLayout.NumFrames(), framesPerBlock);
+        EXPECT_EQ(providedLayout.NumBlocks(), lanesPerPool);
+    }
+    ASSERT_EQ(seenIds.size(), layouts.size());
+    ASSERT_EQ(*seenIds.rbegin(), layouts.size() - 1);
 
     EXPECT_EQ(source.NumFrames(), totalFrames);
     EXPECT_EQ(source.NumZmw(), totalZmw);
-    EXPECT_EQ(source.NumBatches(), 8);
 
-    // The current implementation only provides an integral number of
-    // evenly sized batches.  This should change in the future,
-    // but for now make sure it's working consistently as expected
-
+    // The current implementation rounds up the requested ZMW to fill an integral
+    // number of lanes, but otherwise will have a "runt" batch at the end if necessary
     cfg = DataSourceBase::Configuration(layout, std::make_unique<MallocAllocator>());
-    // these subtractions should effectively do nothing once things get rounded up
-    cfg.numFrames = totalFrames - 256;
-    SimulatedDataSource source2(totalZmw - 256,
+    // The zmw count should be rounded up to full up a lane
+    SimulatedDataSource source2(totalZmw - 260,
                                 simConf,
                                 std::move(cfg),
                                 std::make_unique<ConstantGenerator>());
 
-    providedLayout = source.Layout();
-    EXPECT_EQ(providedLayout.BlockWidth(), laneSize);
-    EXPECT_EQ(providedLayout.NumFrames(), framesPerBlock);
-    EXPECT_EQ(providedLayout.NumBlocks(), lanesPerPool);
+    const auto& layouts2 = source2.PacketLayouts();
+    // Should have the same number of batches, just the last one
+    // is now smaller
+    ASSERT_EQ(layouts2.size(), layouts.size());
+    for (size_t i = 0; i < layouts2.size(); ++i)
+    {
+        ASSERT_TRUE(layouts2.count(i));
+        const auto& l1 = layouts.at(i);
+        const auto& l2 = layouts2.at(i);
+        EXPECT_EQ(l1.BlockWidth(), l2.BlockWidth());
+        EXPECT_EQ(l1.NumFrames(), l2.NumFrames());
+        if (i < layouts2.size() - 1)
+        {
+            EXPECT_EQ(l1.NumBlocks(), l2.NumBlocks());
+        } else
+        {
+            EXPECT_EQ(l1.NumBlocks() - 4, l2.NumBlocks());
+        }
 
-    EXPECT_EQ(source.NumFrames(), totalFrames);
-    EXPECT_EQ(source.NumZmw(), totalZmw);
-    EXPECT_EQ(source.NumBatches(), 8);
+    }
+
+    EXPECT_EQ(source2.NumZmw(), totalZmw - 256);
 }
 
 TEST(SimDataSourceAPI, ZmwInfo)
@@ -433,13 +452,4 @@ TEST(SimDataSourceAPI, ZmwInfo)
 
     EXPECT_EQ(ids.size(), totalZmw);
     EXPECT_EQ(uniqueIds.size(), totalZmw);
-
-    // TODO I expect these to end up changing, they assume perfectly
-    // regular batches, which isn't going to work out in the long run
-    EXPECT_EQ(source.NumBatches(), totalZmw / lanesPerPool / laneSize);
-    auto poolIds = source.PoolIds();
-    std::set<uint32_t> uniquePoolIds;
-    for (auto& val : poolIds) uniquePoolIds.insert(val);
-    EXPECT_EQ(poolIds.size(), source.NumBatches());
-    EXPECT_EQ(uniquePoolIds.size(), source.NumBatches());
 }

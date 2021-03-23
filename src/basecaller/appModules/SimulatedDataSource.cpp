@@ -29,10 +29,13 @@
 
 #include <boost/multi_array.hpp>
 
+#include <common/MongoConstants.h>
+
 namespace PacBio {
 namespace Application {
 
 using namespace PacBio::DataSource;
+using namespace PacBio::Mongo;
 
 class SimulatedDataSource::DataCache {
 public:
@@ -101,51 +104,72 @@ private:
 SimulatedDataSource::~SimulatedDataSource() = default;
 
 SimulatedDataSource::SimulatedDataSource(size_t minZmw,
-                    const SimConfig& sim,
-                    DataSource::DataSourceBase::Configuration cfg,
-                    std::unique_ptr<SignalGenerator> generator)
-    : DataSource::DataSourceBase(std::move(cfg))
-    , cache_(std::make_unique<DataCache>(sim,
-                                         GetConfig().layout.BlockWidth(),
-                                         GetConfig().layout.NumFrames(),
-                                         std::move(generator)))
-    , numZmw_([&](){
-        const auto zmwPerBatch = GetConfig().layout.NumZmw();
-        const auto batchesRoundUp = (minZmw + zmwPerBatch - 1) / zmwPerBatch;
-        return batchesRoundUp * zmwPerBatch;
-    }())
+                                         const SimConfig &sim,
+                                         DataSource::DataSourceBase::Configuration cfg,
+                                         std::unique_ptr<SignalGenerator> generator)
+    : DataSource::DataSourceBase(std::move(cfg)),
+      cache_(std::make_unique<DataCache>(
+          sim, GetConfig().requestedLayout.BlockWidth(),
+          GetConfig().requestedLayout.NumFrames(), std::move(generator))),
+      numZmw_((minZmw + laneSize - 1) / laneSize * laneSize)
 {
-    currChunk_ = SensorPacketsChunk(0, GetConfig().layout.NumFrames());
+    const auto& reqLayout = GetConfig().requestedLayout;
+    if (reqLayout.BlockWidth() != laneSize)
+        PBLOG_WARN << "Unexpected block width requested for SimulatedDataSource. "
+                   << "Requested value will be ignored and we will use: " << laneSize;
+
+    std::array<size_t, 3> layoutDims {
+        reqLayout.NumBlocks(),
+        reqLayout.NumFrames(),
+        laneSize};
+    PacketLayout nominalLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
+                               PacketLayout::INT16,
+                               layoutDims);
+    const auto numPools = (numZmw_ + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
+    layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
+    PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
+                            PacketLayout::INT16,
+                            layoutDims);
+
+    for (size_t i = 0; i < numPools-1; ++i)
+    {
+        layouts_[i] = nominalLayout;
+    }
+    layouts_[numPools-1] = lastLayout;
+
+    currChunk_ = SensorPacketsChunk(0, GetConfig().requestedLayout.NumFrames());
     currChunk_.SetZmwRange(0, numZmw_);
 }
 
 void SimulatedDataSource::ContinueProcessing()
 {
-    const auto& layout = GetConfig().layout;
-
-    const auto startZmw = batchIdx_ * layout.NumZmw();
+    const auto& layout = layouts_[batchIdx_];
     const auto startFrame = chunkIdx_ * layout.NumFrames();
-    SensorPacket batchData(layout, startZmw,
+    SensorPacket batchData(layout, batchIdx_, currZmw_,
                            startFrame,
                            *GetConfig().allocator);
     for (size_t i = 0; i < layout.NumBlocks(); ++i)
     {
-        cache_->FillBlock(batchIdx_ * layout.NumBlocks() + i,
-                              chunkIdx_,
-                              batchData.BlockData(i));
+        cache_->FillBlock(currZmw_ / laneSize + i,
+                          chunkIdx_,
+                          batchData.BlockData(i));
     }
     currChunk_.AddPacket(std::move(batchData));
 
     batchIdx_++;
-    if (batchIdx_ == NumBatches())
+    currZmw_ += layout.NumZmw();
+    if (currZmw_ == numZmw_)
     {
         batchIdx_ = 0;
+        currZmw_ = 0;
         chunkIdx_++;
         this->PushChunk(std::move(currChunk_));
         currChunk_ = SensorPacketsChunk(chunkIdx_ * layout.NumFrames(),
                                         (chunkIdx_ + 1) * layout.NumFrames());
         currChunk_.SetZmwRange(0, numZmw_);
     }
+    if (currZmw_ > numZmw_)
+        throw PBException("Bookkeeping error in SimulatedDataSource!");
 
     if (currChunk_.StartFrame() >= GetConfig().numFrames)
     {

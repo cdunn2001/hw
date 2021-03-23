@@ -342,36 +342,7 @@ private:
         // TODO need a way to let trace file specify numZmw and num frames
         const auto numZmw = numZmwLanes_ * laneSize;
 
-        /// MTL/BB hack.begin
-        /// We manually loaded the allocator with allocations. This greatly improves handling of lots of Packets.
-        /// TODO: clean up this ugliness.
-        // TODO need to handle sparse as well
-        size_t numPreallocatedPackets = 0;
-        switch(config_.source.sourceType)
-        {
-            case Source_t::TRACE_FILE:
-                numPreallocatedPackets = 0;
-                break;
-            case Source_t::WX2:
-                numPreallocatedPackets = 800000 /
-                    config_.source.wx2SourceConfig.wxlayout.lanesPerPacket; // FIXME. this should depend on the number of tiles on the chip, which is hardwired to Spider size right now...
-                break;
-            default:
-                numPreallocatedPackets = 0;
-                break;
-        }
         auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()));
-        if (numPreallocatedPackets>0)
-        {
-            std::vector<PacBio::Memory::SmartAllocation> allocations;
-            allocations.reserve(numPreallocatedPackets);
-            for(uint32_t i=0;i<numPreallocatedPackets;i++)
-            {
-                allocations.emplace_back(allo->GetAllocation(sizeof(Tile)));
-            }
-        }
-        /// MTL/BB hack.end
-
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
@@ -397,6 +368,8 @@ private:
                 wxconfig.dataPath = DataPath_t(config_.source.wx2SourceConfig.dataPath);
                 wxconfig.platform = Platform(config_.source.wx2SourceConfig.platform);
                 wxconfig.sleepDebug = config_.source.wx2SourceConfig.sleepDebug;
+                wxconfig.simulatedFrameRate = config_.source.wx2SourceConfig.simulatedFrameRate;
+                wxconfig.simulatedInputFile = inputTargetFile_;
                 wxconfig.maxPopLoops = config_.source.wx2SourceConfig.maxPopLoops;
                 wxconfig.tilePoolFactor = config_.source.wx2SourceConfig.tilePoolFactor;
                 wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
@@ -412,65 +385,108 @@ private:
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
-    std::unique_ptr <MultiTransformBody<SensorPacket, const TraceBatch <int16_t>>>
-    CreateRepacker(PacketLayout inputLayout) const
+    std::unique_ptr<RepackerBody>
+    CreateRepacker(const std::map<uint32_t, PacketLayout>& inputLayouts) const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = config_.layout.lanesPerPool;
         requiredDims.framesPerBatch = config_.layout.framesPerChunk;
         requiredDims.laneWidth = config_.layout.zmwsPerLane;
 
-        if (inputLayout.Encoding() != PacketLayout::INT16)
+        if (inputLayouts.empty())
+            throw PBException("Received empty layout map!");
+
+        const auto& layout1 = inputLayouts.begin()->second;
+        const auto encoding = layout1.Encoding();
+        const auto type = layout1.Type();
+        const auto numFrames = layout1.NumFrames();
+        const auto blockWidth = layout1.BlockWidth();
+        bool sameBlockWidth = true;
+        for (const auto& kv : inputLayouts)
+        {
+            const auto& layout = kv.second;
+            if (layout.Encoding() != encoding)
+                throw PBException("Inconsistent packet encodings");
+            if (layout.Type() != type)
+                throw PBException("Inconsistent packet types");
+            if (layout.BlockWidth() % 32 != 0)
+                throw PBException("Found packet with unsupported block width");
+            if (layout.NumFrames() != numFrames)
+                throw PBException("Found packets with different frame counts");
+            if (layout.BlockWidth() != blockWidth)
+                sameBlockWidth = false;
+        }
+
+        if (encoding != PacketLayout::INT16)
         {
             throw PBException("Only 16 bit input is supported so far");
         }
 
-        if (inputLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
+        if (type == PacketLayout::FRAME_LAYOUT)
         {
-            throw PBException("Only dense block layouts are supported so far");
+            throw PBException("Frame Layouts not supported");
         }
 
         // check if the trivial repacker is a good fit first, as it's always preferred
         {
             bool trivial = true;
-            if (requiredDims.lanesPerBatch != inputLayout.NumBlocks()) trivial = false;
-            if (requiredDims.laneWidth != inputLayout.BlockWidth()) trivial = false;
-            if (requiredDims.framesPerBatch != inputLayout.NumFrames()) trivial = false;
+            if (numFrames != requiredDims.framesPerBatch) trivial = false;
+            if (blockWidth != laneSize || !sameBlockWidth) trivial = false;
+
+            // "sparse" reanalysis gets a free pass for this particular check.
+            // "dense" setups need to be "close enough
+            //
+            // Note: This process could definitely use some tuning.  Just putting
+            //       something here for now, we can revisit when we actually start
+            //       having a surprising/undesirable decision made.
+            if (type == PacketLayout::BLOCK_LAYOUT_DENSE)
+            {
+                double score = 0.0f;
+                for (const auto& kv : inputLayouts)
+                {
+                    const auto& layout = kv.second;
+                    const uint32_t b1 = layout.NumBlocks();
+                    const uint32_t b2 = requiredDims.lanesPerBatch;
+                    const uint32_t dist = std::max(b1,b2) - std::min(b1,b2);
+                    const auto frac = static_cast<double>(dist) / b2;
+                    if (frac < .1) score += 1;
+                    else if (frac < .7) score += .5;
+                    else score -= 1;
+                }
+                score /= inputLayouts.size();
+                if (score < .9) trivial = false;
+            }
 
             if (trivial)
             {
                 PBLOG_INFO << "Instantiating TrivialRepacker";
-                return std::make_unique<TrivialRepackerBody>(requiredDims);
+                return std::make_unique<TrivialRepackerBody>(inputLayouts);
             }
         }
 
         // Now check if the BlockRepacker is a valid fit
         {
             bool valid = true;
-            if (inputLayout.BlockWidth() % 32 != 0) valid = false;
-            if (requiredDims.framesPerBatch % inputLayout.NumFrames() != 0) valid = false;
+            if (requiredDims.framesPerBatch % numFrames != 0) valid = false;
             if (valid)
             {
                 PBLOG_INFO << "Instantiating BlockRepacker";
                 const size_t numZmw = numZmwLanes_ * laneSize;
                 const size_t numThreads = 6;
-                return std::make_unique<BlockRepacker>(inputLayout, requiredDims, numZmw, numThreads);
+                return std::make_unique<BlockRepacker>(inputLayouts, requiredDims, numZmw, numThreads);
             }
         }
 
-        throw PBException("No repacker exists that can handle this PacketLayout:"
-                          " numBlocks, numFrames, blockWidth -- " + std::to_string(inputLayout.NumBlocks())
-                          + ", " + std::to_string(inputLayout.NumFrames()) + ", "
-                          + std::to_string(inputLayout.BlockWidth()));
+        throw PBException("No repacker exists that can handle the provided PacketLayouts");
     }
 
 
-    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver(DataSourceBase& dataSource)
+    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver(const DataSourceBase& dataSource)
     {
         if (outputTrcFileName_ != "")
         {
             auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const auto sourceLaneWidth = dataSource.Layout().BlockWidth();
+            const auto sourceLaneWidth = dataSource.PacketLayouts().begin()->second.BlockWidth();
             const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
@@ -537,7 +553,7 @@ private:
         if (hasBazFile_)
         {
             auto features1 = source.GetUnitCellProperties();
-            std::vector<uint32_t> features2;            
+            std::vector<uint32_t> features2;
             transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
@@ -559,51 +575,20 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, BAZWRITER);
 
         auto source = CreateSource();
-#define POOLID_FIX
-#ifdef POOLID_FIX
-        std::vector<uint32_t> poolIds;
-        uint32_t zmwsPerPool = config_.layout.zmwsPerLane * config_.layout.lanesPerPool;
-        uint32_t numPools = source->NumZmw()/zmwsPerPool;
-        for(uint32_t i=0; i<numPools;i++)
-        {
-            poolIds.push_back(i);
-        }
-        uint32_t runts = (source->NumZmw() % zmwsPerPool);
-        if (runts)
-        {
-            poolIds.push_back(numPools);
-
-        }
-#else
-        const auto& poolIds = source->PoolIds();
-#endif
         try
-        { 
-          // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
-          // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
+        {
+            // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
+            // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
-            // TODO Some negotation between the source and repacker needs to happen,
-            // which results in the creation of this map.  For now, hard code all
-            // batches to be uniform dimensions.  In reality, the number of lanes
-            // per pool may vary
-            std::map<uint32_t, Data::BatchDimensions> poolDims;
-            Data::BatchDimensions dims;
-            dims.framesPerBatch = config_.layout.framesPerChunk;
-            dims.laneWidth = config_.layout.zmwsPerLane;
-            dims.lanesPerBatch = config_.layout.lanesPerPool;
-            for (auto id : poolIds) poolDims[id] = dims;
-#ifdef POOLID_FIX
-            if (runts)
-            {
-                poolDims[numPools].lanesPerBatch = runts/dims.laneWidth;
-            }
-#endif
+            auto repacker = CreateRepacker(source->PacketLayouts());
+            auto poolDims = repacker->BatchLayouts();
+
             GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
-            auto* repacker = graph.AddNode(CreateRepacker(source->GetDataSource().Layout()), GraphProfiler::REPACKER);
-            repacker->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
+            auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
+            inputNode->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
-                auto* analyzer = repacker->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
+                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
                 analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
             }
 
@@ -614,45 +599,11 @@ private:
                                         / movieConfig_.frameRate
                                         * 1e3;
 
-            // This snippet starts up a simulation on the WX2, if the WX2 is selected and the data path is one of the
-            // loopback paths (anything but Normal).
-            auto dsr = dynamic_cast<WXDataSource*>(&source->GetDataSource());
-            if (dsr)
-            {
-                // wait for wxshim
-                uint32_t waitCount = 0;
-                while(! dsr->WXShimReady())
-                {
-                    if (waitCount++ > 100) throw PBException("WXShim was not ready");
-                    PBLOG_NOTICE << "WX Shim not ready, waiting ...";
-                    PacBio::POSIX::Sleep(1.0);
-                }
-            }
-            if (dsr && dsr->GetDataPath() != DataPath_t::Normal)
-            {
-                TransmitConfig config(dsr->GetPlatform());
-                config.condensed = true;
-                config.frames = frames_; // total number of frames to transmit
-                config.limitFileFrames = 512; // loop in coproc memory.
-                config.hdf5input = inputTargetFile_ == "" ? "constant/123" : inputTargetFile_; // "alpha", "random";
-                if (PacBio::POSIX::IsFile(config.hdf5input))
-                {
-                    config.mode = TransmitConfig::Mode::File;
-                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with file " << config.hdf5input;
-                }
-                else
-                {
-                    config.mode = TransmitConfig::Mode::Generated;
-                    PBLOG_NOTICE << "Trying to generate simulated loopback movie with pattern " << config.hdf5input;
-                }
-                config.rate = config_.source.wx2SourceConfig.simulatedFrameRate;
-                config.enablePadding = true;
-                dsr->TransmitMovieSim(config);
-            }
-
             uint64_t nopSuccesses = 0;
             uint64_t framesAnalyzed = 0;
             uint64_t framesSinceBigReports = 0;
+
+            source->Start();
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -685,7 +636,7 @@ private:
                     else
                     {
                         for (auto& batch : chunk)
-                            repacker->ProcessInput(std::move(batch));
+                            inputNode->ProcessInput(std::move(batch));
                         const auto& reports = graph.FlushAndReport(chunkDurationMS);
 
                         std::stringstream ss;

@@ -44,18 +44,23 @@ public:
     TraceFileDataSource(DataSourceBase::Configuration config,
                         std::string file)
         : TraceFileDataSource(std::move(config), file, 0, 0, false, 0, 0)
-    {}
+    {
+        // Need to update the layouts_ member to know how to extract the
+        // required info from the tracefile
+        PBLOG_WARN << "TraceFile Re-Analysis not yet fully supported. "
+                   << "Original ZMW poolIDs are not yet preserved";
+    }
 
     // Performance testing ctor.  Data dimensions are specified and data
     // will be replicated as necessary.  Caching and preloading options are
     // also provided, to help remove file IO as a bottleneck.
     TraceFileDataSource(DataSourceBase::Configuration cfg,
-                    std::string file,
-                    uint32_t frames,
-                    uint32_t numZmw,
-                    bool cache,
-                    size_t preloadChunks = 0,
-                    size_t maxQueueSize = 0);
+                        std::string file,
+                        uint32_t frames,
+                        uint32_t numZmw,
+                        bool cache,
+                        size_t preloadChunks = 0,
+                        size_t maxQueueSize = 0);
 
 public:
 
@@ -63,13 +68,15 @@ public:
 
 public:
 
-    std::vector<uint32_t> PoolIds() const override;
     std::vector<uint32_t> UnitCellIds() const override;
     std::vector<UnitCellProperties> GetUnitCellProperties() const override;
+    std::map<uint32_t, DataSource::PacketLayout> PacketLayouts() const override
+    {
+        return layouts_;
+    }
 
-    size_t BlockWidth() const { return GetConfig().layout.BlockWidth(); }
-    size_t BlockLen() const { return GetConfig().layout.NumFrames(); }
-    size_t BatchLanes() const { return GetConfig().layout.NumBlocks(); }
+    size_t BlockWidth() const { return GetConfig().requestedLayout.BlockWidth(); }
+    size_t BlockLen() const { return GetConfig().requestedLayout.NumFrames(); }
 
     size_t NumChunks() const { return numChunks_; }
     size_t NumZmwLanes() const { return numZmwLanes_; }
@@ -78,12 +85,9 @@ public:
     size_t NumTraceZmws() const { return numTraceZmws_; }
     size_t NumTraceFrames() const { return numTraceFrames_; }
 
-    size_t NumBatches() const override { return numZmwLanes_ / BatchLanes(); }
     size_t NumFrames() const override { return numChunks_ * BlockLen(); }
     size_t NumZmw() const override { return numZmwLanes_ * BlockWidth(); }
-    // Not sure what makes sense here for trace input.  Is this a minimum frame rate?
-    // Or is it a maximum?  We can't really satisfy many guarantees
-    double FrameRate() const override { return 0.0; }
+    double FrameRate() const override { return frameRate_; }
 
 
     DataSource::HardwareInformation GetHardwareInformation() override
@@ -123,7 +127,10 @@ private:
     size_t numTraceChunks_;
     size_t chunkIndex_;
     size_t batchIndex_;
+    size_t currZmw_;
     size_t maxQueueSize_;
+
+    size_t frameRate_;
 
     std::string filename_;
 
@@ -132,6 +139,8 @@ private:
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
+
+    std::map<uint32_t, DataSource::PacketLayout> layouts_;
 };
 
 }}
