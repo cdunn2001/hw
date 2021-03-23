@@ -437,7 +437,7 @@ private:
             // Note: This process could definitely use some tuning.  Just putting
             //       something here for now, we can revisit when we actually start
             //       having a surprising/undesirable decision made.
-            if (type != PacketLayout::BLOCK_LAYOUT_DENSE)
+            if (type == PacketLayout::BLOCK_LAYOUT_DENSE)
             {
                 double score = 0.0f;
                 for (const auto& kv : inputLayouts)
