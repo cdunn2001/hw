@@ -29,7 +29,7 @@
 
 #include <algorithm>
 
-#include <common/cuda/PBCudaSimd.cuh>
+#include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
 
@@ -158,7 +158,6 @@ struct __align__(128) BlockStateSubframeScorer
     template <typename T, size_t Len>
     CUDA_ENABLED void Setup(const LaneModelParameters<T, Len>& model)
     {
-        static_assert(sizeof(VF) == sizeof(T)*Len, "Invalid function argument");
         static_assert(Len > 1, "Scalar types not expected");
         assert(Len == blockDim.x);
 
@@ -207,7 +206,6 @@ struct __align__(128) BlockStateSubframeScorer
         case 4:
             {
                 const auto i = state-1;
-                const auto j = SubframeLabelManager::FullState(i);
                 const auto y = data - ffmean_[i];
                 return nhalfVal * y * pInvVar_[i]*y + ffFixedTerm_[i];
             }
@@ -215,7 +213,6 @@ struct __align__(128) BlockStateSubframeScorer
             {
                 using std::min;
                 const auto i = (state-1)%4;
-                const auto j = SubframeLabelManager::FullState(i);
 
                 auto score = SubframeScore(i, data);
 
@@ -296,7 +293,7 @@ struct __align__(128) BlockStateSubframeScorer
         auto fixedTerm = Blend(lowExtrema, bInvVar_, pInvVar_[a]);
         fixedTerm = nhalfVal * fixedTerm;
 
-        const auto extrema = lowExtrema || (val > x1_[a]);
+        const auto extrema = lowExtrema | (val > x1_[a]);
         auto s = Blend(extrema, fixedTerm * pow2(val - cap), 0.0f) - logPMean_[a];
 
         if (a == numAnalogs-1)
