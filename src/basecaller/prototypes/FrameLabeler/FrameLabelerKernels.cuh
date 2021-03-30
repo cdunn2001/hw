@@ -219,7 +219,8 @@ public:
     // Helpers to provide scratch space data.  Used to pool allocations so we
     // only need enough to satisfy the current active batches, not one for
     // each possible pool.
-    static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta);
+    static void Configure(const std::array<Mongo::Data::AnalogMode, 4>& meta,
+                          double frameRate);
 
 public:
     static void Finalize();

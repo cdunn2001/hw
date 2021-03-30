@@ -34,10 +34,9 @@
 #include <common/MongoConstants.h>
 
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/AnalogMode.h>
 
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
-
-#include "AnalogMeta.h"
 
 #include "SparseMatrix.cuh"
 
@@ -87,7 +86,8 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
     TransitionMatrix() = default;
 
     // Ctor for host construction
-    TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta);
+    TransitionMatrix(Utility::CudaArray<Mongo::Data::AnalogMode, numAnalogs> analogs,
+                     double frameRate);
 };
 
 // Gaussian fallback for edge frame scoring.  This is a near unchanged transcription

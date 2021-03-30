@@ -361,12 +361,10 @@ class FrameLabelerHost::Impl
 
 public:
 
-    // Helpers to provide scratch space data.  Used to pool allocations so we
-    // only need enough to satisfy the current active batches, not one for
-    // each possible pool.
-    static void Configure(const std::array<Subframe::AnalogMeta, 4>& meta)
+    static void Configure(const std::array<AnalogMode, 4>& analogs,
+                          double frameRate)
     {
-        trans = Subframe::TransitionMatrix<float>(CudaArray<Subframe::AnalogMeta, 4>{meta});
+        trans = Subframe::TransitionMatrix<float>(analogs, frameRate);
     }
 
 public:
@@ -432,15 +430,7 @@ void FrameLabelerHost::Configure(const Data::MovieConfig& movieConfig)
     const auto hostExecution = true;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    std::array<Subframe::AnalogMeta, 4> meta;
-    for (size_t i = 0; i < meta.size(); i++)
-    {
-        meta[i].ipdSSRatio = movieConfig.analogs[i].ipd2SlowStepRatio;
-        meta[i].ipd = movieConfig.frameRate * movieConfig.analogs[i].interPulseDistance;
-        meta[i].pw = movieConfig.frameRate * movieConfig.analogs[i].pulseWidth;
-        meta[i].pwSSRatio = movieConfig.analogs[i].pw2SlowStepRatio;
-    }
-    Impl::Configure(meta);
+    Impl::Configure(movieConfig.analogs, movieConfig.frameRate);
 }
 
 void FrameLabelerHost::Finalize()
