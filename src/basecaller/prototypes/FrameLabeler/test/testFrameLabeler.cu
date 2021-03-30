@@ -3,20 +3,28 @@
 
 #include <gtest/gtest.h>
 
+#include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/primary/HDFMultiArrayIO.h>
+
+#include <appModules/TraceFileDataSource.h>
 
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
 #include <common/ZmwDataManager.h>
+#include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/DataGenerators/SignalGenerator.h>
+
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <SubframeScorer.cuh>
 #include <FrameLabelerKernels.cuh>
 
+using namespace PacBio::Application;
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::DataSource;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Primary;
 
@@ -34,47 +42,42 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         return io.Read<int, 2>("GroundTruth/FrameLabels");
     }();
 
-    auto dataParams = DataManagerParams()
-            .LaneWidth(laneSize)
-            .ImmediateCopy(false)
-            .FrameRate(10000)
-            .NumZmwLanes(lanesPerPool*poolsPerChip)
-            .KernelLanes(lanesPerPool)
-            .NumBlocks(numBlocks)
-            .BlockLength(blockLen);
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, {lanesPerPool, blockLen, laneSize});
+    DataSourceBase::Configuration cfg(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
 
-    auto traceParams = TraceFileParams().TraceFileName(traceFile);
-
-    ZmwDataManager<int16_t, int16_t> manager(dataParams,
-                                    std::make_unique<SignalGenerator>(dataParams, traceParams),
-                                    true);
-
-    LaneModelParameters<PBHalf, laneSize> refModel;
-    std::array<AnalogMode, 4> analogs{};
-    double frameRate = 100;
+    auto source = std::make_unique<TraceFileDataSource>(
+            std::move(cfg),
+            traceFile,
+            numBlocks * blockLen,
+            layout.NumZmw()*poolsPerChip,
+            true);
 
     // Hard code our models to match this specific trace file
     // Beware that we're ignoring some values like relAmp in our
     // analogs, which FrameLabeler does not currently need to know
-    analogs[0].ipd2SlowStepRatio = 0;
-    analogs[1].ipd2SlowStepRatio = 0;
-    analogs[2].ipd2SlowStepRatio = 0;
-    analogs[3].ipd2SlowStepRatio = 0;
+    LaneModelParameters<PBHalf, laneSize> refModel;
+    MovieConfig movieConfig;
+    movieConfig.frameRate = 100;
 
-    analogs[0].interPulseDistance = .308f;
-    analogs[1].interPulseDistance = .234f;
-    analogs[2].interPulseDistance = .234f;
-    analogs[3].interPulseDistance = .188f;
+    movieConfig.analogs[0].ipd2SlowStepRatio = 0;
+    movieConfig.analogs[1].ipd2SlowStepRatio = 0;
+    movieConfig.analogs[2].ipd2SlowStepRatio = 0;
+    movieConfig.analogs[3].ipd2SlowStepRatio = 0;
 
-    analogs[0].pulseWidth = .232f;
-    analogs[1].pulseWidth = .185f;
-    analogs[2].pulseWidth = .181f;
-    analogs[3].pulseWidth = .214f;
+    movieConfig.analogs[0].interPulseDistance = .308f;
+    movieConfig.analogs[1].interPulseDistance = .234f;
+    movieConfig.analogs[2].interPulseDistance = .234f;
+    movieConfig.analogs[3].interPulseDistance = .188f;
 
-    analogs[0].pw2SlowStepRatio = 3.2f;
-    analogs[1].pw2SlowStepRatio = 3.2f;
-    analogs[2].pw2SlowStepRatio = 3.2f;
-    analogs[3].pw2SlowStepRatio = 3.2f;
+    movieConfig.analogs[0].pulseWidth = .232f;
+    movieConfig.analogs[1].pulseWidth = .185f;
+    movieConfig.analogs[2].pulseWidth = .181f;
+    movieConfig.analogs[3].pulseWidth = .214f;
+
+    movieConfig.analogs[0].pw2SlowStepRatio = 3.2f;
+    movieConfig.analogs[1].pw2SlowStepRatio = 3.2f;
+    movieConfig.analogs[2].pw2SlowStepRatio = 3.2f;
+    movieConfig.analogs[3].pw2SlowStepRatio = 3.2f;
 
     refModel.AnalogMode(0).SetAllMeans(227.13f);
     refModel.AnalogMode(1).SetAllMeans(154.45f);
@@ -90,20 +93,20 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     refModel.BaselineMode().SetAllVars(33);
 
     std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
-    FrameLabeler::Configure(analogs, frameRate);
+    FrameLabeler::Configure(movieConfig.analogs, movieConfig.frameRate);
     std::vector<FrameLabeler> frameLabelers;
 
     BatchDimensions latBatchDims;
-    latBatchDims.framesPerBatch = dataParams.blockLength;
+    latBatchDims.framesPerBatch = blockLen;
     latBatchDims.laneWidth = laneSize;
-    latBatchDims.lanesPerBatch = dataParams.kernelLanes;
+    latBatchDims.lanesPerBatch = lanesPerPool;
     std::vector<BatchData<int16_t>> latTrace;
 
     models.reserve(poolsPerChip);
     frameLabelers.reserve(poolsPerChip);
     for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
-        frameLabelers.emplace_back(dataParams.kernelLanes);
+        frameLabelers.emplace_back(lanesPerPool);
         models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
         for (uint32_t j = 0; j < lanesPerPool; ++j)
@@ -130,33 +133,49 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
         else mismatches++;
     };
 
-    while (manager.MoreData())
+    DataSourceRunner runner(std::move(source));
+    runner.Start();
+    while (runner.IsActive())
     {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        const auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
-        frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out,
-                                             frameLabelerMetrics[batchIdx]);
-
-        for (size_t i = 0; i < out.LanesPerBatch(); ++i)
+        SensorPacketsChunk currChunk;
+        if(runner.PopChunk(currChunk, std::chrono::milliseconds{10}))
         {
-            const auto& block = out.GetBlockView(i);
-            for (size_t j = 0; j < block.NumFrames(); ++j)
+            for (auto& packet : currChunk)
             {
-                for (size_t k = 0; k < block.LaneWidth(); ++k)
+                auto firstFrame = packet.StartFrame();
+                auto batchIdx = packet.PacketID();
+                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(), packet.StartZmw());
+                BatchDimensions dims;
+                dims.lanesPerBatch = packet.Layout().NumBlocks();
+                dims.framesPerBatch = packet.Layout().NumFrames();
+                dims.laneWidth = packet.Layout().BlockWidth();
+                TraceBatch<int16_t> in(std::move(packet),
+                                       meta,
+                                       dims,
+                                       SyncDirection::HostWriteDeviceRead,
+                                       SOURCE_MARKER());
+                TraceBatch<int16_t> out(meta, dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+                frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out,
+                                                     frameLabelerMetrics[batchIdx]);
+
+                for (size_t i = 0; i < out.LanesPerBatch(); ++i)
                 {
-                    int zmw = batchIdx * laneSize * lanesPerPool + i * laneSize + k;
-                    int frame = firstFrame + j - ViterbiStitchLookback;
-                    if (frame < 0) continue;
-                    LabelValidator(block(j,k), GroundTruth[zmw][frame]);
+                    const auto& block = out.GetBlockView(i);
+                    for (size_t j = 0; j < block.NumFrames(); ++j)
+                    {
+                        for (size_t k = 0; k < block.LaneWidth(); ++k)
+                        {
+                            int zmw = batchIdx * laneSize * lanesPerPool + i * laneSize + k;
+                            int frame = firstFrame + j - ViterbiStitchLookback;
+                            if (frame < 0) continue;
+                            LabelValidator(block(j,k), GroundTruth[zmw][frame]);
+                        }
+
+                    }
                 }
 
             }
         }
-
-        manager.ReturnBatch(std::move(data));
     }
 
     float total = static_cast<float>(matches + subframeMiss + mismatches);

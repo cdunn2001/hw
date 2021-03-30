@@ -141,6 +141,9 @@ private:    // Data
     VF var_;
 };
 
+template <typename VF>
+constexpr float NormalLog<VF>::log2pi_f;
+
 // Subframe scorer using gause caps. This is a near unchanged transcription
 // of what exists in Sequel, though some precomputed terms have been removed
 // as storage is more expensive than computation. All operations are designed
@@ -159,7 +162,6 @@ struct __align__(128) BlockStateSubframeScorer
     CUDA_ENABLED void Setup(const LaneModelParameters<T, Len>& model)
     {
         static_assert(Len > 1, "Scalar types not expected");
-        assert(Len == blockDim.x);
 
         static constexpr float log2pi_f = 1.8378770664f;
         const float nhalfVal = -0.5f;
