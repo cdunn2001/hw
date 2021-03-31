@@ -9,26 +9,62 @@
 #include <appModules/TraceFileDataSource.h>
 
 #include <common/cuda/memory/DeviceOnlyObject.cuh>
-#include <common/ZmwDataManager.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
-#include <common/DataGenerators/SignalGenerator.h>
 
 #include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
-#include <SubframeScorer.cuh>
-#include <FrameLabelerKernels.cuh>
+#include <basecaller/traceAnalysis/FrameLabelerDevice.h>
+#include <basecaller/traceAnalysis/FrameLabelerHost.h>
 
 using namespace PacBio::Application;
-using namespace PacBio::Cuda;
-using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::DataSource;
+using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
+using namespace PacBio::Mongo::Basecaller;
 using namespace PacBio::Primary;
 
-TEST(FrameLabelerTest, CompareVsGroundTruth)
+namespace {
+
+template <typename Labeler>
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const MovieConfig& config,
+                                                              size_t lanesPerPool,
+                                                              size_t numPools)
+{
+    Labeler::Configure(config);
+    std::vector<std::unique_ptr<FrameLabeler>> ret;
+    for (size_t pool = 0; pool < numPools; ++pool)
+    {
+        ret.emplace_back(std::make_unique<Labeler>(pool, lanesPerPool));
+    }
+    return ret;
+}
+
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLabelerConfig::MethodName method,
+                                                              const MovieConfig& config,
+                                                              size_t lanesPerPool,
+                                                              size_t numPools)
+{
+    switch(method)
+    {
+    case BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+        return CreateAndConfigure<FrameLabelerDevice>(config, lanesPerPool, numPools);
+    case BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps:
+        return CreateAndConfigure<FrameLabelerHost>(config, lanesPerPool, numPools);
+    default:
+        throw PBException("Test does not support this FrameLabeler type");
+    }
+}
+
+}
+
+class FrameLabelerTest : public testing::TestWithParam<BasecallerFrameLabelerConfig::MethodName::RawEnum>
+{};
+
+TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 {
     static constexpr size_t lanesPerPool = 2;
     static constexpr size_t poolsPerChip = 2;
@@ -55,7 +91,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     // Hard code our models to match this specific trace file
     // Beware that we're ignoring some values like relAmp in our
     // analogs, which FrameLabeler does not currently need to know
-    LaneModelParameters<PBHalf, laneSize> refModel;
+    LaneModelParameters<PacBio::Cuda::PBHalf, laneSize> refModel;
     MovieConfig movieConfig;
     movieConfig.frameRate = 100;
 
@@ -92,36 +128,21 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
     refModel.BaselineMode().SetAllMeans(0);
     refModel.BaselineMode().SetAllVars(33);
 
-    std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
-    FrameLabeler::Configure(movieConfig.analogs, movieConfig.frameRate);
-    std::vector<FrameLabeler> frameLabelers;
-
-    BatchDimensions latBatchDims;
-    latBatchDims.framesPerBatch = blockLen;
-    latBatchDims.laneWidth = laneSize;
-    latBatchDims.lanesPerBatch = lanesPerPool;
-    std::vector<BatchData<int16_t>> latTrace;
+    std::vector<UnifiedCudaArray<LaneModelParameters<PacBio::Cuda::PBHalf, laneSize>>> models;
+    auto frameLabelers = CreateAndConfigure(GetParam(),
+                                            movieConfig,
+                                            lanesPerPool,
+                                            poolsPerChip);
 
     models.reserve(poolsPerChip);
-    frameLabelers.reserve(poolsPerChip);
     for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
-        frameLabelers.emplace_back(lanesPerPool);
         models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
         for (uint32_t j = 0; j < lanesPerPool; ++j)
         {
             hostModels[j] = refModel;
         }
-
-        latTrace.emplace_back(latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    }
-
-    std::vector<FrameLabelerMetrics> frameLabelerMetrics;
-    for (size_t i = 0; i < poolsPerChip; ++i)
-    {
-        frameLabelerMetrics.emplace_back(
-                latBatchDims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     }
 
     int mismatches = 0;
@@ -154,19 +175,20 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
                                        dims,
                                        SyncDirection::HostWriteDeviceRead,
                                        SOURCE_MARKER());
-                TraceBatch<int16_t> out(meta, dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-                frameLabelers[batchIdx].ProcessBatch(models[batchIdx], in, latTrace[batchIdx], out,
-                                                     frameLabelerMetrics[batchIdx]);
 
-                for (size_t i = 0; i < out.LanesPerBatch(); ++i)
+                auto result = (*frameLabelers[batchIdx])(std::move(in), models[batchIdx]);
+                const auto& labels = result.first;
+                auto viterbiLookback = labels.LatentTrace().NumFrames();
+
+                for (size_t i = 0; i < labels.LanesPerBatch(); ++i)
                 {
-                    const auto& block = out.GetBlockView(i);
+                    const auto& block = labels.GetBlockView(i);
                     for (size_t j = 0; j < block.NumFrames(); ++j)
                     {
                         for (size_t k = 0; k < block.LaneWidth(); ++k)
                         {
                             int zmw = batchIdx * laneSize * lanesPerPool + i * laneSize + k;
-                            int frame = firstFrame + j - ViterbiStitchLookback;
+                            int frame = firstFrame + j - viterbiLookback;
                             if (frame < 0) continue;
                             LabelValidator(block(j,k), GroundTruth[zmw][frame]);
                         }
@@ -186,3 +208,7 @@ TEST(FrameLabelerTest, CompareVsGroundTruth)
 
     FrameLabeler::Finalize();
 }
+
+INSTANTIATE_TEST_SUITE_P(somthing, FrameLabelerTest,
+                         testing::Values(BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps,
+                                         BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps));
