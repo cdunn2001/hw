@@ -63,6 +63,7 @@ class LaneArray<float, ScalarCount> : public ArithmeticBase<float, ScalarCount, 
     using Base = ArithmeticBase<float, ScalarCount, LaneArray>;
 public:
     using Base::Base;
+    using Base::operator=;
 
     friend LaneMask<ScalarCount> isnan(const LaneArray& c)
     {
@@ -134,6 +135,55 @@ class LaneArray<uint32_t, ScalarCount> : public ArithmeticBase<uint32_t, ScalarC
     using Base = ArithmeticBase<uint32_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
+    using Base::operator=;
+    using Base::Update;
+
+    LaneArray& operator&=(const LaneArray& r)
+    {
+        return Update([](auto&& l, auto&& r) { l &= r; }, r);
+    }
+
+    LaneArray& operator|=(const LaneArray& r)
+    {
+        return Update([](auto&& l, auto&& r) { l |= r; }, r);
+    }
+
+
+    friend LaneArray operator&(const LaneArray& l, const LaneArray& r)
+    {
+        return LaneArray([](auto&& l2, auto&& r2){ return l2 & r2; },
+                         l, r);
+    }
+
+    friend LaneArray operator|(const LaneArray& l, const LaneArray& r)
+    {
+        return LaneArray([](auto&& l2, auto&& r2){ return l2 | r2; },
+                         l, r);
+    }
+
+    friend LaneArray operator<<(const LaneArray& l, const LaneArray& shift)
+    {
+        return LaneArray([](auto&& l2, auto&& s2){ return l2.lshift(s2); },
+                         l, shift);
+    }
+
+    friend LaneArray operator>>(const LaneArray& l, const LaneArray& shift)
+    {
+        return LaneArray([](auto&& l2, auto&& s2){ return l2.rshift(s2); },
+                         l, shift);
+    }
+
+    friend LaneArray operator<<(const LaneArray& l, const uint32_t shift)
+    {
+        return LaneArray([](auto&& l2, auto&& s2){ return l2.lshift(s2); },
+                         l, shift);
+    }
+
+    friend LaneArray operator>>(const LaneArray& l, const uint32_t shift)
+    {
+        return LaneArray([](auto&& l2, auto&& s2){ return l2.rshift(s2); },
+                         l, shift);
+    }
 };
 
 template <size_t ScalarCount>
@@ -142,6 +192,14 @@ class LaneArray<uint16_t, ScalarCount> : public ArithmeticBase<uint16_t, ScalarC
     using Base = ArithmeticBase<uint16_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
+    using Base::operator=;
+
+    friend LaneArray operator&(const LaneArray& l, const LaneArray& r)
+    {
+        return LaneArray([](auto&& l2, auto&& r2){ return l2 & r2; },
+                         l, r);
+    }
+
 };
 
 template <size_t ScalarCount>
@@ -150,6 +208,7 @@ class LaneArray<int32_t, ScalarCount> : public ArithmeticBase<int32_t, ScalarCou
     using Base = ArithmeticBase<int32_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
+    using Base::operator=;
 
     friend LaneArray operator|(const LaneArray& l, const LaneArray& r)
     {
@@ -166,6 +225,7 @@ class LaneArray<int16_t, ScalarCount> : public ArithmeticBase<int16_t, ScalarCou
     using Base = ArithmeticBase<int16_t, ScalarCount, LaneArray>;
 public:
     using Base::Base;
+    using Base::operator=;
 };
 
 }}      // namespace PacBio::Simd

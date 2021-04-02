@@ -62,6 +62,11 @@ public:
     // with the m512b type.  So we write them here.
     LaneMask(const Cuda::Utility::CudaArray<bool, ScalarCount_>& arr)
     {
+        *this = arr;
+    }
+
+    LaneMask& operator=(const Cuda::Utility::CudaArray<bool, ScalarCount_>& arr)
+    {
         for (size_t i = 0; i < SimdCount; ++i)
         {
             auto start = i * SimdWidth;
@@ -70,6 +75,7 @@ public:
                               arr[start+8],  arr[start+9],  arr[start+10], arr[start+11],
                               arr[start+12], arr[start+13], arr[start+14], arr[start+15]);
         }
+        return *this;
     }
 
     operator Cuda::Utility::CudaArray<bool, ScalarCount_>() const

@@ -325,6 +325,31 @@ public:     // Non-member (friend) functions
                       _mm_min_epu16(a.data.simd[3], b.data.simd[3]));
     }
 
+    friend m512us operator & (const m512us& l, const m512us& r)
+    {
+        return m512us(_mm_and_si128(l.data.simd[0], r.data.simd[0]),
+                      _mm_and_si128(l.data.simd[1], r.data.simd[1]),
+                      _mm_and_si128(l.data.simd[2], r.data.simd[2]),
+                      _mm_and_si128(l.data.simd[3], r.data.simd[3]));
+    }
+
+    friend m512us operator | (const m512us& l, const m512us& r)
+    {
+        return m512us(_mm_or_si128(l.data.simd[0], r.data.simd[0]),
+                      _mm_or_si128(l.data.simd[1], r.data.simd[1]),
+                      _mm_or_si128(l.data.simd[2], r.data.simd[2]),
+                      _mm_or_si128(l.data.simd[3], r.data.simd[3]));
+    }
+
+    friend m512us operator ^ (const m512us& l, const m512us& r)
+    {
+        return m512us(_mm_xor_si128(l.data.simd[0], r.data.simd[0]),
+                     _mm_xor_si128(l.data.simd[1], r.data.simd[1]),
+                     _mm_xor_si128(l.data.simd[2], r.data.simd[2]),
+                     _mm_xor_si128(l.data.simd[3], r.data.simd[3])
+                );
+    }
+
     friend m512us max(const m512us& a, const m512us&b)
     {
         return m512us(_mm_max_epu16(a.data.simd[0], b.data.simd[0]),
