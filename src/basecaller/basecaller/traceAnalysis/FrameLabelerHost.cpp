@@ -26,16 +26,14 @@
 
 #include <basecaller/traceAnalysis/FrameLabelerHost.h>
 
-#include <common/AlignedVector.h>
+#include <tbb/parallel_for.h>
+
 #include <common/AlignedVector.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray.h>
-#include <dataTypes/configs/MovieConfig.h>
-
-// BENTODO move from prototypes?
-#include <prototypes/FrameLabeler/SubframeScorer.cuh>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
-#include <tbb/parallel_for.h>
+#include <dataTypes/configs/MovieConfig.h>
+#include <prototypes/FrameLabeler/SubframeScorer.cuh>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -87,11 +85,16 @@ private:
     LaneLabel boundary_;
 };
 
-// BENTODO comment
+// Class that stores compressed "traceback" information for use during
+// the viterbi algorthm.  You can conceptually think of this as
+// an array that is `numLabels` long.  It is only valid to store
+// values in this array between [0-numLabels).
 template <size_t laneWidth, size_t numLabels>
 class PackedLabels
 {
-    using PackedLane = LaneArray<uint32_t, laneWidth>;
+    // Give each ZMW a 32 bit work for storing compressed
+    // data
+    using PackedWord = LaneArray<uint32_t, laneWidth>;
     using LabelLane = LaneArray<uint16_t, laneWidth>;
 public:
 
@@ -104,11 +107,11 @@ public:
         const auto largeIdx = idx / LabelsPerWord();
         const auto smallIdx = idx % LabelsPerWord();
 
-        const PackedLane ZeroMask = ~(((1 << BitsPerLabel()) - 1) << (smallIdx * BitsPerLabel()));
-        PackedLane tmp = labels;
-        tmp = tmp << (smallIdx * BitsPerLabel());
+        const PackedWord ZeroMask = ~(((1 << BitsPerLabel()) - 1) << (smallIdx * BitsPerLabel()));
+        PackedWord payload = labels;
+        payload = payload << (smallIdx * BitsPerLabel());
         data_[largeIdx] &= ZeroMask;
-        data_[largeIdx] |= tmp;
+        data_[largeIdx] |= payload;
     }
 
     LabelLane GetSlot(const LabelLane& idx) const
@@ -116,7 +119,7 @@ public:
         const auto largeIdx = idx / LabelsPerWord();
         const auto smallIdx = idx & ((1 << BitsPerLabel()) - 1);
 
-        PackedLane ExtractMask = ((1 << BitsPerLabel()) - 1);
+        PackedWord ExtractMask = ((1 << BitsPerLabel()) - 1);
         ExtractMask = ExtractMask << (smallIdx * BitsPerLabel());
 
         LabelLane ret;
@@ -147,13 +150,13 @@ private:
     {
         return (numLabels + LabelsPerWord() - 1) / LabelsPerWord();
     }
-    // BENTODO kill
-    static_assert(ArrayLen() == 2, "");
-    std::array<PackedLane, ArrayLen()> data_;
+
+    std::array<PackedWord, ArrayLen()> data_;
 };
 
+// Accepting by value because we need a copy anyway
 template <typename VF, size_t numStates>
-auto Normalize(CudaArray<VF, numStates> vec)
+CudaArray<VF, numStates> Normalize(CudaArray<VF, numStates> vec)
 {
     auto maxVal = vec[0];
     for (uint32_t i = 1; i < numStates; ++i)
@@ -173,7 +176,12 @@ auto Normalize(CudaArray<VF, numStates> vec)
     return vec;
 }
 
-// BENTODO update comments, some are still cuda specific
+// Note: This is a copy/adaptation from the GPU implementation, which itself is a copy/adaptation
+//       from Sequel.
+//
+// Here we do some template magic to iterate over a sparse matrix where the sparsity pattern is
+// known at compile time.  It's a bit complicated, but it does come with significant performance
+// savings.
 template <typename PackedLabels, typename VF, typename VI, typename Scorer, typename TransT, class... Rows>
 void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike, const Scorer& scorer,
                const SparseMatrix<TransT, Rows...>& trans, VI data)
@@ -190,9 +198,10 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
         constexpr auto firstIdx = Row::firstIdx;
 
         // Currently only handle Rows with a single Segment.  This can be
-        // generalized to handle an arbitrary number of Segments, but it
-        // came with a mild performance penalty, so not doing that unless/
-        // until necessary
+        // generalized to handle an arbitrary number of Segments, but here
+        // we've coppied from the GPU implementation, and the GPU implementation
+        // had a performance penalty when doing so.  I'm keeping the
+        // implementations in sync for now, but that may change.
         using Segment = typename Row::Segment0;
 
         auto maxVal = score + VF(rowData[0]) + logLike[firstIdx];
@@ -210,10 +219,6 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
         constexpr auto nextState = Row::rowIdx;
         logAccum[nextState] = maxVal;
 
-        // Always slot new entries into the back, and after 4 inserts it will be fully populated
-        // and ready for storage.  This approach has empirically been observed to be faster than
-        // trying to slot data directly into it's desired final location, as the current version
-        // can be done without any runtime dependance on the value of nextState.
         labels.SetSlot(nextState, maxIdx);
     };
 
@@ -228,6 +233,7 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
     logLike = logAccum;
 }
 
+// Serial function that procudes lane labels for a block of data.
 LaneArray<float, laneSize>
 LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
            const Subframe::TransitionMatrix<float>& trans,
@@ -260,12 +266,10 @@ LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
 
     // Forward recursion on latent data
     auto frame = 0;
+    scorer.Setup(latentData.GetModel());
+    for (auto itr = prevLat.Begin(); itr != prevLat.End(); ++itr, ++frame)
     {
-        scorer.Setup(latentData.GetModel());
-        for (auto itr = prevLat.Begin(); itr != prevLat.End(); ++itr, ++frame)
-        {
-            Recursion(labels[frame], logLike, scorer, trans, itr.Extract());
-        }
+        Recursion(labels[frame], logLike, scorer, trans, itr.Extract());
     }
 
     // Forward recursion on this block's data

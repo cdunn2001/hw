@@ -28,18 +28,17 @@
 #define PACBIO_MONGO_BASECALLER_FRAME_LABALER_HOST_H
 
 #include "FrameLabeler.h"
-#include "dataTypes/BasicTypes.h"
 
-#include <common/cuda/memory/DeviceAllocationStash.h>
+#include <dataTypes/BasicTypes.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// Frame Labeler that runs on the GPU.  Currently hard coded to use
-// the Subframe Gauss Caps approximation, but this could change
-// once the underlying implementation (contained in the prototypes
-// directory) is finally cleaned up
+/// Frame Labeler implementation that runs on the Host
+/// For now it's hard coded to use a particular subframe
+/// model (as is the GPU version), but that can be generalized
+/// in the future.
 class FrameLabelerHost : public FrameLabeler
 {
 
