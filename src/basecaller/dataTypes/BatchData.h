@@ -121,33 +121,60 @@ public:
             return tmp;
         }
 
-        LaneIterator& operator+=(size_t v)
+        LaneIterator& operator+=(int32_t v)
         {
             curFrame_ = curFrame_ + v;
-            if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
         }
-        LaneIterator operator+(size_t v)
+
+        LaneIterator operator+(int32_t v)
         {
             auto ret = *this;
             return ret+=v;
         }
 
+        LaneIterator& operator--()
+        {
+            return *this-=1;
+        }
+
+        LaneIterator operator--(int)
+        {
+            LaneIterator tmp = *this;
+            --*this;
+            return tmp;
+        }
+
+        LaneIterator& operator-=(int32_t v)
+        {
+            curFrame_ = curFrame_ - v;
+            return *this;
+        }
+        LaneIterator operator-(int32_t v)
+        {
+            auto ret = *this;
+            return ret-=v;
+        }
+
         LaneArray<T, laneSize> Extract() const
         {
+            if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
+            if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
             return LaneArray<T, laneSize>(MemoryRange<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
         void Store(const LaneArray<T, laneSize>& lane)
         {
+            if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
+            if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
             memcpy(ptr_ + (curFrame_ * laneWidth_), &lane, sizeof(lane));
         }
 
     private:
         T* ptr_;
-        size_t curFrame_;
-        size_t laneWidth_;
-        size_t numFrames_;
+        int32_t curFrame_;
+        int32_t laneWidth_;
+        int32_t numFrames_;
     };
 
     class ConstLaneIterator
@@ -197,29 +224,56 @@ public:
             return tmp;
         }
 
-        ConstLaneIterator& operator+=(size_t v)
+        ConstLaneIterator& operator+=(int32_t v)
         {
             curFrame_ = curFrame_ + v;
             if (curFrame_ > numFrames_) throw PBException("Out of bounds LaneIterator increment");
             return *this;
         }
 
-        ConstLaneIterator operator+(size_t v)
+        ConstLaneIterator operator+(int32_t v)
         {
             auto ret = *this;
             return ret+=v;
         }
 
+        ConstLaneIterator& operator--()
+        {
+            return *this-=1;
+        }
+
+        ConstLaneIterator operator--(int)
+        {
+            ConstLaneIterator tmp = *this;
+            --*this;
+            return tmp;
+        }
+
+        ConstLaneIterator& operator-=(int32_t v)
+        {
+            if (curFrame_ < v) throw PBException("Out of bounds LaneIterator decrement");
+            curFrame_ = curFrame_ - v;
+            return *this;
+        }
+
+        ConstLaneIterator operator-(int32_t v)
+        {
+            auto ret = *this;
+            return ret-=v;
+        }
+
         ValueType Extract() const
         {
+            if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
+            if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
             return ValueType(MemoryRange<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
         }
 
     private:
         T* ptr_;
-        size_t curFrame_;
-        size_t laneWidth_;
-        size_t numFrames_;
+        int32_t curFrame_;
+        int32_t laneWidth_;
+        int32_t numFrames_;
     };
 
 public:

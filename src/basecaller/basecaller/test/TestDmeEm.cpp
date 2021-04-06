@@ -31,9 +31,10 @@
 #include <random>
 #include <gtest/gtest.h>
 
-#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
+#include <basecaller/traceAnalysis/ComputeDevices.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DmeEmDevice.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
 
@@ -54,8 +55,6 @@ namespace {
 static constexpr unsigned int nAnalogs = 4;
 static constexpr unsigned int nModes = nAnalogs + 1;
 
-} // anonymous namespace
-
 // Testing parameters
 struct TestDmeEmParam
 {
@@ -64,6 +63,18 @@ struct TestDmeEmParam
     float initModelConf;
     float pulseAmpReg;
 };
+
+struct TestConfig : public Configuration::PBConfig<TestConfig>
+{
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(Data::BasecallerTraceHistogramConfig, traceConfig);
+    PB_CONFIG_OBJECT(Data::BasecallerDmeConfig, dmeConfig);
+
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
+};
+
+} // anonymous namespace
 
 // Test fixture that simulates trace data for the trace histogram with the
 // number of frames for each component background and four analogs drawn
@@ -103,7 +114,12 @@ public:
     };
 
 public: // Structors
-    TestDmeEm() = default;
+    TestDmeEm()
+    {
+        Json::Value json;
+        json["dmeConfig"]["PulseAmpRegularization"] = GetParam().pulseAmpReg;
+        testConfig = TestConfig(json);
+    }
 
 public:
     // The main test.  Ideally this should just be in the usual TEST_P macro, but we
@@ -111,8 +127,7 @@ public:
     // easy to do.
     void RunTest()
     {
-        Data::BasecallerDmeConfig dmeConfig;
-        dmeConfig.PulseAmpRegularization = GetParam().pulseAmpReg;
+        const auto& dmeConfig = testConfig.dmeConfig;
         Filter::Configure(dmeConfig, movieConfig);
         // Hacky, but we have to configure the host dme regardless, since we'll
         // use ScaleModelSNR as part of our validation
@@ -232,7 +247,7 @@ public: // Data
     std::unique_ptr<LaneDetectionModelHost> detModelSim;
 
     Data::MovieConfig movieConfig;
-    Data::BasecallerTraceHistogramConfig histConfig;
+    TestConfig testConfig;
 
     std::unique_ptr<CompleteData> completeData;
 
@@ -375,7 +390,7 @@ private:
         }
 
         // Configure and fill the histogram.
-        TraceHistogramAccumHost::Configure(histConfig);
+        TraceHistogramAccumHost::Configure(testConfig.traceConfig);
         TraceHistogramAccumHost tha{poolId, poolSize};
         tha.Reset(ctb.second);
         tha.AddBatch(ctb.first);

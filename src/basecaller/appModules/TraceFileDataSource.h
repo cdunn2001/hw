@@ -130,7 +130,7 @@ private:
     size_t currZmw_;
     size_t maxQueueSize_;
 
-    size_t frameRate_;
+    float frameRate_;
 
     std::string filename_;
 

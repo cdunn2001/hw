@@ -59,6 +59,8 @@ struct TestConfig : Configuration::PBConfig<TestConfig>
     PB_CONFIG_OBJECT(Data::BatchLayoutConfig, layout);
     PB_CONFIG_OBJECT(Data::BasecallerPulseAccumConfig, pulses);
 
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
+
     TestConfig(size_t numLanes)
         : TestConfig(InitJson(numLanes))
     {

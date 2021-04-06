@@ -38,6 +38,7 @@
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 using namespace PacBio::Application;
+using namespace PacBio::Configuration;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda;
 using namespace PacBio::Dev::Profile;
@@ -60,6 +61,15 @@ struct TestParameters
     size_t framesPerBlock;
     size_t numFrames;
     LaneHistBounds bounds;
+};
+
+struct TestConfig : public PBConfig<TestConfig>
+{
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(Data::BasecallerTraceHistogramConfig, histConfig);
+
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
 };
 
 enum class TestTypes
@@ -275,8 +285,9 @@ TEST_P(Histogram, ResetFromStats)
 {
     PacBio::Logging::LogSeverityContext ls(PacBio::Logging::LogLevel::ERROR);
 
-    Data::BasecallerTraceHistogramConfig config;
-    ConfigureHists(config);
+    TestConfig testConfig;
+    const auto& histConfig = testConfig.histConfig;
+    ConfigureHists(histConfig);
 
     const uint32_t numLanes = 2;
     Data::BaselinerMetrics metrics(numLanes,
@@ -314,11 +325,11 @@ TEST_P(Histogram, ResetFromStats)
         {
             const float baselineFrames = static_cast<float>(zmw + lane*laneSize + 2);
             const float baselineMean = baselineFrames;
-            const float baselineSig = (baselineFrames >= config.BaselineStatMinFrameCount)
+            const float baselineSig = (baselineFrames >= histConfig.BaselineStatMinFrameCount)
                 ? std::sqrt(baselineMean * baselineMean * baselineMean / (baselineMean - 1.f))
-                : config.FallBackBaselineSigma;
+                : histConfig.FallBackBaselineSigma;
 
-            EXPECT_FLOAT_EQ(hView[lane].binSize[zmw], config.BinSizeCoeff * baselineSig) << baselineFrames;
+            EXPECT_FLOAT_EQ(hView[lane].binSize[zmw], histConfig.BinSizeCoeff * baselineSig) << baselineFrames;
             // The current implementation is actuall 4 sigma, but I don't want to code against
             // that too tightly.
             EXPECT_LT(hView[lane].lowBound[zmw], baselineMean - 2*baselineSig);

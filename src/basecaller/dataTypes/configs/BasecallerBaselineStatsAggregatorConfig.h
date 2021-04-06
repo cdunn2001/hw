@@ -30,6 +30,8 @@
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
 
+#include <basecaller/traceAnalysis/ComputeDevices.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -40,7 +42,15 @@ public:
     PB_CONFIG(BasecallerBaselineStatsAggregatorConfig);
 
     SMART_ENUM(MethodName, Host, Gpu);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Gpu);
+    PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
+                        [](Basecaller::ComputeDevices device) -> MethodName
+                        {
+                            return device == Basecaller::ComputeDevices::Host ?
+                                MethodName::Host:
+                                MethodName::Gpu;
+                        },
+                        {"analyzerHardware"}
+    ));
 };
 
 }}}     // namespace PacBio::Mongo::Data
