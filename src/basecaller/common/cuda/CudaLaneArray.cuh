@@ -51,7 +51,7 @@ public:
     // for initialization)
     CudaLaneArray() = default;
 
-    // Specifically kill of other constructors.  It would be a mistake
+    // Specifically kill off other constructors.  It would be a mistake
     // to create this class as a local variable, so we need to make it
     // hard to do so.;
     CudaLaneArray(const T&) = delete;
