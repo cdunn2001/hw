@@ -44,10 +44,10 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// Frame Labeler that runs on the GPU.  Currently hard coded to use
-// the Subframe Gauss Caps approximation, but this could change
-// once the underlying implementation (contained in the prototypes
-// directory) is finally cleaned up
+/// Frame Labeler that runs on the GPU.  Currently hard coded to use
+/// the Subframe Gauss Caps approximation, but this could change
+/// once the underlying implementation (contained in the prototypes
+/// directory) is finally cleaned up
 class FrameLabelerDevice : public FrameLabeler
 {
 

@@ -175,8 +175,7 @@ struct __align__(128) BlockStateSubframeScorer
         // Put -0.5 * log(det(V)) into bgFixedTerm_; compute bgInvCov_.
         // sym2x2MatrixInverse returns the determinant and writes the inverse
         // into the second argument.
-        bgFixedTerm_ = bgMode.vars;
-        bgFixedTerm_ = nhalfVal * log(bgFixedTerm_) - normConst;
+        bgFixedTerm_ = nhalfVal * log(VF::FromArray(bgMode.vars)) - normConst;
         bgMean_ = bgMode.means;
 
         #pragma unroll 1
@@ -184,8 +183,7 @@ struct __align__(128) BlockStateSubframeScorer
         {
             // Full-frame states
             const auto& aMode = model.AnalogMode(i);
-            ffFixedTerm_[i] = aMode.vars;
-            ffFixedTerm_[i] = nhalfVal * log(ffFixedTerm_[i]) - normConst;
+            ffFixedTerm_[i] = nhalfVal * log(VF::FromArray(aMode.vars)) - normConst;
             ffmean_[i] = aMode.means;
         }
     }

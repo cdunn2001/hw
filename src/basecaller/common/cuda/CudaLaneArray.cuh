@@ -80,17 +80,20 @@ public:
     __device__ CudaLaneArray& operator=(const T& t)
     {
         Validate();
-        data_[threadIdx.x] = t; return *this;
+        data_[threadIdx.x] = t;
+        return *this;
     }
     __device__ CudaLaneArray& operator=(const CudaLaneArray& a)
     {
         Validate();
-        data_[threadIdx.x] = a.data_[threadIdx.x]; return *this;
+        data_[threadIdx.x] = a.data_[threadIdx.x];
+        return *this;
     }
     __device__ CudaLaneArray& operator=(const Cuda::Utility::CudaArray<T, Len>& a)
     {
         Validate();
-        data_[threadIdx.x] = a[threadIdx.x]; return *this;
+        data_[threadIdx.x] = a[threadIdx.x];
+        return *this;
     }
 
     // Helper to make it easier to extract from CudaArrays when we don't necessarily
@@ -102,7 +105,7 @@ public:
         return arr[threadIdx.x];
     }
 
-    // Implicit convsersions to extract out our thread's slot automatically
+    // Implicit conversions to extract out our thread's slot automatically
     // give us all the arithmetic operations we want, including the usual
     // automatic promotions from things like int to float.
     __device__ operator const T&() const
