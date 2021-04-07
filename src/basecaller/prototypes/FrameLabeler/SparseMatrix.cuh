@@ -42,6 +42,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <common/cuda/CudaFunctionDecorators.h>
+
 namespace PacBio {
 namespace Cuda {
 
@@ -320,7 +322,7 @@ public:
     // that object once per Segment type in this Row.  A Segment pointer is handed
     // in to that function, but is only provided for type deduction, it will always
     // be nullptr and should not be dereferenced.
-    __device__ static auto ForEach()
+    CUDA_ENABLED static auto ForEach()
     {
         return [](auto&& f) {
             auto loop = {(
@@ -350,7 +352,7 @@ public:
 // Note: As with SparseRow, you can manually specify the template parameters,
 //       but it is recommended that you instead use the Matrix class below as
 //       it has a more intuitive interface.
-template <class... Rows>
+template <typename T, class... Rows>
 class SparseMatrix
 {
 public:
@@ -413,8 +415,8 @@ public:
     // access one of the zero entries!
     // Note this is a relatively inefficient method, as it has to search for
     // the mapping between row/col and sparse format storage.
-    half& operator()(size_t row, size_t col,
-                      const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists)
+    T& operator()(size_t row, size_t col,
+                  const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists)
     {
         assert(row < sizeof...(Rows));
         assert(col < sizeof...(Rows));
@@ -424,8 +426,8 @@ public:
         return data_[rowStartIdx_[row] + std::distance(idxLists[row].begin(), colPtr)];
     }
 
-    half& Entry(size_t row, size_t col,
-                const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists)
+    T& Entry(size_t row, size_t col,
+             const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists)
     {
         return (*this)(row, col, idxLists);
     }
@@ -434,8 +436,8 @@ public:
     // it will return -inf (not 0) for the sparse entries.
     // Note this is a relatively inefficient method, as it has to search for
     // the mapping between row/col and sparse format storage.
-    half operator()(size_t row, size_t col,
-                     const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists) const
+    T operator()(size_t row, size_t col,
+                 const std::array<std::vector<size_t>, sizeof...(Rows)>& idxLists) const
     {
     // Matrix is assumed square.  Validation static_asserts will trigger if
     // supplied template arguments are inconsistent with this.
@@ -465,7 +467,7 @@ public:
     // of contiguous columns, it is assumed you will use data[0] to initialize
     // data, and then loop over each segment individually to move through the
     // raw data.
-    __host__ __device__ const half* RowData(size_t row) const
+    CUDA_ENABLED const T* RowData(size_t row) const
     {
         assert(row < sizeof...(Rows));
         return &data_[rowStartIdx_[row]];
@@ -541,7 +543,7 @@ private:
     size_t rowStartIdx_[sizeof...(Rows)];
 
     // Raw compact storage for the whole matrix.
-    half data_[sizeof...(Rows)*sizeof...(Rows)];
+    T data_[sizeof...(Rows)*sizeof...(Rows)];
 
 };
 
@@ -675,7 +677,7 @@ struct SparseRowGenerator
 
 // Helper class used to transform a list of Rows into an actual SparseMatrix
 // type
-template <class... Rows>
+template <typename T, class... Rows>
 class SparseMatrixGenerator
 {
     static constexpr size_t nRows = sizeof...(Rows);
@@ -691,7 +693,7 @@ class SparseMatrixGenerator
     struct Create<IndexList<idxs...>, Rs...>
     {
         static_assert(sizeof...(idxs) == sizeof...(Rs), "wtd");
-        using type = SparseMatrix<typename SparseRowGenerator<idxs, Rs>::type...>;
+        using type = SparseMatrix<T, typename SparseRowGenerator<idxs, Rs>::type...>;
     };
 
 public:
@@ -710,8 +712,8 @@ public:
 // any rows are entirely sparse.  Otherwise, it will automatically convert
 // all the lists of 1/0 into the structures expected by the SparseMatrix
 // type.
-template <class... Rows>
-using SparseMatrixSpec = typename SparseMatrixGenerator<Rows...>::type;
+template <typename T, class... Rows>
+using SparseMatrixSpec = typename SparseMatrixGenerator<T, Rows...>::type;
 
 // definitions for static member declarations
 template <size_t row, size_t firstIdx, class...Segments>

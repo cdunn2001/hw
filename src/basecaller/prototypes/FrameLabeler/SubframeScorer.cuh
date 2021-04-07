@@ -61,7 +61,8 @@ namespace Subframe {
 using Mongo::Basecaller::SubframeLabelManager;
 static constexpr int numStates = SubframeLabelManager::numStates;
 
-using SparseTransitionSpec = SparseMatrixSpec<
+template <typename T>
+using SparseTransitionSpec = SparseMatrixSpec<T,
 //                B  T  G  C  A  TU GU CU AU TD GD CD AD
     SparseRowSpec<1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1>, // Baseline
     SparseRowSpec<0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0>, // T
@@ -78,7 +79,8 @@ using SparseTransitionSpec = SparseMatrixSpec<
     SparseRowSpec<0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0>  // A Down
 >;
 
-struct __align__(128) TransitionMatrix : public SparseTransitionSpec
+template <typename T>
+struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
 {
     // Default constructor for use in device __constant__ memory.  Will
     // remain uninitialized until the host coppies up the data
@@ -91,81 +93,81 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec
 // Gaussian fallback for edge frame scoring.  This is a near unchanged transcription
 // of what exists in Sequel.  All operations are designed to be done by cuda blocks
 // with one thread per pair of zmw.
-template <size_t gpuLaneWidth>
+template <typename VF>
 class __align__(128) NormalLog
 {
-    using Row = Utility::CudaArray<PBHalf2, gpuLaneWidth>;
     static constexpr float log2pi_f = 1.8378770664f;
 public:     // Structors
     NormalLog() = default;
-    __device__ NormalLog(const PBHalf2& mean,
-                         const PBHalf2& variance)
-    {
-        Mean(mean);
-        Variance(variance);
-    }
 
 public:     // Properties
-    __device__ const PBHalf2& Mean() const
-    { return mean_[threadIdx.x]; }
+    CUDA_ENABLED const VF& Mean() const
+    { return mean_; }
 
     /// Sets Mean to new value.
     /// \returns *this.
-    __device__ NormalLog& Mean(const PBHalf2& value)
+    template <typename VF2>
+    CUDA_ENABLED NormalLog& Mean(const VF2& value)
     {
-        mean_[threadIdx.x] = value;
+        mean_ = value;
         return *this;
     }
 
-    __device__ PBHalf2 Variance() const
-    { return var_[threadIdx.x]; }
+    CUDA_ENABLED const VF& Variance() const
+    { return var_; }
 
     /// Sets Variance to new value, which must be positive.
     /// \returns *this.
-    __device__ NormalLog& Variance(const PBHalf2& value)
+    template <typename VF2>
+    CUDA_ENABLED NormalLog& Variance(const VF2& value)
     {
         //assert(all(value > 0.0f));
-        var_[threadIdx.x] = value;
+        var_ = value;
         return *this;
     }
 
 public:
     /// Evaluate the distribution at \a x.
-    __device__ PBHalf2 operator()(const PBHalf2& x) const
+    template <typename VF2>
+    CUDA_ENABLED auto operator()(const VF2& x) const
     {
-        auto normTerm = PBHalf2(-0.5f) * (PBHalf2(log2pi_f) + log(var_[threadIdx.x]));
-        auto scaleFactor = PBHalf2(0.5f) / var_[threadIdx.x];
-        return normTerm - pow2(x - mean_[threadIdx.x]) * scaleFactor;
+        auto normTerm = -0.5f * (log2pi_f + log(var_));
+        auto scaleFactor = 0.5f / var_;
+        return normTerm - pow2(x - mean_) * scaleFactor;
     }
 
 private:    // Data
-    Row mean_;
-    Row var_;
+    VF mean_;
+    VF var_;
 };
 
 // Subframe scorer using gause caps. This is a near unchanged transcription
 // of what exists in Sequel, though some precomputed terms have been removed
 // as storage is more expensive than computation. All operations are designed
 // to be done by cuda blocks with one thread per pair of zmw.
-template <size_t gpuLaneWidth>
+template <typename VF>
 struct __align__(128) BlockStateSubframeScorer
 {
-    using Row = Utility::CudaArray<PBHalf2, gpuLaneWidth>;
-    using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, gpuLaneWidth>;
+    template <typename T, size_t Len>
+    using LaneModelParameters = Mongo::Data::LaneModelParameters<T, Len>;
 
     // Default constructor only exists to facilitate a shared memory instance.
     // The object is not in a valid state until after calling `Setup`
     BlockStateSubframeScorer() = default;
 
-    __device__ void Setup(const LaneModelParameters& model)
+    template <typename T, size_t Len>
+    CUDA_ENABLED void Setup(const LaneModelParameters<T, Len>& model)
     {
+        static_assert(sizeof(VF) == sizeof(T)*Len, "Invalid function argument");
+        static_assert(Len > 1, "Scalar types not expected");
+        assert(Len == blockDim.x);
+
         static constexpr float log2pi_f = 1.8378770664f;
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
-        const PBHalf2 one = PBHalf2(1.0f);
+        const float nhalfVal = -0.5f;
 
         SubframeSetup(model);
 
-        const PBHalf2 normConst = PBHalf2(log2pi_f / 2.0f);
+        const float normConst = log2pi_f / 2.0f;
 
         // Background
         const auto& bgMode = model.BaselineMode();
@@ -173,31 +175,31 @@ struct __align__(128) BlockStateSubframeScorer
         // Put -0.5 * log(det(V)) into bgFixedTerm_; compute bgInvCov_.
         // sym2x2MatrixInverse returns the determinant and writes the inverse
         // into the second argument.
-        bgFixedTerm_[threadIdx.x] = nhalfVal * log(bgMode.vars[threadIdx.x]) - normConst;
-        bgMean_[threadIdx.x] = bgMode.means[threadIdx.x];
+        bgFixedTerm_ = nhalfVal * log(VF::FromArray(bgMode.vars)) - normConst;
+        bgMean_ = bgMode.means;
 
         #pragma unroll 1
         for (unsigned int i = 0; i < numAnalogs; ++i)
         {
             // Full-frame states
             const auto& aMode = model.AnalogMode(i);
-            ffFixedTerm_[i][threadIdx.x] = nhalfVal * log(aMode.vars[threadIdx.x]) - normConst;
-            ffmean_[i][threadIdx.x] = aMode.means[threadIdx.x];
+            ffFixedTerm_[i] = nhalfVal * log(VF::FromArray(aMode.vars)) - normConst;
+            ffmean_[i] = aMode.means;
         }
     }
 
-    __device__ PBHalf2 StateScores(PBHalf2 data, int state) const
+    template <typename VF2>
+    CUDA_ENABLED auto StateScores(const VF2& data, int state) const
     {
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const float nhalfVal = -0.5f;
 
         switch (state)
         {
         case 0:
             {
 
-                const auto mu = bgMean_[threadIdx.x];
-                const auto y = data - mu;
-                return nhalfVal * y * bInvVar_[threadIdx.x] * y + bgFixedTerm_[threadIdx.x];
+                const auto y = data - bgMean_;
+                return nhalfVal * y * bInvVar_ * y + bgFixedTerm_;
             }
         case 1:
         case 2:
@@ -206,9 +208,8 @@ struct __align__(128) BlockStateSubframeScorer
             {
                 const auto i = state-1;
                 const auto j = SubframeLabelManager::FullState(i);
-                const auto mu = ffmean_[i][threadIdx.x];
-                const auto y = data - mu;
-                return nhalfVal * y * pInvVar_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
+                const auto y = data - ffmean_[i];
+                return nhalfVal * y * pInvVar_[i]*y + ffFixedTerm_[i];
             }
         default:
             {
@@ -220,19 +221,16 @@ struct __align__(128) BlockStateSubframeScorer
 
                 // When signal is stronger than full-frame mean, ensure that
                 // subframe density does not exceed full-frame density.
-                const auto mu = ffmean_[i][threadIdx.x];
-                const auto xmu = data * mu;
-                const auto mumu = mu*mu;
+                const auto xmu = data * ffmean_[i];
+                const auto mumu = ffmean_[i]*ffmean_[i];
 
-                const auto y = data - mu;
-                const auto fScore =  nhalfVal * y * pInvVar_[i][threadIdx.x]*y + ffFixedTerm_[i][threadIdx.x];
+                const auto y = data - ffmean_[i];
+                const auto fScore =  nhalfVal * y * pInvVar_[i]*y + ffFixedTerm_[i];
 
                 // xmu > mumu means that the Euclidean projection of x onto mu is
                 // greater than the norm of mu.
-                const PBHalf2 one = PBHalf2(1.0f);
-                const PBHalf2 zero = PBHalf2(0.0f);
                 score = Blend(xmu > mumu,
-                              min(min(score, fScore - one), zero),
+                              min(min(score, fScore - 1.0f), 0.0f),
                               score);
 
                 return score;
@@ -241,42 +239,42 @@ struct __align__(128) BlockStateSubframeScorer
     }
 
  private:
-    __device__ void SubframeSetup(const LaneModelParameters& model)
+    template <typename T, size_t Len>
+    CUDA_ENABLED void SubframeSetup(const LaneModelParameters<T, Len>& model)
     {
         static constexpr float pi_f = 3.1415926536f;
-        const PBHalf2 sqrtHalfPi = PBHalf2(std::sqrt(0.5f * pi_f));
-        const PBHalf2 halfVal = PBHalf2(0.5f);
-        const PBHalf2 oneSixth = PBHalf2(1.0f / 6.0f);
-        const PBHalf2 one = PBHalf2(1.0f);
+        const float sqrtHalfPi = std::sqrt(0.5f * pi_f);
+        const float halfVal = 0.5f;
+        const float oneSixth = 1.0f / 6.0f;
 
         const auto& bMode = model.BaselineMode();
-        const auto bMean = bMode.means[threadIdx.x];
-        const auto bVar = bMode.vars[threadIdx.x];
+        const auto bMean = VF::FromArray(bMode.means);
+        const auto bVar = VF::FromArray(bMode.vars);
         const auto bSigma = sqrt(bVar);
 
         // Low joint in the score function.
-        x0_[threadIdx.x] = bMean + bSigma * sqrtHalfPi;
-        bInvVar_[threadIdx.x] = one / bVar;
+        x0_ = bMean + bSigma * sqrtHalfPi;
+        bInvVar_ = 1.0f / bVar;
 
         #pragma unroll 1
         for (unsigned int a = 0; a < numAnalogs; ++a)
         {
             const auto& dma = model.AnalogMode(a);
-            const auto aMean = dma.means[threadIdx.x];
-            logPMean_[a][threadIdx.x] = log(aMean - bMean);
-            const auto aVar = dma.vars[threadIdx.x];
+            const auto aMean = VF::FromArray(dma.means);
+            logPMean_[a] = log(aMean - bMean);
+            const auto aVar = VF::FromArray(dma.vars);
             const auto aSigma = sqrt(aVar);
             // High joint in the score function.
-            x1_[a][threadIdx.x] = aMean - aSigma * sqrtHalfPi;
-            pInvVar_[a][threadIdx.x] = one / aVar;
+            x1_[a] = aMean - aSigma * sqrtHalfPi;
+            pInvVar_[a] = 1.0f / aVar;
         }
 
         // Assume that the dimmest analog is the only one at risk for
         // violating x0_ <= x1_[a].
         {
             const auto& dm = model.AnalogMode(3);
-            const auto aMean = dm.means[threadIdx.x];
-            const auto aVar = dm.vars[threadIdx.x];
+            const auto aMean = VF::FromArray(dm.means);
+            const auto aVar = VF::FromArray(dm.vars);
             // Edge-frame mean and variance.
             auto eMean = halfVal * (bMean + aMean);
             auto eVar = oneSixth * (aMean - bMean);
@@ -287,46 +285,47 @@ struct __align__(128) BlockStateSubframeScorer
         }
     }
 
-    __device__ PBHalf2 SubframeScore(unsigned int a, PBHalf2 val) const
+    template <typename VF2>
+    CUDA_ENABLED auto SubframeScore(unsigned int a, const VF2& val) const
     {
-        const PBHalf2 nhalfVal = PBHalf2(-0.5f);
+        const float nhalfVal = -0.5f;
 
         // Score between x0 and x1.
-        const auto lowExtrema = val < x0_[threadIdx.x];
-        const auto cap = Blend(lowExtrema, x0_[threadIdx.x], x1_[a][threadIdx.x]);
-        auto fixedTerm = Blend(lowExtrema, bInvVar_[threadIdx.x], pInvVar_[a][threadIdx.x]);
+        const auto lowExtrema = val < x0_;
+        const auto cap = Blend(lowExtrema, x0_, x1_[a]);
+        auto fixedTerm = Blend(lowExtrema, bInvVar_, pInvVar_[a]);
         fixedTerm = nhalfVal * fixedTerm;
 
-        const auto extrema = lowExtrema || (val > x1_[a][threadIdx.x]);
-        PBHalf2 s = Blend(extrema, fixedTerm * pow2(val - cap), PBHalf2(0.0f)) - logPMean_[a][threadIdx.x];
+        const auto extrema = lowExtrema || (val > x1_[a]);
+        auto s = Blend(extrema, fixedTerm * pow2(val - cap), 0.0f) - logPMean_[a];
 
         if (a == numAnalogs-1)
         {
             // Fall back to normal approximation when x1 < x0.
-            s = Blend(x0_[threadIdx.x] <= x1_[a][threadIdx.x], s, dimFallback_(val));
+            s = Blend(x0_ <= x1_[a], s, dimFallback_(val));
         }
         return s;
     }
 
-    Row bgMean_;
-    Utility::CudaArray<Row, numAnalogs> ffmean_; // full-frame states
+    VF bgMean_;
+    Utility::CudaArray<VF, numAnalogs> ffmean_; // full-frame states
 
-    Row bInvVar_;
-    Utility::CudaArray<Row, numAnalogs> pInvVar_;
+    VF bInvVar_;
+    Utility::CudaArray<VF, numAnalogs> pInvVar_;
 
     // -0.5 * log det(V) - log 2\pi.
-    Row bgFixedTerm_;    // background (a.k.a. baseline)
-    Utility::CudaArray<Row, numAnalogs> ffFixedTerm_;    // full-frame states
+    VF bgFixedTerm_;    // background (a.k.a. baseline)
+    Utility::CudaArray<VF, numAnalogs> ffFixedTerm_;    // full-frame states
 
     // Log of displacement of pulse means from baseline mean.
-    Utility::CudaArray<Row, numAnalogs> logPMean_;
+    Utility::CudaArray<VF, numAnalogs> logPMean_;
 
     // Joints in the subframe score function.
-    Row x0_;
-    Utility::CudaArray<Row, numAnalogs> x1_;
+    VF x0_;
+    Utility::CudaArray<VF, numAnalogs> x1_;
 
     // Normal approximation fallback for dimmest analog subframe when x1 < x0.
-    NormalLog<gpuLaneWidth> dimFallback_;
+    NormalLog<VF> dimFallback_;
 };
 
 }}}

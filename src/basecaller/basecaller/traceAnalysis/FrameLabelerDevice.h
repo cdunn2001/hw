@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
-#define PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
+#ifndef PACBIO_MONGO_BASECALLER_FRAME_LABALER_DEVICE_H
+#define PACBIO_MONGO_BASECALLER_FRAME_LABALER_DEVICE_H
 
 #include "FrameLabeler.h"
 #include "dataTypes/BasicTypes.h"
@@ -44,7 +44,11 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class DeviceSGCFrameLabeler : public FrameLabeler
+/// Frame Labeler that runs on the GPU.  Currently hard coded to use
+/// the Subframe Gauss Caps approximation, but this could change
+/// once the underlying implementation (contained in the prototypes
+/// directory) is finally cleaned up
+class FrameLabelerDevice : public FrameLabeler
 {
 
 public:     // Static functions
@@ -58,10 +62,10 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceSGCFrameLabeler(uint32_t poolId,
-                          uint32_t lanesPerPool,
-                          Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
-    ~DeviceSGCFrameLabeler() override;
+    FrameLabelerDevice(uint32_t poolId,
+                       uint32_t lanesPerPool,
+                       Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
+    ~FrameLabelerDevice() override;
 
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
@@ -73,4 +77,4 @@ private:    // Customizable implementation
 
 }}}     // namespace PacBio::Mongo::Basecaller
 
-#endif //PACBIO_MONGO_BASECALLER_DEVICE_SGC_FRAME_LABELER_H
+#endif //PACBIO_MONGO_BASECALLER_FRAME_LABALER_DEVICE_H

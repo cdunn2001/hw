@@ -28,9 +28,11 @@
 
 #include <type_traits>
 
+#include <common/cuda/CudaLaneArray.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
 using namespace PacBio::Cuda;
+using namespace PacBio::Simd;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Subframe;
@@ -48,7 +50,7 @@ namespace
 //
 // Unfortunately __constant__ variables *have* to be global.  We will initialize
 // this during the FrameLabeler::Configure function.
-__constant__ Subframe::TransitionMatrix trans;
+__constant__ Subframe::TransitionMatrix<half> trans;
 
 __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 {
@@ -78,13 +80,12 @@ __global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
     for (auto val : zmwData) val = PBShort2(0);
 }
 
-template <typename T2, typename Labels, typename LogLike, typename Scorer, class... Rows>
-__device__ void Recursion(T2& sharedMaxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
-                          const SparseMatrix<Rows...>& trans, PBShort2 data, int idx)
+template <typename T2, typename Labels, typename LogLike, typename Scorer, typename TransT, class... Rows>
+__device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
+                          const SparseMatrix<TransT, Rows...>& trans, PBShort2 data, int idx)
 {
     CudaArray<PBHalf2, numStates> logAccum;
     PackedLabels packedLabels;
-    auto& maxVal = sharedMaxVal[threadIdx.x];
 
     // Note: The cuda optimizer seems to be finicky about what gets placed
     // inside a register and what gets pushed out to the stack in memory.
@@ -185,7 +186,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     using namespace Subframe;
 
     assert(blockDim.x == blockThreads);
-    __shared__ BlockStateSubframeScorer<blockThreads> scorer;
+    __shared__ BlockStateSubframeScorer<CudaLaneArray<PBHalf2, blockThreads>> scorer;
 
     // This optimization requires some notes, and may need to be revisited
     // periodically.  The BlockStateSubframeScorer above uses 26 32-bit words
@@ -216,7 +217,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     // other changes affect that balance, then this might become a less optimal choice,
     // and these two should be moved back to being per-thread automatic variables in
     // the `Recursion` function
-    __shared__ CudaArray<PBHalf2, blockThreads> sharedMaxVal;
+    __shared__ CudaLaneArray<PBHalf2, blockThreads> sharedMaxVal;
 
     // Initial setup
     CudaArray<PBHalf2, numStates> scratch;
@@ -336,7 +337,7 @@ constexpr size_t FrameLabeler::BlockThreads;
 
 void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta)
 {
-    Subframe::TransitionMatrix transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
+    Subframe::TransitionMatrix<half> transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
     CudaCopyToSymbol(trans, &transHost);
 }
 

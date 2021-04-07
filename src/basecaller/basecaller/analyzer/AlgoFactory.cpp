@@ -39,8 +39,8 @@
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
-#include <basecaller/traceAnalysis/DeviceSGCFrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
+#include <basecaller/traceAnalysis/FrameLabelerDevice.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
@@ -115,7 +115,7 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Finalize();
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        DeviceSGCFrameLabeler::Finalize();
+        FrameLabelerDevice::Finalize();
         break;
     default:
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
@@ -234,7 +234,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         FrameLabeler::Configure();
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        DeviceSGCFrameLabeler::Configure(movConfig);
+        FrameLabelerDevice::Configure(movConfig);
         break;
     default:
         ostringstream msg;
@@ -331,7 +331,7 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
         return std::make_unique<FrameLabeler>(poolId);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
-        return std::make_unique<DeviceSGCFrameLabeler>(poolId, dims.lanesPerBatch, &registrar);
+        return std::make_unique<FrameLabelerDevice>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;
