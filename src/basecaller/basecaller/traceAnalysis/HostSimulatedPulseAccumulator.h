@@ -27,6 +27,7 @@
 #ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
 #define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
 
+#include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 #include <dataTypes/Pulse.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 
@@ -41,14 +42,19 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    HostSimulatedPulseAccumulator(uint32_t poolId);
+    HostSimulatedPulseAccumulator(uint32_t poolId, size_t numLanes);
     ~HostSimulatedPulseAccumulator() override;
 
 private:
     std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
     Process(Data::LabelsBatch trace) override;
 
-    Data::Pulse GeneratePulse(uint32_t pulseNum);
+    Data::Pulse GeneratePulse(size_t zmw) const;
+
+    std::vector<Data::Pulse> nextPulse_;
+    std::vector<uint32_t> pulseId_;
+
+    static Data::SimulatedPulseConfig config_;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller

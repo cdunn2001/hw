@@ -7,6 +7,7 @@ namespace Basecaller {
 void HostSimulatedPulseAccumulator::Configure(const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     const auto hostExecution = true;
+    config_ = pulseConfig.simConfig;
     PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 }
 
@@ -15,9 +16,19 @@ void HostSimulatedPulseAccumulator::Finalize()
     PulseAccumulator::Finalize();
 }
 
-HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId)
+Data::SimulatedPulseConfig HostSimulatedPulseAccumulator::config_;
+
+HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId, size_t numLanes)
     : PulseAccumulator(poolId)
-    { }
+    , nextPulse_(numLanes*laneSize)
+    , pulseId_(numLanes*laneSize)
+    {
+        for (size_t i = 0; i < nextPulse_.size(); ++i)
+        {
+            nextPulse_[i] = GeneratePulse(i);
+            pulseId_[i] = 1;
+        }
+    }
 
 HostSimulatedPulseAccumulator::~HostSimulatedPulseAccumulator() = default;
 
@@ -32,9 +43,12 @@ HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
         lanePulses.Reset();
         for (size_t zmwIdx = 0; zmwIdx < labels.LaneWidth(); ++zmwIdx)
         {
-            for (uint32_t pulseNum = 0; pulseNum < ret.first.Pulses().MaxLen(); ++pulseNum)
+            size_t id = zmwIdx + laneIdx*laneSize;
+            while (nextPulse_[id].Stop() < labels.Metadata().LastFrame())
             {
-                lanePulses.push_back(zmwIdx, GeneratePulse(pulseNum));
+                lanePulses.push_back(zmwIdx, nextPulse_[id]);
+                nextPulse_[id] = GeneratePulse(id);
+                pulseId_[id]++;
             }
         }
     }
@@ -42,29 +56,36 @@ HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
     return ret;
 }
 
-Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(uint32_t pulseNum)
+Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(size_t zmw) const
 {
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
-    // Repeating sequence of ACGT.
-    const NucleotideLabel labels[] =
-        { NucleotideLabel::A, NucleotideLabel::C, NucleotideLabel::G, NucleotideLabel::T };
 
-    // Associated values
-    const std::array<float, 4> meanSignals { { 20.0f, 10.0f, 16.0f, 8.0f } };
-    const std::array<float, 4> midSignals { { 21.0f, 11.0f, 17.0f, 9.0f } };
-    const std::array<float, 4> maxSignals { { 21.0f, 11.0f, 17.0f, 9.0f } };
+    auto makeGenerator = [&](const auto& vec)
+    {
+        return [&]()
+        {
+            auto idx = pulseId_[zmw] % vec.size();
+            return vec[idx];
+        };
+    };
 
-    size_t iL = pulseNum % 4;
+    auto basecall = makeGenerator(config_.basecalls);
+    auto ipd = makeGenerator(config_.ipds);
+    auto pw = makeGenerator(config_.pws);
+    auto meanSignal = makeGenerator(config_.meanSignals);
+    auto midSignal = makeGenerator(config_.midSignals);
+    auto maxSignal = makeGenerator(config_.maxSignals);
 
     auto pulse = Data::Pulse();
 
-    pulse.Label(labels[iL]);
-    pulse.Start(1).Width(3);
-    pulse.MeanSignal(meanSignals[iL]).
-        MidSignal(midSignals[iL]).
-        MaxSignal(maxSignals[iL]).
-        SignalM2(meanSignals[iL] * meanSignals[iL]).
-        IsReject(false);
+    pulse.Label(Data::mapToNucleotideLabel(basecall()));
+    pulse.Start(nextPulse_[zmw].Stop() + ipd());
+    pulse.Width(pw());
+    pulse.MeanSignal(meanSignal());
+    pulse.MidSignal(midSignal());
+    pulse.MaxSignal(maxSignal());
+    pulse.SignalM2(pulse.MeanSignal() * pulse.MeanSignal());
+    pulse.IsReject(false);
 
     return pulse;
 }
