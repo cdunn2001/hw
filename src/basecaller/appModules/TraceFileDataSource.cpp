@@ -194,11 +194,6 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
 {
     std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
     boost::multi_array<int16_t,2> holexy = traceFile_.Traces().HoleXY(); 
-    if (features.size() > holexy.shape()[0])
-    {
-        PBLOG_ERROR << "holexy dim is " << holexy.shape()[0] << " while requested ZMWS is " << features.size();
-        throw PBException("holexy dataset is smaller than expected number of ZMWs");
-    }
     for(uint32_t i=0; i < features.size(); i++)
     {
         // i is ZMW position in chunk.
