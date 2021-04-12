@@ -22,6 +22,7 @@ HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId, si
     : PulseAccumulator(poolId)
     , nextPulse_(numLanes*laneSize)
     , pulseId_(numLanes*laneSize)
+    , mt_(config_.seed + poolId)
     {
         for (size_t i = 0; i < nextPulse_.size(); ++i)
         {
@@ -60,21 +61,40 @@ Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(size_t zmw) const
 {
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
-    auto makeGenerator = [&](const auto& vec)
+    auto makeGenerator = [&](const auto& vec, const auto& vars)
     {
         return [&]()
         {
-            auto idx = pulseId_[zmw] % vec.size();
-            return vec[idx];
+            if (vars.empty())
+            {
+                auto idx = pulseId_[zmw] % vec.size();
+                return vec[idx];
+            } else {
+                auto mean = vec[zmw % vec.size()];
+                auto var = vars[zmw % vars.size()];
+                auto beta = var / mean;
+                auto alpha = mean / beta;
+                auto dist = std::gamma_distribution<float>(alpha, beta);
+                return static_cast<decltype(vec[0])>(dist(mt_));
+            }
         };
     };
 
-    auto basecall = makeGenerator(config_.basecalls);
-    auto ipd = makeGenerator(config_.ipds);
-    auto pw = makeGenerator(config_.pws);
-    auto meanSignal = makeGenerator(config_.meanSignals);
-    auto midSignal = makeGenerator(config_.midSignals);
-    auto maxSignal = makeGenerator(config_.maxSignals);
+    auto makeIntGenerator = [&](const auto& vec, const auto& vars)
+    {
+        return [gen = makeGenerator(vec, vars)]()
+        {
+            return static_cast<int>(std::round(gen()));
+        };
+    };
+
+    decltype(config_.basecalls) tmp{};
+    auto basecall = makeGenerator(config_.basecalls,tmp);
+    auto ipd = makeIntGenerator(config_.ipds, config_.ipdVars);
+    auto pw = makeIntGenerator(config_.pws, config_.pwVars);
+    auto meanSignal = makeGenerator(config_.meanSignals, config_.meanSignalsVars);
+    auto midSignal = makeGenerator(config_.midSignals, config_.midSignalsVars);
+    auto maxSignal = makeGenerator(config_.maxSignals, config_.maxSignalsVars);
 
     auto pulse = Data::Pulse();
 

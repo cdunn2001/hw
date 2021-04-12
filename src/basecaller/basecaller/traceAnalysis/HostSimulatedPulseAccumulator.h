@@ -27,6 +27,8 @@
 #ifndef PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
 #define PACBIO_MONGO_BASECALLER_HOST_SIMULATED_PULSE_ACCUMULATOR_H_
 
+#include <random>
+
 #include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 #include <dataTypes/Pulse.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
@@ -53,6 +55,7 @@ private:
 
     std::vector<Data::Pulse> nextPulse_;
     std::vector<uint32_t> pulseId_;
+    mutable std::mt19937 mt_;
 
     static Data::SimulatedPulseConfig config_;
 };
