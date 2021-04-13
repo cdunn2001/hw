@@ -233,7 +233,7 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
     logLike = logAccum;
 }
 
-// Serial function that procudes lane labels for a block of data.
+// Serial function that produces lane labels for a block of data.
 LaneArray<float, laneSize>
 LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
            const Subframe::TransitionMatrix<float>& trans,

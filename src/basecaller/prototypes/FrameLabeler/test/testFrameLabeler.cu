@@ -50,9 +50,9 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLab
 {
     switch(method)
     {
-    case BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         return CreateAndConfigure<FrameLabelerDevice>(config, lanesPerPool, numPools);
-    case BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps:
+    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
         return CreateAndConfigure<FrameLabelerHost>(config, lanesPerPool, numPools);
     default:
         throw PBException("Test does not support this FrameLabeler type");
@@ -210,5 +210,5 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 }
 
 INSTANTIATE_TEST_SUITE_P(somthing, FrameLabelerTest,
-                         testing::Values(BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps,
-                                         BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps));
+                         testing::Values(BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice,
+                                         BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost));

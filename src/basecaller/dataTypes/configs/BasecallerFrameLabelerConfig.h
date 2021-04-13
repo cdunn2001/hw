@@ -45,13 +45,13 @@ public:
     //       default, consider putting subframe specific options into a
     //       new subgroup
 
-    SMART_ENUM(MethodName, NoOp, DeviceSubFrameGaussCaps, HostSubFrameGaussCaps)
+    SMART_ENUM(MethodName, NoOp, SubFrameGaussCapsDevice, SubFrameGaussCapsHost)
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {
                             return device == Basecaller::ComputeDevices::Host ?
-                                MethodName::HostSubFrameGaussCaps :
-                                MethodName::DeviceSubFrameGaussCaps;
+                                MethodName::SubFrameGaussCapsHost :
+                                MethodName::SubFrameGaussCapsDevice;
                         },
                         {"analyzerHardware"}
     ));

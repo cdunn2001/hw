@@ -116,10 +116,10 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Finalize();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         FrameLabelerDevice::Finalize();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
         FrameLabelerHost::Finalize();
         break;
     default:
@@ -238,10 +238,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Configure();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         FrameLabelerDevice::Configure(movConfig);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
         FrameLabelerHost::Configure(movConfig);
         break;
     default:
@@ -338,10 +338,10 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         return std::make_unique<FrameLabeler>(poolId);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         return std::make_unique<FrameLabelerDevice>(poolId, dims.lanesPerBatch, &registrar);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::HostSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
         return std::make_unique<FrameLabelerHost>(poolId, dims.lanesPerBatch);
         break;
     default:

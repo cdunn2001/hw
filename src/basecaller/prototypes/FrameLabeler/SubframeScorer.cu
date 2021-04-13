@@ -79,7 +79,7 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<Mongo::Data::AnalogMode
     // SPI-1754
     auto computeLenProbs = [&](float widthSeconds, float ratio) -> CudaArray<float, 3>
     {
-        auto widthFrames = frameRate * widthSeconds;
+        const auto widthFrames = frameRate * widthSeconds;
         // Make sure r is small instead of 0, to avoid indeterminate forms
         // in the math below.
         ratio = std::max(ratio, 1e-6f);
