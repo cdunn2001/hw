@@ -30,6 +30,8 @@
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
 
+#include <basecaller/traceAnalysis/ComputeDevices.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Data {
@@ -43,8 +45,16 @@ public:
     //       default, consider putting subframe specific options into a
     //       new subgroup
 
-    SMART_ENUM(MethodName, NoOp, DeviceSubFrameGaussCaps)
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::DeviceSubFrameGaussCaps);
+    SMART_ENUM(MethodName, NoOp, SubFrameGaussCapsDevice, SubFrameGaussCapsHost)
+    PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
+                        [](Basecaller::ComputeDevices device) -> MethodName
+                        {
+                            return device == Basecaller::ComputeDevices::Host ?
+                                MethodName::SubFrameGaussCapsHost :
+                                MethodName::SubFrameGaussCapsDevice;
+                        },
+                        {"analyzerHardware"}
+    ));
 
     PB_CONFIG_PARAM(float, UpperThreshold, 7.0f);
     PB_CONFIG_PARAM(float, LowerThreshold, 2.0f);

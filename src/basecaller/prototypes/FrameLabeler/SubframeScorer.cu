@@ -34,7 +34,8 @@ namespace Subframe {
 
 
 template <typename T>
-TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs> meta)
+TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<Mongo::Data::AnalogMode, numAnalogs> analogs,
+                                      double frameRate)
 {
     // We only have access to single precision math on the host, so populate data as float for now,
     // and at the end we'll convert it and populate our actual half precision data member;
@@ -55,20 +56,20 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs>
     for (size_t i = 0; i < numAnalogs; ++i)
     {
         static constexpr float delta = 0.01f;
-        if (std::abs(meta[i].ipdSSRatio - 1.0f) < delta)
+        if (std::abs(analogs[i].ipd2SlowStepRatio - 1.0f) < delta)
         {
-            meta[i].pwSSRatio = (meta[i].pwSSRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
+            analogs[i].pw2SlowStepRatio = (analogs[i].pw2SlowStepRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
         }
-        if (std::abs(meta[i].ipdSSRatio - 1.0f) < delta)
+        if (std::abs(analogs[i].ipd2SlowStepRatio - 1.0f) < delta)
         {
-            meta[i].ipdSSRatio = (meta[i].ipdSSRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
+            analogs[i].ipd2SlowStepRatio = (analogs[i].ipd2SlowStepRatio < 1.0f) ? 1.0f - delta : 1.0f + delta;
         }
     }
 
     // Mean IPD for the input analog set.
-    const float meanIpd = [&meta](){
+    const float meanIpd = [&analogs,&frameRate](){
         float sum = 0.0f;
-        for (uint32_t i = 0; i < numAnalogs; ++i) sum+=meta[i].ipd;
+        for (uint32_t i = 0; i < numAnalogs; ++i) sum+=analogs[i].interPulseDistance;
         return sum/numAnalogs;
     }();
 
@@ -76,14 +77,15 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs>
     // what are the probabilities that we detect a 1, 2 or 3 frame pulse.
     // See analytic work done in SPI-1674 and particularly subtask
     // SPI-1754
-    auto computeLenProbs = [&](float width, float ratio) -> CudaArray<float, 3>
+    auto computeLenProbs = [&](float widthSeconds, float ratio) -> CudaArray<float, 3>
     {
+        const auto widthFrames = frameRate * widthSeconds;
         // Make sure r is small instead of 0, to avoid indeterminate forms
         // in the math below.
         ratio = std::max(ratio, 1e-6f);
 
-        const auto k1 = (1.0f + ratio) / width;
-        const auto k2 = (1.0f + 1.0f / ratio) / width;
+        const auto k1 = (1.0f + ratio) / widthFrames;
+        const auto k2 = (1.0f + 1.0f / ratio) / widthFrames;
         const auto dk = k1 - k2;
 
         const auto c1 = 1.0f - std::exp(-k1);
@@ -103,10 +105,10 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs>
 
     // Precompute the probabilities of 1, 2 and 3 frame ipds after each analog
     CudaArray<CudaArray<float, 3>, numAnalogs> ipdLenProbs;
-    ipdLenProbs[0] = computeLenProbs(meta[0].ipd, meta[0].ipdSSRatio);
-    ipdLenProbs[1] = computeLenProbs(meta[1].ipd, meta[1].ipdSSRatio);
-    ipdLenProbs[2] = computeLenProbs(meta[2].ipd, meta[2].ipdSSRatio);
-    ipdLenProbs[3] = computeLenProbs(meta[3].ipd, meta[3].ipdSSRatio);
+    ipdLenProbs[0] = computeLenProbs(analogs[0].interPulseDistance, analogs[0].ipd2SlowStepRatio);
+    ipdLenProbs[1] = computeLenProbs(analogs[1].interPulseDistance, analogs[1].ipd2SlowStepRatio);
+    ipdLenProbs[2] = computeLenProbs(analogs[2].interPulseDistance, analogs[2].ipd2SlowStepRatio);
+    ipdLenProbs[3] = computeLenProbs(analogs[3].interPulseDistance, analogs[3].ipd2SlowStepRatio);
 
     // alpha[i] is probability of going from the i down to another up state.
     // The direct down-to-full is currently disallowed, so we roll both
@@ -151,7 +153,7 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<AnalogMeta, numAnalogs>
         const auto down = SubframeLabelManager::DownState(i);
 
         // probabilities of 1,2 and 3 frame pulses for this analog
-        const auto& analogLenProbs = computeLenProbs(meta[i].pw, meta[i].pwSSRatio);
+        const auto& analogLenProbs = computeLenProbs(analogs[i].pulseWidth, analogs[i].pw2SlowStepRatio);
 
         // Probability of a 1 frame pulse is the sum of P(u->0) and all of P(u->u')
         // The former is gamma and the later is alpha. So summing over alpha

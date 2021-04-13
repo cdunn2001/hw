@@ -35,8 +35,8 @@ static std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(
 void run(const Data::DataManagerParams& dataParams,
          const Data::PicketFenceParams& picketParams,
          const Data::TraceFileParams& traceParams,
-         const std::array<Subframe::AnalogMeta, 4>& meta,
-         const Subframe::AnalogMeta& baselineMeta,
+         const std::array<AnalogMode, 4>& meta,
+         const Data::LaneModelParameters<PBHalf, laneSize>& referenceModel,
          size_t simulKernels)
 {
     SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
@@ -44,13 +44,6 @@ void run(const Data::DataManagerParams& dataParams,
     static constexpr size_t gpuBlockThreads = laneSize/2;
 
     std::vector<UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>> models;
-
-    LaneModelParameters<PBHalf, laneSize> referenceModel;
-    referenceModel.BaselineMode().SetAllMeans(baselineMeta.mean).SetAllVars(baselineMeta.var);
-    for (int i = 0; i < 4; ++i)
-    {
-        referenceModel.AnalogMode(i).SetAllMeans(meta[i].mean).SetAllVars(meta[i].var);
-    }
 
     BatchDimensions latBatchDims;
     latBatchDims.framesPerBatch = dataParams.blockLength;
@@ -60,7 +53,7 @@ void run(const Data::DataManagerParams& dataParams,
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
 
-    FrameLabeler::Configure(meta);
+    FrameLabeler::Configure(meta, dataParams.frameRate);
     std::vector<FrameLabeler> frameLabelers;
     models.reserve(numBatches);
     frameLabelers.reserve(numBatches);

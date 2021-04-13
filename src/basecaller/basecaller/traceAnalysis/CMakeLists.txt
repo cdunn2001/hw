@@ -40,6 +40,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     FrameLabeler.cpp
     FrameLabelerDevice.h
     FrameLabelerDevice.cu
+    FrameLabelerHost.h
+    FrameLabelerHost.cpp
     HFMetricsFilter.h
     HFMetricsFilter.cpp
     HostHFMetricsFilter.h

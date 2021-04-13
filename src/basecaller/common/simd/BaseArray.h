@@ -127,6 +127,12 @@ public: // ctors
     template <typename U, std::enable_if_t<std::is_convertible<U, ScalarType<T>>::value, int> = 0>
     BaseArray(const U& val)
     {
+        *this = val;
+    }
+
+    template <typename U, std::enable_if_t<std::is_convertible<U, ScalarType<T>>::value, int> = 0>
+    Derived& operator=(const U& val)
+    {
         for (auto& d : data_)
         {
             // first convert the input to the expected type
@@ -134,6 +140,7 @@ public: // ctors
             // can take it the rest of the way
             d = static_cast<ScalarType<T>>(val);
         }
+        return static_cast<Derived&>(*this);
     }
 
     /// Explicit conversion from CudaArray.  We will use intrinsics to
@@ -146,6 +153,19 @@ public: // ctors
               std::enable_if_t<!isBool, int> = 0>
     explicit BaseArray(const Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>& data)
     {
+        *this = data;
+    }
+
+    /// Explicit conversion from CudaArray.  We will use intrinsics to
+    /// load the data, so the CudaArray is required to be appropriately
+    /// aligned.
+    /// Note: Not suitable for bools, as they are not bitwise equivalant,
+    ///       neither for SSE nor for AVX512
+    template <typename U = T,
+              bool isBool = std::is_same<ScalarType<U>, bool>::value,
+              std::enable_if_t<!isBool, int> = 0>
+    Derived& operator=(const Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount>& data)
+    {
         constexpr auto width = SimdTypeTraits<T>::width;
         const auto* dat = data.data();
         assert(reinterpret_cast<uintptr_t>(dat) % alignof(T) == 0);
@@ -155,6 +175,7 @@ public: // ctors
             d = T(dat);
             dat += width;
         }
+        return static_cast<Derived&>(*this);
     }
 
     /// Explicit conversion from CudaArray, this time also converting from
@@ -166,6 +187,19 @@ public: // ctors
         typename dummy1 = std::enable_if_t<std::is_constructible<Scalar, U>::value>,
         typename dummy2 = std::enable_if_t<!std::is_same<Scalar, U>::value>>
     explicit BaseArray(const Cuda::Utility::CudaArray<U, ScalarCount>& data)
+    {
+        *this = data;
+    }
+
+    /// Explicit conversion from CudaArray, this time also converting from
+    /// one type to another.
+    /// Note: We still can't use this for bools, as ArrayUnion is
+    ///       incompatible (still requires bitwise compatible layout)
+    template <typename U,
+        typename Scalar = ScalarType<T>,
+        typename dummy1 = std::enable_if_t<std::is_constructible<Scalar, U>::value>,
+        typename dummy2 = std::enable_if_t<!std::is_same<Scalar, U>::value>>
+    Derived& operator=(const Cuda::Utility::CudaArray<U, ScalarCount>& data)
     {
         static constexpr auto width = SimdTypeTraits<T>::width;
         size_t inOffset = 0;
@@ -179,6 +213,7 @@ public: // ctors
             d = tmp;
             inOffset += width;
         }
+        return static_cast<Derived&>(*this);
     }
 
     /// Construct by loading data from an arbitrary memory location.
@@ -329,6 +364,12 @@ public: // ctors
     Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ToArray() const
     {
         return static_cast<const Derived&>(*this);
+    }
+
+    template <typename U, std::enable_if_t<std::is_convertible<ScalarType<T>, U>::value, int> = 0>
+    static Derived FromArray(const Cuda::Utility::CudaArray<U, ScalarCount>& data)
+    {
+        return Derived(data);
     }
 
 public: // raw simd data access.

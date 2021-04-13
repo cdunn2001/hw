@@ -335,9 +335,10 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
 constexpr size_t FrameLabeler::BlockThreads;
 
-void FrameLabeler::Configure(const std::array<Subframe::AnalogMeta, 4>& meta)
+void FrameLabeler::Configure(const std::array<AnalogMode, 4>& analogs,
+                             double frameRate)
 {
-    Subframe::TransitionMatrix<half> transHost(CudaArray<Subframe::AnalogMeta, 4>{meta});
+    Subframe::TransitionMatrix<half> transHost(analogs, frameRate);
     CudaCopyToSymbol(trans, &transHost);
 }
 

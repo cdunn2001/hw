@@ -7,6 +7,7 @@
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda;
+using namespace PacBio::Mongo;
 
 int main(int argc, char* argv[])
 {
@@ -115,36 +116,38 @@ int main(int argc, char* argv[])
             .TraceFileName(traceFileName);
 
     // Defaults that match current mongo simulated trace file
-    std::array<Subframe::AnalogMeta, 4> meta;
-    meta[0].ipdSSRatio = 0;
-    meta[1].ipdSSRatio = 0;
-    meta[2].ipdSSRatio = 0;
-    meta[3].ipdSSRatio = 0;
+    std::array<AnalogMode, 4> analogs;
+    LaneModelParameters<PBHalf, laneSize> refModel;
 
-    meta[0].ipd = frameRate * .308f;
-    meta[1].ipd = frameRate * .234f;
-    meta[2].ipd = frameRate * .234f;
-    meta[3].ipd = frameRate * .188f;
+    analogs[0].ipd2SlowStepRatio = 0;
+    analogs[1].ipd2SlowStepRatio = 0;
+    analogs[2].ipd2SlowStepRatio = 0;
+    analogs[3].ipd2SlowStepRatio = 0;
 
-    meta[0].pw = frameRate * .232f;
-    meta[1].pw = frameRate * .185f;
-    meta[2].pw = frameRate * .181f;
-    meta[3].pw = frameRate * .214f;
+    analogs[0].interPulseDistance = .308f;
+    analogs[1].interPulseDistance = .234f;
+    analogs[2].interPulseDistance = .234f;
+    analogs[3].interPulseDistance = .188f;
 
-    meta[0].pwSSRatio = 3.2f;
-    meta[1].pwSSRatio = 3.2f;
-    meta[2].pwSSRatio = 3.2f;
-    meta[3].pwSSRatio = 3.2f;
+    analogs[0].pulseWidth = .232f;
+    analogs[1].pulseWidth = .185f;
+    analogs[2].pulseWidth = .181f;
+    analogs[3].pulseWidth = .214f;
 
-    meta[0].mean = 227.13f;
-    meta[1].mean = 154.45f;
-    meta[2].mean = 97.67f;
-    meta[3].mean = 61.32f;
+    analogs[0].pw2SlowStepRatio = 3.2f;
+    analogs[1].pw2SlowStepRatio = 3.2f;
+    analogs[2].pw2SlowStepRatio = 3.2f;
+    analogs[3].pw2SlowStepRatio = 3.2f;
 
-    meta[0].var = 776;
-    meta[1].var = 426;
-    meta[2].var = 226;
-    meta[3].var = 132;
+    refModel.AnalogMode(0).SetAllMeans(227.13f);
+    refModel.AnalogMode(1).SetAllMeans(154.45f);
+    refModel.AnalogMode(2).SetAllMeans(97.67f);
+    refModel.AnalogMode(3).SetAllMeans(61.32f);
+
+    refModel.AnalogMode(0).SetAllVars(776);
+    refModel.AnalogMode(1).SetAllVars(426);
+    refModel.AnalogMode(2).SetAllVars(226);
+    refModel.AnalogMode(3).SetAllVars(132);
 
     auto MetaSetter = [&](std::string option, auto&& setFunc) {
         const int numAnalogs = 4;
@@ -161,17 +164,15 @@ int main(int argc, char* argv[])
         }
     };
 
-    MetaSetter("analogMeans", [&](int idx, float val) {meta[idx].mean = val; });
-    MetaSetter("analogVars", [&](int idx, float val) {meta[idx].var = val; });
-    MetaSetter("analogIpds", [&](int idx, float val) {meta[idx].ipd = val; });
-    MetaSetter("analogPws", [&](int idx, float val) {meta[idx].pw = val; });
-    MetaSetter("analogSSPws", [&](int idx, float val) {meta[idx].pwSSRatio = val; });
-    MetaSetter("analogSSIpds", [&](int idx, float val) {meta[idx].ipdSSRatio = val; });
+    MetaSetter("analogMeans", [&](int idx, float val) {refModel.AnalogMode(idx).SetAllMeans(val);});
+    MetaSetter("analogVars", [&](int idx, float val) {refModel.AnalogMode(idx).SetAllVars(val);});
+    MetaSetter("analogIpds", [&](int idx, float val) {analogs[idx].interPulseDistance = val; });
+    MetaSetter("analogPws", [&](int idx, float val) {analogs[idx].pulseWidth = val; });
+    MetaSetter("analogSSPws", [&](int idx, float val) {analogs[idx].pw2SlowStepRatio = val; });
+    MetaSetter("analogSSIpds", [&](int idx, float val) {analogs[idx].ipd2SlowStepRatio = val; });
 
-    // This is ugly since we only use two values.  Re-org?
-    Subframe::AnalogMeta baselineMeta;
-    baselineMeta.mean = options.get("BaselineMean");
-    baselineMeta.var = options.get("BaselineVar");
+    refModel.BaselineMode().SetAllMeans(options.get("BaselineMean"));
+    refModel.BaselineMode().SetAllVars(options.get("BaselineVar"));
 
-    run(params, dataParams, trParams, meta, baselineMeta, simulKernels);
+    run(params, dataParams, trParams, analogs, refModel, simulKernels);
 }

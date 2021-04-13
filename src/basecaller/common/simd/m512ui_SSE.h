@@ -186,6 +186,34 @@ public:     // Assignment
         return *this;
     }
 
+    m512ui& operator &= (const m512ui& x)
+    {
+        data.simd[0] = _mm_and_si128(data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_and_si128(data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_and_si128(data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_and_si128(data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512ui& operator |= (const m512ui& x)
+    {
+        data.simd[0] = _mm_or_si128(data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_or_si128(data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_or_si128(data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_or_si128(data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+    m512ui& operator ^= (const m512ui& x)
+    {
+        data.simd[0] = _mm_xor_si128(data.simd[0], x.data.simd[0]);
+        data.simd[1] = _mm_xor_si128(data.simd[1], x.data.simd[1]);
+        data.simd[2] = _mm_xor_si128(data.simd[2], x.data.simd[2]);
+        data.simd[3] = _mm_xor_si128(data.simd[3], x.data.simd[3]);
+        return *this;
+    }
+
+
     // Return a scalar value
     uint32_t operator[](unsigned int i) const
     {
@@ -262,6 +290,60 @@ public:     // Non-member (friend) functions
                      _mm_xor_si128(l.data.simd[2], r.data.simd[2]),
                      _mm_xor_si128(l.data.simd[3], r.data.simd[3])
                 );
+    }
+
+    m512ui lshift(const uint8_t count) const
+    {
+        return m512ui(_mm_slli_epi32(data.simd[0], count),
+                     _mm_slli_epi32(data.simd[1], count),
+                     _mm_slli_epi32(data.simd[2], count),
+                     _mm_slli_epi32(data.simd[3], count)
+                );
+    }
+
+    m512ui lshift(const m512ui& count) const
+    {
+        // This is the desired intrinsic for _m128 data, but for whatever
+        // reason it didn't make it into the simd instruciton set until AVX2
+        //return m512ui(_mm_sllv_epi32(data[1], count),
+        //             _mm_sllv_epi32(data[2], count),
+        //             _mm_sllv_epi32(data[3], count),
+        //             _mm_sllv_epi32(data[4], count)
+        //        );
+        m512ui ret;
+        for (size_t i = 0; i < size(); ++i)
+        {
+            auto val = static_cast<uint32_t>((*this)[i]);
+            ret.data.raw[i] = static_cast<int32_t>(val << count[i]);
+        }
+        return ret;
+    }
+
+    m512ui rshift(const uint8_t count) const
+    {
+        return m512ui(_mm_srli_epi32(data.simd[0], count),
+                     _mm_srli_epi32(data.simd[1], count),
+                     _mm_srli_epi32(data.simd[2], count),
+                     _mm_srli_epi32(data.simd[3], count)
+                );
+    }
+
+    m512ui rshift(const m512ui& count) const
+    {
+        // This is the desired intrinsic for _m128 data, but for whatever
+        // reason it didn't make it into the simd instruciton set until AVX2
+        //return m512ui(_mm_srlv_epi32(data[1], count),
+        //             _mm_srlv_epi32(data[2], count),
+        //             _mm_srlv_epi32(data[3], count),
+        //             _mm_srlv_epi32(data[4], count)
+        //        );
+        m512ui ret;
+        for (size_t i = 0; i < size(); ++i)
+        {
+            auto val = static_cast<uint32_t>((*this)[i]);
+            ret.data.raw[i] = static_cast<int32_t>(val >> count[i]);
+        }
+        return ret;
     }
 
     // SSE is lacking the necessary comparison operators for unsigned ints.

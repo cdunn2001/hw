@@ -166,7 +166,7 @@ TEST(BaseArray, UniformConstruction)
     for(size_t i = 0; i < laneSize; ++i) EXPECT_TRUE(arr6[i]);
 }
 
-// Make sure that we can construct from a CudaArray
+// Make sure that we can construct and assign from a CudaArray
 TEST(BaseArray, ArrayConstruction)
 {
     auto Validate = [](const auto& laneArray, const auto& cudaArray)
@@ -183,21 +183,36 @@ TEST(BaseArray, ArrayConstruction)
     auto c1 = IncreasingCudaArray<float>(1.3f, 1.1f);
     LaneArray<float, laneSize> arr1(c1);
     EXPECT_TRUE(Validate(arr1, c1));
+    c1 = IncreasingCudaArray<float>(2.3f, 2.1f);
+    arr1 = c1;
+    EXPECT_TRUE(Validate(arr1, c1));
 
     auto c2 = IncreasingCudaArray<int32_t>(-5, 2);
     LaneArray<int32_t, laneSize> arr2(c2);
+    EXPECT_TRUE(Validate(arr2, c2));
+    c2 = IncreasingCudaArray<int32_t>(-10, 3);
+    arr2 = c2;
     EXPECT_TRUE(Validate(arr2, c2));
 
     auto c3 = IncreasingCudaArray<uint32_t>(7, 8);
     LaneArray<uint32_t, laneSize> arr3(c3);
     EXPECT_TRUE(Validate(arr3, c3));
+    c3 = IncreasingCudaArray<uint32_t>(2, 5);
+    arr3 = c3;
+    EXPECT_TRUE(Validate(arr3, c3));
 
     auto c4 = IncreasingCudaArray<int16_t>(-33, 5);
     LaneArray<int16_t, laneSize> arr4(c4);
     EXPECT_TRUE(Validate(arr4, c4));
+    c4 = IncreasingCudaArray<int16_t>(-22, 9);
+    arr4 = c4;
+    EXPECT_TRUE(Validate(arr4, c4));
 
     auto c5 = IncreasingCudaArray<uint16_t>(3, 6);
     LaneArray<uint16_t, laneSize> arr5(c5);
+    EXPECT_TRUE(Validate(arr5, c5));
+    c5 = IncreasingCudaArray<uint16_t>(4, 11);
+    arr5 = c5;
     EXPECT_TRUE(Validate(arr5, c5));
 
     auto c6 = AlternatingBools();
@@ -206,6 +221,9 @@ TEST(BaseArray, ArrayConstruction)
     {
         EXPECT_TRUE(c6[i] == arr6[i]);
     }
+    for (auto& val : c6) val = true;
+    arr6 = c6;
+    EXPECT_TRUE(all(arr6));
 }
 
 // We also want to convert back to cuda array
@@ -489,8 +507,9 @@ TYPED_TEST(LaneArrayHomogeneousTypes, Arithmetic)
                 EXPECT_EQ(blendResult[i], tmp2[i]);
         }
 
-        // While we're at it, check inc.
+        // While we're at it, check inc and pow2.
         EXPECT_TRUE(all(inc(v1, mask) == Blend(mask, v1+static_cast<T>(1), v1)));
+        EXPECT_TRUE(all(pow2(v1) == v1*v1));
     }
 
     EXPECT_TRUE(ValidateOp<std::plus<T>>(v1+v2, v1, v2));
@@ -677,6 +696,86 @@ TEST(LaneArray, IntOps)
     auto b = IncreasingLaneArray<int>(3, 15);
 
     EXPECT_TRUE(ValidateOp<std::bit_or<int>>(a | b, a, b));
+}
+
+// Our unsigned int class supports various bitwise operations,
+// right now primarily to support bit packing operations in
+// the FrameLabeler
+TEST(LaneArray, UIntOps)
+{
+    using Arr = LaneArray<uint32_t>;
+
+    //----------First bitwise Or
+    //
+    // b has a subset of the bits of a
+    Arr a = 7;
+    Arr b = 4;
+    EXPECT_TRUE(all((a|a) == a));
+    EXPECT_TRUE(all((a|b) == a));
+    EXPECT_TRUE(all((b|a) == a));
+
+    // a and b have a disjoint set of bits,
+    // or is the same as addition
+    b = 24;
+    EXPECT_TRUE(all((a|b) == a+b));
+    EXPECT_TRUE(all((b|a) == a+b));
+
+    // a and b overlap in the 3rd bit.
+    b = 20;
+    EXPECT_TRUE(all((a|b) == a+b-4u));
+    EXPECT_TRUE(all((b|a) == a+b-4u));
+
+    auto c = a;
+    c |= b;
+    EXPECT_TRUE(all(c == a+b-4u));
+
+    //----------Now bitwise And
+    //
+    // b has a subset of the bits of a
+    a = 7;
+    b = 4;
+    EXPECT_TRUE(all((a&a) == a));
+    EXPECT_TRUE(all((a&b) == b));
+    EXPECT_TRUE(all((b&a) == b));
+
+    // a and b have a disjoint set of bits,
+    // or is the same as addition
+    b = 24;
+    EXPECT_TRUE(all((a&b) == 0u));
+    EXPECT_TRUE(all((b&a) == 0u));
+
+    // a and b overlap in the 3rd bit.
+    b = 20;
+    EXPECT_TRUE(all((a&b) == 4u));
+    EXPECT_TRUE(all((b&a) == 4u));
+
+    c = a;
+    c &= b;
+    EXPECT_TRUE(all(c == 4u));
+
+    //----------Next scalar bit shifts
+    a = 123;
+    b = a << 3;
+    EXPECT_TRUE(all(b == a*8u));
+    b = a >> 3;
+    EXPECT_TRUE(all(b == a/8u));
+
+    //----------Finally vector bit shifts
+    // gets values 0-63
+    auto shift = IncreasingLaneArray<uint32_t>(0, 1);
+    // Effectively %32, so that none of our shifts go past
+    // 32 bits.
+    shift &= 31;
+    ArrayUnion<Arr> u = 1 << shift;
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        EXPECT_EQ(u[i], 1 << (i%32));
+    }
+    u = std::numeric_limits<uint32_t>::max() >> shift;
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        EXPECT_EQ(u[i], std::numeric_limits<uint32_t>::max() >> (i%32));
+    }
 }
 
 // LaneArray tries to mimic scalars in that you can seamlessly

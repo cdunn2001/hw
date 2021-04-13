@@ -95,6 +95,10 @@ public:     // Assignment
     m512ui& operator *= (const m512ui& x) { v = _mm512_mullo_epi32(this->v, x.v); return *this; }
     m512ui& operator /= (const m512ui& x) { v = _mm512_div_epu32(this->v, x.v);   return *this; }
 
+    m512ui& operator &= (const m512ui& x) { v = _mm512_and_si512(v, x.v); return *this; }
+    m512ui& operator |= (const m512ui& x) { v = _mm512_or_si512(v, x.v); return *this; }
+    m512ui& operator ^= (const m512ui& x) { v = _mm512_xor_si512(v, x.v); return *this; }
+
     // Return a scalar value
     uint32_t operator[](unsigned int i) const
     {
@@ -145,6 +149,27 @@ public:     // Non-member (friend) functions
     {
         return m512b(_mm512_cmpneq_epu32_mask(l.v, r.v));
     }
+
+    m512ui lshift(const uint8_t count) const
+    {
+        return m512ui(_mm512_slli_epi32(v, count));
+    }
+
+    m512ui lshift(const m512ui& count) const
+    {
+        return m512ui(_mm512_sllv_epi32(v, count.v));
+    }
+
+    m512ui rshift(const uint8_t count) const
+    {
+        return m512ui(_mm512_srli_epi32(v, count));
+    }
+
+    m512ui rshift(const m512ui& count) const
+    {
+        return m512ui(_mm512_srlv_epi32(v, count.v));
+    }
+
 
     friend int reduceMax(const m512ui& a) { return _mm512_reduce_max_epu32(a.v); }
     friend int reduceMin(const m512ui& a) { return _mm512_reduce_min_epu32(a.v); }

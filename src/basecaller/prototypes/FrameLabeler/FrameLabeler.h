@@ -6,7 +6,8 @@
 #include <common/DataGenerators/PicketFenceGenerator.h>
 #include <common/DataGenerators/SignalGenerator.h>
 
-#include "AnalogMeta.h"
+#include <dataTypes/AnalogMode.h>
+#include <dataTypes/LaneDetectionModel.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -14,8 +15,8 @@ namespace Cuda {
 void run(const Data::DataManagerParams& dataParams,
          const Data::PicketFenceParams& picketParams,
          const Data::TraceFileParams& traceParams,
-         const std::array<Subframe::AnalogMeta, 4>& meta,
-         const Subframe::AnalogMeta& baselineMeta,
+         const std::array<Mongo::Data::AnalogMode, 4>& meta,
+         const Data::LaneModelParameters<PBHalf, Mongo::laneSize>& referenceModel,
          size_t simulKernels);
 
 }}

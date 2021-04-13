@@ -41,6 +41,7 @@
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabelerDevice.h>
+#include <basecaller/traceAnalysis/FrameLabelerHost.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
@@ -114,8 +115,12 @@ AlgoFactory::~AlgoFactory()
     {
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Finalize();
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+        break;
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         FrameLabelerDevice::Finalize();
+        break;
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
+        FrameLabelerHost::Finalize();
         break;
     default:
         PBLOG_ERROR << "Unrecognized method option for FrameLabeler: "
@@ -233,8 +238,11 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Configure();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         FrameLabelerDevice::Configure(movConfig);
+        break;
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
+        FrameLabelerHost::Configure(movConfig);
         break;
     default:
         ostringstream msg;
@@ -330,8 +338,11 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         return std::make_unique<FrameLabeler>(poolId);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::DeviceSubFrameGaussCaps:
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
         return std::make_unique<FrameLabelerDevice>(poolId, dims.lanesPerBatch, &registrar);
+        break;
+    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
+        return std::make_unique<FrameLabelerHost>(poolId, dims.lanesPerBatch);
         break;
     default:
         ostringstream msg;

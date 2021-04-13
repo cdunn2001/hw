@@ -43,17 +43,7 @@ void FrameLabelerDevice::Configure(const Data::MovieConfig& movieConfig)
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    std::array<Subframe::AnalogMeta, 4> meta;
-    for (size_t i = 0; i < meta.size(); i++)
-    {
-        meta[i].ipdSSRatio = movieConfig.analogs[i].ipd2SlowStepRatio;
-        meta[i].ipd = movieConfig.frameRate * movieConfig.analogs[i].interPulseDistance;
-        meta[i].pw = movieConfig.frameRate * movieConfig.analogs[i].pulseWidth;
-        meta[i].pwSSRatio = movieConfig.analogs[i].pw2SlowStepRatio;
-
-    }
-
-    Cuda::FrameLabeler::Configure(meta);
+    Cuda::FrameLabeler::Configure(movieConfig.analogs, movieConfig.frameRate);
 }
 
 void FrameLabelerDevice::Finalize()

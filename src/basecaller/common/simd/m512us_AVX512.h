@@ -164,6 +164,10 @@ public:     // Assignment
         return m512us(_mm512_div_epu16(l.v, r.v));
     }
 
+    friend m512us operator & (const m512us& l, const m512us& r) { return m512us(_mm512_and_si512(l.v, r.v)); }
+    friend m512us operator | (const m512us& l, const m512us& r) { return m512us(_mm512_or_si512(l.v, r.v)); }
+    friend m512us operator ^ (const m512us& l, const m512us& r) { return m512us(_mm512_xor_si512(l.v, r.v)); }
+
     // Turns an __mask32 mask returned from the intrinsic into a pair
     // of __mmask16 types as our m512b type requires
     static std::pair<m512b,m512b> CompHelper(__mmask32 mask)

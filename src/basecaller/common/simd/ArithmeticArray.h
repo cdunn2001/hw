@@ -120,6 +120,7 @@ public:
     // keywords.
     using Base::data;
     using Base::Base;
+    using Base::operator=;
     using Base::Update;
     using Base::Reduce;
     static constexpr auto SimdCount = Base::SimdCount;
@@ -277,6 +278,11 @@ public: // more friend functions (not operators)
         return Derived(
             [](auto&& l2, auto&& r2){ return max(l2, r2);},
             l, r);
+    }
+
+    friend Derived pow2(const Derived& d)
+    {
+        return Derived([](auto&& x) { return x*x; }, d);
     }
 
     friend ScalarType<T> reduceMax(const Derived& c)
