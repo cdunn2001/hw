@@ -229,6 +229,9 @@ void BasecallingMetricsAccumulator::PopulateBasecallingMetrics(
     metrics.autocorrelation = autocorr;
     metrics.pulseDetectionScore = traceMetrics_.PulseDetectionScore();
     metrics.pixelChecksum = traceMetrics_.PixelChecksum();
+    metrics.frameBaselineDWS = traceMetrics_.FrameBaselineDWS();
+    metrics.frameBaselineVarianceDWS = traceMetrics_.FrameBaselineVarianceDWS();
+    metrics.numFramesBaseline = traceMetrics_.NumFramesBaseline();
 
     for (size_t a = 0; a < numAnalogs; ++a)
     {
@@ -324,14 +327,9 @@ void BasecallingMetricsAccumulator::AddBatchMetrics(
         const StatAccumState& pdBaselineStats)
 {
     BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselinerStats);
-    traceMetrics_.BaselinerStatAccum().Merge(reconstitutedStats.BaselineFramesStats());
     traceMetrics_.AutocorrAccum().Merge(reconstitutedStats.BaselineSubtractedStats());
-
     traceMetrics_.PulseDetectionScore() += LaneArray<float>(viterbiScore);
-
-    // TODO: collect PulseAccumulator BaselineStats, replace
-    // BaselinerStatAccum().Merge(... above
-    (void)pdBaselineStats;
+    traceMetrics_.BaselinerStatAccum().Merge(pdBaselineStats);
 }
 
 void BasecallingMetricsAccumulator::Count(

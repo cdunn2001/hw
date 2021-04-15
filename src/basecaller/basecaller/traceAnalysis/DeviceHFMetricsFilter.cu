@@ -429,14 +429,10 @@ __global__ void ProcessChunk(
 
 
     // AddMetrics: accumulate metrics from other stages
-    { // baseline metrics (currently erroneously taken from the baseliner,
-      // should be taken from pulse accumulator, but those aren't available yet
-        blockMetrics.baselineM0[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].baselineStats.moment0);
-        blockMetrics.baselineM1[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].baselineStats.moment1);
-        blockMetrics.baselineM2[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].baselineStats.moment2);
+    { // baseline metrics (correctly taken from pulse accumulator)
+        blockMetrics.baselineM0[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment0);
+        blockMetrics.baselineM1[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment1);
+        blockMetrics.baselineM2[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment2);
     }
 
     { // Autocorrelation basic metrics (correctly taken from baseliner)
@@ -688,6 +684,17 @@ __global__ void FinalizeMetrics(
     outMetrics.pulseDetectionScore[indY] = blockMetrics.pulseDetectionScore[threadIdx.x].Y();
     outMetrics.pixelChecksum[indX] = blockMetrics.pixelChecksum[threadIdx.x].X();
     outMetrics.pixelChecksum[indY] = blockMetrics.pixelChecksum[threadIdx.x].Y();
+
+    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].X() / blockMetrics.baselineM0[threadIdx.x].X();
+    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].Y() / blockMetrics.baselineM0[threadIdx.x].Y();
+    const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
+                               blockMetrics.baselineM1[threadIdx.x],
+                               blockMetrics.baselineM2[threadIdx.x]);
+    outMetrics.frameBaselineVarianceDWS[indX] = var.FloatX();
+    outMetrics.frameBaselineVarianceDWS[indY] = var.FloatY();
+
+    outMetrics.numFramesBaseline[indX] = blockMetrics.baselineM0[threadIdx.x].X();
+    outMetrics.numFramesBaseline[indY] = blockMetrics.baselineM0[threadIdx.x].Y();
 
     outMetrics.numPulses[indX] = 0;
     outMetrics.numPulses[indY] = 0;

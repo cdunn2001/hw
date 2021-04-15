@@ -298,7 +298,8 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
             for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
-                ASSERT_EQ(sizeof(mb), 8320);
+                const auto& bs = pdMetrics.baselineStats.GetHostView()[l];
+                ASSERT_EQ(sizeof(mb), 8960);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
@@ -390,6 +391,9 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[3][z]);
                     EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
+                    EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
+                    EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);
+                    EXPECT_NEAR((bs.moment2[z] - (bs.moment1[z] * bs.moment1[z] / bs.moment0[z])) / (bs.moment0[z] - 1.0f), mb.frameBaselineVarianceDWS[z], 0.01);
                     // TODO: These aren't expected to be "correct", and should
                     // be replaced when these metrics are expected to be
                     // correct. The values themselves may need to be helped

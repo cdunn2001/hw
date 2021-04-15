@@ -73,8 +73,9 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     AnalogMetric<uint16_t> numBasesByAnalog;
     AnalogMetric<uint16_t> numPulsesByAnalog;
 
-    // TODO Add useful tracemetrics members here (there are others in the
-    // accumulator member..., not sure if they are used):
+    SingleMetric<float> frameBaselineDWS;
+    SingleMetric<float> frameBaselineVarianceDWS;
+    SingleMetric<uint16_t> numFramesBaseline;
     SingleMetric<uint32_t> startFrame;
     SingleMetric<uint32_t> numFrames;
     SingleMetric<float> autocorrelation;
@@ -82,7 +83,7 @@ public: // metrics retained from accumulator (more can be pulled through if nece
     SingleMetric<int16_t> pixelChecksum;
 };
 
-static_assert(sizeof(BasecallingMetrics) == 130 * laneSize, "sizeof(BasecallingMetrics) is 130 bytes per zmw");
+static_assert(sizeof(BasecallingMetrics) == 140 * laneSize, "sizeof(BasecallingMetrics) is 140 bytes per zmw");
 
 class BasecallingMetricsFactory
 {
