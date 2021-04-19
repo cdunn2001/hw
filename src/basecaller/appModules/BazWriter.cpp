@@ -51,12 +51,62 @@ void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
     if (metricsPtr)
     {
         const auto& metrics = metricsPtr->GetHostView()[laneIndex];
-        sm.numBasesA_ = metrics.numBasesByAnalog[0][zmwIndex];
-        sm.numBasesC_ = metrics.numBasesByAnalog[1][zmwIndex];
-        sm.numBasesG_ = metrics.numBasesByAnalog[2][zmwIndex];
-        sm.numBasesT_ = metrics.numBasesByAnalog[3][zmwIndex];
 
-        sm.numPulses_ = metrics.numBases[zmwIndex];
+        sm.ActivityLabel(static_cast<ActivityLabeler::HQRFPhysicalState>(metrics.activityLabel[zmwIndex]));
+        sm.TraceAutocorr(metrics.autocorrelation[zmwIndex]);
+
+        sm.BpzvarA(metrics.bpZvar[0][zmwIndex])
+            .BpzvarC(metrics.bpZvar[1][zmwIndex])
+            .BpzvarG(metrics.bpZvar[2][zmwIndex])
+            .BpzvarT(metrics.bpZvar[3][zmwIndex]);
+
+        sm.PkzvarA(metrics.pkZvar[0][zmwIndex])
+            .PkzvarC(metrics.pkZvar[1][zmwIndex])
+            .PkzvarG(metrics.pkZvar[2][zmwIndex])
+            .PkzvarT(metrics.pkZvar[3][zmwIndex]);
+
+        sm.BaseWidth(metrics.numBaseFrames[zmwIndex]);
+        sm.PulseWidth(metrics.numPulseFrames[zmwIndex]);
+
+        sm.NumBasesA(metrics.numBasesByAnalog[0][zmwIndex])
+            .NumBasesC(metrics.numBasesByAnalog[1][zmwIndex])
+            .NumBasesG(metrics.numBasesByAnalog[2][zmwIndex])
+            .NumBasesT(metrics.numBasesByAnalog[3][zmwIndex]);
+
+        sm.NumPulses(metrics.numPulses[zmwIndex]);
+
+        sm.NumPkmidBasesA(metrics.numPkMidBasesByAnalog[0][zmwIndex])
+            .NumBasesC(metrics.numPkMidBasesByAnalog[1][zmwIndex])
+            .NumBasesG(metrics.numPkMidBasesByAnalog[2][zmwIndex])
+            .NumBasesT(metrics.numPkMidBasesByAnalog[3][zmwIndex]);
+
+        sm.NumFrames(metrics.numFrames[zmwIndex]);
+
+        sm.NumPkmidFramesA(metrics.numPkMidFrames[0][zmwIndex])
+            .NumPkmidFramesC(metrics.numPkMidFrames[1][zmwIndex])
+            .NumPkmidFramesG(metrics.numPkMidFrames[2][zmwIndex])
+            .NumPkmidFramesT(metrics.numPkMidFrames[3][zmwIndex]);
+
+        sm.NumPulseLabelStutters(metrics.numPulseLabelStutters[zmwIndex]);
+        sm.NumHalfSandwiches(metrics.numHalfSandwiches[zmwIndex]);
+        sm.NumSandwiches(metrics.numSandwiches[zmwIndex]);
+        sm.PulseDetectionScore(metrics.pulseDetectionScore[zmwIndex]);
+
+        sm.PkmaxA(metrics.pkMax[0][zmwIndex])
+            .PkmaxC(metrics.pkMax[1][zmwIndex])
+            .PkmaxG(metrics.pkMax[2][zmwIndex])
+            .PkmaxT(metrics.pkMax[3][zmwIndex]);
+
+        sm.PixelChecksum(metrics.pixelChecksum[zmwIndex]);;
+
+        sm.PkmidA(metrics.pkMidSignal[0][zmwIndex])
+            .PkmidC(metrics.pkMidSignal[1][zmwIndex])
+            .PkmidG(metrics.pkMidSignal[2][zmwIndex])
+            .PkmidT(metrics.pkMidSignal[3][zmwIndex]);
+
+        sm.NumBaselineFrames({metrics.numFramesBaseline[zmwIndex]});
+        sm.Baselines({metrics.frameBaselineDWS[zmwIndex]});
+        sm.BaselineSds({metrics.frameBaselineVarianceDWS[zmwIndex]});
     }
 }
 
