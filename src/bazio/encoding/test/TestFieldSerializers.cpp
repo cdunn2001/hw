@@ -40,7 +40,9 @@ TEST(BazFieldSerializers, Truncate)
     {
         uint8_t data[8];
         auto * ptr = data;
-        using S = Serialize<TruncateOverflow, NumBits_t<bits.val>>;
+        // running into an unfortunate ICE if I don't do this on it's own line
+        static constexpr auto bval = bits.val;
+        using S = Serialize<TruncateOverflow, NumBits_t<bval>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
         truncated &= (1ul << bits.val)-1;
         auto const * ptr2 = data;
@@ -86,7 +88,10 @@ TEST(BazFieldSerializers, SimpleOverflow)
     {
         uint8_t data[8]{};
         auto ptr = data;
-        using S = Serialize<SimpleOverflow, NumBits_t<mainBits.val>, NumBytes_t<overflowBytes.val>>;
+        // running into an unfortunate ICE if I don't do this on it's own line
+        constexpr auto mval = mainBits.val;
+        constexpr auto oval = overflowBytes.val;
+        using S = Serialize<SimpleOverflow, NumBits_t<mval>, NumBytes_t<oval>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
         truncated &= ((1ul << mainBits.val) - 1);
         auto const* ptr2 = data;
@@ -146,7 +151,9 @@ TEST(BazFieldSerializers, CompactOverflow)
     {
         uint8_t data[8];
         auto ptr = data;
-        using S = Serialize<CompactOverflow, NumBits_t<mainBits.val>>;
+        // running into an unfortunate ICE if I don't do this on it's own line
+        constexpr auto mval = mainBits.val;
+        using S = Serialize<CompactOverflow, NumBits_t<mval>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
         auto const* ptr2 = data;
         return S::FromBinary(truncated, ptr2, storeSigned);
