@@ -77,7 +77,7 @@ PB_CONFIG(TestConfig);
 
 }
 
-TEST(TestNoOpBaseliner, Run)
+TEST(TestHostNoOpBaseliner, Run)
 {
     Data::MovieConfig movConfig;
     const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp);
@@ -351,5 +351,9 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
 
     HostMultiScaleBaseliner::Finalize();
 }
+
+
+
+
 
 }}} // PacBio::Mongo::Basecaller"
