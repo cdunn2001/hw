@@ -175,7 +175,7 @@ public:
     std::vector<uint64_t> ErroredFrames() const
     {
         std::vector<uint64_t> errors;
-        for (uint64_t i = 0; i < NumFrames / sizeof(uint64_t); i++)
+        for (uint64_t i = 0; i < NumFrames / 64; i++)
         {
             uint64_t word = Extract<uint64_t>(1024U + i * sizeof(uint64_t));
             if (word != 0)

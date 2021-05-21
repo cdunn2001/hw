@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/datasource/DataSourceRunner.h>
-#include <pacbio/primary/HDFMultiArrayIO.h>
+#include <bazio/HDFMultiArrayIO.h>
 
 #include <appModules/TraceFileDataSource.h>
 

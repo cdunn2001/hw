@@ -56,8 +56,8 @@ class RTMetricsRegionNew : public Configuration::PBConfig<RTMetricsRegionNew>
                LASERSCATTER, LPTITRATION2P0X, LPTITRATION1P5X, LPTITRATION0P5X, LPTITRATION0P0X);
     SMART_ENUM(zmwMetric, Baseline, BaselineStd, Pkmid, Snr,
                PulseRate, PulseWidth, BaseRate, BaseWidth);
-    PB_CONFIG_PARAM(std::vector<zmwType>, zmwTypesFilter, {});
-    PB_CONFIG_PARAM(std::vector<zmwMetric>, zmwMetricsReported, {});
+    PB_CONFIG_PARAM(std::vector<zmwType>, zmwTypesFilter, std::vector<zmwType>{});
+    PB_CONFIG_PARAM(std::vector<zmwMetric>, zmwMetricsReported, std::vector<zmwMetric>{});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(uint32_t, xMin, 0);
     PB_CONFIG_PARAM(uint32_t, yMin, 0);
@@ -66,6 +66,13 @@ class RTMetricsRegionNew : public Configuration::PBConfig<RTMetricsRegionNew>
     PB_CONFIG_PARAM(uint32_t, samplingFactorStride, 1);
     PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
 public:
+    static std::vector<zmwMetric> ReportKineticMetrics()
+    {
+        return {zmwMetric::PulseRate,
+                zmwMetric::PulseWidth,
+                zmwMetric::BaseRate,
+                zmwMetric::BaseWidth};
+    }
     static std::vector<zmwMetric> ReportSignalMetrics()
     {
         return {zmwMetric::Baseline,
@@ -75,14 +82,10 @@ public:
     }
     static std::vector<zmwMetric> ReportAllMetrics()
     {
-        return {zmwMetric::PulseRate,
-                zmwMetric::PulseWidth,
-                zmwMetric::BaseRate,
-                zmwMetric::BaseWidth,
-                zmwMetric::Baseline,
-                zmwMetric::BaselineStd,
-                zmwMetric::Pkmid,
-                zmwMetric::Snr};
+        auto kin = ReportKineticMetrics();
+        auto sig = ReportSignalMetrics();
+        kin.insert(kin.end(), sig.begin(), kin.end());
+        return kin;
     }
 };
 
@@ -107,7 +110,11 @@ public:
     SMART_ENUM(SignalMode, MODE0, MODE1, MODE2);
     PB_CONFIG_PARAM(SignalMode, signalConfigMode, SignalMode::MODE2);
     PB_CONFIG_PARAM(BaselineMode, baselineConfigMode,
-                    Configuration::DefaultFunc([](bool newFmt) { return newFmt ? BaselineMode::MODE1 : BaselineMode::MODE2},
+                    Configuration::DefaultFunc([](bool newFmt) -> BaselineMode
+                                               { return newFmt ?
+                                                       BaselineMode::MODE1 :
+                                                       BaselineMode::MODE2;
+                                               },
                                                {"newJsonFormat"}));
 
     PB_CONFIG_PARAM(uint32_t, minBaselineFrames, 100);
@@ -143,8 +150,8 @@ public:
     // can remove the old way of specifying regions.
     //
     // TODO: Remove "regions" when new format becomes the default.
-    PB_CONFIG_PARAM(std::vector<RTMetricsRegion>, regions, {});
-    PB_CONFIG_PARAM(std::vector<RTMetricsRegionNew>, newRegions, {});
+    PB_CONFIG_PARAM(std::vector<RTMetricsRegion>, regions, std::vector<RTMetricsRegion>{});
+    PB_CONFIG_PARAM(std::vector<RTMetricsRegionNew>, newRegions, std::vector<RTMetricsRegionNew>{});
 
     void SetSequelChipRegionDefaults()
     {
@@ -202,7 +209,7 @@ public:
         newRegions[0].yMin = 64;
         newRegions[0].xExtent = 1080;
         newRegions[0].yExtent = 960;
-        newRegions[0].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[0].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[0].ReportAllMetrics();
 
         // Top Strip - PORSEQUENCING
@@ -211,7 +218,7 @@ public:
         newRegions[1].yMin = 69;
         newRegions[1].xExtent = 150;
         newRegions[1].yExtent = 940;
-        newRegions[1].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[1].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[1].ReportSignalMetrics();
 
         // Mid Strip - PORSEQUENCING
@@ -220,7 +227,7 @@ public:
         newRegions[2].yMin = 69;
         newRegions[2].xExtent = 150;
         newRegions[2].yExtent = 940;
-        newRegions[2].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[2].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[2].ReportSignalMetrics();
 
         // Bot Strip - PORSEQUENCING
@@ -229,7 +236,7 @@ public:
         newRegions[3].yMin = 69;
         newRegions[3].xExtent = 150;
         newRegions[3].yExtent = 940;
-        newRegions[3].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[3].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[3].ReportSignalMetrics();
     }
 
@@ -295,7 +302,7 @@ public:
         newRegions[0].yMin = 0;
         newRegions[0].xExtent = 2755;
         newRegions[0].yExtent = 2911;
-        newRegions[0].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[0].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[0].samplingFactorStride = 8;
         newRegions[0].ReportAllMetrics();
 
@@ -305,7 +312,7 @@ public:
         newRegions[1].yMin = 75;
         newRegions[1].xExtent = 190;
         newRegions[1].yExtent = 2762;
-        newRegions[1].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[1].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[1].samplingFactorStride = 8;
         newRegions[1].ReportSignalMetrics();
 
@@ -315,7 +322,7 @@ public:
         newRegions[2].yMin = 75;
         newRegions[2].xExtent = 190;
         newRegions[2].yExtent = 2762;
-        newRegions[2].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[2].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[2].samplingFactorStride = 8;
         newRegions[2].ReportSignalMetrics();
 
@@ -325,7 +332,7 @@ public:
         newRegions[3].yMin = 75;
         newRegions[3].xExtent = 190;
         newRegions[3].yExtent = 2762;
-        newRegions[3].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::PORSEQUENCING);
+        newRegions[3].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::PORSEQUENCING);
         newRegions[3].samplingFactorStride = 8;
         newRegions[3].ReportSignalMetrics();
 
@@ -336,7 +343,7 @@ public:
         newRegions[4].xExtent = 5;
         newRegions[4].yExtent = 2911;
         newRegions[4].minSampleSize = 100;
-        newRegions[4].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LASERSCATTER);
+        newRegions[4].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LASERSCATTER);
         newRegions[4].ReportSignalMetrics();
 
         // Mid Strip - LASERSCATTER
@@ -346,7 +353,7 @@ public:
         newRegions[5].xExtent = 5;
         newRegions[5].yExtent = 2911;
         newRegions[5].minSampleSize = 100;
-        newRegions[5].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LASERSCATTER);
+        newRegions[5].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LASERSCATTER);
         newRegions[5].ReportSignalMetrics();
 
         // Bot Strip - LASERSCATTER
@@ -356,7 +363,7 @@ public:
         newRegions[6].xExtent = 5;
         newRegions[6].yExtent = 2911;
         newRegions[6].minSampleSize = 100;
-        newRegions[6].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LASERSCATTER);
+        newRegions[6].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LASERSCATTER);
         newRegions[6].ReportSignalMetrics();
 
         // Full Chip - LPTITRATION2P0X
@@ -366,7 +373,7 @@ public:
         newRegions[7].xExtent = 2755;
         newRegions[7].yExtent = 2911;
         newRegions[7].minSampleSize = 100;
-        newRegions[7].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LPTITRATION2P0X);
+        newRegions[7].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LPTITRATION2P0X);
         newRegions[7].ReportSignalMetrics();
 
         // Full Chip - LPTITRATION1P5X
@@ -376,7 +383,7 @@ public:
         newRegions[8].xExtent = 2755;
         newRegions[8].yExtent = 2911;
         newRegions[8].minSampleSize = 100;
-        newRegions[8].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LPTITRATION1P5X);
+        newRegions[8].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LPTITRATION1P5X);
         newRegions[8].ReportSignalMetrics();
 
         // Full Chip - LPTITRATION0P5X
@@ -386,7 +393,7 @@ public:
         newRegions[9].xExtent = 2755;
         newRegions[9].yExtent = 2911;
         newRegions[9].minSampleSize = 100;
-        newRegions[9].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LPTITRATION0P5X);
+        newRegions[9].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LPTITRATION0P5X);
         newRegions[9].ReportSignalMetrics();
 
         // Full Chip - LPTITRATION0P0X
@@ -396,7 +403,7 @@ public:
         newRegions[10].xExtent = 2755;
         newRegions[10].yExtent = 2911;
         newRegions[10].minSampleSize = 100;
-        newRegions[10].zmwTypesFilter.append(RTMetricsRegionNew::zmwType::LPTITRATION0P0X);
+        newRegions[10].zmwTypesFilter.push_back(RTMetricsRegionNew::zmwType::LPTITRATION0P0X);
         newRegions[10].ReportSignalMetrics();
     }
 

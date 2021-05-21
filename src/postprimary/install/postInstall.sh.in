@@ -1,0 +1,39 @@
+
+
+function ReservePort {
+  port=$1
+  echo -n "    INFO Opening firewall port $port :"
+  firewall-cmd --permanent --zone=public --add-port=$port/tcp
+
+  if grep ${port} /proc/sys/net/ipv4/ip_local_reserved_ports > /dev/null
+  then
+    echo "    INFO port $port reserved already"
+  else
+    existing=`cat /proc/sys/net/ipv4/ip_local_reserved_ports`
+    if [ "$existing" != "" ]
+    then
+      existing="$existing,"
+    fi
+    existing="${existing}${port}"
+    echo "    INFO reserving port $existing"
+    echo $existing > /proc/sys/net/ipv4/ip_local_reserved_ports
+  fi
+}
+
+# ports used by baz2bam
+ports="46660 46661 46662"
+for port in $ports
+do
+  ReservePort $port
+done
+sysctl net.ipv4.ip_local_reserved_ports > /etc/sysctl.d/98-sequel.conf
+echo -n "    INFO Reloading firewall :"
+firewall-cmd --reload
+
+
+mkdir -p /etc/modulefiles/pacbio-ppa
+envsubst '$RPM_INSTALL_PREFIX' < $RPM_INSTALL_PREFIX/etc/modulefiles/pacbio-ppa/@SOFTWARE_VERSION@ > /etc/modulefiles/pacbio-ppa/@SOFTWARE_VERSION@
+
+#remove any existing symlink then recreate, pointing at this installation
+/bin/rm -f /opt/pacbio/ppa
+ln -s $RPM_INSTALL_PREFIX /opt/pacbio/ppa

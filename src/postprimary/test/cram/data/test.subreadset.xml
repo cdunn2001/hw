@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<pbds:SubreadSet CreatedAt="2015-08-07T08:52:50" MetaType="PacBio.DataSet.SubreadSet" Name="" Tags="" TimeStampedName="PacBio.DataSet.SubreadSet-150807_155250" UniqueId="35108bb6-af87-468c-8eef-28151cbf4442" Version="3.0.0" xmlns="http://pacificbiosciences.com/PacBioDataModel.xsd" xmlns:pbbase="http://pacificbiosciences.com/PacBioBaseDataModel.xsd" xmlns:pbds="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pacificbiosciences.com/PacBioDataModel.xsd">
+	<pbbase:ExternalResources>
+		<pbbase:ExternalResource MetaType="PacBio.SubreadFile.SubreadBamFile" ResourceId="test.bam" TimeStampedName="PacBio.SubreadFile.SubreadBamFile-150807_155250" UniqueId="568b9983-db54-4367-8ef7-8b3ae6f75ac9"/>
+	</pbbase:ExternalResources>
+	<pbds:DataSetMetadata>
+		<pbds:TotalLength>-1</pbds:TotalLength>
+		<pbds:NumRecords>-1</pbds:NumRecords>
+	</pbds:DataSetMetadata>
+</pbds:SubreadSet>

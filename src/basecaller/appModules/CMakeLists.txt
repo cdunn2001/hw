@@ -39,6 +39,7 @@ target_link_libraries(libAppModules
         libMongoBasecallerAnalyzer
         libProtoCommon
         libBazio
+        libSequelCommon1
 )
 
 add_subdirectory(test)

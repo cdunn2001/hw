@@ -54,8 +54,6 @@ namespace Primary  {
         const uint32_t maxPixelCols ATT_UNUSED = 2048; ///< this is the number of pixels in the Sequel "y" dimension
         const uint32_t numPixelRowsPerZmw ATT_UNUSED = 1;
         const uint32_t numPixelColsPerZmw ATT_UNUSED = 2;
-        const uint32_t maxNumDataTilesPerChunk ATT_UNUSED =
-                maxPixelRows * maxPixelCols / PacBio::Primary::Tile::NumPixels; // typical ~73K
         const double   defaultFrameRate  ATT_UNUSED      { 100.0};
         const double   defaultLineRate   ATT_UNUSED      { 114784.0 };
     }
@@ -63,8 +61,6 @@ namespace Primary  {
     {
         const uint32_t maxPixelRows ATT_UNUSED = 1144; ///< this is the number of pixels in the Sequel "x" dimension
         const uint32_t maxPixelCols ATT_UNUSED = 2048; ///< this is the number of pixels in the Sequel "y" dimension
-        const uint32_t maxNumDataTilesPerChunk ATT_UNUSED =
-                maxPixelRows * maxPixelCols / PacBio::Primary::Tile::NumPixels; // typical ~73K
     }
     namespace Spider // todo. rename Tech 1C4A
     {
@@ -72,22 +68,18 @@ namespace Primary  {
         const uint32_t maxPixelCols ATT_UNUSED = 2912; ///< this is the number of pixels in the PacBio "y" dimension
         const uint32_t numPixelRowsPerZmw ATT_UNUSED = 1;
         const uint32_t numPixelColsPerZmw ATT_UNUSED = 1;
-        const uint32_t maxNumDataTilesPerChunk ATT_UNUSED =
-                maxPixelRows * maxPixelCols / PacBio::Primary::Tile::NumPixels; // typical ~251K
         const double   defaultFrameRate  ATT_UNUSED      { 100.0};
-        const double   defaultLineRate   ATT_UNUSED      { (maxPixelRows+1) * defaultFrameRate };
+        const double   defaultLineRate   ATT_UNUSED      { 276625 }; ///< This is the minimum line rate when running
+                                                                     ///< with the default chip size and Wolverine
+                                                                     ///< clock speed.
     }
     namespace SpiderLayout
     {
         const uint32_t maxPixelRows ATT_UNUSED = 2756; ///< this is the number of pixels in the PacBio "x" dimension
         const uint32_t maxPixelCols ATT_UNUSED = 2912; ///< this is the number of pixels in the PacBio "y" dimension
-        const uint32_t maxNumDataTilesPerChunk ATT_UNUSED =
-                maxPixelRows * maxPixelCols / PacBio::Primary::Tile::NumPixels; // typical ~251K
     }
     // acquisition parameters
     const double   auroraBitsPerSecond  ATT_UNUSED   { 6.25e9 };
-    const size_t   bytesPerPixel   ATT_UNUSED        { PIXEL_SIZE };
-    const size_t   framesPerTile   ATT_UNUSED        { PacBio::Primary::Tile::NumFrames };
     const size_t   zmwsPerTranche  ATT_UNUSED        { 16 };
     const size_t   pixelsPerSIMD   ATT_UNUSED        { 32 };
 
@@ -103,11 +95,6 @@ namespace Primary  {
     const float    defaultRefDwsSnr  ATT_UNUSED      { 11.0f }; ///< SNR of Dye Weighted Sum
     const float    defaultMinSnr     ATT_UNUSED      { 4.0f};   ///< SNR of basecall
 
-// Used internally to PA
-SMART_ENUM(CalType    ,none,dark,gain,spectral,loading);
-
-// Used externally between pa-ws and ICS
-SMART_ENUM(PrepareMode,none,darkframe,gain,spectral,loading,darkthenacquire,acquire);
 
 #if 0
   const uint32_t chunksPerSuperchunk = 32;

@@ -1,0 +1,84 @@
+#!/usr/bin/env python2
+"""Identify bursty inserts in PacBio subreads from pulse width
+characteristics.  Output a list of bursts in the format required
+by Kris Nyquist's bammend.
+
+It has been noted (Aruna Bhamidipati, Nick Douglas, Emilia Mollova)
+that the pulse widths in bursts tend to be short, often one or two
+pulses, which is notably different than in normal sequencing.
+
+Here, a two state Hidden Markov Model is used to identify bursts.
+The model has a "burst" state and a "normal" state, and it emits
+a pulse width from a multinomial distribution. The emission
+probabilities were initialized based on the pulse width distributions
+in bursts vs normal regions as identified from reference alignment
+with NGMLR+burstFinder.  The model was then trained with Expectation
+Maximization from hmmlearn.model.fit on a single read with two
+separate long bursts.  The Viterbi algorithm is used to assign burst
+or normal to each base.
+"""
+
+import argparse
+import signal
+import pbcore.io
+import numpy as np
+from hmmlearn import hmm
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+argparser = argparse.ArgumentParser(description="""Identify bursty inserts from pulse widths""")
+# positional arguments
+argparser.add_argument("subreadsbam", metavar="subreads.bam",
+    help="input subreads BAM")
+argparser.add_argument("bammendcsv", metavar="bammend.csv",
+    help="bursty inserts in bammend format")
+
+
+def main():
+    args = argparser.parse_args()
+
+    states = ["burst","sequence"]
+    n_states = len(states)
+    observations = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ">9"]
+    n_observations = len(observations)
+
+    model = hmm.MultinomialHMM(n_components=n_states, init_params="")
+    model.startprob_ = np.array([0.01, 0.99])
+    model.transmat_ = np.array([
+      [ 0.979472732, 0.020527268 ],
+      [ 0.000204271, 0.999795729 ]
+    ])
+    model.emissionprob_ = np.array([
+      [ 0.03688890, 0.20162510, 0.32948849, 0.15870858, 0.08543165, 0.05133312, 0.0325789, 0.02274935, 0.0159825, 0.06521340 ],
+      [ 0.00089901, 0.02193594, 0.05354958, 0.06332271, 0.06570604, 0.06429624, 0.0610961, 0.05710235, 0.0526792, 0.55941284 ]
+    ])
+
+    bammendcsv = open(args.bammendcsv, "w")
+    bammendcsv.write('"holeNumber","annotationStartIndex","annotationEndIndex"\n')
+
+    subreadsbam = pbcore.io.BamReader(args.subreadsbam)
+    for b in subreadsbam:
+        # trim all PWs> 10 to be 10
+        PWs = np.array([[min(x,10)-1] for x in b.PulseWidth(False)])
+        # run the Viterbi algorithm to assign a burst or normal state to each base
+        ll,predictions = model.decode(PWs)
+
+        # output all ranges assigned to the burst state
+        start = None
+        holeNumber = b.queryName.split("/")[1]
+        for ix,p in enumerate(predictions):
+            if p == 0:
+                if start is None:
+                    start = ix
+            elif start is not None:
+                bammendcsv.write("%s,%d,%d\n" % (holeNumber, b.queryStart + start, b.queryStart + ix))
+                start = None
+        if start is not None:
+            bammendcsv.write("%s,%d,%d\n" % (holeNumber, b.queryStart + start, b.queryEnd))
+    subreadsbam.close()
+    bammendcsv.close()
+
+
+if __name__ == "__main__":
+    main()

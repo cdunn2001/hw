@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<Metadata xmlns="http://pacificbiosciences.com/PAP/Metadata.xsd">
+  <Primary>
+    <Protocol>SequelAlpha</Protocol>
+    <ResultsFolder>315/3150359/r54043_20160903_212624/1_A01/</ResultsFolder>
+  </Primary>
+  <Secondary>
+    <ProtocolName>NoRS_Standard_Edna.1</ProtocolName>
+    <ProtocolParameters>Reference=lambdaNEB</ProtocolParameters>
+  </Secondary>
+  <Custom>
+    <KeyValue key="LIMS_IMPORT">1234TestFolder</KeyValue>
+  </Custom>
+</Metadata>

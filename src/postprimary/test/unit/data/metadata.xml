@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pbdm:PacBioDataModel xmlns:pbrk="http://pacificbiosciences.com/PacBioReagentKit.xsd" xmlns:pbbase="http://pacificbiosciences.com/PacBioBaseDataModel.xsd" xmlns:pbpn="http://pacificbiosciences.com/PacBioPartNumbers.xsd" xmlns:pbds="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:pbmeta="http://pacificbiosciences.com/PacBioCollectionMetadata.xsd" xmlns:pbsample="http://pacificbiosciences.com/PacBioSampleInfo.xsd" xmlns:pbdm="http://pacificbiosciences.com/PacBioDataModel.xsd">
+    <pbdm:ExperimentContainer ExperimentId="318/3180003" Name="NoRS_ForwardOnly_Edna_Unrolled.1" Description="1_Cell_Manual" CreatedAt="2015-07-09T09:30:47.833Z" ModifiedAt="2015-07-09T09:30:47.833Z">
+        <pbdm:InvestigatorName>PacBio</pbdm:InvestigatorName>
+        <pbdm:CreatedDate>2015-04-13</pbdm:CreatedDate>
+        <pbdm:Runs>
+            <pbdm:Run Status="Starting" UniqueId="e3312e0b-519b-4364-a76c-6673c1da0939" MetaType="Run" TimeStampedName="r54006_20151205_021307" Name="Chip_reuse_ProtK_treat_reload" Description="All4mer_V2_11_circular_72x_l50256" CreatedAt="2015-07-09T09:30:47.833Z" ModifiedAt="0001-01-01T00:00:00">
+                <pbdm:Outputs>
+                    <pbdm:SubreadSets>
+                        <pbds:SubreadSet UniqueId="c6985952-2f6a-43cd-90d6-a4cdc8fd22ad" MetaType="SubreadSetCollection" Name="&quot;TestSample&quot;-Cell1">
+                            <pbbase:ExternalResources>
+<pbbase:ExternalResource UniqueId="e9300490-1f18-4474-a234-7cf337b9a0fc" MetaType="ExternalResource"/>
+                            </pbbase:ExternalResources>
+                            <pbds:DataSetMetadata>
+<pbds:TotalLength>0</pbds:TotalLength>
+<pbds:NumRecords>0</pbds:NumRecords>
+<pbmeta:Collections>
+    <pbmeta:CollectionMetadata Context="m54006_151205_021320" InstrumentId="54004" InstrumentName="Inst54004" UniqueId="a976900d-c83b-42ea-ab3c-6488c9cdb6b3" MetaType="CollectionMetadata" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00">
+        <pbmeta:WellSample Name="&quot;TestSample&quot;" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00">
+            <pbmeta:WellName>SamplePlate-1-A-1</pbmeta:WellName>
+            <pbmeta:Concentration>0.0</pbmeta:Concentration>
+            <pbmeta:InsertSize>0</pbmeta:InsertSize>
+            <pbmeta:SampleReuseEnabled>false</pbmeta:SampleReuseEnabled>
+            <pbmeta:StageHotstartEnabled>true</pbmeta:StageHotstartEnabled>
+            <pbmeta:SizeSelectionEnabled>false</pbmeta:SizeSelectionEnabled>
+            <pbmeta:UseCount>0</pbmeta:UseCount>
+        </pbmeta:WellSample>
+        <pbmeta:Automation Name="manualcellprep.py">
+            <pbbase:AutomationParameters>
+                <pbbase:AutomationParameter ValueDataType="Double" SimpleValue="0.0125" Name="Exposure" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="Double" SimpleValue="10" Name="CouplerLaserPower" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="String" SimpleValue="False" Name="ActiveLaserPower" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="Double" SimpleValue="10" Name="MovieLength" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="String" SimpleValue="True" Name="CellAtStage" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="String" SimpleValue="False" Name="SkipAlignment" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="JSON" SimpleValue="[[32,64,1,96]]" Name="sequencingPixelROI" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="JSON" SimpleValue="[[210,352,272,384],[680,352,272,384],[210,1152,272,384],[680,1152,272,384]]" Name="traceFilePixelROI" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="String" SimpleValue="False" Name="UseStageHotStart" CreatedAt="0001-01-01T00:00:00" ModifiedAt="0001-01-01T00:00:00"/>
+                <pbbase:AutomationParameter ValueDataType="Int32" SimpleValue="0" Name="CollectionNumber"/>
+                <pbbase:AutomationParameter ValueDataType="Int32" SimpleValue="0" Name="CellReuseIndex"/>
+                <pbbase:AutomationParameter ValueDataType="Int32" SimpleValue="0" Name="CollectionNumber"/>
+                <pbbase:AutomationParameter ValueDataType="Int32" SimpleValue="0" Name="CellReuseIndex"/>
+            </pbbase:AutomationParameters>
+        </pbmeta:Automation>
+        <pbmeta:CollectionNumber>0</pbmeta:CollectionNumber>
+        <pbmeta:CellIndex>0</pbmeta:CellIndex>
+        <pbmeta:CellPac PartNumber="100-513-100" LotNumber="000002" Barcode="00000000635848784004435390" ExpirationDate="2017-01-01"/>
+        <pbmeta:TemplatePrepKit MinInsertSize="500" MaxInsertSize="20000" PartNumber="100259100" LotNumber="333333" Barcode="333333100259100092215" ExpirationDate="2020-09-22" Name="SMRTbell™ Template Prep Kit">
+            <pbbase:LeftAdaptorSequence>ATCTCTCTCttttcctcctcctccgttgttgttgttGAGAGAGAT</pbbase:LeftAdaptorSequence>
+            <pbbase:RightAdaptorSequence>ATCTCTCTCttttcctcctcctccgttgttgttgttGAGAGAGAT</pbbase:RightAdaptorSequence>
+        </pbmeta:TemplatePrepKit>
+        <pbmeta:BindingKit PartNumber="100-619-300" LotNumber="444444" Barcode="444444100619300092215" ExpirationDate="2020-09-22" Name="Sequel Binding Kit v1"/>
+        <pbmeta:SequencingKitPlate PartNumber="100-620-000" LotNumber="151123" Barcode="151123100620000061716" ExpirationDate="2016-06-17"/>
+        <pbmeta:ControlKit
+                Name="Sequel&#8482; DNA Control 1.0" Description="The Sequel DNA Control 1.0 contains a fixed template of 2 kb length bound to Sequel Binding Kit for use as an sequencing control. Reagent quantities provide spike-in controls for a minimum of 24 samples."
+                Tags="Control Kit, CCK" Version="1.0" PartNumber="CCK-100-619-900"  IsObsolete="false" >
+            <pbbase:CustomSequence>&gt;left_adapter\nTAGAGAGAGAAAAGGAGGAGGAGGCAACAACAACAACTCTCTCTA\n&gt;right_adapter\nTAGAGAGAGAAAAGGAGGAGGAGGCAACAACAACAACTCTCTCTA\n&gt;custom_sequence\nTGTCTAGGTCATCTCAACGTAGCTTTGACATATAACTTATCTAAAGTAATCCCTGCACACCTGTATGCATTATGCTTGCTATACACGCGGACACAGGCATATCATTTATTTTTTGCCATGTCCATTAATTGTTCAATAATTTTACTCACGGTATTTAATTTGATGTTGTGTTATATAGAATTGGAATTAAACTTATAAGGATGCTTAGACGTTGCATTATAAAAGTTTATGTACTAAGTATTTAAGACATTGGCATATGATTATAGCTTGACATTATTAAAAATTAATTAATTAAATCTCACACAATACTTATTCAAGACATTTTTACTAAGATAACCAAAGGAATGCGAACAAAATAATACTTAAAATATAAGACTTAGAAGTAATATGATCCAATAGTTACATATAGTACACTAAGTTCCTAAATTATATAACTTTAAAACAAAGTTACGAAATTTGGAAATAATTTTATTTAATCATATTTTCATAATAATGAAATACTGTTTATTTCAGTGGCGAAAAGAGATAATACGATTTTATAGTGATAGAATATCCTTGAAATATCTAAAGATAAAATTAGAAACTTTCTCTTTTCGCTGTAAAGCTATATGACTTAAAAATAACTTATACGCAAAGTATATTGCAGTGGAAACCCAAGAGTATAGTAGCCATGTAATCTCGGGTTCGAAACTACACGCCGCGCACGTAGTCAGATGGTCTGAAACTTGTCTGGGGCTGTTTGTTGACGGATGGAGACTTCACTAAGTGGCGTCAGGCGATGCGCACACACGGGACTCAATCCCGTAGCATGTTATGTGTCGTTCGAAACTCGTGCGTTCGAGATTTACGCCACATTGCCGGCTGGTCCAAGGACGTTATCTACCAGATGATACGGTCCAATTCGTAAGTTTGACTCACATAGTCGCGAACCGCGGAGCTGGAGAACAATAATTACCGGATGATTAGTTGACCATACGCACTATCATGCTCCGTGACTCAGTTTCCGCCATGGAGTTCTCACAGCCCCGTGTGTACCATAACTGCAGTAAGTAAGGACCTTGTTCGGAGGCCGACTCGTATTTCATATGATCTTAGTCTCGCCACCTTATCGCACGAATTGGGGGTGTCTTTTAGCCGACTCCGGCACGATCCGCCGGGAAGTTACTCGACCAGTTGCGGGACGCCCTAGTATGTTCGTATTACGTTCGATGCGTAAGCACCCCAGAGATTTTTGGCGGACGTTTCGGTAAATCATAGTAGAACCGGAGCGGTAAAGCTATTGATAACACGCAGGGACGAGCCAGTCGTCTAAGCTCCTCAGGGGTACCGTTCGCCGGACTACAGCCTGTCCCCGGCGGCCGCAACTGGGCTGCGATCCAGCCCCCGCTCCAAAAGGATGACTCGACCTTGCGCCTCGCGTACTCTGCTCTCGAGCTGTCTCCGTGGGCAATGCCGGCTCACGCTGTGGGGAACCCTGGACGCCCGGGCCGAGCCGACGTGGCCCCGCCCAGGCCTTTTCGTCGATCGCAGCTATGTACCCTGTGCTGGCCAGCGCTACTGCGCCGGCCATTAGCGGTGCGCTCTCGACTCGGCCCCAACGTAGACGGCGTCGCTGGCCGGATTCAAAGAAGTGAGCTACTACCATCGCGTGACGCCCTGCGGGCCTGAGTAACCGTGCACGAAGGACACCCCGTTCGTGGCGGGGGTTGCCTCCGCGACGGTCGCCAACGTTGGGGGTCGGTGCATTCAGGCGACGAGGGACCGCTGGTTTCCGGAGAGCGGCCTGTGCTCACACAGGTGCGGTCCATGGGGCCTGTGGATCCGGTTCTCCCACGCGTAGCGCCGGCGTTAGCATGGACGCTAAATAAGTATACGCCGGCAAAGGGAGTGTAGGCCGGCCCGAGGGCAATCGCGGTTACCGGGGTGGGGGAGCTCCCCGCACCAGCCTTGATGTGGTGTGCGAGCG</pbbase:CustomSequence>
+        </pbmeta:ControlKit>
+        <pbmeta:Primary>
+            <pbmeta:AutomationName>SequelAlpha</pbmeta:AutomationName>
+            <pbmeta:ConfigFileName>SqlPoC_SubCrf_2C2A-t2.xml</pbmeta:ConfigFileName>
+            <pbmeta:OutputOptions>
+                <pbmeta:ResultsFolder>Analysis_Results</pbmeta:ResultsFolder>
+                <pbmeta:CollectionPathUri>rsync://oixfr@mp-rsync/pbi_collections/318/3180003/r54006_20151205_021307/1_A01/</pbmeta:CollectionPathUri>
+                <pbmeta:CopyFiles>
+                    <pbmeta:CollectionFileCopy>Trace</pbmeta:CollectionFileCopy>
+                    <pbmeta:CollectionFileCopy>Fasta</pbmeta:CollectionFileCopy>
+                    <pbmeta:CollectionFileCopy>Bam</pbmeta:CollectionFileCopy>
+                    <pbmeta:CollectionFileCopy>Baz</pbmeta:CollectionFileCopy>
+                </pbmeta:CopyFiles>
+                <pbmeta:Readout>Bases</pbmeta:Readout>
+                <pbmeta:MetricsVerbosity>High</pbmeta:MetricsVerbosity>
+            </pbmeta:OutputOptions>
+        </pbmeta:Primary>
+        <pbmeta:Secondary>
+            <pbmeta:CellCountInJob>0</pbmeta:CellCountInJob>
+        </pbmeta:Secondary>
+        <pbmeta:UserDefinedFields>
+            <pbbase:DataEntities ValueDataType="String"/>
+            <pbbase:DataEntities ValueDataType="String"/>
+            <pbbase:DataEntities ValueDataType="String"/>
+            <pbbase:DataEntities ValueDataType="String"/>
+            <pbbase:DataEntities ValueDataType="String"/>
+        </pbmeta:UserDefinedFields>
+    </pbmeta:CollectionMetadata>
+</pbmeta:Collections>
+                            </pbds:DataSetMetadata>
+                        </pbds:SubreadSet>
+                    </pbdm:SubreadSets>
+                </pbdm:Outputs>
+                <pbdm:RecordedEvents>
+                    <pbdm:RecordedEvent SimpleValue="Starting" Name="RunStateChange"/>
+                </pbdm:RecordedEvents>
+            </pbdm:Run>
+        </pbdm:Runs>
+    </pbdm:ExperimentContainer>
+</pbdm:PacBioDataModel>
