@@ -2,7 +2,7 @@
 #define CUDA_BASELINE_FILTER_CUH
 
 #include <common/cuda/PBCudaSimd.cuh>
-#include <common/cuda/utility/CudaTuple.cuh>
+#include <common/cuda/utility/CudaTuple.h>
 
 #include <prototypes/BaselineFilter/ExtremaFilter.cuh>
 
