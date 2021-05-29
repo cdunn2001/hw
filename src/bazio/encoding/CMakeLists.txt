@@ -4,10 +4,14 @@ add_library(libBazioEncoding STATIC
    EncodingParams.h
    EncodingParams.cpp
    FieldNames.h
+   FieldAccessors.h
+   FieldAccessors.cpp
    FieldSerializers.h
    FieldSerializers.cpp
    FieldTransforms.h
    FieldTransforms.cpp
+   PulseToBaz.h
+   PulseToBaz.cpp
 )
 
 include(pacbio-cplusplus-api)

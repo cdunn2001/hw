@@ -6,6 +6,7 @@ include(pacbio-gtest)
 add_library(libBazioEncodingTest OBJECT
     TestFieldSerializers.cpp
     TestFieldTransforms.cpp
+    TestPulseToBaz.cu
 )
 
 target_link_libraries(libBazioEncodingTest
