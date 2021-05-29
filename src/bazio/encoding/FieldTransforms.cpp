@@ -23,36 +23,4 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_ENCODING_TYPES_H
-#define PACBIO_BAZIO_ENCODING_TYPES_H
-
-#include <cstdint>
-#include <common/utility/StrongTypedef.h>
-
-namespace PacBio {
-namespace BazIO {
-
-// Set up some strong typedefs, both to prevent
-// accidental argument swaps, but also to make
-// call-sites easier to read
-PB_STRONG_TYPEDEF(uint8_t, NumBits);
-PB_STRONG_TYPEDEF(uint8_t, NumBytes);
-PB_STRONG_TYPEDEF(uint32_t, FixedPointScale);
-
-// Set up some machinery for a compile time version
-// of the above strong typedefs
-template <typename U, typename U::T v>
-struct TemplateVal
-{
-    static constexpr U val = U(v);
-};
-template <typename U, typename U::T v>
-constexpr U TemplateVal<U, v>::val;
-
-template <uint8_t v> using NumBits_t  = TemplateVal<NumBits, v>;
-template <uint8_t v> using NumBytes_t = TemplateVal<NumBytes, v>;
-template <uint32_t v> using FixedPointScale_t = TemplateVal<FixedPointScale, v>;
-
-}}
-
-#endif //PACBIO_BAZIO_ENCODING_TYPES_H
+#include "FieldTransforms.h"

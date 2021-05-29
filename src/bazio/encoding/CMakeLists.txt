@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.13)
 add_library(libBazioEncoding STATIC
    FieldSerializers.h
    FieldSerializers.cpp
+   FieldTransforms.h
+   FieldTransforms.cpp
 )
 
 include(pacbio-cplusplus-api)

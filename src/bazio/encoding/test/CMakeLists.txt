@@ -5,6 +5,7 @@ include(pacbio-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libBazioEncodingTest OBJECT
     TestFieldSerializers.cpp
+    TestFieldTransforms.cpp
 )
 
 target_link_libraries(libBazioEncodingTest
