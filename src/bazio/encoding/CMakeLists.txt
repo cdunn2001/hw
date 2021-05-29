@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.13)
 
 add_library(libBazioEncoding STATIC
+   EncodingParams.h
+   EncodingParams.cpp
+   FieldNames.h
    FieldSerializers.h
    FieldSerializers.cpp
    FieldTransforms.h

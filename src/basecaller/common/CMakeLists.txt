@@ -27,6 +27,8 @@ add_library(libMongoCommon STATIC
     graphs/GraphManager.cpp
     graphs/GraphNodeBody.h
     graphs/GraphNodeBody.cpp
+    utility/Overload.h
+    utility/Overload.cpp
     utility/StrongTypedef.h
 )
 
