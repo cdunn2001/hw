@@ -38,6 +38,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
 #include <x86intrin.h>
 

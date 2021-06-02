@@ -50,14 +50,14 @@ namespace {
 
 template <typename OutputType, typename InputType>
 std::vector<OutputType> boundValues(const std::vector<InputType>& in,
-                                     const std::vector<bool>& mask,
-                                     size_t pulseBegin, size_t pulseEnd)
+                                    const std::vector<bool>& mask,
+                                    size_t pulseBegin, size_t pulseEnd)
 {
     const auto& resolvedMask = (mask.size() == 0) ? std::vector<bool>(in.size(), true)
                                                   : mask;
 
     InputType maxValue = boost::numeric_cast<InputType>(
-        std::numeric_limits<OutputType>::max());
+            std::numeric_limits<OutputType>::max());
     InputType minValue = 0;
 
     std::vector<OutputType> res;
@@ -67,7 +67,7 @@ std::vector<OutputType> boundValues(const std::vector<InputType>& in,
         if (resolvedMask[i])
         {
             res.push_back(static_cast<OutputType>(
-                std::max(std::min(in[i], maxValue), minValue)));
+                                  std::max(std::min(in[i], maxValue), minValue)));
         }
     }
     return res;
@@ -110,8 +110,22 @@ BAM::Tag convertData(const std::vector<uint32_t>& data,
 
 } // anonymous namespace
 
+const std::string EventDataParent::BaseQualityValues(size_t leftPulseIndex,
+                                                  size_t rightPulseIndex) const
+{
+    if (HasPacketField(PacketFieldName::OVERALL_QV))
+        return convertData(PacketField(PacketFieldName::OVERALL_QV),
+                           IsBase(), FieldType::CHAR, leftPulseIndex,
+                           rightPulseIndex).ToString();
+    else if (HasPacketField(PacketFieldName::SUB_QV))
+        return convertData(PacketField(PacketFieldName::SUB_QV),
+                           IsBase(), FieldType::CHAR, leftPulseIndex,
+                           rightPulseIndex).ToString();
+    return {};
+}
+
 const std::vector<std::pair<std::string, BAM::Tag>>
-BazEventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
+EventDataParent::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
 {
     std::vector<std::pair<std::string, BAM::Tag>> ret;
     ret.reserve(PacketFieldMap::packetBaseFieldToBamID.size() +
@@ -126,9 +140,9 @@ BazEventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
                 const auto& data = PacketField(kv.first);
                 const auto& type = kv.second.second;
                 ret.push_back(
-                    std::make_pair(tag,
-                                   convertData(data, {}, type,
-                                               pulseBegin, pulseEnd)));
+                        std::make_pair(tag,
+                                       convertData(data, {}, type,
+                                                   pulseBegin, pulseEnd)));
             }
         }
     }
@@ -140,13 +154,13 @@ BazEventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
             const auto& data = PacketField(kv.first);
             const auto& type = kv.second.second;
             ret.push_back(
-                std::make_pair(tag,
-                               convertData(data, IsBase(), type,
-                                           pulseBegin, pulseEnd)));
+                    std::make_pair(tag,
+                                   convertData(data, IsBase(), type,
+                                               pulseBegin, pulseEnd)));
         }
     }
     return ret;
-};
+}
 
 EventData::EventData(size_t zmwIdx,
                      size_t zmwNum,
@@ -200,19 +214,7 @@ EventData::EventData(size_t zmwIdx,
     baseToLeftmostPulseIndex_.push_back(NumEvents());
 }
 
-const std::string BazEventData::BaseQualityValues(size_t leftPulseIndex,
-                                    size_t rightPulseIndex) const
-{
-    if (HasPacketField(PacketFieldName::OVERALL_QV))
-        return convertData(PacketField(PacketFieldName::OVERALL_QV),
-                           IsBase(), FieldType::CHAR, leftPulseIndex,
-                           rightPulseIndex).ToString();
-    else if (HasPacketField(PacketFieldName::SUB_QV))
-        return convertData(PacketField(PacketFieldName::SUB_QV),
-                           IsBase(), FieldType::CHAR, leftPulseIndex,
-                           rightPulseIndex).ToString();
-    return {};
-}
+
 
 void EventDataParent::UpdateIPDs(const std::vector<InsertState>& states)
 {

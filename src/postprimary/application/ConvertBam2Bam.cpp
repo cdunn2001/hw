@@ -627,7 +627,7 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         }
     }
 
-    auto packets = EventDataParent(std::move(rawPackets));
+    auto packets = BazEventData(std::move(rawPackets));
     if (insertStates.size() == 0)
     {
         insertStates = std::vector<InsertState>(

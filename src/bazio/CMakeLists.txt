@@ -37,6 +37,8 @@ add_library(libBazio
     STATIC
         BazBuffer.h
         BazCore.h
+        BazEventData.cpp
+        BazEventData.h
         BazReader.cpp
         BazReader.h
         BazWriter.cpp

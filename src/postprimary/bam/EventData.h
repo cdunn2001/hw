@@ -39,15 +39,6 @@
  * an individual class so as to make the data as immutable and encapsualted
  * as possible.
  *
- * * Data starts as RawEventData which is returned directly by the data parsers
- *   in another file, and represents an encapsualted vector of vector view of
- *   the data, where entries in the the outermost vector corresponds to individual
- *   PacketFieldNames
- *
- * * BazEventData is the result of very light processing, where data is accessed
- *   via a more direct API, and subtlties like IPD_V1 and IPD_LL have been
- *   abstracted away
- *
  * * EventDataParent is the result of additional processing, where things like
  *   excluded bases have been accounted for, and derivative data (such as
  *   start_frame in internal mode) has been computed
@@ -63,6 +54,7 @@
 #include <bazio/Codec.h>
 #include <bazio/DataParsing.h>
 #include <bazio/FieldType.h>
+#include <bazio/BazEventData.h>
 
 #include <postprimary/insertfinder/InsertState.h>
 
@@ -72,95 +64,6 @@ namespace Primary {
 namespace Postprimary {
 
 using namespace PacBio::Primary;
-
-// Provides read-only access to event data extracted from the baz file.
-// It has been lightly processed and abstracted, so that one does not have
-// to worry about things like data compression of pulse widths used during binary
-// storage.
-//
-// N.B. private inheritance is a somewhat unusual choice, but intentional.
-// We need access to the protected members of RawEventData, but do *not*
-// want to expose it's API as our own.  Once the refactor is finished and parent
-// class' protected function is removed we could move to standard composition.
-class BazEventData : private RawEventData
-{
-public:
-
-    BazEventData(RawEventData&& packets)
-        : RawEventData(std::move(packets))
-    {
-        
-        const auto& rawIsBase = PacketField(PacketFieldName::IS_BASE);
-        if (rawIsBase.empty())
-        {
-            isBase_ = std::vector<bool>(NumEvents(), true);
-        }
-        else
-        {
-            isBase_ = std::vector<bool>(rawIsBase.begin(), rawIsBase.end());
-        }
-
-        if(Internal())
-        {
-            ipds_ = PacketField(PacketFieldName::IPD_LL);
-            pws_ = PacketField(PacketFieldName::PW_LL);
-        }
-        else
-        {
-            ipds_ = PacketField(PacketFieldName::IPD_V1);
-            pws_ = PacketField(PacketFieldName::PW_V1);
-
-            for (auto& val : ipds_) val = codec_.CodeToFrame(static_cast<uint8_t>(val));
-            for (auto& val : pws_) val = codec_.CodeToFrame(static_cast<uint8_t>(val));
-        }
-    }
-
-    // Move only semantics
-    BazEventData(const BazEventData&) = delete;
-    BazEventData(BazEventData&&) = default;
-    BazEventData& operator=(const BazEventData&) = delete;
-    BazEventData& operator=(BazEventData&&) = default;
-
-public: // const data accesors
-    const std::vector<bool>& IsBase() const { return isBase_; }
-    bool IsBase(size_t idx) const { return isBase_[idx]; }
-
-    const std::vector<uint32_t> Ipds() const { return ipds_; }
-    uint32_t Ipds(size_t idx) const { return ipds_[idx]; }
-
-    const std::vector<uint32_t> PulseWidths() const { return pws_; }
-    uint32_t PulseWidths(size_t idx) const { return pws_[idx]; }
-
-    const std::vector<uint32_t>& Readouts() const
-    { return PacketField(PacketFieldName::READOUT); }
-
-    const std::vector<uint32_t>& StartFrames() const
-    { return PacketField(PacketFieldName::START_FRAME); }
-
-    const std::string BaseQualityValues(size_t leftPulseIndex,
-                                        size_t rightPulseIndex) const;
-
-    const std::vector<std::pair<std::string, BAM::Tag>> AvailableTagData(
-        size_t pulseBegin, size_t pulseEnd) const;
-
-    // Expose the few parts of the base class interface we do want to use.
-    using RawEventData::NumEvents;
-    using RawEventData::Internal;
-
-protected:
-
-    // Only present because our child class will need to modify the underlying
-    // raw data structure.  We don't want this exposed as part of this class'
-    // API, and once the refactor is complete this need will go away and
-    // this is to be removed.
-    using RawEventData::PacketField;
-
-    std::vector<bool> isBase_;
-    std::vector<uint32_t> ipds_;
-    std::vector<uint32_t> pws_;
-
-    Codec codec_;
-};
 
 // Provides read-only access to event data.  It no longer matches what was
 // in the original file, as it will handle input from the pulse exclusion
@@ -173,7 +76,7 @@ protected:
 class EventDataParent : private BazEventData
 {
 public:
-    EventDataParent(BazEventData&& rawPackets, const std::vector<InsertState>& states)
+    EventDataParent(PacBio::Primary::BazEventData&& rawPackets, const std::vector<InsertState>& states)
       : BazEventData(std::move(rawPackets))
     {
         UpdateIPDs(states);
@@ -195,6 +98,14 @@ public:
 
 public:
 
+    const std::string BaseQualityValues(size_t leftPulseIndex,
+                                        size_t rightPulseIndex) const;
+
+    const std::vector<std::pair<std::string, BAM::Tag>> AvailableTagData(size_t pulseBegin,
+                                                                         size_t pulseEnd) const;
+
+public:
+
     // Forward the parts of the parent API we want exposed.
     using BazEventData::NumEvents;
     using BazEventData::Internal;
@@ -203,8 +114,6 @@ public:
     using BazEventData::PulseWidths;
     using BazEventData::Readouts;
     using BazEventData::StartFrames;
-    using BazEventData::BaseQualityValues;
-    using BazEventData::AvailableTagData;
 
 private:
 
