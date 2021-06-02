@@ -64,9 +64,6 @@
 namespace PacBio {
 namespace BazIO {
 
-template <typename T>
-static constexpr bool isSigned = std::is_signed<T>::value;
-
 // Generic Serializer function for template metaprogramming use.
 // The first parameter the type of serializer to use, with the
 // subsequent parameters to be used as function arguments.
@@ -81,10 +78,9 @@ struct Serialize
     /// \param t The value in question (must be integral type)
     /// \returns The number of overflow bytes that will be required
     ///          to serialize the provided value
-    template <typename T>
-    BAZ_CUDA static size_t OverflowBytes(const T& t)
+    BAZ_CUDA static size_t OverflowBytes(uint64_t val, StoreSigned storeSigned)
     {
-        return Base::OverflowBytes(t, numBits::val, autoParams::val...);
+        return Base::OverflowBytes(val, storeSigned, numBits::val, autoParams::val...);
     }
 
     /// Converts the provided value to binary.
@@ -95,10 +91,9 @@ struct Serialize
     /// \returns The "main portion", which has a payload of the specified
     ///          number of bits.  Some bits or bit patterns may be
     ///          reserved to indicate that an overflow has happened
-    template <typename T>
-    BAZ_CUDA static T ToBinary(const T& val, uint8_t*& ptr)
+    BAZ_CUDA static uint64_t ToBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned)
     {
-        return Base::ToBinary(val, ptr, numBits::val, autoParams::val...);
+        return Base::ToBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }
 
     /// Converts a binary stream to a integral value
@@ -108,10 +103,9 @@ struct Serialize
     ///            If overflow data was read, this parameter will be
     ///            incrememted to the next unread address
     /// \returns The deserialized value
-    template <bool isSigned>
-    BAZ_CUDA static auto FromBinary(const uint64_t& val, uint8_t*& ptr)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned)
     {
-        return Base::template FromBinary<isSigned>(val, ptr, numBits::val, autoParams::val...);
+        return Base::FromBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }
 };
 
@@ -121,33 +115,27 @@ struct Serialize
 ///        do any unecessary operations
 struct TruncateOverflow
 {
-    template <typename T>
-    BAZ_CUDA static size_t OverflowBytes(const T&, NumBits)
+    BAZ_CUDA static size_t OverflowBytes(uint64_t, StoreSigned, NumBits)
     {
         return 0;
     }
 
-    template <typename T>
-    BAZ_CUDA static T ToBinary(const T& val, uint8_t*&, NumBits)
+    BAZ_CUDA static uint64_t ToBinary(uint64_t val, uint8_t*&, StoreSigned, NumBits)
     {
         return val;
     }
 
-    template <bool isSigned>
-    BAZ_CUDA static auto FromBinary(const uint64_t& val, uint8_t*&, NumBits numBits)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*&, StoreSigned storeSigned, NumBits numBits)
     {
-        using T = std::conditional_t<isSigned, int64_t, uint64_t>;
-
-        T ret = val;
-        if (isSigned)
+        if (storeSigned)
         {
             // If we have a signed value and the most significant bit
             // read is one, then we need to pad out sign bits to fill
             // the rest of our wider destination type.
-            if (ret & (1ul << (numBits-1)))
-                ret |= (static_cast<uint64_t>(-1) << numBits);
+            if (val & (1ul << (numBits-1)))
+                val |= (static_cast<uint64_t>(-1) << numBits);
         }
-        return ret;
+        return val;
     }
 };
 
@@ -157,41 +145,53 @@ struct TruncateOverflow
 ///        represent the value.
 ///        Note: If `NumBytes` is still not enough to represent the value, the
 ///              data will be truncated.
+///        Note: Signifying all bits set to 1 for overflow is a touch awkward for
+///              signed types, since the reserved value is equivalent to -1 and
+///              in the middle of our range.  However we want the same bit patern
+///              for overflows with both signed and unsigned numbers, so that any
+///              bugs where the serializer/desierilaizer have a signed/unsigned
+///              mismatch will just corrupt the individually read value, and
+///              not potentially downstream values because overflow data was not
+///              properly consumed (or improperly consumed).
 struct SimpleOverflow
 {
-    template <typename T>
-    BAZ_CUDA static bool NeedsOverflow(T val, NumBits numBits)
-    {
-        static constexpr auto allBitsSet = std::numeric_limits<uint64_t>::max();
+    // Technically implementation defined until c++20,
+    // but I seriously doubt we're going to run on any
+    // hardware that is not 2s complement
+    static_assert(-2 >> 1 == -1, "");
 
-        if (isSigned<T>)
+    BAZ_CUDA static bool NeedsOverflow(uint64_t val, StoreSigned storeSigned, NumBits numBits)
+    {
+        // We know we're on hardware that's twos compliment, so just cast things
+        // to an usigned int.  Now we can add/subtact whatever and have well
+        // defined overflow behaviour.
+        if (storeSigned)
         {
-            auto minIfSigned = static_cast<T>(allBitsSet << (numBits - 1)) + 1;
-            val -= minIfSigned;
+            // The usual N bit signed integer range is from -2^(N-1) to 2^(N-1)-1.  We're going
+            // to reserve the bit pattern of all 1s to indicate overflow, so we
+            // need to remove one value from the negative range, -2^(N-1) + 1 to 2^(N-1)-1.
+            // If we add 2^(N-1)-1 to our value, then the range is 0 to 2^N-2, and
+            // we no longer have to worry about the fact that our unsigned value was
+            // really a signed value.
+            val += (1ul << (numBits-1)) - 1;
         }
         uint64_t max = (1ul << numBits) - 1;
 
-        if (static_cast<uint64_t>(val) >= max) return true;
+        if (val >= max) return true;
         else return false;
     }
 
-    template <typename T>
-    BAZ_CUDA static size_t OverflowBytes(const T& t, NumBits numBits, NumBytes overflowSize)
+    BAZ_CUDA static size_t OverflowBytes(uint64_t val, StoreSigned storeSigned, NumBits numBits, NumBytes overflowSize)
     {
-        if(NeedsOverflow(t, numBits))
+        if(NeedsOverflow(val, storeSigned, numBits))
             return overflowSize;
         else
             return 0;
     }
 
-    template <typename T>
-    BAZ_CUDA static T ToBinary(T val, uint8_t*& ptr, NumBits numBits, NumBytes overflowSize)
+    BAZ_CUDA static uint64_t ToBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits, NumBytes overflowSize)
     {
-        assert(sizeof(T)*8 > numBits);
-        assert(sizeof(T) >= overflowSize);
-        static_assert(std::is_integral<T>::value, "");
-
-        if (NeedsOverflow(val, numBits))
+        if (NeedsOverflow(val, storeSigned, numBits))
         {
             memcpy(ptr, &val, overflowSize);
             ptr += overflowSize;
@@ -199,35 +199,33 @@ struct SimpleOverflow
         }
         else
         {
-            if (isSigned<T>)
+            if (storeSigned)
             {
-                static constexpr auto allBitsSet = std::numeric_limits<uint64_t>::max();
-                auto minIfSigned = static_cast<T>(allBitsSet << (numBits - 1)) + 1;
-                return val - minIfSigned;
+                // Add 2(^N-1)-1 to our value (using unsigned types to avoid undefined overflow)
+                // so that none of our valid numbers have the reserved bit pattern of all 1s,
+                // incidating an overflow.
+                auto signedOffset = (1ul << (numBits-1)) - 1;
+                val += signedOffset;
             }
-            else
-                return val;
+            return val;
         }
     }
 
-    template <bool isSigned>
-    BAZ_CUDA static auto FromBinary(const uint64_t& val, uint8_t*& ptr, NumBits numBits, NumBytes overflowSize)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits, NumBytes overflowSize)
     {
-        using T = std::conditional_t<isSigned, int64_t, uint64_t>;
-
-        T ret = val;
-        if (val == (1ul<<numBits)-1)
+        uint64_t ret = val;
+        if (ret == (1ul<<numBits)-1)
         {
             std::memcpy(&ret, ptr, overflowSize);
             ptr += overflowSize;
             auto signBit = 8*overflowSize;
-            if (isSigned && (ret & (1ul << (signBit-1))))
+            if (storeSigned && (ret & (1ul << (signBit-1))))
                 ret |= (static_cast<uint64_t>(-1) << (signBit-1));
-        } else if (isSigned)
+        } else if (storeSigned)
         {
-            static constexpr auto allBitsSet = std::numeric_limits<uint64_t>::max();
-            auto minIfSigned = static_cast<T>(allBitsSet << (numBits - 1)) + 1;
-            ret += minIfSigned;
+            // Subtract the offset we added during serialization
+            auto signedOffset = (1ul << (numBits-1)) - 1;
+            ret = val - signedOffset;
         }
         return ret;
     }
@@ -246,11 +244,8 @@ struct CompactOverflow
     // hardware that is not 2s complement
     static_assert(-2 >> 1 == -1, "");
 
-    template <typename T>
-    BAZ_CUDA static size_t OverflowBytes(T t, NumBits numBits)
+    BAZ_CUDA static size_t OverflowBytes(uint64_t t, StoreSigned storeSigned, NumBits numBits)
     {
-        static_assert(std::is_integral<T>::value, "");
-
         // Separating the signed and unsigned paths, because I can't
         // seem to make the bit counting version nearly as fast
         // (there is almost a 2x difference).  I've tried several
@@ -258,25 +253,15 @@ struct CompactOverflow
         // loop and shift strategy in the else, but that specifically
         // only works for unsigned integers.  (It won't even work for
         // positive signed integers, as it may truncate off the sign bit)
-        //
-        // I may just remove signed support.  I put it in mostly for
-        // completeness, not because we actually need it.
-        if (isSigned<T>)
+        if (storeSigned)
         {
-            // TODO gcc specific...
 #ifdef __CUDA_ARCH__
             auto discard = [&](){ if (static_cast<int64_t>(t) < 0) t = ~t; return __clzll(t) - 1;}();
 #else
             auto discard = __builtin_clrsbl(t);
 #endif
             auto keep = 64 - discard - (static_cast<int>(numBits)-1);
-            size_t ret = 0;
-            while (keep > 0)
-            {
-                ret++;
-                keep -= 7;
-            }
-            return ret;
+            return (keep + 6)/7;
         } else {
             t = t >> (numBits-1);
             size_t ret = 0;
@@ -289,17 +274,13 @@ struct CompactOverflow
         }
     }
 
-    template <typename T>
-    BAZ_CUDA static T ToBinary(T val, uint8_t*& ptr, NumBits numBits)
+    BAZ_CUDA static uint64_t ToBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits)
     {
-        assert(sizeof(T)*8 > numBits);
-        static_assert(std::is_integral<T>::value, "");
-
         auto InitialContinueMask = 1ul << (numBits - 1);
         auto InitialValueMask = InitialContinueMask - 1;
 
-        size_t numOverflow = OverflowBytes(val, numBits);
-        T initialVal = val & InitialValueMask;
+        size_t numOverflow = OverflowBytes(val, storeSigned, numBits);
+        uint64_t initialVal = val & InitialValueMask;
         val = val >> (numBits-1);
         if (numOverflow != 0) initialVal |= InitialContinueMask;
 
@@ -318,15 +299,12 @@ struct CompactOverflow
         return initialVal;
     }
 
-    template <bool isSigned>
-    BAZ_CUDA static auto FromBinary(const uint64_t& val, uint8_t*& ptr, NumBits numBits)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits)
     {
-        using T = std::conditional_t<isSigned, int64_t, uint64_t>;
-
         auto InitialContinueMask = 1ul << (numBits - 1);
         auto InitialValueMask = InitialContinueMask - 1;
 
-        T ret = val & InitialValueMask;
+        uint64_t ret = val & InitialValueMask;
         bool cont = val & InitialContinueMask;
         size_t currBits = numBits-1;
         while (cont)
@@ -341,7 +319,7 @@ struct CompactOverflow
             ret |= (byte & overflowValueMask) << currBits;
             currBits += 7;
         }
-        if (isSigned && (ret & (1ul << (currBits-1))))
+        if (storeSigned && (ret & (1ul << (currBits-1))))
             ret |= static_cast<uint64_t>(-1) << currBits;
         return ret;
     }

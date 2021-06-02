@@ -62,6 +62,7 @@ using SerializeParams = boost::variant<TruncateParams, SimpleOverflowParams, Com
 struct FieldParams
 {
     PacketFieldName name;
+    StoreSigned storeSigned;
     TransformsParams transform;
     SerializeParams serialize;
 };

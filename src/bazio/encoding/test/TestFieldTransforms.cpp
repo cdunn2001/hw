@@ -36,26 +36,36 @@ struct Int {
 
 TEST(BazTransform, NoTransform)
 {
-    EXPECT_EQ(Identity::Apply(12u), 12u);
-    EXPECT_EQ(Identity::Apply(-12), -12);
-    EXPECT_EQ(Identity::Apply(1ul<<54), 1ul<<54);
+    EXPECT_EQ(NoOp::Apply(12u, StoreSigned{false}), 12u);
+    EXPECT_EQ(NoOp::Apply(-12, StoreSigned{true}), static_cast<uint64_t>(-12));
+    EXPECT_EQ(NoOp::Apply(1ul<<54, StoreSigned{false}), 1ul<<54);
 
-    EXPECT_EQ(Identity::Revert(12u), 12u);
-    EXPECT_EQ(Identity::Revert(-12), -12);
-    EXPECT_EQ(Identity::Revert(1ul<<54), 1ul<<54);
+    EXPECT_EQ(NoOp::Revert<uint32_t>(12u, StoreSigned{false}), 12u);
+    EXPECT_EQ(NoOp::Revert<int32_t>(static_cast<uint64_t>(-12), StoreSigned{true}), -12);
+    EXPECT_EQ(NoOp::Revert<uint64_t>(1ul<<54, StoreSigned{false}), 1ul<<54);
 }
 
 TEST(BazTransform, FixedPoint)
 {
-    EXPECT_EQ(FixedPointU32::Apply(3.125412, FixedPointScale{10}), 31);
-    EXPECT_EQ(FixedPointU32::Apply(3.125412, FixedPointScale{100}), 313);
-    EXPECT_EQ(FixedPointU32::Apply(3.125412, FixedPointScale{1000}), 3125);
-    EXPECT_EQ(FixedPointU32::Apply(3.125412, FixedPointScale{30}), 94);
+    EXPECT_EQ(FixedPoint::Apply(3.125412, StoreSigned{false}, FixedPointScale{10}), 31);
+    EXPECT_EQ(FixedPoint::Apply(3.125412, StoreSigned{false}, FixedPointScale{100}), 313);
+    EXPECT_EQ(FixedPoint::Apply(3.125412, StoreSigned{false}, FixedPointScale{1000}), 3125);
+    EXPECT_EQ(FixedPoint::Apply(3.125412, StoreSigned{false}, FixedPointScale{30}), 94);
 
-    EXPECT_FLOAT_EQ(FixedPointU32::Revert(31, FixedPointScale{10}), 3.1);
-    EXPECT_FLOAT_EQ(FixedPointU32::Revert(313, FixedPointScale{100}), 3.13);
-    EXPECT_FLOAT_EQ(FixedPointU32::Revert(3125, FixedPointScale{1000}), 3.125);
-    EXPECT_FLOAT_EQ(FixedPointU32::Revert(94, FixedPointScale{30}), 3.13333333);
+    EXPECT_EQ(FixedPoint::Apply(-3.125412, StoreSigned{true}, FixedPointScale{10}), static_cast<uint64_t>(-31));
+    EXPECT_EQ(FixedPoint::Apply(-3.125412, StoreSigned{true}, FixedPointScale{100}), static_cast<uint64_t>(-313));
+    EXPECT_EQ(FixedPoint::Apply(-3.125412, StoreSigned{true}, FixedPointScale{1000}), static_cast<uint64_t>(-3125));
+    EXPECT_EQ(FixedPoint::Apply(-3.125412, StoreSigned{true}, FixedPointScale{30}), static_cast<uint64_t>(-94));
+
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(31, StoreSigned{false}, FixedPointScale{10}), 3.1);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(313, StoreSigned{false}, FixedPointScale{100}), 3.13);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(3125, StoreSigned{false}, FixedPointScale{1000}), 3.125);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(94, StoreSigned{false}, FixedPointScale{30}), 3.13333333);
+
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(static_cast<uint64_t>(-31), StoreSigned{true}, FixedPointScale{10}), -3.1);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(static_cast<uint64_t>(-313), StoreSigned{true}, FixedPointScale{100}), -3.13);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(static_cast<uint64_t>(-3125), StoreSigned{true}, FixedPointScale{1000}), -3.125);
+    EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(static_cast<uint64_t>(-94), StoreSigned{true}, FixedPointScale{30}), -3.13333333);
 }
 
 TEST(BazTransform, Codec)
@@ -76,7 +86,7 @@ TEST(BazTransform, Codec)
             {
                 for (int k = 0; k < stride; ++k, frame++)
                 {
-                    bool good = ::Codec::Apply(frame, mainBits) == code;
+                    bool good = ::Codec::Apply(frame, StoreSigned{false}, mainBits) == code;
                     if (errors < 10)
                         EXPECT_TRUE(good) << code;
                     good ? successes++ : errors++;
@@ -103,7 +113,7 @@ TEST(BazTransform, Codec)
         {
             for (int j = 0; j < entriesPerRound; ++j, code++, frame+=stride)
             {
-                bool good = ::Codec::Apply(frame, mainBits) == code;
+                bool good = ::Codec::Apply(frame, StoreSigned{false}, mainBits) == code;
                 if (errors < 10)
                     EXPECT_TRUE(good) << code;
                 good ? successes++ : errors++;

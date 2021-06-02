@@ -92,7 +92,7 @@ namespace detail {
 
 // Just a helper struct to record a combination of Transformation and Serialization
 // that will end up applied to individual fields.
-template <typename Trans, typename Serial>
+template <typename StoreSigned, typename Trans, typename Serial>
 struct EncodeInfo {};
 
 // Serializes an individual group of fields.  Fields are grouped together such
@@ -100,8 +100,8 @@ struct EncodeInfo {};
 // while still being <= 64.  During serialization, first each field writes it's main
 // portion, and then after that any necessary overflow information is recorded.
 template <size_t numBytes, typename...Info> struct GroupEncoder {};
-template <size_t numBytes, typename... Transforms, typename... Serializers>
-struct GroupEncoder<numBytes, EncodeInfo<Transforms, Serializers>...>
+template <size_t numBytes, typename... Signed, typename... Transforms, typename... Serializers>
+struct GroupEncoder<numBytes, EncodeInfo<Signed, Transforms, Serializers>...>
 {
     BAZ_CUDA static constexpr size_t TotalBits()
     {
@@ -121,7 +121,7 @@ struct GroupEncoder<numBytes, EncodeInfo<Transforms, Serializers>...>
     BAZ_CUDA static size_t BytesRequired(const Ts&... ts)
     {
         size_t ret = numBytes;
-        auto worker = {(ret += Serializers::OverflowBytes(Transforms::Apply(ts))
+        auto worker = {(ret += Serializers::OverflowBytes(Transforms::Apply(ts, Signed::val), Signed::val)
                         ,0)...};
         (void)worker;
         return ret;
@@ -144,8 +144,9 @@ struct GroupEncoder<numBytes, EncodeInfo<Transforms, Serializers>...>
             pos += bits;
         };
 
-        auto worker = {(Insert(Serializers::ToBinary(Transforms::Apply(ts),
-                                                    ptr2),
+        auto worker = {(Insert(Serializers::ToBinary(Transforms::Apply(ts, Signed::val),
+                                                     ptr2,
+                                                     Signed::val),
                                Serializers::nBits)
                         ,0)...};
         (void)worker;
@@ -170,10 +171,11 @@ struct GroupEncoder<numBytes, EncodeInfo<Transforms, Serializers>...>
             data = data >> bits;
             return val;
         };
-        auto worker = {(ts = Transforms::Revert(
-                                 Serializers::template FromBinary<isSigned<Ts>>(
+        auto worker = {(ts = Transforms::template Revert<Ts>(
+                                 Serializers::FromBinary(
                                      Extract(Serializers::nBits),
-                                     ptr))
+                                     ptr, Signed::val),
+                                 Signed::val)
                         ,0)...};
         (void)worker;
         return ptr;
@@ -181,9 +183,11 @@ struct GroupEncoder<numBytes, EncodeInfo<Transforms, Serializers>...>
 };
 
 // Like an EncodeInfo, but now we add a particular PacketFieldName to the mix.
-template <PacketFieldName::RawEnum name, typename Trans, typename Serial>
+template <PacketFieldName::RawEnum name, typename StoreSigned, typename Trans, typename Serial>
 struct Field
 {
+    // Add some validation of the template parameters, since this is something
+    // external code will be interacting with.
     template <typename U, typename...params>
     BAZ_CUDA static constexpr bool IsSerializer(Serialize<U, params...>*) { return true; }
     BAZ_CUDA static constexpr bool IsSerializer(...) { return false; }
@@ -192,8 +196,14 @@ struct Field
     BAZ_CUDA static constexpr bool IsTransformer(Transform<U, params...>*) { return true; }
     BAZ_CUDA static constexpr bool IsTransformer(...) { return false; }
 
+    template <bool b>
+    BAZ_CUDA static constexpr bool IsStoreSigned(StoreSigned_t<b>*) { return true; }
+    BAZ_CUDA static constexpr bool IsStoreSigned(...) { return false; }
+
     static_assert(IsSerializer(static_cast<Serial*>(nullptr)), "");
     static_assert(IsTransformer(static_cast<Trans*>(nullptr)), "");
+    static_assert(IsStoreSigned(static_cast<StoreSigned*>(nullptr)), "");
+
     static constexpr auto nBits = Serial::nBits;
 };
 
@@ -247,9 +257,9 @@ struct FieldGroupEncoder
 
 template <typename FieldGroup>
 struct GroupToEncoder;
-template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Transforms, typename... Serializers>
-struct GroupToEncoder<FieldGroup<totalBits, Field<names, Transforms, Serializers>...>> {
-    using T = FieldGroupEncoder<GroupEncoder<(totalBits+7)/8, EncodeInfo<Transforms, Serializers>...>, names...>;
+template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Signed, typename... Transforms, typename... Serializers>
+struct GroupToEncoder<FieldGroup<totalBits, Field<names, Signed, Transforms, Serializers>...>> {
+    using T = FieldGroupEncoder<GroupEncoder<(totalBits+7)/8, EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
 };
 template <typename Encoding>
 using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
@@ -328,8 +338,8 @@ struct GenerateGroups<Pack<ProcessedGroups...>, FieldGroup<currBits, CurrFields.
 // an integral number of bytes, with the exception that a group cannot be
 // larger than 64 bits, and if we have to tie off a ragged group to avoid
 // that limitation then we will.
-template <PacketFieldName::RawEnum name, typename Trans, typename Serial>
-using Field = detail::Field<name, Trans, Serial>;
+template <PacketFieldName::RawEnum name, typename Signed, typename Trans, typename Serial>
+using Field = detail::Field<name, Signed, Trans, Serial>;
 template <typename...Fields>
 using PulseToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
 

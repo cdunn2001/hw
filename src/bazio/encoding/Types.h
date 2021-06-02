@@ -35,6 +35,7 @@ namespace BazIO {
 // Set up some strong typedefs, both to prevent
 // accidental argument swaps, but also to make
 // call-sites easier to read
+PB_STRONG_TYPEDEF(bool, StoreSigned);
 PB_STRONG_TYPEDEF(uint8_t, NumBits);
 PB_STRONG_TYPEDEF(uint8_t, NumBytes);
 PB_STRONG_TYPEDEF(uint32_t, FixedPointScale);
@@ -49,6 +50,7 @@ struct TemplateVal
 template <typename U, typename U::T v>
 constexpr U TemplateVal<U, v>::val;
 
+template <bool b> using StoreSigned_t  = TemplateVal<StoreSigned, b>;
 template <uint8_t v> using NumBits_t  = TemplateVal<NumBits, v>;
 template <uint8_t v> using NumBytes_t = TemplateVal<NumBytes, v>;
 template <uint32_t v> using FixedPointScale_t = TemplateVal<FixedPointScale, v>;

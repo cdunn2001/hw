@@ -34,14 +34,17 @@ TEST(BazToPulse, KestrelLosslessCompact)
 {
     std::vector<FieldParams> info;
     info.push_back({PacketFieldName::Base,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     TruncateParams{ NumBits{2} }
         });
     info.push_back({PacketFieldName::Ipd,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     CompactOverflowParams{ NumBits{7} }
         });
     info.push_back({PacketFieldName::Pw,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     CompactOverflowParams{ NumBits{7} }
         });
@@ -104,14 +107,17 @@ TEST(BazToPulse, KestrelLosslessSimple)
 {
     std::vector<FieldParams> info;
     info.push_back({PacketFieldName::Base,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     TruncateParams{ NumBits{2} }
         });
     info.push_back({PacketFieldName::Ipd,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
         });
     info.push_back({PacketFieldName::Pw,
+                    StoreSigned{false},
                     NoOpTransformParams{},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
         });

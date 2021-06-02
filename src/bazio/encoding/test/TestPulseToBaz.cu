@@ -117,16 +117,19 @@ __global__ void RunGpuTest(DeviceView<const PacBio::Mongo::Data::Pulse> pulsesIn
 TEST(PulseToBaz, KestrelLossyTruncate)
 {
     using Test = PulseToBaz<Field<PacketFieldName::Base,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
                             Field<PacketFieldName::Ipd,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<TruncateOverflow,
                                             NumBits_t<7>>
                                   >,
                             Field<PacketFieldName::Pw,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<7>>
                                   >
                        >;
@@ -200,15 +203,18 @@ TEST(PulseToBaz, KestrelLossyTruncate)
 TEST(PulseToBaz, KestrelLosslessSimple)
 {
     using Test = PulseToBaz<Field<PacketFieldName::Base,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<TruncateOverflow,  NumBits_t<2>>
                                   >,
                             Field<PacketFieldName::Ipd,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
                                   >,
                             Field<PacketFieldName::Pw,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
                                   >
                        >;
@@ -276,15 +282,18 @@ TEST(PulseToBaz, KestrelLosslessSimple)
 TEST(PulseToBaz, KestrelLosslessCompact)
 {
     using Test = PulseToBaz<Field<PacketFieldName::Base,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
                             Field<PacketFieldName::Ipd,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
                                   >,
                             Field<PacketFieldName::Pw,
-                                  Transform<Identity>,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
                                   >
                        >;

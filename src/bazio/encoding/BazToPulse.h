@@ -96,32 +96,31 @@ public:
     uint8_t* Serialize(const P& pulse, uint8_t* dest)
     {
         // Helper to handle the transformation visitation
-        auto convertFloat = [](const TransformsParams& info, float val) -> uint64_t
+        auto convertFloat = [](const TransformsParams& info, float val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const FixedPointParams& p) -> uint64_t { return FixedPointU16::Apply(val, p.scale); },
+                [&](const FixedPointParams& p) { return FixedPoint::Apply(val, storeSigned, p.scale); },
                 [&](const auto&) -> uint64_t { throw PBException("Transformation does not support floating point values"); return 0; }
             );
             return boost::apply_visitor(o, info);
         };
-        auto convertIntegral = [](const TransformsParams& info, auto val) -> uint64_t
+        auto convertUInt = [](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) -> uint64_t { return Identity::Apply(val); },
-                [&](const CodecParams& p) -> uint64_t { return Codec::Apply(val, p.numBits); },
+                [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
+                [&](const CodecParams& p) { return Codec::Apply(val, storeSigned, p.numBits); },
                 [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
             );
             return boost::apply_visitor(o, info);
         };
-        auto convert = Utility::make_overload(convertFloat, convertIntegral);
 
         // Helper to handle the serialization visitation
-        auto encode = [](const SerializeParams& info, uint64_t val, uint8_t*& ptr)
+        auto encode = [](const SerializeParams& info, uint64_t val, StoreSigned storeSigned, uint8_t*& ptr)
         {
             auto o = Utility::make_overload(
-                [&](const TruncateParams& info) { return TruncateOverflow::ToBinary(val, ptr, info.numBits); },
-                [&](const CompactOverflowParams& info) { return CompactOverflow::ToBinary(val, ptr, info.numBits); },
-                [&](const SimpleOverflowParams& info) { return SimpleOverflow::ToBinary(val, ptr, info.numBits, info.overflowBytes); }
+                [&](const TruncateParams& info) { return TruncateOverflow::ToBinary(val, ptr, storeSigned, info.numBits); },
+                [&](const CompactOverflowParams& info) { return CompactOverflow::ToBinary(val, ptr, storeSigned, info.numBits); },
+                [&](const SimpleOverflowParams& info) { return SimpleOverflow::ToBinary(val, ptr, storeSigned, info.numBits, info.overflowBytes); }
             );
             return boost::apply_visitor(o, info);
         };
@@ -140,29 +139,30 @@ public:
                 switch (info.name)
                 {
                 case PacketFieldName::Base:
-                    val = encode(info.serialize, convert(info.transform, base.Get(pulse)), oPtr);
+                    val = convertUInt(info.transform, base.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
-                    val = encode(info.serialize, convert(info.transform, pw.Get(pulse)), oPtr);
+                    val = convertUInt(info.transform, pw.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Ipd:
-                    val = encode(info.serialize, convert(info.transform, ipd.Get(pulse)), oPtr);
+                    val = convertUInt(info.transform, ipd.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmax:
-                    val = encode(info.serialize, convert(info.transform, pkmax.Get(pulse)), oPtr);
+                    val = convertFloat(info.transform, pkmax.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmean:
-                    val = encode(info.serialize, convert(info.transform, pkmean.Get(pulse)), oPtr);
+                    val = convertFloat(info.transform, pkmean.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmid:
-                    val = encode(info.serialize, convert(info.transform, pkmid.Get(pulse)), oPtr);
+                    val = convertFloat(info.transform, pkmid.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkvar:
-                    val = encode(info.serialize, convert(info.transform, pkvar.Get(pulse)), oPtr);
+                    val = convertFloat(info.transform, pkvar.Get(pulse), info.storeSigned);
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
                 }
+                val = encode(info.serialize, val, info.storeSigned, oPtr);
                 mainVal |= (val & ((1 << numBits) - 1)) << pos;
                 pos += numBits;
             }
@@ -175,71 +175,32 @@ public:
     template <typename P>
     uint8_t* Deserialize(P& pulse, uint8_t* source)
     {
-        auto setFloat = [&, this](PacketFieldName name, float val)
-        {
-            switch (name)
-            {
-            case PacketFieldName::Base:
-            case PacketFieldName::Pw:
-            case PacketFieldName::Ipd:
-                throw PBException("Cannot set field from float");
-            case PacketFieldName::Pkmax:
-                pkmax.Set(pulse, val);
-                break;
-            case PacketFieldName::Pkmean:
-                pkmean.Set(pulse, val);
-                break;
-            case PacketFieldName::Pkmid:
-                pkmid.Set(pulse, val);
-                break;
-            case PacketFieldName::Pkvar:
-                pkvar.Set(pulse, val);
-                break;
-            default:
-                throw PBException("FieldName Not Supported");
-            }
-        };
-        auto setIntegral = [&, this](PacketFieldName name, uint64_t val)
-        {
-            switch (name)
-            {
-            case PacketFieldName::Base:
-                base.Set(pulse, val);
-                break;
-            case PacketFieldName::Pw:
-                pw.Set(pulse, val);
-                break;
-            case PacketFieldName::Ipd:
-                ipd.Set(pulse, val);
-                break;
-            case PacketFieldName::Pkmax:
-            case PacketFieldName::Pkmean:
-            case PacketFieldName::Pkmid:
-            case PacketFieldName::Pkvar:
-                throw PBException("Cannot set field from integer");
-            default:
-                throw PBException("FieldName Not Supported");
-            }
-        };
-
-        // Helper to handle the transformation visitation
-        auto convertAndSet = [&](PacketFieldName name, const TransformsParams& info, auto val)
+        // Helpers to handle the transformation visitation
+        auto convertUint = [&](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) { setIntegral(name, Identity::Revert(val)); },
-                [&](const CodecParams& p) { setIntegral(name, Codec::Revert(val, p.numBits)); },
-                [&](const FixedPointParams& p) { setFloat(name, FixedPointU16::Revert(val, p.scale)); }
+                [&](const NoOpTransformParams&) { return NoOp::Revert<uint64_t>(val, storeSigned); },
+                [&](const CodecParams& p) { return Codec::Revert<uint64_t>(val, storeSigned, p.numBits); },
+                [&](const FixedPointParams&) -> uint64_t { throw PBException("Datatype does not support FixedPoint format"); }
             );
             return boost::apply_visitor(o, info);
         };
-        // Helper to handle the serialization visitation
-        auto decode = [](const SerializeParams& info, auto val, auto& ptr)
+        auto convertFloat = [&](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
         {
-            static constexpr bool isSigned = std::is_signed<decltype(val)>::value;
             auto o = Utility::make_overload(
-                [&](const TruncateParams& info) { return TruncateOverflow::FromBinary<isSigned>(val, ptr, info.numBits); },
-                [&](const CompactOverflowParams& info) { return CompactOverflow::FromBinary<isSigned>(val, ptr, info.numBits); },
-                [&](const SimpleOverflowParams& info) { return SimpleOverflow::FromBinary<isSigned>(val, ptr, info.numBits, info.overflowBytes); }
+                [&](const FixedPointParams& p) { return FixedPoint::Revert<float>(val, storeSigned, p.scale); },
+                [&](const auto&) -> float { throw PBException("Datatype does not support FixedPoint format"); }
+            );
+            return boost::apply_visitor(o, info);
+        };
+
+        // Helper to handle the serialization visitation
+        auto decode = [](const SerializeParams& info, uint64_t val, auto& ptr, StoreSigned storeSigned)
+        {
+            auto o = Utility::make_overload(
+                [&](const TruncateParams& info) { return TruncateOverflow::FromBinary(val, ptr, storeSigned, info.numBits); },
+                [&](const CompactOverflowParams& info) { return CompactOverflow::FromBinary(val, ptr, storeSigned, info.numBits); },
+                [&](const SimpleOverflowParams& info) { return SimpleOverflow::FromBinary(val, ptr, storeSigned, info.numBits, info.overflowBytes); }
             );
             return boost::apply_visitor(o, info);
         };
@@ -256,8 +217,33 @@ public:
                 auto numBits = g.numBits[i];
                 uint64_t val = mainVal & ((1 << numBits)-1);
                 mainVal = mainVal >> numBits;
-                auto integral = decode(info.serialize, val, source);
-                convertAndSet(info.name, info.transform, integral);
+                auto integral = decode(info.serialize, val, source, info.storeSigned);
+                switch (info.name)
+                {
+                    case PacketFieldName::Base:
+                        base.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Pw:
+                        pw.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Ipd:
+                        ipd.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Pkmax:
+                        pkmax.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Pkmean:
+                        pkmean.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Pkmid:
+                        pkmid.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::Pkvar:
+                        pkvar.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        break;
+                    default:
+                        throw PBException("FieldName Not Supported");
+                }
             }
         }
         return source;
@@ -266,31 +252,32 @@ public:
     template <typename P>
     size_t BytesRequired(const P& pulse)
     {
-        auto convertFloat = [](const TransformsParams& info, float val) -> uint64_t
+        // Helper to handle the transformation visitation
+        auto convertFloat = [](const TransformsParams& info, float val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const FixedPointParams& p) -> uint64_t { return FixedPointU16::Apply(val, p.scale); },
+                [&](const FixedPointParams& p) { return FixedPoint::Apply(val, storeSigned, p.scale); },
                 [&](const auto&) -> uint64_t { throw PBException("Transformation does not support floating point values"); return 0; }
             );
             return boost::apply_visitor(o, info);
         };
-        auto convertIntegral = [](const TransformsParams& info, auto val) -> uint64_t
+        auto convertUInt = [](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) -> uint64_t { return Identity::Apply(val); },
-                [&](const CodecParams& p) -> uint64_t { return Codec::Apply(val, p.numBits); },
+                [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
+                [&](const CodecParams& p) { return Codec::Apply(val, storeSigned, p.numBits); },
                 [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
             );
             return boost::apply_visitor(o, info);
         };
-        auto convert = Utility::make_overload(convertFloat, convertIntegral);
 
-        auto encode = [](const SerializeParams& info, uint64_t val)
+        // Helper to handle the serialization visitation
+        auto encode = [](const SerializeParams& info, uint64_t val, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
-                [&](const TruncateParams& info) { return TruncateOverflow::OverflowBytes(val, info.numBits); },
-                [&](const CompactOverflowParams& info) { return CompactOverflow::OverflowBytes(val, info.numBits); },
-                [&](const SimpleOverflowParams& info) { return SimpleOverflow::OverflowBytes(val, info.numBits, info.overflowBytes); }
+                [&](const TruncateParams& info) { return TruncateOverflow::OverflowBytes(val, storeSigned, info.numBits); },
+                [&](const CompactOverflowParams& info) { return CompactOverflow::OverflowBytes(val, storeSigned, info.numBits); },
+                [&](const SimpleOverflowParams& info) { return SimpleOverflow::OverflowBytes(val, storeSigned, info.numBits, info.overflowBytes); }
             );
             return boost::apply_visitor(o, info);
         };
@@ -301,32 +288,34 @@ public:
             bytes += (g.totalBits + 7) / 8;
             for (const auto& info : g.members)
             {
+                uint64_t val;
                 switch (info.name)
                 {
                 case PacketFieldName::Base:
-                    bytes += encode(info.serialize, convert(info.transform, base.Get(pulse)));
+                    val = convertUInt(info.transform, base.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
-                    bytes += encode(info.serialize, convert(info.transform, pw.Get(pulse)));
+                    val = convertUInt(info.transform, pw.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Ipd:
-                    bytes += encode(info.serialize, convert(info.transform, ipd.Get(pulse)));
+                    val = convertUInt(info.transform, ipd.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmax:
-                    bytes += encode(info.serialize, convert(info.transform, pkmax.Get(pulse)));
+                    val = convertFloat(info.transform, pkmax.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmean:
-                    bytes += encode(info.serialize, convert(info.transform, pkmean.Get(pulse)));
+                    val = convertFloat(info.transform, pkmean.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmid:
-                    bytes += encode(info.serialize, convert(info.transform, pkmid.Get(pulse)));
+                    val = convertFloat(info.transform, pkmid.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkvar:
-                    bytes += encode(info.serialize, convert(info.transform, pkvar.Get(pulse)));
+                    val = convertFloat(info.transform, pkvar.Get(pulse), info.storeSigned);
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
                 }
+                bytes += encode(info.serialize, val, info.storeSigned);
             }
         }
         return bytes;

@@ -26,8 +26,11 @@
 /// \file FieldTransforms.h
 /// \details Defines the various ways by which an input value can be
 ///          transformed to an integral type in preparation for
-///          serialization.  The currently supported transformations are:
-///          * Identity:   Do nothing, just pass through the value
+///          serialization.  The result of the transformation will be
+///          a uint64_t value, though the storeSigned value will indicate
+///          if the bits should be interpreted as a signed value. The
+///          currently supported transformations are:
+///          * NoOp:       Do nothing, just pass through the value
 ///          * FixedPoint: Apply a scale paramter to a floating point value
 ///                        and then round do the nearest integral value
 ///          * Codec:      Applies a lossy and compression, which starts out
@@ -50,6 +53,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 #include <bazio/encoding/BazioEnableCuda.h>
@@ -63,49 +67,65 @@ template <typename Base, typename... autoParams>
 struct Transform
 {
     template <typename T>
-    BAZ_CUDA static auto Apply(const T& t)
+    BAZ_CUDA static uint64_t Apply(const T& t, StoreSigned storeSigned)
     {
-        return Base::Apply(t, autoParams::val...);
+        return Base::Apply(t, storeSigned, autoParams::val...);
     }
-    template <typename T>
-    BAZ_CUDA static auto Revert(const T& t)
+    template <typename Ret>
+    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
-        return Base::Revert(t, autoParams::val...);
+        return Base::template Revert<Ret>(val, storeSigned, autoParams::val...);
     }
 };
 
-struct Identity
+struct NoOp
 {
     template <typename T>
-    BAZ_CUDA static T Apply(const T& t)
+    BAZ_CUDA static uint64_t Apply(const T& t, StoreSigned)
     {
         static_assert(std::is_integral<T>::value, "");
-        return t;
+        return static_cast<uint64_t>(t);
     }
-    template <typename T>
-    BAZ_CUDA static T Revert(const T& t)
+    template <typename Ret>
+    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned)
     {
-        static_assert(std::is_integral<T>::value, "");
-        return t;
+        static_assert(std::is_integral<Ret>::value, "");
+        return static_cast<Ret>(val);
     }
 };
 
-template <typename I>
 struct FixedPoint
 {
-    BAZ_CUDA static I Apply(float f, FixedPointScale scale)
+    BAZ_CUDA static uint64_t Apply(float f, StoreSigned storeSigned, FixedPointScale scale)
     {
-        if (!std::is_signed<I>::value) assert(f >= 0);
-        return static_cast<I>(roundf(f * scale));
+        auto scaled = roundf(f*scale);
+        // Check for various flavors of under/over flow
+        if (storeSigned)
+        {
+            assert(nextafterf(static_cast<float>(std::numeric_limits<int64_t>::max()), 0) > scaled);
+            assert(nextafterf(static_cast<float>(std::numeric_limits<int64_t>::lowest()), 0) < scaled);
+            // Need to cast to a signed type first to make sure we handle negatives correctly.
+            // Casting a signed to an unsigned works fine as long as you assume 2s complement
+            // (which we do), but casting a float to an int is undefined if the value is out of
+            // range.
+            return static_cast<uint64_t>(static_cast<int64_t>(scaled));
+        } else {
+            assert(scaled >= 0);
+            assert(nextafterf(static_cast<float>(std::numeric_limits<uint64_t>::max()), 0) > scaled);
+            return static_cast<uint64_t>(scaled);
+        }
     }
-    BAZ_CUDA static float Revert(I i, FixedPointScale scale)
+
+    template <typename Ret>
+    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned storeSigned, FixedPointScale scale)
     {
-        return static_cast<float>(i) / scale;
+        static_assert(std::is_same<Ret, float>::value,"");
+        if (storeSigned)
+            return static_cast<float>(static_cast<int64_t>(val)) / scale;
+        else
+            return static_cast<float>(val) / scale;
     }
 };
-using FixedPointU8 = FixedPoint<uint8_t>;
-using FixedPointU16 = FixedPoint<uint16_t>;
-using FixedPointU32 = FixedPoint<uint32_t>;
 
 // Some algebra to make the below bit twiddles make a bit more sense
 //
@@ -149,11 +169,9 @@ using FixedPointU32 = FixedPoint<uint32_t>;
 //    mapped our value into the M bits via round-to-nearest.
 struct Codec
 {
-    template <typename T>
-    BAZ_CUDA static T Apply(T t, NumBits bits)
+    BAZ_CUDA static uint64_t Apply(uint64_t t, StoreSigned storeSigned, NumBits bits)
     {
-        static_assert(std::is_integral<T>::value, "");
-        static_assert(std::is_unsigned<T>::value, "");
+        assert(!storeSigned);
 
         uint64_t F = 1ul << bits;
         t += F;
@@ -169,18 +187,17 @@ struct Codec
         return main + (group << bits);
     }
 
-    template <typename T>
-    BAZ_CUDA static uint64_t Revert(T t, NumBits bits)
+    template <typename Ret>
+    BAZ_CUDA static Ret Revert(uint64_t t, StoreSigned storeSigned, NumBits bits)
     {
-        static_assert(std::is_integral<T>::value, "");
-        static_assert(std::is_unsigned<T>::value, "");
+        assert(!storeSigned);
 
         auto group = (t >> bits);
         auto main = t & ((1ul << bits) - 1);
         uint64_t F = 1ul << bits;
         auto multiplier = 1ul << group;
         auto base = (multiplier - 1) * F;
-        return base + multiplier * main;
+        return static_cast<Ret>(base + multiplier * main);
     }
 };
 
