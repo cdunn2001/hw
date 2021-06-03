@@ -6,8 +6,6 @@ cmake_minimum_required (VERSION 3.2)
 
 include(pacbio-git-info)
 
-create_git_rev_header()
-
 include(pacbio-cmake-config-vars)
 
 generate_config_header(ppa-config.h PpaApplicationConfig)
@@ -40,11 +38,11 @@ add_library(libbaz2bam STATIC
 target_link_libraries(libbaz2bam
     PUBLIC
         libPpaApp
+        GitVersionInfo
 )
 
 add_executable(baz2bam
     baz2bam.cpp
-    git-rev-pseudo-header.h
 )
 
 target_link_libraries(baz2bam
@@ -70,11 +68,11 @@ add_library(libbam2bam STATIC
 target_link_libraries(libbam2bam
     PUBLIC
         libPpaApp
+        GitVersionInfo
 )
 
 add_executable(bam2bam
     bam2bam.cpp
-    git-rev-pseudo-header.h
 )
 
 target_link_libraries(bam2bam
@@ -90,7 +88,6 @@ target_link_libraries(bam2bam
 
 add_executable(recalladapters
     recalladapters.cpp
-    git-rev-pseudo-header.h
 )
 
 target_link_libraries(recalladapters
@@ -123,13 +120,13 @@ include(pacbio-jsoncpp)
 
 add_executable(ppa-reducestats
     ppa-reducestats.cpp
-    git-rev-pseudo-header.h
 )
 
 target_link_libraries(ppa-reducestats
     PUBLIC
         libSequelCommon1
         libJsoncpp
+        GitVersionInfo
     PRIVATE
         SegFault
 )
@@ -140,13 +137,13 @@ target_link_libraries(ppa-reducestats
 
 add_executable(bampaverify
     bampaverify.cpp
-    git-rev-pseudo-header.h
 )
 
 target_link_libraries(bampaverify
     PUBLIC
         libPpaBase
         libPpaInterfaces
+        GitVersionInfo
     PRIVATE
         SegFault
         pthread
