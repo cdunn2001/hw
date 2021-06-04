@@ -3,7 +3,7 @@
   $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 1 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
-  65
+  67
 
   $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
@@ -13,12 +13,18 @@
   $ smrt-basecaller --inputfile ${TRCFILE} --zmwOutputStrideFactor 4 --numZmwLanes 1 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +2 | wc -l
-  65
+  67
 
   $ bazviewer --silent -d -n 4 ${CRAMTMP}/test.baz  | grep READOUT | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/ //g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 
   $ bazviewer --silent -d -n 2 ${CRAMTMP}/test.baz  | tail -n +2
+  [*] [*] [info]    Beginning read of next header batch (glob)
+  [*] [*] [info]    Finished read of next header batch (glob)
+  [*] [*] [info]    Beginning read of next slice (glob)
+  [*] [*] [info]    Beginning read of next header batch (glob)
+  [*] [*] [info]    Finished read of next header batch (glob)
+  [*] [*] [info]    Finished read of next slice (glob)
   {
   \t"STITCHED" :  (esc)
   \t[ (esc)
