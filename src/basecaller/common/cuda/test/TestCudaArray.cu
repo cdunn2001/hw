@@ -73,8 +73,6 @@ TEST(CudaArray, Construct)
     EXPECT_EQ(arr2[2], 3);
     EXPECT_EQ(arr2[3], 4);
 
-    for (auto& v : arr2) v -= 1;
-
     CudaArray<int, 3> arr3{3};
     EXPECT_EQ(arr3[0], 3);
     EXPECT_EQ(arr3[1], 3);

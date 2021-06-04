@@ -34,7 +34,6 @@ struct Foo {};
 TEST(CudaTuple, Types)
 {
     CudaTuple<Foo, int, float, double, Foo> tuple;
-    (void)tuple;
 
     EXPECT_TRUE((std::is_same<Foo&, decltype(tuple.Get<0>())>::value));
     EXPECT_TRUE((std::is_same<int&, decltype(tuple.Get<1>())>::value));

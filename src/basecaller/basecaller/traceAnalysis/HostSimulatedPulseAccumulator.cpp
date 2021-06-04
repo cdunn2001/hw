@@ -104,7 +104,10 @@ Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(size_t zmw) const
     pulse.MeanSignal(meanSignal());
     pulse.MidSignal(midSignal());
     pulse.MaxSignal(maxSignal());
-    pulse.SignalM2(pulse.MeanSignal() * pulse.MeanSignal());
+    if (pulse.Width() > 2)
+        pulse.SignalM2(pulse.MeanSignal() * pulse.MeanSignal() * 2 * (pulse.Width() - 2));
+    else
+        pulse.SignalM2(0);
     pulse.IsReject(false);
 
     return pulse;
