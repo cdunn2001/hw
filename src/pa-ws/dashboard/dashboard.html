@@ -1,0 +1,675 @@
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<! 
+
+
+    THIS FILE IS JUST A PLACEHOLDER FOR A REAL IMPLEMENTATION.
+
+    It was just copied over from Sequel.  The actually implementation will
+    poll wx-daemon's HTTP/REST interface and display the information in 
+    tabular or graphical format.  The code here is an example of how to 
+    write in Jquery and Javascript.
+
+>
+<head>
+    <meta charset="utf-8" />
+    <title>Primary Analysis</title>
+
+    <link rel="stylesheet" type="text/css" href="css/pa.css">
+    <link rel="stylesheet" type="text/css" href="css/epoch.min.css">
+
+
+    <script src="js/jquery.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/d3.min.js"></script>
+    <script src="js/epoch.min.js"></script>
+</head>
+<body>
+    <h1>Wx-Daemon Status Panel</h1>
+    <!-- some more ideas http://code.shutterstock.com/rickshaw/examples/ -->
+
+    <p>
+    <a href="/image">Click Here to see a live frame</a>
+    </p>
+
+    Blue Line: Frame Rate (f/s). Orange Line: Free Tiles (%).
+    <div id="pa_acq"  class="epoch" style="height: 100px;"></div>
+    Blue,Orange,Green Lines: % Idle. Pink,Purple,Brown Lines: Core Temperatures (C).
+    <div id="pa_t2b"  class="epoch" style="height: 100px;"></div>
+    Blue Line: byteRate received (MB/s)
+    <div id="pa_bw"   class="epoch" style="height: 100px;"></div>
+
+    <div class="list-row">
+        <div class="list-left">
+            pa-acq Acquisition
+            <table border="1" id="mybody">
+                <tr><th></th><th>HOST</th></tr>
+                <tr><td>State</td><td id="acqState"> ? </td></tr>
+                <tr><td>Timestamp</td><td id="acqTimeStatus"> ? </td></tr>
+                <tr><td>Uptime</td><td id="acqUptime"> ? </td></tr>
+                <tr><td>CPU Load</td><td id="acqLoad"> ? </td></tr>
+                <tr><td>Chip Class</td><td id="acqChipClass"> ? </td></tr>
+                <tr><td>Free Tile Pcnt</td><td id="freeTilePercent"> ? </td></tr>
+                <tr><td>Aurora</td><td id="auroraStatus"> ? </td></tr>
+                <tr><td>phiCount</td><td id="phiCount"> ? </td></tr>
+                <tr><td>Token</td><td id="acqToken"> ? </td></tr>
+                <tr><td>TX Status</td><td id="transmitStatus"> ? </td></tr>
+                <tr><td>RX Rate (f/s)</td><td id="frameRate"> ? </td></tr>
+                <tr><td>RX Frames</td><td id="currentFrame"> ? </td></tr>
+                <tr><td>Movie Frames</td><td id="movieFrame"> ? </td></tr>
+                <tr><td>PDU Overflows</td><td id="pduOverflows"> ? </td></tr>
+                <tr><td>CRC Errors</td><td id="crcErrors"> ? </td></tr>
+                <tr><td>TLB Proc Inv</td><td id="tlbProcInvCnt"> ? </td></tr>
+                <tr><td>Tiles @ FPGA</td><td id="tilesOwnedByFpga"> ? </td></tr>
+                <tr><td>Sent Deeds</td><td id="acqSentDeeds"> ? </td></tr>
+                <tr><td>Frac of Chunk</td><td id="acqFractionOfChunk"></td></tr>
+                <tr><td>Frac of SuperChunk</td><td id="acqFractionOfSuperChunk"></td></tr>
+                <tr><td>Alarms</td><td><select id="acqAlarms" size="3" class="alarmselect"></select></td></tr>
+            </table>
+        </div>
+        <div class="list-left">
+            pa-t2b Trace2Base
+            <table border="1">
+                <tr>
+                    <th></th>
+                    <th>MIC0</th>
+                    <th>MIC1</th>
+                    <th>MIC2</th>
+                </tr>
+                <tr>
+                    <td>state</td>
+                    <td id="t2bState0"> ? </td>
+                    <td id="t2bState1"> ? </td>
+                    <td id="t2bState2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Time</td>
+                    <td id="t2bTimeStatus0"> ? </td>
+                    <td id="t2bTimeStatus1"> ? </td>
+                    <td id="t2bTimeStatus2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Uptime</td>
+                    <td id="t2bUptime0"> ? </td>
+                    <td id="t2bUptime1"> ? </td>
+                    <td id="t2bUptime2"> ? </td>
+                </tr>
+                <tr>
+                    <td>CPU Load</td>
+                    <td id="t2bLoad0"> ? </td>
+                    <td id="t2bLoad1"> ? </td>
+                    <td id="t2bLoad2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Process</td>
+                    <td id="t2bPid0"> ? </td>
+                    <td id="t2bPid1"> ? </td>
+                    <td id="t2bPid2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Duty</td>
+                    <td id="t2bDuty0"> ? </td>
+                    <td id="t2bDuty1"> ? </td>
+                    <td id="t2bDuty2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Die Temp</td>
+                    <td id="t2bDieTemp0"> ? </td>
+                    <td id="t2bDieTemp1"> ? </td>
+                    <td id="t2bDieTemp2"> ? </td>
+                </tr>
+                <tr>
+                    <td>bytes in</td>
+                    <td id="bytesReceived0"> ? </td>
+                    <td id="bytesReceived1"> ? </td>
+                    <td id="bytesReceived2"> ? </td>
+                </tr>
+                </tr>
+                <tr>
+                    <td>tranches done</td>
+                    <td id="completedDataTranches0"> ? </td>
+                    <td id="completedDataTranches1"> ? </td>
+                    <td id="completedDataTranches2"> ? </td>
+                </tr>
+                <tr>
+                    <td>tranche rate (1/s)</td>
+                    <td id="trancheRate0"> ? </td>
+                    <td id="trancheRate1"> ? </td>
+                    <td id="trancheRate2"> ? </td>
+                </tr>
+                <tr>
+                    <td>free readBuffers</td>
+                    <td id="freeReadBufferQueue_0"> ? </td>
+                    <td id="freeReadBufferQueue_1"> ? </td>
+                    <td id="freeReadBufferQueue_2"> ? </td>
+                </tr>
+                <tr>
+                    <td>free tranches</td>
+                    <td id="trancheFreeQueue0"> ? </td>
+                    <td id="trancheFreeQueue1"> ? </td>
+                    <td id="trancheFreeQueue2"> ? </td>
+                </tr>
+                <tr>
+                    <td>recv deeds</td>
+                    <td id="t2bNumDeeds0"> ? </td>
+                    <td id="t2bNumDeeds1"> ? </td>
+                    <td id="t2bNumDeeds2"> ? </td>
+                </tr>
+                <tr>
+                    <td>Alarms</td>
+                    <td><select id="t2bAlarms0" size="3" class="alarmselect"></select></td>
+                    <td><select id="t2bAlarms1" size="3" class="alarmselect"></select></td>
+                    <td><select id="t2bAlarms2" size="3" class="alarmselect"></select></td>
+                </tr>
+
+            </table>
+        </div>
+        <div class="list-left">
+            pa-bw Basewriter
+            <table border="1">
+                <tr><th></th><th>HOST</th></tr>
+                <tr><td>State</td><td id="bwState"> ? </td></tr>
+                <tr><td>Time</td><td id="bwTimeStatus"> ? </td></tr>
+                <tr><td>Uptime</td><td id="bwUptime"> ? </td></tr>
+                <tr><td>CPU Load</td><td id="bwLoad"> ? </td></tr>
+                <tr><td>Chip Class</td><td id="bwChipClass"> ? </td></tr>
+                <tr><td>BAZ file</td><td id="bazfile"> ? </td></tr>
+                <tr><td>numZmws</td><td id="numZmws"> ? </td></tr>
+                <tr><td>bwToken</td><td id="bwToken"> ? </td></tr>
+                <tr><td>totalBytes</td><td id="bwTotalBytes"> ? </td></tr>
+                <tr><td>byteRate</td><td id="bwByteRate"> ? </td></tr>
+                <tr><td>ZMWs processed</td><td id="zmwsSoFar"> ? </td></tr>
+                <tr><td>Alarms</td><td><select id="bwAlarms" size="3" class="alarmselect"></select></td></tr>
+
+            </table>
+        </div>
+        <div class="list-left">
+            ppad Post Primary
+            <table border="1">
+                <tr><th></th><th>HOST</th></tr>
+                <tr><td>State</td><td id="ppadState"> ? </td></tr>
+                <tr><td>Timestamp</td><td id="ppadTimeStatus"> ? </td></tr>
+                <tr><td>Uptime</td><td id="ppadUptime"> ? </td></tr>
+                <tr><td>AcqId</td><td id="ppadAcqId"> ? </td></tr>
+                <tr><td>Message</td><td id="ppadMessage"> ? </td></tr>
+                <tr><td>Progress (%)</td><td id="ppadProgress"> ? </td></tr>
+            </table>
+        </div>
+        <div class="list-left">
+            pa-ws Web Services
+            <table border="1">
+                <tr><th></th><th>HOST</th></tr>
+                <tr><td>Acq State</td><td "> <select id="pawsAcqState" size="3" class="acqselect"></select> </td></tr>
+                <tr><td>Timestamp</td><td id="pawsTimeStatus"> ? </td></tr>
+                <tr><td>Uptime</td><td id="pawsUptime"> ? </td></tr>
+                <tr><td>Hours Left</td><td id="hoursLeft"> ? </td></tr>
+            </table>
+        </div>
+    </div>
+    <div id="errorMessages"></div>
+    <input type="checkbox" id="isShowAllAlarmsSelected">Show All Alarms</input>
+
+    <div class="list-left">
+        Versions
+        <table border="1">
+            <tr><td>pa-ws   </td> <td id="pawsVersion"> ? </td></tr>
+            <tr><td>pa-acq  </td> <td id="acqVersion"> ? </td></tr>
+            <tr><td>pa-t2b@0</td> <td id="t2bVersion0"> ? </td></tr>
+            <tr><td>pa-t2b@1</td> <td id="t2bVersion1"> ? </td></tr>
+            <tr><td>pa-t2b@2</td> <td id="t2bVersion2"> ? </td></tr>
+            <tr><td>pa-bw   </td> <td id="bwVersion">   ? </td></tr>
+            <tr><td>ppad    </td> <td id="ppadVersion"> ? </td></tr>
+        </table>
+    </div>
+
+
+    <p>
+    </p>
+    <script type="text/javascript">
+        var previousTranches = [0,0,0];
+        pawsHost = ""; // window.location.hostname;
+        ppadHost = ""; // window.location.hostname;
+        platform = "UNKNOWN";
+        $.urlParam = function(name){
+            var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+            if (results==null){
+                return null;
+            }
+            else{
+                return results[1] || 0;
+            }
+        }
+
+        $(function () {
+            var baseport=$.urlParam("baseport");
+            if (baseport == null)
+            {
+                baseport = location.port.substring(0,location.port.length - 2);
+                baseport = parseInt(baseport)*100; // take current and round down to nearest block of 100
+            } else
+            {
+                baseport = parseInt(baseport);
+            }
+            console.log("baseport=%d ",baseport)
+
+            var data = [
+                { label: 'Frame Rate', values: [{ time: 0, y: 0 }] },
+                { label: 'Free Tile pct', values: [{ time: 0, y: 0 }] },
+                { label: 'Frac Chunk', values: [{ time: 0, y: 0 }] },
+                { label: 'Frac SuperChunk', values: [{ time: 0, y: 0 }] },
+            ];
+            var dataT2b_conf = [
+                { label: 'freeReadBufferQueue_0', values: [{ time: 0, y: 0 }] },
+                { label: 'freeReadBufferQueue_1', values: [{ time: 0, y: 0 }] },
+                { label: 'freeReadBufferQueue_2', values: [{ time: 0, y: 0 }] },
+                { label: 'freeReadBufferQueue_0', values: [{ time: 0, y: 0 }] },
+                { label: 'freeReadBufferQueue_1', values: [{ time: 0, y: 0 }] },
+                { label: 'freeReadBufferQueue_2', values: [{ time: 0, y: 0 }] },
+            ];
+            var dataB2 = [
+                { label: 'bwByteRate', values: [{ time: 0, y: 0 }] },
+            ]
+            var chartAcq = $('#pa_acq').epoch({
+                type: 'time.line',
+                ticks: {bottom: 10},
+                data: data,
+                axes: ['left', 'right', 'bottom'],
+                windowSize: 600
+            });
+            var chartT2b = $('#pa_t2b').epoch({
+                type: 'time.line',
+                ticks: {bottom: 20},
+                data: dataT2b_conf,
+                axes: ['left', 'right', 'bottom'],
+                windowSize: 600
+            });
+            var chartBw = $('#pa_bw').epoch({
+                type: 'time.line',
+                ticks: {bottom: 20},
+                data: dataB2,
+                axes: ['left', 'right', 'bottom'],
+                windowSize: 600
+            });
+            var dataT2b = [
+                { time: 0, y: 0},
+                { time: 0, y: 0},
+                { time: 0, y: 0},
+                { time: 0, y: 0},
+                { time: 0, y: 0},
+                { time: 0, y: 0}
+            ];
+            function timeStatus(field,t) {
+                tt = new Date(t * 1000);
+                now = Date.now();
+                diff = now.valueOf() - tt.valueOf();
+                if (diff > 15000) {
+                    $(field)[0].style.backgroundColor = "red";
+                }
+                else {
+                    $(field)[0].style.backgroundColor = "white"; // $('#mybody').style.backgroundColor
+                }
+                return tt.toString().match(" [0-9]+:[0-9]{2}:[0-9]{2} ");
+            }
+            function convertTime(time) {
+                var seconds = parseInt(time % 60);
+                time = parseInt(time/60);
+                var minutes = time % 60;
+                time = parseInt(time/60);
+                var hours = time % 24;
+                time = parseInt(time/24);
+                var days = time % 24;
+                var out = "";
+                if(days > 0) out += days + "d ";
+                if(hours > 0) out += hours + "h ";
+                if(minutes > 0) out += minutes + "m "
+                if(seconds > 0) out += seconds + "s ";
+                return out.trim();
+            }
+
+            function colorState(field,state)
+            {
+                if (state == null || state == "error" || state == "Error" || state.includes("Failed")) {
+                    $(field)[0].style.backgroundColor = "red";
+                }
+                else if(state == "boot")
+                {
+                    $(field)[0].style.backgroundColor = "yellow";
+                }
+                else if(state == "offline")
+                {
+                    $(field)[0].style.backgroundColor = "gray";
+                }
+                else {
+                    $(field)[0].style.backgroundColor = "lightgreen";
+                }
+
+            }
+            function onDataReceivedAcq(json1) {
+                json = json1.status;
+                platform = json.platform;
+                $('#frameRate')[0].innerText = json.frameRate;
+                $('#acqState')[0].innerText = json.state;
+                colorState('#acqState', json.state);
+                $('#acqVersion')[0].innerText = json.version;
+                $('#acqTimeStatus')[0].innerText = timeStatus('#acqTimeStatus', parseFloat(json.time));
+                $('#acqUptime')[0].innerText = convertTime(json.uptime);
+                $('#acqLoad')[0].innerText = parseFloat(json.load1m);
+                $('#acqChipClass')[0].innerText = json.chipClass;
+                $('#auroraStatus')[0].innerText = json.auroraStatus;
+                if (json.auroraStatus == "up") {
+                    $('#auroraStatus')[0].style.backgroundColor = "lightgreen";
+                } else if (json.auroraStatus == "na") {
+                    $('#auroraStatus')[0].style.backgroundColor = "white";
+                } else {
+                    $('#auroraStatus')[0].style.backgroundColor = "red";
+                }
+                // $('#transmitFrame')[0].innerText = parseInt(json.transmitFrame).toLocaleString();
+                if (json.movieTransmitterFrameIndex >= 18446744073709552000) {
+                    $('#transmitStatus')[0].innerText = json.transmitStatus + " index: none sent";
+                } else {
+                    $('#transmitStatus')[0].innerText = json.transmitStatus + " index:" + json.movieTransmitterFrameIndex;
+                }
+                $('#currentFrame')[0].innerText = parseInt(json.currentFrame).toLocaleString() + " index:" + json.currentFrameIndex;
+                $('#movieFrame')[0].innerText = parseInt(json.movieFrame).toLocaleString();
+                $('#acqToken')[0].innerText = json.token;
+
+                $('#freeTilePercent')[0].innerText = json.freeTilePercent;
+                $('#phiCount')[0].innerText = json.phiCount;
+
+                if (json1.warning) {
+                    $('#pduOverflows')[0].innerText = json1.warning.rxOverflowPduCount;
+                    $('#crcErrors')[0].innerText = json1.warning.rxGthCrcErrorCount;
+                }
+                else {
+                    $('#pduOverflows')[0].innerText = 0;
+                    $('#crcErrors')[0].innerText = 0;
+                }
+                if (json1.fpga) {
+                    $('#tlbProcInvCnt')[0].innerText = json1.fpga.tlbProcInvCnt;
+                }
+                $('#tilesOwnedByFpga')[0].innerText = json1.tilesOwnedByFpga;
+                $('#acqSentDeeds')[0].innerText = json.sentDeeds;
+                $('#acqFractionOfChunk')[0].innerText = json.fractionOfChunk;
+                $('#acqFractionOfSuperChunk')[0].innerText = json.fractionOfSuperChunk;
+//                if (json.storageCapacity) {
+//                    $('#hoursLeft')[0].innerText = "/data/pa:" + json.storageCapacity.pa.hoursRemaining.toLocaleString() + "H /data/pb:" + json.storageCapacity.pb.hoursRemaining.toLocaleString() + "H";
+//                }
+                hoursLeft
+                d = [
+                    { time: parseInt(json.time), y: parseFloat(json.frameRate) },
+                    { time: parseInt(json.time), y: parseFloat(json.freeTilePercent) },
+                    { time: parseInt(json.time), y: parseFloat(json.fractionOfChunk)*100.0 },
+                    { time: parseInt(json.time), y: parseFloat(json.fractionOfSuperChunk)*100.0 },
+                ];
+                chartAcq.push(d);
+
+//                console.warn(json);
+            }
+            function showAlarms(tag,json) {
+                var $el = $(tag);
+
+                var cb = $('#isShowAllAlarmsSelected');
+                var showAll = cb[0].checked;
+                $el.empty(); // remove old options
+                if (json == null)
+                {
+                    $el.append($("<option></option>")
+                        .text("null"));
+                }
+                else {
+
+                    json.forEach(function (value) {
+                        if (value.severity != "CLEAR" || showAll) {
+                            $el.append($("<option></option>")
+                                .text(value.severity + " " + value.name + " " + value.message));
+                        }
+                    });
+                }
+            }
+
+            function showAcqStates(tag,json) {
+                var $el = $(tag);
+
+                var cb = $('#isShowAllAlarmsSelected');
+                var showAll = cb[0].checked;
+                $el.empty(); // remove old options
+                if (json == null)
+                {
+                    $el.append($("<option></option>")
+                        .text("null"));
+                }
+                else {
+
+                    json.forEach(function (value) {
+                        if (value.severity != "CLEAR" || showAll) {
+                            $el.append($("<option></option>")
+                                .text(value.acqId + " " + value.acqState));
+                        }
+                    });
+                }
+            }
+
+
+            function onDataReceivedT2bx(mic,json) {
+                $('#t2bState'+mic)[0].innerText = json.state;
+                colorState('#t2bState'+mic,json.state);
+                $('#t2bVersion'+mic)[0].innerText = json.version;
+                $('#t2bTimeStatus'+mic)[0].innerText = timeStatus('#t2bTimeStatus'+mic,parseFloat(json.time));
+                $('#t2bUptime'+mic)[0].innerText = convertTime(json.uptime);
+                $('#t2bLoad'+mic)[0].innerText = parseFloat(json.load1m);
+                //$('#t2bPid'+mic)[0].innerText = json.hostname.split(".")[0] + ":" + json.pid;
+                $('#t2bPid'+mic)[0].innerText = json.pid;
+                $('#t2bDuty'+mic)[0].innerText = parseFloat(json.dutyCycle_weighted);
+                $('#t2bDieTemp'+mic)[0].innerText = parseFloat(json.dieTemp) + "C";
+                $('#completedDataTranches'+mic)[0].innerText = parseInt(json.completedDataTranches).toLocaleString();
+                deltaT = 1.0;
+                $('#trancheRate'+mic)[0].innerText = (parseInt(json.completedDataTranches) - previousTranches[mic])/deltaT;
+                previousTranches[mic] = parseInt(json.completedDataTranches);
+                $('#freeReadBufferQueue_'+mic)[0].innerText = json.BaseWriterPipe.freeReadBufferQueue_;
+                $('#trancheFreeQueue'+mic)[0].innerText = json.fromAcquisition.trancheFreeQueue;
+                $('#t2bNumDeeds'+mic)[0].innerText = json.fromAcquisition.numDeeds;
+                var n = parseInt(json.fromAcquisition.bytesReceived);
+                $('#bytesReceived'+mic)[0].innerText = n.toLocaleString();
+                dataT2b[0+mic] =  { time: parseInt(json.time), y: parseFloat(json.idle) * 100.0 };
+                dataT2b[3+mic] =  { time: parseInt(json.time), y: parseFloat(json.dieTemp) };
+            }
+
+            function onDataReceivedBw(json) {
+                $('#bwState')[0].innerText = json.state;
+                colorState('#bwState',json.state);
+                $('#bwVersion')[0].innerText = json.version;
+                $('#bwTimeStatus')[0].innerText = timeStatus('#bwTimeStatus',parseFloat(json.time));
+                $('#bwUptime')[0].innerText = convertTime(json.uptime);
+                $('#bwLoad')[0].innerText = parseFloat(json.load1m);
+                $('#bwChipClass')[0].innerText = json.chipClass;
+                $('#bazfile')[0].innerText = json.bazfile;
+                $('#numZmws')[0].innerText = json.numZmws;
+                $('#bwToken')[0].innerText = json.token;
+                $('#bwTotalBytes')[0].innerText = (parseFloat(json.totalBytes)*1e-6).toFixed(1) + " MB";
+                $('#bwByteRate')[0].innerText = (parseFloat(json.byteRate) * 1e-6).toFixed(1) + " MB/s";
+                $('#zmwsSoFar')[0].innerText = json.zmwsSoFar;
+
+                d = [
+                    { time: parseInt(json.time), y: parseFloat(json.byteRate) *1e-6 }
+                    ]
+                chartBw.push(d);
+                //                console.warn(json);
+                //                chartBw.push(d);
+            }
+            function onDataReceivedPpad(json) {
+                $('#ppadAcqId')[0].innerText    = json.acqId ;
+                $('#ppadVersion')[0].innerText = json.version;
+                $('#ppadTimeStatus')[0].innerText = timeStatus('#ppadTimeStatus',parseFloat(json.time));
+                $('#ppadUptime')[0].innerText = convertTime(json.uptime);
+                $('#ppadMessage')[0].innerText  = json.message ;
+                $('#ppadProgress')[0].innerText = json.progress ;
+                $('#ppadState')[0].innerText    = json.state;
+                colorState('#ppadState',json.state);
+                //"acqId": "eab96191-427c-4edb-8932-ceb70e146966","message": "","progress": "70","state": "busy","version": "4.1.0.0"}
+                // "message": "Status Service are up and running for 250871 seconds.",
+            }
+            function onDataReceivedPawsStatus(json) {
+                //$('#pawsState')[0].innerText = json.state;
+                //colorState('#pawsState',json.state);
+                $('#pawsVersion')[0].innerText = json.version;
+                $('#pawsTimeStatus')[0].innerText = timeStatus('#pawsTimeStatus',parseFloat(json.time));
+                $('#pawsUptime')[0].innerText = convertTime(json.uptime);
+            }
+            //function onDataReceivedPawsAcquisitionStatus(json) {
+                //$('#pawsAcqState')[0].innerText = json.state;
+                //colorState('#pawsAcqState',json.state);
+                //$('#pawsHasPipeStats')[0].innerText = json.hasPipeStats;
+                //$('#pawsState')[0].innerText = json.hasPipeStats;
+                //$('#pawsState')[0].innerText = json.hasPipeStats;
+                // "message": "Status Service are up and running for 250871 seconds.",
+            //}
+            function onDataFailure(jqXHR, textStatus, errorThrown) {
+                console.warn(jqXHR);
+                var fp = $('#errorMessages')[0];
+                fp.innerText = jqXHR.responseText
+                //r = jQuery.parseJSON(jqXHR.responseText);
+                //fp.innerText = r.Message + r.StackTrace + r.ExceptionType;
+            }
+
+            setInterval(function () {
+                $.ajax({
+                    url: "http://"+window.location.hostname + ":" + (baseport +2) + "/acquisition",
+                    method: 'GET',
+                    dataType: 'json',
+                    contentType: "application/json",
+                    success: onDataReceivedAcq,
+                    error: function(a,b,c) {
+                        onDataFailure(a, b, c);
+                        $('#acqTimeStatus')[0].style.backgroundColor = "red";
+                    }
+                });
+            }, 1000);
+
+            function wireUpAlarms(port, tag){
+                setInterval(function () {
+                    $.ajax({
+                        url: "http://"+window.location.hostname + ":" + port + "/alarms",
+                        method: 'GET',
+                        dataType: 'json',
+                        //contentType: "application/json",
+                        success: function(json) {
+                            showAlarms(tag, json);
+                        }
+                    });
+                }, 1000);
+            }
+            wireUpAlarms(baseport +  2,'#acqAlarms');
+            wireUpAlarms(baseport + 12,'#t2bAlarms0');
+            wireUpAlarms(baseport + 42,'#t2bAlarms1'); // fix me. This should be disabled for Sequel2
+            wireUpAlarms(baseport + 52,'#t2bAlarms2'); // fix me. This should be disabled for Sequel2
+            wireUpAlarms(baseport + 22,'#bwAlarms');
+
+            setInterval(function() {
+                $.ajax({
+                    url: "http://"+ pawsHost + ":" + 8091 + "/acquisitions",
+                    method: 'GET',
+                    dataType: 'json',
+                    //contentType: "application/json",
+                    success: function(json) {
+                        showAcqStates('#pawsAcqState', json);
+                    }
+                });
+                if (platform === "Sequel2Lvl1" || platform === "Sequel2Lvl2")
+                {
+                    // replace "rt-" with "nrt-"
+                    pawsHost = window.location.hostname.replace("rt-","nrt-");
+                    ppadHost = pawsHost;
+                }
+                else
+                {
+                    pawsHost = window.location.hostname;
+                    ppadHost = window.location.hostname;
+                }
+            }, 1000);
+
+
+            setInterval(function () {
+                $.ajax({
+                    url: "http://" + window.location.hostname + ":" + (baseport +12) + "/",
+                    method: 'GET',
+                    dataType: 'json',
+                    contentType: "application/json",
+                    success: function(x){
+                        onDataReceivedT2bx(0,x);
+                        chartT2b.push(dataT2b);
+                    },
+                    error: onDataFailure
+                });
+            }, 1000);
+            setInterval(function () {
+                if (platform === "Sequel1PAC1") {
+                    $.ajax({
+                        url: "http://" + window.location.hostname + ":" + (baseport + 42) + "/",
+                        method: 'GET',
+                        dataType: 'json',
+                        contentType: "application/json",
+                        success: function (x) {
+                            onDataReceivedT2bx(1, x);
+                        },
+                        error: onDataFailure
+                    });
+                }
+            }, 1000);
+            setInterval(function () {
+                if (platform === "Sequel1PAC1") {
+                    $.ajax({
+                        url: "http://" + window.location.hostname + ":" + (baseport + 52) + "/",
+                        method: 'GET',
+                        dataType: 'json',
+                        contentType: "application/json",
+                        success: function (x) {
+                            onDataReceivedT2bx(2, x);
+                        },
+                        error: onDataFailure
+                    });
+                }
+            }, 1000);
+
+            setInterval(function () {
+                $.ajax({
+                    url: "http://" + window.location.hostname + ":" + (baseport + 22) + "/",
+                    method: 'GET',
+                    dataType: 'json',
+                    contentType: "application/json",
+                    success: onDataReceivedBw,
+                    error: onDataFailure
+                });
+            }, 1000);
+
+            setInterval(function () {
+                if (ppadHost !== "") {
+                    $.ajax({
+                        url: "http://" + ppadHost + ":" + (baseport + 62) + "/",
+                        method: 'GET',
+                        dataType: 'json',
+                        contentType: "application/json",
+                        success: onDataReceivedPpad,
+                        error: onDataFailure
+                    });
+                }
+            }, 1000);
+
+            setInterval(function () {
+                if (pawsHost !== "") {
+                    $.ajax({
+                        url: "http://" + pawsHost + ":8091/status",
+                        method: 'GET',
+                        dataType: 'json',
+                        contentType: "application/json",
+                        success: onDataReceivedPawsStatus,
+                        error: onDataFailure
+                    });
+                }
+            }, 1000);
+
+        });
+
+
+    </script>
+    Based on <a href="https://fastly.github.io/epoch/basic/">https://fastly.github.io/epoch/basic/</a>
+</body>
+</html>

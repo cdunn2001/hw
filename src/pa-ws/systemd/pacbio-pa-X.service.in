@@ -1,0 +1,78 @@
+# Copyright (c) 2021, Pacific Biosciences of California, Inc.
+#
+# All rights reserved.
+#
+# THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+# AND PROPRIETARY INFORMATION.
+#
+# Disclosure, redistribution and use of this software is subject to the
+# terms and conditions of the applicable written agreement(s) between you
+# and Pacific Biosciences, where "you" refers to you or your company or
+# organization, as applicable.  Any other disclosure, redistribution or
+# use is prohibited.
+#
+# THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+# IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+[Unit]
+Description=PacBio Primary Analysis WX Daemon @SYSTEM_EXEC@ @APP_VERSION@
+Documentation=file:$RPM_INSTALL_PREFIX/doc/index.html
+PartOf=pacbio-pa-rt-@SOFTWARE_VERSION@.service
+Requires=@SYSTEMD_DEPENDENCIES@
+After=@SYSTEMD_DEPENDENCIES@
+After=network-online.target
+#OnFailure=pacbio-doctor.service
+
+[Service]
+WorkingDirectory=/home/pbi
+User=pbi
+Environment=SEGFAULT_SIGNALS=all
+EnvironmentFile=-@SYSTEMD_CONF_PATH@
+#### this allows to run on all cores
+Environment="NUMA_ACQ=-c 0-1000"
+# to limit the cores (pinning), assign NUMA_ACQ in this file:
+EnvironmentFile=-/etc/pacbio/taskset.conf
+StandardOutput=journal
+
+# run the ExecStartPre scripts as root, run ExecStart as User=pbi
+PermissionsStartOnly=true
+
+@SYSTEMD_PREEXEC1@
+ExecStartPre=/usr/bin/ldd $RPM_INSTALL_PREFIX/bin/@SYSTEM_EXEC@
+### ExecStartPre=$RPM_INSTALL_PREFIX/bin/precheck.sh $PA_ACQ_OPTIONS
+ExecStartPre=$RPM_INSTALL_PREFIX/bin/precheck-wx-daemon.sh
+ExecStartPre=/usr/bin/sleep 1
+ExecStart=/usr/bin/taskset $NUMA_ACQ $RPM_INSTALL_PREFIX/bin/@SYSTEM_EXEC@ --daemon=/var/run/pacbio/wx-daemon.pid --logoutput=/var/log/pacbio/wx-daemon/wx-daemon $PA_WX_DAEMON_OPTIONS $PA_COMMON_CONFIG --config=@SYSTEMD_COMMON_JSON@
+PIDFile=/var/run/pacbio/pa-acq.pid
+#ExecReload=/bin/kill -HUP $MAINPID
+WatchdogSec=10s
+# allow daemon to send sd_notifications to systemd (STATUS, WATCHDOG, etc)
+NotifyAccess=all
+## Restart the process if it fails (which means !=0 exit, abnormal termination, or abort or watchdog)
+RestartSec=5s
+Restart=on-failure
+## try starting up to this many times:
+StartLimitBurst=6
+## ... within this time limit:
+StartLimitInterval=5min
+## ... otherwise, reboot the machine.
+#StartLimitAction=reboot-force
+StartLimitAction=none
+
+TimeoutStopSec=120s
+Nice=-10
+IOSchedulingClass=realtime
+
+[Install]
+Alias="@SYSTEMD_ALIAS@.service"
+WantedBy=multi-user.target
