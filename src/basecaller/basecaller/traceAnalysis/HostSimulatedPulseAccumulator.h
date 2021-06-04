@@ -57,7 +57,7 @@ private:
     std::vector<uint32_t> pulseId_;
     mutable std::mt19937 mt_;
 
-    static Data::SimulatedPulseConfig config_;
+    static std::unique_ptr<Data::SimulatedPulseConfig> config_;
 };
 
 }}} // namespace PacBio::Mongo::Basecaller

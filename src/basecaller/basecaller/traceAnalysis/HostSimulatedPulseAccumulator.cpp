@@ -7,7 +7,7 @@ namespace Basecaller {
 void HostSimulatedPulseAccumulator::Configure(const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     const auto hostExecution = true;
-    config_ = pulseConfig.simConfig;
+    config_ = std::make_unique<Data::SimulatedPulseConfig>(pulseConfig.simConfig);
     PulseAccumulator::InitFactory(hostExecution, pulseConfig);
 }
 
@@ -16,7 +16,7 @@ void HostSimulatedPulseAccumulator::Finalize()
     PulseAccumulator::Finalize();
 }
 
-Data::SimulatedPulseConfig HostSimulatedPulseAccumulator::config_;
+std::unique_ptr<Data::SimulatedPulseConfig> HostSimulatedPulseAccumulator::config_;
 
 HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId, size_t numLanes)
     : PulseAccumulator(poolId)
@@ -88,13 +88,13 @@ Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(size_t zmw) const
         };
     };
 
-    decltype(config_.basecalls) tmp{};
-    auto basecall = makeGenerator(config_.basecalls,tmp);
-    auto ipd = makeIntGenerator(config_.ipds, config_.ipdVars);
-    auto pw = makeIntGenerator(config_.pws, config_.pwVars);
-    auto meanSignal = makeGenerator(config_.meanSignals, config_.meanSignalsVars);
-    auto midSignal = makeGenerator(config_.midSignals, config_.midSignalsVars);
-    auto maxSignal = makeGenerator(config_.maxSignals, config_.maxSignalsVars);
+    decltype(config_->basecalls) tmp{};
+    auto basecall = makeGenerator(config_->basecalls,tmp);
+    auto ipd = makeIntGenerator(config_->ipds, config_->ipdVars);
+    auto pw = makeIntGenerator(config_->pws, config_->pwVars);
+    auto meanSignal = makeGenerator(config_->meanSignals, config_->meanSignalsVars);
+    auto midSignal = makeGenerator(config_->midSignals, config_->midSignalsVars);
+    auto maxSignal = makeGenerator(config_->maxSignals, config_->maxSignalsVars);
 
     auto pulse = Data::Pulse();
 
