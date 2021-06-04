@@ -59,18 +59,15 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     RawMetricData rawMetrics(fields);
     for (int i = 0; i < numMetricBlocks; ++i)
     {
-        rawMetrics.FloatMetric(MetricFieldName::BASELINE_RED_MEAN).push_back(10);
-        rawMetrics.FloatMetric(MetricFieldName::BASELINE_GREEN_MEAN).push_back(20);
-        rawMetrics.FloatMetric(MetricFieldName::BASELINE_RED_SD).push_back(30);
-        rawMetrics.FloatMetric(MetricFieldName::BASELINE_GREEN_SD).push_back(40);
+        rawMetrics.FloatMetric(MetricFieldName::BASELINE_MEAN).push_back(20);
+        rawMetrics.FloatMetric(MetricFieldName::BASELINE_SD).push_back(40);
 
         rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_A).push_back(100);
         rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_C).push_back(200);
         rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_G).push_back(300);
         rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_T).push_back(400);
 
-        rawMetrics.FloatMetric(MetricFieldName::ANGLE_RED).push_back(10);
-        rawMetrics.FloatMetric(MetricFieldName::ANGLE_GREEN).push_back(30);
+
         if (i >= seqStartBlock && i < seqEndBlock)
         {
             if (i == seqEndBlock - 1 && config.dumpBasesInLastBlock) numBasePerMBlock = numBases - totBases;

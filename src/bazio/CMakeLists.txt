@@ -23,7 +23,9 @@ set(Baz_MAJOR_VERSION 1)
 set(Baz_MINOR_VERSION 6)
 set(Baz_PATCH_VERSION 0)
 
-# Baz IO version
+# Explicitly set Baz IO version
+set(BazIO_VERSION "7.0.0")
+
 # P4 version
 if(NOT NO_P4VERSION)
     include(pacbio-versionheaderfile)

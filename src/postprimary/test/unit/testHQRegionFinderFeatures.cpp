@@ -210,13 +210,13 @@ TEST(HQRegionFinderFeatures, HQMetrics)
             TestFloatMetric(metrics.bpzvar().data().G, {0.10, 0.10, 0.10}),
             TestFloatMetric(metrics.bpzvar().data().T, {0.11, 0.11, 0.11}),
             TestFloatMetric(metrics.BaselineSD().data().green, {25, 25, 25});
-            TestFloatMetric(metrics.BaselineSD().data().red, {26, 26, 26});
+            TestFloatMetric(metrics.BaselineSD().data().red, {25, 25, 25});
             TestFloatMetric(metrics.PulseDetectionScore().data(), {-7, -7, -7});
             TestFloatMetric(metrics.TraceAutocorr().data(), {.8, .8, .8});
             // (mdsmith) I've confirmed these manually:
-            TestFloatMetric(metrics.ChannelMinSNR().data().red, {7.93, 7.93, 7.93});
-            TestFloatMetric(metrics.ChannelMinSNR().data().green, {8.45, 8.45, 8.45});
-            TestFloatMetric(metrics.BlockLowSNR().data(), {7.93, 7.93, 7.93});
+            TestFloatMetric(metrics.ChannelMinSNR().data().red, {8.34, 8.34, 8.34});
+            TestFloatMetric(metrics.ChannelMinSNR().data().green, {8.34, 8.34, 8.34});
+            TestFloatMetric(metrics.BlockLowSNR().data(), {8.34, 8.34, 8.34});
         }
     }
 }

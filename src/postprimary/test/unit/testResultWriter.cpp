@@ -454,17 +454,18 @@ TEST(ResultWriter,StreamingToStdout)
         EXPECT_TRUE(bam.Header().HasProgram("bazwriter")) << bam.Header().ToSam();
         EXPECT_TRUE(bam.Header().HasProgram("bazFormat")) << bam.Header().ToSam();
         auto ids = bam.Header().ReadGroupIds();
-        bool gotPlatform = false;
-        for(const auto& rg : bam.Header().ReadGroups())
-        {
-            //TEST_COUT << "rg:" << rg.Id() <<" " << rg.Programs() << std::endl;
 
-            if (rg.Platform() == "PACBIO" && rg.PlatformModel() == PacBio::BAM::PlatformModelType::SEQUEL)
-            {
-                gotPlatform = true;
-            }
-        }
-        EXPECT_TRUE(gotPlatform) << bam.Header().ToSam();
+//        bool gotPlatform = false;
+//        for(const auto& rg : bam.Header().ReadGroups())
+//        {
+//            //TEST_COUT << "rg:" << rg.Id() <<" " << rg.Programs() << std::endl;
+//
+//            if (rg.Platform() == "PACBIO" && rg.PlatformModel() == PacBio::BAM::PlatformModelType::SEQUEL)
+//            {
+//                gotPlatform = true;
+//            }
+//        }
+//        EXPECT_TRUE(gotPlatform) << bam.Header().ToSam();
 
         for(const auto& co : bam.Header().Comments())
         {

@@ -119,7 +119,7 @@ TEST(zmwMetrics, HQRegionSnrMean)
     std::unique_ptr<FileHeader> fh = std::move(std::get<1>(res));
 
     auto snrs = zmw.HQRegionSnrMean;
-    std::array<double,4> expsnrs = {{1/3.0f, 2/3.0f, 3/4.0f, 1}};
+    std::array<double,4> expsnrs = {{1/4.0f, 1/2.0f, 3/4.0f, 1}};
     for (int i = 0; i < 4; i++ )
     {
         EXPECT_NEAR(expsnrs[i], snrs[i], 0.01);

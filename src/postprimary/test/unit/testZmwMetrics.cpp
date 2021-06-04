@@ -26,18 +26,18 @@ TEST(zmwMetrics, SignalMetrics)
     const auto& signalMetrics = SignalMetrics(bazMetrics.GetFullRegion(), bazMetrics);
 
     EXPECT_EQ(20, signalMetrics.Baseline().green);
-    EXPECT_EQ(10, signalMetrics.Baseline().red);
+    EXPECT_EQ(20, signalMetrics.Baseline().red);
 
     EXPECT_EQ(40, signalMetrics.BaselineSD().green);
-    EXPECT_EQ(30, signalMetrics.BaselineSD().red);
+    EXPECT_EQ(40, signalMetrics.BaselineSD().red);
 
     EXPECT_EQ(10, signalMetrics.PkMid().A);
     EXPECT_EQ(20, signalMetrics.PkMid().C);
     EXPECT_EQ(30, signalMetrics.PkMid().G);
     EXPECT_EQ(40, signalMetrics.PkMid().T);
 
-    EXPECT_NEAR(0.333333, signalMetrics.Snr().A, 0.01);
-    EXPECT_NEAR(0.666667, signalMetrics.Snr().C, 0.01);
+    EXPECT_NEAR(0.25, signalMetrics.Snr().A, 0.01);
+    EXPECT_NEAR(0.5, signalMetrics.Snr().C, 0.01);
     EXPECT_NEAR(0.75, signalMetrics.Snr().G, 0.01);
     EXPECT_NEAR(1, signalMetrics.Snr().T, 0.01);
 
@@ -46,13 +46,9 @@ TEST(zmwMetrics, SignalMetrics)
     // produce data consistent with the expected relative amplitudes.  So the A/C
     // happens to come out about right, but the G/T channel ends up somewhere in
     // the middle of the two values.
-    EXPECT_NEAR(0.333333, signalMetrics.MinSnr().red, 0.01);
-    EXPECT_NEAR(0.63, signalMetrics.MinSnr().green, 0.01);
+    EXPECT_NEAR(0.45, signalMetrics.MinSnr().red, 0.01);
+    EXPECT_NEAR(0.45, signalMetrics.MinSnr().green, 0.01);
 
-    EXPECT_EQ(10, signalMetrics.Angle().A);
-    EXPECT_EQ(10, signalMetrics.Angle().C);
-    EXPECT_EQ(30, signalMetrics.Angle().G);
-    EXPECT_EQ(30, signalMetrics.Angle().T);
 }
 
 TEST(zmwMetrics, ExcludedPulseMetrics)
