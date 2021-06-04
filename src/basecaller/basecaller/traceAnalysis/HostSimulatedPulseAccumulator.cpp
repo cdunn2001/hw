@@ -22,7 +22,7 @@ HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId, si
     : PulseAccumulator(poolId)
     , nextPulse_(numLanes*laneSize)
     , pulseId_(numLanes*laneSize)
-    , mt_(config_.seed + poolId)
+    , mt_(config_->seed + poolId)
     {
         for (size_t i = 0; i < nextPulse_.size(); ++i)
         {
@@ -105,7 +105,12 @@ Data::Pulse HostSimulatedPulseAccumulator::GeneratePulse(size_t zmw) const
     pulse.MidSignal(midSignal());
     pulse.MaxSignal(maxSignal());
     if (pulse.Width() > 2)
-        pulse.SignalM2(pulse.MeanSignal() * pulse.MeanSignal() * 2 * (pulse.Width() - 2));
+    {
+        auto n = pulse.Width() - 2;
+        auto mean = pulse.MeanSignal();
+        auto m2 = (n-1)*mean + n * mean * mean;
+        pulse.SignalM2(m2);
+    }
     else
         pulse.SignalM2(0);
     pulse.IsReject(false);
