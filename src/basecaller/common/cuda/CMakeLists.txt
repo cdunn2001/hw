@@ -43,7 +43,7 @@ set(CUDA_LIST
     streams/LaunchManager.cuh
     utility/CudaArray.h
     utility/CudaArray.cu
-    utility/CudaTuple.cuh
+    utility/CudaTuple.h
     utility/CudaTuple.cu
 )
 

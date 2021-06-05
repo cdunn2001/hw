@@ -6,6 +6,8 @@ include(pacbio-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonCudaTest OBJECT
     TestCudaEvents.cu
+    TestCudaTuple.cu
+    TestCudaArray.cu
     TestDeviceAllocationStash.cu
     TestManagedAllocations.cpp
     TestPBCudaSimd.cpp

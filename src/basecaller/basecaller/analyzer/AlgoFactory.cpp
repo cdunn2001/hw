@@ -429,7 +429,7 @@ AlgoFactory::CreatePulseAccumulator(unsigned int poolId,
         return std::make_unique<PulseAccumulator>(poolId);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostSimulatedPulses:
-        return std::make_unique<HostSimulatedPulseAccumulator>(poolId);
+        return std::make_unique<HostSimulatedPulseAccumulator>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         return std::make_unique<HostPulseAccumulator<SubframeLabelManager>>(poolId, dims.lanesPerBatch);

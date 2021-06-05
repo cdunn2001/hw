@@ -24,4 +24,4 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "CudaTuple.cuh"
+#include "CudaTuple.h"

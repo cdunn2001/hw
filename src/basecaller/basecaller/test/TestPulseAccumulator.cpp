@@ -127,6 +127,18 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
 
     HostSimulatedPulseAccumulator::Configure(config.pulses);
 
+    // Validate some assumptions about our pulse generation configuration
+    const size_t repeatInterval = config.pulses.simConfig.basecalls.size();
+    ASSERT_EQ(repeatInterval, config.pulses.simConfig.maxSignals.size());
+    ASSERT_EQ(repeatInterval, config.pulses.simConfig.meanSignals.size());
+    ASSERT_EQ(repeatInterval, config.pulses.simConfig.midSignals.size());
+
+    ASSERT_EQ(1, config.pulses.simConfig.ipds.size());
+    ASSERT_EQ(1, config.pulses.simConfig.pws.size());
+
+    const auto pw = config.pulses.simConfig.pws[0];
+    const auto ipd = config.pulses.simConfig.ipds[0];
+
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
@@ -138,28 +150,24 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, framesPerChunk, 0), config.Dims());
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
-    HostSimulatedPulseAccumulator pulseAccumulator(poolId);
+    HostSimulatedPulseAccumulator pulseAccumulator(poolId, config.layout.lanesPerPool);
 
     auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
-
-    // Repeating sequence of ACGT.
-    const NucleotideLabel labels[] =
-            { NucleotideLabel::A, NucleotideLabel::C, NucleotideLabel::G, NucleotideLabel::T };
 
     for (uint32_t laneIdx = 0; laneIdx < pulseBatch.Dims().lanesPerBatch; ++laneIdx)
     {
         const auto& lanePulses = pulseBatch.Pulses().LaneView(laneIdx);
         for (uint32_t zmwIdx = 0; zmwIdx < laneSize; ++zmwIdx)
         {
-            EXPECT_EQ(config.pulses.maxCallsPerZmw, lanePulses.size(zmwIdx));
-            for (uint32_t pulseNum = 0; pulseNum < config.pulses.maxCallsPerZmw; ++pulseNum)
+            for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
                 const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
-                EXPECT_EQ(labels[pulseNum % 4], pulse.Label());
-                EXPECT_EQ(1, pulse.Start());
-                EXPECT_EQ(3, pulse.Width());
+                auto expectedCall = config.pulses.simConfig.basecalls[pulseNum % repeatInterval];
+                EXPECT_EQ(Data::mapToNucleotideLabel(expectedCall), pulse.Label());
+                EXPECT_EQ(ipd+(pw+ipd)*pulseNum, pulse.Start());
+                EXPECT_EQ(pw, pulse.Width());
             }
         }
     }

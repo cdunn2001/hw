@@ -36,6 +36,34 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+class SimulatedPulseConfig : public Configuration::PBConfig<SimulatedPulseConfig>
+{
+public:
+    PB_CONFIG(SimulatedPulseConfig);
+
+    // These vectors do NOT need to be the same length.  They will be looped through independently,
+    // and in fact having their lengths be relatively prime is a way to get a longer period between
+    // repeats in the overall pulse sequence
+    PB_CONFIG_PARAM(std::vector<char>,  basecalls,   std::vector<char>({ 'A', 'C', 'G', 'T'}));
+    PB_CONFIG_PARAM(std::vector<float>, meanSignals, std::vector<float>({ 20.0f, 10.0f, 16.0f, 8.0f}));
+    PB_CONFIG_PARAM(std::vector<float>, midSignals,  std::vector<float>({ 21.0f, 11.0f, 17.0f, 9.0f}));
+    PB_CONFIG_PARAM(std::vector<float>, maxSignals,  std::vector<float>({ 21.0f, 11.0f, 17.0f, 9.0f}));
+    PB_CONFIG_PARAM(std::vector<float>, ipds, std::vector<float>({6}));
+    PB_CONFIG_PARAM(std::vector<float>, pws, std::vector<float>({5}));
+
+    // When these vectors are empty, the corresponding vector above is treated as a sequence which
+    // each ZMW will walk through in order.  When these vectors have at least one value, then
+    // this vector and it's corresponding vector above is treated as a sequence of mean/variance
+    // pairs.  These mean/variances will be distributed amongst ZMW in a round-robin fashion.
+    PB_CONFIG_PARAM(std::vector<float>, meanSignalsVars, std::vector<float>());
+    PB_CONFIG_PARAM(std::vector<float>, midSignalsVars,  std::vector<float>());
+    PB_CONFIG_PARAM(std::vector<float>, maxSignalsVars,  std::vector<float>());
+    PB_CONFIG_PARAM(std::vector<float>, ipdVars, std::vector<float>());
+    PB_CONFIG_PARAM(std::vector<float>, pwVars, std::vector<float>());
+
+    PB_CONFIG_PARAM(uint64_t, seed, 0);
+};
+
 class BasecallerPulseAccumConfig : public Configuration::PBConfig<BasecallerPulseAccumConfig>
 {
 public:
@@ -57,6 +85,9 @@ public:
     // Hard-coded for now to correspond to 512-frame chunk, 100 fps, with
     // max pulse rate of 10 pulses per second.
     PB_CONFIG_PARAM(uint32_t, maxCallsPerZmw, 48);
+
+    // Only has an effect if we are configured to use HostSimulatedPulses
+    PB_CONFIG_OBJECT(SimulatedPulseConfig, simConfig);
 };
 
 }}}     // namespace PacBio::Mongo::Data

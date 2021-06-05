@@ -48,6 +48,12 @@ public:
         : DeviceHandle<T>(handle)
     {}
 
+    // Allow construction of a const view from a non-const handle
+    template <typename U = T, std::enable_if_t<std::is_const<U>::value, int> = 0>
+    __device__ __host__ DeviceView(const DeviceHandle<std::remove_const_t<T>>& handle)
+        : DeviceHandle<T>(handle)
+    {}
+
     // Implicit conversion to DeviceView<const T> needs to be disabled if we're already
     // templated on a const T
     template <typename U = T, std::enable_if_t<!std::is_const<U>::value, int> = 0>

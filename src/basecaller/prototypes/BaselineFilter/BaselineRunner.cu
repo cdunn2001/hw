@@ -8,7 +8,6 @@
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/memory/UnifiedCudaArray.h>
-#include <common/cuda/utility/CudaTuple.cuh>
 #include <common/DataGenerators/SawtoothGenerator.h>
 #include <common/KernelThreadPool.h>
 
