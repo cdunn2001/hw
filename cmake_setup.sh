@@ -16,8 +16,9 @@ for d in \
    build/pa-cal/gcc/x86_64/Release
 #   build/basecaller/gcc/x86_64/Release \
 #   build/basecaller/gcc/x86_64/Debug \
-#   build/basecaller/icpc/x86_64/Release \
-#   build/basecaller/icpc/x86_64/Debug
+#   build/basecaller/icc/x86_64/Release \
+#   build/basecaller/icc/x86_64/Debug \
+#   build/basecaller/icc/avx512/Release \
 do
     rm -rf $d 
     mkdir -p $d
