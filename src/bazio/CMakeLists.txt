@@ -3,15 +3,10 @@
 
 cmake_minimum_required (VERSION 3.13)
 
-option(BUILD_SEQUEL_COMMON_TESTS "If ON, the unit and functional tests are built")
-option(SHM_REALTIME              "If ON, build the pipeline using PoolShmRealtime instead of PoolSCIF (needed for Purley Skylake with no MICS)")
-
 # Allow use of std::min in Visual Studio.
 add_definitions(-DNOMINMAX)
 
 include(pacbio-cplusplus-api)
-include(pacbio-hdf5)
-include(pacbio-tbb)
 include(pacbio-boost)
 include(pacbio-jsoncpp)
 include(pacbio-half)
@@ -19,18 +14,12 @@ include(pacbio-half)
 # libBazio - BAZ-related code
 
 # BAZ file format version
-set(Baz_MAJOR_VERSION 1)
-set(Baz_MINOR_VERSION 6)
+set(Baz_MAJOR_VERSION 2)
+set(Baz_MINOR_VERSION 0)
 set(Baz_PATCH_VERSION 0)
 
 # Explicitly set Baz IO version
 set(BazIO_VERSION "7.0.0")
-
-# P4 version
-if(NOT NO_P4VERSION)
-    include(pacbio-versionheaderfile)
-    get_perforce_change_number(P4VERSION)
-endif()
 
 # Generate header with versions
 configure_file(template/BazVersion.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/BazVersion.h)
@@ -105,6 +94,5 @@ target_link_libraries(libBazio
         libJsoncpp
         libHalf
 )
-
 
 add_subdirectory(bazviewer)

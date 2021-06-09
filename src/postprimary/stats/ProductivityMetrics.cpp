@@ -116,10 +116,8 @@ ProductivityInfo ProductivityMetrics::ComputeProductivityInfo(
 
 bool ProductivityMetrics::IsSequencingZmw(size_t zmwNum)
 {
-    // BENTODO this used to be based of the chipLayout, need a new way
-    // to percolate this from the baz file
-    //UnitCell uc(zmwNum);
-    //return chipLayout.IsSequencing(static_cast<uint16_t>(uc.x), static_cast<uint16_t>(uc.y));
+    static bool warnOnce = [](){PBLOG_WARN << "Marking all ZMWs as sequencing, Kestrel does not yet have a replacement for Sequel layout"; return true;}();
+    (void)warnOnce;
     return true;
 }
 

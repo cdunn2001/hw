@@ -55,7 +55,7 @@
 #include <bazio/FileHeader.h>
 #include <BazVersion.h>
 
-#include <bazio/HDFMultiArrayIO.h>
+#include <pacbio/primary/HDFMultiArrayIO.h>
 
 
 using namespace PacBio;

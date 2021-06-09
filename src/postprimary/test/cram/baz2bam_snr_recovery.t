@@ -1,12 +1,12 @@
 
 Kiwi CRF HQRF (now the default)
 
-  $ baz2bam -o out_crf -m $TESTDIR/data/metadata.xml /pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_prod_hf_min_exp_meta.baz --silent --enableBarcodedAdapters=False
+  $ baz2bam --minSnr 3.75 -o out_crf -m $TESTDIR/data/metadata.xml /pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_prod_hf_min_exp_meta.baz --silent --enableBarcodedAdapters=False
 
 Number of reads and SNRs from subreads.bam
 
   $ samtools view -c out_crf.subreads.bam
-  7895
+  8000
   $ samtools view out_crf.subreads.bam | head -10 | cut -f19
   sn:B:f,26.3762,49.8892,19.753,30.6053
   sn:B:f,26.4701,50.2023,19.6867,30.2927
@@ -24,15 +24,5 @@ parts of reads that are now whole when using the CRF. The only scraps
 left were NO-HQ, and those existed in Jaguar as well).
 
   $ samtools view -c out_crf.scraps.bam
-  105
+  0
   $ samtools view out_crf.scraps.bam | head -10 | cut -f18
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0
-  sn:B:f,0,0,0,0

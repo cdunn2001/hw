@@ -228,6 +228,8 @@ public:
         if (user->runtimeMetaDataFilePath.empty())
             rmd->movieName  = fileHeader.MovieName();
 
+        static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for run metadata XML"; return true;}();
+        (void)warnOnce;
         rmd->platform = Platform::SEQUELII;
 
         return rmd;

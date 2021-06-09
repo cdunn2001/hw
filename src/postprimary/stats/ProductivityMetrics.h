@@ -42,7 +42,6 @@
 #include <bazio/RegionLabelType.h>
 
 #include "LoadingClass.h"
-// BENTODO Move this to pa-common
 #include "PBOptional.h"
 #include "ProductivityClass.h"
 #include "ReadTypeClass.h"

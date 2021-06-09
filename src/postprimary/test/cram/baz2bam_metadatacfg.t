@@ -13,4 +13,4 @@ Run with command-line argument
 Run with no minSnr in metadata.xml, default for platform should be used
   $ baz2bam --metadata $TESTDIR/data/testcfg_nominSnr.metadata.xml -o noSnrmd --whitelistZmwId=0-199 ${bazFile} --silent > /dev/null 2>&1
   $ grep PPAAlgoConfig noSnrmd.baz2bam_1.log | awk -F'=' '{print $2}' | jq '.inputFilter.minSnr'
-  3.75
+  2

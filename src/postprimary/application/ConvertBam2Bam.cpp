@@ -74,7 +74,7 @@
 
 #include <git-rev.h>
 
-const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash();
+static const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash();
 
 using namespace PacBio::Primary::Postprimary;
 
@@ -983,21 +983,6 @@ int ConvertBam2Bam::ParseHeader(std::vector<ProgramInfo>* apps)
         }
         else
             apps->emplace_back(app);
-    }
-
-    // Set chip type so that the platform model is set. We
-    // only support running bam2bam on either Sequel or SequelII data.
-    switch (rmd_->platform)
-    {
-        case Platform::SEQUEL:
-            //fh_->ChipLayoutName("SequEL_4.0_RTO3");
-            break;
-        case Platform::SEQUELII:
-            //fh_->ChipLayoutName("Spider_1p0_NTO");
-            break;
-        default:
-            throw std::runtime_error("Only SEQUEL and SEQUELII platforms supported for bam2bam");
-            break;
     }
 
     // Get one read group as a representative

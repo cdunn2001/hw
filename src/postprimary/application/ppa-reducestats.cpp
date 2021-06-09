@@ -47,7 +47,7 @@
 
 #include <git-rev.h>
 
-const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash();
+static const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash();
 
 using namespace PacBio::Process;
 using namespace PacBio::Primary;

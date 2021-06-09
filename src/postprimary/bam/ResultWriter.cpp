@@ -865,6 +865,9 @@ std::vector<ProgramInfo> ResultWriter::CreateProgramInfos(const FileHeader& file
 ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
                                                 const FileHeader& fileHeader)
 {
+    static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for ReadGroupInfo in BAM file"; return true;}();
+    (void)warnOnce;
+
     PlatformModelType type = PlatformModelType::SEQUELII;
     ReadGroupInfo group(rmd_->movieName, readType, type);
 

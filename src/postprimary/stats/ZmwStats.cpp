@@ -104,6 +104,7 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
 
     zmwStats.HoleNumber = events.ZmwNumber();
     static bool warned = [](){PBLOG_WARN << "ZmwStats not setting hole type or holexy"; return true; }();
+    (void)warned;
     //Primary::UnitCell uc(events.ZmwNumber());
     zmwStats.HoleXY[0] = 0;//uc.x;
     zmwStats.HoleXY[1] = 0;//uc.y;

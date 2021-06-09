@@ -148,10 +148,3 @@ target_link_libraries(bampaverify
         SegFault
         pthread
 )
-
-# HACK
-if(CMAKE_COMPILER_IS_GNUCC)
-  target_compile_options(libbam2bam PRIVATE "-fpermissive")
-  target_compile_options(libbaz2bam PRIVATE "-fpermissive")
-  target_compile_options(baz2bam PRIVATE "-fpermissive")
-endif()

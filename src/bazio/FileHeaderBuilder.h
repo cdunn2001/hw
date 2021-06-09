@@ -66,10 +66,6 @@ public: // static
     static std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(
         const std::vector<uint32_t>& input);
 
-    //static FileHeaderBuilder* MakeDummyFileHeaderBuilder();
-
-    //static FileHeaderBuilder* MakeDummyFileHeaderBuilder(const Acquisition::Setup& setup);
-
 public:
     class Flags
     {
@@ -227,9 +223,6 @@ public:
     inline uint32_t LFMetricFrames() const
     { return lFMetricFrames_; }
 
-    inline std::string P4Version() const
-    { return p4Version_; }
-
     inline SmrtData::Readout ReadoutConfig() const
     { return readout_; }
 
@@ -338,9 +331,6 @@ public:
     inline void BazPatchVersion(const uint32_t bazPatchVersion)
     { bazPatchVersion_ = bazPatchVersion; }
 
-    inline void P4Version(const std::string& p4Version)
-    { p4Version_ = p4Version; }
-
     inline void SliceLengthFrames(const uint32_t sliceLengthFrames)
     { sliceLengthFrames_ = sliceLengthFrames; }
 
@@ -417,7 +407,6 @@ private:
     std::string movieName_;
     std::string basecallerVersion_;
     std::string bazWriterVersion_;
-    std::string p4Version_;
 
     SmrtData::Readout readout_;
     SmrtData::MetricsVerbosity metricsVerbosity_;

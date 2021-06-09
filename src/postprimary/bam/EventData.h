@@ -76,7 +76,7 @@ using namespace PacBio::Primary;
 class EventDataParent : private BazEventData
 {
 public:
-    EventDataParent(PacBio::Primary::BazEventData&& rawPackets, const std::vector<InsertState>& states)
+    EventDataParent(BazEventData&& rawPackets, const std::vector<InsertState>& states)
       : BazEventData(std::move(rawPackets))
     {
         UpdateIPDs(states);
@@ -86,7 +86,7 @@ public:
 
     // Constructor required for `bam2bam`, which needs to skip several steps
     // in the data processing (e.g. it may already have start_frame in the input)
-    EventDataParent(PacBio::Primary::RawEventData&& rawData)
+    EventDataParent(RawEventData&& rawData)
       : BazEventData(std::move(rawData))
     {}
 
@@ -98,7 +98,7 @@ public:
 
 public:
 
-    const std::string BaseQualityValues(size_t leftPulseIndex,
+    std::string BaseQualityValues(size_t leftPulseIndex,
                                         size_t rightPulseIndex) const;
 
     const std::vector<std::pair<std::string, BAM::Tag>> AvailableTagData(size_t pulseBegin,

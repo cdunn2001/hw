@@ -165,7 +165,6 @@ std::string FileHeaderBuilder::CreateJSON()
     header["BAZ_MAJOR_VERSION"] = bazMajorVersion_;
     header["BAZ_MINOR_VERSION"] = bazMinorVersion_;
     header["BAZ_PATCH_VERSION"] = bazPatchVersion_;
-    header["P4_VERSION"] = p4Version_;
     header["BASE_CALLER_VERSION"] = basecallerVersion_;
     header["BAZWRITER_VERSION"] = bazWriterVersion_;
     header["FRAME_RATE_HZ"] = frameRateHz_;
@@ -271,54 +270,6 @@ std::vector<std::pair<uint32_t, uint32_t>> FileHeaderBuilder::RunLengthEncLUT(co
     return rleLut;
 }
 
-//FileHeaderBuilder* FileHeaderBuilder::MakeDummyFileHeaderBuilder()
-//{
-//    return new FileHeaderBuilder(
-//        "dummy",
-//        100.0,
-//        0,
-//        PacBio::SmrtData::Readout::BASES,
-//        PacBio::SmrtData::MetricsVerbosity::MINIMAL,
-//        "{}",
-//        "{}",
-//        std::vector<uint32_t>(0),
-//        {},
-//        GetPrimaryConfig().MinFramesPerHFMetricBlock(),
-//        GetPrimaryConfig().framesPerMFMetricBlock,
-//        GetPrimaryConfig().cache.framesPerSuperchunk,
-//        GetPrimaryConfig().chipClass(),
-//        Flags()
-//            .SpiderOnSequel(false)
-//            .NewBazFormat(false)
-//            .UseHalfFloat(true)
-//            .RealTimeActivityLabels(GetPrimaryConfig().cache.realtimeActivityLabels)
-//    );
-//}
-//
-//FileHeaderBuilder* FileHeaderBuilder::MakeDummyFileHeaderBuilder(const Acquisition::Setup& setup)
-//{
-//    return new FileHeaderBuilder(
-//        "dummy",
-//        setup.expectedFrameRate,
-//        setup.numFrames,
-//        setup.readout,
-//        setup.metricsVerbosity,
-//        PrettyJSON(setup),
-//        "{}",
-//        std::vector<uint32_t>(setup.NumSequencingZmws()),
-//        {},
-//        GetPrimaryConfig().MinFramesPerHFMetricBlock(),
-//        GetPrimaryConfig().framesPerMFMetricBlock,
-//        GetPrimaryConfig().cache.framesPerSuperchunk,
-//        GetPrimaryConfig().chipClass(),
-//        Flags()
-//            .SpiderOnSequel(false)
-//            .NewBazFormat(false)
-//            .UseHalfFloat(true)
-//            .RealTimeActivityLabels(GetPrimaryConfig().cache.realtimeActivityLabels)
-//    );
-//}
-
 void FileHeaderBuilder::ClearMetricFields(const MetricFrequency& frequency)
 {
     switch (frequency)
@@ -380,7 +331,6 @@ void FileHeaderBuilder::Default()
     bazMajorVersion_ = BAZ_MAJOR_VERSION;
     bazMinorVersion_ = BAZ_MINOR_VERSION;
     bazPatchVersion_ = BAZ_PATCH_VERSION;
-    p4Version_ = BAZIO_P4VERSION;
 }
 
 void FileHeaderBuilder::DefaultBases()

@@ -33,6 +33,7 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
+#include "DataParsing.h"
 
 #include <cstring>
 #include <half.hpp>
@@ -40,7 +41,7 @@
 #include <pacbio/logging/Logger.h>
 #include <pacbio/smrtdata/QvCore.h>
 
-#include "DataParsing.h"
+
 #include "FloatFixedCodec.h"
 #include "PacketField.h"
 

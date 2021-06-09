@@ -110,7 +110,7 @@ BAM::Tag convertData(const std::vector<uint32_t>& data,
 
 } // anonymous namespace
 
-const std::string EventDataParent::BaseQualityValues(size_t leftPulseIndex,
+std::string EventDataParent::BaseQualityValues(size_t leftPulseIndex,
                                                   size_t rightPulseIndex) const
 {
     if (HasPacketField(PacketFieldName::OVERALL_QV))

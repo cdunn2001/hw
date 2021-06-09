@@ -36,7 +36,6 @@ set(exec FrameLabelerTests)
 
 add_executable(${exec}
     test/testFrameLabeler.cu
-    ${CMAKE_CURRENT_LIST_DIR}/../../bazio/HDFMultiArrayIO.cpp
 )
 
 target_link_libraries(FrameLabelerTests

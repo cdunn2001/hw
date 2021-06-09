@@ -15,7 +15,6 @@ add_definitions(-DNOMINMAX)
 
 include(pacbio-cplusplus-api)
 include(pacbio-hdf5)
-include(pacbio-tbb)
 include(pacbio-boost)
 include(pacbio-jsoncpp)
 include(pacbio-half)
@@ -25,7 +24,6 @@ include(pacbio-half)
 
 add_library(libSequelCommon1
     STATIC
-        AnalogMode.h
         BasecallingMetrics.h
         BasecallingMetrics.cpp
         DetectionMode.h
@@ -34,6 +32,8 @@ add_library(libSequelCommon1
         HDF5_type_traits.h
         HDF5_type_traits.cpp
         HDF5cpp.h
+        HDFMultiArrayIO.h
+        HDFMultiArrayIO.cpp
         HQRFMethod.h
         HQRFMethod.cpp
         HQRFParamsMCart.h
@@ -45,7 +45,6 @@ add_library(libSequelCommon1
         SequelHDF5.h
         SequelHDF5.cpp
         TraceAnalysisMetrics.h
-        UnitCell.h
         Util.h
         ZmwReducedStatsFile.h
         ZmwReducedStatsFile.cpp
@@ -78,10 +77,6 @@ if(SHM_REALTIME)
     )
 endif(SHM_REALTIME)
 
-# set( BOOST_ROOT ${PACBIO_THIRDPARTY} )
-# set(Boost_USE_STATIC_LIBS ON)
-include(pacbio-zlib)
-
 target_link_libraries(libSequelCommon1
     PUBLIC
         libBazio
@@ -91,7 +86,6 @@ target_link_libraries(libSequelCommon1
         libHdf5Cpp
         libBoost
         libJsoncpp
-        #libZlib
 )
 
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/null.cpp)
@@ -109,21 +103,6 @@ message(STATUS "libSequelCommon boost dependencies: Boost_LIBRARIES= ${Boost_LIB
 target_link_libraries(libSequelCommon
     PUBLIC
         libSequelCommon1
-        libTbb
     PRIVATE
         SegFault
 )
-
-add_custom_target(rstdocs DEPENDS ZmwStats.rst)
-add_custom_command(OUTPUT ZmwStats.rst
-    COMMAND cpp -P ${CMAKE_CURRENT_LIST_DIR}/ZmwStats_template.rst | column --table --separator '|' --output-separator '|' > ZmwStats.rst
-    DEPENDS
-	${CMAKE_CURRENT_LIST_DIR}/ZmwStats_template.rst
-	${CMAKE_CURRENT_LIST_DIR}/ZmwStatsFileDefinition.h
-    COMMENT Making RST documentation for ZmwStats.h
-)
-
-if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_LIST_DIR} OR PA_build_test_sequel_common)
-    enable_testing()
-    add_subdirectory(test)
-endif()

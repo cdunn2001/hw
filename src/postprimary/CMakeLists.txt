@@ -63,10 +63,6 @@ option(Baz2bam_Jemalloc "Builds baz2bam binary using jemalloc.  Defaults to on,\
                          but must be disabled if you wish to play with other allocators \
                          (e.g. using LD_PRELOAD to get tcmalloc or something)" ON)
 
-
-if(CMAKE_COMPILER_IS_GNUCC)
-  target_compile_options(libPpaBase PRIVATE "-fpermissive")
-endif()
 target_compile_definitions(libPpaBase
     PUBLIC
         -DSEQAN_NO_GLOBAL_EXCEPTION_HANDLER

@@ -84,9 +84,9 @@ BazReader::BazReader(const std::string& fileName,
     if (callBackCheck && callBackCheck()) return;
 
     // Check if BAZ version is correct
-    if (!(fh_->BazMajorVersion() == 1 && fh_->BazMinorVersion() == 6))
+    if (!(fh_->BazMajorVersion() == 2 && fh_->BazMinorVersion() == 0))
     {
-        PBLOG_ERROR << "Incorrect BAZ version provided. Need version 1.6.x, provided version is "
+        PBLOG_ERROR << "Incorrect BAZ version provided. Need version 2.0.x, provided version is "
                     << fh_->BazVersion();
         exit(EXIT_FAILURE);
     }
@@ -254,7 +254,6 @@ const std::vector<ZmwSliceHeader>& BazReader::HeaderReader::NextHeaders(const st
 
 void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& callBackCheck)
 {
-    PBLOG_INFO << "Beginning read of next header batch";
     constexpr size_t sizeSingleHeader = ZmwSliceHeader::SizeOf();
     firstLoaded_ = idx_;
     // Make minimum 1 to avoide division by 0
@@ -339,8 +338,6 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
 
     if (!silent_)
         std::cerr << "Read " << headerId << " SUPER_CHUNK_META" << std::endl;
-
-    PBLOG_INFO << "Finished read of next header batch";
 }
 
 // Destructor
@@ -371,7 +368,7 @@ std::vector<uint32_t> BazReader::NextZmwIds()
 std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& callBackCheck)
 {
     if (callBackCheck && callBackCheck()) return std::vector<ZmwByteData>{};
-    PBLOG_INFO << "Beginning read of next slice";
+
     // Timing
     // auto now3 = std::chrono::high_resolution_clock::now();
 
@@ -519,8 +516,6 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
             }
         }
     }
-
-    PBLOG_INFO << "Finished read of next slice";
 
     // TODO: This is necessary to handle some testing code that produces a baz
     // file with 0 superchunks.  It's arguable that the code path producing
