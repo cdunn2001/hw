@@ -15,10 +15,10 @@
 #include <bazio/FastaEntry.h>
 #include <bazio/FastaUtilities.h>
 
-#include <postprimary/adapterfinder/DefaultAdapter.h>
 #include <postprimary/adapterfinder/AdapterLabeler.h>
 #include <postprimary/adapterfinder/AdapterCorrector.h>
 
+#include "DefaultAdapter.h"
 #include "TestUtils.h"
 #include "Timing.h"
 #include "test_data_config.h"

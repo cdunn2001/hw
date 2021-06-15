@@ -256,7 +256,7 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
 {
     constexpr size_t sizeSingleHeader = ZmwSliceHeader::SizeOf();
     firstLoaded_ = idx_;
-    // Make minimum 1 to avoide division by 0
+    // Make minimum 1 to avoid division by 0
     size_t zmwHeadersSize = std::max(sizeSingleHeader * metaPositions_.size(), size_t(1));
     // Load as many zmw as fit, but make sure we load at least one.
     size_t numLoad = std::max((batchSizeMB_ << 20) / zmwHeadersSize,

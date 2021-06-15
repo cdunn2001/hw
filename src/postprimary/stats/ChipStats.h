@@ -193,7 +193,7 @@ public:
             {
                 AddFilters(data_.baselineSequencing, zmwSignalMetrics.Baseline());
             }
-            static bool warnOnce = [](){PBLOG_WARN << "Scatering Metrology disabled in ChipStats, Kestrel does not yet have a replacement for Sequel layout"; return true;}();
+            static bool warnOnce = [](){PBLOG_WARN << "Scaterring Metrology disabled in ChipStats, Kestrel does not yet have a replacement for Sequel layout"; return true;}();
             (void)warnOnce;
             //Primary::UnitCell uc(readMetrics.HoleNumber());
             //if (layout.IsScatteringMetrology(static_cast<uint16_t>(uc.x), static_cast<uint16_t>(uc.y)))
