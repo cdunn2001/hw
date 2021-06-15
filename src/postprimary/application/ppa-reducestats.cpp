@@ -87,7 +87,9 @@ int main(int argc, char* argv[])
         mux.Ignore("ppa");
         mux.ProcessCommandLine(options.all("config"));
 
-        // chipClass is set by now for reduced stats config
+        // Explicit instantiation is for Spider
+        static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for reducedStatsConfig"; return true;}();
+        (void)warnOnce;
         ReducedStatsConfig reducedStatsConfig{};
         mux.Add("ppa-reducestats", reducedStatsConfig);
 

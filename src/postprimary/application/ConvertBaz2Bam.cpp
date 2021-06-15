@@ -1191,18 +1191,10 @@ void ConvertBaz2Bam::CreateZmwStatsFile(const std::string& filename)
     config.numHoles = NumZmwsToProcess();
 
     config.numAnalogs = 4; // fixme
-    switch (rmd_->platform)
-    {
-        case Platform::SEQUEL:
-            config.numFilters = 2;
-            break;
-        case Platform::SEQUELII:
-            config.numFilters = 1;
-            break;
-        default:
-            throw PBException("Only SEQUEL and SEQUELII platforms supported for creating sts.h5");
-            break;
-    }
+
+    static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for ZmwStatsFile"; return true;}();
+    (void)warnOnce;
+    config.numFilters = 1;
 
     const auto& fh = bazReader_->Fileheader();
     config.binSize = fh.LFMetricFrames();

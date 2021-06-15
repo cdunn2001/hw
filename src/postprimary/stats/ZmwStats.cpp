@@ -58,9 +58,12 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     {
         A, C, G, T
     };
+
+    static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII and setting GREEN = 0, RED = 0"; return true;}();
+    (void)warnOnce;
     enum Color
     {
-        GREEN, RED
+        GREEN = 0, RED = 0
     };
 
     // Unconstrained auto isn't ideal here, but the dest parameter
@@ -77,19 +80,9 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     };
     auto FillFilter = [&](auto& dest, const auto& filter)
     {
-        switch (platform)
-        {
-            case Platform::SEQUEL:
-                dest[Color::GREEN] = filter.green;
-                dest[Color::RED]   = filter.red;
-                break;
-            case Platform::SEQUELII:
-                dest[Color::GREEN] = filter.green;
-                break;
-            default:
-                throw std::runtime_error("Only SEQUEL and SEQUELII platforms supported for creating sts.h5");
-                break;
-        }
+        static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for FillFilter"; return true;}();
+        (void)warnOnce;
+        dest[Color::GREEN] = filter.green;
     };
 
     const auto& excludedPulseMetrics = zmwMetrics.ZmwExcludedPulseMetrics();
