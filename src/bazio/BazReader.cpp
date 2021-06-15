@@ -254,6 +254,7 @@ const std::vector<ZmwSliceHeader>& BazReader::HeaderReader::NextHeaders(const st
 
 void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& callBackCheck)
 {
+    PBLOG_INFO << "Beginning read of next header batch";
     constexpr size_t sizeSingleHeader = ZmwSliceHeader::SizeOf();
     firstLoaded_ = idx_;
     // Make minimum 1 to avoid division by 0
@@ -338,6 +339,8 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
 
     if (!silent_)
         std::cerr << "Read " << headerId << " SUPER_CHUNK_META" << std::endl;
+
+    PBLOG_INFO << "Finished read of next header batch";
 }
 
 // Destructor
@@ -368,7 +371,7 @@ std::vector<uint32_t> BazReader::NextZmwIds()
 std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& callBackCheck)
 {
     if (callBackCheck && callBackCheck()) return std::vector<ZmwByteData>{};
-
+    PBLOG_INFO << "Beginning read of next slice";
     // Timing
     // auto now3 = std::chrono::high_resolution_clock::now();
 
@@ -516,6 +519,8 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
             }
         }
     }
+
+    PBLOG_INFO << "Finished read of next slice";
 
     // TODO: This is necessary to handle some testing code that produces a baz
     // file with 0 superchunks.  It's arguable that the code path producing

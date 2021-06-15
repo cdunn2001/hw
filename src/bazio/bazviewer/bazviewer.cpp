@@ -453,7 +453,12 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        BazReader reader(args[0], 1, 1000, options.get("silent"));
+        const bool silent = options.get("silent");
+        if (silent)
+        {
+            Logging::PBLogger::SetMinimumSeverityLevel(Logging::LogLevel::ERROR);
+        }
+        BazReader reader(args[0], 1, 1000, silent);
 
         // HDF5 mode is only compatible with metrics output
         if (!options["hdf5Output"].empty()) {
