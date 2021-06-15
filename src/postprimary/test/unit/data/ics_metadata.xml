@@ -1,0 +1,120 @@
+<PacBioDataModel xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="4.0.1" xmlns="http://pacificbiosciences.com/PacBioDataModel.xsd">
+	<ExperimentContainer Name="1_TestCellManualDiags" Description="1_TestCellManualDiags" CreatedAt="2017-02-25T01:53:34.705573Z" ExperimentId="xfer-test">
+		<InvestigatorName>PacBio</InvestigatorName>
+		<CreatedDate>2017-02-25</CreatedDate>
+		<Runs>
+			<Run Name="1_TestCellManualDiags" Description="1_TestCellManualDiags" Tags="PacBio" CreatedAt="2017-02-25T01:53:34.705915Z" UniqueId="db8eb627-5657-476b-a449-72dcdeffed7f" TimeStampedName="r54001_20170225_015334" Status="Starting" CreatedBy="unknown" StartedBy="unknown" WhenStarted="2017-02-25T01:53:40.87786Z">
+				<Outputs>
+					<SubreadSets>
+						<SubreadSet Name="Sample Name-Cell1" UniqueId="c1cc4c94-3454-4dde-a308-d14ec15e3cd6" MetaType="SubreadSetCollection" TimeStampedName="Inst1234_SubreadSetCollection_02/25/2017 01:53:34" CreatedAt="2017-02-25T01:53:34.705915Z" xmlns="http://pacificbiosciences.com/PacBioDatasets.xsd">
+							<ExternalResources xmlns="http://pacificbiosciences.com/PacBioBaseDataModel.xsd">
+								<ExternalResource UniqueId="af723687-00e9-473a-89a1-42b5a147d953" MetaType="ExternalResource" TimeStampedName="Inst1234_ExternalResource_02/25/2017 01:53:34" />
+							</ExternalResources>
+							<DataSetMetadata>
+								<TotalLength>0</TotalLength>
+								<NumRecords>0</NumRecords>
+								<Collections xmlns="http://pacificbiosciences.com/PacBioCollectionMetadata.xsd">
+									<CollectionMetadata UniqueId="c1cc4c94-3454-4dde-a308-d14ec15e3cd6" Status="Ready" InstrumentId="Inst1234" InstrumentName="Inst1234" Context="m54001_170225_015341">
+										<ConsensusReadSetRef UniqueId="faf4adf1-73f4-4ea8-be07-89a92318ff2c" />
+										<InstCtrlVer>4.1.0.190970</InstCtrlVer>
+										<SigProcVer>4.1.0.0</SigProcVer>
+										<RunDetails>
+											<TimeStampedName>r54001_20170225_015334</TimeStampedName>
+											<Name>1_TestCellManualDiags</Name>
+											<CreatedBy>unknown</CreatedBy>
+											<WhenCreated>2017-02-25T01:53:34.705915Z</WhenCreated>
+											<StartedBy>unknown</StartedBy>
+											<WhenStarted>2017-02-25T01:53:40.87786Z</WhenStarted>
+										</RunDetails>
+										<WellSample Name="Sample Name" Description="Sample Description">
+											<WellName>A01</WellName>
+											<Concentration>0</Concentration>
+											<InsertSize>500</InsertSize>
+											<SampleReuseEnabled>false</SampleReuseEnabled>
+											<StageHotstartEnabled>false</StageHotstartEnabled>
+											<SizeSelectionEnabled>false</SizeSelectionEnabled>
+											<UseCount>0</UseCount>
+										</WellSample>
+										<Automation Name="manualcellprep.py">
+											<AutomationParameters xmlns="http://pacificbiosciences.com/PacBioBaseDataModel.xsd">
+												<AutomationParameter Name="Exposure" ValueDataType="Double" SimpleValue="0.0125" />
+												<AutomationParameter Name="CouplerLaserPower" ValueDataType="Double" SimpleValue="6.5" />
+												<AutomationParameter Name="MovieLength" ValueDataType="Double" SimpleValue="5" />
+												<AutomationParameter Name="SNRCut" ValueDataType="Double" SimpleValue="6.0" />
+												<AutomationParameter Name="CellAtStage" ValueDataType="String" SimpleValue="True" />
+												<AutomationParameter Name="ActiveLaserPower" ValueDataType="String" SimpleValue="False" />
+												<AutomationParameter Name="CellNFCIndex" ValueDataType="Int32" SimpleValue="0" />
+												<AutomationParameter Name="CollectionNumber" ValueDataType="Int32" SimpleValue="0" />
+												<AutomationParameter Name="UseStageHotStart" ValueDataType="Boolean" SimpleValue="False" />
+												<AutomationParameter Name="InsertSize" ValueDataType="Int32" SimpleValue="500" />
+												<AutomationParameter Name="HasN2Switch" ValueDataType="Boolean" SimpleValue="False" />
+											</AutomationParameters>
+										</Automation>
+										<CollectionNumber>0</CollectionNumber>
+										<CellIndex>0</CellIndex>
+										<CellPac PartNumber="100-513-100" LotNumber="007777" Barcode="000000000636235844210064530" ExpirationDate="2019-12-31" />
+										<TemplatePrepKit Name="SMRT Asymmetric Template Prep Kit 1.0" PartNumber="100-902-400" LotNumber="333333" Barcode="333333100902400092215" ExpirationDate="2015-09-22" MinInsertSize="500" MaxInsertSize="20000">
+											<LeftAdaptorSequence xmlns="http://pacificbiosciences.com/PacBioBaseDataModel.xsd">ATCTCTCTCAATTTTTTTTTTTTTTTTTTTTTTTAAGAGAGAGAT</LeftAdaptorSequence>
+											<RightAdaptorSequence xmlns="http://pacificbiosciences.com/PacBioBaseDataModel.xsd">ATCTCTCTCAACAACAACAACGGAGGAGGAGGAAAAGAGAGAGAT</RightAdaptorSequence>
+										</TemplatePrepKit>
+										<BindingKit Name="Sequel Binding Kit v1" PartNumber="100-619-300" LotNumber="444444" Barcode="444444100619300092220" ExpirationDate="2020-09-22" />
+										<SequencingKitPlate Name="Sequel Sequencing Kit v1.2" PartNumber="100-902-100" LotNumber="222222" Barcode="222222100902100092220" ExpirationDate="2020-09-22" />
+										<Primary>
+											<AutomationName>SequelAlpha</AutomationName>
+											<ConfigFileName>SqlPoC_SubCrf_2C2A-t2.xml</ConfigFileName>
+											<OutputOptions>
+												<ResultsFolder>xfer-test/r54001_20170225_015334/1_A01/</ResultsFolder>
+												<CollectionPathUri>/pbi/collections/xfer-test/xfer-test/r54001_20170225_015334/1_A01/</CollectionPathUri>
+												<CopyFiles>
+													<CollectionFileCopy>Trace</CollectionFileCopy>
+													<CollectionFileCopy>Fasta</CollectionFileCopy>
+													<CollectionFileCopy>Bam</CollectionFileCopy>
+													<CollectionFileCopy>Baz</CollectionFileCopy>
+												</CopyFiles>
+												<Readout>Bases_Without_QVs</Readout>
+												<MetricsVerbosity>Minimal</MetricsVerbosity>
+												<TransferResource>
+													<Id>srs-pbi-collections</Id>
+													<TransferScheme>SRS</TransferScheme>
+													<Name>PBI Collections Xfer test using Rsync+SSH</Name>
+													<Description>Test Location for writing Transfer services to write to. Should be used by internal tools (PA SIM) and ICS tests</Description>
+													<DestPath>/pbi/collections/xfer-test</DestPath>
+												</TransferResource>
+											</OutputOptions>
+										</Primary>
+										<Secondary>
+											<AutomationName>NoRS_ForwardOnly_Edna_Unrolled.1</AutomationName>
+											<AutomationParameters>
+												<AutomationParameter Name="Reference" ValueDataType="String" SimpleValue="NoHP_V1_01_circular_89x_l50552" />
+											</AutomationParameters>
+											<CellCountInJob>1</CellCountInJob>
+										</Secondary>
+										<ComponentVersions>
+											<VersionInfo Name="ics" Version="4.1.0.190970" />
+											<VersionInfo Name="iui" Version="4.1.0.78" />
+											<VersionInfo Name="pa" />
+											<VersionInfo Name="paws" Version="4.1.0.0" />
+											<VersionInfo Name="ppa" />
+											<VersionInfo Name="realtime" />
+											<VersionInfo Name="transfer" />
+											<VersionInfo Name="smrttools" Version="4.1.0.190429" />
+											<VersionInfo Name="smrtview" Version="4.1.0.190423" />
+											<VersionInfo Name="smrtimisc" Version="4.1.0.190364" />
+											<VersionInfo Name="smrtlink" Version="4.1.0.190429" />
+											<VersionInfo Name="smrtlink-analysisservices-gui" Version="4.1.0.37f5a74" />
+											<VersionInfo Name="smrtinub" Version="4.1.0.190423" />
+										</ComponentVersions>
+									</CollectionMetadata>
+								</Collections>
+							</DataSetMetadata>
+						</SubreadSet>
+					</SubreadSets>
+				</Outputs>
+				<RecordedEvents>
+					<RecordedEvent Name="RunStateChange" CreatedAt="2017-02-25T01:53:34.792183Z" SimpleValue="Starting" Context="db8eb627-5657-476b-a449-72dcdeffed7f" />
+					<RecordedEvent Name="Alarm" CreatedAt="2017-02-25T01:53:34.792268Z" SimpleValue="{&quot;Id&quot;:100004,&quot;Name&quot;:&quot;Configuration&quot;,&quot;Owner&quot;:&quot;Svc:/i/&quot;,&quot;Severity&quot;:&quot;WARNING&quot;,&quot;Message&quot;:&quot;Deviations in ICS installation:  / ./scripts/test/bench/detector/newsensorclock.py&quot;,&quot;When&quot;:&quot;2017-02-25T00:19:37.637171Z&quot;}" Context="db8eb627-5657-476b-a449-72dcdeffed7f" />
+				</RecordedEvents>
+			</Run>
+		</Runs>
+	</ExperimentContainer>
+</PacBioDataModel>

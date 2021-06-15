@@ -26,7 +26,7 @@
 #include <appModules/BazWriter.h>
 
 #include <pacbio/logging/Logger.h>
-#include <pacbio/primary/FileHeaderBuilder.h>
+#include <bazio/FileHeaderBuilder.h>
 #include <pacbio/primary/ZmwResultBuffer.h>
 
 #include <common/MongoConstants.h>
@@ -52,7 +52,7 @@ void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
     {
         const auto& metrics = metricsPtr->GetHostView()[laneIndex];
 
-        sm.ActivityLabel(static_cast<ActivityLabeler::HQRFPhysicalState>(metrics.activityLabel[zmwIndex]));
+        sm.ActivityLabel(static_cast<ActivityLabeler::Activity>(metrics.activityLabel[zmwIndex]));
         sm.TraceAutocorr(metrics.autocorrelation[zmwIndex]);
 
         sm.BpzvarA(metrics.bpZvar[0][zmwIndex])
@@ -181,11 +181,8 @@ BazWriterBody::BazWriterBody(
                          zmwFeatures,
                          basecallerConfig.layout.framesPerChunk,
                          basecallerConfig.layout.framesPerChunk,
-                         basecallerConfig.layout.framesPerChunk,
-                         false,
-                         true,
-                         true,
-                         false);
+                         basecallerConfig.layout.framesPerChunk);
+
     fh.BaseCallerVersion("0.1");
 
     bazWriter_.reset(new BazWriter(bazName_, fh, BazIOConfig{}, ReadBuffer::MaxNumSamplesPerBuffer()));

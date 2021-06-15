@@ -566,6 +566,7 @@ __device__ PBShort2 labelBlock(
     for (size_t i = 0; i < features.size(); ++i)
     {
         const auto& nanMask = features[i] == features[i];
+        (void)nanMask;
         assert(nanMask.X());
         assert(nanMask.Y());
     }

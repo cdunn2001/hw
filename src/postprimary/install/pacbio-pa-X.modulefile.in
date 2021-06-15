@@ -1,0 +1,5 @@
+#%Module 1.0
+#
+set root $RPM_INSTALL_PREFIX
+module-whatis "pacbio-ppa @APP_VERSION@"
+prepend-path PATH             $root/bin

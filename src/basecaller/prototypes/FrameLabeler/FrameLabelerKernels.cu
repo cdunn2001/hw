@@ -159,6 +159,7 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
                trans.RowData(Rows::rowIdx),
                (Rows*){nullptr}),0
     )...};
+    (void)loop;
 
     // Every time we handled a 4th state we wrote the result to
     // labels, but the 13th state is the odd man out.  Need to

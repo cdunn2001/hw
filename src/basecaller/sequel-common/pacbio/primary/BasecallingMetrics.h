@@ -34,7 +34,10 @@
 #include <cstdint>
 #include <array>
 #include <deque>
-#include <pacbio/primary/BlockActivityLabels.h>
+
+#include <bazio/BlockActivityLabels.h>
+
+#include <pacbio/primary/RTMetricsConfig.h>
 #include <pacbio/smrtdata/Basecall.h>
 
 #include "TraceAnalysisMetrics.h"
@@ -60,7 +63,7 @@ public:     // Structors
       , numSandwiches_(0)
       , numHalfSandwiches_(0)
       , numPulseLabelStutters_(0)
-      , activityLabel_(ActivityLabeler::HQRFPhysicalState::EMPTY)
+      , activityLabel_(ActivityLabeler::A0)
       , pkmidSig_ {{ 0.0f, 0.0f, 0.0f, 0.0f }}
       , bpzvar_ {{ 0.0f, 0.0f, 0.0f, 0.0f }}
       , pkzvar_ {{ 0.0f, 0.0f, 0.0f, 0.0f }}
@@ -192,7 +195,7 @@ public:     // Property Accessors/Settors
     { return numPulsesByAnalog_; }
 
     /// Estimated activity label
-    ActivityLabeler::HQRFPhysicalState ActivityLabel() const
+    ActivityLabeler::Activity ActivityLabel() const
     { return activityLabel_; }
 
     /// Set the number of detected pulses.
@@ -253,7 +256,7 @@ public:     // Property Accessors/Settors
 
     /// Set the estimated activity label
     /// \returns Reference to \code *this.
-    BasecallingMetrics& ActivityLabel(ActivityLabeler::HQRFPhysicalState val)
+    BasecallingMetrics& ActivityLabel(ActivityLabeler::Activity val)
     {
         activityLabel_ = val;
         return *this;
@@ -309,7 +312,7 @@ private:
     uint16_t numSandwiches_;
     uint16_t numHalfSandwiches_;
     uint16_t numPulseLabelStutters_;
-    ActivityLabeler::HQRFPhysicalState activityLabel_;
+    ActivityLabeler::Activity activityLabel_;
     std::array<Flt, numAnalogs> pkmidSig_;
     std::array<Flt, numAnalogs> bpzvar_;
     std::array<Flt, numAnalogs> pkzvar_;

@@ -3,7 +3,7 @@
 
   $ smrt-basecaller --numZmwLanes 64 --config layout.lanesPerPool=16 --frames=1024 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
-  $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
+  $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   4097
 
   $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/designer_zmw_0.txt ${CRAMTMP}/exp_designer_zmw_0.txt
@@ -26,7 +26,7 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --numZmwLanes 4 --config layout.lanesPerPool=1 --frames=8192 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
-  $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
+  $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/align_zmw_0.txt ${CRAMTMP}/expected_align_zmw_0.txt

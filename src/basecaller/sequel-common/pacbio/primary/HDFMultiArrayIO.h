@@ -39,8 +39,8 @@
 #include <boost/multi_array.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
-#include "HDF5cpp.h"
-#include "HDF5_type_traits.h"
+#include <pacbio/primary/HDF5cpp.h>
+#include <pacbio/primary/HDF5_type_traits.h>
 
 namespace PacBio {
 namespace Primary {

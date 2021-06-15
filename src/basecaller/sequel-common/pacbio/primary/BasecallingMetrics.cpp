@@ -202,6 +202,7 @@ void BasecallingMetrics<Flt, NCam>::FinalizeVariance()
         if (numPkmidBasesByAnalog_[baseLabel] == 0)
         {
             // No bases called on channel.
+            // TODO: In this case, pkmidSig_[baseLabel] will be zero. Since pkmidSig_ is a signal sum, wouldn't it be better to leave it zero?
             pkmidSig_[baseLabel] = std::numeric_limits<Flt>::quiet_NaN();
             bpzvar_[baseLabel] = std::numeric_limits<Flt>::quiet_NaN();
             pkzvar_[baseLabel] = std::numeric_limits<Flt>::quiet_NaN();

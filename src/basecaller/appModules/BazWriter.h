@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include <pacbio/primary/BazWriter.h>
+#include <bazio/BazWriter.h>
 
 #include <common/graphs/GraphNodeBody.h>
 

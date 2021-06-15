@@ -433,11 +433,11 @@ void HDFMultiArrayIO::WriteStringAttribute(
     auto obj = getH5Object(groupName, datasetName);
 
     H5::DataSpace scalarDspace;
-    H5::StrType dtype(H5::PredType::C_S1, 256);
+    H5::StrType dtype(H5::PredType::C_S1, H5T_VARIABLE);
 
     try {
         auto attr = obj->createAttribute(attributeName, dtype, scalarDspace);
-        attr.write(dtype, attributeValue.c_str());
+        attr.write(dtype, attributeValue);
     }
     catch (const H5::Exception& ex)
     {
