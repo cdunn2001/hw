@@ -81,17 +81,17 @@ Check that the adapterqc metrics are actually different (looks like we pick up s
 
 Check that the new adapter is roughly halfway through a read:
   $ samtools view old_adapter.subreads.bam | grep 'ad:Z:0,0.8367,176,1;0,0.8776,231,1' | cut -f1
-  m54006_151205_021320/4194381/1720_3009
+  m54006_151205_021320/13/1720_3009
   $ samtools view new_adapter.subreads.bam | grep 'ad:Z:0,0.8367,176,1;0,0.6429,437,1' | cut -f1
-  m54006_151205_021320/4194381/1720_2353
+  m54006_151205_021320/13/1720_2353
   $ samtools view new_adapter.subreads.bam | grep 'ad:Z:0,0.6429,437,1;0,0.8776,231,1' | cut -f1
-  m54006_151205_021320/4194381/2395_3009
+  m54006_151205_021320/13/2395_3009
   $ samtools view old_adapter.subreads.bam | grep 'ad:Z:0,0.8085,211,1;0,0.8444,186,1' | cut -f1
-  m54006_151205_021320/4194408/1801_3113
+  m54006_151205_021320/40/1801_3113
   $ samtools view new_adapter.subreads.bam | grep 'ad:Z:0,0.8085,211,1;0,0.6061,389,1' | cut -f1
-  m54006_151205_021320/4194408/1801_2535
+  m54006_151205_021320/40/1801_2535
   $ samtools view new_adapter.subreads.bam | grep 'ad:Z:0,0.6061,389,1;0,0.8444,186,1' | cut -f1
-  m54006_151205_021320/4194408/2568_3113
+  m54006_151205_021320/40/2568_3113
 
 Full program w/ af, and cf and adapter correction. (Change params to exercise palindrome finder):
   $ baz2bam out_gold.baz --disableSensitiveCorrection -o out_palicorrected --adpqc -Q $TESTDIR/data/goldenSubset.fasta -j 8 --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False --minSubLength=50

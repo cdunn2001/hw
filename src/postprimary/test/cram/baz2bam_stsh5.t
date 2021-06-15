@@ -1,7 +1,7 @@
 Extract sts.h5
 
   $ outPrefix="softball_snr-50"
-  $ bazFile="/pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_prod_hf_min_exp_meta.baz"
+  $ bazFile="/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_prod_hf_min_exp_meta.baz"
   $ baz2bam --fullHQ -o ${outPrefix} -m $TESTDIR/data/metadata.xml ${bazFile} --silent --whitelistZmwId=0-199 --enableBarcodedAdapters=False
 
 Compare sts.h5

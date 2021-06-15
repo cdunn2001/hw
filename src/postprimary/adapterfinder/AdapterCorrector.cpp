@@ -359,7 +359,7 @@ std::vector<RegionLabel> SensitiveAdapterSearch(
     // split flagged subreads if possible:
     for (size_t i = 0; i <= adapters.size(); ++i)
     {
-        if (rcFound || (curFlag != flagged.end() && *curFlag == i))
+        if (rcFound || (curFlag != flagged.end() && *curFlag == static_cast<int>(i)))
         {
             RegionLabel subread;
             if (i == 0)
@@ -494,11 +494,11 @@ CompressHomopolymers(const std::string& bases,
         }
         if (adapteri < adapters.size())
         {
-            if (i == adapters[adapteri].begin)
+            if (static_cast<int>(i) == adapters[adapteri].begin)
             {
                 adpStart = compressed.size();
             }
-            if (i == adapters[adapteri].end)
+            if (static_cast<int>(i) == adapters[adapteri].end)
             {
                 shiftedAdapters.emplace_back(
                         adpStart,

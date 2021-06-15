@@ -33,8 +33,8 @@ Compare hqregion
 
 Compare hqregion, doing real region finding on softball data
 
-  $ production_baz=/pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_prod_hf_min_exp_meta.baz
-  $ internal_baz=/pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_internal_hf_min_exp_meta.baz
+  $ production_baz=/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_prod_hf_min_exp_meta.baz
+  $ internal_baz=/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_internal_hf_min_exp_meta.baz
 
   $ baz2bam ${production_baz} -o out_production --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
   $ baz2bam ${internal_baz} -o out_internal --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False

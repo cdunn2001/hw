@@ -11,7 +11,7 @@
   $ smrt-basecaller --cache --numZmwLanes 64 --config=system.analyzerHardware=Host --config=algorithm.baselinerConfig.Method=DeviceMultiScale --config layout.lanesPerPool=16 --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
-  4099
+  4097
 
 # Look at one zmw from each lane.  Due to the dme stagger it is expected that each subsequent test
 # will have monotonically fewer bases to align.
@@ -36,7 +36,7 @@
   $ # Running GPU version of baseline filter until the host version is fixed.  PTSD-360
   $ smrt-basecaller --cache --numZmwLanes 4 --config layout.lanesPerPool=1 --config=system.analyzerHardware=Host --config=algorithm.baselinerConfig.Method=DeviceMultiScale --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
-  259
+  257
 
   $ ${TESTDIR}/verify_replicated_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/replicated_zmw_0.txt ${CRAMTMP}/expected_replicated_zmw_0.txt
   ----------------------------------------------------------------------------------------------------------------------------------------GTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATAC-

@@ -72,8 +72,8 @@ Emit adapter QC metrics with long global flanking alignments:
 Emit adapter QC metrics for all potential adapters. We should see some
 additional, generally low quality, adapter calls:
   $ bam2bam -s gold_adapter.subreadset.xml --adpqc -o new_adapter_all -j 8 --silent --minHardAccuracy=0.4 --minSoftAccuracy=0.4 --minFlankingScore=-1 --disableAdapterCorrection --enableBarcodedAdapters=False --enableBarcodedAdapters=False
-  $ samtools view new_adapter.subreads.bam | grep zm:i:4194370 | cut -f12 > new_adapter_metrics.txt
-  $ samtools view new_adapter_all.subreads.bam | grep zm:i:4194370 | cut -f12 > new_adapter_metrics_all.txt
+  $ samtools view new_adapter.subreads.bam | grep -w zm:i:2 | cut -f12 > new_adapter_metrics.txt
+  $ samtools view new_adapter_all.subreads.bam | grep -w zm:i:2 | cut -f12 > new_adapter_metrics_all.txt
   $ cat new_adapter_metrics.txt
   ad:Z:.;0,0.9375,291,1
   ad:Z:0,0.9375,291,1;0,0.9184,285,1

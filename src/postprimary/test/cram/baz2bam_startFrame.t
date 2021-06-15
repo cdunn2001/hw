@@ -1,4 +1,4 @@
-  $ baz=/pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_internal_hf_min_exp_meta.baz
+  $ baz=/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_internal_hf_min_exp_meta.baz
   $ meta=$TESTDIR/data/metadata.xml
   $ bam=out
 

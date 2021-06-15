@@ -10,7 +10,7 @@
   $ smrt-basecaller --cache --numZmwLanes 64 --config layout.lanesPerPool=16 --frames=32768 --config=algorithm.modelEstimationMode=DynamicEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
-  4099
+  4097
 
 # Look at one zmw from each lane.  Due to the dme stagger it is expected that each subsequent test
 # will have monotonically fewer bases to align.
@@ -35,7 +35,7 @@
   $ smrt-basecaller --cache --numZmwLanes 4 --config layout.lanesPerPool=1 --frames=32768 --config=algorithm.modelEstimationMode=DynamicEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +2 | wc -l
-  259
+  257
 
   $ ${TESTDIR}/verify_replicated_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/replicated_zmw_0.txt ${CRAMTMP}/expected_replicated_zmw_0.txt
   ----------------------------------------------------------------------------------------------------------------------------------------GTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATACGAACAATGGGGTCCACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATAC-

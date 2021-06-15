@@ -1,6 +1,6 @@
 Generate sts.xml and sts.h5
 
-  $ bazFile="/pbi/dept/primary/testdata/sim/softball_snr-50/softball_SNR-50_prod_hf_min_exp_meta.baz"
+  $ bazFile="/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_prod_hf_min_exp_meta.baz"
   $ outPrefix="MetricsTest"
   $ baz2bam -o ${outPrefix} -m $TESTDIR/data/metadata.xml ${bazFile} --silent --enableBarcodedAdapters=False
 

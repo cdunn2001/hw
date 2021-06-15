@@ -18,8 +18,11 @@ set(Baz_MAJOR_VERSION 2)
 set(Baz_MINOR_VERSION 0)
 set(Baz_PATCH_VERSION 0)
 
-# Explicitly set Baz IO version
-set(BazIO_VERSION "7.0.0")
+# Explicitly set BazIO_VERSION
+set(BazIO_VERSION "0.0.0")
+
+# Explicitly set BAZ_BASECALLER_ALGO_VERSION
+set(Baz_BASECALLER_ALGO_VERSION "5.0.0")
 
 # Generate header with versions
 configure_file(template/BazVersion.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/BazVersion.h)
