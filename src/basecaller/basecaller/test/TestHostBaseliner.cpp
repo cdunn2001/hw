@@ -1,4 +1,3 @@
-"
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -36,8 +35,6 @@
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
 
 #include <common/cuda/memory/ManagedAllocations.h>
-#include <common/DataGenerators/BatchGenerator.h>
-#include <common/DataGenerators/PicketFenceGenerator.h>
 #include <common/ZmwDataManager.h>
 
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
@@ -59,7 +56,7 @@ namespace {
 
 struct TestConfig : public Configuration::PBConfig<TestConfig>
 {
-PB_CONFIG(TestConfig);
+    PB_CONFIG(TestConfig);
 
     PB_CONFIG_OBJECT(Data::BasecallerBaselinerConfig, baselineConfig);
 
@@ -213,24 +210,24 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
         SensorPacketsChunk currChunk;
         if(runner.PopChunk(currChunk, std::chrono::milliseconds{10}))
         {
-            if (burnInFrames <= currChunk.StartFrame())
+            for (auto& packet : currChunk)
             {
-                for (auto& packet : currChunk)
-                {
-                    auto batchIdx = packet.PacketID();
-                    BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
-                                       packet.StartZmw());
-                    BatchDimensions dims;
-                    dims.lanesPerBatch = packet.Layout().NumBlocks();
-                    dims.framesPerBatch = packet.Layout().NumFrames();
-                    dims.laneWidth = packet.Layout().BlockWidth();
-                    TraceBatch<int16_t> in(std::move(packet),
-                                           meta,
-                                           dims,
-                                           SyncDirection::HostWriteDeviceRead,
-                                           SOURCE_MARKER());
+                auto batchIdx = packet.PacketID();
+                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
+                                   packet.StartZmw());
+                BatchDimensions dims;
+                dims.lanesPerBatch = packet.Layout().NumBlocks();
+                dims.framesPerBatch = packet.Layout().NumFrames();
+                dims.laneWidth = packet.Layout().BlockWidth();
+                TraceBatch<int16_t> in(std::move(packet),
+                                       meta,
+                                       dims,
+                                       SyncDirection::HostWriteDeviceRead,
+                                       SOURCE_MARKER());
 
-                    auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                if (burnInFrames <= currChunk.StartFrame())
+                {
                     auto traces = std::move(cameraBatch.first);
                     auto stats = std::move(cameraBatch.second);
                     for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
@@ -244,10 +241,22 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
                         var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
                         const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
-                        EXPECT_NEAR(count, (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd, 20);
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count));
-                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma, 2 * pfConfig.baselineSigma);
-                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel, pfConfig.baselineSigma / std::sqrt(count));
+                        EXPECT_NEAR(count,
+                                    (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
+                                    pfConfig.pulseIpd, 20)
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
+                                    2 * pfConfig.baselineSigma)
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
+                                    pfConfig.baselineSigma / std::sqrt(count))
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
                     }
                 }
             }
@@ -308,24 +317,24 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
         SensorPacketsChunk currChunk;
         if(runner.PopChunk(currChunk, std::chrono::milliseconds{10}))
         {
-            if (burnInFrames <= currChunk.StartFrame())
+            for (auto& packet : currChunk)
             {
-                for (auto& packet : currChunk)
-                {
-                    auto batchIdx = packet.PacketID();
-                    BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
-                                       packet.StartZmw());
-                    BatchDimensions dims;
-                    dims.lanesPerBatch = packet.Layout().NumBlocks();
-                    dims.framesPerBatch = packet.Layout().NumFrames();
-                    dims.laneWidth = packet.Layout().BlockWidth();
-                    TraceBatch<int16_t> in(std::move(packet),
-                                           meta,
-                                           dims,
-                                           SyncDirection::HostWriteDeviceRead,
-                                           SOURCE_MARKER());
+                auto batchIdx = packet.PacketID();
+                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
+                                   packet.StartZmw());
+                BatchDimensions dims;
+                dims.lanesPerBatch = packet.Layout().NumBlocks();
+                dims.framesPerBatch = packet.Layout().NumFrames();
+                dims.laneWidth = packet.Layout().BlockWidth();
+                TraceBatch<int16_t> in(std::move(packet),
+                                       meta,
+                                       dims,
+                                       SyncDirection::HostWriteDeviceRead,
+                                       SOURCE_MARKER());
 
-                    auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                if (burnInFrames <= currChunk.StartFrame())
+                {
                     auto traces = std::move(cameraBatch.first);
                     auto stats = std::move(cameraBatch.second);
                     for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
@@ -339,10 +348,22 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
                         var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
                         const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
-                        EXPECT_NEAR(count, (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd, 20);
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count));
-                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma, 2 * pfConfig.baselineSigma);
-                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel, pfConfig.baselineSigma / std::sqrt(count));
+                        EXPECT_NEAR(count,
+                                    (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
+                                    pfConfig.pulseIpd, 20)
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
+                                    2 * pfConfig.baselineSigma)
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
+                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
+                                    pfConfig.baselineSigma / std::sqrt(count))
+                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                    << laneIdx << " startframe=" << meta.FirstFrame();
                     }
                 }
             }
@@ -352,8 +373,4 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
     HostMultiScaleBaseliner::Finalize();
 }
 
-
-
-
-
-}}} // PacBio::Mongo::Basecaller"
+}}} // PacBio::Mongo::Basecaller
