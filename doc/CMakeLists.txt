@@ -1,6 +1,6 @@
 #
 # This cmake code creates a target (libPaWsDoc) that
-# contains staticly linked text files, such as the REST API markdown,
+# contains statically linked text files, such as the REST API markdown,
 # and a tiny wrapper to access these text files as std::strings.
 #
 
