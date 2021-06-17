@@ -160,15 +160,16 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
                                     pfConfig.pulseIpd, 20)
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
+                        // Account for bias.
+                        EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                         EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                    2 * pfConfig.baselineSigma)
+                                    6 * pfConfig.baselineSigma)
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                         EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                    pfConfig.baselineSigma / std::sqrt(count))
+                                    6 * (pfConfig.baselineSigma / std::sqrt(count)))
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                     }
@@ -203,9 +204,10 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
     }
 
     PicketFenceGenerator::Config pfConfig;
+    pfConfig.generatePoisson = false;
     pfConfig.pulseSignalLevels = { 600 };
-    pfConfig.pulseWidthRate = 0.04167f;
-    pfConfig.pulseIpdRate = 0.05f;
+    pfConfig.pulseWidth = 24;
+    pfConfig.pulseIpd = 20;
     auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                         PacketLayout::INT16,
@@ -263,18 +265,19 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
 
                         EXPECT_NEAR(count,
                                     (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
-                                    pfConfig.pulseIpd, 20)
+                                            (pfConfig.pulseIpd - 1), 20)
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
+                        // Account for bias.
+                        EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                         EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                    2 * pfConfig.baselineSigma)
+                                    6 * pfConfig.baselineSigma)
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                         EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                    pfConfig.baselineSigma / std::sqrt(count))
+                                    6 * (pfConfig.baselineSigma / std::sqrt(count)))
                                     << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
                                     << laneIdx << " startframe=" << meta.FirstFrame();
                     }
