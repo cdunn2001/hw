@@ -260,8 +260,8 @@ public:
         stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].Y();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
-        stats.rawBaselineSum[2*threadIdx.x] = rawSumB_[threadIdx.x].FloatX();
-        stats.rawBaselineSum[2*threadIdx.x+1] = rawSumB_[threadIdx.x].FloatY();
+        stats.rawBaselineSum[2*threadIdx.x] = rawSumB_[threadIdx.x].X();
+        stats.rawBaselineSum[2*threadIdx.x+1] = rawSumB_[threadIdx.x].Y();
         stats.traceMin[2*threadIdx.x] = minB_[threadIdx.x].FloatX();
         stats.traceMin[2*threadIdx.x+1] = minB_[threadIdx.x].FloatY();
         stats.traceMax[2*threadIdx.x] = maxB_[threadIdx.x].FloatX();
@@ -288,7 +288,7 @@ private:
     Utility::CudaArray<PBHalf2,  blockThreads> minB_;
     Utility::CudaArray<PBHalf2,  blockThreads> maxB_;
     // Sum over all baseline frames before baseline subtraction
-    Utility::CudaArray<PBHalf2,  blockThreads> rawSumB_;
+    Utility::CudaArray<PBFloat2,  blockThreads> rawSumB_;
     // Baseline stats computed from baseline-subtracted frames classified as baseline
     Utility::CudaArray<PBHalf2,  blockThreads> m0B_;
     Utility::CudaArray<PBHalf2,  blockThreads> m1B_;
