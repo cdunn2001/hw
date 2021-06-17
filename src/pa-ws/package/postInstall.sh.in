@@ -70,8 +70,11 @@ then
 fi
 
 echo "    Installing systemd service @SYSTEMD_SERVICE@"
-# cp -f $RPM_INSTALL_PREFIX/systemd/@SYSTEMD_SERVICE@ /etc/systemd/system
-envsubst '$RPM_INSTALL_PREFIX' < $RPM_INSTALL_PREFIX/systemd/@SYSTEMD_SERVICE@ > /etc/systemd/system/@SYSTEMD_SERVICE@
-systemctl daemon-reload
+if [[ $RPM_INSTALL_PREFIX != "" ]]
+then
+    envsubst '$RPM_INSTALL_PREFIX' < $RPM_INSTALL_PREFIX/systemd/@SYSTEMD_SERVICE@ > /etc/systemd/system/@SYSTEMD_SERVICE@
+    systemctl daemon-reload
+fi    
+
 
 exit 0

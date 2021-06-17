@@ -25,7 +25,7 @@
 
 
 [Unit]
-Description=PacBio Primary Analysis WX Daemon @SYSTEM_EXEC@ @APP_VERSION@
+Description=PacBio Primary Analysis Webservice @SYSTEM_EXEC@ @APP_VERSION@
 Documentation=file:$RPM_INSTALL_PREFIX/doc/index.html
 PartOf=pacbio-pa-rt-@SOFTWARE_VERSION@.service
 Requires=@SYSTEMD_DEPENDENCIES@
@@ -39,8 +39,8 @@ User=pbi
 Environment=SEGFAULT_SIGNALS=all
 EnvironmentFile=-@SYSTEMD_CONF_PATH@
 #### this allows to run on all cores
-Environment="NUMA_ACQ=-c 0-1000"
-# to limit the cores (pinning), assign NUMA_ACQ in this file:
+Environment="NUMA_WS=-c 0-1000"
+# to limit the cores (pinning), assign NUMA_WS in this file:
 EnvironmentFile=-/etc/pacbio/taskset.conf
 StandardOutput=journal
 
@@ -49,11 +49,10 @@ PermissionsStartOnly=true
 
 @SYSTEMD_PREEXEC1@
 ExecStartPre=/usr/bin/ldd $RPM_INSTALL_PREFIX/bin/@SYSTEM_EXEC@
-### ExecStartPre=$RPM_INSTALL_PREFIX/bin/precheck.sh $PA_ACQ_OPTIONS
-ExecStartPre=$RPM_INSTALL_PREFIX/bin/precheck-wx-daemon.sh
+ExecStartPre=$RPM_INSTALL_PREFIX/bin/precheck-pa-ws.sh
 ExecStartPre=/usr/bin/sleep 1
-ExecStart=/usr/bin/taskset $NUMA_ACQ $RPM_INSTALL_PREFIX/bin/@SYSTEM_EXEC@ --daemon=/var/run/pacbio/wx-daemon.pid --logoutput=/var/log/pacbio/wx-daemon/wx-daemon $PA_WX_DAEMON_OPTIONS $PA_COMMON_CONFIG --config=@SYSTEMD_COMMON_JSON@
-PIDFile=/var/run/pacbio/pa-acq.pid
+ExecStart=/usr/bin/taskset $NUMA_WS $RPM_INSTALL_PREFIX/bin/@SYSTEM_EXEC@ --daemon=/var/run/pacbio/pa-ws.pid --logoutput=/var/log/pacbio/pa-ws/pa-ws $PA_WS_OPTIONS $PA_COMMON_CONFIG --config=@SYSTEMD_COMMON_JSON@
+PIDFile=/var/run/pacbio/pa-ws.pid
 #ExecReload=/bin/kill -HUP $MAINPID
 WatchdogSec=10s
 # allow daemon to send sd_notifications to systemd (STATUS, WATCHDOG, etc)
