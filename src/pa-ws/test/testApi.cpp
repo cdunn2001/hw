@@ -12,7 +12,7 @@ TEST(API,ONE)
     const std::string json1 = R"JSON(
     {
         "movie_max_frames" : 100,
-        "movie_max_time": 60.0,
+        "movie_max_seconds": 60.0,
         "movie_number": 123,
         "baz_url" : "http://localhost:23632/storage/m123456/mine.baz",
         "log_url" : "http://localhost:23632/storage/m123456/log.txt",

@@ -567,12 +567,12 @@ HttpResponse WebServiceHandler::GET(const std::string& uri)
                 }
             }
 #endif
+#endif
             else
             {
                 throw HttpResponseException(HttpStatus::NOT_FOUND, 
                     "path \'" + uri + "' not found");
             }
-#endif
         }
         else
         {
@@ -759,17 +759,26 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
 
     if (nextArg != args.end())
     {
-        int socketNumber = std::stoi(*nextArg);
+        uint32_t socketNumber = std::stoul(*nextArg);
+        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
+        {
+            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
+        }
         nextArg++;
         if (nextArg == args.end())
         {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "need application (basecaller, darkcal, etc)");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST must include final app name: basecaller, darkcal or loadingcal");
+        }
+        if (postData == "")
+        {
+            throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
         }
         if (*nextArg == "basecaller")
         {
             nextArg++;
             if (nextArg == args.end())
             {
+                response.httpStatus = HttpStatus::OK;
                 SocketBasecallerObject sbo(json);
                 (void) socketNumber;
             }
@@ -779,7 +788,7 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
             }
             else
             {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "?");
+                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to basecaller contains unknown command:" + *nextArg);
             }
         }
         else if (*nextArg == "darkcal")
@@ -795,26 +804,28 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
             }
             else
             {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "?");
+                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to darkcal contains unknown command:" + *nextArg);
             }
         }
         else if (*nextArg == "loadingcal")
         {
             nextArg++;
             if (nextArg == args.end())
+            {
                 SocketLoadingcalObject sbo(json);
+            }
             else if (*nextArg == "stop")
             {
                 // do something
             }
             else
             {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "?");
+                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to loadingcal contains unknown command:" + *nextArg);
             }
         }
         else
         {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "?");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST URL must include final app name: basecaller, darkcal or loadingcal");
         }
     }
     else
@@ -1007,72 +1018,6 @@ HttpResponse WebServiceHandler::POST(
             {
                 response.json = "here is the API";
             }
-
-#if 0            
-            if (args[0] == "sras")
-            {
-                args.erase(args.begin());
-                if (args.size() >= 1)
-                {
-                    auto sraIndex = std::stoul(args[0]);
-                    args.erase(args.begin());
-
-                    SraMessage sraMessage;
-                    auto so = LockSra(sraIndex, true);
-                    if (args.size() >= 1)
-                    {
-                        if (args[0] == "reconfigure")
-                        {
-                            response.json = Json::Value("ok");
-                            sraMessage.json = postJson;
-                            sraMessage.command = SraMessage::Command::RECONFIGURE;
-                        }
-                        else if (args[0] == "drain")
-                        {
-                            response.json = Json::Value("ok");
-                            sraMessage.json = postJson;
-                            sraMessage.command = SraMessage::Command::DRAIN;
-                        }
-                        else if (args[0] == "transmit")
-                        {
-                            response.json = Json::Value("ok");
-                            sraMessage.json = postJson;
-                            sraMessage.command = SraMessage::Command::TRANSMIT;
-                        }
-                        else
-                        {
-                            throw HttpResponseException(HttpStatus::NOT_FOUND,
-                                uri + " not found ");
-                        }
-                    }
-                    else
-                    {
-                        // construct a new SraObject
-                        so->Load(postJson);
-                        // validate
-                        if (so->sra_index != sraIndex)
-                        {
-                            throw PBException("SraObject::sra_index mismatches URL, fixing");
-                        }
-                        // fix up
-                        so->url = "http://" + PacBio::POSIX::gethostname() + ":"
-                            + std::to_string(config_.port) + "/sras/" 
-                            + std::to_string(sraIndex);
-                        sraMessage.json = so->Json();
-                        sraMessage.command = SraMessage::Command::CONSTRUCT;
-
-                        response.httpStatus = HttpStatus::CREATED;
-                        response.json = so->Json();
-                    }
-                    // send message to sra #sraIndex
-                    if (sraCallback_) sraCallback_(sraIndex, std::move(sraMessage));
-                }
-                else
-                {
-                    throw HttpResponseException(HttpStatus::NOT_FOUND,
-                                                uri + " not found " + args[0]);
-                }
-            }
             else if (args[0] == "ping")
             {
                 response.json["processed"] = PacBio::Utilities::Time::GetTimeOfDay();
@@ -1088,11 +1033,10 @@ HttpResponse WebServiceHandler::POST(
             {
                 threadController_->RequestExit();
             }
-            else 
+            else
             {
                 throw HttpResponseException(HttpStatus::NOT_FOUND, uri + " not found");
             }
-#endif
         }
         else
         {

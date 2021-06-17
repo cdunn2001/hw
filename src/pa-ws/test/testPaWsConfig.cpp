@@ -8,10 +8,10 @@ using namespace PacBio::Sensor;
 TEST(PaWsConfig,Basic)
 {
     Json::Value json;
-    json["numSRAs"] = 2;
+    json["lastSocket"] = 2;
     PaWsConfig conf1(json);
     EXPECT_FALSE(conf1.logHttpGets);
-    EXPECT_EQ(2,conf1.numSRAs);
+    EXPECT_EQ(2,conf1.lastSocket);
 }
 
 TEST(PaWsConfig,Factory)
@@ -22,13 +22,13 @@ TEST(PaWsConfig,Factory)
 
     conf1.platform = Platform::Sequel2Lvl1;
     FactoryConfig(&conf1);
-    EXPECT_DOUBLE_EQ(conf1.numSRAs,1);
+    EXPECT_DOUBLE_EQ(conf1.lastSocket,1);
 
     conf1.platform = Platform::Mongo;
     FactoryConfig(&conf1);
-    EXPECT_DOUBLE_EQ(conf1.numSRAs,4);
+    EXPECT_DOUBLE_EQ(conf1.lastSocket,4);
 
     conf1.platform = Platform::Kestrel;
     FactoryConfig(&conf1);
-    EXPECT_DOUBLE_EQ(conf1.numSRAs,4);
+    EXPECT_DOUBLE_EQ(conf1.lastSocket,4);
 }

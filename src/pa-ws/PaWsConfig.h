@@ -79,7 +79,8 @@ struct PaWsConfig : PacBio::Configuration::PBConfig<PaWsConfig>
 
     PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::UNKNOWN);
 
-    PB_CONFIG_PARAM(uint32_t, numSRAs, 0); ///< Number of threads to launch to service the HT Units representing SRAs
+    PB_CONFIG_PARAM(uint32_t, firstSocket, 0); ///< Socket number (1 based) of the first socket). 0 means no sockets are available
+    PB_CONFIG_PARAM(uint32_t, lastSocket, 0); ///< Socket number (1 based of the last socket). 0 means no sockets are available
     PB_CONFIG_PARAM(double, pollingInternalSeconds, 1.0); ///< Interval between housekeeping events
     PB_CONFIG_PARAM(bool, logHttpGets, false); ///< Whether or not incoming http GETs are logged (could be very noisy)
     PB_CONFIG_PARAM(uint16_t, port, PORT_REST_PAWS); ///< The dedicated REST port.
