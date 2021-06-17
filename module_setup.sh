@@ -1,5 +1,4 @@
-# this must be SOURCED, not executed
-. /etc/profile.d/modules.sh
+source /etc/profile.d/modules.sh
 
 module purge
 
