@@ -44,19 +44,4 @@ then
    chmod o+t /var/run/pacbio
 fi
 
-#if grep show_hugepage_usage /etc/sudoers > /dev/null
-#then
-#  echo "    INFO sudoers list already updated"
-#else
-#  echo "    INFO adding to sudoers list"
-#  echo "ALL ALL=NOPASSWD: $RPM_INSTALL_PREFIX/bin/show_hugepage_usage.sh" >> /etc/sudoers
-#fi
-
-if [ ! -e @SYSTEMD_COMMON_JSON@ ]
-then
-   echo " Creating empty system configuration file @SYSTEMD_COMMON_JSON@"
-   echo "{}" > @SYSTEMD_COMMON_JSON@
-fi
-
-
 exit 0
