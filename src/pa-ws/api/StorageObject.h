@@ -50,9 +50,9 @@ struct StorageItemObject : PacBio::Configuration::PBConfig<StorageItemObject>
     PB_CONFIG_PARAM(std::string, source_info, ""); ///< information about the source of this file
 };
 
-struct StorageDiskReport : PacBio::Configuration::PBConfig<StorageDiskReport>
+struct StorageDiskReportObject : PacBio::Configuration::PBConfig<StorageDiskReportObject>
 {
-    PB_CONFIG(StorageDiskReport);
+    PB_CONFIG(StorageDiskReportObject);
 
     PB_CONFIG_PARAM(uint64_t, total_space,0);
     PB_CONFIG_PARAM(uint64_t, free_space,0);
@@ -70,7 +70,7 @@ struct StorageObject : PacBio::Configuration::PBConfig<StorageObject>
 
     PB_CONFIG_PARAM(std::vector<StorageItemObject>, files, 0);
 
-    PB_CONFIG_OBJECT(StorageDiskReport, space);
+    PB_CONFIG_OBJECT(StorageDiskReportObject, space);
     PB_CONFIG_OBJECT(ProcessStatusObject, process_status);       ///< This is the process of "file deletion".
 };
 

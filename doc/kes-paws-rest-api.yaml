@@ -1,0 +1,357 @@
+openapi: 3.0.0
+info:
+  title: Primary Analysis Webservice (pa-ws) API
+  description: The REST API for controlling primary analysis processes and data storage.
+  version: 0.0.1
+servers:
+  - url: http://pa-dev01.lab.nanofluidics.com:23632
+    description: Optional server description, e.g. Main (production) server
+paths:
+  /sockets:
+    get:
+      summary: Returns a list of socket numbers.
+      description: Optional extended description in CommonMark or HTML.
+      responses:
+        '200':    # status code
+          description: A JSON array of socket numbers
+          content:
+            application/json:
+              schema: 
+                type: array
+                items: 
+                  type: string
+  /sockets/{socknum}:
+    get:
+      summary: Returns the socket object indexed by the socknum.
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketObject'                  
+  /sockets/reset:
+    post:
+      summary: Resets all "one shot" app resources for each of the sockets.
+      responses:
+        '200':
+          description: OK
+  /sockets/{socknum}/reset:
+    post:
+      summary: Resets all "one shot" app resources for the socket.
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /sockets/{socknum}/image:
+    get:
+      summary: Returns a single image from the socket
+      description: Format of image not decided (png or pgm).  TODO Still need to workout details on what image is returned.
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /sockets/{socknum}/basecaller:
+    get:
+      summary: Returns the basecaller object indexed by the socknum.
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketBasecallerObject'                  
+  /sockets/{socknum}/basecaller/start:
+    post:
+      summary: Start the basecaller process on socket {socknum}
+      description: "Input parameters might include: movie length, files types, 
+                   output directory url (for any internal files that might be generated)
+                   dictionary of output file urls"
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocketBasecallerObject'             
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketBasecallerObject'             
+  /sockets/{socknum}/basecaller/stop:
+    post:
+      summary: Gracefully aborts the basecalling process on socket {socknum}
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /sockets/{socknum}/basecaller/reset:
+    post:
+      summary: Gracefully aborts the basecalling process on socket {socknum}
+      parameters:
+      - name: socknum
+        in: path
+        description: The socket number
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /storages:
+    get:
+      summary: Returns a list of MIDs for each storage object.
+      description: 
+      responses:
+        '200':    # status code
+          description: A JSON array of MIDs
+          content:
+            application/json:
+              schema: 
+                type: array
+                items: 
+                  type: string
+    post:
+      summary: Creates a storages resource for a movie.
+      description: The input data will include a movie context name and the socket (or partition) number.  The necessary directory (or directories) for the provided movie will be created.  If they can't be then a 4XX error response is returned.  The created resource will have the following path /storages/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header.            
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageObject'             
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageObject'                  
+
+  /storages/{mid}:
+    get:
+      summary: Returns the storage object by MID.
+      description: The information provided for each resource will at a minimum contain the movie context name (mid) and the path to the root directory for the movie.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageObject'                  
+    delete:
+      summary: Deletes the storages resource for the provided movie context name (mid).
+      description: Attempt to delete a storage resource for which there are still files (not empty) will fail and return a 409 (Conflict) error code.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '409':
+          description: CONFLICT
+  /storages/{mid}/free:
+    post:
+      summary: Deletes all directories and files associated with the storages resource.
+      description: Can be refused if PA deems that there are not enough IO/compute resources to perform the delete.  In the event of a failure, a 409 (Conflict) error code will be returned.  Further information may be provided in the response body as to why the POST was refused.  Clients (ICS) can keep calling this POST command until a success (200) response is returned.
+                   An optional category and/or source filter may be provided in the POST payload to only delete files of this category and/or source. 
+                   If no files of that category and/or source exist, the call should succeed
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+
+  /postprimaries:
+    get:
+      summary: Returns a list of MIDs for each postprimary object
+      responses:
+        '200':    # status code
+          description: A JSON array of MIDs
+          content:
+            application/json:
+              schema: 
+                type: array
+                items: 
+                  type: string
+    post:
+      summary: Starts a post primary process on the provided url's to basecalling artifacts files.
+      description: "Input parameters include:
+
+                    * movie context name (mid)
+
+                    * input file urls
+
+                    * post primary processing parameters
+
+                    * output directory url (for any internal files that might be generated)
+
+                    * dictionary of output file urls
+
+                    The created resource will have the following path /postprimaries/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header."
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostprimaryObject'             
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostprimaryObject'                  
+    delete:
+      summary: Deletes all existing postprimaries resources.
+      description: All postprimaries resources must be stopped first.
+      responses:
+        '200':
+          description: All postprimary resources were successfully deleted.
+        '40X':
+          description: One or more of the postprimaries processes were not stopped.
+  /postprimaries/{mid}:
+    get:
+      summary: Returns the postprimariy object by MID.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostprimaryObject'                  
+    delete:
+      summary: Deletes the postprimary resource.
+      description: All resource must be stopped first.
+      responses:
+        '200':
+          description: The postprimary resource was successfully deleted.
+        '40X':
+          description: The postprimaries processes were not stopped. POST to the stop endpoint first.
+  /postprimaries/{mid}/stop:
+    post:
+      summary: Gracefully aborts the postprimary process associated with mid.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK The process was stopped, and now the resource can be DELETEd.
+  /transfers:
+    get:
+      summary: Returns a list of MIDs for each transfer object
+      responses:
+        '200':    # status code
+          description: A JSON array of MIDs
+          content:
+            application/json:
+              schema: 
+                type: array
+                items: 
+                  type: string
+    post:
+      summary: Starts the transfer of artifacts (files) to a remoter location.
+      description:   "The artifacts to transfer, the transfer protocol, and the destination will be provided in the data body.  Can be refused if PA deems that there are not enough IO/compute resources to perform the transfer.  In the event of a failure, a 409 (Conflict) error code will be returned.  Further information may be provided in the response body as to why the POST was refused.  Clients (ICS) can keep calling this POST command until a success (200) response is returned.
+                     Input parameters must include:
+
+                    * movie context name (mid)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferObject'             
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferObject'                  
+  /transfers/{mid}:
+    get:
+      summary: Returns the transfer object by MID.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the transfer process
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferObject'
+    delete:
+      summary: Deletes the transfer object by MID.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the transfer process
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK transfer object was deleted.
+        '40X':
+          description: failed, the transfer object was not stopped.  
