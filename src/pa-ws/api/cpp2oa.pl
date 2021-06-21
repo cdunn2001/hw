@@ -10,6 +10,7 @@ my %enums;
 my $currentStruct = "";
 my $indent = 0;
 my @fields;
+my %objects;
 
 my %subs = ("std::string" => "string",
 "double"=>"number",
@@ -34,17 +35,114 @@ sub transmogrify
     if ($s =~ /std::vector<(.+)>/)
     {   
         my $inner = $1;
-        if ($inner =~ /std::vector/) { $inner = transmogrify($inner); }
-        # return " [ $inner, $inner ... ]";
-        return "array"; # FIXME
+        my @inners;
+        if ($inner =~ /std::vector/) { 
+            $inner = transmogrify($inner); 
+            if (ref($inner) eq 'ARRAY') { push @inners, @$inner; }
+            else { push @inners, $inner; }
+        }
+        else
+        {
+            push @inners, $inner;
+        }
+        
+        return [ "array", @inners ];
     }
     else
     {
         return $s;
     }
 }
-print "components:\n";
-print "  schemas:\n";
+print GetIndent($indent) . "components:\n";
+$indent++;
+print GetIndent($indent) . "schemas:\n";
+$indent++;
+
+sub GetIndent
+{
+    my ($indent0) = @_;
+    return "  " x $indent0;
+}
+sub ShowStruct
+{
+    my ($indent1, $ffields) = @_;
+
+    my $ii = GetIndent($indent1);
+
+    print $ii . "properties:\n";
+
+    $indent1++;
+
+    for my $f (@$ffields)
+    {
+        $ii = GetIndent($indent1);
+        print $ii . "$f->[0]:\n";
+
+        $indent1++;
+        $ii = GetIndent($indent1);
+
+        my $type = $f->[1];
+        if (ref($type) eq 'ARRAY')
+        {
+            my $indent2= $indent1;
+            while (scalar(@$type) > 0)
+            {
+                $indent2++;
+                $ii = GetIndent($indent2);
+                my $k = shift @$type;
+                if ($k eq "array")
+                {
+                    print $ii . "type: array\n";
+                    print $ii . "items:\n";
+                }
+                elsif ($k =~ /Object/)
+                {
+                    print $ii . "\$ref: '#/components/schemas/$k'\n";
+                }
+                else
+                {
+                    $k = $subs{$k} || $k;
+                    print $ii . "type: $k\n"
+                }
+            }
+        }
+        elsif ($type =~ /Object/) {
+            $indent1++;
+            $ii = GetIndent($indent1);
+            print $ii . "type: object\n";
+            if (!$objects{$type})
+            {
+                die "object $type not defined";
+            }
+            ShowStruct($indent1, $objects{$type});
+            $indent1--;
+        }
+        else
+        {
+            print $ii . "type: $type\n";
+        }
+        if ($f->[2])
+        {
+            print $ii . "$f->[2]\n";
+        }
+        if ($f->[3])
+        {
+            print $ii . "$f->[3]\n";
+        }
+        if ($f->[4])
+        {
+            print $ii . "$f->[4]\n";
+        }
+        $indent1--;
+    }
+    $indent1--;
+    $ii = GetIndent($indent1);
+    print $ii . "required:\n";
+    for my $f (@fields)
+    {
+        print $ii . " - $f->[0]\n";
+    }
+}
 
 while(<>)
 {
@@ -58,31 +156,8 @@ while(<>)
     {
         if (/^\s*}/)
         {
-            print "      properties:\n";
-            for my $f (@fields)
-            {
-                print "        $f->[0]:\n";
-                my $type = $f->[1];
-                if ($type =~ /Object/) { $type = "object"; }
-                print "          type: $type\n";
-                if ($f->[2])
-                {
-                    print "          $f->[2]\n";
-                }
-                if ($f->[3])
-                {
-                    print "          $f->[3]\n";
-                }
-                if ($f->[4])
-                {
-                    print "          $f->[4]\n";
-                }
-            }
-            print "      required:\n";
-            for my $f (@fields)
-            {
-                print "        - $f->[0]\n";
-            }
+            ShowStruct($indent, \@fields);
+
             $indent--;
             
             $currentStruct  = "";
@@ -128,17 +203,19 @@ while(<>)
                 $f->[4] = "description: $doc\n";
             }
             push @fields, $f;
+            push @{$objects{$currentStruct}}, $f;
+
         }
         elsif (/PB_CONFIG_OBJECT\(\s*(\S+),\s*(\S+)\s*\);/)
         {
             my ($class, $name) = ($1,$2);
 
-            my $f = [ ]; #  "  " x $indent;
+            my $f = [ ];
 
             $f->[0] = $name;
             $f->[1] = $class;
             push @fields, $f;
-
+            push @{$objects{$currentStruct}}, $f;
         }
         elsif (/^\s*$/)
         {
@@ -158,7 +235,8 @@ while(<>)
         if (/^struct\s+(\S+)\s.*PBConfig/)
         {
             $currentStruct = $1;
-            print "    $currentStruct:\n";
+            print GetIndent($indent);
+            print "$currentStruct:  #top level\n";
         }
         elsif (/^\s*{/)
         {
