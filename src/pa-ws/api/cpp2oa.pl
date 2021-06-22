@@ -185,23 +185,22 @@ while(<>)
 
             my $f =  [ ];
 
+            $f->[0] = $name;
             if (exists $enums{$class})
             {
-                $f->[0] = $name;
                 $f->[1] = "string";
                 $f->[2] = "enum: [" .join(", ", @{$enums{$class}} )."]";
-                $f->[3] = "example: \"" . $enums{$class}->[0]. "\"";
+                $example ||= "\"" . $enums{$class}->[0]. "\"";
                 $f->[4] = "description: $doc\n";
             }
             else
             {
                 $class = $subs{$class} || $class;
                 $class = transmogrify($class);
-                $f->[0] = $name;
                 $f->[1] = $class;
-                $f->[3] = "example: $example";
-                $f->[4] = "description: $doc\n";
             }
+            $f->[3] = "example: $example";
+            $f->[4] = "description: $doc\n";
             push @fields, $f;
             push @{$objects{$currentStruct}}, $f;
 

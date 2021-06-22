@@ -41,10 +41,10 @@ struct TransferStatusObject : PacBio::Configuration::PBConfig<TransferStatusObje
 {
     PB_CONFIG(TransferStatusObject);
 
-    PB_CONFIG_PARAM(double, progress, 0.0); ///< progress measured in terms of bytes, normalized to [0.0,1.0]
-    PB_CONFIG_PARAM(uint64_t, bytes_transferred, 0);
-    PB_CONFIG_PARAM(std::string, current_file, ""); ///< The file that is currently being transferred
-    PB_CONFIG_PARAM(double, estimated_time_remaining, 0.0); ///< Time in seconds to complete the transfer.
+    PB_CONFIG_PARAM(double, progress, 0.0); ///< progress measured in terms of bytes, normalized to [0.0,1.0] EXAMPLE(0.63)
+    PB_CONFIG_PARAM(uint64_t, bytes_transferred, 0); // EXAMPLE(98746374817)
+    PB_CONFIG_PARAM(std::string, current_file, ""); ///< The file that is currently being transferred EXAMPLE("foo.bam")
+    PB_CONFIG_PARAM(double, estimated_time_remaining, 0.0); ///< Time in seconds to complete the transfer. EXAMPLE(1355.0)
     PB_CONFIG_PARAM(std::vector<std::string>, completed_files, 0);
 };
 
@@ -54,12 +54,12 @@ struct TransferObject : PacBio::Configuration::PBConfig<TransferObject>
 
     SMART_ENUM(Protocol, UNKNOWN, RSYNC, SSH_RSYNC);
 
-    PB_CONFIG_PARAM(std::string, mid, "");
+    PB_CONFIG_PARAM(std::string, mid, ""); // EXAMPLE("m123456_987654")
     PB_CONFIG_PARAM(std::vector<std::string>, urls_to_transfer, 0);
-    PB_CONFIG_PARAM(std::string, destination_url, "discard:"); ///< URL of the destination directory
-    PB_CONFIG_PARAM(Protocol, protocol, Protocol::UNKNOWN);
-    PB_CONFIG_PARAM(url, output_log_url, "discard:");
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
+    PB_CONFIG_PARAM(std::string, destination_url, "discard:"); ///< URL of the destination directory EXAMPLE("rsync://lims.customer.com:54321/foo")
+    PB_CONFIG_PARAM(Protocol, protocol, Protocol::UNKNOWN); // EXAMPLE("RSYNC")
+    PB_CONFIG_PARAM(url, output_log_url, "discard:"); // EXAMPLE("http://localhost:23632/storages/m123456_987654/transfer.log
+    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("INFO")
 
     PB_CONFIG_OBJECT(TransferStatusObject, status);
     PB_CONFIG_OBJECT(ProcessStatusObject, process_status);

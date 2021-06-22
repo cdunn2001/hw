@@ -47,12 +47,12 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
     PB_CONFIG(SocketDarkcalObject);
 
     PB_CONFIG_OBJECT(ProcessStatusObject, process_status);       
-    PB_CONFIG_PARAM(uint64_t, movie_max_frames, 0); ///< Movie length in frames
-    PB_CONFIG_PARAM(double, movie_max_seconds, 0); ///< Movie length in seconds
-    PB_CONFIG_PARAM(uint32_t, movie_number, 0); ///< arbitrary movie number to delimite the start and end
-    PB_CONFIG_PARAM(url, calib_file_url, "discard:"); ///< calibration file destination
-    PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
+    PB_CONFIG_PARAM(uint64_t, movie_max_frames, 0); ///< Movie length in frames EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movie_max_seconds, 0); ///< Movie length in seconds EXAMPLE(6.0)
+    PB_CONFIG_PARAM(uint32_t, movie_number, 0); ///< arbitrary movie number to delimite the start and end EXAMPLE(1)
+    PB_CONFIG_PARAM(url, calib_file_url, "discard:"); ///< calibration file destination  EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
+    PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.log")
+    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("INFO")
 };
 
 struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcalObject>
@@ -60,20 +60,20 @@ struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcal
     PB_CONFIG(SocketLoadingcalObject);
     
     PB_CONFIG_OBJECT(ProcessStatusObject, process_status);       
-    PB_CONFIG_PARAM(uint64_t, movie_max_frames, 0); ///< Movie length in frames
-    PB_CONFIG_PARAM(double, movie_max_time, 0); ///< Movie length in seconds
-    PB_CONFIG_PARAM(uint32_t, movie_number, 0); ///< arbitrary movie number to delimite the start and end
-    PB_CONFIG_PARAM(url, dark_frame_file_url, "discard:"); ///< dark_frame file URL source
-    PB_CONFIG_PARAM(url, calib_file_url, "discard:"); ///< calibration file destination
-    PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
+    PB_CONFIG_PARAM(uint64_t, movie_max_frames, 0); ///< Movie length in frames  EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movie_max_time, 0); ///< Movie length in seconds EXAMPLE(6.0)
+    PB_CONFIG_PARAM(uint32_t, movie_number, 0); ///< arbitrary movie number to delimite the start and end EXAMPLE(2)
+    PB_CONFIG_PARAM(url, dark_frame_file_url, "discard:"); ///< dark_frame file URL source  EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
+    PB_CONFIG_PARAM(url, calib_file_url, "discard:"); ///< calibration file destination  EXAMPLE("http://localhost:23632/storages/m123456_987654/loadingcal.h5")
+    PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination  EXAMPLE("http://localhost:23632/storages/m123456_987654/loadingcal.log")
+    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("INFO")
 };
 
 struct SocketBasecallerRTMetricsObject : PacBio::Configuration::PBConfig<SocketBasecallerRTMetricsObject>
 {
     PB_CONFIG(SocketBasecallerRTMetricsObject);
 
-    PB_CONFIG_PARAM(std::string, url, "http://localhost:23632/m123456/rtmetrics_20210602T060545Z.xml" );
+    PB_CONFIG_PARAM(std::string, url, "discard:" ); // EXAMPLE("http://localhost:23632/storages/m123456_987654/loadingcal.log")
 };
 
 struct AnalogObject : PacBio::Configuration::PBConfig<AnalogObject>
@@ -81,13 +81,13 @@ struct AnalogObject : PacBio::Configuration::PBConfig<AnalogObject>
     PB_CONFIG(AnalogObject);
 
     SMART_ENUM(BaseLabel_t, N,A,T,G,C);
-    PB_CONFIG_PARAM(BaseLabel_t, base_label, BaseLabel_t::N);
-    PB_CONFIG_PARAM(double, relative_amp, 1.0);
-    PB_CONFIG_PARAM(double, inter_pulse_distance_sec, 0.0);
-    PB_CONFIG_PARAM(double, excess_noise_cv, 0.0);
-    PB_CONFIG_PARAM(double, pulse_width_sec, 0.0);
-    PB_CONFIG_PARAM(double, pw_to_slow_step_ratio, 0.15);
-    PB_CONFIG_PARAM(double, ipd_to_slow_step_ratio, 0.15);
+    PB_CONFIG_PARAM(BaseLabel_t, base_label, BaseLabel_t::N); // EXAMPLE("C")
+    PB_CONFIG_PARAM(double, relative_amp, 1.0); // EXAMPLE(0.3)
+    PB_CONFIG_PARAM(double, inter_pulse_distance_sec, 0.0); // EXAMPLE(0.14)
+    PB_CONFIG_PARAM(double, excess_noise_cv, 0.0); // EXAMPLE(3.0)
+    PB_CONFIG_PARAM(double, pulse_width_sec, 0.0); // EXAMPLE(0.11)
+    PB_CONFIG_PARAM(double, pw_to_slow_step_ratio, 0.15); // EXAMPLE(0.19)
+    PB_CONFIG_PARAM(double, ipd_to_slow_step_ratio, 0.15); // EXAMPLE(0.14)
 };
 
 
@@ -104,14 +104,14 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
     PB_CONFIG_PARAM(url, baz_url, "discard:"); ///< baz destination EXAMPLE("http://localhost:23632/storages/m123456_987654/thefile.baz")
     PB_CONFIG_PARAM(url, trace_file_url, "discard:"); ///< trace file destination EXAMPLE("discard:")
     PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination EXAMPLE("http://localhost:23632/storages/m123456_987654/basecaller.log")
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
-    PB_CONFIG_PARAM(ControlledString_t, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout
+    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("DEBUG")
+    PB_CONFIG_PARAM(ControlledString_t, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout EXAMPLE("Minesweeper1.0") 
     PB_CONFIG_PARAM(url, darkcal_url, ""); // EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, pixel_spread_function, 0); ///< This is required and a function of the sensor NFC tag EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, crosstalk_filter, 0); ///< Optional kernel definition of the crosstalk deconvolution.  THe pixel_spread_function is used to automatically calculate one if this is not specified. EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<AnalogObject>, analogs, 0);
-    PB_CONFIG_PARAM(std::vector<std::vector<int>>, sequencing_roi, 0);
-    PB_CONFIG_PARAM(std::vector<std::vector<int>>, trace_file_roi, 0);
+    PB_CONFIG_PARAM(std::vector<std::vector<int>>, sequencing_roi, 0); // EXAMPLE(0,0,2048,1980)
+    PB_CONFIG_PARAM(std::vector<std::vector<int>>, trace_file_roi, 0); // EXAMPLE(0,0,256,32)
 
     PB_CONFIG_PARAM(double, expected_frame_rate, 100.0); // EXAMPLE(100.0)
     PB_CONFIG_PARAM(double, photoelectron_sensitivity, 0.0); // EXAMPLE(1.4)

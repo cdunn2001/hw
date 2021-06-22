@@ -43,26 +43,26 @@ struct PostprimaryStatusObject : PacBio::Configuration::PBConfig<PostprimaryStat
 {
     PB_CONFIG(PostprimaryStatusObject);
 
-    PB_CONFIG_PARAM(std::vector<url>, output_urls, 0);
-    PB_CONFIG_PARAM(double, progress, 0.0); ///< progress of job completion. Range is [0.0, 1.0]
-    PB_CONFIG_PARAM(double, baz2bam_zmws_per_min, 0.0);
-    PB_CONFIG_PARAM(double, ccs_zmws_per_min, 0.0);
-    PB_CONFIG_PARAM(uint64_t, num_zmws, 0);
-    PB_CONFIG_PARAM(double, baz2bam_peak_rss_gb, 0.0);
-    PB_CONFIG_PARAM(double, ccs_peak_rss_gb, 0.0);
+    PB_CONFIG_PARAM(std::vector<url>, output_urls, 0); // EXAMPLE(["http://localhost:23632/m123456_98765/foo.bam","http://localhost:23632/m123456_98765/foo.baz2bam.log"])
+    PB_CONFIG_PARAM(double, progress, 0.0); ///< progress of job completion. Range is [0.0, 1.0] EXAMPLE(0.74)
+    PB_CONFIG_PARAM(double, baz2bam_zmws_per_min, 0.0); // EXAMPLE(3.6e6)
+    PB_CONFIG_PARAM(double, ccs_zmws_per_min, 0.0); // EXAMPLE(0.4e6)
+    PB_CONFIG_PARAM(uint64_t, num_zmws, 0); // EXAMPLE(25000000)
+    PB_CONFIG_PARAM(double, baz2bam_peak_rss_gb, 0.0); // EXAMPLE(5.6)
+    PB_CONFIG_PARAM(double, ccs_peak_rss_gb, 0.0); // EXAMPLE(1.1)
 };
 
 struct PostprimaryObject : PacBio::Configuration::PBConfig<PostprimaryObject>
 {
     PB_CONFIG(PostprimaryObject);
 
-    PB_CONFIG_PARAM(std::string, mid, "");
-    PB_CONFIG_PARAM(url, baz_file_url, "discard:"); // RFC 863
-    PB_CONFIG_PARAM(std::string, uuid, "");
+    PB_CONFIG_PARAM(std::string, mid, ""); // EXAMPLE("m123456_987654")
+    PB_CONFIG_PARAM(url, baz_file_url, "discard:"); // RFC 863  EXAMPLE("http://localhost:23632/m123456_98765/foo.baz")
+    PB_CONFIG_PARAM(std::string, uuid, ""); // EXAMPLE("123e4567-e89b-12d3-a456-426614174000")
 
 
-    PB_CONFIG_PARAM(url, output_log_url, "discard:");
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
+    PB_CONFIG_PARAM(url, output_log_url, "discard:"); // EXAMPLE("http://localhost:23632/m123456_98765/ppa.log")
+    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold // EXAMPLE("INFO")
     /// output_dataset_url can be either .subreadset.xml or .consensusreadset.xml
 
     /// output files will use the output_dataset_url minus the .dataset.xml dataset extension
@@ -79,15 +79,15 @@ struct PostprimaryObject : PacBio::Configuration::PBConfig<PostprimaryObject>
     ///     http://localhost:23632/storages/0/m12346.ccs_reports.json
     ///     http://localhost:23632/storages/0/m12346.zmw_metrics.json.gz
     ///     http://localhost:23632/storages/0/m12346.hifi_summary.json
-    PB_CONFIG_PARAM(url, output_prefix_url, "discard:");
+    PB_CONFIG_PARAM(url, output_prefix_url, "discard:"); // EXAMPLE(http://localhost:23632/storages/0/m12346)
 
-    PB_CONFIG_PARAM(url, output_stats_xml_url, "discard:"); ///< "stats.xml"
-    PB_CONFIG_PARAM(url, output_stats_h5_url, "discard:"); ///< ".sts.h5"
-    PB_CONFIG_PARAM(url, output_reduce_stats_h5_url, "discard:"); ///< if set, run reduce stats
-    PB_CONFIG_PARAM(std::string, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout
-    PB_CONFIG_PARAM(std::string, subreadset_metadata_xml, "");
-    PB_CONFIG_PARAM(bool, include_kinetics, false);
-    PB_CONFIG_PARAM(bool, ccs_on_instrument, true);
+    PB_CONFIG_PARAM(url, output_stats_xml_url, "discard:"); ///< EXAMPLE("http://localhost:23632/storages/0/m12346.stats.xml")
+    PB_CONFIG_PARAM(url, output_stats_h5_url, "discard:"); ///< EXAMPLE("http://localhost:23632/storages/0/m12346.sts.h5")
+    PB_CONFIG_PARAM(url, output_reduce_stats_h5_url, "discard:"); ///< if set, run reduce stats  EXAMPLE("http://localhost:23632/storages/0/m12346.rsts.h5")
+    PB_CONFIG_PARAM(std::string, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout  EXAMPLE("Minesweeper1.0")
+    PB_CONFIG_PARAM(std::string, subreadset_metadata_xml, ""); // EXAMPLE("<SubreadSets><SubreadSet xmln= [snip] </SubreadSets>")
+    PB_CONFIG_PARAM(bool, include_kinetics, false); // EXAMPLE(true)
+    PB_CONFIG_PARAM(bool, ccs_on_instrument, true); // EXAMPLE(true)
 
     PB_CONFIG_OBJECT(PostprimaryStatusObject,status);
     PB_CONFIG_OBJECT(ProcessStatusObject,process_status);
