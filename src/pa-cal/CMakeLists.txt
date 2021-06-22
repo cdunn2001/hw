@@ -39,7 +39,6 @@ project (pa-cal)
 # The SOFTWARE_VERSION is used to create the RPM and installation directory, and it is reported
 # by the application and logged.
 set(SOFTWARE_VERSION "0.0.0")
-set(SYSTEMD_COMMON_JSON "/etc/pacbio/app-common.json")
 
 add_subdirectory(test)
 

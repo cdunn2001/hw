@@ -150,18 +150,6 @@ void PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
 
 void PaCalProcess::RunAllThreads()
 {
-    // There are main processing threads and some helper threads.
-    // The main threads are
-    //   1. personality thread (1 thread)
-    //   2. SRA threads (1 thread per SRA)
-    // The main threads run in parallel and are synchronized using 
-    // barriers for the initial start-up.
-    // The helper threads include
-    //   1. the Main event loop thread that is part of the ProcessBase framework
-    //   2. the watchdog feeding loop, which generates events that need
-    //      pass through all threads.
-    //   3. test point inject thread(s) that generated synthetic failures
-
 #if 0
     {
         PacBio::Logging::LogStream ls;
