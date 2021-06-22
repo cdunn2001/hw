@@ -38,12 +38,12 @@ TEST(BazToPulse, KestrelLosslessCompact)
                     NoOpTransformParams{},
                     TruncateParams{ NumBits{2} }
         });
-    info.push_back({PacketFieldName::Ipd,
+    info.push_back({PacketFieldName::Pw,
                     StoreSigned{false},
                     NoOpTransformParams{},
                     CompactOverflowParams{ NumBits{7} }
         });
-    info.push_back({PacketFieldName::Pw,
+    info.push_back({PacketFieldName::Ipd,
                     StoreSigned{false},
                     NoOpTransformParams{},
                     CompactOverflowParams{ NumBits{7} }
@@ -72,13 +72,13 @@ TEST(BazToPulse, KestrelLosslessCompact)
 
     uint32_t start = 0;
     pulsesIn[0].Start(start += 14);
-    pulsesIn[1].Start(start += 130);
-    pulsesIn[2].Start(start += 5);
-    pulsesIn[3].Start(start += 18);
-    pulsesIn[4].Start(start += 22);
-    pulsesIn[5].Start(start += 500);
-    pulsesIn[6].Start(start += 64);
-    pulsesIn[7].Start(start += 33);
+    pulsesIn[1].Start(start += pulsesIn[0].Width() + 130);
+    pulsesIn[2].Start(start += pulsesIn[1].Width() + 5);
+    pulsesIn[3].Start(start += pulsesIn[2].Width() + 18);
+    pulsesIn[4].Start(start += pulsesIn[3].Width() + 22);
+    pulsesIn[5].Start(start += pulsesIn[4].Width() + 500);
+    pulsesIn[6].Start(start += pulsesIn[5].Width() + 64);
+    pulsesIn[7].Start(start += pulsesIn[6].Width() + 33);
 
     BazToPulse parser(info);
     size_t len = 0;
@@ -111,12 +111,12 @@ TEST(BazToPulse, KestrelLosslessSimple)
                     NoOpTransformParams{},
                     TruncateParams{ NumBits{2} }
         });
-    info.push_back({PacketFieldName::Ipd,
+    info.push_back({PacketFieldName::Pw,
                     StoreSigned{false},
                     NoOpTransformParams{},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
         });
-    info.push_back({PacketFieldName::Pw,
+    info.push_back({PacketFieldName::Ipd,
                     StoreSigned{false},
                     NoOpTransformParams{},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
@@ -145,13 +145,13 @@ TEST(BazToPulse, KestrelLosslessSimple)
 
     uint32_t start = 0;
     pulsesIn[0].Start(start += 14);
-    pulsesIn[1].Start(start += 130);
-    pulsesIn[2].Start(start += 5);
-    pulsesIn[3].Start(start += 18);
-    pulsesIn[4].Start(start += 22);
-    pulsesIn[5].Start(start += 500);
-    pulsesIn[6].Start(start += 64);
-    pulsesIn[7].Start(start += 33);
+    pulsesIn[1].Start(start += pulsesIn[0].Width() + 130);
+    pulsesIn[2].Start(start += pulsesIn[1].Width() + 5);
+    pulsesIn[3].Start(start += pulsesIn[2].Width() + 18);
+    pulsesIn[4].Start(start += pulsesIn[3].Width() + 22);
+    pulsesIn[5].Start(start += pulsesIn[4].Width() + 500);
+    pulsesIn[6].Start(start += pulsesIn[5].Width() + 64);
+    pulsesIn[7].Start(start += pulsesIn[6].Width() + 33);
 
     BazToPulse parser(info);
     size_t len = 0;

@@ -121,18 +121,18 @@ TEST(PulseToBaz, KestrelLossyTruncate)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
+                            Field<PacketFieldName::Pw,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
+                                  Serialize<TruncateOverflow, NumBits_t<7>>
+                                  >,
                             Field<PacketFieldName::Ipd,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow,
                                             NumBits_t<7>>
-                                  >,
-                            Field<PacketFieldName::Pw,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<7>>
                                   >
-                       >;
+                            >;
 
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
@@ -160,13 +160,13 @@ TEST(PulseToBaz, KestrelLossyTruncate)
 
         uint32_t start = 0;
         pulsesInV[0].Start(start += 14);
-        pulsesInV[1].Start(start += 130);
-        pulsesInV[2].Start(start += 5);
-        pulsesInV[3].Start(start += 18);
-        pulsesInV[4].Start(start += 22);
-        pulsesInV[5].Start(start += 500);
-        pulsesInV[6].Start(start += 64);
-        pulsesInV[7].Start(start += 33);
+        pulsesInV[1].Start(start += pulsesInV[0].Width() + 130);
+        pulsesInV[2].Start(start += pulsesInV[1].Width() + 5);
+        pulsesInV[3].Start(start += pulsesInV[2].Width() + 18);
+        pulsesInV[4].Start(start += pulsesInV[3].Width() + 22);
+        pulsesInV[5].Start(start += pulsesInV[4].Width() + 500);
+        pulsesInV[6].Start(start += pulsesInV[5].Width() + 64);
+        pulsesInV[7].Start(start += pulsesInV[6].Width() + 33);
     }
 
     auto Validate = [&]()
@@ -180,9 +180,9 @@ TEST(PulseToBaz, KestrelLossyTruncate)
             EXPECT_EQ(pulsesInV[i].Label(), pulsesOutV[i].Label()) << i;
             EXPECT_EQ(pulsesInV[i].Width()%128, pulsesOutV[i].Width()) << i;
             auto ipdTruth = pulsesInV[i].Start() - startFrameTruth;
-            startFrameTruth += ipdTruth;
+            startFrameTruth += ipdTruth + pulsesInV[i].Width();
             auto ipdTrunc = pulsesOutV[i].Start() - startFrameTrunc;
-            startFrameTrunc += ipdTrunc;
+            startFrameTrunc += ipdTrunc + pulsesOutV[i].Width();
             EXPECT_EQ(ipdTruth%128, ipdTrunc) << i;
         }
     };
@@ -207,17 +207,17 @@ TEST(PulseToBaz, KestrelLosslessSimple)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow,  NumBits_t<2>>
                                   >,
-                            Field<PacketFieldName::Ipd,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
-                                  >,
                             Field<PacketFieldName::Pw,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
+                                  >,
+                            Field<PacketFieldName::Ipd,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
+                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
                                   >
-                       >;
+                            >;
 
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
@@ -245,13 +245,13 @@ TEST(PulseToBaz, KestrelLosslessSimple)
 
         uint32_t start = 0;
         pulsesInV[0].Start(start += 14);
-        pulsesInV[1].Start(start += 130);
-        pulsesInV[2].Start(start += 5);
-        pulsesInV[3].Start(start += 18);
-        pulsesInV[4].Start(start += 22);
-        pulsesInV[5].Start(start += 500);
-        pulsesInV[6].Start(start += 64);
-        pulsesInV[7].Start(start += 33);
+        pulsesInV[1].Start(start += pulsesInV[0].Width() + 130);
+        pulsesInV[2].Start(start += pulsesInV[1].Width() + 5);
+        pulsesInV[3].Start(start += pulsesInV[2].Width() + 18);
+        pulsesInV[4].Start(start += pulsesInV[3].Width() + 22);
+        pulsesInV[5].Start(start += pulsesInV[4].Width() + 500);
+        pulsesInV[6].Start(start += pulsesInV[5].Width() + 64);
+        pulsesInV[7].Start(start += pulsesInV[6].Width() + 33);
     }
 
     auto Validate = [&]()
@@ -286,17 +286,17 @@ TEST(PulseToBaz, KestrelLosslessCompact)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
-                            Field<PacketFieldName::Ipd,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<CompactOverflow, NumBits_t<7>>
-                                  >,
                             Field<PacketFieldName::Pw,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
+                                  >,
+                            Field<PacketFieldName::Ipd,
+                                  StoreSigned_t<false>,
+                                  Transform<NoOp>,
+                                  Serialize<CompactOverflow, NumBits_t<7>>
                                   >
-                       >;
+                            >;
 
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
@@ -324,13 +324,13 @@ TEST(PulseToBaz, KestrelLosslessCompact)
 
         uint32_t start = 0;
         pulsesInV[0].Start(start += 14);
-        pulsesInV[1].Start(start += 130);
-        pulsesInV[2].Start(start += 5);
-        pulsesInV[3].Start(start += 18);
-        pulsesInV[4].Start(start += 22);
-        pulsesInV[5].Start(start += 500);
-        pulsesInV[6].Start(start += 64);
-        pulsesInV[7].Start(start += 33);
+        pulsesInV[1].Start(start += pulsesInV[0].Width() + 130);
+        pulsesInV[2].Start(start += pulsesInV[1].Width() + 5);
+        pulsesInV[3].Start(start += pulsesInV[2].Width() + 18);
+        pulsesInV[4].Start(start += pulsesInV[3].Width() + 22);
+        pulsesInV[5].Start(start += pulsesInV[4].Width() + 500);
+        pulsesInV[6].Start(start += pulsesInV[5].Width() + 64);
+        pulsesInV[7].Start(start += pulsesInV[6].Width() + 33);
     }
 
     auto Validate = [&]()

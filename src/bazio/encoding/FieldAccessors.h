@@ -62,15 +62,21 @@ struct PulseFieldAccessor<PacketFieldName::Ipd>
     BAZ_CUDA Type Get(const P& p)
     {
         auto ret = p.Start() - currFrame;
-        currFrame = p.Start();
+        currFrame = p.Start() + p.Width();
         return ret;
     }
 
     template <typename P>
     BAZ_CUDA void Set(P& p, Type val)
     {
-        currFrame = val + currFrame;
-        p.Start(currFrame);
+        p.Start(currFrame + val);
+        // WARN: This is a horrific bug waiting to happen.  We currently
+        //       have no guarantee pulse width has been deserialized yet.
+        //       This can be manually controlled just by listing pulse width
+        //       before IPD in the serialization description, but that is
+        //       hardly robust
+        //       This will be fixed in a near term PR.
+        currFrame = val + currFrame + p.Width();
     }
 
 private:
