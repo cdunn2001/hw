@@ -63,6 +63,7 @@ struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcal
     PB_CONFIG_PARAM(uint64_t, movie_max_frames, 0); ///< Movie length in frames
     PB_CONFIG_PARAM(double, movie_max_time, 0); ///< Movie length in seconds
     PB_CONFIG_PARAM(uint32_t, movie_number, 0); ///< arbitrary movie number to delimite the start and end
+    PB_CONFIG_PARAM(url, dark_frame_file_url, "discard:"); ///< dark_frame file URL source
     PB_CONFIG_PARAM(url, calib_file_url, "discard:"); ///< calibration file destination
     PB_CONFIG_PARAM(url, log_url, "discard:"); ///< log file destination
     PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
