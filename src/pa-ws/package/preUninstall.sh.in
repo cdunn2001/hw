@@ -1,0 +1,36 @@
+
+unalias=`systemctl show -p Id @SYSTEMD_ALIAS@ | cut -d= -f2`
+
+if systemctl status @SYSTEMD_SERVICE@ >/dev/null
+then
+  echo "    ERROR @SYSTEMD_SERVICE@ is RUNNING, won't uninstall."
+  echo "       Please issue the following commands before uninstalling this package."
+  echo "           sudo systemctl stop    @SYSTEMD_SERVICE@"
+  exit 1
+#else
+#  echo "INFO  @SYSTEMD_SERVICE@ is not running, continuing..."
+fi
+
+if [ "$unalias" == "@SYSTEMD_SERVICE@" -a "$1" == "0" ]
+then
+    if systemctl is-enabled @SYSTEMD_ALIAS@>/dev/null 2>&1
+    then
+      echo "    ERROR @SYSTEMD_ALIAS@ is ENABLED, won't uninstall."
+      echo "        Please issue the following command before uninstalling this package."
+      echo "            sudo systemctl disable @SYSTEMD_SERVICE@ "
+      exit 1
+    else
+      echo "    INFO @SYSTEMD_ALIAS@ is disabled, continuing..."
+    fi
+fi
+
+
+if [ "$1" == "0" ]
+then
+    echo Removing systemd server @SYSTEMD_SERVICE@
+    rm -f /etc/systemd/system/@SYSTEMD_SERVICE@
+    rm -f /etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@
+else
+    echo Leaving systemd server @SYSTEMD_SERVICE@
+fi
+
