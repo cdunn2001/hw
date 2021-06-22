@@ -30,14 +30,14 @@
 ///          a uint64_t value, though the storeSigned value will indicate
 ///          if the bits should be interpreted as a signed value. The
 ///          currently supported transformations are:
-///          * NoOp:       Do nothing, just pass through the value
-///          * FixedPoint: Apply a scale paramter to a floating point value
-///                        and then round do the nearest integral value
-///          * Codec:      Applies a lossy and compression, which starts out
-///                        counting by 1s, but as we get further from 0 our
-///                        stride begins increasing by powers of 2, so that
-///                        a wider input range can be mapped to a fewer number
-///                        of bits.
+///          * NoOp:             Do nothing, just pass through the value
+///          * FixedPoint:       Apply a scale paramter to a floating point value
+///                              and then round do the nearest integral value
+///          * LossySequelCodec: Applies a lossy and compression, which starts out
+///                              counting by 1s, but as we get further from 0 our
+///                              stride begins increasing by powers of 2, so that
+///                              a wider input range can be mapped to a fewer number
+///                              of bits.
 ///
 ///          Beyond that, there is a Transform class, suitable for
 ///          use in template metaprogramming.  Where the transformations
@@ -167,7 +167,7 @@ struct FixedPoint
 //    to the right, then we've mapped our value into the M bits via
 //    truncation.  If we instead add 2^(N-1) before shifting, then we've
 //    mapped our value into the M bits via round-to-nearest.
-struct Codec
+struct LossySequelCodec
 {
     BAZ_CUDA static uint64_t Apply(uint64_t t, StoreSigned storeSigned, NumBits bits)
     {

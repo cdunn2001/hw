@@ -108,7 +108,7 @@ public:
         {
             auto o = Utility::make_overload(
                 [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
-                [&](const CodecParams& p) { return Codec::Apply(val, storeSigned, p.numBits); },
+                [&](const CodecParams& p) { return LossySequelCodec::Apply(val, storeSigned, p.numBits); },
                 [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
             );
             return boost::apply_visitor(o, info);
@@ -180,7 +180,7 @@ public:
         {
             auto o = Utility::make_overload(
                 [&](const NoOpTransformParams&) { return NoOp::Revert<uint64_t>(val, storeSigned); },
-                [&](const CodecParams& p) { return Codec::Revert<uint64_t>(val, storeSigned, p.numBits); },
+                [&](const CodecParams& p) { return LossySequelCodec::Revert<uint64_t>(val, storeSigned, p.numBits); },
                 [&](const FixedPointParams&) -> uint64_t { throw PBException("Datatype does not support FixedPoint format"); }
             );
             return boost::apply_visitor(o, info);
@@ -265,7 +265,7 @@ public:
         {
             auto o = Utility::make_overload(
                 [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
-                [&](const CodecParams& p) { return Codec::Apply(val, storeSigned, p.numBits); },
+                [&](const CodecParams& p) { return LossySequelCodec::Apply(val, storeSigned, p.numBits); },
                 [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
             );
             return boost::apply_visitor(o, info);

@@ -42,12 +42,12 @@ PB_STRONG_TYPEDEF(uint32_t, FixedPointScale);
 
 // Set up some machinery for a compile time version
 // of the above strong typedefs
-template <typename U, typename U::T v>
+template <typename U, typename U::UnderlyingType v>
 struct TemplateVal
 {
     static constexpr U val = U(v);
 };
-template <typename U, typename U::T v>
+template <typename U, typename U::UnderlyingType v>
 constexpr U TemplateVal<U, v>::val;
 
 template <bool b> using StoreSigned_t  = TemplateVal<StoreSigned, b>;

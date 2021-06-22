@@ -30,15 +30,16 @@
 
 // Based loosely off BOOST_STRONG_TYPEDEF, but re-implemented as that
 // doesn't support constexpr or cuda
-#define PB_STRONG_TYPEDEF(Type, Name)                                             \
-struct Name                                                                       \
-{                                                                                 \
-    using T = Type;                                                               \
-    CUDA_ENABLED explicit constexpr Name(const T t_) : t(t_) {};                      \
-    CUDA_ENABLED constexpr Name & operator=(const T & rhs) { t = rhs; return *this;}  \
-    CUDA_ENABLED constexpr operator const T & () const {return t; }                   \
-    CUDA_ENABLED constexpr operator T & () { return t; }                              \
-    T t;                                                                          \
+#define PB_STRONG_TYPEDEF(Type, Name)                                                              \
+struct Name                                                                                        \
+{                                                                                                  \
+    using UnderlyingType = Type;                                                                   \
+    CUDA_ENABLED explicit constexpr Name(const UnderlyingType t_) : t(t_) {};                      \
+    CUDA_ENABLED constexpr Name & operator=(const UnderlyingType & rhs) { t = rhs; return *this;}  \
+    CUDA_ENABLED constexpr operator const UnderlyingType & () const {return t; }                   \
+    CUDA_ENABLED constexpr operator UnderlyingType & () { return t; }                              \
+private:                                                                                           \
+    UnderlyingType t;                                                                              \
 };
 
 #endif //PACBIO_COMMON_UTILITY_STRONG_TYPEDEF_H

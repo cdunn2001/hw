@@ -86,7 +86,7 @@ TEST(BazTransform, Codec)
             {
                 for (int k = 0; k < stride; ++k, frame++)
                 {
-                    bool good = ::Codec::Apply(frame, StoreSigned{false}, mainBits) == code;
+                    bool good = ::LossySequelCodec::Apply(frame, StoreSigned{false}, mainBits) == code;
                     if (errors < 10)
                         EXPECT_TRUE(good) << code;
                     good ? successes++ : errors++;
@@ -113,7 +113,7 @@ TEST(BazTransform, Codec)
         {
             for (int j = 0; j < entriesPerRound; ++j, code++, frame+=stride)
             {
-                bool good = ::Codec::Apply(frame, StoreSigned{false}, mainBits) == code;
+                bool good = ::LossySequelCodec::Apply(frame, StoreSigned{false}, mainBits) == code;
                 if (errors < 10)
                     EXPECT_TRUE(good) << code;
                 good ? successes++ : errors++;

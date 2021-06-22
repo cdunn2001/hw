@@ -25,7 +25,7 @@
 //
 /// \File PulseToBaz.h
 /// \detail This file is a preliminary stab at writing a generic pulse to baz stream
-///         using template metaprogramming.  It is targeted and serializing pulses,
+///         using template metaprogramming.  It is targeted at serializing pulses,
 ///         where we are generally under stricter real-time constraints and performance
 ///         matters, though it does have the inverse baz to pulse functionality for
 ///         test reasons.
@@ -33,9 +33,9 @@
 ///         Some of the generic programming done here is perhaps a bit involved, but
 ///         its justification is best viewed in light of the alternatives:
 ///             * We could hand-code individual formats like was done in the Sequel code
-///               base.  However this is a manual and potentially error prone processes.
+///               base.  However this is a manual and potentially error prone process.
 ///               We lived for a long time now with an under-tuned internal mode format
-///               comes with strong ROI constraints in Sequel II, simply because we've
+///               that comes with strong ROI constraints in Sequel II, simply because we've
 ///               never had the time to revisit the code and fix the issues.  Also now
 ///               that Kestrel is dealing with a much more relaxed sub-byte and cross-byte
 ///               possibilities, playing with hand rolled code anytime we wish to make a
@@ -58,7 +58,7 @@
 ///
 ///          The code here is robust and flexible.  The bit twiddles are written once,
 ///          so changing what format we choose to serialize shouldn't introduce new bugs.
-///          Also since all serialization information is viewable by the copmiler, it
+///          Also since all serialization information is viewable by the compiler, it
 ///          can do some pretty aggressive inlining and optimization.  I've hand checked
 ///          some of the generated assembly, and it's pretty close to what you'd get from
 ///          writing things manually.  Things are also very easy to update.  Changing
@@ -99,10 +99,12 @@ struct EncodeInfo {};
 // that the sum of their individual bits is as close to a multiple of 8 as possible,
 // while still being <= 64.  During serialization, first each field writes it's main
 // portion, and then after that any necessary overflow information is recorded.
-template <size_t numBytes, typename...Info> struct GroupEncoder {};
-template <size_t numBytes, typename... Signed, typename... Transforms, typename... Serializers>
-struct GroupEncoder<numBytes, EncodeInfo<Signed, Transforms, Serializers>...>
+template <typename...Info> struct GroupEncoder {};
+template <typename... Signed, typename... Transforms, typename... Serializers>
+struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
 {
+    // Compute the number of bits we require for this group, not counting
+    // any data-dependent overflow bytes
     BAZ_CUDA static constexpr size_t TotalBits()
     {
         size_t ret = 0;
@@ -110,10 +112,9 @@ struct GroupEncoder<numBytes, EncodeInfo<Signed, Transforms, Serializers>...>
         (void) worker;
         return ret;
     }
+    static constexpr size_t numBytes = (TotalBits() + 7) / 8;
 
     static_assert(numBytes <= 8, "Cannot use more than 64 bit storage");
-    static_assert((TotalBits() + 7) / 8 <= numBytes, "Not enough storage specified for requested bit fields");
-    static_assert((TotalBits() + 7) / 8 == numBytes, "Too much storage specified for requested bit fields");
 
     // Used to determine how much space would hypthetically be required to store
     // the supplied values.
@@ -259,7 +260,7 @@ template <typename FieldGroup>
 struct GroupToEncoder;
 template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Signed, typename... Transforms, typename... Serializers>
 struct GroupToEncoder<FieldGroup<totalBits, Field<names, Signed, Transforms, Serializers>...>> {
-    using T = FieldGroupEncoder<GroupEncoder<(totalBits+7)/8, EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
+    using T = FieldGroupEncoder<GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
 };
 template <typename Encoding>
 using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
