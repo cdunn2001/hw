@@ -47,94 +47,94 @@ std::string CompressedISO8601()
     return s2;
 }
 
-SocketObject CreateMockupOfSocketObject(int index)
+SocketObject CreateMockupOfSocketObject(int socketNumber)
 {
-    std::string mid = "m12345" + std::to_string(index);
+    std::string mid = "m12345" + std::to_string(socketNumber);
     SocketObject so;
-    so.index = index;
-    so.darkcal.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::COMPLETE;
-    so.darkcal.process_status.completion_status = ProcessStatusObject::CompletionStatus_t::FAILED;
-    so.darkcal.process_status.exit_code = 137; // sig_segv
-    so.darkcal.process_status.timestamp = "20210601T 01:23:45.000Z";
-    so.darkcal.movie_max_frames = 512;
-    so.darkcal.movie_max_seconds = 6;
-    so.darkcal.movie_number = 111;
-    so.darkcal.calib_file_url = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
-    so.darkcal.log_url = "http://pac1:23632/storages/" + mid + "/darkcal.log";
+    so.socketNumber = socketNumber;
+    so.darkcal.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::COMPLETE;
+    so.darkcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::FAILED;
+    so.darkcal.processStatus.exitCode = 137; // sig_segv
+    so.darkcal.processStatus.timestamp = "20210601T 01:23:45.000Z";
+    so.darkcal.movieMaxFrames = 512;
+    so.darkcal.movieMaxSeconds = 6;
+    so.darkcal.movieNumber = 111;
+    so.darkcal.calibFileUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
+    so.darkcal.logUrl = "http://pac1:23632/storages/" + mid + "/darkcal.log";
 
-    so.loadingcal.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::READY;
-    so.loadingcal.process_status.completion_status = ProcessStatusObject::CompletionStatus_t::UNKNOWN;
-    so.loadingcal.process_status.timestamp = "20210601T 01:32:15.000Z";
-    so.loadingcal.movie_max_frames = 0;
-    so.loadingcal.movie_max_time = 0;
-    so.loadingcal.movie_number = 0;
-    so.loadingcal.calib_file_url = "discard:";
-    so.loadingcal.log_url = "discard:";
+    so.loadingcal.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::READY;
+    so.loadingcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::UNKNOWN;
+    so.loadingcal.processStatus.timestamp = "20210601T 01:32:15.000Z";
+    so.loadingcal.movieMaxFrames = 0;
+    so.loadingcal.movieMaxTime = 0;
+    so.loadingcal.movieNumber = 0;
+    so.loadingcal.calibFileUrl = "discard:";
+    so.loadingcal.logUrl = "discard:";
 
-    so.basecaller.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::RUNNING;
-    so.basecaller.process_status.timestamp = PacBio::Utilities::ISO8601::TimeString();
+    so.basecaller.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::RUNNING;
+    so.basecaller.processStatus.timestamp = PacBio::Utilities::ISO8601::TimeString();
     so.basecaller.mid = mid;
-    so.basecaller.uuid = "00104afe-c341-11eb-8529-0242ac13000" + std::to_string(index);
-    so.basecaller.movie_max_frames = 1000000;
-    so.basecaller.movie_max_seconds = 10000;
-    so.basecaller.movie_number = 113;
-    so.basecaller.baz_url = "http://pac1:23632/storages/" + mid + "/" + mid + ".baz";
-    so.basecaller.log_url = "http://pac1:23632/storages/" + mid + "/loadingcal.log";
+    so.basecaller.uuid = "00104afe-c341-11eb-8529-0242ac13000" + std::to_string(socketNumber);
+    so.basecaller.movieMaxFrames = 1000000;
+    so.basecaller.movieMaxSeconds = 10000;
+    so.basecaller.movieNumber = 113;
+    so.basecaller.bazUrl = "http://pac1:23632/storages/" + mid + "/" + mid + ".baz";
+    so.basecaller.logUrl = "http://pac1:23632/storages/" + mid + "/loadingcal.log";
     so.basecaller.chiplayout = "Minesweeper";
-    so.basecaller.darkcal_url = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
-    so.basecaller.pixel_spread_function.resize(5);
-    for (auto& r : so.basecaller.pixel_spread_function) r.resize(5);
-    so.basecaller.pixel_spread_function[2][2] = 1.0;
+    so.basecaller.darkcalUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
+    so.basecaller.pixelSpreadFunction.resize(5);
+    for (auto& r : so.basecaller.pixelSpreadFunction) r.resize(5);
+    so.basecaller.pixelSpreadFunction[2][2] = 1.0;
 
-    so.basecaller.crosstalk_filter.resize(7);
-    for (auto& r : so.basecaller.crosstalk_filter) r.resize(7);
-    so.basecaller.crosstalk_filter[3][3] = 1.0;
+    so.basecaller.crosstalkFilter.resize(7);
+    for (auto& r : so.basecaller.crosstalkFilter) r.resize(7);
+    so.basecaller.crosstalkFilter[3][3] = 1.0;
     so.basecaller.analogs.resize(4);
-    so.basecaller.analogs[0].base_label = AnalogObject::BaseLabel_t::A;
-    so.basecaller.analogs[0].relative_amp = 0.2;
-    so.basecaller.analogs[1].base_label = AnalogObject::BaseLabel_t::C;
-    so.basecaller.analogs[1].relative_amp = 0.4;
-    so.basecaller.analogs[2].base_label = AnalogObject::BaseLabel_t::G;
-    so.basecaller.analogs[2].relative_amp = 0.7;
-    so.basecaller.analogs[3].base_label = AnalogObject::BaseLabel_t::T;
-    so.basecaller.analogs[3].relative_amp = 1.0;
-    so.basecaller.expected_frame_rate = 100.0;
-    so.basecaller.photoelectron_sensitivity = 1.4;
-    so.basecaller.ref_snr = 15.0;
-    so.basecaller.rt_metrics.url = "http://pac1:23632/storages/" + mid + "/rt_metrics_" +
+    so.basecaller.analogs[0].baseLabel = AnalogObject::BaseLabel_t::A;
+    so.basecaller.analogs[0].relativeAmp = 0.2;
+    so.basecaller.analogs[1].baseLabel = AnalogObject::BaseLabel_t::C;
+    so.basecaller.analogs[1].relativeAmp = 0.4;
+    so.basecaller.analogs[2].baseLabel = AnalogObject::BaseLabel_t::G;
+    so.basecaller.analogs[2].relativeAmp = 0.7;
+    so.basecaller.analogs[3].baseLabel = AnalogObject::BaseLabel_t::T;
+    so.basecaller.analogs[3].relativeAmp = 1.0;
+    so.basecaller.expectedFrameRate = 100.0;
+    so.basecaller.photoelectronSensitivity = 1.4;
+    so.basecaller.refSnr = 15.0;
+    so.basecaller.rtMetrics.url = "http://pac1:23632/storages/" + mid + "/rt_metrics_" +
        CompressedISO8601() + ".xml";
 
     return so;
 }
 
-StorageObject CreateMockupOfStorageObject(int socket_number, const std::string& mid)
+StorageObject CreateMockupOfStorageObject(int socketNumber, const std::string& mid)
 {
     StorageObject so;
 
     std::string rootUrl = "http://pac1:23632/storages/" + mid;
 
     so.mid = mid;
-    so.root_url = rootUrl;
-    so.linux_path = "file:/data/pa/storages/"+ mid;
+    so.rootUrl = rootUrl;
+    so.linuxPath = "file:/data/pa/storages/"+ mid;
 
-    so.space.total_space = 100'000'000'000ULL;
-    so.space.free_space = 90'000'000'000ULL;
+    so.space.totalSpace = 100'000'000'000ULL;
+    so.space.freeSpace = 90'000'000'000ULL;
 
     so.files.emplace_back();
     so.files.back().url = rootUrl + "/" + mid + ".baz";
     so.files.back().timestamp = PacBio::Utilities::ISO8601::TimeString();
     so.files.back().size = 1'230'000'000ULL;
     so.files.back().category = StorageItemObject::Category_t::BAM;
-    so.files.back().source_info = "basecaller";
+    so.files.back().sourceInfo = "basecaller";
 
     so.files.emplace_back();
     so.files.back().url = rootUrl + "/" + mid + ".bam";
     so.files.back().timestamp = PacBio::Utilities::ISO8601::TimeString();
     so.files.back().size = 4'560'000'000ULL;
     so.files.back().category = StorageItemObject::Category_t::UNKNOWN;
-    so.files.back().source_info = "baz2bam";
+    so.files.back().sourceInfo = "baz2bam";
 
-    so.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::READY;
+    so.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::READY;
     return so;
 }
 
@@ -143,30 +143,30 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     PostprimaryObject po;
     po.mid = mid;
     std::string root = "http://localhost:23632/storages/" + mid + "/";
-    po.baz_file_url =  root + mid + ".baz";
+    po.bazFileUrl =  root + mid + ".baz";
     po.uuid = "00104afe-c341-11eb-8529-0242ac130003";
-    po.output_log_url = root + mid + ".ppa.log";
-    po.log_level = LogLevel_t::DEBUG;
-    po.output_prefix_url = root + mid;
-    po.output_stats_xml_url = root + mid + ".stats.xml";
-    po.output_stats_h5_url = root + mid + ".sts.h5";
-    po.output_reduce_stats_h5_url = root + mid + ".rsts.h5";
+    po.outputLogUrl = root + mid + ".ppa.log";
+    po.logLevel = LogLevel_t::DEBUG;
+    po.outputPrefixUrl = root + mid;
+    po.outputStatsXmlUrl = root + mid + ".stats.xml";
+    po.outputStatsH5Url = root + mid + ".sts.h5";
+    po.outputReduceStatsH5Url = root + mid + ".rsts.h5";
     po.chiplayout = "Minesweeper";
-    po.subreadset_metadata_xml = "<pbds:SubreadSet> ... lots of XML goes here ... </pbds:SubreadSet>";
-    po.include_kinetics = true;
-    po.ccs_on_instrument = true;
+    po.subreadsetMetadataXml = "<pbds:SubreadSet> ... lots of XML goes here ... </pbds:SubreadSet>";
+    po.includeKinetics = true;
+    po.ccsOnInstrument = true;
 
-    po.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::RUNNING;
-    po.process_status.timestamp = PacBio::Utilities::ISO8601::TimeString();
+    po.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::RUNNING;
+    po.processStatus.timestamp = PacBio::Utilities::ISO8601::TimeString();
     po.status.progress = 0.34;
-    po.status.output_urls.push_back(root + mid + ".dataset.xml");
-    po.status.output_urls.push_back(root + mid + ".ccs.bam");
-    po.status.output_urls.push_back(root + mid + ".baz2bam.log");
-    po.status.baz2bam_zmws_per_min = 1.0e5;
-    po.status.ccs_zmws_per_min = 1.0e5;
-    po.status.num_zmws = 18579372;
-    po.status.baz2bam_peak_rss_gb = 401.1;
-    po.status.ccs_peak_rss_gb = 56.9;
+    po.status.outputUrls.push_back(root + mid + ".dataset.xml");
+    po.status.outputUrls.push_back(root + mid + ".ccs.bam");
+    po.status.outputUrls.push_back(root + mid + ".baz2bam.log");
+    po.status.baz2bamZmwsPerMin = 1.0e5;
+    po.status.ccsZmwsPerMin = 1.0e5;
+    po.status.numZmws = 18579372;
+    po.status.baz2bamPeakRssGb = 401.1;
+    po.status.ccsPeakRssGb = 56.9;
     return po;
 }
 
@@ -175,18 +175,18 @@ TransferObject CreateMockupOfTransferObject(int index, const std::string& mid)
     TransferObject to;
     to.mid = mid;
     to.protocol = TransferObject::Protocol::RSYNC;
-    to.destination_url = "rsync://my.smrt.server.org:54321/this/experiment/"
+    to.destinationUrl = "rsync://my.smrt.server.org:54321/this/experiment/"
         +mid+"_00000" + std::to_string(index);
     std::string root = "http://localhost:23632/storages/" + mid + "/";
 
-    to.urls_to_transfer.push_back(root + mid + ".dataset.xml");
-    to.urls_to_transfer.push_back(root + mid + ".ccs.bam");
-    to.urls_to_transfer.push_back(root + mid + ".baz2bam.log");
-    to.status.current_file = root + mid + ".ccs.bam";
-    to.status.estimated_time_remaining = 3600.1;
+    to.urlsToTransfer.push_back(root + mid + ".dataset.xml");
+    to.urlsToTransfer.push_back(root + mid + ".ccs.bam");
+    to.urlsToTransfer.push_back(root + mid + ".baz2bam.log");
+    to.status.currentFile = root + mid + ".ccs.bam";
+    to.status.estimatedTimeRemaining = 3600.1;
     to.status.progress = 0.95;
-    to.process_status.execution_status = ProcessStatusObject::ExecutionStatus_t::RUNNING;
-    to.process_status.timestamp = PacBio::Utilities::ISO8601::TimeString();
+    to.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::RUNNING;
+    to.processStatus.timestamp = PacBio::Utilities::ISO8601::TimeString();
 
     return to;
 }
