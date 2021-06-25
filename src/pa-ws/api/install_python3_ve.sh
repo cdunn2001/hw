@@ -11,5 +11,5 @@ then
   python3 -m venv e2e_ve
 fi
 source e2e_ve/bin/activate
-#pip3 install --upgrade pip
+pip3 install --upgrade pip
 pip3 install h5py junit_xml lxml requests simplejson pyyaml

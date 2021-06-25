@@ -1,6 +1,50 @@
 #! env perl
 
-# converts C++ structs to OpenAPI yaml schemas
+# Copyright (c) 2021, Pacific Biosciences of California, Inc.
+#
+# All rights reserved.
+#
+# THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+# AND PROPRIETARY INFORMATION.
+#
+# Disclosure, redistribution and use of this software is subject to the
+# terms and conditions of the applicable written agreement(s) between you
+# and Pacific Biosciences, where "you" refers to you or your company or
+# organization, as applicable.  Any other disclosure, redistribution or
+# use is prohibited.
+#
+# THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+# IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# File Description:
+#  \brief converts C++ structs to OpenAPI yaml schemas
+# 
+# The script should be given a list of all headers used for the API as command line
+# parameters.
+# The header file format must strict conform to the requirements of this script
+# 
+# 1. The structs must be derived from PBConfig
+#
+# 2. Each parameter and Oxygen comments must be on a single line.
+#
+# 3. Each parameter should have ///< documentation at the end of the line
+#
+# 4. Inside the ///< documentation, there should an EXAMPLE() macro that gives a raw example
+#    of the parameter.
+#
+# Example:
+#
+#    PB_CONFIG_PARAM(double, progress, 0.0); ///< progress of job completion. Range is [0.0, 1.0] EXAMPLE(0.74)
+
 
 use strict;
 
@@ -18,15 +62,10 @@ my %subs = ("std::string" => "string",
 "uint32_t"=>"integer",
 "uint64_t"=>"integer",
 "bool"=>"boolean",
-"url"=>"string",   # fixme
-"ControlledString_t"=>"string", #fixme
-"ISO8601_Timestamp_t"=>"string" #fixme
+"url"=>"string",   # FIXME - This richer type information should be shown in the OpenAPI description, rather than simply give "string" as the type.
+"ControlledString_t"=>"string", # FIXME
+"ISO8601_Timestamp_t"=>"string" # FIXME
 );
-
-#"std::vector<std::string>" => "[ string, string ...]",
-#"std::vector<url>" => "[ url, url ...]",
-#"std::vector<std::vector<double>>" => "[ [ double, double ...], [ double, double ...] ... ]",
-#"std::vector<std::vector<int>>" => "[ [ int, int ...], [ int, int ...] ... ]",
 
 sub transmogrify
 {
@@ -177,10 +216,10 @@ while(<>)
                 $example = $1;
             }
             my $doc = "";
-            if ($_ =~ m|///<(.+)|)
+            if ($_ =~ m|///<\s*(.+)|)
             {
                $doc = $1;
-               $doc =~ s/EXAMPLE\(.*\)//;     
+               $doc =~ s/\s*EXAMPLE\(.+\)//;     
             }
 
             my $f =  [ ];
@@ -191,7 +230,6 @@ while(<>)
                 $f->[1] = "string";
                 $f->[2] = "enum: [" .join(", ", @{$enums{$class}} )."]";
                 $example ||= "\"" . $enums{$class}->[0]. "\"";
-                $f->[4] = "description: $doc\n";
             }
             else
             {
@@ -200,7 +238,8 @@ while(<>)
                 $f->[1] = $class;
             }
             $f->[3] = "example: $example";
-            $f->[4] = "description: $doc\n";
+            $doc =~ s/\'/\\'/g;
+            $f->[4] = "description: '$doc'\n";
             push @fields, $f;
             push @{$objects{$currentStruct}}, $f;
 

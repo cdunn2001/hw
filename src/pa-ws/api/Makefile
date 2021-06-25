@@ -3,7 +3,10 @@ all: schema.txt kes-paws-rest-api.yaml kes-paws-rest-api.html
 clean:
 	rm -f schema.txt kes-paws-rest-api.yaml pa-ws.schemas.yaml
 
-headers = ObjectTypes.h ProcessStatusObject.h PostprimaryObject.h SocketObject.h StorageObject.h TransferObject.h
+distclean: clean
+	rm -rf e2e_ve
+
+headers = ObjectTypes.h ProcessStatusObject.h SocketObject.h PostprimaryObject.h StorageObject.h TransferObject.h
 
 schema.txt: cpp2md.pl $(headers)
 	perl ./cpp2md.pl $(headers) > $@
@@ -15,5 +18,5 @@ kes-paws-rest-api.yaml: ../../../doc/kes-paws-rest-api.yaml pa-ws-schemas.yaml
 	cat $^ > $@
 
 kes-paws-rest-api.html: kes-paws-rest-api.yaml
-	./install_python3.sh
+	./install_python3_ve.sh
 	source e2e_ve/bin/activate && python swagger-yaml-to-html.py < $< > $@
