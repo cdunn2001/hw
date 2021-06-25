@@ -11,20 +11,20 @@ TEST(API,ONE)
 
     const std::string json1 = R"JSON(
     {
-        "movie_max_frames" : 100,
-        "movie_max_seconds": 60.0,
-        "movie_number": 123,
-        "baz_url" : "http://localhost:23632/storage/m123456/mine.baz",
-        "log_url" : "http://localhost:23632/storage/m123456/log.txt",
-        "log_level" : "DEBUG",
+        "movieMaxFrames" : 100,
+        "movieMaxSeconds": 60.0,
+        "movieNumber": 123,
+        "bazUrl" : "http://localhost:23632/storage/m123456/mine.baz",
+        "logUrl" : "http://localhost:23632/storage/m123456/log.txt",
+        "logLevel" : "DEBUG",
         "chiplayout" : "Minesweeper",
-        "crosstalk_filter" :
+        "crosstalkFilter" :
         [
             [ 0.1,  0.2, 0.3 ],
             [ -0.1, 0.8, -0.2],
             [ 0.4,  0.5, 0.6 ]
         ],
-        "trace_file_roi":
+        "traceFileRoi":
         [ [ 0, 0, 13, 32 ] ]
     }
     )JSON";
@@ -34,17 +34,17 @@ TEST(API,ONE)
 
     SocketBasecallerObject sbc(json);
 
-    EXPECT_EQ(sbc.movie_max_frames, 100);
-    EXPECT_EQ(0.2, sbc.crosstalk_filter[0][1]);
-    EXPECT_EQ(13, sbc.trace_file_roi[0][2]);
-    EXPECT_EQ("discard:",sbc.trace_file_url);
-    EXPECT_EQ("http://localhost:23632/storage/m123456/log.txt",sbc.log_url);
+    EXPECT_EQ(sbc.movieMaxFrames, 100);
+    EXPECT_EQ(0.2, sbc.crosstalkFilter[0][1]);
+    EXPECT_EQ(13, sbc.traceFileRoi[0][2]);
+    EXPECT_EQ("discard:",sbc.traceFileUrl);
+    EXPECT_EQ("http://localhost:23632/storage/m123456/log.txt",sbc.logUrl);
 
 
     // typo
     const std::string json2 = R"JSON(
     {
-        "movie_max_frmes" : 100,
+        "movieMaxFrmes" : 100,
     }
     )JSON";
 
@@ -53,7 +53,7 @@ TEST(API,ONE)
     // bad structure (passing 1D array instead of 2D array)
     const std::string json3 = R"JSON(
     {
-         "trace_file_roi": [ 0, 0, 13, 32 ]
+         "traceFileRoi": [ 0, 0, 13, 32 ]
     }
     )JSON";
 
