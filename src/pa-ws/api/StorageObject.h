@@ -41,37 +41,37 @@ struct StorageItemObject : PacBio::Configuration::PBConfig<StorageItemObject>
 {
     PB_CONFIG(StorageItemObject);
 
-    SMART_ENUM(Category_t, UNKNOWN, BAM);
+    SMART_ENUM(Category_t, UNKNOWN, BAM, BAZ, CAL);
 
-    PB_CONFIG_PARAM(std::string, url, ""); ///< URL to this object
-    PB_CONFIG_PARAM(std::string, timestamp, ""); ///< ISO8601 timestamp of file write time
-    PB_CONFIG_PARAM(uint64_t, size, ""); ///< ISO8601 timestamp of file write time
-    PB_CONFIG_PARAM(Category_t, category, Category_t::UNKNOWN); ///< 
-    PB_CONFIG_PARAM(std::string, source_info, ""); ///< information about the source of this file
+    PB_CONFIG_PARAM(std::string, url, ""); ///< URL of this object EXAMPLE("http://localhost:23632/storages/m123456_987654/foobar1.bam")
+    PB_CONFIG_PARAM(std::string, timestamp, ""); ///< ISO8601 timestamp of file write time EXAMPLE("2017-01-31T01:59:49.103998Z")
+    PB_CONFIG_PARAM(uint64_t, size, ""); ///< size of the file  EXAMPLE(6593845929837)
+    PB_CONFIG_PARAM(Category_t, category, Category_t::UNKNOWN); ///< The category for this particular item in the StorageObject EXAMPLE("BAM")
+    PB_CONFIG_PARAM(std::string, sourceInfo, ""); ///< information about the source of this file
 };
 
-struct StorageDiskReport : PacBio::Configuration::PBConfig<StorageDiskReport>
+struct StorageDiskReportObject : PacBio::Configuration::PBConfig<StorageDiskReportObject>
 {
-    PB_CONFIG(StorageDiskReport);
+    PB_CONFIG(StorageDiskReportObject);
 
-    PB_CONFIG_PARAM(uint64_t, total_space,0);
-    PB_CONFIG_PARAM(uint64_t, free_space,0);
+    PB_CONFIG_PARAM(uint64_t, totalSpace,0);  ///< Total space allocated in bytes for this StorageObject, include used and unused space EXAMPLE(6593845929837)
+    PB_CONFIG_PARAM(uint64_t, freeSpace,0);   ///< Total unused space in bytes of this StorageObject EXAMPLE(6134262344238)
 };
 
 struct StorageObject : PacBio::Configuration::PBConfig<StorageObject>
 {
     PB_CONFIG(StorageObject);
 
-    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID
-    PB_CONFIG_PARAM(std::string, root_url, ""); ///< symbolic link to storage directory
-    PB_CONFIG_PARAM(std::string, linux_path, ""); ///< physical path to storage directory (should only be used for debugging and logging)
-    PB_CONFIG_PARAM(url, output_log_url, "discard:");
-    PB_CONFIG_PARAM(LogLevel_t, log_level, LogLevel_t::INFO); ///< log severity threshold
+    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID EXAMPLE("m123456_987654")
+    PB_CONFIG_PARAM(std::string, rootUrl, ""); ///< symbolic link to storage directory which points back to this StorageObject EXAMPLE("http://localhost:23632/storages/m123456_987654")
+    PB_CONFIG_PARAM(std::string, linuxPath, ""); ///< physical path to storage directory (should only be used for debugging and logging) EXAMPLE("file:/data/pa/m123456_987654")
+    PB_CONFIG_PARAM(url, outputLogUrl, "discard:"); ///< Destination URL for the log file. Logging happens during construction and freeing. EXAMPLE("http://localhost:23632/storages/m123456_987654/storage.log")
+    PB_CONFIG_PARAM(LogLevel_t, logLevel, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("INFO")
 
-    PB_CONFIG_PARAM(std::vector<StorageItemObject>, files, 0);
+    PB_CONFIG_PARAM(std::vector<StorageItemObject>, files, 0); ///< A list of all the files in this StorageObject EXAMPLE(["http://localhost:23632/storages/m123456_987654/storage.log","http://localhost:23632/storages/m123456_987654/my.baz",...])
 
-    PB_CONFIG_OBJECT(StorageDiskReport, space);
-    PB_CONFIG_OBJECT(ProcessStatusObject, process_status);       ///< This is the process of "file deletion".
+    PB_CONFIG_OBJECT(StorageDiskReportObject, space);
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       ///< This is the process of "file deletion".
 };
 
 }}

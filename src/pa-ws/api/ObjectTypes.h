@@ -38,11 +38,11 @@
 namespace PacBio {
 namespace API {
 
-typedef std::string url;  // EXAMPLE("http://pa-12345:23632/storages/m123456_0000001/mylog.txt")
-typedef std::string ControlledString_t; // EXAMPLE("SequEL_4.0_RTO3")
-typedef std::string ISO8601_Timestamp_t; // EXAMPLE("20210101T01:23:45.678Z")
+typedef std::string url;  ///< A URL to the local /storages endpoint, or to an external file (if supported) EXAMPLE("http://pa-12345:23632/storages/m123456_0000001/mylog.txt")
+typedef std::string ControlledString_t; ///< A string that has a limited set of allowed strings EXAMPLE("SequEL_4.0_RTO3")
+typedef std::string ISO8601_Timestamp_t; ///< A timestamp string in the ISO8601 format, with milliseconds allowed. EXAMPLE("20210101T01:23:45.678Z")
 
-SMART_ENUM(LogLevel_t,DEBUG,INFO,WARN,ERROR);
+SMART_ENUM(LogLevel_t,DEBUG,INFO,WARN,ERROR); ///< The verbosity of the log file expressed as a severity level
 
 }}
 

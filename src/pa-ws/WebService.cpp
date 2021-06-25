@@ -655,7 +655,7 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
         Json::Value objects = Json::arrayValue;
         for (const auto& o : sockets_)
         {
-            assert(o.first == o.second.index);
+            assert(o.first == o.second.socketNumber);
             objects.append(o.first);
         }
         response.json = objects;

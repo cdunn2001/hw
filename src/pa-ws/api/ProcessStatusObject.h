@@ -43,10 +43,10 @@ struct ProcessStatusObject : PacBio::Configuration::PBConfig<ProcessStatusObject
 
     SMART_ENUM(ExecutionStatus_t, UNKNOWN, READY, RUNNING, COMPLETE);
     SMART_ENUM(CompletionStatus_t, UNKNOWN, SUCCESS, FAILED, ABORTED);
-    PB_CONFIG_PARAM(ExecutionStatus_t, execution_status, ExecutionStatus_t::UNKNOWN);
-    PB_CONFIG_PARAM(CompletionStatus_t, completion_status, CompletionStatus_t::UNKNOWN);
-    PB_CONFIG_PARAM(ISO8601_Timestamp_t, timestamp, "00000101T00:00:00.000Z"); /// < ISO8601 with milliseconds
-    PB_CONFIG_PARAM(int, exit_code, 0);
+    PB_CONFIG_PARAM(ExecutionStatus_t, executionStatus, ExecutionStatus_t::UNKNOWN); ///< Status of the execution of the process EXAMPLE("RUNNING")
+    PB_CONFIG_PARAM(CompletionStatus_t, completionStatus, CompletionStatus_t::UNKNOWN); ///< Status of the completion of the process after it exits. Only valid if the executionStatus is COMPLETE EXAMPLE("SUCCESS")
+    PB_CONFIG_PARAM(ISO8601_Timestamp_t, timestamp, "00000101T00:00:00.000Z"); ///< ISO8601 timestamp (with milliseconds) of the latest status update EXAMPLE("2017-01-31T01:59:49.103Z")
+    PB_CONFIG_PARAM(int, exitCode, 0); ///< The exit code of the process EXAMPLE(0)
 };
 
 }}

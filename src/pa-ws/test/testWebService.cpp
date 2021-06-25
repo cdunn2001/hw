@@ -99,15 +99,6 @@ public:
         lastIndex = index;
         lastCommand = message;
     }
-#if 0
-    void Construct(int index)
-    {
-        SraObject sraObject0;
-        sraObject0.sra_index = index;
-        client.Post(url + "/sras/" + std::to_string(index), sraObject0.Json());
-    }
-#endif
-
 };
 #endif
 
@@ -140,20 +131,20 @@ TEST_F(WebServiceHandler_Test,BasecallerEndpoint)
 
     const std::string json1 = R"JSON(
     {
-        "movie_max_frames" : 100,
-        "movie_max_seconds": 60.0,
-        "movie_number": 123,
-        "baz_url" : "http://localhost:23632/storage/m123456/mine.baz",
-        "log_url" : "http://localhost:23632/storage/m123456/log.txt",
-        "log_level" : "DEBUG",
+        "movieMaxFrames" : 100,
+        "movieMaxSeconds": 60.0,
+        "movieNumber": 123,
+        "bazUrl" : "http://localhost:23632/storage/m123456/mine.baz",
+        "logUrl" : "http://localhost:23632/storage/m123456/log.txt",
+        "logLevel" : "DEBUG",
         "chiplayout" : "Minesweeper",
-        "crosstalk_filter" :
+        "crosstalkFilter" :
         [
             [ 0.1,  0.2, 0.3 ],
             [ -0.1, 0.8, -0.2],
             [ 0.4,  0.5, 0.6 ]
         ],
-        "trace_file_roi":
+        "traceFileRoi":
         [ [ 0, 0, 13, 32 ] ]
     }
     )JSON";
@@ -166,18 +157,18 @@ TEST_F(WebService_Test, BasecallerGetReturnsPostContents)
 {
     SocketObject so = CreateMockupOfSocketObject(1);
     auto referenceJson = so.Serialize();
-    referenceJson["basecaller"].removeMember("process_status");
-    referenceJson["basecaller"].removeMember("rt_metrics");
-    referenceJson["darkcal"].removeMember("process_status");
-    referenceJson["loadingcal"].removeMember("process_status");
+    referenceJson["basecaller"].removeMember("processStatus");
+    referenceJson["basecaller"].removeMember("rtMetrics");
+    referenceJson["darkcal"].removeMember("processStatus");
+    referenceJson["loadingcal"].removeMember("processStatus");
     client.Post(url + "/sockets/1/basecaller", PacBio::IPC::RenderJSON(referenceJson["basecaller"]));
 
     auto readback = client.Get(url + "/sockets/1");
     auto readbackJson = PacBio::IPC::ParseJSON(readback);
-    readbackJson["basecaller"].removeMember("process_status");
-    readbackJson["basecaller"].removeMember("rt_metrics");
-    readbackJson["darkcal"].removeMember("process_status");
-    readbackJson["loadingcal"].removeMember("process_status");
+    readbackJson["basecaller"].removeMember("processStatus");
+    readbackJson["basecaller"].removeMember("rtMetrics");
+    readbackJson["darkcal"].removeMember("processStatus");
+    readbackJson["loadingcal"].removeMember("processStatus");
 
     EXPECT_EQ(PacBio::IPC::RenderJSON(readbackJson),  PacBio::IPC::RenderJSON(referenceJson));
 };
@@ -187,18 +178,18 @@ TEST_F(WebService_Test, BasecallerGetReturnsPostContents_Timed)
 {
     SocketObject so = CreateMockupOfSocketObject(1);
     auto referenceJson = so.Serialize();
-    referenceJson["basecaller"].removeMember("process_status");
-    referenceJson["basecaller"].removeMember("rt_metrics");
-    referenceJson["darkcal"].removeMember("process_status");
-    referenceJson["loadingcal"].removeMember("process_status");
+    referenceJson["basecaller"].removeMember("processStatus");
+    referenceJson["basecaller"].removeMember("rtMetrics");
+    referenceJson["darkcal"].removeMember("processStatus");
+    referenceJson["loadingcal"].removeMember("processStatus");
     client.Post(url + "/sockets/1/basecaller", PacBio::IPC::RenderJSON(referenceJson["basecaller"]));
 
     auto readback = client.Get(url + "/sockets/1");
     auto readbackJson = PacBio::IPC::ParseJSON(readback);
-    readbackJson["basecaller"].removeMember("process_status");
-    readbackJson["basecaller"].removeMember("rt_metrics");
-    readbackJson["darkcal"].removeMember("process_status");
-    readbackJson["loadingcal"].removeMember("process_status");
+    readbackJson["basecaller"].removeMember("processStatus");
+    readbackJson["basecaller"].removeMember("rtMetrics");
+    readbackJson["darkcal"].removeMember("processStatus");
+    readbackJson["loadingcal"].removeMember("processStatus");
 
     EXPECT_EQ(PacBio::IPC::RenderJSON(readbackJson),  PacBio::IPC::RenderJSON(referenceJson));
 };
