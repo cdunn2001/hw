@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Primary Analysis Webservice (pa-ws) API
   description: The REST API for controlling primary analysis processes and data storage.
-  version: 0.0.1
+  version: 0.0.2
 servers:
   - url: http://pa-dev01.lab.nanofluidics.com:23632
     description: Optional server description, e.g. Main (production) server
