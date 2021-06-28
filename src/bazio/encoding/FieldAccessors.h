@@ -50,82 +50,70 @@ struct PulseFieldAccessor<PacketFieldName::Base>
 {
     using Type = uint8_t;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.Label()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Label()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, Type val) { p.Label(static_cast<typename P::NucleotideLabel>(val)); }
+    BAZ_CUDA static void Set(P& p, Type val) { p.Label(static_cast<typename P::NucleotideLabel>(val)); }
 };
 template <>
-struct PulseFieldAccessor<PacketFieldName::Ipd>
+struct PulseFieldAccessor<PacketFieldName::StartFrame>
 {
     using Type = uint32_t;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p)
+    BAZ_CUDA static Type Get(const P& p)
     {
-        auto ret = p.Start() - currFrame;
-        currFrame = p.Start() + p.Width();
-        return ret;
+        return p.Start();
     }
 
     template <typename P>
-    BAZ_CUDA void Set(P& p, Type val)
+    BAZ_CUDA static void Set(P& p, Type val)
     {
-        p.Start(currFrame + val);
-        // WARN: This is a horrific bug waiting to happen.  We currently
-        //       have no guarantee pulse width has been deserialized yet.
-        //       This can be manually controlled just by listing pulse width
-        //       before IPD in the serialization description, but that is
-        //       hardly robust
-        //       This will be fixed in a near term PR.
-        currFrame = val + currFrame + p.Width();
+        p.Start(val);
     }
-
-private:
-    size_t currFrame = 0;
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pw>
 {
     using Type = uint32_t;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.Width()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Width()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, const Type& val) { p.Width(val); }
+    BAZ_CUDA static void Set(P& p, const Type& val) { p.Width(val); }
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pkmax>
 {
     using Type = float;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.MaxSignal()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MaxSignal()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, const Type& val) { p.MaxSignal(val); }
+    BAZ_CUDA static void Set(P& p, const Type& val) { p.MaxSignal(val); }
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pkmid>
 {
     using Type = float;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.MidSignal()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MidSignal()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, const Type& val) { p.MidSignal(val); }
+    BAZ_CUDA static void Set(P& p, const Type& val) { p.MidSignal(val); }
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pkmean>
 {
     using Type = float;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.MeanSignal()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MeanSignal()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, const Type& val) { p.MeanSignal(val); }
+    BAZ_CUDA static void Set(P& p, const Type& val) { p.MeanSignal(val); }
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pkvar>
 {
     using Type = float;
     template <typename P>
-    BAZ_CUDA Type Get(const P& p) { return static_cast<Type>(p.SignalM2()); }
+    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.SignalM2()); }
     template <typename P>
-    BAZ_CUDA void Set(P& p, const Type& val) { p.SignalM2(val); }
+    BAZ_CUDA static void Set(P& p, const Type& val) { p.SignalM2(val); }
 };
 
 }}

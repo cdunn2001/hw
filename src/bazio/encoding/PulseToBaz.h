@@ -99,9 +99,9 @@ struct EncodeInfo {};
 // that the sum of their individual bits is as close to a multiple of 8 as possible,
 // while still being <= 64.  During serialization, first each field writes it's main
 // portion, and then after that any necessary overflow information is recorded.
-template <typename...Info> struct GroupEncoder {};
-template <typename... Signed, typename... Transforms, typename... Serializers>
-struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
+template <typename Idxs, typename...Info> struct GroupEncoder {};
+template <size_t... idxs, typename... Signed, typename... Transforms, typename... Serializers>
+struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms, Serializers>...>
 {
     // Compute the number of bits we require for this group, not counting
     // any data-dependent overflow bytes
@@ -119,10 +119,10 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
     // Used to determine how much space would hypthetically be required to store
     // the supplied values.
     template <typename... Ts>
-    BAZ_CUDA static size_t BytesRequired(const Ts&... ts)
+    BAZ_CUDA size_t BytesRequired(const Ts&... ts)
     {
         size_t ret = numBytes;
-        auto worker = {(ret += Serializers::OverflowBytes(Transforms::Apply(ts, Signed::val), Signed::val)
+        auto worker = {(ret += Serializers::OverflowBytes(transforms_.template Get<idxs>().Apply(ts, Signed::val), Signed::val)
                         ,0)...};
         (void)worker;
         return ret;
@@ -131,7 +131,7 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
     // Writes a series of values to a memory location.  The return value is a pointer to the
     // next byte after the current writes.
     template <typename... Ts>
-    BAZ_CUDA static uint8_t* Encode(uint8_t* ptr, const Ts&... ts)
+    BAZ_CUDA uint8_t* Encode(uint8_t* ptr, const Ts&... ts)
     {
         static_assert(sizeof...(Ts) == sizeof...(Serializers), "Wrong number of arguments");
         uint64_t data = 0;
@@ -145,7 +145,7 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
             pos += bits;
         };
 
-        auto worker = {(Insert(Serializers::ToBinary(Transforms::Apply(ts, Signed::val),
+        auto worker = {(Insert(Serializers::ToBinary(transforms_.template Get<idxs>().Apply(ts, Signed::val),
                                                      ptr2,
                                                      Signed::val),
                                Serializers::nBits)
@@ -160,7 +160,7 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
     // Reads a series of values from a memory location.  The return value is a pointer to the
     // next byte after the curent reads.
     template <typename... Ts>
-    BAZ_CUDA static uint8_t* Decode(uint8_t* ptr, Ts&... ts)
+    BAZ_CUDA const uint8_t* Decode(const uint8_t* ptr, Ts&... ts)
     {
         uint64_t data = 0;
         std::memcpy(&data, ptr, numBytes);
@@ -172,7 +172,7 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
             data = data >> bits;
             return val;
         };
-        auto worker = {(ts = Transforms::template Revert<Ts>(
+        auto worker = {(ts = transforms_.template Get<idxs>().template Revert<Ts>(
                                  Serializers::FromBinary(
                                      Extract(Serializers::nBits),
                                      ptr, Signed::val),
@@ -181,6 +181,8 @@ struct GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>
         (void)worker;
         return ptr;
     }
+
+    PacBio::Cuda::Utility::CudaTuple<Transforms...> transforms_;
 };
 
 // Like an EncodeInfo, but now we add a particular PacketFieldName to the mix.
@@ -228,21 +230,21 @@ struct FieldGroupEncoder
     template <typename P>
     BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
     {
-        return GroupEncoder::Encode(dest, fields_.template Get<PulseFieldAccessor<names>>().Get(pulse)...);
+        return groupEncoder_.Encode(dest, PulseFieldAccessor<names>::Get(pulse)...);
     }
 
     template <typename P, size_t...ids>
-    BAZ_CUDA uint8_t* DeserializeHelper(P& pulse, uint8_t* dest, std::index_sequence<ids...>)
+    BAZ_CUDA const uint8_t* DeserializeHelper(P& pulse, const uint8_t* dest, std::index_sequence<ids...>)
     {
         PacBio::Cuda::Utility::CudaTuple<typename PulseFieldAccessor<names>::Type...> vals;
-        dest = GroupEncoder::Decode(dest, vals.template Get<ids>()...);
-        auto worker = {(fields_.template Get<ids>().Set(pulse, vals.template Get<ids>()),0)...};
+        dest = groupEncoder_.Decode(dest, vals.template Get<ids>()...);
+        auto worker = {(PulseFieldAccessor<names>::Set(pulse, vals.template Get<ids>()),0)...};
         (void)worker;
         return dest;
     }
 
     template <typename P>
-    BAZ_CUDA uint8_t* Deserialize(P& pulse, uint8_t* dest)
+    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
     {
         return DeserializeHelper(pulse, dest, std::make_index_sequence<sizeof...(names)>{});
     }
@@ -250,17 +252,17 @@ struct FieldGroupEncoder
     template <typename P, size_t...ids>
     BAZ_CUDA size_t BytesRequired(const P& pulse)
     {
-        return GroupEncoder::BytesRequired(fields_.template Get<PulseFieldAccessor<names>>().Get(pulse)...);
+        return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
     }
 
-    PacBio::Cuda::Utility::CudaTuple<PulseFieldAccessor<names>...> fields_;
+    GroupEncoder groupEncoder_;
 };
 
 template <typename FieldGroup>
 struct GroupToEncoder;
 template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Signed, typename... Transforms, typename... Serializers>
 struct GroupToEncoder<FieldGroup<totalBits, Field<names, Signed, Transforms, Serializers>...>> {
-    using T = FieldGroupEncoder<GroupEncoder<EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
+    using T = FieldGroupEncoder<GroupEncoder<std::make_index_sequence<sizeof...(Transforms)>, EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
 };
 template <typename Encoding>
 using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
@@ -277,7 +279,7 @@ struct PulseEncoder
         return dest;
     }
     template <typename P>
-    BAZ_CUDA uint8_t* Deserialize(P& pulse, uint8_t* dest)
+    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
     {
         auto worker = {(dest = data_.template Get<GroupEncoders>().Deserialize(pulse, dest),0)...};
         (void)worker;
@@ -294,7 +296,7 @@ struct PulseEncoder
 
     BAZ_CUDA void Reset()
     {
-        data_ =PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
+        data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
     }
 
 private:

@@ -84,12 +84,12 @@ __host__ __device__ void TestPulseToBaz(PulsesIn pulsesIn,
     }
 
     t.Reset();
-    ptr = raw.data();
+    auto const* ptr2 = raw.data();
     for (size_t i = 0; i < pulsesOut.Size(); ++i)
     {
-        ptr = t.Deserialize(pulsesOut[i], ptr);
+        ptr2 = t.Deserialize(pulsesOut[i], ptr2);
     }
-    if (ptr != raw.data() + len)
+    if (ptr2 != raw.data() + len)
     {
         overrun[0] = true;
         return;
@@ -126,9 +126,9 @@ TEST(PulseToBaz, KestrelLossyTruncate)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<7>>
                                   >,
-                            Field<PacketFieldName::Ipd,
+                            Field<PacketFieldName::StartFrame,
                                   StoreSigned_t<false>,
-                                  Transform<NoOp>,
+                                  Transform<DeltaCompression>,
                                   Serialize<TruncateOverflow,
                                             NumBits_t<7>>
                                   >
@@ -179,11 +179,11 @@ TEST(PulseToBaz, KestrelLossyTruncate)
         {
             EXPECT_EQ(pulsesInV[i].Label(), pulsesOutV[i].Label()) << i;
             EXPECT_EQ(pulsesInV[i].Width()%128, pulsesOutV[i].Width()) << i;
-            auto ipdTruth = pulsesInV[i].Start() - startFrameTruth;
-            startFrameTruth += ipdTruth + pulsesInV[i].Width();
-            auto ipdTrunc = pulsesOutV[i].Start() - startFrameTrunc;
-            startFrameTrunc += ipdTrunc + pulsesOutV[i].Width();
-            EXPECT_EQ(ipdTruth%128, ipdTrunc) << i;
+            auto deltaTruth = pulsesInV[i].Start() - startFrameTruth;
+            startFrameTruth = pulsesInV[i].Start();
+            auto deltaTrunc = pulsesOutV[i].Start() - startFrameTrunc;
+            startFrameTrunc = pulsesOutV[i].Start();
+            EXPECT_EQ(deltaTruth%128, deltaTrunc) << i;
         }
     };
 
@@ -212,9 +212,9 @@ TEST(PulseToBaz, KestrelLosslessSimple)
                                   Transform<NoOp>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
                                   >,
-                            Field<PacketFieldName::Ipd,
+                            Field<PacketFieldName::StartFrame,
                                   StoreSigned_t<false>,
-                                  Transform<NoOp>,
+                                  Transform<DeltaCompression>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
                                   >
                             >;
@@ -291,9 +291,9 @@ TEST(PulseToBaz, KestrelLosslessCompact)
                                   Transform<NoOp>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
                                   >,
-                            Field<PacketFieldName::Ipd,
+                            Field<PacketFieldName::StartFrame,
                                   StoreSigned_t<false>,
-                                  Transform<NoOp>,
+                                  Transform<DeltaCompression>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
                                   >
                             >;
@@ -345,7 +345,7 @@ TEST(PulseToBaz, KestrelLosslessCompact)
         }
     };
 
-    static constexpr size_t expectedLen = 22;
+    static constexpr size_t expectedLen = 24;
 
     PacBio::Cuda::PBLauncher(RunGpuTest<Test, expectedLen>, 1, 1)(pulsesIn, pulsesOut, Overrun);
     EXPECT_FALSE(Overrun.GetHostView()[0]);

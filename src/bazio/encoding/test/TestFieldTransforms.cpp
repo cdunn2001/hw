@@ -148,3 +148,68 @@ TEST(BazTransform, Codec)
     // 2 ** (5+2) = 128
     EXPECT_EQ(VerifyToFrame(NumBits{5}, NumBits{2}), 128);
 }
+
+TEST(BazTransform, DeltaCompression)
+{
+    DeltaCompression d;
+
+    // Simple increasing sequencing
+    EXPECT_EQ(d.Apply(10, StoreSigned{false}), 10);
+    EXPECT_EQ(d.Apply(20, StoreSigned{false}), 10);
+    EXPECT_EQ(d.Apply(30, StoreSigned{false}), 10);
+    EXPECT_EQ(d.Apply(50, StoreSigned{false}), 20);
+    EXPECT_EQ(d.Apply(55, StoreSigned{false}), 5);
+
+    // Undo previous sequence.  We're stateful, so we
+    // need to reset our state
+    d = DeltaCompression{};
+    EXPECT_EQ(d.Revert<int>(10, StoreSigned{false}), 10);
+    EXPECT_EQ(d.Revert<int>(10, StoreSigned{false}), 20);
+    EXPECT_EQ(d.Revert<int>(10, StoreSigned{false}), 30);
+    EXPECT_EQ(d.Revert<int>(20, StoreSigned{false}), 50);
+    EXPECT_EQ(d.Revert<int>(5,  StoreSigned{false}), 55);
+
+    // Now handle non-monotonic sequences.
+    d = DeltaCompression{};
+    EXPECT_EQ(d.Apply(10, StoreSigned{true}), static_cast<uint64_t>(10));
+    EXPECT_EQ(d.Apply(20, StoreSigned{true}), static_cast<uint64_t>(10));
+    EXPECT_EQ(d.Apply(10, StoreSigned{true}), static_cast<uint64_t>(-10));
+    EXPECT_EQ(d.Apply(15, StoreSigned{true}), static_cast<uint64_t>(5));
+    EXPECT_EQ(d.Apply(5,  StoreSigned{true}), static_cast<uint64_t>(-10));
+
+    // And again undoing the previous sequence
+    d = DeltaCompression{};
+    EXPECT_EQ(d.Revert<int>(static_cast<uint64_t>(10),  StoreSigned{true}), 10);
+    EXPECT_EQ(d.Revert<int>(static_cast<uint64_t>(10),  StoreSigned{true}), 20);
+    EXPECT_EQ(d.Revert<int>(static_cast<uint64_t>(-10), StoreSigned{true}), 10);
+    EXPECT_EQ(d.Revert<int>(static_cast<uint64_t>(5),   StoreSigned{true}), 15);
+    EXPECT_EQ(d.Revert<int>(static_cast<uint64_t>(-10), StoreSigned{true}), 5);
+}
+
+TEST(BazTransform, MultiTransform)
+{
+    using Stage1 = Transform<DeltaCompression>;
+    using Stage2 = Transform<LossySequelCodec, NumBits_t<6>>;
+    using Multi = MultiTransform<Stage1, Stage2>;
+
+    Multi m;
+    EXPECT_EQ(m.Apply(10, StoreSigned{false}), 10);
+    EXPECT_EQ(m.Apply(20, StoreSigned{false}), 10);
+    EXPECT_EQ(m.Apply(40, StoreSigned{false}), 20);
+    EXPECT_EQ(m.Apply(80, StoreSigned{false}), 40);
+    EXPECT_EQ(m.Apply(144, StoreSigned{false}), 64);
+    // We jump by 67, we should now have entered the lossy portion
+    // of the codec 67 gets rounded to 68, which then gets transformed
+    // to 64 + 4/2 = 66.
+    EXPECT_EQ(m.Apply(211, StoreSigned{false}), 66);
+
+    m = Multi{};
+    EXPECT_EQ(m.Revert<int>(10, StoreSigned{false}), 10);
+    EXPECT_EQ(m.Revert<int>(10, StoreSigned{false}), 20);
+    EXPECT_EQ(m.Revert<int>(20, StoreSigned{false}), 40);
+    EXPECT_EQ(m.Revert<int>(40, StoreSigned{false}), 80);
+    EXPECT_EQ(m.Revert<int>(64, StoreSigned{false}), 144);
+    // 66 in the codec is really 64 + 2*2 = 68.  144+68=212
+    EXPECT_EQ(m.Revert<int>(66, StoreSigned{false}), 212);
+
+}

@@ -39,13 +39,14 @@ namespace PacBio {
 namespace BazIO {
 
 struct NoOpTransformParams{};
+struct DeltaCompressionParams{};
 struct CodecParams{
     NumBits numBits;
 };
 struct FixedPointParams {
     FixedPointScale scale;
 };
-using TransformsParams = boost::variant<NoOpTransformParams, CodecParams, FixedPointParams>;
+using TransformsParams = boost::variant<NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams>;
 
 struct TruncateParams {
     NumBits numBits;
@@ -63,7 +64,7 @@ struct FieldParams
 {
     PacketFieldName name;
     StoreSigned storeSigned;
-    TransformsParams transform;
+    std::vector<TransformsParams> transform;
     SerializeParams serialize;
 };
 

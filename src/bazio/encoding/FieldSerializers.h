@@ -103,7 +103,7 @@ struct Serialize
     ///            If overflow data was read, this parameter will be
     ///            incrememted to the next unread address
     /// \returns The deserialized value
-    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t const*& ptr, StoreSigned storeSigned)
     {
         return Base::FromBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }
@@ -125,7 +125,7 @@ struct TruncateOverflow
         return val;
     }
 
-    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*&, StoreSigned storeSigned, NumBits numBits)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, const uint8_t*&, StoreSigned storeSigned, NumBits numBits)
     {
         if (storeSigned)
         {
@@ -211,7 +211,7 @@ struct SimpleOverflow
         }
     }
 
-    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits, NumBytes overflowSize)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, const uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits, NumBytes overflowSize)
     {
         uint64_t ret = val;
         if (ret == (1ul<<numBits)-1)
@@ -299,7 +299,7 @@ struct CompactOverflow
         return initialVal;
     }
 
-    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, const uint8_t*& ptr, StoreSigned storeSigned, NumBits numBits)
     {
         auto InitialContinueMask = 1ul << (numBits - 1);
         auto InitialValueMask = InitialContinueMask - 1;

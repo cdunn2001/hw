@@ -34,6 +34,7 @@
 #include <bazio/encoding/FieldSerializers.h>
 
 #include <common/utility/Overload.h>
+#include <functional>
 
 namespace PacBio {
 namespace BazIO {
@@ -53,13 +54,148 @@ namespace BazIO {
 // of the serialization/transformation strategies supported.
 class BazToPulse
 {
+    void CreateHelpers()
+    {
+        // Helper to handle the transformation visitation
+        auto transformFloat = [](const TransformsParams& info)
+        {
+            using Ret = std::function<uint64_t(float, StoreSigned)>;
+            auto o = Utility::make_overload(
+                [&](const FixedPointParams& p) -> Ret { return [p](float f, StoreSigned storeSigned) { return FixedPoint::Apply(f, storeSigned, p.scale); }; },
+                [&](const auto&) -> Ret { throw PBException("Transformation does not support floating point values"); return 0; }
+            );
+            return boost::apply_visitor(o, info);
+        };
+        auto transformUInt = [](const TransformsParams& info)
+        {
+            using Ret = std::function<uint64_t(uint64_t, StoreSigned)>;
+            auto o = Utility::make_overload(
+                [&](const NoOpTransformParams&) -> Ret { return [](uint64_t v, StoreSigned storeSigned) { return NoOp::Apply(v, storeSigned); }; },
+                [&](const DeltaCompressionParams&) -> Ret { return [d = DeltaCompression{}](uint64_t v, StoreSigned storeSigned) mutable { return d.Apply(v, storeSigned); }; },
+                [&](const CodecParams& p) -> Ret { return [p](uint64_t v, StoreSigned storeSigned) { return LossySequelCodec::Apply(v, storeSigned, p.numBits); }; },
+                [&](const FixedPointParams&) -> Ret { throw PBException("Transformation does not support integral values"); return 0;}
+            );
+            return boost::apply_visitor(o, info);
+        };
+
+        auto revertFloat = [](const TransformsParams& info)
+        {
+            using Ret = std::function<float(uint64_t, StoreSigned)>;
+            auto o = Utility::make_overload(
+                [&](const FixedPointParams& p) -> Ret { return [p](uint64_t v, StoreSigned storeSigned) { return FixedPoint::Revert<float>(v, storeSigned, p.scale); }; },
+                [&](const auto&) -> Ret { throw PBException("Transformation does not support floating point values"); return 0; }
+            );
+            return boost::apply_visitor(o, info);
+        };
+        auto revertUInt = [](const TransformsParams& info)
+        {
+            using Ret = std::function<uint64_t(uint64_t, StoreSigned)>;
+            auto o = Utility::make_overload(
+                [&](const NoOpTransformParams&) -> Ret { return [](uint64_t v, StoreSigned storeSigned) { return NoOp::Revert<uint64_t>(v, storeSigned); }; },
+                [&](const DeltaCompressionParams&) -> Ret { return [d = DeltaCompression{}](uint64_t v, StoreSigned storeSigned) mutable { return d.Revert<uint64_t>(v, storeSigned); }; },
+                [&](const CodecParams& p) -> Ret { return [p](uint64_t v, StoreSigned storeSigned) { return LossySequelCodec::Revert<uint64_t>(v, storeSigned, p.numBits); }; },
+                [&](const FixedPointParams&) -> Ret { throw PBException("Transformation does not support integral values"); return 0;}
+            );
+            return boost::apply_visitor(o, info);
+        };
+        for (const auto& g : groups_)
+        {
+            for (const auto& f : g.members)
+            {
+                const auto info = f.transform;
+                std::function<uint64_t(uint64_t, StoreSigned)> tmp;
+                switch(f.name)
+                {
+                case PacketFieldName::Base:
+                    base.transform_ = transformUInt(info[0]);
+                    base.revert_ = revertUInt(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        base.transform_ = [f = base.transform_, tmp](uint64_t val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        base.revert_ = [f = base.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::StartFrame:
+                    startFrame.transform_ = transformUInt(info[0]);
+                    startFrame.revert_ = revertUInt(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        startFrame.transform_ = [f = startFrame.transform_, tmp](uint64_t val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        startFrame.revert_ = [f = startFrame.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::Pw:
+                    pw.transform_ = transformUInt(info[0]);
+                    pw.revert_ = revertUInt(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        pw.transform_ = [f = pw.transform_, tmp](uint64_t val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        pw.revert_ = [f = pw.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::Pkmax:
+                    pkmax.transform_ = transformFloat(info[0]);
+                    pkmax.revert_ = revertFloat(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        pkmax.transform_ = [f = pkmax.transform_, tmp](float val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        pkmax.revert_ = [f = pkmax.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::Pkmid:
+                    pkmid.transform_ = transformFloat(info[0]);
+                    pkmid.revert_ = revertFloat(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        pkmid.transform_ = [f = pkmid.transform_, tmp](float val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        pkmid.revert_ = [f = pkmid.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::Pkmean:
+                    pkmean.transform_ = transformFloat(info[0]);
+                    pkmean.revert_ = revertFloat(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        pkmean.transform_ = [f = pkmean.transform_, tmp](float val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        pkmean.revert_ = [f = pkmean.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::Pkvar:
+                    pkvar.transform_ = transformFloat(info[0]);
+                    pkvar.revert_ = revertFloat(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        pkvar.transform_ = [f = pkvar.transform_, tmp](float val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        pkvar.revert_ = [f = pkvar.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                }
+            }
+        }
+    }
 public:
     // Accepts a encoding specification, complete with the
     // heirarchy of which fields are grouped together
     // (e.g. to handle cross byte fields)
     BazToPulse(std::vector<GroupParams> groups)
         : groups_(std::move(groups))
-    {}
+    {
+        CreateHelpers();
+    }
 
     // Accepts a flat list of fields to be serialized.  It will form the
     // groups itself, choosing the smallest groups that fit into integral
@@ -83,6 +219,7 @@ public:
             currGroup.numBits.push_back(numBits);
         }
         groups_.push_back(currGroup);
+        CreateHelpers();
     }
 
     // Clears all state data.  Necessary if you walked through a bunch of
@@ -95,25 +232,6 @@ public:
     template <typename P>
     uint8_t* Serialize(const P& pulse, uint8_t* dest)
     {
-        // Helper to handle the transformation visitation
-        auto convertFloat = [](const TransformsParams& info, float val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const FixedPointParams& p) { return FixedPoint::Apply(val, storeSigned, p.scale); },
-                [&](const auto&) -> uint64_t { throw PBException("Transformation does not support floating point values"); return 0; }
-            );
-            return boost::apply_visitor(o, info);
-        };
-        auto convertUInt = [](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
-                [&](const CodecParams& p) { return LossySequelCodec::Apply(val, storeSigned, p.numBits); },
-                [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
-            );
-            return boost::apply_visitor(o, info);
-        };
-
         // Helper to handle the serialization visitation
         auto encode = [](const SerializeParams& info, uint64_t val, StoreSigned storeSigned, uint8_t*& ptr)
         {
@@ -136,28 +254,29 @@ public:
                 const auto& info = g.members[i];
                 auto numBits = g.numBits[i];
                 uint64_t val = 0;
+                assert(!info.transform.empty());
                 switch (info.name)
                 {
                 case PacketFieldName::Base:
-                    val = convertUInt(info.transform, base.Get(pulse), info.storeSigned);
+                    val = base.transform_(base.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
-                    val = convertUInt(info.transform, pw.Get(pulse), info.storeSigned);
+                    val = pw.transform_(pw.access_.Get(pulse), info.storeSigned);
                     break;
-                case PacketFieldName::Ipd:
-                    val = convertUInt(info.transform, ipd.Get(pulse), info.storeSigned);
+                case PacketFieldName::StartFrame:
+                    val = startFrame.transform_(startFrame.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmax:
-                    val = convertFloat(info.transform, pkmax.Get(pulse), info.storeSigned);
+                    val = pkmax.transform_(pkmax.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmean:
-                    val = convertFloat(info.transform, pkmean.Get(pulse), info.storeSigned);
+                    val = pkmean.transform_(pkmean.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmid:
-                    val = convertFloat(info.transform, pkmid.Get(pulse), info.storeSigned);
+                    val = pkmid.transform_(pkmid.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkvar:
-                    val = convertFloat(info.transform, pkvar.Get(pulse), info.storeSigned);
+                    val = pkvar.transform_(pkvar.access_.Get(pulse), info.storeSigned);
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
@@ -173,29 +292,10 @@ public:
     }
 
     template <typename P>
-    uint8_t* Deserialize(P& pulse, uint8_t* source)
+    const uint8_t* Deserialize(P& pulse, const uint8_t* source)
     {
-        // Helpers to handle the transformation visitation
-        auto convertUint = [&](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) { return NoOp::Revert<uint64_t>(val, storeSigned); },
-                [&](const CodecParams& p) { return LossySequelCodec::Revert<uint64_t>(val, storeSigned, p.numBits); },
-                [&](const FixedPointParams&) -> uint64_t { throw PBException("Datatype does not support FixedPoint format"); }
-            );
-            return boost::apply_visitor(o, info);
-        };
-        auto convertFloat = [&](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const FixedPointParams& p) { return FixedPoint::Revert<float>(val, storeSigned, p.scale); },
-                [&](const auto&) -> float { throw PBException("Datatype does not support FixedPoint format"); }
-            );
-            return boost::apply_visitor(o, info);
-        };
-
         // Helper to handle the serialization visitation
-        auto decode = [](const SerializeParams& info, uint64_t val, auto& ptr, StoreSigned storeSigned)
+        auto decode = [](const SerializeParams& info, uint64_t val, auto const *& ptr, StoreSigned storeSigned)
         {
             auto o = Utility::make_overload(
                 [&](const TruncateParams& info) { return TruncateOverflow::FromBinary(val, ptr, storeSigned, info.numBits); },
@@ -218,28 +318,29 @@ public:
                 uint64_t val = mainVal & ((1 << numBits)-1);
                 mainVal = mainVal >> numBits;
                 auto integral = decode(info.serialize, val, source, info.storeSigned);
+                assert(!info.transform.empty());
                 switch (info.name)
                 {
                     case PacketFieldName::Base:
-                        base.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                        base.access_.Set(pulse, base.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pw:
-                        pw.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                        pw.access_.Set(pulse, pw.revert_(integral, info.storeSigned));
                         break;
-                    case PacketFieldName::Ipd:
-                        ipd.Set(pulse, convertUint(info.transform, integral, info.storeSigned));
+                    case PacketFieldName::StartFrame:
+                        startFrame.access_.Set(pulse, startFrame.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pkmax:
-                        pkmax.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        pkmax.access_.Set(pulse, pkmax.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pkmean:
-                        pkmean.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        pkmean.access_.Set(pulse, pkmean.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pkmid:
-                        pkmid.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        pkmid.access_.Set(pulse, pkmid.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pkvar:
-                        pkvar.Set(pulse, convertFloat(info.transform, integral, info.storeSigned));
+                        pkvar.access_.Set(pulse, pkvar.revert_(integral, info.storeSigned));
                         break;
                     default:
                         throw PBException("FieldName Not Supported");
@@ -252,25 +353,6 @@ public:
     template <typename P>
     size_t BytesRequired(const P& pulse)
     {
-        // Helper to handle the transformation visitation
-        auto convertFloat = [](const TransformsParams& info, float val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const FixedPointParams& p) { return FixedPoint::Apply(val, storeSigned, p.scale); },
-                [&](const auto&) -> uint64_t { throw PBException("Transformation does not support floating point values"); return 0; }
-            );
-            return boost::apply_visitor(o, info);
-        };
-        auto convertUInt = [](const TransformsParams& info, uint64_t val, StoreSigned storeSigned)
-        {
-            auto o = Utility::make_overload(
-                [&](const NoOpTransformParams&) { return NoOp::Apply(val, storeSigned); },
-                [&](const CodecParams& p) { return LossySequelCodec::Apply(val, storeSigned, p.numBits); },
-                [&](const FixedPointParams&) -> uint64_t { throw PBException("Transformation does not support integral values"); return 0;}
-            );
-            return boost::apply_visitor(o, info);
-        };
-
         // Helper to handle the serialization visitation
         auto encode = [](const SerializeParams& info, uint64_t val, StoreSigned storeSigned)
         {
@@ -288,29 +370,30 @@ public:
             bytes += (g.totalBits + 7) / 8;
             for (const auto& info : g.members)
             {
+                assert(!info.transform.empty());
                 uint64_t val;
                 switch (info.name)
                 {
                 case PacketFieldName::Base:
-                    val = convertUInt(info.transform, base.Get(pulse), info.storeSigned);
+                    val = base.transform_(base.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
-                    val = convertUInt(info.transform, pw.Get(pulse), info.storeSigned);
+                    val = pw.transform_(pw.access_.Get(pulse), info.storeSigned);
                     break;
-                case PacketFieldName::Ipd:
-                    val = convertUInt(info.transform, ipd.Get(pulse), info.storeSigned);
+                case PacketFieldName::StartFrame:
+                    val = startFrame.transform_(startFrame.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmax:
-                    val = convertFloat(info.transform, pkmax.Get(pulse), info.storeSigned);
+                    val = pkmax.transform_(pkmax.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmean:
-                    val = convertFloat(info.transform, pkmean.Get(pulse), info.storeSigned);
+                    val = pkmean.transform_(pkmean.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkmid:
-                    val = convertFloat(info.transform, pkmid.Get(pulse), info.storeSigned);
+                    val = pkmid.transform_(pkmid.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pkvar:
-                    val = convertFloat(info.transform, pkvar.Get(pulse), info.storeSigned);
+                    val = pkvar.transform_(pkvar.access_.Get(pulse), info.storeSigned);
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
@@ -321,15 +404,23 @@ public:
         return bytes;
     }
 private:
+    template <PacketFieldName::RawEnum name>
+    struct FieldHelpers
+    {
+        PulseFieldAccessor<name> access_;
+        using T = typename PulseFieldAccessor<name>::Type;
+        std::function<uint64_t(T, StoreSigned)> transform_;
+        std::function<T(uint64_t, StoreSigned)> revert_;
+    };
 
     std::vector<GroupParams> groups_;
-    PulseFieldAccessor<PacketFieldName::Base> base;
-    PulseFieldAccessor<PacketFieldName::Pw> pw;
-    PulseFieldAccessor<PacketFieldName::Ipd> ipd;
-    PulseFieldAccessor<PacketFieldName::Pkmax> pkmax;
-    PulseFieldAccessor<PacketFieldName::Pkmean> pkmean;
-    PulseFieldAccessor<PacketFieldName::Pkmid> pkmid;
-    PulseFieldAccessor<PacketFieldName::Pkvar> pkvar;
+    FieldHelpers<PacketFieldName::Base> base;
+    FieldHelpers<PacketFieldName::Pw> pw;
+    FieldHelpers<PacketFieldName::StartFrame> startFrame;
+    FieldHelpers<PacketFieldName::Pkmax> pkmax;
+    FieldHelpers<PacketFieldName::Pkmean> pkmean;
+    FieldHelpers<PacketFieldName::Pkmid> pkmid;
+    FieldHelpers<PacketFieldName::Pkvar> pkvar;
 };
 
 }}

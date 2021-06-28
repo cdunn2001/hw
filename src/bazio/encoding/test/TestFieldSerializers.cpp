@@ -39,12 +39,12 @@ TEST(BazFieldSerializers, Truncate)
     auto roundTrip = [](auto val, auto bits, StoreSigned storeSigned)
     {
         uint8_t data[8];
-        auto ptr = data;
+        auto * ptr = data;
         using S = Serialize<TruncateOverflow, NumBits_t<bits.val>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
         truncated &= (1ul << bits.val)-1;
-        ptr = data;
-        return S::FromBinary(truncated, ptr, storeSigned);
+        auto const * ptr2 = data;
+        return S::FromBinary(truncated, ptr2, storeSigned);
     };
 
     EXPECT_EQ(roundTrip(0u, Int<1>{}, StoreSigned{false}), 0u);
@@ -89,8 +89,8 @@ TEST(BazFieldSerializers, SimpleOverflow)
         using S = Serialize<SimpleOverflow, NumBits_t<mainBits.val>, NumBytes_t<overflowBytes.val>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
         truncated &= ((1ul << mainBits.val) - 1);
-        ptr = data;
-        return S::FromBinary(truncated, ptr, storeSigned);
+        auto const* ptr2 = data;
+        return S::FromBinary(truncated, ptr2, storeSigned);
     };
 
     // Same sequence as the previous test, but now we shouldn't lose data
@@ -148,8 +148,8 @@ TEST(BazFieldSerializers, CompactOverflow)
         auto ptr = data;
         using S = Serialize<CompactOverflow, NumBits_t<mainBits.val>>;
         auto truncated = S::ToBinary(val, ptr, storeSigned);
-        ptr = data;
-        return S::FromBinary(truncated, ptr, storeSigned);
+        auto const* ptr2 = data;
+        return S::FromBinary(truncated, ptr2, storeSigned);
     };
 
     // Same sequence as the truncation test, but now we shouldn't lose data,
