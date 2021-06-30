@@ -65,10 +65,7 @@ private:
             , cSigmaBias_{config.SigmaBias()}
             , cMeanBias_{config.MeanBias()}
             , scaler_(scaler)
-        {
-            latHMask_.push_back(Mask{false});
-            latHMask_.push_back(Mask{false});
-        }
+        { }
 
         MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
         MultiScaleBaseliner(MultiScaleBaseliner&&) = default;
@@ -119,14 +116,14 @@ private:
             using InputContainer = Data::BlockView<VIn>;
 
             MultiStageFilter(const std::vector<size_t>& strides, const std::vector<size_t>& widths)
-                    : first(widths[0], strides[0])
-                      , second(widths[0])
+                : first(widths[0], strides[0])
+                , second(widths[0], 1, strides[0])
             {
                 assert(strides.size() == widths.size());
                 for (size_t i = 1; i < strides.size(); ++i)
                 {
-                    firstv.emplace_back(new BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i]));
-                    secondv.emplace_back(new BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i]));
+                    firstv.emplace_back(new BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i], strides[i-1]));
+                    secondv.emplace_back(new BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i], 1, strides[i-1]*strides[i]));
                 }
             }
 
@@ -166,12 +163,12 @@ private:
         const FloatArray cMeanBias_;
         float scaler_;
 
-        FloatArray prevSigma_{0};
-        bool firstFrame_ = true;
+        FloatArray bgSigma_{0};
         LaneArray latData_{0};
         LaneArray latRawData_{0};
         Mask latLMask_{false};
-        AlignedCircularBuffer<Mask> latHMask_{2};
+        Mask latHMask2_{false};
+        Mask latHMask1_{false};
         FloatArray thrLow_{0};
         FloatArray thrHigh_{0};
 
