@@ -72,9 +72,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto lowerIter = lower->CBegin();
     auto upperIter = upper->CBegin();
 
-    using ValueType = typename decltype(trIter)::ValueType;
-    for ( ; blsIter != baselineSubtractedData.End() && lowerIter != lower->CEnd() && upperIter != upper->CEnd();
-            lowerIter += Stride(), upperIter += Stride())
+    size_t inputCount = traceData.NumFrames() / Stride();
+    for (size_t i = 0; i < inputCount; i++)
     {
         auto upperVal = upperIter.Extract();
         auto lowerVal = lowerIter.Extract();
@@ -84,8 +83,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
         // Estimates are scattered on stride intervals.
-        for (size_t i = 0; i < Stride() && blsIter != baselineSubtractedData.End() && trIter != traceData.CEnd();
-             i++, blsIter++, trIter++)
+        for (size_t j = 0; j < Stride(); j++)
         {
             const auto& rawSignal = trIter.Extract();
 
@@ -96,9 +94,11 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
             blsIter.Store(out);
 
             AddToBaselineStats(rawSignal, out, baselinerStats);
-
-            firstFrame_ = false;
+            trIter++;
+            blsIter++;
         }
+        upperIter++;
+        lowerIter++;
     }
 
     return baselinerStats;
@@ -108,24 +108,22 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
                                                                       const LaneArray& baselineSubtractedFrame,
                                                                       Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
-    if (!firstFrame_)
-    {
-        // NOTE: Thresholds below are specified as floats whereas
-        // incoming frame data are shorts.
+    // NOTE: Thresholds below are specified as floats whereas
+    // incoming frame data are shorts.
 
-        // Compute the high mask at the plus-1 position (this) for variance
-        const auto& maskHp1 = baselineSubtractedFrame < thrHigh_;
+    // Compute the high mask at the plus-1 position (this) for variance
+    const auto& maskHp1 = baselineSubtractedFrame < thrHigh_;
 
-        // Compute the full mask to use for the single-frame latent variance
-        // Minus-1[High] & Pos-0[Low] & Plus-1[High]
-        const auto& mask = latHMask_.front() & latLMask_ & maskHp1;
+    // Compute the full mask to use for the single-frame latent variance
+    // Minus-1[High] & Pos-0[Low] & Plus-1[High]
+    const auto& mask = latHMask1_ & latLMask_ & maskHp1;
 
-        // Push the plus-1 frame masks
-        latLMask_ = baselineSubtractedFrame < thrLow_;
-        latHMask_.push_back(maskHp1);
+    // Push the plus-1 frame masks
+    latLMask_ = baselineSubtractedFrame < thrLow_;
+    latHMask2_ = latHMask1_;
+    latHMask1_ = maskHp1;
 
-        baselinerStats.AddSample(latRawData_, latData_, mask);
-    }
+    baselinerStats.AddSample(latRawData_, latData_, mask);
 
     // Set latent data.
     latRawData_ = traceData;
@@ -137,31 +135,20 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
 {
     // Fixed thresholds for variance computation.
     // TODO - Make these tunable parameters.
-    const float sigmaThrL { 4.5 };
-    const float sigmaThrH { 4.5 };
-
-    if (firstFrame_)
-    {
-        // NOTE: We initialize with the first sigma value
-        // but a different strategy might be better here i.e
-        // taking the average of the first few sigmas before
-        // applying the smoothing.
-        prevSigma_ = sigma;
-    }
-
-    // TODO: Make configurable.
+    const float sigmaThrL { 4.5f };
+    const float sigmaThrH { 4.5f };
     const FloatArray alphaFactor{0.7f};
 
-    const auto& newSigma = ((FloatArray{1.0f} - alphaFactor) * prevSigma_)
-                             + (alphaFactor * sigma);
+    const FloatArray minSigma { .288675135f }; // sqrt(1.0f/12.0f)
+
+    bgSigma_ = ((FloatArray{1.0f} - alphaFactor) * bgSigma_)
+                             + (alphaFactor * max(sigma, minSigma));
 
     // Update thresholds for classifying baseline frames.
-    thrLow_ = FloatArray{sigmaThrL} * newSigma;
-    thrHigh_ = FloatArray{sigmaThrH} * newSigma;
+    thrLow_ = FloatArray{sigmaThrL} * bgSigma_;
+    thrHigh_ = FloatArray{sigmaThrH} * bgSigma_;
 
-    prevSigma_ = newSigma;
-
-    return newSigma;
+    return bgSigma_;
 }
 
 }}}      // namespace PacBio::Mongo::Basecaller

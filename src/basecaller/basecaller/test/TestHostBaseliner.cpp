@@ -163,10 +163,10 @@ TEST(TestHostNoOpBaseliner, Run)
 TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
 
-    const uint32_t numZmwLanes = 4;
-    const uint32_t numPools = 2;
+    const uint32_t numZmwLanes = 1; // FIXME
+    const uint32_t numPools = 1;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 256;
 
@@ -226,38 +226,39 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
                                        SOURCE_MARKER());
 
                 auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
-                if (burnInFrames <= currChunk.StartFrame())
+
+                if (currChunk.StartFrame() < burnInFrames) continue;
+
+                auto traces = std::move(cameraBatch.first);
+                auto stats = std::move(cameraBatch.second);
+                for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
                 {
-                    auto traces = std::move(cameraBatch.first);
-                    auto stats = std::move(cameraBatch.second);
-                    for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
-                    {
-                        const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];
-                        const auto& baselineStats = baselinerStatAccumState.baselineStats;
+                    const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];
+                    const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
-                        const auto count = baselineStats.moment0[0];
-                        const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
-                        auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
-                        var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
-                        const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
+                    const auto count = baselineStats.moment0[0];
+                    const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
+                    auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
+                    var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
+                    const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
-                        EXPECT_NEAR(count,
-                                    (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
-                                    pfConfig.pulseIpd, 20)
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                    2 * pfConfig.baselineSigma)
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                    pfConfig.baselineSigma / std::sqrt(count))
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                    }
+                    EXPECT_NEAR(count,
+                                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
+                                pfConfig.pulseIpd, 20)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    // Account for bias.
+                    EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
+                                6 * pfConfig.baselineSigma)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
+                                6 * (pfConfig.baselineSigma / std::sqrt(count)))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
                 }
             }
         }
@@ -270,7 +271,7 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -291,9 +292,10 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
     }
 
     PicketFenceGenerator::Config pfConfig;
+    pfConfig.generatePoisson = false;
     pfConfig.pulseSignalLevels = { 600 };
-    pfConfig.pulseWidthRate = 0.04167f;
-    pfConfig.pulseIpdRate = 0.05f;
+    pfConfig.pulseWidth = 24;
+    pfConfig.pulseIpd = 20;
     auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                         PacketLayout::INT16,
@@ -333,38 +335,39 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
                                        SOURCE_MARKER());
 
                 auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
-                if (burnInFrames <= currChunk.StartFrame())
+
+                if (currChunk.StartFrame() < burnInFrames) continue;
+
+                auto traces = std::move(cameraBatch.first);
+                auto stats = std::move(cameraBatch.second);
+                for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
                 {
-                    auto traces = std::move(cameraBatch.first);
-                    auto stats = std::move(cameraBatch.second);
-                    for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
-                    {
-                        const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];
-                        const auto& baselineStats = baselinerStatAccumState.baselineStats;
+                    const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];
+                    const auto& baselineStats = baselinerStatAccumState.baselineStats;
 
-                        const auto count = baselineStats.moment0[0];
-                        const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
-                        auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
-                        var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
-                        const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
+                    const auto count = baselineStats.moment0[0];
+                    const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
+                    auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
+                    var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
+                    const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
-                        EXPECT_NEAR(count,
-                                    (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
-                                    pfConfig.pulseIpd, 20)
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(mean, 0, pfConfig.baselineSigma / std::sqrt(count))
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                    2 * pfConfig.baselineSigma)
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                        EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                    pfConfig.baselineSigma / std::sqrt(count))
-                                    << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                    << laneIdx << " startframe=" << meta.FirstFrame();
-                    }
+                    EXPECT_NEAR(count,
+                                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
+                                (pfConfig.pulseIpd - 1), 20)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    // Account for bias.
+                    EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
+                                6 * pfConfig.baselineSigma)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
+                    EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
+                                6 * (pfConfig.baselineSigma / std::sqrt(count)))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
+                                << laneIdx << " startframe=" << meta.FirstFrame();
                 }
             }
         }
