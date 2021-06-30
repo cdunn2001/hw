@@ -92,6 +92,7 @@ include(pacbio-half)
 
 target_link_libraries(libBazio
     PUBLIC
+        libBazioEncoding
         libPacbioCplusplusApi
         libPacbioSmrtdata
         libJsoncpp
@@ -99,3 +100,4 @@ target_link_libraries(libBazio
 )
 
 add_subdirectory(bazviewer)
+add_subdirectory(encoding)
