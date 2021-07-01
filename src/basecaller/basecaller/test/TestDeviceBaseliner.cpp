@@ -80,8 +80,8 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
     Data::MovieConfig movConfig;
     const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::MultiScaleLarge);
 
-    const uint32_t numZmwLanes = 1;
-    const uint32_t numPools = 1;
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 256;
 

@@ -165,8 +165,8 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
     Data::MovieConfig movConfig;
     const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
 
-    const uint32_t numZmwLanes = 1; // FIXME
-    const uint32_t numPools = 1;
+    const uint32_t numZmwLanes = 4;
+    const uint32_t numPools = 2;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 256;
 
