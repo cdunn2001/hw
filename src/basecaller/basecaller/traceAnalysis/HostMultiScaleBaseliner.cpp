@@ -135,14 +135,13 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
 {
     // Fixed thresholds for variance computation.
     // TODO - Make these tunable parameters.
-    const float sigmaThrL { 4.5f };
-    const float sigmaThrH { 4.5f };
+    constexpr float sigmaThrL { 4.5f };
+    constexpr float sigmaThrH { 4.5f };
+    constexpr float minSigma { sqrt(1.0f/12.0f) };
     const FloatArray alphaFactor{0.7f};
 
-    const FloatArray minSigma { .288675135f }; // sqrt(1.0f/12.0f)
-
     bgSigma_ = ((FloatArray{1.0f} - alphaFactor) * bgSigma_)
-                             + (alphaFactor * max(sigma, minSigma));
+                             + (alphaFactor * max(sigma, FloatArray{minSigma}));
 
     // Update thresholds for classifying baseline frames.
     thrLow_ = FloatArray{sigmaThrL} * bgSigma_;

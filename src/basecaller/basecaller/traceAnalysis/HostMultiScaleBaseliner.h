@@ -122,8 +122,8 @@ private:
                 assert(strides.size() == widths.size());
                 for (size_t i = 1; i < strides.size(); ++i)
                 {
-                    firstv.emplace_back(new BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i], strides[i-1]));
-                    secondv.emplace_back(new BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i], 1, strides[i-1]*strides[i]));
+                    firstv.emplace_back(BlockFilterStage<VIn, ErodeHgw<VIn>>(widths[i], strides[i], strides[i-1]));
+                    secondv.emplace_back(BlockFilterStage<VIn, DilateHgw<VIn>>(widths[i], 1, strides[i-1]*strides[i]));
                 }
             }
 
@@ -138,8 +138,8 @@ private:
                 second(input);
                 for (size_t i = 0; i < firstv.size(); ++i)
                 {
-                    (*firstv[i])(input);
-                    (*secondv[i])(input);
+                    firstv[i](input);
+                    secondv[i](input);
                 }
                 return input;
             }
@@ -147,11 +147,8 @@ private:
             typename FilterTraits<VIn, filter>::FirstStage first;
             typename FilterTraits<VIn, filter>::SecondStage second;
 
-            // These unique_ptrs are an unfortunate extra indirection necessitated
-            // because icc compiles as if it was gcc 4.7 when mpss 3.5 is installed.
-            // The ptrs can probably be removed once we upgrade to a newer mpss
-            std::vector<std::unique_ptr<BlockFilterStage<VIn, ErodeHgw<VIn>>>> firstv;
-            std::vector<std::unique_ptr<BlockFilterStage<VIn, DilateHgw<VIn>>>> secondv;
+            std::vector<BlockFilterStage<VIn, ErodeHgw<VIn>>> firstv;
+            std::vector<BlockFilterStage<VIn, DilateHgw<VIn>>> secondv;
         };  // MultiStageFilter
 
     private:
