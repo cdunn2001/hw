@@ -81,7 +81,7 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
 void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 {
     constexpr unsigned int numBins = LaneHistType::numBins;
-
+    hist_.clear();
     auto view = metrics.baselinerStats.GetHostView();
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
