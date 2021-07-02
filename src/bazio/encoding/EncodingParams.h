@@ -32,47 +32,85 @@
 
 #include <boost/variant.hpp>
 
+#include <pacbio/configuration/implementation/ConfigVariant.hpp>
+#include <pacbio/configuration/PBConfig.h>
+
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/Types.h>
 
 namespace PacBio {
 namespace BazIO {
 
-struct NoOpTransformParams{};
-struct DeltaCompressionParams{};
-struct CodecParams{
-    NumBits numBits;
-};
-struct FixedPointParams {
-    FixedPointScale scale;
-};
-using TransformsParams = boost::variant<NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams>;
-
-struct TruncateParams {
-    NumBits numBits;
-};
-struct SimpleOverflowParams {
-    NumBits numBits;
-    NumBytes overflowBytes;
-};
-struct CompactOverflowParams {
-    NumBits numBits;
-};
-using SerializeParams = boost::variant<TruncateParams, SimpleOverflowParams, CompactOverflowParams>;
-
-struct FieldParams
+struct NoOpTransformParams : Configuration::PBConfig<NoOpTransformParams>
 {
-    PacketFieldName name;
-    StoreSigned storeSigned;
-    std::vector<TransformsParams> transform;
-    SerializeParams serialize;
+    PB_CONFIG(NoOpTransformParams);
+};
+struct DeltaCompressionParams : Configuration::PBConfig<DeltaCompressionParams>
+{
+    PB_CONFIG(DeltaCompressionParams);
+};
+struct CodecParams : Configuration::PBConfig<CodecParams>
+{
+    PB_CONFIG(CodecParams);
+
+    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+};
+struct FixedPointParams : Configuration::PBConfig<FixedPointParams>
+{
+    PB_CONFIG(FixedPointParams);
+
+    PB_CONFIG_PARAM(FixedPointScale::UnderlyingType , scale, 10);
+};
+struct TransformsParams : Configuration::PBConfig<TransformsParams>
+{
+    PB_CONFIG(TransformsParams);
+
+    PB_CONFIG_VARIANT(var, NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams);
 };
 
-struct GroupParams
+struct TruncateParams : Configuration::PBConfig<TruncateParams>
 {
-    std::vector<FieldParams> members;
-    std::vector<size_t> numBits;
-    size_t totalBits = 0;
+    PB_CONFIG(TruncateParams);
+
+    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+};
+struct SimpleOverflowParams : Configuration::PBConfig<SimpleOverflowParams>
+{
+    PB_CONFIG(SimpleOverflowParams);
+
+    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+    PB_CONFIG_PARAM(uint16_t, overflowBytes, 4);
+};
+struct CompactOverflowParams : Configuration::PBConfig<CompactOverflowParams>
+{
+    PB_CONFIG(CompactOverflowParams);
+
+    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+};
+struct SerializeParams : Configuration::PBConfig<SerializeParams>
+{
+    PB_CONFIG(SerializeParams);
+
+    PB_CONFIG_VARIANT(var, TruncateParams, SimpleOverflowParams, CompactOverflowParams);
+};
+
+struct FieldParams : Configuration::PBConfig<FieldParams>
+{
+    PB_CONFIG(FieldParams);
+
+    PB_CONFIG_PARAM(PacketFieldName, name, PacketFieldName::Base);
+    PB_CONFIG_PARAM(StoreSigned::UnderlyingType, storeSigned, false);
+    PB_CONFIG_OBJECT(std::vector<TransformsParams>, transform);
+    PB_CONFIG_OBJECT(SerializeParams, serialize);
+};
+
+struct GroupParams : Configuration::PBConfig<GroupParams>
+{
+    PB_CONFIG(GroupParams);
+
+    PB_CONFIG_OBJECT(std::vector<FieldParams>, members);
+    PB_CONFIG_PARAM(std::vector<size_t>, numBits, std::vector<size_t>{});
+    PB_CONFIG_PARAM(size_t, totalBits, 0);
 };
 
 }}
