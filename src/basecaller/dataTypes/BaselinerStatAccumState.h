@@ -16,7 +16,7 @@ struct BaselinerStatAccumState
 {
     using StatElement = AutocorrAccumState::FloatArray::value_type;
     using IntArray = Cuda::Utility::CudaArray<RawTraceElement, laneSize>;
-    using SummedIntArray = Cuda::Utility::CudaArray<SummedRawTraceElement, laneSize>;
+    using FloatArray = Cuda::Utility::CudaArray<float, laneSize>;
 
     // Statistics of all frames after baseline estimate has been subtracted.
     AutocorrAccumState fullAutocorrState;
@@ -28,7 +28,7 @@ struct BaselinerStatAccumState
     StatAccumState baselineStats;
 
     // Sum of raw baseline frames (i.e., prior to baseline subtraction).
-    SummedIntArray rawBaselineSum;
+    FloatArray rawBaselineSum;
 
     const StatAccumState::FloatArray& NumBaselineFrames() const
     {

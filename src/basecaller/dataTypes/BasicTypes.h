@@ -9,7 +9,6 @@ namespace Data {
 
 using RawTraceElement =  int16_t;
 using BaselinedTraceElement = int16_t;
-using SummedRawTraceElement = int32_t;
 
 
 
