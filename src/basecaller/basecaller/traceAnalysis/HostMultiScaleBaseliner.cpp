@@ -138,7 +138,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray&
     // TODO - Make these tunable parameters.
     constexpr float sigmaThrL { 4.5f };
     constexpr float sigmaThrH { 4.5f };
-    constexpr float minSigma { sqrt(1.0f/12.0f) };
+    const float minSigma { sqrt(1.0f/12.0f) };
     const FloatArray alphaFactor{0.7f};
 
     bgSigma_ = ((FloatArray{1.0f} - alphaFactor) * bgSigma_)
