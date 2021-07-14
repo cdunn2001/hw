@@ -26,6 +26,7 @@
 
 #include <basecaller/traceAnalysis/FrameLabelerHost.h>
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 #include <common/AlignedVector.h>
@@ -380,14 +381,14 @@ public:
         , prevLat_(LatBatchDims(lanesPerPool), SyncDirection::HostWriteDeviceRead, SOURCE_MARKER())
         , numLanes_(lanesPerPool)
     {
-
-        tbb::parallel_for((uint32_t){0}, numLanes_, [&](unsigned int lane)
-        {
-            auto view = prevLat_.GetBlockView(lane);
-            for (auto itr = view.Begin(); itr != view.End(); ++itr)
-            {
-                itr.Store(0);
-            }
+        tbb::task_arena().execute([&] {
+            tbb::parallel_for((uint32_t) {0}, numLanes_, [&](unsigned int lane) {
+                auto view = prevLat_.GetBlockView(lane);
+                for (auto itr = view.Begin(); itr != view.End(); ++itr)
+                {
+                    itr.Store(0);
+                }
+            });
         });
     }
 
@@ -406,15 +407,16 @@ public:
         auto metricsView = metricsOutput.viterbiScore.GetHostView();
         auto modelView = models.GetHostView();
 
-        tbb::parallel_for((uint32_t){0}, numLanes_, [&](unsigned int lane)
-        {
-            metricsView[lane] = LabelBlock(modelView[lane],
-                                           trans,
-                                           input.GetBlockView(lane),
-                                           latent_.GetHostView()[lane],
-                                           prevLat_.GetBlockView(lane),
-                                           latOut.GetBlockView(lane),
-                                           output.GetBlockView(lane));
+        tbb::task_arena().execute([&] {
+            tbb::parallel_for((uint32_t) {0}, numLanes_, [&](unsigned int lane) {
+                metricsView[lane] = LabelBlock(modelView[lane],
+                                               trans,
+                                               input.GetBlockView(lane),
+                                               latent_.GetHostView()[lane],
+                                               prevLat_.GetBlockView(lane),
+                                               latOut.GetBlockView(lane),
+                                               output.GetBlockView(lane));
+            });
         });
         std::swap(prevLat_, latOut);
     }

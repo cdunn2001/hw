@@ -30,6 +30,7 @@
 
 #include "HostHFMetricsFilter.h"
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 namespace PacBio {
@@ -49,19 +50,21 @@ HostHFMetricsFilter::~HostHFMetricsFilter() = default;
 void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
 {
     const auto& pulses = pulseBatch.Pulses();
-    tbb::parallel_for(uint32_t{0}, pulseBatch.Dims().lanesPerBatch , [&](size_t l)
-    {
-        const auto& laneCalls = pulses.LaneView(l);
-        metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for(uint32_t{0}, pulseBatch.Dims().lanesPerBatch, [&](size_t l) {
+            const auto& laneCalls = pulses.LaneView(l);
+            metrics_[l].Count(laneCalls, pulseBatch.Dims().framesPerBatch);
+        });
     });
 }
 
 void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
 {
-    tbb::parallel_for(size_t{0}, modelsBatch.Size(), [&](size_t l)
-    {
-        const auto& models = modelsBatch.GetHostView()[l];
-        metrics_[l].AddModels(models);
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for(size_t{0}, modelsBatch.Size(), [&](size_t l) {
+            const auto& models = modelsBatch.GetHostView()[l];
+            metrics_[l].AddModels(models);
+        });
     });
 }
 
@@ -70,12 +73,13 @@ void HostHFMetricsFilter::AddMetrics(
         const Data::FrameLabelerMetrics& frameLabelerMetrics,
         const Data::PulseDetectorMetrics& pdMetrics)
 {
-    tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l)
-    {
-        metrics_[l].AddBatchMetrics(
-                baselinerMetrics.baselinerStats.GetHostView()[l],
-                frameLabelerMetrics.viterbiScore.GetHostView()[l],
-                pdMetrics.baselineStats.GetHostView()[l]);
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l) {
+            metrics_[l].AddBatchMetrics(
+                    baselinerMetrics.baselinerStats.GetHostView()[l],
+                    frameLabelerMetrics.viterbiScore.GetHostView()[l],
+                    pdMetrics.baselineStats.GetHostView()[l]);
+        });
     });
 }
 
@@ -101,10 +105,11 @@ HostHFMetricsFilter::Process(
         FinalizeBlock();
         framesSeen_ = 0;
         auto ret = metricsFactory_->NewBatch(pulseBatch.Dims().lanesPerBatch);
-        tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l)
-        {
-            metrics_[l].PopulateBasecallingMetrics(
-                    ret->GetHostView()[l]);
+        tbb::task_arena().execute([&] {
+            tbb::parallel_for(size_t{0}, metrics_.size(), [&](size_t l) {
+                metrics_[l].PopulateBasecallingMetrics(
+                        ret->GetHostView()[l]);
+            });
         });
         return ret;
     }

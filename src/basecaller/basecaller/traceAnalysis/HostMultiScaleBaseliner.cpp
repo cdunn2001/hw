@@ -1,5 +1,5 @@
 #include "HostMultiScaleBaseliner.h"
-
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 #include <dataTypes/BasicTypes.h>
@@ -34,18 +34,19 @@ HostMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace
                                                Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto statsView = out.second.baselinerStats.GetHostView();
-    tbb::parallel_for(size_t{0}, rawTrace.LanesPerBatch(), [&](size_t laneIdx)
-    {
-        const auto& traceData = rawTrace.GetBlockView(laneIdx);
-        auto baselineSubtracted = out.first.GetBlockView(laneIdx);
-        auto& baseliner = baselinerByLane_[laneIdx];
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for(size_t{0}, rawTrace.LanesPerBatch(), [&](size_t laneIdx) {
+            const auto& traceData = rawTrace.GetBlockView(laneIdx);
+            auto baselineSubtracted = out.first.GetBlockView(laneIdx);
+            auto& baseliner = baselinerByLane_[laneIdx];
 
-        auto baselinerStats = baseliner.EstimateBaseline(traceData,
-                                                         lowerBuffer.GetBlockView(laneIdx),
-                                                         upperBuffer.GetBlockView(laneIdx),
-                                                         baselineSubtracted);
+            auto baselinerStats = baseliner.EstimateBaseline(traceData,
+                                                             lowerBuffer.GetBlockView(laneIdx),
+                                                             upperBuffer.GetBlockView(laneIdx),
+                                                             baselineSubtracted);
 
-        statsView[laneIdx] = baselinerStats.GetState();
+            statsView[laneIdx] = baselinerStats.GetState();
+        });
     });
 
     return out;
