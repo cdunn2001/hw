@@ -70,7 +70,7 @@ public:     // Const functions
     const LaneArray& TraceMax() const
     { return traceMax; }
 
-    const LaneArray& RawBaselineSum() const
+    const FloatArray& RawBaselineSum() const
     { return rawBaselineSum_; }
 
 public:     // Non-const functions
@@ -87,7 +87,7 @@ private:
     StatAccumulator<FloatArray> baselineStats_;
 
     // Sum of baseline frames _prior_ to baseline subtraction.
-    LaneArray rawBaselineSum_{0};
+    FloatArray rawBaselineSum_{0};
 };
 
 }}}     // namespace PacBio::Mongo::Data

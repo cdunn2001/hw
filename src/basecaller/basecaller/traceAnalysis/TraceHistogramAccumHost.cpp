@@ -31,6 +31,7 @@
 
 #include <algorithm>
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 #include <common/StatAccumulator.h>
@@ -81,7 +82,7 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
 void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 {
     constexpr unsigned int numBins = LaneHistType::numBins;
-
+    hist_.clear();
     auto view = metrics.baselinerStats.GetHostView();
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
@@ -108,10 +109,11 @@ void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementTy
 {
     const auto numLanes = traces.LanesPerBatch();
 
-    // For each lane/block in the batch ...
-    tbb::parallel_for((size_t){0}, numLanes, [&](size_t lane)
-    {
-        AddBlock(traces, lane);
+    tbb::task_arena().execute([&] {
+        // For each lane/block in the batch ...
+        tbb::parallel_for((size_t) {0}, numLanes, [&](size_t lane) {
+            AddBlock(traces, lane);
+        });
     });
 }
 

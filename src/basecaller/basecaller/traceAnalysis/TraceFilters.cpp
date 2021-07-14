@@ -18,17 +18,8 @@ size_t extremumFilterHgw(RandInIter p, RandInIter in1, RandOutIter out,
     size_t width = r.capacity();
 
     using ValueType = typename ExtremumFilterHgw<RandInIter, RandOutIter, ExtremumFunc>::ValueType;
-    // Assumption is that the boundary condition is already applied for the first chunk,
-    // with a half-window's worth of values placed in the window buffer using PushBack().
-    // Fill in all but the last needed to compute the first value.
-    while (r.size() < width &&  p != in1)
-    {
-        r.PushBack(ValueType(p.Extract()));
-        p += std::min(stride, RandInIter::distance(p, in1));
-    }
 
     auto s = r.GetHoldoverValue();
-
     using IterDiffType = typename RandInIter::DiffType;
     const auto dist = RandInIter::distance(p, in1);
     for (IterDiffType i = 0; i < dist; i += stride)

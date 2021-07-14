@@ -1,5 +1,6 @@
 #include "HostPulseAccumulator.h"
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 #include <dataTypes/configs/MovieConfig.h>
@@ -51,30 +52,31 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
 
-    tbb::parallel_for(size_t{0}, labels.LanesPerBatch(), [&](size_t laneIdx)
-    {
-        const auto& blockLabels = labels.GetBlockView(laneIdx);
-        const auto& blockLatTrace = labels.LatentTrace().GetBlockView(laneIdx);
-        const auto& currTrace = labels.TraceData().GetBlockView(laneIdx);
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for(size_t{0}, labels.LanesPerBatch(), [&](size_t laneIdx) {
+            const auto& blockLabels = labels.GetBlockView(laneIdx);
+            const auto& blockLatTrace = labels.LatentTrace().GetBlockView(laneIdx);
+            const auto& currTrace = labels.TraceData().GetBlockView(laneIdx);
 
-        auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
-        lanePulses.Reset();
+            auto lanePulses = ret.first.Pulses().LaneView(laneIdx);
+            lanePulses.Reset();
 
-        LabelsSegment& currSegment = startSegmentByLane[laneIdx];
+            LabelsSegment& currSegment = startSegmentByLane[laneIdx];
 
-        auto baselineStats = BaselineStats{};
-        auto blIter = blockLabels.CBegin();
-        for (size_t relativeFrameIndex = 0;
-             relativeFrameIndex < blockLabels.NumFrames() &&
-             blIter != blockLabels.CEnd();
-             ++relativeFrameIndex, ++blIter)
-        {
-            EmitFrameLabels(currSegment, lanePulses, baselineStats,
-                            blIter.Extract(), blockLatTrace, currTrace,
-                            relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
-        }
+            auto baselineStats = BaselineStats{};
+            auto blIter = blockLabels.CBegin();
+            for (size_t relativeFrameIndex = 0;
+                 relativeFrameIndex < blockLabels.NumFrames() &&
+                 blIter != blockLabels.CEnd();
+                 ++relativeFrameIndex, ++blIter)
+            {
+                EmitFrameLabels(currSegment, lanePulses, baselineStats,
+                                blIter.Extract(), blockLatTrace, currTrace,
+                                relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
+            }
 
-        ret.second.baselineStats.GetHostView()[laneIdx] = baselineStats.GetState();
+            ret.second.baselineStats.GetHostView()[laneIdx] = baselineStats.GetState();
+        });
     });
 
     return ret;

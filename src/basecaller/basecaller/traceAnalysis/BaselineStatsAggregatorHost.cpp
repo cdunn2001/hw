@@ -30,6 +30,7 @@
 
 #include <algorithm>
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 namespace PacBio {
@@ -41,10 +42,11 @@ void BaselineStatsAggregatorHost::AddMetricsImpl(const Data::BaselinerMetrics& m
     assert(stats_.size() == metrics.baselinerStats.Size());
 
     const auto& statsView = metrics.baselinerStats.GetHostView();
-    tbb::parallel_for((size_t){0}, stats_.size(), [&](size_t lane)
-    {
-        // Accumulate baseliner stats.
-        stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for((size_t) {0}, stats_.size(), [&](size_t lane) {
+            // Accumulate baseliner stats.
+            stats_[lane].Merge(Data::BaselinerStatAccumulator<Data::RawTraceElement>(statsView[lane]));
+        });
     });
 }
 

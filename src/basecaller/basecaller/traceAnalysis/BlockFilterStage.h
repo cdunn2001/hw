@@ -19,14 +19,17 @@ template <typename T, typename Filter>
 class BlockFilterStage
 {
 public: // Structors
-    BlockFilterStage(size_t w, size_t s = 1)
+    BlockFilterStage(size_t w, size_t s = 1, size_t nf = 1)
         : width_(w)
-        , leftHalfWidth_(w / 2)
-        , rightHalfWidth_(1 + (w - 1) / 2)
         , stride_(s)
+        , nf_(nf)
         , winbuf_(w)
-        , rhsDeficit_(rightHalfWidth_)
-    { }
+    {
+        for (unsigned int i = 0; i < width_; ++i)
+        {
+            winbuf_.PushBack(T{0});
+        }
+    }
 
     BlockFilterStage(const BlockFilterStage& x) = delete;
     BlockFilterStage(BlockFilterStage&& x) = default;
@@ -37,16 +40,14 @@ public: // Structors
 
 private:
     const size_t width_;
-    const size_t leftHalfWidth_;
-    const size_t rightHalfWidth_;
     const size_t stride_;
-
-    // Filter functor
-    Filter filter_;
+    const size_t nf_;
 
     // Buffers
     WindowBuffer<LaneArray<T>> winbuf_;
-    int rhsDeficit_;
+
+    // Filter functor
+    Filter filter_;
 };
 
 }}}

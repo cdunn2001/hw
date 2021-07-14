@@ -36,6 +36,7 @@
 #include <boost/numeric/conversion/cast.hpp>
 #include <Eigen/Dense>
 
+#include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
 #include <common/LaneArray.h>
@@ -131,19 +132,21 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
 
     const auto& hView = hist.data.GetHostView();
     auto dmView = detModel->GetHostView();
-    tbb::parallel_for((unsigned int){0}, PoolSize(), [&](unsigned int lane)
-    {
-        auto& dmLane = dmView[lane];
 
-        // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd).
-        const UHistType uhist (hView[lane]);
-        LaneDetModelHost laneDetModel (dmLane);
+    tbb::task_arena().execute([&] {
+        tbb::parallel_for((unsigned int) {0}, PoolSize(), [&](unsigned int lane) {
+            auto& dmLane = dmView[lane];
 
-        // Estimate parameters for this lane.
-        EstimateLaneDetModel(uhist, &laneDetModel);
+            // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd).
+            const UHistType uhist(hView[lane]);
+            LaneDetModelHost laneDetModel(dmLane);
 
-        // Transcribe results back into *detModel.
-        laneDetModel.ExportTo(&dmLane);
+            // Estimate parameters for this lane.
+            EstimateLaneDetModel(uhist, &laneDetModel);
+
+            // Transcribe results back into *detModel.
+            laneDetModel.ExportTo(&dmLane);
+        });
     });
 }
 
