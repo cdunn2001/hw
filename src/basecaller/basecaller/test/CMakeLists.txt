@@ -32,7 +32,7 @@ add_executable(${exec}
 
 target_link_libraries(${exec}
     libMongoBasecallerTest
-    libGtestWithMain
+    libGtest
 )
 
 add_test(${exec} ${exec} --gtest_output=xml:${exec}.xml)
