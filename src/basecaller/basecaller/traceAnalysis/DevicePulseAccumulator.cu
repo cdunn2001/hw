@@ -122,7 +122,7 @@ public:
         // a Get function to handle getting the 0th or 1st element.  It would be
         // nice to handle this semmetrically, but right now we don't have a
         // PBUint2 type, and I don't think this is enough motivation to add one
-        auto Get = [](uint2& var) -> uint& { return id ? var.x : var.y; };
+        auto Get = [](uint2& var) -> uint& { return id == 0 ? var.x : var.y; };
 
         Get(endFrame_[threadIdx.x]) = frameIndex;
         auto start = Get(startFrame_[threadIdx.x]);
