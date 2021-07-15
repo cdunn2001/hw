@@ -81,7 +81,7 @@ T modifyingQuantile(std::vector<T>& data,
 {
     size_t quanti = data.size() * quantile;
     std::nth_element(data.begin(), data.begin() + quanti, data.end());
-    return data[quanti];
+    return data.at(quanti);
 }
 
 std::vector<int> PickCandidates(const std::vector<int> candidates,
@@ -534,11 +534,21 @@ std::vector<RegionLabel> PalindromeSearch(
     const int nAdapters = boost::numeric_cast<int>(adapters.size());
     bool homopolymerCompression = false;
 
-    std::vector<int> sizes;
-    sizes.reserve(adapters.size());
-    for (size_t i = 1; i < adapters.size(); ++i)
-        sizes.push_back(adapters[i].begin - adapters[i - 1].end);
-    int roughInsertSize = modifyingQuantile(sizes, 0.75);
+    assert (adapters.size() > 0);
+    int roughInsertSize = 0;
+    if (adapters.size() > 1)
+    {
+        std::vector<int> sizes;
+        sizes.reserve(adapters.size());
+        for (size_t i = 1; i < adapters.size(); ++i)
+            sizes.push_back(adapters[i].begin - adapters[i - 1].end);
+        roughInsertSize = modifyingQuantile(sizes, 0.75);
+    }
+    else
+    {
+        roughInsertSize = std::max(hqRegion.end - adapters[0].end,
+                                   adapters[0].begin - hqRegion.begin);
+    }
     // Refuse to operate on short inserts
     if (roughInsertSize < 140)
         return adapters;
@@ -1042,10 +1052,11 @@ std::vector<Candidate> SmoothHitDensities(const std::vector<KmerHit>& rcHits,
         if (lastHit == rcHits[i].Location())
             continue;
         lastHit = rcHits[i].Location();
-        while (wBegin->Location() + flankSize < rcHits[i].Location())
+        while (wBegin != rcHits.end()
+                && wBegin->Location() + flankSize < rcHits[i].Location())
             ++wBegin;
-        while (rcHits[i].Location() + flankSize >= wEnd->Location()
-                && wEnd != rcHits.end())
+        while (wEnd != rcHits.end()
+                && rcHits[i].Location() + flankSize >= wEnd->Location())
             ++wEnd;
         assert(wEnd > wBegin);
         int density = wEnd - wBegin;
@@ -1638,7 +1649,7 @@ PalindromeTrieCenter(const std::string& bases,
     }
 
     // If we don't find any hits!
-    if (rcHits.size() == 0)
+    if (rcHits.empty())
         return {};
 
     auto spanSorter = [](const KmerHit& first,
@@ -1649,8 +1660,8 @@ PalindromeTrieCenter(const std::string& bases,
     // happen and can be very misleading:
     std::sort(rcHits.begin(), rcHits.end(), spanSorter);
     auto tooBig = rcHits.begin();
-    while (tooBig->reverse - tooBig->forward < 3 * estInsertSize
-            && tooBig != rcHits.end())
+    while (tooBig != rcHits.end()
+            && tooBig->reverse - tooBig->forward < 3 * estInsertSize)
         ++tooBig;
     if (tooBig != rcHits.begin() && tooBig != rcHits.end())
         rcHits.erase(tooBig, rcHits.end());
