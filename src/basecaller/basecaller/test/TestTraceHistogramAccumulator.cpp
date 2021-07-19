@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -26,7 +26,6 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
-#include <pacbio/process/OptionParser.h>
 #include <pacbio/utilities/Finally.h>
 
 #include <appModules/SimulatedDataSource.h>
@@ -36,6 +35,8 @@
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+
+#include "SpeedTestToggle.h"
 
 using namespace PacBio::Application;
 using namespace PacBio::Configuration;
@@ -136,14 +137,8 @@ public:
         }
     }
 
-    static void EnablePerfTests(bool b)
-    {
-        allowPerfTests_ = b;
-    }
     static bool PerfTestsEnabled()
-    {
-        return allowPerfTests_;
-    }
+    { return SpeedTestToggle::Enabled(); }
 
     // Sets up things for performance monitoring, and creates an RAII functor
     // to tear it down again at the end of the test.
@@ -275,11 +270,8 @@ private:
 
     // Is the current test monitoring performance?
     bool monitorPerf_ = false;
-    // Are tests that would want to monitor performance enabled?
-    static bool allowPerfTests_;
 };
 
-bool Histogram::allowPerfTests_ = false;
 
 TEST_P(Histogram, ResetFromStats)
 {
@@ -919,24 +911,3 @@ INSTANTIATE_TEST_SUITE_P(DeviceSharedContig2DBlock,
 INSTANTIATE_TEST_SUITE_P(DeviceSharedInterleaved2DBlock,
                          Histogram,
                          testing::Values(TestTypes::DeviceSharedInterleaved2DBlock));
-
-// Setting up our own main so we can have runtime configuration to enable performance tests
-// They are too long to leave enabled by default, but may prove useful when/if we evaluate
-// new hardware
-int main(int argc, char **argv)
-{
-    using namespace PacBio::Process;
-    ::testing::InitGoogleTest(&argc, argv);
-
-    OptionParser parser;
-    parser.version("0");
-    parser.add_option("--enablePerfHistTests").action_store_true().type_bool().set_default(false)
-          .help("Enable longer running histogram tests that collect performance metrics");
-    Values& options = parser.parse_args(argc, argv);
-    std::vector<std::string> args = parser.args();
-
-    Histogram::EnablePerfTests(options.get("enablePerfHistTests"));
-
-    auto stat = RUN_ALL_TESTS();
-    return stat;
-}
