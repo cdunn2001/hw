@@ -359,8 +359,7 @@ TEST(PulseToBaz, KestrelLosslessCompact)
 
 TEST(PulseToBaz, Params)
 {
-    auto pp = ProductionPulses();
-    auto pp_params = pp.Params();
+    auto pp_params = ProductionPulses::Params();
     EXPECT_EQ(1, pp_params.size());
     auto gp = pp_params.front();
     EXPECT_EQ(PacketFieldName::Base, gp.members[0].name);
@@ -395,8 +394,7 @@ TEST(PulseToBaz, Params)
     EXPECT_EQ(2, json["members"][0]["serialize"]["var"]["TruncateParams"]["numBits"].asUInt());
     EXPECT_TRUE(json["members"][0]["transform"][0]["var"]["NoOpTransformParams"].isNull());
 
-    auto ip = InternalPulses();
-    auto ip_params = ip.Params();
+    auto ip_params = InternalPulses::Params();
     EXPECT_EQ(5, ip_params.size());
     gp = ip_params.front();
     EXPECT_EQ(2, gp.numBits[0]);

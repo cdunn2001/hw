@@ -186,7 +186,7 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     }
 
     template <typename TransformParams, typename SerializerParams>
-    FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
+    static FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
                            TransformParams transformParams, SerializerParams serializerParams)
     {
         FieldParams fp;
@@ -200,7 +200,7 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     }
 
     template <typename... Names>
-    GroupParams Params(Names... names)
+    static GroupParams Params(Names... names)
     {
         GroupParams params;
         auto w1 = {(params.members.push_back(FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())),0)...};
@@ -285,9 +285,9 @@ struct FieldGroupEncoder
         return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
     }
 
-    GroupParams Params()
+    static GroupParams Params()
     {
-        return groupEncoder_.Params(names...);
+        return GroupEncoder::Params(names...);
     }
 
     GroupEncoder groupEncoder_;
@@ -334,10 +334,10 @@ struct PulseEncoder
         data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
     }
 
-    std::vector<GroupParams> Params()
+    static std::vector<GroupParams> Params()
     {
         std::vector<GroupParams> params;
-        auto worker = {(params.push_back(data_.template Get<GroupEncoders>().Params()),0)...};
+        auto worker = {(params.push_back(GroupEncoders::Params()),0)...};
         (void)worker;
         return params;
     }
