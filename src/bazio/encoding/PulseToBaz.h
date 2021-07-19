@@ -77,7 +77,10 @@
 #ifndef PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
 #define PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
 
+#include <numeric>
+
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/EncodingParams.h>
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/FieldAccessors.h>
 #include <bazio/encoding/FieldSerializers.h>
@@ -182,6 +185,33 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
         return ptr;
     }
 
+    template <typename TransformParams, typename SerializerParams>
+    FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
+                           TransformParams transformParams, SerializerParams serializerParams)
+    {
+        FieldParams fp;
+        fp.name = name;
+        fp.storeSigned = storeSigned;
+        // NOTE: Only supports single transform.
+        fp.transform.resize(1);
+        fp.transform.front().var = transformParams;
+        fp.serialize.var = serializerParams;
+        return fp;
+    }
+
+    template <typename... Names>
+    GroupParams Params(Names... names)
+    {
+        GroupParams params;
+        auto w1 = {(params.members.push_back(FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())),0)...};
+        (void)w1;
+        auto w2 = {(params.numBits.push_back(Serializers::nBits),0)...};
+        (void)w2;
+        auto w3 = {(params.totalBits += Serializers::nBits,0)...};
+        (void)w3;
+        return params;
+    }
+
     PacBio::Cuda::Utility::CudaTuple<Transforms...> transforms_;
 };
 
@@ -255,6 +285,11 @@ struct FieldGroupEncoder
         return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
     }
 
+    GroupParams Params()
+    {
+        return groupEncoder_.Params(names...);
+    }
+
     GroupEncoder groupEncoder_;
 };
 
@@ -297,6 +332,14 @@ struct PulseEncoder
     BAZ_CUDA void Reset()
     {
         data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
+    }
+
+    std::vector<GroupParams> Params()
+    {
+        std::vector<GroupParams> params;
+        auto worker = {(params.push_back(data_.template Get<GroupEncoders>().Params()),0)...};
+        (void)worker;
+        return params;
     }
 
 private:

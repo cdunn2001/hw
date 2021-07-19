@@ -30,6 +30,7 @@
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
 
+#include <bazio/encoding/PulseGroups.h>
 #include <bazio/encoding/PulseToBaz.h>
 
 #include <dataTypes/Pulse.h>
@@ -354,4 +355,89 @@ TEST(PulseToBaz, KestrelLosslessCompact)
     TestPulseToBaz<Test, expectedLen>(pulsesIn.GetHostView(), pulsesOut.GetHostView(), Overrun.GetHostView());
     EXPECT_FALSE(Overrun.GetHostView()[0]);
     Validate();
+}
+
+TEST(PulseToBaz, Params)
+{
+    auto pp = ProductionPulses();
+    auto pp_params = pp.Params();
+    EXPECT_EQ(1, pp_params.size());
+    auto gp = pp_params.front();
+    EXPECT_EQ(PacketFieldName::Base, gp.members[0].name);
+    EXPECT_EQ(PacketFieldName::Pw, gp.members[1].name);
+    EXPECT_EQ(PacketFieldName::StartFrame, gp.members[2].name);
+    EXPECT_EQ(2, gp.numBits[0]);
+    EXPECT_EQ(7, gp.numBits[1]);
+    EXPECT_EQ(7, gp.numBits[2]);
+    EXPECT_EQ(16, gp.totalBits);
+    EXPECT_TRUE(gp.members[0].transform.front().var.Visit(
+                                                          [](const NoOpTransformParams& v) { return true; },
+                                                          [](const CodecParams& v) { return false; },
+                                                          [](const FixedPointParams& v) { return false; },
+                                                          [](const DeltaCompressionParams& v) { return false; }));
+    EXPECT_TRUE(gp.members[0].serialize.var.Visit(
+                                                  [](const TruncateParams& v) { return v.numBits == 2; },
+                                                  [](const SimpleOverflowParams& v) { return false; },
+                                                  [](const CompactOverflowParams& v) { return false; }));
+    EXPECT_TRUE(gp.members[1].serialize.var.Visit(
+                                                  [](const TruncateParams& v) { return false; },
+                                                  [](const SimpleOverflowParams& v) { return false; },
+                                                  [](const CompactOverflowParams& v) { return v.numBits == 7; }));
+    EXPECT_TRUE(gp.members[2].transform.front().var.Visit([](const NoOpTransformParams& v) { return false; },
+                                                          [](const CodecParams& v) { return false; },
+                                                          [](const FixedPointParams& v) { return false; },
+                                                          [](const DeltaCompressionParams& v) { return true; }));
+    auto json = gp.Serialize();
+    EXPECT_EQ(16, json["totalBits"].asUInt());
+    EXPECT_EQ(2, json["numBits"][0].asUInt());
+    EXPECT_EQ(7, json["numBits"][1].asUInt());
+    EXPECT_EQ(7, json["numBits"][2].asUInt());
+    EXPECT_EQ(2, json["members"][0]["serialize"]["var"]["TruncateParams"]["numBits"].asUInt());
+    EXPECT_TRUE(json["members"][0]["transform"][0]["var"]["NoOpTransformParams"].isNull());
+
+    auto ip = InternalPulses();
+    auto ip_params = ip.Params();
+    EXPECT_EQ(5, ip_params.size());
+    gp = ip_params.front();
+    EXPECT_EQ(2, gp.numBits[0]);
+    EXPECT_EQ(7, gp.numBits[1]);
+    EXPECT_EQ(7, gp.numBits[2]);
+    EXPECT_EQ(16, gp.totalBits);
+    auto json2 = ip_params[0].Serialize();
+    EXPECT_EQ(json["totalBits"].asUInt(), json2["totalBits"].asUInt());
+    EXPECT_EQ("Base", json2["members"][0]["name"].asString());
+
+    gp = ip_params[1];
+    EXPECT_EQ(1, gp.members.size());
+    EXPECT_EQ(PacketFieldName::Pkmax, gp.members[0].name);
+    EXPECT_EQ(1, gp.numBits.size());
+    EXPECT_EQ(gp.numBits.front(), gp.totalBits);
+    EXPECT_TRUE(gp.members[0].storeSigned);
+    EXPECT_TRUE(gp.members[0].transform[0].var.Visit(
+            [](const NoOpTransformParams& v) { return false; },
+            [](const CodecParams& v) { return false; },
+            [](const FixedPointParams& v) { return v.scale == 10; },
+            [](const DeltaCompressionParams& v) { return false; }
+            ));
+    EXPECT_TRUE(gp.members[0].serialize.var.Visit(
+            [](const TruncateParams& v) { return false; },
+            [](const SimpleOverflowParams& v) { return v.numBits == 8 && v.overflowBytes == 2; },
+            [](const CompactOverflowParams& v) { return false; }
+            ));
+    gp = ip_params[2];
+    EXPECT_EQ(1, gp.members.size());
+    EXPECT_EQ(PacketFieldName::Pkmid, gp.members[0].name);
+    EXPECT_EQ(1, gp.numBits.size());
+    EXPECT_EQ(gp.numBits.front(), gp.totalBits);
+    EXPECT_TRUE(gp.members[0].transform[0].var.Visit(
+            [](const NoOpTransformParams& v) { return false; },
+            [](const CodecParams& v) { return false; },
+            [](const FixedPointParams& v) { return v.scale == 10; },
+            [](const DeltaCompressionParams& v) { return false; }
+    ));
+    EXPECT_TRUE(gp.members[0].serialize.var.Visit(
+            [](const TruncateParams& v) { return false; },
+            [](const SimpleOverflowParams& v) { return v.numBits == 8 && v.overflowBytes == 2; },
+            [](const CompactOverflowParams& v) { return false; }
+    ));
 }

@@ -71,6 +71,7 @@
 #include <common/cuda/utility/CudaTuple.h>
 
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/EncodingParams.h>
 
 #include <bazio/encoding/Types.h>
 
@@ -89,6 +90,10 @@ struct Transform
     BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
         return b_.template Revert<Ret>(val, storeSigned, autoParams::val...);
+    }
+    static typename Base::P Params()
+    {
+        return Base::Params(autoParams::val...);
     }
 private:
     Base b_;
@@ -129,6 +134,13 @@ struct NoOp
         static_assert(std::is_integral<Ret>::value, "");
         return static_cast<Ret>(val);
     }
+
+    using P = NoOpTransformParams;
+    static P Params()
+    {
+        NoOpTransformParams params;
+        return params;
+    }
 };
 
 struct FixedPoint
@@ -161,6 +173,14 @@ struct FixedPoint
             return static_cast<float>(static_cast<int64_t>(val)) / scale;
         else
             return static_cast<float>(val) / scale;
+    }
+
+    using P = FixedPointParams;
+    static P Params(FixedPointScale scale)
+    {
+        FixedPointParams params;
+        params.scale = scale;
+        return params;
     }
 };
 
@@ -236,6 +256,14 @@ struct LossySequelCodec
         auto base = (multiplier - 1) * F;
         return static_cast<Ret>(base + multiplier * main);
     }
+
+    using P = CodecParams;
+    static P Params(NumBits bits)
+    {
+        CodecParams params;
+        params.numBits = bits;
+        return params;
+    }
 };
 
 struct DeltaCompression
@@ -254,6 +282,13 @@ struct DeltaCompression
     {
         lastVal += val;
         return lastVal;
+    }
+
+    using P = DeltaCompressionParams;
+    static P Params()
+    {
+        DeltaCompressionParams params;
+        return params;
     }
 private:
     // Storing this as unsigned, but really only so
