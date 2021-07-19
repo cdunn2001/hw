@@ -81,10 +81,10 @@ std::vector<std::vector<uint32_t>> ParsePacketFields(
 
     auto decode = [](const SerializeParams& info, uint64_t val, auto& ptr, StoreSigned storeSigned)
     {
-        return info.var.Visit(
-            [&](const TruncateParams& info) { return TruncateOverflow::FromBinary(val, ptr, storeSigned, static_cast<NumBits>(info.numBits)); },
-            [&](const CompactOverflowParams& info) { return CompactOverflow::FromBinary(val, ptr, storeSigned, static_cast<NumBits>(info.numBits)); },
-            [&](const SimpleOverflowParams& info) { return SimpleOverflow::FromBinary(val, ptr, storeSigned, static_cast<NumBits>(info.numBits), static_cast<NumBytes>(info.overflowBytes)); }
+        return info.params.Visit(
+            [&](const TruncateParams& info) { return TruncateOverflow::FromBinary(val, ptr, storeSigned, NumBits{info.numBits}); },
+            [&](const CompactOverflowParams& info) { return CompactOverflow::FromBinary(val, ptr, storeSigned, NumBits{info.numBits}); },
+            [&](const SimpleOverflowParams& info) { return SimpleOverflow::FromBinary(val, ptr, storeSigned, NumBits{info.numBits}, NumBytes{info.overflowBytes}); }
         );
     };
 
@@ -104,7 +104,7 @@ std::vector<std::vector<uint32_t>> ParsePacketFields(
                 auto numBits = group.numBits[i];
                 uint64_t val = mainVal & ((1 << numBits)-1);
                 mainVal = mainVal >> numBits;
-                auto integral = decode(info.serialize, val, packetByteStream, static_cast<StoreSigned>(info.storeSigned));
+                auto integral = decode(info.serialize, val, packetByteStream, StoreSigned{info.storeSigned});
                 packetFields[static_cast<size_t>(info.name)].push_back(integral);
             }
         }

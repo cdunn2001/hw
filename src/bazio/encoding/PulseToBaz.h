@@ -192,10 +192,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
         FieldParams fp;
         fp.name = name;
         fp.storeSigned = storeSigned;
-        // NOTE: Only supports single transform.
-        fp.transform.resize(1);
-        fp.transform.front().var = transformParams;
-        fp.serialize.var = serializerParams;
+        fp.transform = transformParams;
+        fp.serialize = serializerParams;
         return fp;
     }
 
@@ -203,12 +201,10 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     static GroupParams Params(Names... names)
     {
         GroupParams params;
-        auto w1 = {(params.members.push_back(FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())),0)...};
-        (void)w1;
-        auto w2 = {(params.numBits.push_back(Serializers::nBits),0)...};
-        (void)w2;
-        auto w3 = {(params.totalBits += Serializers::nBits,0)...};
-        (void)w3;
+        params.members = {FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())...};
+        params.numBits = {Serializers::nBits...};
+        auto worker = {(params.totalBits += Serializers::nBits,0)...};
+        (void)worker;
         return params;
     }
 
@@ -336,10 +332,7 @@ struct PulseEncoder
 
     static std::vector<GroupParams> Params()
     {
-        std::vector<GroupParams> params;
-        auto worker = {(params.push_back(GroupEncoders::Params()),0)...};
-        (void)worker;
-        return params;
+        return std::vector<GroupParams>{GroupEncoders::Params()...};
     }
 
 private:

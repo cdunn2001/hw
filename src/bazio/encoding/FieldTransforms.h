@@ -91,7 +91,7 @@ struct Transform
     {
         return b_.template Revert<Ret>(val, storeSigned, autoParams::val...);
     }
-    static typename Base::P Params()
+    static std::vector<TransformsParams> Params()
     {
         return Base::Params(autoParams::val...);
     }
@@ -111,6 +111,11 @@ struct MultiTransform
     BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
         return first_.template Revert<Ret>(rest_.template Revert<uint64_t>(val, storeSigned), storeSigned);
+    }
+    static std::vector<TransformsParams> Params()
+    {
+        auto toParams = [](const auto& p) { TransformsParams tp = p.front(); return tp; };
+        return std::vector<TransformsParams>{ toParams(Trans1::Params()), toParams(TransRest::Params())... };
     }
 private:
     Trans1 first_;
@@ -135,11 +140,12 @@ struct NoOp
         return static_cast<Ret>(val);
     }
 
-    using P = NoOpTransformParams;
-    static P Params()
+    static std::vector<TransformsParams> Params()
     {
+        TransformsParams tp;
         NoOpTransformParams params;
-        return params;
+        tp.params = params;
+        return std::vector<TransformsParams>{ tp };
     }
 };
 
@@ -175,12 +181,13 @@ struct FixedPoint
             return static_cast<float>(val) / scale;
     }
 
-    using P = FixedPointParams;
-    static P Params(FixedPointScale scale)
+    static std::vector<TransformsParams> Params(FixedPointScale scale)
     {
+        TransformsParams tp;
         FixedPointParams params;
         params.scale = scale;
-        return params;
+        tp.params = params;
+        return std::vector<TransformsParams>{ tp };
     }
 };
 
@@ -257,12 +264,13 @@ struct LossySequelCodec
         return static_cast<Ret>(base + multiplier * main);
     }
 
-    using P = CodecParams;
-    static P Params(NumBits bits)
+    static std::vector<TransformsParams> Params(NumBits bits)
     {
+        TransformsParams tp;
         CodecParams params;
         params.numBits = bits;
-        return params;
+        tp.params = params;
+        return std::vector<TransformsParams>{ tp };
     }
 };
 
@@ -284,11 +292,12 @@ struct DeltaCompression
         return lastVal;
     }
 
-    using P = DeltaCompressionParams;
-    static P Params()
+    static std::vector<TransformsParams> Params()
     {
+        TransformsParams tp;
         DeltaCompressionParams params;
-        return params;
+        tp.params = params;
+        return std::vector<TransformsParams>{ tp };
     }
 private:
     // Storing this as unsigned, but really only so

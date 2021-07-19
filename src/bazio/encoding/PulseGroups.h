@@ -39,7 +39,7 @@ namespace PacBio {
 namespace BazIO {
 
 using ProductionPulses =
-    PulseToBaz<Field<PacketFieldName::Base,
+    PulseToBaz<Field<PacketFieldName::Label,
                      StoreSigned_t<false>,
                      Transform<NoOp>,
                      Serialize<TruncateOverflow, NumBits_t<2>>
@@ -57,7 +57,7 @@ using ProductionPulses =
                >;
 
 using InternalPulses =
-    PulseToBaz<Field<PacketFieldName::Base,
+    PulseToBaz<Field<PacketFieldName::Label,
                      StoreSigned_t<false>,
                      Transform<NoOp>,
                      Serialize<TruncateOverflow, NumBits_t<2>>

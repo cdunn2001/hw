@@ -109,7 +109,7 @@ struct Serialize
         return Base::FromBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }
 
-    static typename Base::P Params()
+    static SerializeParams Params()
     {
         return Base::Params(numBits::val, autoParams::val...);
     }
@@ -144,12 +144,13 @@ struct TruncateOverflow
         return val;
     }
 
-    using P = TruncateParams;
-    static P Params(NumBits numBits)
+    static SerializeParams Params(NumBits numBits)
     {
+        SerializeParams sp;
         TruncateParams params;
         params.numBits = numBits;
-        return params;
+        sp.params = params;
+        return sp;
     }
 };
 
@@ -244,13 +245,14 @@ struct SimpleOverflow
         return ret;
     }
 
-    using P = SimpleOverflowParams;
-    static P Params(NumBits numBits, NumBytes overflowSize)
+    static SerializeParams Params(NumBits numBits, NumBytes overflowSize)
     {
+        SerializeParams sp;
         SimpleOverflowParams params;
         params.numBits = numBits;
         params.overflowBytes = overflowSize;
-        return params;
+        sp.params = params;
+        return sp;
     }
 };
 
@@ -347,12 +349,13 @@ struct CompactOverflow
         return ret;
     }
 
-    using P = CompactOverflowParams;
-    static P Params(NumBits numBits)
+    static SerializeParams Params(NumBits numBits)
     {
+        SerializeParams sp;
         CompactOverflowParams params;
         params.numBits = numBits;
-        return params;
+        sp.params = params;
+        return sp;
     }
 };
 

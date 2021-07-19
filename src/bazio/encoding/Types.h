@@ -36,8 +36,8 @@ namespace BazIO {
 // accidental argument swaps, but also to make
 // call-sites easier to read
 PB_STRONG_TYPEDEF(bool, StoreSigned);
-PB_STRONG_TYPEDEF(uint8_t, NumBits);
-PB_STRONG_TYPEDEF(uint8_t, NumBytes);
+PB_STRONG_TYPEDEF(uint16_t, NumBits);
+PB_STRONG_TYPEDEF(uint16_t, NumBytes);
 PB_STRONG_TYPEDEF(uint32_t, FixedPointScale);
 
 // Set up some machinery for a compile time version

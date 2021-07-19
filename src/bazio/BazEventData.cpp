@@ -63,7 +63,7 @@ namespace {
             std::vector<TOut> ret;
             ret.reserve(raw.size());
             for (const auto& val : raw)
-                ret.push_back(BazIO::LossySequelCodec::Revert<TOut>(val, storeSigned, static_cast<BazIO::NumBits>(params.numBits)));
+                ret.push_back(BazIO::LossySequelCodec::Revert<TOut>(val, storeSigned, BazIO::NumBits{params.numBits}));
             return ret;
         };
         auto delta = [&](const BazIO::DeltaCompressionParams&) {
@@ -74,7 +74,7 @@ namespace {
                 ret.push_back(d.Revert<TOut>(val, storeSigned));
             return ret;
         };
-        return info.var.Visit(
+        return info.params.Visit(
             std::move(noop),
             std::move(codec),
             std::move(delta),
@@ -96,10 +96,10 @@ namespace {
             std::vector<TOut> ret;
             ret.reserve(raw.size());
             for (const auto& val : raw)
-                ret.push_back(BazIO::FixedPoint::Revert<TOut>(val, storeSigned, static_cast<BazIO::FixedPointScale>(params.scale)));
+                ret.push_back(BazIO::FixedPoint::Revert<TOut>(val, storeSigned, BazIO::FixedPointScale{params.scale}));
             return ret;
         };
-        return info.var.Visit(
+        return info.params.Visit(
             std::move(func),
             [&](const auto&) -> std::vector<TOut> { throw PBException("Datatype only supports FixedPoint format"); }
         );
@@ -124,11 +124,11 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
                 return packets.PacketField(field.name);
             else
             {
-                auto ret = ConvertIntegral<uint32_t>(packets.PacketField(field.name), field.transform.back(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                auto ret = ConvertIntegral<uint32_t>(packets.PacketField(field.name), field.transform.back(), field.name, BazIO::StoreSigned{field.storeSigned});
                 if (field.transform.size() > 2)
                     for (size_t i = field.transform.size() - 2; i > 0; --i)
                     {
-                        ret = ConvertIntegral<uint32_t>(ret, field.transform[i], field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                        ret = ConvertIntegral<uint32_t>(ret, field.transform[i], field.name, BazIO::StoreSigned{field.storeSigned});
                     }
                 return ret;
             }
@@ -147,7 +147,7 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
         {
         case BazIO::PacketFieldName::Label:
             {
-                auto tmp = ConvertIntegral<uint8_t>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                auto tmp = ConvertIntegral<uint8_t>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 readouts_.reserve(tmp.size());
                 static constexpr char tags[4] = {'A', 'C', 'G', 'T'};
                 for (auto& r : tmp) readouts_.push_back(tags[r]);
@@ -155,38 +155,38 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
             }
         case BazIO::PacketFieldName::IsBase:
             {
-                isBase_ = ConvertIntegral<bool>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                isBase_ = ConvertIntegral<bool>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::Pw:
             {
-                pws_ = ConvertIntegral<uint32_t>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                pws_ = ConvertIntegral<uint32_t>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::StartFrame:
             {
                 exactStartFrames_ = !isLossy(field.transform);
-                startFrames_ = ConvertIntegral<uint32_t>(raw, field.transform.front(), field.name, field.storeSigned);
+                startFrames_ = ConvertIntegral<uint32_t>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::Pkmax:
             {
-                pkmax_ = ConvertFloat<float>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                pkmax_ = ConvertFloat<float>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::Pkmid:
             {
-                pkmid_ = ConvertFloat<float>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                pkmid_ = ConvertFloat<float>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::Pkmean:
             {
-                pkmean_ = ConvertFloat<float>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                pkmean_ = ConvertFloat<float>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         case BazIO::PacketFieldName::Pkvar:
             {
-                pkvar_ = ConvertFloat<float>(raw, field.transform.front(), field.name, static_cast<BazIO::StoreSigned>(field.storeSigned));
+                pkvar_ = ConvertFloat<float>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
         }

@@ -30,8 +30,6 @@
 
 #include <vector>
 
-#include <boost/variant.hpp>
-
 #include <pacbio/configuration/implementation/ConfigVariant.hpp>
 #include <pacbio/configuration/PBConfig.h>
 
@@ -53,52 +51,52 @@ struct CodecParams : Configuration::PBConfig<CodecParams>
 {
     PB_CONFIG(CodecParams);
 
-    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
 };
 struct FixedPointParams : Configuration::PBConfig<FixedPointParams>
 {
     PB_CONFIG(FixedPointParams);
 
-    PB_CONFIG_PARAM(FixedPointScale::UnderlyingType , scale, 10);
+    PB_CONFIG_PARAM(FixedPointScale::UnderlyingType, scale, 10);
 };
 struct TransformsParams : Configuration::PBConfig<TransformsParams>
 {
     PB_CONFIG(TransformsParams);
 
-    PB_CONFIG_VARIANT(var, NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams);
+    PB_CONFIG_VARIANT(params, NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams);
 };
 
 struct TruncateParams : Configuration::PBConfig<TruncateParams>
 {
     PB_CONFIG(TruncateParams);
 
-    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
 };
 struct SimpleOverflowParams : Configuration::PBConfig<SimpleOverflowParams>
 {
     PB_CONFIG(SimpleOverflowParams);
 
-    PB_CONFIG_PARAM(uint16_t, numBits, 8);
-    PB_CONFIG_PARAM(uint16_t, overflowBytes, 4);
+    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
+    PB_CONFIG_PARAM(NumBytes::UnderlyingType, overflowBytes, 4);
 };
 struct CompactOverflowParams : Configuration::PBConfig<CompactOverflowParams>
 {
     PB_CONFIG(CompactOverflowParams);
 
-    PB_CONFIG_PARAM(uint16_t, numBits, 8);
+    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
 };
 struct SerializeParams : Configuration::PBConfig<SerializeParams>
 {
     PB_CONFIG(SerializeParams);
 
-    PB_CONFIG_VARIANT(var, TruncateParams, SimpleOverflowParams, CompactOverflowParams);
+    PB_CONFIG_VARIANT(params, TruncateParams, SimpleOverflowParams, CompactOverflowParams);
 };
 
 struct FieldParams : Configuration::PBConfig<FieldParams>
 {
     PB_CONFIG(FieldParams);
 
-    PB_CONFIG_PARAM(PacketFieldName, name, PacketFieldName::Base);
+    PB_CONFIG_PARAM(PacketFieldName, name, PacketFieldName::Label);
     PB_CONFIG_PARAM(StoreSigned::UnderlyingType, storeSigned, false);
     PB_CONFIG_OBJECT(std::vector<TransformsParams>, transform);
     PB_CONFIG_OBJECT(SerializeParams, serialize);
