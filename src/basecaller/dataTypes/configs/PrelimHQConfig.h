@@ -24,42 +24,26 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_SmrtBasecallerConfig_H_
-#define mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#ifndef mongo_dataTypes_configs_PrelimHQConfig_H_
+#define mongo_dataTypes_configs_PrelimHQConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
-
-#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/BatchLayoutConfig.h>
-#include <dataTypes/configs/PrelimHQConfig.h>
-#include <dataTypes/configs/SourceConfig.h>
-#include <dataTypes/configs/SystemsConfig.h>
-#include <dataTypes/configs/ROIConfig.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig>
+class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
 {
-    PB_CONFIG(SmrtBasecallerConfig);
+    PB_CONFIG(PrelimHQConfig);
 
-    PB_CONFIG_OBJECT(SystemsConfig, system);
-    PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
-    PB_CONFIG_OBJECT(BatchLayoutConfig, layout);
-    PB_CONFIG_OBJECT(SourceConfig, source);
-    PB_CONFIG_OBJECT(ROIConfig, traceROI);
-    PB_CONFIG_OBJECT(PrelimHQConfig, prelimHQ);
-
-    PB_CONFIG_PARAM(bool, internalMode, false);
-
-    /// Minimum duration (in frames) between intermediate reports
-    /// for both memory and compute statistics.  Reports will happen
-    /// only on chunk boundaries
-    PB_CONFIG_OBJECT(size_t, monitoringReportInterval, 8192);
+    // TODO this should maybe be in units of frames?  Something to
+    // think about while the PrelimHQ stage gets implemented for real
+    PB_CONFIG_PARAM(size_t, bazBufferChunks, 8);
+    PB_CONFIG_PARAM(size_t, zmwOutputStride, 1);
 };
 
 }}}     // namespace PacBio::Mongo::Data
 
 
-#endif //mongo_dataTypes_configs_SmrtBasecallerConfig_H_
+#endif //mongo_dataTypes_configs_PrelimHQConfig_H_

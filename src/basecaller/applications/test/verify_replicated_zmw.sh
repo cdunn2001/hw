@@ -5,7 +5,7 @@ zmw=$3
 f1=$4
 f2=$5
 
-outSeq=$(bazviewer --silent -d -n ${zmw} ${baz} | grep READOUT | cut -d':' -f 2 | xargs | sed 's/[ "]//g')
+outSeq=$(bazviewer --silent -d -n ${zmw} ${baz} | grep Label | cut -d':' -f 2 | xargs | sed 's/[ ",]//g')
 expSeq=$(h5dump -d /GroundTruth/Bases -s ${zmw} -c 1 ${trc} | grep "(${zmw})" | cut -d':' -f 2 | sed 's/[ "]//g')
 
 # Need to make sure trace file had a nonzero number of bases for us,

@@ -53,8 +53,7 @@ inline FileHeaderBuilder ArminsFakeNoMetricsMovie( )
 }
 
 /// for unit testing only
-template <typename MetricBlock_T>
-inline void CheckFileSizes(const BazWriter<MetricBlock_T>& writer)
+inline void CheckFileSizes(const PacBio::BazIO::SimBazWriter& writer)
 {
 #if 0
     writer.Summarize(std::cout);

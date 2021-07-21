@@ -46,7 +46,7 @@ namespace BazIO {
 
 template <PacketFieldName::RawEnum> struct PulseFieldAccessor;
 template <>
-struct PulseFieldAccessor<PacketFieldName::Base>
+struct PulseFieldAccessor<PacketFieldName::Label>
 {
     using Type = uint8_t;
     template <typename P>
@@ -69,6 +69,15 @@ struct PulseFieldAccessor<PacketFieldName::StartFrame>
     {
         p.Start(val);
     }
+};
+template <>
+struct PulseFieldAccessor<PacketFieldName::IsBase>
+{
+    using Type = bool;
+    template <typename P>
+    BAZ_CUDA static Type Get(const P& p) { return !p.IsReject(); }
+    template <typename P>
+    BAZ_CUDA static void Set(P& p, Type val) { p.IsReject(!val); }
 };
 template <>
 struct PulseFieldAccessor<PacketFieldName::Pw>

@@ -116,7 +116,7 @@ __global__ void RunGpuTest(DeviceView<const PacBio::Mongo::Data::Pulse> pulsesIn
 // checks/tweaks on the data that we might be tempted to optomize.
 TEST(PulseToBaz, KestrelLossyTruncate)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Base,
+    using Test = PulseToBaz<Field<PacketFieldName::Label,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
@@ -202,7 +202,7 @@ TEST(PulseToBaz, KestrelLossyTruncate)
 // a 4 byte overflow value
 TEST(PulseToBaz, KestrelLosslessSimple)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Base,
+    using Test = PulseToBaz<Field<PacketFieldName::Label,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow,  NumBits_t<2>>
@@ -281,7 +281,7 @@ TEST(PulseToBaz, KestrelLosslessSimple)
 // at the cost of one byte per bit to encode if there are subsequent bytes to read/write
 TEST(PulseToBaz, KestrelLosslessCompact)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Base,
+    using Test = PulseToBaz<Field<PacketFieldName::Label,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>

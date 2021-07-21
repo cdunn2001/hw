@@ -100,16 +100,16 @@ struct MultiTransform
     template <typename T>
     BAZ_CUDA uint64_t Apply(const T& t, StoreSigned storeSigned)
     {
-        return second_.Apply(first_.Apply(t, storeSigned), storeSigned);
+        return rest_.Apply(first_.Apply(t, storeSigned), storeSigned);
     }
     template <typename Ret>
     BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
-        return first_.template Revert<Ret>(second_.template Revert<uint64_t>(val, storeSigned), storeSigned);
+        return first_.template Revert<Ret>(rest_.template Revert<uint64_t>(val, storeSigned), storeSigned);
     }
 private:
     Trans1 first_;
-    MultiTransform<TransRest...> second_;
+    MultiTransform<TransRest...> rest_;
 };
 
 template <typename Trans>

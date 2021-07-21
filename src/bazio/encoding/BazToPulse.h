@@ -106,7 +106,7 @@ class BazToPulse
                 std::function<uint64_t(uint64_t, StoreSigned)> tmp;
                 switch(f.name)
                 {
-                case PacketFieldName::Base:
+                case PacketFieldName::Label:
                     base.transform_ = transformUInt(info[0]);
                     base.revert_ = revertUInt(info[0]);
                     for (size_t i = 1; i < info.size(); ++i)
@@ -115,6 +115,17 @@ class BazToPulse
                         base.transform_ = [f = base.transform_, tmp](uint64_t val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
                         tmp = revertUInt(info[i]);
                         base.revert_ = [f = base.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
+                    }
+                    break;
+                case PacketFieldName::IsBase:
+                    isBase.transform_ = transformUInt(info[0]);
+                    isBase.revert_ = revertUInt(info[0]);
+                    for (size_t i = 1; i < info.size(); ++i)
+                    {
+                        tmp = transformUInt(info[i]);
+                        isBase.transform_ = [f = isBase.transform_, tmp](uint64_t val, StoreSigned storeSigned){ return tmp(f(val, storeSigned), storeSigned); };
+                        tmp = revertUInt(info[i]);
+                        isBase.revert_ = [f = isBase.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
                     }
                     break;
                 case PacketFieldName::StartFrame:
@@ -257,8 +268,11 @@ public:
                 assert(!info.transform.empty());
                 switch (info.name)
                 {
-                case PacketFieldName::Base:
+                case PacketFieldName::Label:
                     val = base.transform_(base.access_.Get(pulse), info.storeSigned);
+                    break;
+                case PacketFieldName::IsBase:
+                    val = isBase.transform_(isBase.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
                     val = pw.transform_(pw.access_.Get(pulse), info.storeSigned);
@@ -321,8 +335,11 @@ public:
                 assert(!info.transform.empty());
                 switch (info.name)
                 {
-                    case PacketFieldName::Base:
+                    case PacketFieldName::Label:
                         base.access_.Set(pulse, base.revert_(integral, info.storeSigned));
+                        break;
+                    case PacketFieldName::IsBase:
+                        isBase.access_.Set(pulse, isBase.revert_(integral, info.storeSigned));
                         break;
                     case PacketFieldName::Pw:
                         pw.access_.Set(pulse, pw.revert_(integral, info.storeSigned));
@@ -374,8 +391,11 @@ public:
                 uint64_t val;
                 switch (info.name)
                 {
-                case PacketFieldName::Base:
+                case PacketFieldName::Label:
                     val = base.transform_(base.access_.Get(pulse), info.storeSigned);
+                    break;
+                case PacketFieldName::IsBase:
+                    val = isBase.transform_(isBase.access_.Get(pulse), info.storeSigned);
                     break;
                 case PacketFieldName::Pw:
                     val = pw.transform_(pw.access_.Get(pulse), info.storeSigned);
@@ -414,7 +434,8 @@ private:
     };
 
     std::vector<GroupParams> groups_;
-    FieldHelpers<PacketFieldName::Base> base;
+    FieldHelpers<PacketFieldName::Label> base;
+    FieldHelpers<PacketFieldName::IsBase> isBase;
     FieldHelpers<PacketFieldName::Pw> pw;
     FieldHelpers<PacketFieldName::StartFrame> startFrame;
     FieldHelpers<PacketFieldName::Pkmax> pkmax;

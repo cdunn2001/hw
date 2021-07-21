@@ -171,21 +171,27 @@ private: // modifying methods
     inline void AddBaseFeature(const BAM::ReadGroupInfo& rg,
                                const BAM::BaseFeature& feature);
 
-    inline void AppendPacketFields(std::vector<std::vector<uint32_t>>& rawPackets,
-                                   const BAM::QualityValues& qvs,
-                                   PacketFieldName field,
-                                   bool perBase = false);
+    template <typename TOut, typename ContainerIn, typename DefaultVal = uint32_t>
+    inline void AppendPacketFields(std::vector<TOut>& dest,
+                                   const ContainerIn& data,
+                                   const std::vector<uint32_t>& isBase = {},
+                                   DefaultVal defaultVal = 0)
+    {
+        dest.reserve(data.size());
+        if (isBase.size() == 0)
+        {
+            std::copy(data.begin(), data.end(), std::back_inserter(dest));
+        }
+        else
+        {
+            for (size_t i = 0, j = 0; i < isBase.size(); ++i)
+            {
+                dest.push_back(isBase[i] ? data.at(j++) : defaultVal);
+            }
+            assert(dest.size() == isBase.size());
+        }
+    }
 
-    inline void AppendPacketFields(std::vector<std::vector<uint32_t>>& rawPackets,
-                                   const std::string& str,
-                                   PacketFieldName field,
-                                   bool perBase = false);
-
-    template <typename T>
-    inline void AppendPacketFields(std::vector<std::vector<uint32_t>>& rawPackets,
-                                   const std::vector<T> data,
-                                   PacketFieldName field,
-                                   bool perBase = false);
 };
 
 }}} // ::PacBio::Primary::Postprimary

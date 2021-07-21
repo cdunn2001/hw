@@ -26,6 +26,7 @@
 #include <appModules/Basecaller.h>
 #include <appModules/BazWriter.h>
 #include <appModules/BlockRepacker.h>
+#include <appModules/PrelimHQFilter.h>
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
@@ -106,7 +107,6 @@ public:
         ThreadedProcessBase::HandleProcessOptions(options);
 
         numChunksPreloadInputQueue_ = options.get("numChunksPreload");
-        zmwOutputStrideFactor_ = options.get("zmwOutputStrideFactor");
 
         // TODO validate.  File must be specified
         inputTargetFile_ = options["inputfile"];
@@ -548,7 +548,13 @@ private:
                                                 config_.system);
     }
 
-    std::unique_ptr <LeafBody<BatchResult>> CreateBazSaver(const DataSourceRunner& source)
+    std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    CreatePrelimHQFilter(size_t numZmw, size_t numBatches)
+    {
+        return std::make_unique<PrelimHQFilterBody>(numZmw, numBatches, config_.prelimHQ, config_.internalMode);
+    }
+
+    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>> CreateBazSaver(const DataSourceRunner& source)
     {
         if (hasBazFile_)
         {
@@ -560,8 +566,7 @@ private:
                                                    source.NumFrames(),
                                                    source.UnitCellIds(),
                                                    features2,
-                                                   config_,
-                                                   zmwOutputStrideFactor_);
+                                                   config_);
         } else
         {
             return std::make_unique<NoopBazWriterBody>();
@@ -572,7 +577,7 @@ private:
     void RunAnalyzer()
     {
         // Names for the various graph stages
-        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, BAZWRITER);
+        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
         auto source = CreateSource();
         try
@@ -583,13 +588,14 @@ private:
             auto repacker = CreateRepacker(source->PacketLayouts());
             auto poolDims = repacker->BatchLayouts();
 
-            GraphManager <GraphProfiler> graph(config_.system.numWorkerThreads);
+            GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
             inputNode->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
-                analyzer->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
+                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims.size()), GraphProfiler::PRE_HQ);
+                preHQ->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
@@ -711,7 +717,6 @@ private:
     std::string inputTargetFile_;
     std::string outputBazFile_;
     bool hasBazFile_ = false;
-    size_t zmwOutputStrideFactor_ = 1;
     size_t numChunksPreloadInputQueue_ = 0;
     size_t numZmwLanes_ = 0;
     size_t frames_ = 0;
@@ -754,11 +759,6 @@ int main(int argc, char* argv[])
         group1.add_option("--numZmwLanes").type_int().set_default(131072).help("Specifies number of zmw lanes to analyze");
         group1.add_option("--frames").type_int().set_default(10000).help("Specifies number of frames to run");
         parser.add_option_group(group1);
-
-        auto group2 = OptionGroup(parser, "Data Output Throttling Options",
-                                  "Controls data throttling for BAZ file writing");
-        group2.add_option("--zmwOutputStrideFactor").type_int().set_default(1).help("Throttle zmw writing data output");
-        parser.add_option_group(group2);
 
         auto group3 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");

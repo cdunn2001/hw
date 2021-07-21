@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2016, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -33,25 +33,4 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-// Programmer: Armin Töpfer
-
-#include <pacbio/smrtdata/MetricsVerbosity.h>
-#include <pacbio/smrtdata/Readout.h>
-
-#include "SmartMemory.h"
-#include "FieldType.h"
-#include "FileHeader.h"
-#include "FileFooter.h"
-#include "FileHeaderBuilder.h"
-#include "FileFooterBuilder.h"
-#include "MetricBlock.h"
-#include "MetricField.h"
-#include "MetricFieldMap.h"
-#include "MetricFieldName.h"
-#include "MetricFrequency.h"
-#include "PacketField.h"
-#include "PacketFieldMap.h"
-#include "PacketFieldName.h"
-#include "Sanity.h"
-#include "SuperChunkMeta.h"
-#include "ZmwSliceHeader.h"
+#include "BazBuffer.hpp"

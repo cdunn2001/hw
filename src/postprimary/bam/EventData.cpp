@@ -1,4 +1,4 @@
-// Copyright (c) 2018, Pacific Biosciences of California, Inc.
+// Copyright (c) 2018,2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -38,9 +38,10 @@
 #include <boost/numeric/conversion/converter.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
-#include <bazio/PacketFieldMap.h>
+#include <pacbio/logging/Logger.h>
 
-#include "EventData.h"
+#include <bazio/FieldType.h>
+#include <postprimary/bam/EventData.h>
 
 namespace PacBio {
 namespace Primary {
@@ -110,54 +111,83 @@ BAM::Tag convertData(const std::vector<uint32_t>& data,
 
 } // anonymous namespace
 
-std::string EventDataParent::BaseQualityValues(size_t leftPulseIndex,
-                                                  size_t rightPulseIndex) const
+std::string EventData::BaseQualityValues(size_t leftPulseIndex,
+                                         size_t rightPulseIndex) const
 {
-    if (HasPacketField(PacketFieldName::OVERALL_QV))
-        return convertData(PacketField(PacketFieldName::OVERALL_QV),
-                           IsBase(), FieldType::CHAR, leftPulseIndex,
-                           rightPulseIndex).ToString();
-    else if (HasPacketField(PacketFieldName::SUB_QV))
-        return convertData(PacketField(PacketFieldName::SUB_QV),
-                           IsBase(), FieldType::CHAR, leftPulseIndex,
-                           rightPulseIndex).ToString();
-    return {};
+    static const bool warnOnce = [](){
+        PBLOG_WARN << "QualityValues not currently supported\n";
+        return true;
+    }();
+    (void) warnOnce;
+    //if (HasPacketField(PacketFieldName::OVERALL_QV))
+    //    return convertData(PacketField(PacketFieldName::OVERALL_QV),
+    //                       IsBase(), FieldType::CHAR, leftPulseIndex,
+    //                       rightPulseIndex).ToString();
+    //else if (HasPacketField(PacketFieldName::SUB_QV))
+    //    return convertData(PacketField(PacketFieldName::SUB_QV),
+    //                       IsBase(), FieldType::CHAR, leftPulseIndex,
+    //                       rightPulseIndex).ToString();
+    const auto numBases = std::count(IsBase().begin() + leftPulseIndex,
+                                     IsBase().begin() + rightPulseIndex,
+                                     true);
+    return std::string(numBases, '!');
 }
 
 const std::vector<std::pair<std::string, BAM::Tag>>
-EventDataParent::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
+EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
 {
     std::vector<std::pair<std::string, BAM::Tag>> ret;
-    ret.reserve(PacketFieldMap::packetBaseFieldToBamID.size() +
-                PacketFieldMap::packetPulseFieldToBamID.size());
+    auto AddIntField = [&](auto& vec, const std::string& tag,
+                        const std::vector<bool>& filter, FieldType type)
+    {
+        ret.push_back(std::make_pair(tag, convertData(vec, filter, type, pulseBegin, pulseEnd)));
+    };
+    auto AddFloatField = [&](auto& vec, const std::string& tag,
+                             const std::vector<bool>& filter, FieldType type)
+    {
+        std::vector<uint32_t> intVec;
+        intVec.reserve(vec.size());
+        int bamFixedPointFactor = 10;
+        for (const auto& v : vec) intVec.push_back(static_cast<uint32_t>(std::round(v * bamFixedPointFactor)));
+        ret.push_back(std::make_pair(tag, convertData(intVec, filter, type, pulseBegin, pulseEnd)));
+    };
     if (Internal())
     {
-        for (const auto& kv : PacketFieldMap::packetPulseFieldToBamID)
-        {
-            if (HasPacketField(kv.first))
-            {
-                const auto& tag = kv.second.first;
-                const auto& data = PacketField(kv.first);
-                const auto& type = kv.second.second;
-                ret.push_back(
-                        std::make_pair(tag,
-                                       convertData(data, {}, type,
-                                                   pulseBegin, pulseEnd)));
-            }
-        }
+        AddFloatField(bazEvents_.PkMeans(), "pa", {}, FieldType::UINT16);
+        AddFloatField(bazEvents_.PkMids(),  "pm", {}, FieldType::UINT16);
+        AddIntField(PulseWidths(),  "px", {}, FieldType::UINT16);
+        AddIntField(ipdsWithPulses_,  "pd", {}, FieldType::UINT16);
+
+        // supported in Sequel but not Kestrel yet.  Keeping just so I don't
+        // have to hunt down what the TAG string is supposed to be...
+        // {PacketFieldName::LAB_QV,       std::make_pair("pq", FieldType::CHAR)},
+        // {PacketFieldName::ALT_QV,       std::make_pair("pv", FieldType::CHAR)},
+        // {PacketFieldName::ALT_LABEL,    std::make_pair("pt", FieldType::CHAR)},
+        // {PacketFieldName::PKMEAN2_LL,   std::make_pair("ps", FieldType::UINT32)},
+        // {PacketFieldName::PKMID2_LL,    std::make_pair("pi", FieldType::UINT32)},
+        // {PacketFieldName::PULSE_MRG_QV, std::make_pair("pg", FieldType::CHAR)},
     }
-    for (const auto& kv : PacketFieldMap::packetBaseFieldToBamID)
+    // Always prodution fields
     {
-        if (HasPacketField(kv.first))
-        {
-            const auto& tag = kv.second.first;
-            const auto& data = PacketField(kv.first);
-            const auto& type = kv.second.second;
-            ret.push_back(
-                    std::make_pair(tag,
-                                   convertData(data, IsBase(), type,
-                                               pulseBegin, pulseEnd)));
-        }
+        // supported in Sequel but not Kestrel yet.  Keeping just so I don't
+        // have to hunt down what the TAG string is supposed to be...
+        // {PacketFieldName::DEL_TAG, std::make_pair("dt", FieldType::CHAR)},
+        // {PacketFieldName::SUB_TAG, std::make_pair("st", FieldType::CHAR)},
+        // {PacketFieldName::DEL_QV,  std::make_pair("dq", FieldType::CHAR)},
+        // {PacketFieldName::SUB_QV,  std::make_pair("sq", FieldType::CHAR)},
+        // {PacketFieldName::INS_QV,  std::make_pair("iq", FieldType::CHAR)},
+        // {PacketFieldName::MRG_QV,  std::make_pair("mq", FieldType::CHAR)},
+
+        // Note: need to sort out compression.  We want these lossless, but
+        //       will gzip be enough for us or do we need to compress as we
+        //       do in the baz file
+        //       PTSD-568 is a followup story that should address these
+        //       questions
+        AddIntField(bazEvents_.StartFrames(), "sf", {}, FieldType::UINT32);
+        AddIntField(Ipds(), "ip", IsBase(), FieldType::UINT16);
+        AddIntField(PulseWidths(), "pw", IsBase(), FieldType::UINT16);
+        // {PacketFieldName::IPD_V1,  std::make_pair("ip", FieldType::UINT8)},
+        // {PacketFieldName::PW_V1,   std::make_pair("pw", FieldType::UINT8)}
     }
     return ret;
 }
@@ -165,24 +195,46 @@ EventDataParent::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
 EventData::EventData(size_t zmwIdx,
                      size_t zmwNum,
                      bool truncated,
-                     EventDataParent&& events,
+                     BazIO::BazEventData&& events,
                      std::vector<InsertState>&& states)
-      : EventDataParent(std::move(events))
-      , truncated_(truncated)
+      : truncated_(truncated)
       , zmwIndex_(zmwIdx)
       , zmwNum_(zmwNum)
+      , bazEvents_(std::move(events))
       , insertStates_(std::move(states))
 {
     assert(insertStates_.size() == NumEvents());
+    assert(StartFrames().size() == NumEvents());
+    assert(PulseWidths().size() == NumEvents());
 
-    excludedBases_.reserve(insertStates_.size());
-    std::transform(insertStates_.begin(), insertStates_.end(),
-                   std::back_inserter(excludedBases_),
-                   [](InsertState state) -> bool
-                   {
-                       return state == InsertState::BURST_PULSE;
-                   }
-    );
+    isBase_ = std::vector<bool>(NumEvents(), true);
+    for (size_t i = 0; i < NumEvents(); ++i)
+    {
+        if (insertStates_[i] == InsertState::BASE)
+            assert(events.IsBase().empty() || events.IsBase(i));
+        else isBase_[i] = false;
+    }
+
+    ipdsWithPulses_.resize(NumEvents());
+    ipdsSkipPulses_.resize(NumEvents());
+    excludedBases_.resize(NumEvents());
+    size_t lastPulse = 0;
+    size_t lastBase = 0;
+    for (size_t i = 0; i < NumEvents(); ++i)
+    {
+        excludedBases_[i] = (insertStates_[i] == InsertState::BURST_PULSE);
+        ipdsWithPulses_[i] = StartFrames(i) - lastPulse;
+        lastPulse = StartFrames(i) + PulseWidths(i);
+        if (isBase_[i])
+        {
+            ipdsSkipPulses_[i] = StartFrames(i) - lastBase;
+            lastBase = lastPulse;
+        }
+        else
+        {
+            ipdsSkipPulses_[i] = ipdsWithPulses_[i];
+        }
+    }
 
     baseCalls_.reserve(NumEvents());
     baseToPulseIndex_.reserve(NumEvents());
@@ -194,7 +246,7 @@ EventData::EventData(size_t zmwIdx,
     int lastBaseIndex = -1;
     for ( ; pulseIndex < NumEvents(); ++pulseIndex)
     {
-        if (IsBase(pulseIndex))
+        if (isBase_[pulseIndex])
         {
             baseToPulseIndex_.push_back(pulseIndex);
             if (lastBaseIndex == -1)
@@ -205,124 +257,13 @@ EventData::EventData(size_t zmwIdx,
                 baseToLeftmostPulseIndex_.push_back(pulseIndex);
             lastBaseIndex = pulseIndex;
             // baseToPulseIndexRight.push_back(i);
-            baseCalls_.push_back(static_cast<char>(readouts[pulseIndex]));
+            baseCalls_.push_back(readouts[pulseIndex]);
             ++numBases_;
         }
     }
     // Add a dummy base that maps to the pulse right after the last base.
     baseToPulseIndex_.push_back(pulseIndex);
     baseToLeftmostPulseIndex_.push_back(NumEvents());
-}
-
-
-
-void EventDataParent::UpdateIPDs(const std::vector<InsertState>& states)
-{
-    // Distances from the end of the last original pulse/base to
-    // the end of the last accepted base.
-    size_t pulseRelIdx = 0;
-    size_t baseRelIdx = 0;
-
-    for (size_t i = 0; i < states.size(); ++i)
-    {
-        if (states[i] == InsertState::BASE)
-        {
-            // Check ipd of subsequent bases is not changed
-            if (!isBase_[i]) throw PBException("Attempting to promote pulse to base!");
-
-            // base stayed base.  But the previous base may not have, in which
-            // case baseRelIdx is nonzero and our ipd gets an update.
-            ipds_[i] = baseRelIdx + ipds_[i];
-
-            baseRelIdx = 0;
-            pulseRelIdx = 0;
-        }
-        else
-        {
-            if (!isBase_[i])
-            {
-                // pulse stayed pulse
-                ipds_[i] = ipds_[i];
-                pulseRelIdx += ipds_[i] + pws_[i];
-            }
-            else
-            {
-                // base became pulse
-                ipds_[i] = baseRelIdx + ipds_[i] - pulseRelIdx;
-                pulseRelIdx += ipds_[i] + pws_[i];
-                baseRelIdx = pulseRelIdx;
-            }
-        }
-    }
-
-    for (size_t i = 0; i < isBase_.size(); ++i)
-    {
-        if (states[i] != InsertState::BASE) isBase_[i] = false;
-    }
-
-    auto& rawIsBase = PacketField(PacketFieldName::IS_BASE);
-    if (rawIsBase.size() != NumEvents()) rawIsBase.resize(NumEvents());
-    for (size_t i = 0; i < NumEvents(); ++i)
-    {
-        rawIsBase[i] = isBase_[i];
-    }
-
-    // We've modified the ipds and pws in EventData (as uncompressed values),
-    // and we need to write those back to the PacketFields so they are
-    // reflected in the BAM tags
-    if (Internal())
-    {
-        PacketField(PacketFieldName::IPD_LL) = ipds_;
-        PacketField(PacketFieldName::PW_LL) = pws_;
-    }
-    else
-    {
-        for (auto& val : ipds_)
-            val = codec_.FrameToCode(static_cast<uint16_t>(val));
-        for (auto& val : pws_)
-            val = codec_.FrameToCode(static_cast<uint16_t>(val));
-        PacketField(PacketFieldName::IPD_V1) = ipds_;
-        PacketField(PacketFieldName::PW_V1) = pws_;
-    }
-}
-
-void EventDataParent::ComputeAdditionalData()
-{
-    PacketField(PacketFieldName::PX_LL) = pws_;
-    auto& pdLL  = PacketField(PacketFieldName::PD_LL);
-    auto& sf    = PacketField(PacketFieldName::START_FRAME);
-
-    uint32_t framesSinceLastBase = 0;
-    uint32_t currentStartFrame = 0;
-    sf.resize(ipds_.size());
-    pdLL.resize(ipds_.size());
-    for (size_t i = 0; i < ipds_.size(); ++i)
-    {
-        // This is a mess, but that is because IPD is has different contextual meanings.
-        // IPD means number of frames to previous event IF the current event is a PULSE
-        // IPD means number of frames to previous BASE if the current event is a BASE
-        // We first convert to "PD" which number of frames to previous event, regardless of event type.
-        uint32_t pd;
-
-        if (!isBase_[i])
-        {
-            // PD is same as IPD
-            framesSinceLastBase += ipds_[i] + pws_[i];
-            pd = ipds_[i];
-        }
-        else
-        {
-            if (framesSinceLastBase > ipds_[i]) throw PBException("ASONAS " + std::to_string(framesSinceLastBase) + " " + std::to_string(ipds_[i]));
-            // PD is not the same at IPD. Need to correct by subtracting frames accumulated from intervening pulses.
-            pd =  ipds_[i] - framesSinceLastBase;
-            framesSinceLastBase = 0;
-        }
-        pdLL[i] = pd;
-
-        currentStartFrame += pd;
-        sf[i] = currentStartFrame;
-        currentStartFrame += pws_[i];
-    }
 }
 
 }}} // ::PacBio::Primary::Postprimary

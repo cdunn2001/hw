@@ -932,8 +932,8 @@ void ConvertBaz2Bam::SingleThread()
                 {
                     auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
                     (void)parseProfile;
-                    auto bazEvents = BazEventData(ParsePackets(fileHeader, batch[i]));
-                    
+                    auto bazEvents = BazIO::BazEventData(ParsePackets(fileHeader, batch[i]));
+
                     // Remove bursts:
                     auto insertProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::FIND_INSERTS);
                     (void)insertProfile;
@@ -980,7 +980,7 @@ void ConvertBaz2Bam::SingleThread()
                          regions.hqregion) = subreadLabeler_->CallAdapters(
                     events, regions.hqregion, controlMetrics.isControl);
 
-                if (!events.Internal())
+                if (!events.StartFramesAreExact())
                     ApproximateBase2Frame(bazMetrics, events, regions);
                 else
                     PopulateBase2Frame(events, regions);

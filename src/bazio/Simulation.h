@@ -45,7 +45,7 @@
   (byte & 0x08 ? 1 : 0), \
   (byte & 0x04 ? 1 : 0), \
   (byte & 0x02 ? 1 : 0), \
-  (byte & 0x01 ? 1 : 0) 
+  (byte & 0x01 ? 1 : 0)
 
 #include <cstring>
 #include <algorithm>
@@ -61,10 +61,9 @@
 #include <vector>
 
 #include "BazCore.h"
-#include "BazWriter.h"
-#include "PrimaryToBaz.h"
 #include "Timing.h"
 #include "SimulationRNG.h"
+#include <bazio/SimulateWriteUtils.h>
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
@@ -159,32 +158,22 @@ public:
         const MetricsVerbosity verbosity = MetricsVerbosity::MINIMAL;
         const uint16_t numMetrics = 16;
         const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
-        Basecall* basecall = new Basecall[numEvents];
+        auto basecall = std::make_unique<BazIO::SimPulse[]>(numEvents);
         int currentFrame = 0;
         for (uint32_t i = 0; i < numEvents; ++i)
         {
             int ipd = 20;
-            basecall[i].Base(NucleotideLabel::A);
-            basecall[i].DeletionTag(NucleotideLabel::C);
-            basecall[i].SubstitutionTag(NucleotideLabel::C);
-            basecall[i].DeletionQV(5);
-            basecall[i].GetPulse().MergeQV(5);
-            basecall[i].SubstitutionQV(5);
-            basecall[i].InsertionQV(5);
-            basecall[i].GetPulse().AltLabelQV(5);
-            basecall[i].GetPulse().LabelQV(5);
-            basecall[i].GetPulse().AltLabel(NucleotideLabel::C);
-            basecall[i].GetPulse().Label(NucleotideLabel::C);
-            basecall[i].GetPulse().MeanSignal(20/10.0);
-            basecall[i].GetPulse().MidSignal(20/10.0);
-            basecall[i].GetPulse().Start(currentFrame + ipd);
-            basecall[i].GetPulse().Width(20);
-            currentFrame += ipd + basecall[i].GetPulse().Width();
+            basecall[i].Label(BazIO::SimPulse::NucleotideLabel::A);
+            basecall[i].MeanSignal(20/10.0);
+            basecall[i].MidSignal(20/10.0);
+            basecall[i].Start(currentFrame + ipd);
+            basecall[i].Width(20);
+            currentFrame += ipd + basecall[i].Width();
         }
 
         FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
-        BazWriter<SequelMetricBlock> writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         for (int c = 0; c < chunks_; ++c)
         {
@@ -201,10 +190,9 @@ public:
 
             // Simulate
             const auto now = std::chrono::high_resolution_clock::now();
-            bool success;
             for (const auto i : zmwIds)
             {
-                std::vector<SequelMetricBlock> hfMetric;
+                std::vector<SpiderMetricBlock> hfMetric;
                 hfMetric.resize(numMetrics);
                 for (int ii = 0; ii < numMetrics; ++ii)
                 {
@@ -248,35 +236,17 @@ public:
                                 .PkzvarC(7.3f)
                                 .PkzvarG(4.2f)
                                 .PkzvarT(9.8f)
-                                .Baselines({8,8})
-                                .BaselineSds({20,20})
-                                .NumBaselineFrames({10,10})
-                                .Angles({28.3f,72.5f});
+                                .Baselines({8})
+                                .BaselineSds({20})
+                                .NumBaselineFrames({10});
                 }
-                success = writer.AddZmwSlice(basecall, numEvents, std::move(hfMetric), i);
-                if (!success)
-                {
-                    std::cerr << "Problem writing BAZ: " << writer.ErrorMessage() << std::endl;
-                    return;
-                }
+                writer.AddZmwSlice(basecall.get(), numEvents, std::move(hfMetric), i);
             }
             if (!silent_) Timing::PrintTime(now, "Simulation");
 
-            success = writer.Flush();
-            if (!success)
-            {
-                std::cerr << "Problem writing BAZ: " << writer.ErrorMessage() << std::endl;
-                return;
-            }
-
-            // Avoid flooding
-            // while (writer.BufferSize() > 1)
-            // {
-            //     if (!silent_) std::cerr << "WAIT" << std::endl;
-            //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            // }
+            writer.Flush();
         }
-        delete[] basecall;
+        writer.WaitForTermination();
     }
 
     void Simulate(const Readout readout, const MetricsVerbosity verbosity, uint16_t numMetrics)
@@ -284,7 +254,7 @@ public:
         FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
         if (numMetrics == 0) fhb.ClearAllMetricFields();
-        BazWriter<SequelMetricBlock> writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         std::vector<uint64_t> currentPulseFrames(zmws_, 0);
         std::vector<uint64_t> currentBaseFrames(zmws_, 0);
@@ -304,37 +274,17 @@ public:
 
             // Simulate
             const auto now = std::chrono::high_resolution_clock::now();
-            bool success;
             for (const auto i : zmwIds)
             {
                 const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
-                Basecall* basecall = rng.SimulateBaseCalls(numEvents, &currentPulseFrames[i], &currentBaseFrames[i], readout == Readout::PULSES);
-                std::vector<SequelMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
-                success = writer.AddZmwSlice(basecall, numEvents, std::move(hfMetric), i);
-                delete[] basecall;
+                auto basecall = rng.SimulateBaseCalls(numEvents, &currentPulseFrames[i], &currentBaseFrames[i], readout == Readout::PULSES);
+                std::vector<SpiderMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
+                writer.AddZmwSlice(basecall.get(), numEvents, std::move(hfMetric), i);
 
-                if (!success)
-                {
-                    std::cerr << "Problem writing BAZ: " << writer.ErrorMessage() << std::endl;
-                    return;
-                }
             }
             if (!silent_) Timing::PrintTime(now, "Simulation");
-            success = writer.Flush();
-            if (!success)
-            {
-                std::cerr << "Problem writing BAZ: " << writer.ErrorMessage() << std::endl;
-                return;
-            }
-
-            // Avoid flooding
-            while (writer.BufferSize() > 1)
-            {
-                if (!silent_) std::cerr << "WAIT" << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
+            writer.Flush();
         }
-        writer.WaitForTermination();
 
         if (summarize_)
         {
@@ -343,22 +293,22 @@ public:
         }
     }
 
-    void SimulateBases() 
+    void SimulateBases()
     {
         Simulate(Readout::BASES, MetricsVerbosity::MINIMAL, 16);
     }
 
-    void SimulatePulses() 
+    void SimulatePulses()
     {
         Simulate(Readout::PULSES, MetricsVerbosity::HIGH, 16);
     }
 
-    void SimulateBasesNoMetrics() 
+    void SimulateBasesNoMetrics()
     {
         Simulate(Readout::BASES, MetricsVerbosity::NONE, 0);
     }
 
-    void SimulatePulsesNoMetrics() 
+    void SimulatePulsesNoMetrics()
     {
         Simulate(Readout::PULSES, MetricsVerbosity::NONE, 0);
     }

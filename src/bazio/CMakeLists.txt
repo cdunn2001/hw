@@ -29,14 +29,11 @@ configure_file(template/BazVersion.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/Ba
 
 add_library(libBazio
     STATIC
-        BazBuffer.h
         BazCore.h
         BazEventData.cpp
         BazEventData.h
         BazReader.cpp
         BazReader.h
-        BazWriter.cpp
-        BazWriter.h
         BlockActivityLabels.cpp
         BlockActivityLabels.h
         BlockLevelMetrics.cpp
@@ -63,19 +60,18 @@ add_library(libBazio
         PacketFieldMap.cpp
         PacketFieldMap.h
         PacketFieldName.h
-        PrimaryToBaz.cpp
-        PrimaryToBaz.h
         RegionLabel.h
         RegionLabelType.h
         Sanity.h
         Simulation.cpp
         Simulation.h
         SimulationRNG.h
+        SimulateWriteUtils.h
+        SimulateWriteUtils.cpp
         SmartBazEnum.h
         SmartMemory.h
         SuperChunkMeta.h
         Timing.h
-        ZmwSlice.h
         ZmwSliceHeader.h
 )
 
@@ -93,6 +89,7 @@ include(pacbio-half)
 target_link_libraries(libBazio
     PUBLIC
         libBazioEncoding
+        libBazioWriting
         libPacbioCplusplusApi
         libPacbioSmrtdata
         libJsoncpp
@@ -101,3 +98,4 @@ target_link_libraries(libBazio
 
 add_subdirectory(bazviewer)
 add_subdirectory(encoding)
+add_subdirectory(writing)

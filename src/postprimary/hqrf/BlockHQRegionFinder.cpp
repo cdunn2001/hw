@@ -512,7 +512,7 @@ std::pair<size_t, size_t> BlockHQRegionFinder<Method>::FindHQRegion(
     assert(numPulses.size() == activitySeq.size());
     size_t pulseBegin = std::accumulate(numPulses.begin(), numPulses.begin()+begin, 0);
     size_t pulseEnd = std::accumulate(numPulses.begin()+begin, numPulses.begin() + end, pulseBegin);
-    
+
     // If the interval is empty, normalize to 0-0
     if (pulseBegin == pulseEnd)
         return {0,0};

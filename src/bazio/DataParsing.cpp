@@ -43,9 +43,15 @@
 
 
 #include "FloatFixedCodec.h"
-#include "PacketField.h"
+
+#include <bazio/encoding/FieldNames.h>
+#include <bazio/encoding/FieldSerializers.h>
+#include <bazio/encoding/EncodingParams.h>
+
+#include <common/utility/Overload.h>
 
 using namespace PacBio::SmrtData::QvCore;
+using namespace PacBio::BazIO;
 
 namespace PacBio {
 namespace Primary {
@@ -53,142 +59,54 @@ namespace Primary {
 namespace
 {
 
-const size_t NUM_PACKET_FIELDS = PacketFieldName::allValues().size();
-static constexpr char tags[6] = {'A', 'C', 'G', 'T', 'N', '-'};
+const size_t NUM_PACKET_FIELDS = BazIO::PacketFieldName::allValues().size();
 
 std::vector<std::vector<uint32_t>> ParsePacketFields(
-        const std::vector<PacketField>& fields,
+        const std::vector<BazIO::GroupParams>& encoding,
         const ZmwByteData::ByteStream& data,
         size_t numEvents)
 {
     std::vector<std::vector<uint32_t>> packetFields(NUM_PACKET_FIELDS);
-    for (size_t i = 0; i < NUM_PACKET_FIELDS; ++i)
-        packetFields[i].reserve(numEvents);
+    for (const auto& group : encoding)
+    {
+        for (const auto& field : group.members)
+        {
+            packetFields[static_cast<size_t>(field.name)].reserve(numEvents);
+        }
+    }
 
-    size_t counter = 0;
-    uint64_t bytesRead = 0;
     uint64_t end = data.size();
     const uint8_t* packetByteStream = data.get();
     if (end == 0) assert(numEvents == 0);
 
-    while (bytesRead < end)
+    auto decode = [](const SerializeParams& info, uint64_t val, auto& ptr, StoreSigned storeSigned)
     {
-        for (const auto& f : fields)
-        {
-            if (bytesRead >= end) break;
-            if (f.fieldName != PacketFieldName::GAP)
-            {
-                const auto fieldNameIndex = static_cast<uint8_t>(f.fieldName);
-                if (f.fieldBitSize == 1)
-                {
-                    const uint8_t tmp8 = static_cast<uint8_t>((packetByteStream[bytesRead] & f.fieldBitMask)
-                            >> f.fieldBitShift);
-                    packetFields[fieldNameIndex].push_back(tmp8);
-                    if (f.fieldBitShift == 0) ++bytesRead;
-                }
-                else if (f.fieldBitSize < 8)
-                {
-                    const uint8_t tmp8 = static_cast<uint8_t>((packetByteStream[bytesRead] & f.fieldBitMask)
-                            >> f.fieldBitShift);
+        auto o = Utility::make_overload(
+            [&](const TruncateParams& info) { return TruncateOverflow::FromBinary(val, ptr, storeSigned, info.numBits); },
+            [&](const CompactOverflowParams& info) { return CompactOverflow::FromBinary(val, ptr, storeSigned, info.numBits); },
+            [&](const SimpleOverflowParams& info) { return SimpleOverflow::FromBinary(val, ptr, storeSigned, info.numBits, info.overflowBytes); }
+        );
+        return boost::apply_visitor(o, info);
+    };
 
-                    if (fieldNameIndex < 4) // READOUT, DEL_TAG, SUB_TAG, or LABEL
-                    {
-                        if (tmp8 > 4)
-                            throw PBException("Woot is that tag? " + std::to_string(static_cast<int>(tmp8)));
-                        packetFields[fieldNameIndex].emplace_back(tags[tmp8]);
-                    }
-                    else if (fieldNameIndex == 4) // ALT_LABEL
-                    {
-                        if (tmp8 > 5)
-                            throw PBException("Woot is that tag? " + std::to_string(static_cast<int>(tmp8)));
-                        packetFields[fieldNameIndex].emplace_back(tags[tmp8]);
-                    }
-                    else if (fieldNameIndex <= 10 || fieldNameIndex == 31) // QVs
-                    {
-                        packetFields[fieldNameIndex].emplace_back(tmp8 + 33);
-                    }
-
-                    if (f.fieldBitShift == 0) ++bytesRead;
-                }
-                else if (f.fieldBitSize == 8)
-                {
-                    if (!f.hasFieldEscape || packetByteStream[bytesRead] < f.fieldEscapeValue)
-                    {
-                        packetFields[fieldNameIndex].push_back(packetByteStream[bytesRead++]);
-                    }
-                    else if (f.extensionBitSize == 16)
-                    {
-                        uint16_t tmp16;
-                        memcpy(&tmp16, &packetByteStream[++bytesRead],
-                               sizeof(uint16_t)); // prefix increment to skip overflowed 8-bit escape value
-                        packetFields[fieldNameIndex].push_back(tmp16);
-                        bytesRead += 2;
-                    }
-                    else if (f.extensionBitSize == 32)
-                    {
-                        uint32_t tmp32;
-                        memcpy(&tmp32, &packetByteStream[++bytesRead],
-                               sizeof(uint32_t)); // prefix increment to skip overflowed 8-bit escape value
-                        packetFields[fieldNameIndex].push_back(tmp32);
-                        bytesRead += 4;
-                    }
-                    else
-                    {
-                        throw PBException(
-                                "Didn't except that extension bit-size LL: " +
-                                std::to_string(f.extensionBitSize) + "\t" +
-                                f.fieldName.toString());
-                    }
-                }
-                else
-                {
-                    throw PBException(
-                            "Didn't except that field bit-size: " +
-                            std::to_string(f.fieldBitSize));
-                }
-            }
-            else
-            {
-                if (f.fieldBitSize < 8)
-                {
-                    if (f.fieldBitShift == 0)
-                    {
-                        ++bytesRead;
-                    }
-                }
-                else if (f.fieldBitSize % 8 == 0)
-                {
-                    bytesRead += f.fieldBitSize / 8;
-                }
-                else
-                {
-                    throw PBException("Unknown/Gap field is cross byte. Not allowed.");
-                }
-            }
-        }
-        counter++;
-    }
-
-#if 0
-    if (counter)
-        std::cout << "packet " << bytesRead << " " << packetsByteSize << " " <<counter << " " << (double)bytesRead/counter << std::endl;
-#endif
-
-    // Compute OVERALL_QV
-    uint8_t overallQvIndex = static_cast<uint8_t>(PacketFieldName::OVERALL_QV);
-    if (packetFields[overallQvIndex].empty())
+    while (packetByteStream < data.get() + data.size())
     {
-        for (decltype(numEvents) i = 0; i < numEvents; ++i)
+        for (const auto& group : encoding)
         {
-            const auto pIns = errorProbability(
-                    static_cast<int8_t>(packetFields[static_cast<uint8_t>(PacketFieldName::INS_QV)][i]));
-            const auto pDel = errorProbability(
-                    static_cast<int8_t>(packetFields[static_cast<uint8_t>(PacketFieldName::DEL_QV)][i]));
-            const auto pSub = errorProbability(
-                    static_cast<int8_t>(packetFields[static_cast<uint8_t>(PacketFieldName::SUB_QV)][i]));
-            const auto q = (1 - pIns) * (1 - pDel) * (1 - pSub);
-            const auto qv = qualityValue(1 - q) + 33;
-            packetFields[overallQvIndex].push_back(qv);
+            uint64_t mainVal = 0;
+            auto numBytes = (group.totalBits + 7) / 8;
+            std::memcpy(&mainVal, packetByteStream, numBytes);
+            packetByteStream += numBytes;
+
+            for (size_t i = 0; i < group.members.size(); ++i)
+            {
+                const auto& info = group.members[i];
+                auto numBits = group.numBits[i];
+                uint64_t val = mainVal & ((1 << numBits)-1);
+                mainVal = mainVal >> numBits;
+                auto integral = decode(info.serialize, val, packetByteStream, info.storeSigned);
+                packetFields[static_cast<size_t>(info.name)].push_back(integral);
+            }
         }
     }
 
@@ -351,8 +269,92 @@ RawEventData ParsePackets(const FileHeader& fh, const ZmwByteData& data)
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
 
-    auto rawData = ParsePacketFields(fh.PacketFields(), data.packetByteStream(), data.NumEvents());
-    return RawEventData(std::move(rawData));
+    // Puting this here to force a compiler error when this is removed
+    // from the file header.  Need to properly plumb through the new
+    // group encodings.
+    const auto fields = fh.PacketFields();
+    bool internal = false;
+    for (const auto& field : fields)
+    {
+        if (field.fieldName == PacketFieldName::IPD_LL)
+        {
+            internal = true;
+            break;
+        }
+    }
+
+    // TODO remove hard code: PTSD-420
+    std::vector<GroupParams> encodeInfo;
+    GroupParams group;
+    group.totalBits = 16;
+    group.numBits.push_back(2);
+    group.numBits.push_back(7);
+    group.numBits.push_back(7);
+    group.members.push_back(FieldParams{
+            BazIO::PacketFieldName::Label,
+            StoreSigned{false},
+            {NoOpTransformParams{}},
+            TruncateParams{NumBits{2}}});
+    group.members.push_back(FieldParams{
+            BazIO::PacketFieldName::Pw,
+            StoreSigned{false},
+            {NoOpTransformParams{}},
+            CompactOverflowParams{NumBits{7}}});
+    group.members.push_back(FieldParams{
+            BazIO::PacketFieldName::StartFrame,
+            StoreSigned{false},
+            {DeltaCompressionParams{}},
+            CompactOverflowParams{NumBits{7}}});
+    encodeInfo.push_back(group);
+    if (internal)
+    {
+        group = GroupParams{};
+        group.totalBits = 8;
+
+        group.members.push_back(FieldParams{
+              BazIO::PacketFieldName::Pkmax,
+                     StoreSigned{true},
+                     {FixedPointParams{FixedPointScale{10}}},
+                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}});
+        group.numBits.push_back(8);
+        encodeInfo.push_back(group);
+        group.members[0] = FieldParams{
+              BazIO::PacketFieldName::Pkmid,
+                     StoreSigned{true},
+                     {FixedPointParams{FixedPointScale{10}}},
+                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}};
+        encodeInfo.push_back(group);
+        group.members[0] = FieldParams{
+              BazIO::PacketFieldName::Pkmean,
+                     StoreSigned{true},
+                     {FixedPointParams{FixedPointScale{10}}},
+                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}};
+        encodeInfo.push_back(group);
+        group.members[0] = FieldParams{
+              BazIO::PacketFieldName::Pkvar,
+                     StoreSigned{false},
+                     {FixedPointParams{FixedPointScale{10}}},
+                     SimpleOverflowParams{NumBits{7}, NumBytes{2}}};
+        group.members.push_back(FieldParams{
+              BazIO::PacketFieldName::IsBase,
+                     StoreSigned{false},
+                     {NoOpTransformParams{}},
+                     TruncateParams{NumBits{1}}});
+        group.numBits[0] = 7;
+        group.numBits.push_back(1);
+        encodeInfo.push_back(group);
+    }
+
+    std::vector<BazIO::FieldParams> fieldInfo;
+    for (const auto& g : encodeInfo)
+    {
+        for (const auto& f : g.members)
+        {
+            fieldInfo.push_back(f);
+        }
+    }
+    auto rawData = ParsePacketFields(encodeInfo, data.packetByteStream(), data.NumEvents());
+    return RawEventData(std::move(rawData), fieldInfo);
 }
 
 }}

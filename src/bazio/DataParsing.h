@@ -41,6 +41,9 @@
 #include "BlockLevelMetrics.h"
 #include "FileHeader.h"
 
+#include <bazio/encoding/FieldNames.h>
+#include <bazio/encoding/EncodingParams.h>
+
 namespace PacBio {
 namespace Primary {
 
@@ -183,18 +186,20 @@ private:
 };
 
 // Provides a raw read-only API to directly access the data parsed from the
-// Baz file.  Mostly only used for testing to ensure the expected data fields
-// were present in the baz.
+// Baz file.  It will have been deserialized into a vector of uint32_t values,
+// but any transformations done to the data upstream will not yet have been
+// reverted
 class RawEventData
 {
 public:
     // Accepts the vector of vectors for the parsed packet data, as produced
     // where each entry into the outermost vector corresponds to a given
     // PacketFieldName.
-    RawEventData(std::vector<std::vector<uint32_t>>&& rawPacketData)
+    RawEventData(std::vector<std::vector<uint32_t>>&& rawPacketData,
+                 const std::vector<BazIO::FieldParams>& fieldInfo)
         : data_(std::move(rawPacketData))
+        , fieldInfo_(fieldInfo)
     {
-        internal_ = HasPacketField(PacketFieldName::IPD_LL);
         numEvents_ = 0;
         for (const auto& packet : data_)
         {
@@ -220,30 +225,25 @@ public:
 
 public:  // const data accessors
     size_t NumEvents() const { return numEvents_; }
-    bool Internal() const { return internal_; }
 
-    bool HasPacketField(PacketFieldName name) const
+    bool HasPacketField(BazIO::PacketFieldName name) const
     {
         return data_[static_cast<uint32_t>(name)].size() > 0;
     };
-    const std::vector<uint32_t>& PacketField(PacketFieldName name) const
+    const std::vector<uint32_t>& PacketField(BazIO::PacketFieldName name) const
     {
         return data_[static_cast<uint32_t>(name)];
     };
 
-protected:
-
-    // Temporary function, allowing our children to update our data_ member.
-    // Necessary while we need to support conversion to a vector of vectors.
-    std::vector<uint32_t>& PacketField(PacketFieldName name)
+    const std::vector<BazIO::FieldParams>& FieldInfo() const
     {
-        return data_[static_cast<uint32_t>(name)];
+        return fieldInfo_;
     };
 
 private:
     std::vector<std::vector<uint32_t>> data_;
     size_t numEvents_;
-    bool internal_;
+    std::vector<BazIO::FieldParams> fieldInfo_;
 };
 
 class RawMetricData
