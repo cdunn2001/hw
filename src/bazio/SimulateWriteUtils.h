@@ -62,7 +62,7 @@ class SimBazWriter
     }
 public:
     SimBazWriter(const std::string& fileName,
-                 Primary::FileHeaderBuilder& fhb,
+                 FileHeaderBuilder& fhb,
                  const PacBio::Primary::BazIOConfig& conf, bool);
     ~SimBazWriter();
 
@@ -82,7 +82,7 @@ public:
     }
     void Summarize(std::ostream& out) { writer_->Summarize(out); }
 
-    const Primary::FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
+    const FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
     size_t NumEvents() const { return totalEvents_; }
     size_t BytesWritten() const { return writer_->BytesWritten(); }
     std::string Summary() const { return writer_->Summary(); }

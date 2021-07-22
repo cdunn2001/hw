@@ -1,6 +1,3 @@
-//
-// Created by jnguyen on 1/29/19.
-//
 
 #include "ReadSimulator.h"
 #include <postprimary/bam/SubreadLabelerMetrics.h>
@@ -21,7 +18,7 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     std::vector<MetricField> fields;
     MetricFrequency frequency = MetricFrequency::HIGH;
 
-    const FileHeader& fh = config.GenerateHeader();
+    const PacBio::BazIO::FileHeader& fh = config.GenerateHeader();
     if (!fh.HFMetricFields().empty())
     {
         assert(fh.MFMetricFields().empty());
@@ -183,7 +180,7 @@ EventData SimulateEventData(const ReadConfig& config)
         }
     }
 
-    const FileHeader& fh = config.GenerateHeader();
+    const auto& fh = config.GenerateHeader();
     return EventData(
             fh, 0, false,
             BazIO::BazEventData(fields, {}),
@@ -214,13 +211,13 @@ ZmwMetrics RunMetrics(const EventData& events,
 // own.
 // TODO: Factor out the computation in the ZmwStats object into a public
 // interface so that it can be more easily tested
-std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<FileHeader>> fillstats(
+std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>> fillstats(
         const EventData& events,
         const BlockLevelMetrics& metrics,
         const RegionLabel& hqRegion,
         const ReadConfig& readconfig)
 {
-    auto fh = std::make_unique<FileHeader>(readconfig.GenerateHeader());
+    auto fh = std::make_unique<PacBio::BazIO::FileHeader>(readconfig.GenerateHeader());
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
     PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters,
                                   readconfig.nlfb()};

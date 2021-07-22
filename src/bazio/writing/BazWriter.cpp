@@ -43,7 +43,7 @@ namespace PacBio {
 namespace BazIO {
 
 BazWriter::BazWriter(const std::string& filePath,
-                     Primary::FileHeaderBuilder& fileHeaderBuilder,
+                     FileHeaderBuilder& fileHeaderBuilder,
                      const Primary::BazIOConfig& ioConf)
     : filePath_(filePath)
     , filePathTmp_(filePath + ".tmp")
@@ -90,7 +90,7 @@ void BazWriter::Init(const Primary::BazIOConfig& ioConfig)
 {
     // Parse ASCII JSON to FileHeader instance,
     // includes sanity checks for validity
-    fh_ = std::make_unique<Primary::FileHeader>(jsonFileHeader_.data(), jsonFileHeader_.size());
+    fh_ = std::make_unique<FileHeader>(jsonFileHeader_.data(), jsonFileHeader_.size());
 
     // Start thread that saves BazBuffers to disk
     writeThreadContinue_ = true;

@@ -104,7 +104,7 @@ struct SimBazWriter::InternalPulses :
 SimBazWriter::~SimBazWriter() = default;
 
 SimBazWriter::SimBazWriter(const std::string& fileName,
-                           Primary::FileHeaderBuilder& fhb,
+                           BazIO::FileHeaderBuilder& fhb,
                            const PacBio::Primary::BazIOConfig& conf, bool)
     : numZmw_(fhb.MaxNumZmws())
     , writer_(std::make_unique<BazIO::BazWriter>(fileName, fhb, conf))

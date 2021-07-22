@@ -43,7 +43,7 @@ namespace PacBio {
 namespace Primary {
 
 BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
-                                     const FileHeader& fh,
+                                     const BazIO::FileHeader& fh,
                                      MetricFrequency frequency,
                                      bool internal)
 {

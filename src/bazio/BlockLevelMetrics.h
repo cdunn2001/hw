@@ -41,7 +41,8 @@
 #include "MetricData.h"
 #include "RegionLabel.h"
 #include "MetricFrequency.h"
-#include "FileHeader.h"
+
+#include <bazio/file/FileHeader.h>
 
 namespace PacBio {
 namespace Primary {
@@ -227,7 +228,7 @@ public:
     // TODO: Once metrics computation has been refactored, remove `internal`
     //       flag from this class.
     BlockLevelMetrics(const RawMetricData& rawMetrics,
-                      const FileHeader& fh,
+                      const BazIO::FileHeader& fh,
                       MetricFrequency frequency,
                       bool internal);
 

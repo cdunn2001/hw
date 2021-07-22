@@ -47,6 +47,7 @@
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/FieldSerializers.h>
 #include <bazio/encoding/EncodingParams.h>
+#include <bazio/encoding/PulseGroups.h>
 
 #include <common/utility/Overload.h>
 
@@ -224,7 +225,7 @@ RawMetricData ParseMetricFields(const std::vector<MetricField>& fields, const Zm
     return metrics;
 }
 
-BlockLevelMetrics ParseMetrics(const FileHeader& fh, const ZmwByteData& data, bool internal)
+BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal)
 {
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
@@ -263,98 +264,14 @@ BlockLevelMetrics ParseMetrics(const FileHeader& fh, const ZmwByteData& data, bo
     // TODO validate num_pulses and num_bases
 }
 
-RawEventData ParsePackets(const FileHeader& fh, const ZmwByteData& data)
+RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data)
 {
 
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
 
-    // Puting this here to force a compiler error when this is removed
-    // from the file header.  Need to properly plumb through the new
-    // group encodings.
-    const auto fields = fh.PacketFields();
-    bool internal = false;
-    for (const auto& field : fields)
-    {
-        if (field.fieldName == PacketFieldName::IPD_LL)
-        {
-            internal = true;
-            break;
-        }
-    }
-
-    // TODO remove hard code: PTSD-420
-    std::vector<GroupParams> encodeInfo;
-    GroupParams group;
-    group.totalBits = 16;
-    group.numBits.push_back(2);
-    group.numBits.push_back(7);
-    group.numBits.push_back(7);
-    group.members.push_back(FieldParams{
-            BazIO::PacketFieldName::Label,
-            StoreSigned{false},
-            {NoOpTransformParams{}},
-            TruncateParams{NumBits{2}}});
-    group.members.push_back(FieldParams{
-            BazIO::PacketFieldName::Pw,
-            StoreSigned{false},
-            {NoOpTransformParams{}},
-            CompactOverflowParams{NumBits{7}}});
-    group.members.push_back(FieldParams{
-            BazIO::PacketFieldName::StartFrame,
-            StoreSigned{false},
-            {DeltaCompressionParams{}},
-            CompactOverflowParams{NumBits{7}}});
-    encodeInfo.push_back(group);
-    if (internal)
-    {
-        group = GroupParams{};
-        group.totalBits = 8;
-
-        group.members.push_back(FieldParams{
-              BazIO::PacketFieldName::Pkmax,
-                     StoreSigned{true},
-                     {FixedPointParams{FixedPointScale{10}}},
-                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}});
-        group.numBits.push_back(8);
-        encodeInfo.push_back(group);
-        group.members[0] = FieldParams{
-              BazIO::PacketFieldName::Pkmid,
-                     StoreSigned{true},
-                     {FixedPointParams{FixedPointScale{10}}},
-                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}};
-        encodeInfo.push_back(group);
-        group.members[0] = FieldParams{
-              BazIO::PacketFieldName::Pkmean,
-                     StoreSigned{true},
-                     {FixedPointParams{FixedPointScale{10}}},
-                     SimpleOverflowParams{NumBits{8}, NumBytes{2}}};
-        encodeInfo.push_back(group);
-        group.members[0] = FieldParams{
-              BazIO::PacketFieldName::Pkvar,
-                     StoreSigned{false},
-                     {FixedPointParams{FixedPointScale{10}}},
-                     SimpleOverflowParams{NumBits{7}, NumBytes{2}}};
-        group.members.push_back(FieldParams{
-              BazIO::PacketFieldName::IsBase,
-                     StoreSigned{false},
-                     {NoOpTransformParams{}},
-                     TruncateParams{NumBits{1}}});
-        group.numBits[0] = 7;
-        group.numBits.push_back(1);
-        encodeInfo.push_back(group);
-    }
-
-    std::vector<BazIO::FieldParams> fieldInfo;
-    for (const auto& g : encodeInfo)
-    {
-        for (const auto& f : g.members)
-        {
-            fieldInfo.push_back(f);
-        }
-    }
-    auto rawData = ParsePacketFields(encodeInfo, data.packetByteStream(), data.NumEvents());
-    return RawEventData(std::move(rawData), fieldInfo);
+    auto rawData = ParsePacketFields(fh.PacketGroups(), data.packetByteStream(), data.NumEvents());
+    return RawEventData(std::move(rawData), fh.PacketFields());
 }
 
-}}
+}} // PacBio::BazIO

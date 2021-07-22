@@ -39,10 +39,10 @@
 #include <unordered_map>
 
 #include "BlockLevelMetrics.h"
-#include "FileHeader.h"
 
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/EncodingParams.h>
+#include <bazio/file/FileHeader.h>
 
 namespace PacBio {
 namespace Primary {
@@ -103,7 +103,7 @@ public:
         size_t capacity_;
     };
 
-    ZmwByteData(const FileHeader& fh, const ZmwDataCounts& expectedSizes, size_t idx)
+    ZmwByteData(const BazIO::FileHeader& fh, const ZmwDataCounts& expectedSizes, size_t idx)
       : packetByteStream_(expectedSizes.packetsByteSize)
       , hFMByteStream_(expectedSizes.numHFMBs * fh.HFMetricByteSize())
       , mFMByteStream_(expectedSizes.numMFMBs * fh.MFMetricByteSize())
@@ -388,8 +388,8 @@ private:
 // Free functions, used to help parse binary data into metrics and packet
 // information
 
-BlockLevelMetrics ParseMetrics(const FileHeader& fh, const ZmwByteData& data, bool internal);
-RawEventData ParsePackets(const FileHeader& fh, const ZmwByteData& data);
+BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal);
+RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data);
 RawMetricData ParseMetricFields(const std::vector<MetricField>& fields, const ZmwByteData::ByteStream& data);
 
 }}

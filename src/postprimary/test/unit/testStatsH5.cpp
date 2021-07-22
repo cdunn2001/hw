@@ -46,7 +46,7 @@ TEST(zmwMetrics, ReadLength)
 
     auto res = fillstats(events, metrics, hqRegion, config);
     PacBio::Primary::ZmwStats zmw = std::get<0>(res);
-    std::unique_ptr<FileHeader> fh = std::move(std::get<1>(res));
+    std::unique_ptr<PacBio::BazIO::FileHeader> fh = std::move(std::get<1>(res));
 
     EXPECT_EQ(hqlen, zmw.ReadLength);
 
@@ -72,7 +72,7 @@ TEST(zmwMetrics, HQPkmid)
     // actual function call
     auto res = [&](){ return fillstats(events, metrics, hqRegion, ReadConfig{}); }();
     PacBio::Primary::ZmwStats zmw = std::get<0>(res);
-    std::unique_ptr<FileHeader> fh = std::move(std::get<1>(res));
+    std::unique_ptr<PacBio::BazIO::FileHeader> fh = std::move(std::get<1>(res));
 
     std::array<double, 4> exppk = {{10, 20, 30, 40}};
 
@@ -97,7 +97,7 @@ TEST(zmwMetrics, HQRegionStartEnd)
 
     auto res = fillstats(events, metrics, hqRegion, config);
     PacBio::Primary::ZmwStats zmw = std::get<0>(res);
-    std::unique_ptr<FileHeader> fh = std::move(std::get<1>(res));
+    std::unique_ptr<PacBio::BazIO::FileHeader> fh = std::move(std::get<1>(res));
 
     EXPECT_EQ(0, zmw.HQRegionStart);
     EXPECT_EQ(131072, zmw.HQRegionEnd);
@@ -116,7 +116,7 @@ TEST(zmwMetrics, HQRegionSnrMean)
     // actual function call
     auto res = [&](){ return fillstats(events, metrics, hqRegion, ReadConfig{}); }();
     PacBio::Primary::ZmwStats zmw = std::get<0>(res);
-    std::unique_ptr<FileHeader> fh = std::move(std::get<1>(res));
+    std::unique_ptr<PacBio::BazIO::FileHeader> fh = std::move(std::get<1>(res));
 
     auto snrs = zmw.HQRegionSnrMean;
     std::array<double,4> expsnrs = {{1/4.0f, 1/2.0f, 3/4.0f, 1}};

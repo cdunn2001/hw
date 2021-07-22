@@ -36,11 +36,13 @@
 #ifndef PACBIO_BAZIO_WRITING_BAZ_WRITER_H
 #define PACBIO_BAZIO_WRITING_BAZ_WRITER_H
 
+#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileHeaderBuilder.h>
+
 #include "bazio/ManuallyBufferedFile.h"
 #include <bazio/BazIOConfig.h>
 #include <bazio/MetricBlock.h>
 #include <bazio/FileFooterBuilder.h>
-#include <bazio/FileHeaderBuilder.h>
 #include <bazio/FileHeader.h>
 #include <bazio/Sanity.h>
 #include <bazio/writing/BazBuffer.h>
@@ -61,7 +63,7 @@ public: // structors
     /// \param filePath          File name of the output BAZ file.
     /// \param fileHeaderBuilder JSON of file header from a builder.
     BazWriter(const std::string& filePath,
-              Primary::FileHeaderBuilder& fileHeaderBuilder,
+              FileHeaderBuilder& fileHeaderBuilder,
               const Primary::BazIOConfig& ioConf);
 
     BazWriter(BazWriter&&) = delete;
@@ -123,7 +125,7 @@ public:
         }
         return bw;
     }
-    const Primary::FileHeaderBuilder& GetFileHeaderBuilder() const { return fhb_;}
+    const FileHeaderBuilder& GetFileHeaderBuilder() const { return fhb_;}
 
 protected:
     size_t BytesWritten1() const
@@ -147,10 +149,10 @@ private: // data
 
     std::thread writeThread_;
 
-    std::unique_ptr<Primary::FileHeader> fh_;
+    std::unique_ptr<FileHeader> fh_;
 
     BufferQueue bazBufferQueue_;
-    Primary::FileHeaderBuilder fhb_;
+    FileHeaderBuilder fhb_;
     Primary::FileFooterBuilder ffb_;
     std::unique_ptr<Primary::ManuallyBufferedFile> fileHandle_;
 

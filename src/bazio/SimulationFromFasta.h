@@ -64,6 +64,7 @@
 #include "SimulationRNG.h"
 #include "Simulation.h"
 
+#include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/SimulateWriteUtils.h>
 
 namespace PacBio {
@@ -136,6 +137,7 @@ private:
         const auto metricsVerbosity = internal ? MetricsVerbosity::HIGH : MetricsVerbosity::MINIMAL;
 
         int seconds_ = std::round(superChunksFrames_ / frameRate_);
+        using FileHeaderBuilder = BazIO::FileHeaderBuilder;
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate_,
                               frameRate_*60*60*3,

@@ -89,6 +89,7 @@ include(pacbio-half)
 target_link_libraries(libBazio
     PUBLIC
         libBazioEncoding
+        libBazioFile
         libBazioWriting
         libPacbioCplusplusApi
         libPacbioSmrtdata
@@ -98,4 +99,5 @@ target_link_libraries(libBazio
 
 add_subdirectory(bazviewer)
 add_subdirectory(encoding)
+add_subdirectory(file)
 add_subdirectory(writing)

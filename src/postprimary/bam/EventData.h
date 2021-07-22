@@ -63,7 +63,7 @@ private:
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states);
 public:
-    EventData(const FileHeader& fh,
+    EventData(const BazIO::FileHeader& fh,
               size_t zmwIdx,
               bool truncated,
               BazIO::BazEventData&& events,

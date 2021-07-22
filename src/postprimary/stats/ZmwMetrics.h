@@ -91,7 +91,7 @@ class BaseMetrics
 {
 public:
     BaseMetrics() = default;
-    BaseMetrics(const FileHeader& fh,
+    BaseMetrics(const BazIO::FileHeader& fh,
                 const RegionLabel& hqRegion,
                 const BlockLevelMetrics& metrics,
                 const EventData& events);
@@ -124,7 +124,7 @@ class PulseMetrics
 {
 public:
     PulseMetrics() = default;
-    PulseMetrics(const FileHeader& fh,
+    PulseMetrics(const BazIO::FileHeader& fh,
                  const RegionLabel& hqRegion,
                  const BlockLevelMetrics& metrics);
 
@@ -173,7 +173,7 @@ class ReadMetrics
 {
 public:
     ReadMetrics() = default;
-    ReadMetrics(const FileHeader& fh,
+    ReadMetrics(const BazIO::FileHeader& fh,
                 const RegionLabel& hqRegion,
                 const EventData& events,
                 const ProductivityInfo& prod);
@@ -245,7 +245,7 @@ private:
     AdapterMetrics adapterMetrics_;
 
 public:
-    ZmwMetrics(const FileHeader& fh,
+    ZmwMetrics(const BazIO::FileHeader& fh,
                const RegionLabel& hqRegion,
                const std::vector<RegionLabel>& adapters,
                const BlockLevelMetrics& metrics,

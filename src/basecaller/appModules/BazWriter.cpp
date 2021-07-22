@@ -26,8 +26,9 @@
 #include <appModules/BazWriter.h>
 
 #include <pacbio/logging/Logger.h>
-#include <bazio/FileHeaderBuilder.h>
 #include <pacbio/primary/ZmwResultBuffer.h>
+
+#include <bazio/file/FileHeaderBuilder.h>
 
 #include <common/MongoConstants.h>
 
@@ -53,10 +54,10 @@ BazWriterBody::BazWriterBody(
 
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
+    using FileHeaderBuilder = BazIO::FileHeaderBuilder;
     FileHeaderBuilder fh(bazName_,
                          100.0f,
                          expectedFrames,
-                         // This is a hack, we need to hand in the new encoding params
                          basecallerConfig.internalMode ? SmrtData::Readout::PULSES : SmrtData::Readout::BASES,
                          SmrtData::MetricsVerbosity::MINIMAL,
                          "",

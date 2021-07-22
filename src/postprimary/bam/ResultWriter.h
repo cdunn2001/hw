@@ -48,7 +48,7 @@
 #include <pbbam/DataSet.h>
 #include <pbbam/RunMetadata.h>
 
-#include <bazio/FileHeader.h>
+#include <bazio/file/FileHeader.h>
 
 #include <postprimary/application/PpaAlgoConfig.h>
 #include <postprimary/application/UserParameters.h>
@@ -100,6 +100,8 @@ static BamConfig subreadConfig{"PacBio.SubreadFile.SubreadBamFile",
 ///          as subreads.bam, scraps.bam, fasta.gz, and fastq.gz.
 class ResultWriter
 {
+public:
+    using FileHeader = BazIO::FileHeader;
 public: // structors
     /// Opens stream to new output BAM files. These may include
     ///   subreads.bam, scraps.bam, fasta.gz, fastq.gz, consensusreads.bam

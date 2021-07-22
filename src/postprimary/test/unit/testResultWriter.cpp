@@ -13,7 +13,8 @@
 #include <pacbio/text/PBXml.h>
 #include <pacbio/text/String.h>
 
-#include <bazio/FileHeaderBuilder.h>
+#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/MetricData.h>
 
 #include <postprimary/bam/ResultWriter.h>
@@ -29,6 +30,7 @@ using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
 
 const std::string SUBREADSET      = std::string(PacBio::PaPpaTestConfig::cmakeCurrentListDir) + "/data/subreadset.xml";
+
 
 /// a wrapper class to expose protected members for the purpose of unit testing.
 class ResultWriterEx : public ResultWriter
@@ -107,6 +109,8 @@ private:
 
 TEST(ResultWriter,Basics)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     PacBio::Logging::LogSeverityContext context(PacBio::Logging::LogLevel::WARN);
 
     PacBio::Dev::TemporaryDirectory tmpdir;
@@ -226,6 +230,8 @@ TEST(ResultWriter,Basics)
 /// written to the BAM files with LB and SM tags.
 TEST(ResultWriter,LB_SM_tags)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     PacBio::Logging::LogSeverityContext context(PacBio::Logging::LogLevel::WARN);
     PacBio::Dev::TemporaryDirectory tmpdir;
     tmpdir.Keep();
@@ -389,6 +395,8 @@ TEST(ResultWriter,LB_SM_tags)
 
 TEST(ResultWriter,StreamingToStdout)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     // This tests that a proper BAM file is written to stdout, and a proper subreadset.xml file is created with
     // a sts.xml as an external resource file.
     // The subreadset.xml will mark the stdout external resource as "-" which is the convention for BamWriter.

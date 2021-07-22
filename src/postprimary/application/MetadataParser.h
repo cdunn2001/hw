@@ -51,7 +51,7 @@
 #include <pacbio/text/String.h>
 #include <pacbio/PBException.h>
 
-#include <bazio/FileHeader.h>
+#include <bazio/file/FileHeader.h>
 
 #include <postprimary/bam/RuntimeMetaData.h>
 
@@ -218,7 +218,7 @@ public:
     }
 
     static std::shared_ptr<RuntimeMetaData> ParseRMD(
-        const FileHeader& fileHeader,
+        const BazIO::FileHeader& fileHeader,
         const std::shared_ptr<UserParameters>& user)
     {
         auto rmd = ParseRMD(user);
