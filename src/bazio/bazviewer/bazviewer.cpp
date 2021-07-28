@@ -665,7 +665,7 @@ int main(int argc, char* argv[])
                 for (const auto& data: zmwData)
                 {
                     const auto& eventData = BazIO::BazEventData(ParsePackets(fh, data));
-                    bool hasIsBase  = !eventData.IsBase().empty();
+                    const bool hasIsBase  = !eventData.IsBase().empty();
                     for (size_t i = 0; i < eventData.NumEvents(); ++i)
                     {
                         auto b = eventData.Readouts()[i];

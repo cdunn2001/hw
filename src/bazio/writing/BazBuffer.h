@@ -50,18 +50,18 @@ struct BazBuffer
     {
         MemoryBufferView<uint8_t> data_;
         uint32_t endIdx = 0;
-        PacketPiece* next = nullptr;
     };
     struct Slice
     {
-        Slice(size_t idx, PacketPiece& p)
+        Slice(size_t idx, PacketPiece&& p)
             : zmwIdx{idx}
-            , piece{p}
-        {}
+        {
+            pieces.emplace_back(std::move(p));
+        }
         size_t zmwIdx;
         size_t packetsByteSize = 0;
         size_t numEvents = 0;
-        PacketPiece& piece;
+        std::vector<PacketPiece> pieces;
         MemoryBufferView<TMetric> metric;
     };
 public:
@@ -102,13 +102,11 @@ public:
         metricsBuffer_.Reset();
 
         numEvents_ = 0;
-        packets_ = std::deque<PacketPiece>(numZmw_);
-        size_t counter = 0;
-        for (auto& p : packets_)
+        for (size_t zmw = 0; zmw < numZmw_; ++zmw)
         {
+            PacketPiece p{};
             p.data_ = packetBuffer_.Allocate(expectedPulseBufferSize_);
-            slices_.emplace_back(counter, p);
-            counter++;
+            slices_.emplace_back(zmw, std::move(p));
         }
     }
 
@@ -120,10 +118,6 @@ private:
     MemoryBuffer<uint8_t> packetBuffer_;
     MemoryBuffer<TMetric> metricsBuffer_;
 
-    // One entry per ZMW is ideal, but the PacketPiece
-    // does have a way to point to another entry, if we
-    // need to handle some overflow
-    std::deque<PacketPiece> packets_;
     // One entry per ZMW is expected
     std::vector<Slice> slices_;
 };

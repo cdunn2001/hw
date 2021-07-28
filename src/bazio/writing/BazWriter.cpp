@@ -349,11 +349,9 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         // Write bases/pulses
         if (slice.packetsByteSize != 0)
         {
-            auto* piece = &slice.piece;
-            while (piece != nullptr)
+            for (const auto& piece : slice.pieces)
             {
-                eventsBytes_ += Fwrite(&piece->data_[0], piece->endIdx);
-                piece = piece->next;
+                eventsBytes_ += Fwrite(&piece.data_[0], piece.endIdx);
             }
         }
 

@@ -49,7 +49,7 @@
 ///          the compiler for chosen configurations.
 ///
 ///          There is also the MultiTransform class which can be used to chain together
-///          multiple Transform types together.  Each consituent transformation is
+///          multiple Transform types together.  Each constituent transformation is
 ///          still required to result in a uint64_t.
 ///
 ///          Stateful transformations are supported, though it's recommended to avoid

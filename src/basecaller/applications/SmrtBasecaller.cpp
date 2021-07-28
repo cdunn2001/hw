@@ -554,7 +554,8 @@ private:
         return std::make_unique<PrelimHQFilterBody>(numZmw, numBatches, config_.prelimHQ, config_.internalMode);
     }
 
-    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>> CreateBazSaver(const DataSourceRunner& source)
+    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    CreateBazSaver(const DataSourceRunner& source)
     {
         if (hasBazFile_)
         {

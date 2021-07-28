@@ -47,8 +47,7 @@ void BazBuffer::AddZmw(size_t zmw, Iterator begin, Iterator end, Serializer&& s)
     assert(slices_.size() > zmw);
 
     auto& slice = slices_[zmw];
-    auto* packets = &slices_[zmw].piece;
-    while (packets->next != nullptr) packets = packets->next;
+    auto* packets = &slice.pieces.back();
 
     // Need to make a copy of the serializer, since it is stateful,
     // and calling BytesRequired will alter that state.
@@ -72,9 +71,8 @@ void BazBuffer::AddZmw(size_t zmw, Iterator begin, Iterator end, Serializer&& s)
         size_t numBytes = sCopy.BytesRequired(*itr);
         if (packets->endIdx + numBytes > packets->data_.size())
         {
-            packets_.push_back(PacketPiece{});
-            packets->next = &packets_.back();
-            packets = packets->next;
+            slice.pieces.push_back(PacketPiece{});
+            packets = &slice.pieces.back();
             packets->data_ = packetBuffer_.Allocate(expectedPulseBufferSize_);
         }
         auto* in = & packets->data_[packets->endIdx];

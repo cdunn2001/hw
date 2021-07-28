@@ -50,6 +50,8 @@ namespace {
                                       BazIO::PacketFieldName name,
                                       BazIO::StoreSigned storeSigned)
     {
+        static_assert(std::is_integral<TOut>::value, "Output type should be integral");
+
         auto noop = [&](const BazIO::NoOpTransformParams&) {
             std::vector<TOut> ret;
             ret.reserve(raw.size());
@@ -89,6 +91,8 @@ namespace {
                                    BazIO::PacketFieldName name,
                                    BazIO::StoreSigned storeSigned)
     {
+        static_assert(std::is_floating_point<TOut>::value, "Output type should be integral");
+
         auto func = [&](const BazIO::FixedPointParams& params) {
             std::vector<TOut> ret;
             ret.reserve(raw.size());
@@ -110,6 +114,12 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
 {
     for (const auto& field : packets.FieldInfo())
     {
+        // There can be multiple transforms, but each individual transform is required to accept a uint64_t
+        // as the input to it's `Revert` function.  Since `Revert` needs to apply things in reverse order
+        // here we can undo all but the first transform in a single loop, since `ConvertIntegral` is
+        // guaranteed to be the only function we need to call.  The first transform in the vector will have
+        // to be done in the switch statement below, where we know from the variable name if we need to
+        // do an integral or a floating point conversion
         const auto& raw = [&]()
         {
             if (field.transform.size() == 1)
@@ -186,6 +196,61 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
 
     if (!Internal())
         isBase_ = std::vector<bool>(NumEvents(), true);
+}
+
+BazEventData::BazEventData(const std::map<PacketFieldName, std::vector<uint32_t>>& intFields,
+                           const std::map<PacketFieldName, std::vector<float>>& floatData,
+                           bool exactStartFrames)
+    : exactStartFrames_(exactStartFrames)
+{
+    internal_ = intFields.count(PacketFieldName::IsBase);
+    numEvents_ = 0;
+    for (const auto& kv : intFields)
+    {
+        numEvents_ = kv.second.size();
+        if (numEvents_) break;
+    }
+    if (numEvents_ == 0)
+    {
+        for (const auto& kv : floatData)
+        {
+            numEvents_ = kv.second.size();
+            if (numEvents_) break;
+        }
+    }
+
+    auto copyVec = [](PacketFieldName field, const auto& map, auto& vec)
+    {
+        const auto& source = map.at(field);
+        vec.reserve(source.size());
+        std::copy(source.begin(), source.end(), std::back_inserter(vec));
+    };
+
+    auto copyIfPresent = [&](PacketFieldName field, const auto& map, auto& vec)
+    {
+        if (map.count(field))
+        {
+            copyVec(field, map, vec);
+            return true;
+        }
+        return false;
+    };
+
+    copyVec(PacketFieldName::Label, intFields, readouts_);
+    copyVec(PacketFieldName::Pw, intFields, pws_);
+    copyVec(PacketFieldName::StartFrame, intFields, startFrames_);
+
+    if(!copyIfPresent(PacketFieldName::IsBase, intFields, isBase_))
+    {
+        assert(!internal_);
+        isBase_ = std::vector<bool>(NumEvents(), true);
+    }
+
+    copyIfPresent(PacketFieldName::Pkmid, floatData, pkmid_);
+    copyIfPresent(PacketFieldName::Pkmax, floatData, pkmax_);
+    copyIfPresent(PacketFieldName::Pkmean, floatData, pkmean_);
+    copyIfPresent(PacketFieldName::Pkvar, floatData, pkvar_);
+
 }
 
 }}

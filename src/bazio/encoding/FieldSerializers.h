@@ -103,7 +103,7 @@ struct Serialize
     ///            If overflow data was read, this parameter will be
     ///            incrememted to the next unread address
     /// \returns The deserialized value
-    BAZ_CUDA static uint64_t FromBinary(uint64_t val, uint8_t const*& ptr, StoreSigned storeSigned)
+    BAZ_CUDA static uint64_t FromBinary(uint64_t val, const uint8_t*& ptr, StoreSigned storeSigned)
     {
         return Base::FromBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }

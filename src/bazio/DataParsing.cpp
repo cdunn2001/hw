@@ -95,6 +95,7 @@ std::vector<std::vector<uint32_t>> ParsePacketFields(
         {
             uint64_t mainVal = 0;
             auto numBytes = (group.totalBits + 7) / 8;
+            static_assert(CHAR_BIT == 8, "We assume 8 bits per byte.");
             std::memcpy(&mainVal, packetByteStream, numBytes);
             packetByteStream += numBytes;
 

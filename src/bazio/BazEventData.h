@@ -54,57 +54,7 @@ public:
     BazEventData(const std::map<PacketFieldName, std::vector<uint32_t>>& intFields,
                  const std::map<PacketFieldName, std::vector<float>>& floatData,
                  // Not sure what to assume here, this seems conservative
-                 bool exactStartFrames = false)
-        : exactStartFrames_(exactStartFrames)
-    {
-        internal_ = intFields.count(PacketFieldName::IsBase);
-        numEvents_ = 0;
-        for (const auto& kv : intFields)
-        {
-            numEvents_ = kv.second.size();
-            if (numEvents_) break;
-        }
-        if (numEvents_ == 0)
-        {
-            for (const auto& kv : floatData)
-            {
-                numEvents_ = kv.second.size();
-                if (numEvents_) break;
-            }
-        }
-
-        auto copyVec = [](PacketFieldName field, const auto& map, auto& vec)
-        {
-            const auto& source = map.at(field);
-            std::copy(source.begin(), source.end(), std::back_inserter(vec));
-        };
-
-        auto copyIfPresent = [&](PacketFieldName field, const auto& map, auto& vec)
-        {
-            if (map.count(field))
-            {
-                copyVec(field, map, vec);
-                return true;
-            }
-            return false;
-        };
-
-        copyVec(PacketFieldName::Label, intFields, readouts_);
-        copyVec(PacketFieldName::Pw, intFields, pws_);
-        copyVec(PacketFieldName::StartFrame, intFields, startFrames_);
-
-        if(!copyIfPresent(PacketFieldName::IsBase, intFields, isBase_))
-        {
-            assert(!internal_);
-            isBase_ = std::vector<bool>(NumEvents(), true);
-        }
-
-        copyIfPresent(PacketFieldName::Pkmid, floatData, pkmid_);
-        copyIfPresent(PacketFieldName::Pkmax, floatData, pkmax_);
-        copyIfPresent(PacketFieldName::Pkmean, floatData, pkmean_);
-        copyIfPresent(PacketFieldName::Pkvar, floatData, pkvar_);
-
-    }
+                 bool exactStartFrames = false);
 
     explicit BazEventData(const Primary::RawEventData& packets);
 
