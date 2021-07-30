@@ -12,10 +12,6 @@ set(PPA_RootDir       ${CMAKE_CURRENT_LIST_DIR})
 set(PPA_TestsDir      ${PPA_RootDir}/test)
 set(PPA_ThirdPartyDir ${PPA_RootDir}/third-party)
 
-# To remove, upgrade boost.  The current version of Boost.ICL does not compile with
-# fully standards compliant C++17
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fno-new-ttp-matching")
-
 ###############################################################################
 
 # Main library

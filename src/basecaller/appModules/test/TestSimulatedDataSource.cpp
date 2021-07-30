@@ -95,7 +95,7 @@ size_t ValidateData(const ExpectedFunc& expected, SimulatedDataSource& source)
         source.ContinueProcessing();
         if(source.PopChunk(chunk, std::chrono::milliseconds{10}))
         {
-            const bool validLayout = (chunk.Valid() && expectedNextStartFrame == chunk.StartFrame());
+            const bool validLayout = (chunk.IsValid() && expectedNextStartFrame == chunk.StartFrame());
             expectedNextStartFrame = chunk.StopFrame();
             EXPECT_TRUE(validLayout) << "Failed layout validation, skipping data validation";
             if (!validLayout) continue;
