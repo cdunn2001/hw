@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2016, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -33,159 +33,55 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-// Programmer: Armin Töpfer
+#ifndef PACBIO_BAZIO_WRITING_BAZ_WRITER_H
+#define PACBIO_BAZIO_WRITING_BAZ_WRITER_H
 
-#pragma once
-
-#define BYTETOBINARY(byte)  \
-  (byte & 0x80 ? 1 : 0), \
-  (byte & 0x40 ? 1 : 0), \
-  (byte & 0x20 ? 1 : 0), \
-  (byte & 0x10 ? 1 : 0), \
-  (byte & 0x08 ? 1 : 0), \
-  (byte & 0x04 ? 1 : 0), \
-  (byte & 0x02 ? 1 : 0), \
-  (byte & 0x01 ? 1 : 0)
-
-#include <atomic>
-#include <cstdio>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <queue>
-#include <stdexcept>
-#include <string>
-#include <thread>
-#include <stdio.h>
-#include <string.h>
-#include <tuple>
-#include <utility>
-#include <vector>
-
-#include <json/json.h>
-
+#include "bazio/ManuallyBufferedFile.h"
+#include <bazio/BazIOConfig.h>
+#include <bazio/MetricBlock.h>
+#include <bazio/FileFooterBuilder.h>
+#include <bazio/FileHeaderBuilder.h>
+#include <bazio/FileHeader.h>
+#include <bazio/Sanity.h>
+#include <bazio/writing/BazBuffer.h>
+#include <bazio/ZmwSliceHeader.h>
 #include <pacbio/ipc/ThreadSafeQueue.h>
 
-
-#include <pacbio/smrtdata/Basecall.h>
-#include <pacbio/smrtdata/Pulse.h>
-
-#include "BazBuffer.h"
-#include "BazIOConfig.h"
-#include "ManuallyBufferedFile.h"
-#include "PrimaryToBaz.h"
-#include "BazCore.h"
-
-using PacBio::SmrtData::MetricsVerbosity;
-using PacBio::SmrtData::Readout;
-using PacBio::SmrtData::Basecall;
-
 namespace PacBio {
-namespace Primary {
+namespace BazIO {
 
-class IBazWriter
-{
-public:
-    virtual bool Flush() = 0;
-    virtual void WaitForTermination() = 0;
-    virtual const std::string& FilePath() const = 0;
-    virtual const std::string& ErrorMessage() const = 0;
-    virtual ~IBazWriter() noexcept = default;
-};
-
-/// Writes BAZ file format
-template <typename TMetric>
-class BazWriter : public IBazWriter
+class BazWriter
 {
 public: // static
-    /// Pre-check to get an approximate BAZ file size in Bytes for a given config.
-    static size_t ExpectedFileByteSize(const uint64_t movieFrames,
-                                       const double frameRateHz,
-                                       const double basesPerSecond,
-                                       const uint32_t numZmws,
-                                       const Readout readout,
-                                       const MetricsVerbosity metricsVerbosity);
-    static constexpr int blocksize = 4000;
-#ifdef FAKE_ERROR
-public: // data
-    bool fakeError_ = false;
-#endif
-    
+    using TMetric = Primary::SpiderMetricBlock;
+
 public: // structors
 
     /// Creates a new BAZ file and writes file header.
     /// \param filePath          File name of the output BAZ file.
     /// \param fileHeaderBuilder JSON of file header from a builder.
-    BazWriter(const std::string& filePath, 
-              FileHeaderBuilder& fileHeaderBuilder,
-              const Primary::BazIOConfig& ioConf,
-              const size_t maxNumSamples = 100000,
-              bool silent = true);
-    // Default constructor
-    BazWriter() = delete;
-    // Move constructor
+    BazWriter(const std::string& filePath,
+              Primary::FileHeaderBuilder& fileHeaderBuilder,
+              const Primary::BazIOConfig& ioConf);
+
     BazWriter(BazWriter&&) = delete;
-    // Copy constructor
     BazWriter(const BazWriter&) = delete;
-    // Move assignment operator
-    BazWriter& operator=(BazWriter&& rhs) noexcept = delete;
-    // Copy assignment operator
+    BazWriter& operator=(BazWriter&& rhs) = delete;
     BazWriter& operator=(const BazWriter&) = delete;
 
 
     /// Waits for writing thread to finish,
     /// before writing EOF chunk meta.
-    ~BazWriter() noexcept;
+    ~BazWriter();
 
-public: // modifying methods
-
-    /// Given primary pulse/base calls and trace metrics
-    /// convert and add to the BAZ.  MetricsConverter is used to convert/generate
-    /// baz format metrics from an unspecified format, without doing either a
-    /// memory copy, or injecting a new dependence on the other format
-    /// (e.g. on the basecaller metrics format) into this class
-    /// 
-    /// MetricsConverter is expected to be a functor with the signature:
-    /// void MetricsConverter(Primary::MemoryBufferView<MetricBlock>& metrics);
-    ///
-    /// \return bool if slice was successfully added. False can be cause by
-    ///              basecall and hfMetrics are not present or basecall does
-    ///              not contains bases in production mode.
-    template <class MetricsConverter>
-    bool AddZmwSlice(const Basecall* basecall, const uint16_t numEvents,
-                     const MetricsConverter&& metricsConverter,
-                     const size_t numMetrics,
-                     const uint32_t zmwId)
-    {
-
-        Primary::MemoryBufferView<TMetric> metrics = currentBazBuffer_->MetricsBuffer().Allocate(numMetrics);
-        metricsConverter(metrics);
-
-        return AddZmwSlice(basecall, numEvents, metrics, zmwId);
-    }
-
-    /// Given primary pulse/base calls and trace metrics
-    /// convert and add to the BAZ.  
-    ///
-    /// \return bool if slice was successfully added. False can be cause by
-    ///              basecall and hfMetrics are not present or basecall does
-    ///              not contains bases in production mode.
-    bool AddZmwSlice(const Basecall* basecall, const uint16_t numEvents,
-                     const std::vector<TMetric>& hfMetrics,
-                     const uint32_t zmwId);
-
-private:
-    bool AddZmwSlice(const Basecall* basecall, const uint16_t numEvents,
-                     const Primary::MemoryBufferView<TMetric>& metrics,
-                     const uint32_t zmwId);
-
+    static constexpr int blocksize = 4000;
 public:
 
     /// Push internal BazBuffer to the queue of BazBuffers that are
     /// ready to be written to disk.
-    /// 
+    ///
     /// \return bool if data was available to be flushed out
-    bool Flush();
+    void Flush(std::unique_ptr<BazBuffer> buffer);
 
     /// Waits until internal buffers have been written. If this method is not
     /// being called, data may get lost.
@@ -198,9 +94,6 @@ public:
     /// Return the current file path of the BAZ file.
     const std::string& FilePath() const
     { return filePath_; }
-
-    const std::string& ErrorMessage() const
-    { return errorMsg_; }
 
     std::string Summary() const
     {
@@ -230,9 +123,7 @@ public:
         }
         return bw;
     }
-    const FileHeaderBuilder& GetFileHeaderBuilder() const { return fhb_;}
-
-    size_t NumEvents() const { return numEvents_;}
+    const Primary::FileHeaderBuilder& GetFileHeaderBuilder() const { return fhb_;}
 
 protected:
     size_t BytesWritten1() const
@@ -244,56 +135,23 @@ protected:
         return bytesWritten_;
     }
 
-#if 0
-    /// Compute the expected BAZ file size based on the user fileheader config,
-    /// movie length and average bases/second.
-    size_t ExpectedFileByteSize(const uint64_t movieFrames,
-                                const double basesPerSecond);
-#endif
-
-public:
-    static constexpr double packetSizeProdMin= 3; // These constants are ugly, but they are sanity checked with
-    static constexpr double packetSizeProd   = 4; // static_asserts in PrimaryToBaz.
-    static constexpr double packetSizeInt    = 9; //
-
 private: // types
-    using BufferQueue = PacBio::ThreadSafeQueue<std::unique_ptr<BazBuffer<TMetric>>>;
-    
-private: // static data
-    static constexpr uint8_t      zero = '\0';
+    using BufferQueue = PacBio::ThreadSafeQueue<std::unique_ptr<BazBuffer>>;
 
 private: // data
 
-    size_t maxNumSamples_;
-
-    std::atomic_bool success_;
     std::atomic_bool writeThreadContinue_;
 
-    std::string errorMsg_;
     std::string filePath_;
     std::string filePathTmp_;
-    
-    std::map<uint32_t, uint32_t> zmwsAdded_;
 
     std::thread writeThread_;
 
-    std::unique_ptr<BazBuffer<TMetric>>    currentBazBuffer_;
-    std::unique_ptr<FileHeader>   fh_;
-    std::unique_ptr<PrimaryToBaz<TMetric>> p2b_;
-
-    uint32_t maxZmwNumber_   = 0;
-    uint32_t numSuperChunks_ = 0;
-
-    bool silent_;
-
-    uint8_t hFbyLFRatio_ = 0;
-    uint8_t hFbyMFRatio_ = 0;
+    std::unique_ptr<Primary::FileHeader> fh_;
 
     BufferQueue bazBufferQueue_;
-    BufferQueue idleBuffers_;
-    FileHeaderBuilder fhb_;
-    FileFooterBuilder ffb_;
-    MetricsVerbosity metricsVerbosity_;
+    Primary::FileHeaderBuilder fhb_;
+    Primary::FileFooterBuilder ffb_;
     std::unique_ptr<Primary::ManuallyBufferedFile> fileHandle_;
 
     std::vector<char> jsonFileHeader_;
@@ -308,19 +166,14 @@ private: // data
     size_t overheadBytes_ = 0;
     size_t paddingBytes_= 0 ;
 
-    size_t numEvents_ = 0;
-    
-    size_t numZmwsZeroIncorporatedEvents_ = 0;
-    size_t numZmwsEmptyMetrics_ = 0;
-
 private: // modifying methods
 
     /// Is executed in its own thread. Writes BazBuffers to disk.
     void WriteToDiskLoop();
 
-    void Init(const BazIOConfig& );
-
 private: // non-modifying methods
+
+    void Init(const Primary::BazIOConfig& ioConfig);
 
     /// Writes meta information of super chunk.
     /// \param nextPointer offset to next meta
@@ -330,14 +183,14 @@ private: // non-modifying methods
 
     /// Writes header information for each ZmwSlice for current super chunk.
     /// \param headerBuffer current header buffer to be written
-    void WriteZmwSliceHeader(std::vector<ZmwSliceHeader>& headerBuffer);
+    void WriteZmwSliceHeader(std::vector<Primary::ZmwSliceHeader>& headerBuffer);
 
     /// Writes base calls/pulses and metrics for each ZMW slice
     /// for current super chunk.
     /// \param bazBuffer    current buffer to be written
     /// \param headerBuffer corresponding header buffer for ZmwSlice offsets
-    void WriteChunkData(std::unique_ptr<BazBuffer<TMetric>>& bazBuffer,
-                        std::vector<ZmwSliceHeader>& headerBuffer);
+    void WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
+                        std::vector<Primary::ZmwSliceHeader>& headerBuffer);
 
     /// Write high-frequency metrics blocks to given buffer.
     /// \param hFMetricFields   User-defined high-frequency metric fields
@@ -345,27 +198,11 @@ private: // non-modifying methods
     /// \param numMetricBlocks  Number of HighFrequencyMetricBlocks
     /// \param buffer           Buffer to be appended
     /// \param c                Reference to buffer index
-    void Write(const std::vector<MetricField>& hFMetricFields,
-               const Primary::MemoryBufferView<TMetric>& metricBlocks,
+    void Write(const std::vector<Primary::MetricField>& hFMetricFields,
+               const MemoryBufferView<TMetric>& metricBlocks,
                std::vector<uint8_t>& buffer, size_t& c);
-
-    /// Compute average of metrics wrt to ratioToHFMetrics and write it to
-    /// given buffer.   
-    /// \param hFMetricFields   User-defined high-frequency metric fields
-    /// \param metricBlocks     HighFrequencyMetricBlock array
-    /// \param numMetricBlocks  Number of HighFrequencyMetricBlocks
-    /// \param ratioToHFMetrics Ratio HF/MF or HF/LF
-    /// \param buffer           Buffer to be appended
-    /// \param c                Reference to buffer index
-    void Write(const std::vector<MetricField>& metricFields,
-               const Primary::MemoryBufferView<TMetric>& metricBlocks,
-               const size_t ratioToHFMetrics,
-               std::vector<uint8_t>& buffer, size_t& c);
-
-    void WriteSkippedZmws();
 
 protected:
-    virtual void Error(const std::string& errorMsg);
 
     void Align(size_t alignmentSize, bool accumulate = true);
 
@@ -410,7 +247,7 @@ protected:
     void WriteSanity(bool accumulate = true)
     {
         std::array<uint8_t, 4> data;
-        Sanity::Write(data);
+        Primary::Sanity::Write(data);
         fileHandle_->Fwrite(data.data(), 4);
         if (accumulate)
         {
@@ -427,3 +264,5 @@ protected:
 };
 
 }}
+
+#endif //PACBIO_BAZIO_WRITING_BAZ_WRITER_H

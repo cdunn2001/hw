@@ -41,206 +41,41 @@ using namespace PacBio::Mongo::Data;
 namespace PacBio {
 namespace Application {
 
-namespace {
-
-void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
-                   SpiderMetricBlock& sm,
-                   size_t laneIndex,
-                   size_t zmwIndex)
-{
-    if (metricsPtr)
-    {
-        const auto& metrics = metricsPtr->GetHostView()[laneIndex];
-
-        sm.ActivityLabel(static_cast<ActivityLabeler::Activity>(metrics.activityLabel[zmwIndex]));
-        sm.TraceAutocorr(metrics.autocorrelation[zmwIndex]);
-
-        sm.BpzvarA(metrics.bpZvar[0][zmwIndex])
-            .BpzvarC(metrics.bpZvar[1][zmwIndex])
-            .BpzvarG(metrics.bpZvar[2][zmwIndex])
-            .BpzvarT(metrics.bpZvar[3][zmwIndex]);
-
-        sm.PkzvarA(metrics.pkZvar[0][zmwIndex])
-            .PkzvarC(metrics.pkZvar[1][zmwIndex])
-            .PkzvarG(metrics.pkZvar[2][zmwIndex])
-            .PkzvarT(metrics.pkZvar[3][zmwIndex]);
-
-        sm.BaseWidth(metrics.numBaseFrames[zmwIndex]);
-        sm.PulseWidth(metrics.numPulseFrames[zmwIndex]);
-
-        sm.NumBasesA(metrics.numBasesByAnalog[0][zmwIndex])
-            .NumBasesC(metrics.numBasesByAnalog[1][zmwIndex])
-            .NumBasesG(metrics.numBasesByAnalog[2][zmwIndex])
-            .NumBasesT(metrics.numBasesByAnalog[3][zmwIndex]);
-
-        sm.NumPulses(metrics.numPulses[zmwIndex]);
-
-        sm.NumPkmidBasesA(metrics.numPkMidBasesByAnalog[0][zmwIndex])
-            .NumBasesC(metrics.numPkMidBasesByAnalog[1][zmwIndex])
-            .NumBasesG(metrics.numPkMidBasesByAnalog[2][zmwIndex])
-            .NumBasesT(metrics.numPkMidBasesByAnalog[3][zmwIndex]);
-
-        sm.NumFrames(metrics.numFrames[zmwIndex]);
-
-        sm.NumPkmidFramesA(metrics.numPkMidFrames[0][zmwIndex])
-            .NumPkmidFramesC(metrics.numPkMidFrames[1][zmwIndex])
-            .NumPkmidFramesG(metrics.numPkMidFrames[2][zmwIndex])
-            .NumPkmidFramesT(metrics.numPkMidFrames[3][zmwIndex]);
-
-        sm.NumPulseLabelStutters(metrics.numPulseLabelStutters[zmwIndex]);
-        sm.NumHalfSandwiches(metrics.numHalfSandwiches[zmwIndex]);
-        sm.NumSandwiches(metrics.numSandwiches[zmwIndex]);
-        sm.PulseDetectionScore(metrics.pulseDetectionScore[zmwIndex]);
-
-        sm.PkmaxA(metrics.pkMax[0][zmwIndex])
-            .PkmaxC(metrics.pkMax[1][zmwIndex])
-            .PkmaxG(metrics.pkMax[2][zmwIndex])
-            .PkmaxT(metrics.pkMax[3][zmwIndex]);
-
-        sm.PixelChecksum(metrics.pixelChecksum[zmwIndex]);;
-
-        sm.PkmidA(metrics.pkMidSignal[0][zmwIndex])
-            .PkmidC(metrics.pkMidSignal[1][zmwIndex])
-            .PkmidG(metrics.pkMidSignal[2][zmwIndex])
-            .PkmidT(metrics.pkMidSignal[3][zmwIndex]);
-
-        sm.NumBaselineFrames({metrics.numFramesBaseline[zmwIndex]});
-        sm.Baselines({metrics.frameBaselineDWS[zmwIndex]});
-        sm.BaselineSds({metrics.frameBaselineVarianceDWS[zmwIndex]});
-    }
-}
-
-auto ConvertMongoPulsesToSequelBasecalls(const Pulse* pulses, uint32_t numPulses)
-{
-    auto LabelConv = [](Pulse::NucleotideLabel label) {
-        switch (label)
-        {
-            case Pulse::NucleotideLabel::A:
-                return PacBio::SmrtData::NucleotideLabel::A;
-            case Pulse::NucleotideLabel::C:
-                return PacBio::SmrtData::NucleotideLabel::C;
-            case Pulse::NucleotideLabel::G:
-                return PacBio::SmrtData::NucleotideLabel::G;
-            case Pulse::NucleotideLabel::T:
-                return PacBio::SmrtData::NucleotideLabel::T;
-            case Pulse::NucleotideLabel::N:
-                return PacBio::SmrtData::NucleotideLabel::N;
-            default:
-                assert(label == Pulse::NucleotideLabel::NONE);
-                return PacBio::SmrtData::NucleotideLabel::NONE;
-        }
-    };
-
-    std::vector<Basecall> baseCalls(numPulses);
-    for (size_t pulseNum = 0; pulseNum < numPulses; ++pulseNum)
-    {
-        const auto& pulse = pulses[pulseNum];
-        auto& bc = baseCalls[pulseNum];
-
-        static constexpr int8_t qvDefault_ = 0;
-
-        auto label = LabelConv(pulse.Label());
-
-        // Populate pulse data
-        bc.GetPulse().Start(pulse.Start()).Width(pulse.Width());
-        bc.GetPulse().MeanSignal(pulse.MeanSignal()).MidSignal(pulse.MidSignal()).MaxSignal(pulse.MaxSignal());
-        bc.GetPulse().Label(label).LabelQV(qvDefault_);
-        bc.GetPulse().AltLabel(label).AltLabelQV(qvDefault_);
-        bc.GetPulse().MergeQV(qvDefault_);
-
-        // Populate base data.
-        bc.Base(label).InsertionQV(qvDefault_);
-        bc.DeletionTag(PacBio::SmrtData::NucleotideLabel::N).DeletionQV(qvDefault_);
-        bc.SubstitutionTag(PacBio::SmrtData::NucleotideLabel::N).SubstitutionQV(qvDefault_);
-    }
-    return baseCalls;
-}
-
-} // anon
-
 BazWriterBody::BazWriterBody(
         const std::string& bazName,
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
-        const SmrtBasecallerConfig& basecallerConfig,
-        size_t outputStride)
+        const SmrtBasecallerConfig& basecallerConfig)
     : bazName_(bazName)
-    , zmwOutputStrideFactor_(outputStride)
 {
     PBLOG_INFO << "Opening BAZ file for writing: " << bazName_ << " zmws: " << zmwNumbers.size();
+
+    const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
     FileHeaderBuilder fh(bazName_,
                          100.0f,
                          expectedFrames,
-                         Readout::BASES,
-                         MetricsVerbosity::MINIMAL,
+                         // This is a hack, we need to hand in the new encoding params
+                         basecallerConfig.internalMode ? SmrtData::Readout::PULSES : SmrtData::Readout::BASES,
+                         SmrtData::MetricsVerbosity::MINIMAL,
                          "",
                          basecallerConfig.Serialize().toStyledString(),
                          zmwNumbers,
                          zmwFeatures,
-                         basecallerConfig.layout.framesPerChunk,
-                         basecallerConfig.layout.framesPerChunk,
-                         basecallerConfig.layout.framesPerChunk);
+                         // Hack, until metrics handling can be rewritten
+                         metricFrames,
+                         metricFrames,
+                         metricFrames);
 
     fh.BaseCallerVersion("0.1");
 
-    bazWriter_.reset(new BazWriter(bazName_, fh, BazIOConfig{}, ReadBuffer::MaxNumSamplesPerBuffer()));
+    bazWriter_ = std::make_unique<BazIO::BazWriter>(bazName_, fh, BazIOConfig{});
 }
 
-void BazWriterBody::Process(BatchResult in)
+void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
 {
-    static const std::string bazWriterError = "BazWriter has failed. Last error message was ";
-
-    const auto& pulseBatch = in.pulses;
-    const auto& metricsPtr = in.metrics;
-
-    if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
-    {
-        bazWriter_->Flush();
-        currFrame_ = pulseBatch.GetMeta().FirstFrame();
-    } else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
-    {
-        throw PBException("Data out of order, multiple chunks being processed simultaneously");
-    }
-
-    // TODO note, this maybe needs to be contiguous integers?  Unless we can guarantee order of inputs, we may need more robust bookkeeping
-    size_t currentZmwIndex = pulseBatch.GetMeta().FirstZmw();
-    for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
-    {
-        const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
-
-        for (uint32_t zmw = 0; zmw < laneSize; zmw++)
-        {
-            if (currentZmwIndex % zmwOutputStrideFactor_ == 0)
-            {
-                const auto& baseCalls = ConvertMongoPulsesToSequelBasecalls(lanePulses.ZmwData(zmw),
-                                                                            lanePulses.size(zmw));
-                if (!bazWriter_->AddZmwSlice(baseCalls.data(),
-                                             baseCalls.size(),
-                                             [&](MemoryBufferView<SpiderMetricBlock>& dest)
-                                             {
-                                                for (size_t i = 0; i < dest.size(); i++)
-                                                {
-                                                    ConvertMetric(metricsPtr, dest[i], lane, zmw);
-                                                }
-                                             },
-                                             1,
-                                             currentZmwIndex))
-                {
-                    throw PBException(bazWriterError + bazWriter_->ErrorMessage());
-                }
-            }
-            else
-            {
-                if (!bazWriter_->AddZmwSlice(NULL, 0, [](auto&){}, 0, currentZmwIndex))
-                {
-                    throw PBException(bazWriterError + bazWriter_->ErrorMessage());
-                }
-            }
-            currentZmwIndex++;
-        }
-    }
+    bazWriter_->Flush(std::move(in));
 }
 
 }}

@@ -58,13 +58,13 @@
 #include <cstring>
 
 #include "BazCore.h"
-#include "BazWriter.h"
-#include "PrimaryToBaz.h"
 #include "FastaEntry.h"
 #include "FastaUtilities.h"
 #include "Timing.h"
 #include "SimulationRNG.h"
 #include "Simulation.h"
+
+#include <bazio/SimulateWriteUtils.h>
 
 namespace PacBio {
 namespace Primary {
@@ -158,7 +158,7 @@ private:
         size_t superChunkCounter = 0;
         const int numMetrics = 8;
 
-        BazWriter<SequelMetricBlock> writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         std::vector<uint64_t> currentPulseFrames(numZmws_, 0);
         std::vector<uint64_t> currentBaseFrames(numZmws_, 0);
@@ -178,10 +178,10 @@ private:
                 if (numEvents == basesPerSuperChunk) superChunksLeft = true;
 
 
-                Basecall* basecall = rng.SimulateBaseCalls(sub, &numEvents, &currentPulseFrames[z], &currentBaseFrames[z], readout_);
+                auto basecall = rng.SimulateBaseCalls(sub, &numEvents, &currentPulseFrames[z], &currentBaseFrames[z], internal);
                 if (numEvents < sub.size())
                     throw std::runtime_error("Less pulses than bases: " + std::to_string(numEvents) + " < " + std::to_string(sub.size()));
-                std::vector<SequelMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
+                std::vector<SpiderMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
 
                 for (int jj = 0; jj < numMetrics; ++jj)
                 {
@@ -200,20 +200,13 @@ private:
                 }
                 hfMetric.back().NumPulses(numEvents / numMetrics + numEvents % numMetrics);
 
-                writer.AddZmwSlice(basecall, numEvents, std::move(hfMetric), z);
-                free(basecall);
+                writer.AddZmwSlice(basecall.get(), numEvents, std::move(hfMetric), z);
             }
             // Timing::PrintTime(now, "SimulationFromFasta");
             writer.Flush();
             superChunkCounter++;
 
             if (!silent_) Timing::PrintTime(now, "Simulation");
-            
-            while (writer.BufferSize() > 1)
-            {
-                if (!silent_) std::cerr << "Wait" << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
 
         } while (superChunksLeft);
         writer.WaitForTermination();

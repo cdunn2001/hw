@@ -35,6 +35,7 @@
 
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 
 #include <bazio/MetricData.h>
@@ -331,15 +332,11 @@ float ComputePausiness(const FileHeader& fh, const RegionLabel& hqRegion, const 
         const auto& ipds = events.Ipds();
         const auto& isBase = events.IsBase();
 
-        static Codec c;
         if (ipds.size() > 0)
         {
             for (int i = hqRegion.pulseBegin; i < hqRegion.pulseEnd; ++i)
             {
-                // TODO fix bug.  Previous incarnation was accidentally
-                // using compressed ipd. Leaving it to evoid updating
-                // tests for now
-                if (isBase[i] && c.FrameToCode((uint16_t)ipds[i]) > threshold) ++pauses;
+                if (isBase[i] && ipds[i] > threshold) ++pauses;
             }
         }
     }
@@ -361,7 +358,7 @@ AnalogMetricData<float> DMEFilteredAngleEstimate(const MetricRegion& region,
         else
             return Median(&angleEstimates);
     };
- 
+
     const auto& bazAngle = metrics.Angle().GetRegion(region);
 
     filterAngles.red = GetAngleEstimate(bazAngle.red.copy());

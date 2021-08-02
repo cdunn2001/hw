@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include <bazio/BazWriter.h>
+#include <bazio/writing/BazWriter.h>
 
 #include <common/graphs/GraphNodeBody.h>
 
@@ -41,31 +41,29 @@
 namespace PacBio {
 namespace Application {
 
-class NoopBazWriterBody final : public Graphs::LeafBody<Mongo::Data::BatchResult>
+class NoopBazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(Mongo::Data::BatchResult) override
+    void Process(std::unique_ptr<BazIO::BazBuffer>) override
     {
     }
 };
 
-class BazWriterBody final : public Graphs::LeafBody<Mongo::Data::BatchResult>
+class BazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
     BazWriterBody(const std::string& bazName,
                   size_t expectedFrames,
                   const std::vector<uint32_t>& zmwNumbers,
                   const std::vector<uint32_t>& zmwFeatures,
-                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
-                  size_t outputStride);
+                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig);
 
     ~BazWriterBody()
     {
         PBLOG_INFO << "Closing BAZ file: " << bazName_;
-        bazWriter_->Flush();
         bazWriter_->WaitForTermination();
         bazWriter_.reset();
     }
@@ -73,13 +71,11 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1; }
 
-    void Process(Mongo::Data::BatchResult in) override;
+    void Process(std::unique_ptr<BazIO::BazBuffer> in) override;
 
-    using BazWriter = PacBio::Primary::BazWriter<Primary::SpiderMetricBlock>;
-    std::unique_ptr<BazWriter> bazWriter_;
+private:
+    std::unique_ptr<BazIO::BazWriter> bazWriter_;
     std::string bazName_;
-    size_t zmwOutputStrideFactor_;
-    size_t currFrame_ = 0;
 };
 
 

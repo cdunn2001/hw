@@ -23,18 +23,38 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_ENCODING_FIELDNAMES_H
-#define PACBIO_BAZIO_ENCODING_FIELDNAMES_H
+#ifndef PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+#define PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
 
-#include <pacbio/utilities/SmartEnum.h>
+#include <common/graphs/GraphNodeBody.h>
 
-#include <common/utility/StrongTypedef.h>
+#include <dataTypes/BatchResult.h>
+#include <dataTypes/configs/ConfigForward.h>
+
+#include <bazio/writing/BazBuffer.h>
 
 namespace PacBio {
-namespace BazIO {
+namespace Application {
 
-SMART_ENUM(PacketFieldName, Label, StartFrame, Pw, IsBase, Pkmax, Pkmid, Pkmean, Pkvar);
+class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
+{
+public:
+    PrelimHQFilterBody(size_t numZmws, size_t numBatches,
+                       const Mongo::Data::PrelimHQConfig& config, bool internal);
+    ~PrelimHQFilterBody();
+
+    size_t ConcurrencyLimit() const override { return 1; }
+    float MaxDutyCycle() const override { return 1; }
+
+    void Process(Mongo::Data::BatchResult in) override;
+private:
+    struct Impl;
+    template <bool internal>
+    struct ImplChild;
+    std::unique_ptr<Impl> impl_;
+};
+
 
 }}
 
-#endif //PACBIO_BAZIO_ENCODING_FIELDNAMES_H
+#endif //PACBIO_APPLICATION_PRELIM_HQ_FILTER_H

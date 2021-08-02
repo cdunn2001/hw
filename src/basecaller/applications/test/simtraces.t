@@ -1,7 +1,7 @@
   $ BAZFILE=${CRAMTMP}/designer.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
-  $ smrt-basecaller --numZmwLanes 64 --config layout.lanesPerPool=16 --frames=1024 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
+  $ smrt-basecaller --numZmwLanes 64 --config prelimHQ.bazBufferChunks=1 --config layout.lanesPerPool=16 --frames=1024 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   4097

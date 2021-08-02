@@ -5,6 +5,8 @@
 #include "ReadSimulator.h"
 #include <postprimary/bam/SubreadLabelerMetrics.h>
 
+using namespace PacBio;
+
 RegionLabel GenerateEmpyHQ()
 {
     return RegionLabel(0, 0, 0, RegionLabelType::HQREGION);
@@ -158,40 +160,33 @@ EventData SimulateEventData(const ReadConfig& config)
     static const std::array<char, 4> baseMap = {'A', 'C', 'T', 'G'};
 
     // Add bases.
-    std::vector<std::vector<uint32_t>> packetFields(PacketFieldName::allValues().size());
+    std::map<BazIO::PacketFieldName, std::vector<uint32_t>> fields;
     std::vector<InsertState> states;
+    const int fixedIPD = 5;
+    const int fixedPW = 6;
+    size_t frame = fixedIPD;
     for (int i = 0, j = 0, k = 0; i < numBases; ++i, ++j, ++k)
     {
         if (j == 4) j = 0;
         if (k == 5) k = 0;
-        packetFields[static_cast<uint8_t>(PacketFieldName::READOUT)].push_back(baseMap[j]);
-        packetFields[static_cast<uint8_t>(PacketFieldName::SUB_TAG)].push_back(k);
-        packetFields[static_cast<uint8_t>(PacketFieldName::DEL_TAG)].push_back(k);
-        packetFields[static_cast<uint8_t>(PacketFieldName::SUB_QV)].push_back(1);
-        packetFields[static_cast<uint8_t>(PacketFieldName::DEL_QV)].push_back(2);
-        packetFields[static_cast<uint8_t>(PacketFieldName::MRG_QV)].push_back(3);
-        packetFields[static_cast<uint8_t>(PacketFieldName::INS_QV)].push_back(4);
-        packetFields[static_cast<uint8_t>(PacketFieldName::IPD_LL)].push_back(5);
-        packetFields[static_cast<uint8_t>(PacketFieldName::PW_LL)].push_back(6);
+        fields[BazIO::PacketFieldName::Label].push_back(baseMap[j]);
+        fields[BazIO::PacketFieldName::StartFrame].push_back(frame);
+        fields[BazIO::PacketFieldName::Pw].push_back(fixedPW);
+        frame += fixedIPD + fixedPW;
         if (exclude && i % 10 == 0)
         {
-            packetFields[static_cast<uint8_t>(PacketFieldName::IS_BASE)].push_back(0);
+            fields[BazIO::PacketFieldName::IsBase].push_back(0);
             states.push_back(InsertState::EX_SHORT_PULSE);
         } else {
-            packetFields[static_cast<uint8_t>(PacketFieldName::IS_BASE)].push_back(1);
+            fields[BazIO::PacketFieldName::IsBase].push_back(1);
             states.push_back(InsertState::BASE);
         }
-        if (exclude && i % 10 == 1)
-        {
-            packetFields[static_cast<uint8_t>(PacketFieldName::IPD_LL)].back() += 11;
-        }
-        packetFields[static_cast<uint8_t>(PacketFieldName::IS_PULSE)].push_back(1);
     }
 
     const FileHeader& fh = config.GenerateHeader();
     return EventData(
             fh, 0, false,
-            BazEventData(std::move(packetFields)),
+            BazIO::BazEventData(fields, {}),
             std::move(states));
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default

@@ -61,7 +61,7 @@ size_t argmax(T begin, T end)
 
 }
 
-std::vector<uint32_t> ObservePulseWidths(const BazEventData& packets)
+std::vector<uint32_t> ObservePulseWidths(const BazIO::BazEventData& packets)
 {
     // Pulse widths from the BAZ file are for all pulses so need
     // to check that we are returning only pulse widths from
@@ -81,7 +81,7 @@ std::vector<uint32_t> ObservePulseWidths(const BazEventData& packets)
     return pulseWidths;
 }
 
-std::vector<InsertState> BurstInsertFinder::ClassifyInserts(const BazEventData& packets) const
+std::vector<InsertState> BurstInsertFinder::ClassifyInserts(const BazIO::BazEventData& packets) const
 {
     const auto& pulseWidths = ObservePulseWidths(packets);
 
@@ -200,7 +200,6 @@ std::vector<InsertState> BurstInsertFinder::ClassifyInserts(const BazEventData& 
                     states[pulseIdx] = currState;
                     sameStateCount--;
                 }
-                
             }
 
             rightIdx = baseIndex - 1;
@@ -211,7 +210,7 @@ std::vector<InsertState> BurstInsertFinder::ClassifyInserts(const BazEventData& 
     return states;
 }
 
-std::vector<InsertState> SimpleInsertFinder::ClassifyInserts(const BazEventData& packets) const
+std::vector<InsertState> SimpleInsertFinder::ClassifyInserts(const BazIO::BazEventData& packets) const
 {
     if (packets.Internal())
     {

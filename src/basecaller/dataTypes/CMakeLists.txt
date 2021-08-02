@@ -27,6 +27,8 @@ set(CPP_LIST
     configs/ConfigForward.h
     configs/MovieConfig.cpp
     configs/MovieConfig.h
+    configs/PrelimHQConfig.cpp
+    configs/PrelimHQConfig.h
     configs/SimulatedFaults.h
     configs/SmrtBasecallerConfig.cpp
     configs/SmrtBasecallerConfig.h

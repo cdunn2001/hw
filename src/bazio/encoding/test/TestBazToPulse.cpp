@@ -33,19 +33,19 @@ using namespace PacBio::BazIO;
 TEST(BazToPulse, KestrelLosslessCompact)
 {
     std::vector<FieldParams> info;
-    info.push_back({PacketFieldName::Base,
+    info.push_back({PacketFieldName::Label,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {NoOpTransformParams{}},
                     TruncateParams{ NumBits{2} }
         });
     info.push_back({PacketFieldName::Pw,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {NoOpTransformParams{}},
                     CompactOverflowParams{ NumBits{7} }
         });
-    info.push_back({PacketFieldName::Ipd,
+    info.push_back({PacketFieldName::StartFrame,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {DeltaCompressionParams{}},
                     CompactOverflowParams{ NumBits{7} }
         });
 
@@ -84,7 +84,7 @@ TEST(BazToPulse, KestrelLosslessCompact)
     size_t len = 0;
     for (const auto& p : pulsesIn) len += parser.BytesRequired(p);
 
-    EXPECT_EQ(len, 22);
+    EXPECT_EQ(len, 24);
     auto data = std::make_unique<uint8_t[]>(len);
 
     parser.Reset();
@@ -93,8 +93,8 @@ TEST(BazToPulse, KestrelLosslessCompact)
     ASSERT_EQ(ptr, data.get()+len);
 
     parser.Reset();
-    ptr = data.get();
-    for (auto& p : pulsesOut) ptr = parser.Deserialize(p, ptr);
+    auto const* ptr2 = data.get();
+    for (auto& p : pulsesOut) ptr2 = parser.Deserialize(p, ptr2);
     ASSERT_EQ(ptr, data.get()+len);
 
     for (size_t i = 0; i < pulsesIn.size(); ++i)
@@ -106,19 +106,19 @@ TEST(BazToPulse, KestrelLosslessCompact)
 TEST(BazToPulse, KestrelLosslessSimple)
 {
     std::vector<FieldParams> info;
-    info.push_back({PacketFieldName::Base,
+    info.push_back({PacketFieldName::Label,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {NoOpTransformParams{}},
                     TruncateParams{ NumBits{2} }
         });
     info.push_back({PacketFieldName::Pw,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {NoOpTransformParams{}},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
         });
-    info.push_back({PacketFieldName::Ipd,
+    info.push_back({PacketFieldName::StartFrame,
                     StoreSigned{false},
-                    NoOpTransformParams{},
+                    {DeltaCompressionParams{}},
                     SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
         });
 
@@ -166,8 +166,8 @@ TEST(BazToPulse, KestrelLosslessSimple)
     ASSERT_EQ(ptr, data.get()+len);
 
     parser.Reset();
-    ptr = data.get();
-    for (auto& p : pulsesOut) ptr = parser.Deserialize(p, ptr);
+    auto const* ptr2 = data.get();
+    for (auto& p : pulsesOut) ptr2 = parser.Deserialize(p, ptr2);
     ASSERT_EQ(ptr, data.get()+len);
 
     for (size_t i = 0; i < pulsesIn.size(); ++i)

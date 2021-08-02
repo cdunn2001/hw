@@ -1,4 +1,4 @@
-// Copyright (c) 2018, Pacific Biosciences of California, Inc.
+// Copyright (c) 2018,2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -33,31 +33,14 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-/*
- * The classes in this file are meant to represent different stages of
- * processing for the per pulse/base event data for a given zmw.  Each stage is
- * an individual class so as to make the data as immutable and encapsualted
- * as possible.
- *
- * * EventDataParent is the result of additional processing, where things like
- *   excluded bases have been accounted for, and derivative data (such as
- *   start_frame in internal mode) has been computed
- *
- * * EventData is the final form, which is included all of the prior information
- *   as well as extra information like the mapping from base index to pulse index
- */
-
-#pragma once
+#ifndef PACBIO_POSTPRIMARY_BAM_EVENT_DATA_H
+#define PACBIO_POSTPRIMARY_BAM_EVENT_DATA_H
 
 #include <pbbam/Tag.h>
 
-#include <bazio/Codec.h>
-#include <bazio/DataParsing.h>
-#include <bazio/FieldType.h>
 #include <bazio/BazEventData.h>
 
 #include <postprimary/insertfinder/InsertState.h>
-
 
 namespace PacBio {
 namespace Primary {
@@ -65,67 +48,11 @@ namespace Postprimary {
 
 using namespace PacBio::Primary;
 
-// Provides read-only access to event data.  It no longer matches what was
-// in the original file, as it will handle input from the pulse exclusion
-// classifier, as well as generate derivative data such as the "start frame"
-//
-// N.B. private inheritance is an unusual choice, but is intentional.  Not
-// only do we need access to a protected member of the parent (which will be
-// unnecessary after the refactor is complete), but forwarding part of the
-// EventData API is easier via private inheritance than vanilla composition.
-class EventDataParent : private BazEventData
-{
-public:
-    EventDataParent(BazEventData&& rawPackets, const std::vector<InsertState>& states)
-      : BazEventData(std::move(rawPackets))
-    {
-        UpdateIPDs(states);
-        if (Internal())
-            ComputeAdditionalData();
-    }
-
-    // Constructor required for `bam2bam`, which needs to skip several steps
-    // in the data processing (e.g. it may already have start_frame in the input)
-    EventDataParent(RawEventData&& rawData)
-      : BazEventData(std::move(rawData))
-    {}
-
-    // Move only semantics
-    EventDataParent(const EventDataParent&) = delete;
-    EventDataParent(EventDataParent&&) = default;
-    EventDataParent& operator=(const EventDataParent&) = delete;
-    EventDataParent& operator=(EventDataParent&&) = default;
-
-public:
-
-    std::string BaseQualityValues(size_t leftPulseIndex,
-                                        size_t rightPulseIndex) const;
-
-    const std::vector<std::pair<std::string, BAM::Tag>> AvailableTagData(size_t pulseBegin,
-                                                                         size_t pulseEnd) const;
-
-public:
-
-    // Forward the parts of the parent API we want exposed.
-    using BazEventData::NumEvents;
-    using BazEventData::Internal;
-    using BazEventData::IsBase;
-    using BazEventData::Ipds;
-    using BazEventData::PulseWidths;
-    using BazEventData::Readouts;
-    using BazEventData::StartFrames;
-
-private:
-
-    void UpdateIPDs(const std::vector<InsertState>& states);
-    void ComputeAdditionalData();
-};
-
 // Provides read-only access to the full set of pulse/base information. All
 // necessary data transformations (such as handling pulse exclusion) has been
 // handled previously, and once constructed this data should remain entirely
 // immutable.
-class EventData : private EventDataParent
+class EventData
 {
 private:
     // Private delegating ctor, to unify the two separate exposed constructors
@@ -133,25 +60,25 @@ private:
     EventData(size_t zmwIdx,
               size_t zmwNum,
               bool truncated,
-              EventDataParent&& events,
+              BazIO::BazEventData&& events,
               std::vector<InsertState>&& states);
 public:
     EventData(const FileHeader& fh,
               size_t zmwIdx,
               bool truncated,
-              Postprimary::BazEventData&& events,
+              BazIO::BazEventData&& events,
               std::vector<InsertState>&& states)
         : EventData(zmwIdx,
                     fh.ZmwIdToNumber(zmwIdx),
                     truncated,
-                    EventDataParent(std::move(events), states),
+                    std::move(events),
                     std::move(states))
     {}
 
     // Special constructor for Bam2Bam.  ZmwIndex() will be invalid (0), but
     // bam2bam doesn't need to know it anyway
     EventData(size_t zmwNum,
-              EventDataParent&& events,
+              BazIO::BazEventData&& events,
               std::vector<InsertState>&& states)
         : EventData(0, zmwNum, false, std::move(events), std::move(states))
     {}
@@ -163,19 +90,35 @@ public:
     EventData& operator=(const EventData&) = delete;
 
 public:
-    // Expose desired portions of base class API (this list will get longer
-    // as the refactor proceeds.
-    using EventDataParent::NumEvents;
-    using EventDataParent::Internal;
-    using EventDataParent::IsBase;
-    using EventDataParent::Ipds;
-    using EventDataParent::PulseWidths;
-    using EventDataParent::Readouts;
-    using EventDataParent::StartFrames;
-    using EventDataParent::BaseQualityValues;
-    using EventDataParent::AvailableTagData;
+    std::string BaseQualityValues(size_t leftPulseIndex,
+                                  size_t rightPulseIndex) const;
+
+    const std::vector<std::pair<std::string, BAM::Tag>> AvailableTagData(size_t pulseBegin,
+                                                                         size_t pulseEnd) const;
+
 
 public: // const data accessors
+
+    size_t NumEvents() const { return bazEvents_.NumEvents(); }
+
+    bool Internal() const { return bazEvents_.Internal(); }
+
+    bool StartFramesAreExact() const { return bazEvents_.StartFramesAreExact(); }
+
+    const std::vector<bool>& IsBase() const { return isBase_; }
+    bool IsBase(size_t idx) const { return isBase_[idx]; }
+
+    const std::vector<uint32_t>& Ipds() const { return ipdsSkipPulses_; }
+    uint32_t Ipds(size_t idx) const { return ipdsSkipPulses_[idx]; }
+
+    const std::vector<uint32_t>& PulseWidths() const { return bazEvents_.PulseWidths(); }
+    uint32_t PulseWidths(size_t idx) const { return bazEvents_.PulseWidths()[idx]; }
+
+    const std::vector<char>& Readouts() const { return bazEvents_.Readouts(); }
+    char Readouts(size_t idx) const { return bazEvents_.Readouts()[idx]; }
+
+    const std::vector<uint32_t>& StartFrames() const { return bazEvents_.StartFrames(); }
+    uint32_t StartFrames(size_t idx) const { return bazEvents_.StartFrames()[idx]; }
 
     const std::vector<InsertState>& InsertStates() const
     { return insertStates_; }
@@ -196,7 +139,7 @@ public: // const data accessors
     { return numBases_; }
 
     uint64_t NumPulses() const
-    { return EventDataParent::NumEvents(); }
+    { return bazEvents_.NumEvents(); }
 
     bool Truncated() const
     { return truncated_; }
@@ -208,7 +151,6 @@ public: // const data accessors
     { return zmwNum_; }
 
 private:
-
     bool truncated_;
 
     uint32_t zmwIndex_;
@@ -216,6 +158,11 @@ private:
 
     uint64_t numBases_;
 
+    BazIO::BazEventData bazEvents_;
+
+    std::vector<bool> isBase_;
+    std::vector<uint32_t> ipdsWithPulses_;
+    std::vector<uint32_t> ipdsSkipPulses_;
     std::vector<uint8_t> baseCalls_;
     std::vector<size_t>  baseToLeftmostPulseIndex_;
     std::vector<size_t>  baseToPulseIndex_;
@@ -226,3 +173,5 @@ private:
 };
 
 }}} // ::PacBio::Primary::Postprimary
+
+#endif //PACBIO_POSTPRIMARY_BAM_EVENT_DATA_H

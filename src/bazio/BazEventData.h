@@ -1,4 +1,4 @@
-// Copyright (c) 2018, Pacific Biosciences of California, Inc.
+// Copyright (c) 2018-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -33,83 +33,30 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-/*
- * The classes in this file are meant to represent different stages of
- * processing for the per pulse/base event data for a given zmw.  Each stage is
- * an individual class so as to make the data as immutable and encapsualted
- * as possible.
- *
- * * Data starts as RawEventData which is returned directly by the data parsers
- *   in another file, and represents an encapsualted vector of vector view of
- *   the data, where entries in the the outermost vector corresponds to individual
- *   PacketFieldNames
- *
- * * BazEventData is the result of very light processing, where data is accessed
- *   via a more direct API, and subtlties like IPD_V1 and IPD_LL have been
- *   abstracted away
- *
- * * EventDataParent is the result of additional processing, where things like
- *   excluded bases have been accounted for, and derivative data (such as
- *   start_frame in internal mode) has been computed
- *
- * * EventData is the final form, which is included all of the prior information
- *   as well as extra information like the mapping from base index to pulse index
- */
+#ifndef PACBIO_BAZIO_BAZ_EVENT_DATA_H_
+#define PACBIO_BAZIO_BAZ_EVENT_DATA_H_
 
-#pragma once
-
-#include <limits>
-
-#include <bazio/Codec.h>
 #include <bazio/DataParsing.h>
-#include <bazio/FieldType.h>
+#include <bazio/encoding/FieldNames.h>
 
 namespace PacBio {
-namespace Primary {
-
-using namespace PacBio::Primary;
+namespace BazIO {
 
 // Provides read-only access to event data extracted from the baz file.
-// It has been lightly processed and abstracted, so that one does not have
-// to worry about things like data compression of pulse widths used during binary
-// storage.
-//
-// N.B. private inheritance is a somewhat unusual choice, but intentional.
-// We need access to the protected members of RawEventData, but do *not*
-// want to expose it's API as our own.  Once the refactor is finished and parent
-// class' protected function is removed we could move to standard composition.
-class BazEventData : public RawEventData
+// It has been fully deserialzed and all transformations reverted.  This
+// class does not perform any significant post-processing of whatever was
+// stored in the baz file.  With the exception of making sure the IsBase
+// vector is populated, nothing will be present in this object that was not
+// directly serialized in the baz file itself
+class BazEventData
 {
 public:
+    BazEventData(const std::map<PacketFieldName, std::vector<uint32_t>>& intFields,
+                 const std::map<PacketFieldName, std::vector<float>>& floatData,
+                 // Not sure what to assume here, this seems conservative
+                 bool exactStartFrames = false);
 
-    BazEventData(RawEventData&& packets)
-            : RawEventData(std::move(packets))
-    {
-
-        const auto& rawIsBase = PacketField(PacketFieldName::IS_BASE);
-        if (rawIsBase.empty())
-        {
-            isBase_ = std::vector<bool>(NumEvents(), true);
-        }
-        else
-        {
-            isBase_ = std::vector<bool>(rawIsBase.begin(), rawIsBase.end());
-        }
-
-        if(Internal())
-        {
-            ipds_ = PacketField(PacketFieldName::IPD_LL);
-            pws_ = PacketField(PacketFieldName::PW_LL);
-        }
-        else
-        {
-            ipds_ = PacketField(PacketFieldName::IPD_V1);
-            pws_ = PacketField(PacketFieldName::PW_V1);
-
-            for (auto& val : ipds_) val = codec_.CodeToFrame(static_cast<uint8_t>(val));
-            for (auto& val : pws_) val = codec_.CodeToFrame(static_cast<uint8_t>(val));
-        }
-    }
+    explicit BazEventData(const Primary::RawEventData& packets);
 
     // Move only semantics
     BazEventData(const BazEventData&) = delete;
@@ -121,36 +68,92 @@ public: // const data accesors
     const std::vector<bool>& IsBase() const { return isBase_; }
     bool IsBase(size_t idx) const { return isBase_[idx]; }
 
-    const std::vector<uint32_t> Ipds() const { return ipds_; }
-    uint32_t Ipds(size_t idx) const { return ipds_[idx]; }
-
-    const std::vector<uint32_t> PulseWidths() const { return pws_; }
+    const std::vector<uint32_t>& PulseWidths() const { return pws_; }
     uint32_t PulseWidths(size_t idx) const { return pws_[idx]; }
 
-    const std::vector<uint32_t>& Readouts() const
-    { return PacketField(PacketFieldName::READOUT); }
+    const std::vector<char>& Readouts() const
+    { return readouts_; }
 
     const std::vector<uint32_t>& StartFrames() const
-    { return PacketField(PacketFieldName::START_FRAME); }
+    { return startFrames_; }
 
-    // Expose the few parts of the base class interface we do want to use.
-    using RawEventData::NumEvents;
-    using RawEventData::Internal;
+    const std::vector<float>& PkMeans() const { return pkmean_; }
 
-protected:
+    const std::vector<float>& PkMids() const { return pkmid_; }
 
-    // Only present because our child class will need to modify the underlying
-    // raw data structure.  We don't want this exposed as part of this class'
-    // API, and once the refactor is complete this need will go away and
-    // this is to be removed.
-    using RawEventData::PacketField;
+    size_t NumEvents() const { return numEvents_; }
+    bool Internal() const { return internal_; }
+    bool StartFramesAreExact() const { return exactStartFrames_; }
+
+    Json::Value EventToJson(size_t idx) const
+    {
+        Json::Value ret;
+        for (auto field : PacketFieldName::allValues())
+        {
+            const std::string name = field.toString();
+            switch(field)
+            {
+            case PacketFieldName::IsBase:
+                {
+                    if (!isBase_.empty()) ret[name] = isBase_[idx];
+                    break;
+                }
+            case PacketFieldName::Label:
+                {
+                    if (!readouts_.empty()) ret[name] = std::string(1, readouts_[idx]);
+                    break;
+                }
+            case PacketFieldName::Pw:
+                {
+                    if (!pws_.empty()) ret[name] = pws_[idx];
+                    break;
+                }
+            case PacketFieldName::StartFrame:
+                {
+                    if (!startFrames_.empty()) ret[name] = startFrames_[idx];
+                    break;
+                }
+            case PacketFieldName::Pkmid:
+                {
+                    if (!pkmid_.empty()) ret[name] = pkmid_[idx];
+                    break;
+                }
+            case PacketFieldName::Pkmax:
+                {
+                    if (!pkmax_.empty()) ret[name] = pkmax_[idx];
+                    break;
+                }
+            case PacketFieldName::Pkmean:
+                {
+                    if (!pkmean_.empty()) ret[name] = pkmean_[idx];
+                    break;
+                }
+            case PacketFieldName::Pkvar:
+                {
+                    if (!pkvar_.empty()) ret[name] = pkvar_[idx];
+                    break;
+                }
+            }
+        }
+        return ret;
+    }
+
+private:
+    size_t numEvents_;
+    bool internal_;
+    bool exactStartFrames_;
 
     std::vector<bool> isBase_;
-    std::vector<uint32_t> ipds_;
+    std::vector<char> readouts_;
     std::vector<uint32_t> pws_;
+    std::vector<uint32_t> startFrames_;
 
-    Codec codec_;
+    std::vector<float> pkmid_;
+    std::vector<float> pkmax_;
+    std::vector<float> pkmean_;
+    std::vector<float> pkvar_;
 };
 
 }} // ::PacBio::Primary
 
+#endif //PACBIO_BAZIO_BAZ_EVENT_DATA_H_

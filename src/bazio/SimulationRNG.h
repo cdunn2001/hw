@@ -45,7 +45,7 @@
   (byte & 0x08 ? 1 : 0), \
   (byte & 0x04 ? 1 : 0), \
   (byte & 0x02 ? 1 : 0), \
-  (byte & 0x01 ? 1 : 0) 
+  (byte & 0x01 ? 1 : 0)
 
 #include <iostream>
 #include <memory>
@@ -60,10 +60,10 @@
 
 #include "MetricBlock.h"
 #include "BazCore.h"
-#include "BazWriter.h"
 #include "BlockActivityLabels.h"
-#include "PrimaryToBaz.h"
 #include "Timing.h"
+
+#include <bazio/SimulateWriteUtils.h>
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
@@ -116,36 +116,35 @@ public: // structors
     SimulationRNG& operator=(const SimulationRNG&) = delete;
 
 public:
-    std::vector<SequelMetricBlock> SimulateHFMetrics(const uint16_t numMetricBlocks)
+    std::vector<SpiderMetricBlock> SimulateHFMetrics(const uint16_t numMetricBlocks)
     {
-        std::vector<SequelMetricBlock> metrics;
+        std::vector<SpiderMetricBlock> metrics;
         metrics.resize(numMetricBlocks);
         for (int i = 0; i < numMetricBlocks; ++i)
         {
             const auto basesPerAnalog = NextTwoByte();
             const auto pulses = 4 * basesPerAnalog + NextEightBit();
             const auto pulseMetric = pulses == 0 ? pulses : pulses - 1;
-            const float blR = NextFourBit(); 
-            const float blL = NextFourBit();
+            const float bl = NextFourBit();
             metrics[i].NumBasesA(basesPerAnalog)
                       .NumBasesC(basesPerAnalog)
                       .NumBasesG(basesPerAnalog)
                       .NumBasesT(basesPerAnalog)
-                      .BaselineSds({{blL, blR}})
+                      .BaselineSds({{bl}})
                       .NumPulses(pulses)
                       .PulseWidth(NextTwoByte())
                       .BaseWidth(NextTwoByte())
-                      .Baselines({{1,1}})
-                      .PkmidA(blR * 10)
-                      .PkmidC(blR * 10)
-                      .PkmidG(blL * 10)
-                      .PkmidT(blL * 10)
+                      .Baselines({{1}})
+                      .PkmidA(bl * 10)
+                      .PkmidC(bl * 10)
+                      .PkmidG(bl * 10)
+                      .PkmidT(bl * 10)
                       .NumPkmidFramesA(NextEightBit())
                       .NumPkmidFramesC(NextEightBit())
                       .NumPkmidFramesG(NextEightBit())
                       .NumPkmidFramesT(NextEightBit())
                       .NumFrames(NextEightBit())
-                      .NumBaselineFrames({{NextEightBit(), NextEightBit()}})
+                      .NumBaselineFrames({{NextEightBit()}})
                       .NumSandwiches(pulseMetric)
                       .NumHalfSandwiches(pulseMetric)
                       .NumPulseLabelStutters(pulseMetric)
@@ -154,12 +153,13 @@ public:
         }
         return metrics;
     }
-    Basecall* SimulateBaseCalls(const uint16_t numEvents,
-                                uint64_t* currentPulseFrame,
-                                uint64_t* currentBaseFrame,
-                                bool internal = false)
+    std::unique_ptr<BazIO::SimPulse[]> SimulateBaseCalls(
+            const uint16_t numEvents,
+            uint64_t* currentPulseFrame,
+            uint64_t* currentBaseFrame,
+            bool internal = false)
     {
-        Basecall* basecall = new Basecall[numEvents];
+        auto basecall = std::make_unique<BazIO::SimPulse[]>(numEvents);
         for (int i = 0; i < numEvents; ++i)
         {
             bool isBase;
@@ -167,130 +167,91 @@ public:
             if (internal)
             {
                 isBase = NextOneBit() != 0;
-                basecall[i].Base(isBase ? NextBase() : NucleotideLabel::NONE);
+                basecall[i].Label(isBase ? NextBase() : BazIO::SimPulse::NucleotideLabel::A);
             }
             else
             {
                 isBase = true;
-                basecall[i].Base(NextBase());
+                basecall[i].Label(NextBase());
             }
-            basecall[i].DeletionTag(NextTag());
-            basecall[i].SubstitutionTag(NextTag());
-            basecall[i].DeletionQV(NextFourBit());
-            basecall[i].GetPulse().MergeQV(NextFourBit());
-            basecall[i].SubstitutionQV(NextFourBit());
-            basecall[i].InsertionQV(NextFourBit());
-            basecall[i].GetPulse().AltLabelQV(NextFourBit());
-            basecall[i].GetPulse().LabelQV(NextFourBit());
-            basecall[i].GetPulse().AltLabel(NextTag());
-            basecall[i].GetPulse().Label(NextBase());
-            basecall[i].GetPulse().MeanSignal(NextTwoByte()/10.0);
-            basecall[i].GetPulse().MidSignal(NextTwoByte()/10.0);
-            basecall[i].GetPulse().Start(*currentPulseFrame + ipd);
-            basecall[i].GetPulse().Width(NextFourBit() >= 14 ? NextTwoByte() : NextEightBit());
-            *currentPulseFrame += ipd + basecall[i].GetPulse().Width();
-            if (isBase) 
+            basecall[i].IsReject(!isBase);
+            basecall[i].MeanSignal(NextTwoByte()/10.0);
+            basecall[i].MidSignal(NextTwoByte()/10.0);
+            basecall[i].Start(*currentPulseFrame + ipd);
+            basecall[i].Width(NextFourBit() >= 14 ? NextTwoByte() : NextEightBit());
+            *currentPulseFrame += ipd + basecall[i].Width();
+            if (isBase)
             {
                 *currentBaseFrame = *currentPulseFrame;
             }
         }
         return basecall;
     }
-    Basecall* SimulateBaseCalls(const std::string& sequence, size_t* numEvents,
-                                uint64_t* currentPulseFrame,
-                                uint64_t* currentBaseFrame,
-                                const Readout readout = Readout::BASES)
+    std::unique_ptr<BazIO::SimPulse[]> SimulateBaseCalls(
+            const std::string& sequence, size_t* numEvents,
+            uint64_t* currentPulseFrame,
+            uint64_t* currentBaseFrame,
+            bool internal = false)
     {
-        const bool internal = readout == Readout::PULSES;
-        std::vector<Basecall> basecall;
+        std::vector<BazIO::SimPulse> basecall;
         basecall.reserve(sequence.size() * 3);
-        size_t i = 0; 
+        size_t i = 0;
         while (i < sequence.size())
         {
-            Basecall b;
+            BazIO::SimPulse b;
             bool isBase;
             int ipd = NextFourBit() >= 14 ? NextFourByte() : NextEightBit();
             uint8_t cbase = sequence.at(i);
-            NucleotideLabel base;
+            BazIO::SimPulse::NucleotideLabel base;
             switch(cbase)
             {
-                case 'A': base = NucleotideLabel::A; break;
-                case 'C': base = NucleotideLabel::C; break;
-                case 'G': base = NucleotideLabel::G; break;
-                case 'T': base = NucleotideLabel::T; break;
+                case 'A': base = BazIO::SimPulse::NucleotideLabel::A; break;
+                case 'C': base = BazIO::SimPulse::NucleotideLabel::C; break;
+                case 'G': base = BazIO::SimPulse::NucleotideLabel::G; break;
+                case 'T': base = BazIO::SimPulse::NucleotideLabel::T; break;
                 default: throw std::runtime_error("Not aware of base " + std::to_string(cbase));
             }
             if (internal)
             {
                 isBase = NextOneBit() != 0;
-                b.Base(isBase ? base : NucleotideLabel::NONE);
+                b.Label(isBase ? base : BazIO::SimPulse::NucleotideLabel::NONE);
             }
             else
             {
                 isBase = true;
-                b.Base(base);
+                b.Label(base);
             }
-            if (readout != Readout::BASES_WITHOUT_QVS)
-            {
-                b.DeletionTag(NextTag());
-                b.SubstitutionTag(NextTag());
-                b.DeletionQV(NextFourBit());
-                b.GetPulse().MergeQV(NextFourBit());
-                b.SubstitutionQV(NextFourBit());
-                b.InsertionQV(NextFourBit());
-                b.GetPulse().AltLabelQV(NextFourBit());
-                b.GetPulse().LabelQV(NextFourBit());
-                b.GetPulse().AltLabel(NextTag());
-                b.GetPulse().Label(NextBase());
-            }
-            else
-            {
-                b.DeletionTag(NucleotideLabel::A);
-                b.SubstitutionTag(NucleotideLabel::A);
-                b.DeletionQV(0);
-                b.GetPulse().MergeQV(0);
-                b.SubstitutionQV(0);
-                b.InsertionQV(0);
-                b.GetPulse().AltLabelQV(0);
-                b.GetPulse().LabelQV(0);
-                b.GetPulse().AltLabel(NucleotideLabel::N);
-                b.GetPulse().Label(NucleotideLabel::A);
-            }
-            b.GetPulse().MeanSignal(NextTwoByte()/10.0);
-            b.GetPulse().MidSignal(NextTwoByte()/10.0);
-            b.GetPulse().Start(*currentPulseFrame + ipd);
-            b.GetPulse().Width(std::max(NextFourBit() >= 14 ? NextTwoByte() : NextEightBit(), 1));
-            *currentPulseFrame += ipd + b.GetPulse().Width();
+            b.IsReject(!isBase);
+            b.MeanSignal(NextTwoByte()/10.0);
+            b.MidSignal(NextTwoByte()/10.0);
+            b.Start(*currentPulseFrame + ipd);
+            b.Width(std::max(NextFourBit() >= 14 ? NextTwoByte() : NextEightBit(), 1));
+            *currentPulseFrame += ipd + b.Width();
             basecall.emplace_back(std::move(b));
-            if (isBase) 
+            if (isBase)
             {
                 ++i;
                 *currentBaseFrame = *currentPulseFrame;
             }
         }
         (*numEvents) = basecall.size();
-        Basecall* basecallArray;
-        basecallArray = (Basecall*) malloc(sizeof(Basecall) * basecall.size());
-        std::copy(basecall.begin(), basecall.end(), basecallArray);
+        auto basecallArray = std::make_unique<BazIO::SimPulse[]>(basecall.size());
+        std::copy(basecall.begin(), basecall.end(), basecallArray.get());
         return basecallArray;
     }
 
-    inline NucleotideLabel NextTag()
-    { return ToNucleotideLabel(NextThreeBit()); }
-
-    inline NucleotideLabel NextBase()
+    inline BazIO::SimPulse::NucleotideLabel NextBase()
     { return ToNucleotideLabel(NextTwoBit()); }
 
-    inline NucleotideLabel ToNucleotideLabel(uint8_t value)
+    inline BazIO::SimPulse::NucleotideLabel ToNucleotideLabel(uint8_t value)
     {
         switch(value)
         {
-            case 0: return NucleotideLabel::A;
-            case 1: return NucleotideLabel::C;
-            case 2: return NucleotideLabel::G;
-            case 3: return NucleotideLabel::T;
-            case 4: return NucleotideLabel::N;
-            default: 
+            case 0: return BazIO::SimPulse::NucleotideLabel::A;
+            case 1: return BazIO::SimPulse::NucleotideLabel::C;
+            case 2: return BazIO::SimPulse::NucleotideLabel::G;
+            case 3: return BazIO::SimPulse::NucleotideLabel::T;
+            default:
                 throw std::runtime_error("Not aware of that base in simulation");
         }
     }
@@ -336,12 +297,12 @@ public:
         if (fourByteCounter_ == maxRng_) fourByteCounter_ = 0;
         return fourByteRng_[fourByteCounter_++];
     }
-    
+
 private: // data
     const int maxRng_ = 1000000;
 
     std::mt19937 generator_;
-    
+
     std::vector<uint8_t> oneBitRng_;
     std::vector<uint8_t> twoBitRng_;
     std::vector<uint8_t> threeBitRng_;

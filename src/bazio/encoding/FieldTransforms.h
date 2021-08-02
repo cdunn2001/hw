@@ -38,6 +38,8 @@
 ///                              stride begins increasing by powers of 2, so that
 ///                              a wider input range can be mapped to a fewer number
 ///                              of bits.
+///          * DeltaCompression: A stateful transformation that returns the difference
+///                              between the current and previously supplied values.
 ///
 ///          Beyond that, there is a Transform class, suitable for
 ///          use in template metaprogramming.  Where the transformations
@@ -45,6 +47,16 @@
 ///          the Transform class uses only compile time values, and
 ///          can be used to promote extensive inlining/optimization by
 ///          the compiler for chosen configurations.
+///
+///          There is also the MultiTransform class which can be used to chain together
+///          multiple Transform types together.  Each constituent transformation is
+///          still required to result in a uint64_t.
+///
+///          Stateful transformations are supported, though it's recommended to avoid
+///          that when possible.  If there is a data-dependant value that needs to be
+///          recorded/updated then that is fine, but if there is a field parameter it
+///          may be better to accept it as an argument to Apply/Revert, so that the
+///          compiler can see things better and perhaps optimize more aggressively.
 
 
 #ifndef PACBIO_BAZIO_ENCODING_FIELD_TRANSFORMS_H
@@ -55,6 +67,8 @@
 #include <cstdint>
 #include <limits>
 #include <type_traits>
+
+#include <common/cuda/utility/CudaTuple.h>
 
 #include <bazio/encoding/BazioEnableCuda.h>
 
@@ -67,16 +81,39 @@ template <typename Base, typename... autoParams>
 struct Transform
 {
     template <typename T>
-    BAZ_CUDA static uint64_t Apply(const T& t, StoreSigned storeSigned)
+    BAZ_CUDA uint64_t Apply(const T& t, StoreSigned storeSigned)
     {
-        return Base::Apply(t, storeSigned, autoParams::val...);
+        return b_.Apply(t, storeSigned, autoParams::val...);
     }
     template <typename Ret>
-    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned storeSigned)
+    BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
-        return Base::template Revert<Ret>(val, storeSigned, autoParams::val...);
+        return b_.template Revert<Ret>(val, storeSigned, autoParams::val...);
     }
+private:
+    Base b_;
 };
+
+template <typename Trans1, typename... TransRest>
+struct MultiTransform
+{
+    template <typename T>
+    BAZ_CUDA uint64_t Apply(const T& t, StoreSigned storeSigned)
+    {
+        return rest_.Apply(first_.Apply(t, storeSigned), storeSigned);
+    }
+    template <typename Ret>
+    BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
+    {
+        return first_.template Revert<Ret>(rest_.template Revert<uint64_t>(val, storeSigned), storeSigned);
+    }
+private:
+    Trans1 first_;
+    MultiTransform<TransRest...> rest_;
+};
+
+template <typename Trans>
+struct MultiTransform<Trans> : public Trans {};
 
 struct NoOp
 {
@@ -199,6 +236,34 @@ struct LossySequelCodec
         auto base = (multiplier - 1) * F;
         return static_cast<Ret>(base + multiplier * main);
     }
+};
+
+struct DeltaCompression
+{
+    template <typename T>
+    BAZ_CUDA uint64_t Apply(const T& t, StoreSigned)
+    {
+        static_assert(std::is_integral<T>::value, "");
+        auto ut = static_cast<uint64_t>(t);
+        auto ret = ut - lastVal;
+        lastVal = ut;
+        return ret;
+    }
+    template <typename Ret>
+    BAZ_CUDA Ret Revert(uint64_t val, StoreSigned)
+    {
+        lastVal += val;
+        return lastVal;
+    }
+private:
+    // Storing this as unsigned, but really only so
+    // that over/underflow is well defined.  Since we're
+    // two's compliment, adding/subtracting are the same
+    // operation regardless of sign, and the StoreSigned
+    // parameter is already handed in to instruct us if we
+    // should interpret the most significant bit as a sign
+    // bit or not.
+    uint64_t lastVal = 0;
 };
 
 }}

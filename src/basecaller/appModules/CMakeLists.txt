@@ -17,6 +17,8 @@ add_library(libAppModules STATIC
         BazWriter.cpp
         BlockRepacker.h
         BlockRepacker.cpp
+        PrelimHQFilter.h
+        PrelimHQFilter.cpp
         Repacker.h
         Repacker.cpp
         TrivialRepacker.h

@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.13)
+
+add_library(libBazioWriting STATIC
+    BazBuffer.h
+    BazBuffer.cpp
+    BazWriter.h
+    BazWriter.cpp
+    MemoryBuffer.h
+    MemoryBuffer.cpp
+)
+
+include(pacbio-cplusplus-api)
+
+target_link_libraries(libBazioWriting
+    PUBLIC
+        libPacbioCplusplusApi
+        libBazio # I want to destroy this dep
+        libHalf # potentially temporary?
+)
+
+target_include_directories(libBazioWriting
+    PUBLIC
+#remove this dep
+${BAZIO_PROJECT_DIR}/basecaller
+        ${BAZIO_PROJECT_DIR}
+)
+
+#add_subdirectory(test)

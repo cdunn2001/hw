@@ -23,18 +23,4 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_ENCODING_FIELDNAMES_H
-#define PACBIO_BAZIO_ENCODING_FIELDNAMES_H
-
-#include <pacbio/utilities/SmartEnum.h>
-
-#include <common/utility/StrongTypedef.h>
-
-namespace PacBio {
-namespace BazIO {
-
-SMART_ENUM(PacketFieldName, Label, StartFrame, Pw, IsBase, Pkmax, Pkmid, Pkmean, Pkvar);
-
-}}
-
-#endif //PACBIO_BAZIO_ENCODING_FIELDNAMES_H
+#include "MemoryBuffer.h"

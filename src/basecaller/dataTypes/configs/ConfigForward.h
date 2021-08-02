@@ -41,6 +41,7 @@ class BasecallerBaselineStatsAggregatorConfig;
 class BasecallerDmeConfig;
 class BatchLayoutConfig;
 class MovieConfig;
+class PrelimHQConfig;
 class SmrtBasecallerConfig;
 class StaticDetModelConfig;
 class SystemsConfig;

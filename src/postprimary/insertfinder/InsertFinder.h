@@ -56,7 +56,7 @@ namespace Postprimary {
 class InsertFinder
 {
 public: /// Client API
-    virtual std::vector<InsertState> ClassifyInserts(const BazEventData& packets) const = 0;
+    virtual std::vector<InsertState> ClassifyInserts(const BazIO::BazEventData& packets) const = 0;
 
     virtual ~InsertFinder() {};
 };
@@ -82,10 +82,10 @@ public: // structors
 
 public: /// Client API
 
-    std::vector<InsertState> ClassifyInserts(const BazEventData& packets) const override;
+    std::vector<InsertState> ClassifyInserts(const BazIO::BazEventData& packets) const override;
 
 private:
-    
+
     uint32_t minInsertionLength_;
 };
 
@@ -105,7 +105,7 @@ public: // structors
 
 public: /// Client API
 
-    std::vector<InsertState> ClassifyInserts(const BazEventData& read) const override;
+    std::vector<InsertState> ClassifyInserts(const BazIO::BazEventData& read) const override;
 };
 
 // Helper class to return a concrete implementation of InsertFinder

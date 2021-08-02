@@ -476,15 +476,15 @@ EventData ConvertBam2Bam::PolyReadToEventData(
 {
     bool internalMode = polyRead.HasPulseCall() ;
 
-    // Number of events (bases/pulses)
+    // // Number of events (bases/pulses)
     uint64_t numEvents = internalMode
                             ? polyRead.PulseCall().size()
                             : polyRead.QueryEnd();
 
     // Reconstruct the packet info
-    static const auto numFields = PacketFieldName::allValues().size();
-    std::vector<std::vector<uint32_t>> rawPackets(numFields);
-    for (auto& vec : rawPackets) vec.reserve(numEvents);
+    using Fields = BazIO::PacketFieldName;
+    std::map<Fields, std::vector<uint32_t>> rawIntPackets;
+    std::map<Fields, std::vector<float>> rawFloatPackets;
 
     std::vector<InsertState> insertStates;
     insertStates.reserve(numEvents);
@@ -493,43 +493,40 @@ EventData ConvertBam2Bam::PolyReadToEventData(
     {
         // Bases
         const std::string currentBases = polyRead.Sequence();
-        AppendPacketFields(rawPackets, currentBases, PacketFieldName::READOUT);
+        AppendPacketFields(rawIntPackets[Fields::Label], currentBases, {}, '-');
 
-        if (polyRead.Qualities().size() > 0)
-            AppendPacketFields(rawPackets, polyRead.Qualities(),
-                               PacketFieldName::OVERALL_QV);
-        if (polyRead.HasDeletionQV())
-            AppendPacketFields(rawPackets, polyRead.DeletionQV(),
-                               PacketFieldName::DEL_QV);
-        if (polyRead.HasInsertionQV())
-            AppendPacketFields(rawPackets, polyRead.InsertionQV(),
-                               PacketFieldName::INS_QV);
-        if (polyRead.HasMergeQV())
-            AppendPacketFields(rawPackets, polyRead.MergeQV(),
-                               PacketFieldName::MRG_QV);
-        if (polyRead.HasSubstitutionQV())
-            AppendPacketFields(rawPackets, polyRead.SubstitutionQV(),
-                               PacketFieldName::SUB_QV);
-        if (polyRead.HasDeletionTag())
-            AppendPacketFields(rawPackets, polyRead.DeletionTag(),
-                               PacketFieldName::DEL_TAG);
-        if (polyRead.HasSubstitutionTag())
-            AppendPacketFields(rawPackets, polyRead.SubstitutionTag(),
-                               PacketFieldName::SUB_TAG);
+        auto& pws = rawIntPackets[Fields::Pw];
+        auto& startFrames = rawIntPackets[Fields::StartFrame];
+        std::vector<uint32_t> ipds;
 
-        if (polyRead.HasIPD())
-            AppendPacketFields(rawPackets, polyRead.IPDRaw().Data(),
-                               PacketFieldName::IPD_V1);
-        if (polyRead.HasPulseWidth())
-            AppendPacketFields(rawPackets, polyRead.PulseWidthRaw().Data(),
-                               PacketFieldName::PW_V1);
+        AppendPacketFields(pws, polyRead.PulseWidthRaw().Data());
+        AppendPacketFields(ipds, polyRead.IPDRaw().Data());
+        AppendPacketFields(startFrames, polyRead.StartFrame());
+
+        if (startFrames.size() == 0)
+        {
+            startFrames.reserve(ipds.size());
+            // Note: there are still questions about lossy values, both from
+            //       a codec that may or may not be applied, as well as from
+            //       a saturated conversion to uint16_t that may be applied
+            //       when writing to bam
+            //       PTSD-568 is a followup story that should address these
+            //       questions
+            size_t frame = 0;
+            for (size_t i = 0; i < ipds.size(); ++i)
+            {
+                frame += ipds[i];
+                startFrames.push_back(frame);
+                frame += pws[i];
+            }
+        }
     }
     else // Internal mode
     {
         // IsBase
         auto pulseCall = polyRead.PulseCall();
 
-        auto& isBase = rawPackets[static_cast<uint8_t>(PacketFieldName::IS_BASE)];
+        auto& isBase = rawIntPackets[Fields::IsBase];
         isBase.reserve(pulseCall.size());
         for (const auto& c : pulseCall)
         {
@@ -538,72 +535,14 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         }
 
         std::transform(pulseCall.begin(), pulseCall.end(), pulseCall.begin(), ::toupper);
-        AppendPacketFields(rawPackets, pulseCall, PacketFieldName::READOUT);
+        AppendPacketFields(rawIntPackets[Fields::Label], pulseCall, {}, '-');
 
-        if (polyRead.Qualities().size() > 0)
-            AppendPacketFields(rawPackets, polyRead.Qualities(),
-                               PacketFieldName::OVERALL_QV, true);
-        if (polyRead.HasDeletionQV())
-            AppendPacketFields(rawPackets, polyRead.DeletionQV(),
-                               PacketFieldName::DEL_QV, true);
-        if (polyRead.HasInsertionQV())
-            AppendPacketFields(rawPackets, polyRead.InsertionQV(),
-                               PacketFieldName::INS_QV, true);
-        if (polyRead.HasMergeQV())
-            AppendPacketFields(rawPackets, polyRead.MergeQV(),
-                               PacketFieldName::MRG_QV, true);
-        if (polyRead.HasSubstitutionQV())
-            AppendPacketFields(rawPackets, polyRead.SubstitutionQV(),
-                               PacketFieldName::SUB_QV, true);
-        if (polyRead.HasDeletionTag())
-            AppendPacketFields(rawPackets, polyRead.DeletionTag(),
-                               PacketFieldName::DEL_TAG, true);
-        if (polyRead.HasSubstitutionTag())
-            AppendPacketFields(rawPackets, polyRead.SubstitutionTag(),
-                               PacketFieldName::SUB_TAG, true);
-        if (polyRead.HasIPD())
-            AppendPacketFields(rawPackets, polyRead.IPDRaw().Data(),
-                               PacketFieldName::IPD_LL, true);
-        if (polyRead.HasPulseWidth())
-            AppendPacketFields(rawPackets, polyRead.PulseWidthRaw().Data(),
-                               PacketFieldName::PW_LL, true);
-        if (polyRead.HasPulseCallWidth())
-            AppendPacketFields(rawPackets, polyRead.PulseCallWidth().Data(),
-                               PacketFieldName::PX_LL, false);
-        if (polyRead.HasPrePulseFrames())
-            AppendPacketFields(rawPackets, polyRead.PrePulseFrames().Data(),
-                               PacketFieldName::PD_LL, false);
-        if (polyRead.HasStartFrame())
-            AppendPacketFields(rawPackets, polyRead.StartFrame(),
-                               PacketFieldName::START_FRAME, false);
+        AppendPacketFields(rawIntPackets[Fields::Pw], polyRead.PulseCallWidth().Data());
+        AppendPacketFields(rawIntPackets[Fields::StartFrame], polyRead.StartFrame());
         if (polyRead.HasPkmean())
-            AppendPacketFields(
-                rawPackets, BamRecord::EncodePhotons(
-                    polyRead.Pkmean()), PacketFieldName::PKMEAN_LL, false);
+            AppendPacketFields(rawFloatPackets[Fields::Pkmean], polyRead.Pkmean());
         if (polyRead.HasPkmid())
-            AppendPacketFields(rawPackets,
-                BamRecord::EncodePhotons(polyRead.Pkmid()),
-                    PacketFieldName::PKMID_LL, false);
-        if (polyRead.HasPkmean2())
-            AppendPacketFields(
-                rawPackets, BamRecord::EncodePhotons(
-                    polyRead.Pkmean2()), PacketFieldName::PKMEAN2_LL, false);
-        if (polyRead.HasPkmid2())
-            AppendPacketFields(
-                rawPackets, BamRecord::EncodePhotons(
-                    polyRead.Pkmid2()), PacketFieldName::PKMID2_LL, false);
-        if (polyRead.HasAltLabelQV())
-            AppendPacketFields(rawPackets, polyRead.AltLabelQV(),
-                               PacketFieldName::ALT_QV, false);
-        if (polyRead.HasLabelQV())
-            AppendPacketFields(rawPackets, polyRead.LabelQV(),
-                               PacketFieldName::LAB_QV, false);
-        if (polyRead.HasAltLabelTag())
-            AppendPacketFields(rawPackets, polyRead.AltLabelTag(),
-                               PacketFieldName::ALT_LABEL, false);
-        if (polyRead.HasPulseMergeQV())
-            AppendPacketFields(rawPackets, polyRead.PulseMergeQV(),
-                               PacketFieldName::PULSE_MRG_QV, false);
+            AppendPacketFields(rawFloatPackets[Fields::Pkmid], polyRead.Pkmid());
         if (polyRead.HasPulseExclusion())
         {
             // Pulse exclusion tag is stored explicitly.
@@ -619,15 +558,22 @@ EventData ConvertBam2Bam::PolyReadToEventData(
                               "otherwise nonconforming");
         }
     }
-    for (const auto& vec : rawPackets)
+    for (const auto& vec : rawIntPackets)
     {
-        if ((vec.size() != 0) && (vec.size() != numEvents))
+        if ((vec.second.size() != 0) && (vec.second.size() != numEvents))
+        {
+            throw PBException("Error reconstructing baz packets");
+        }
+    }
+    for (const auto& vec : rawFloatPackets)
+    {
+        if ((vec.second.size() != 0) && (vec.second.size() != numEvents))
         {
             throw PBException("Error reconstructing baz packets");
         }
     }
 
-    auto packets = BazEventData(std::move(rawPackets));
+    auto packets = BazIO::BazEventData(std::move(rawIntPackets), std::move(rawFloatPackets));
     if (insertStates.size() == 0)
     {
         insertStates = std::vector<InsertState>(
@@ -663,7 +609,7 @@ RegionLabels ConvertBam2Bam::PolyReadToRegionLabels(
 {
     RegionLabels regions;
 
-    if (events.StartFrames().size() > 0)
+    if (events.Internal())
         regions.base2frame = StartFramesToBase2Frame(events);
     else
         regions.base2frame = base2frame;
@@ -763,7 +709,7 @@ RegionLabels ConvertBam2Bam::PolyReadToRegionLabels(
                 42,
                 0,
                 RegionLabelType::HQREGION);
-        } 
+        }
         else if (polyRead.HasVirtualRegionType(VirtualRegionType::HQREGION))
         {
             const auto hqr = polyRead.VirtualRegionsTable(VirtualRegionType::HQREGION);
@@ -1216,71 +1162,3 @@ void ConvertBam2Bam::AddBaseFeature(const ReadGroupInfo& rg, const BaseFeature& 
         baseFeatures_.emplace_back(feature);
 }
 
-void ConvertBam2Bam::AppendPacketFields(
-        std::vector<std::vector<uint32_t>>& packetFields,
-        const QualityValues& qvs,
-        PacketFieldName field, bool perBase)
-{
-    const auto& isBase = packetFields[static_cast<uint8_t>(PacketFieldName::IS_BASE)];
-    auto& dest = packetFields[static_cast<uint8_t>(field)];
-    if (!perBase || isBase.size() == 0)
-    {
-        for (const auto& x : qvs)
-            dest.emplace_back(x+33);
-    }
-    else
-    {
-        for (size_t i = 0, j = 0; i < isBase.size(); ++i)
-        {
-            dest.push_back(isBase[i] ? qvs.at(j++).Fastq() : '!');
-        }
-        assert(dest.size() == isBase.size());
-    }
-}
-
-void ConvertBam2Bam::AppendPacketFields(
-        std::vector<std::vector<uint32_t>>& packetFields,
-        const std::string& str,
-        PacketFieldName field, bool perBase)
-{
-    const auto& isBase = packetFields[static_cast<uint8_t>(PacketFieldName::IS_BASE)];
-    auto& dest = packetFields[static_cast<uint8_t>(field)];
-
-    if (!perBase || isBase.size() == 0)
-    {
-        std::copy(str.begin(), str.end(), std::back_inserter(dest));
-    }
-    else
-    {
-        // The last pulse isn't necessarily the last base, resulting
-        // in j == str.size() for one or more iterations
-        for (size_t i = 0, j = 0; i < isBase.size(); ++i)
-        {
-            dest.push_back(isBase[i] ? str.at(j++) : '-');
-        }
-        assert(dest.size() == isBase.size());
-    }
-}
-
-template <typename T>
-void ConvertBam2Bam::AppendPacketFields(
-        std::vector<std::vector<uint32_t>>& packetFields,
-        const std::vector<T> data,
-        PacketFieldName field, bool perBase)
-{
-    const auto& isBase = packetFields[static_cast<uint8_t>(PacketFieldName::IS_BASE)];
-    auto& dest = packetFields[static_cast<uint8_t>(field)];
-
-    if (!perBase || isBase.size() == 0)
-    {
-        std::copy(data.begin(), data.end(), std::back_inserter(dest));
-    }
-    else
-    {
-        for (size_t i = 0, j = 0; i < isBase.size(); ++i)
-        {
-            dest.push_back(isBase[i] ? data.at(j++) : 0);
-        }
-        assert(dest.size() == isBase.size());
-    }
-}

@@ -33,8 +33,8 @@ Compare hqregion
 
 Compare hqregion, doing real region finding on softball data
 
-  $ production_baz=/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_prod_hf_min_exp_meta.baz
-  $ internal_baz=/pbi/dept/primary/testdata/sim/softball_snr-50_kes/softball_SNR-50_internal_hf_min_exp_meta.baz
+  $ production_baz=/pbi/dept/primary/sim/spider/kestrel-test/prod.baz
+  $ internal_baz=/pbi/dept/primary/sim/spider/kestrel-test/internal.baz
 
   $ baz2bam ${production_baz} -o out_production --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
   $ baz2bam ${internal_baz} -o out_internal --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
@@ -117,7 +117,7 @@ Test Spider RTAL BAZ:
   $ spider_baz_size=$(ls -s out_spider.baz|cut -d' ' -f1)
   $ spiderrtal_baz_size=$(ls -s out_spiderrtal.baz|cut -d' ' -f1)
   $ echo "scale=2; $spiderrtal_baz_size/$spider_baz_size" | bc
-  .9[23] (re)
+  .8[45] (re)
 
   $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_spiderrtal_n2.subreadset.xml
   467

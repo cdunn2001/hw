@@ -42,7 +42,6 @@
 #include <bazio/Simulation.h>
 #include <bazio/BazCore.h>
 #include <bazio/BazReader.h>
-#include <bazio/BazWriter.h>
 #include <BazVersion.h>
 
 //#include <pacbio/primary/SimulationFuture.h>
@@ -245,7 +244,7 @@ int main(int argc, char* argv[])
         Readout readout = Readout::BASES_WITHOUT_QVS;
         if (static_cast<bool>(options.get("internal")))
             readout = Readout::PULSES;
-        
+
         if (options.is_set_by_user("zmws"))
             SimulationFromFasta(filename, fasta, readout, silent, zmwNumbers, options.get("rtal"), (int)options.get("zmws"));
         else

@@ -1,6 +1,3 @@
-#ifndef Sequel_Common_MemoryBuffer_H_
-#define Sequel_Common_MemoryBuffer_H_
-
 // Copyright (c) 2018, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -32,22 +29,22 @@
 ///         memory from the system using a few large allocations, and allowing
 ///         client code to consume that with a large number of smaller requests
 
+#ifndef PACBIO_BAZIO_WRITING_MEMORY_BUFFER_H_
+#define PACBIO_BAZIO_WRITING_MEMORY_BUFFER_H_
+
 #include <cassert>
 #include <cstddef>
 #include <vector>
 #include <type_traits>
 
-#ifdef SECONDARY_BUILD
-#include "pacbio/microlog/Logger.h"
-using namespace PacBio::MicroLog;
-#else
 #include <pacbio/logging/Logger.h>
-#endif
+#include <pacbio/memory/SmartAllocation.h>
+#include <pacbio/datasource/MallocAllocator.h>
 
 namespace PacBio {
-namespace Primary {
+namespace BazIO {
 
-template <typename T, template <typename U> class Allocator>
+template <typename T>
 class MemoryBuffer;
 
 // This class is used to wrap a pointer belonging to the MemoryBuffer.  It is a
@@ -60,16 +57,11 @@ class MemoryBufferView
 {
     // Private CTor, a MemoryBuffer is the only thing capable of creating
     // a "non-null" view object.
-    template <typename U, template <typename V> class Allocator>
+    template <typename U>
     friend class MemoryBuffer;
     MemoryBufferView(T* data, size_t size) : data_(data), size_(size) {}
 public:
     MemoryBufferView() : data_(nullptr), size_(0) {}
-
-    MemoryBufferView(const MemoryBufferView&) = default;
-    MemoryBufferView(MemoryBufferView&&) = default;
-    MemoryBufferView& operator=(const MemoryBufferView&) = default;
-    MemoryBufferView& operator=(MemoryBufferView&&) = default;
 
     // Very basic array/container interface.
     bool empty() const { return size_ == 0; }
@@ -95,55 +87,37 @@ private:
 // will remain valid for the lifetime of the buffer itself. Causing the class
 // to add more capacity will not cause previous allocations to be moved in memory.
 //
-// Allocator template parameter is mostly meant as a hook for testing code
-template <typename T, template <typename U> class Allocator = std::allocator>
+// Some historical notes:
+//
+// The file is based off the Sequel version by the same name, in the Sequel/common
+// library.  The code has been updated/simplified somewhat as the use cases are now
+// somewhat different.  The old sequel version can be more-or-less considered
+// mothballed, however there *also* exists a very similar AllocationSlicer code
+// that exists in the pa-common respository.  (That code was also forked from the
+// same original implementation).  The functionality here and there is *very*
+// similar, however it's not clear that the two use cases truly align in a
+// fundamental sense.  I've leaving the near-duplication of code for now, we
+// can always go back and unify things later if it seems desirable.
+template <typename T>
 class MemoryBuffer
 {
     // Private class, to handle the actual allocations and object lifetimes.
-    class MemorInnerBuffer
+    class MemoryInnerBuffer
     {
     public:
-        MemorInnerBuffer(const MemorInnerBuffer&) = delete;
-        MemorInnerBuffer& operator=(const MemorInnerBuffer&) = delete;
-
-        MemorInnerBuffer(MemorInnerBuffer&& other)
-              : size_(other.size_),
-                capacity_(other.capacity_),
-                alloc_(other.alloc_),
-                data_(other.data_)
-        {
-            other.data_ = nullptr;
-            other.size_ = 0;
-            other.capacity_ = 0;
-        }
-        MemorInnerBuffer& operator=(MemorInnerBuffer&& other)
-        {
-            if (data_ != nullptr) alloc_->deallocate(data_, capacity_);
-
-            alloc_ = other.alloc_;
-            data_ = other.data_;
-            size_ = other.size_;
-            capacity_ = other.capacity_;
-
-            other.data_ = nullptr;
-            other.size_ = 0;
-            other.capacity_ = 0;
-            return *this;
-        }
-
-        MemorInnerBuffer(Allocator<T>&  alloc, size_t capacity)
+        MemoryInnerBuffer(Memory::IAllocator& alloc, size_t capacity)
               : size_(0)
-              , capacity_(capacity)
-              , alloc_(&alloc)
-              , data_(alloc.allocate(capacity))
-        {
+              , data_(alloc.GetAllocation(capacity*sizeof(T)))
+        {}
 
-        }
+        MemoryInnerBuffer(const MemoryInnerBuffer&) = delete;
+        MemoryInnerBuffer(MemoryInnerBuffer&&) = default;
+        MemoryInnerBuffer& operator=(const MemoryInnerBuffer&) = delete;
+        MemoryInnerBuffer& operator=(MemoryInnerBuffer&&) = default;
 
-        ~MemorInnerBuffer()
+        ~MemoryInnerBuffer()
         {
             ResetInner();
-            if (data_) alloc_->deallocate(data_, capacity_);
         }
 
         /// Does not release any memory, but will destroy any objects that
@@ -151,33 +125,33 @@ class MemoryBuffer
         /// allocations
         void ResetInner()
         {
-            //static_assert(std::is_nothrow_destructible<T>::value, "MemoryBuffer requires a nothrow destructor!");
+            static_assert(std::is_nothrow_destructible<T>::value, "MemoryBuffer requires a nothrow destructor!");
 
-            // stopgap guard against double destruction if one of these destructors
-            // throws and then the stack unwinds and calls this function again.
-            // Things are still fubar and we may have resource leaks, but at least
-            // we wont call std::terminate because of two active exceptions.
-            // Preferably we'd just disable throwing destructors, but the
-            // current mic compiler doesn't recognize std::is_nothrow_destructible
-            // Can maybe revisit after that is upgraded.
-            const auto size = size_;
-            size_ = 0;
             if (data_)
             {
-                for (size_t i = 0; i < size; ++i)
+                auto ptr = data_.get<T>();
+                // Really shouldn't have to do this optimization manually,
+                // but since I literally saw another piece of code fail to
+                // optimize away a loop over no-op destructors, I'm
+                // officially paranoid about such things.
+                if (!std::is_trivially_destructible<T>::value)
                 {
-                    data_[i].~T();
+                    for (size_t i = 0; i < size_; ++i)
+                    {
+                        ptr[i].~T();
+                    }
                 }
             }
+            size_ = 0;
         }
         /// \returns number of T objects in this buffer
         size_t size() const { return size_; }
 
         /// \returns number of T objects that this buffer could potentially hold without realllocation
-        size_t capacity() const { return capacity_; }
+        size_t capacity() const { return data_.size() / sizeof(T); }
 
         /// Convenience function, to see if there is space enough for n more items
-        bool CanHold(size_t n) const { return size_ + n <= capacity_; }
+        bool CanHold(size_t n) const { return size_ + n <= capacity(); }
 
         /// Returns a MemoryBufferView with a copy of data.  Written such that
         /// if T is a trivially copiable type, this should just optimize down
@@ -222,24 +196,17 @@ class MemoryBuffer
         /// internal counters accordingly
         MemoryBufferView<T> Prepare(size_t n)
         {
-            if (size_ + n > capacity_)
+            if (size_ + n > capacity())
                 throw PBException("Bounds overrun in MemoryBuffer");
-            auto ret = MemoryBufferView<T>(data_ + size_, n);
+            auto ret = MemoryBufferView<T>(data_.get<T>() + size_, n);
             size_ += n;
 
             return ret;
         }
 
         size_t size_;
-        size_t capacity_;
-        Allocator<T>* alloc_;
-        T* data_;
+        Memory::SmartAllocation data_;
     };
-
-    // fast (linear) growth rate = fastRatio * estimatedMaximum;
-    static constexpr float fastRatio = .25;
-    // slow (exponential) growth rate = slowRatio * size_;
-    static constexpr float slowRatio = .1;
 
 public:
     // initialCapacity: The initial allocation that will be made upon creation
@@ -254,33 +221,23 @@ public:
     // to avoid either an excessive number of allocations, or an excessive
     // amount of over-allocations.  If this proves impossible it may prove
     // worthwhile to make the growth rates configurable.
-    MemoryBuffer(size_t initialCapacity, size_t estimatedMaximum)
+    MemoryBuffer(size_t bufferSize, size_t initialBufferCount,
+                 Memory::IAllocator& allocator)
       : size_(0)
-      , capacity_(initialCapacity)
-      , estimatedMaximum_(estimatedMaximum)
-      , fastAllocations_(0)
-      , slowAllocations_(0)
+      , bufferSize_(bufferSize)
       , bufferIdx_(0)
-      , allocator_()
+      , allocator_(allocator)
     {
-        storage_.emplace_back(allocator_, capacity_);
-        PBLOG_DEBUG << " MemoryBuffer::Constructor2 this:" << (void*) this
-                    << " capacity_:" << capacity_
-                    << " estimatedMaximum_:" << estimatedMaximum_;
-    }
-
-    // Single argument constructor, if you know exactly how much memory you
-    // want and wish to skip the initial growth phase.
-    MemoryBuffer(size_t capacity) : MemoryBuffer(capacity, capacity)
-    {
-        PBLOG_DEBUG << " MemoryBuffer::Constructor1 this:" << (void*) this
-                    << " capacity_:" << capacity_;
+        for (size_t i = 0; i < initialBufferCount; ++i)
+        {
+            storage_.emplace_back(allocator_, bufferSize_);
+        }
     }
 
     MemoryBuffer(const MemoryBuffer&) = delete;
-    MemoryBuffer(MemoryBuffer&&) = delete;
+    MemoryBuffer(MemoryBuffer&&) = default;
     MemoryBuffer& operator=(const MemoryBuffer&) = delete;
-    MemoryBuffer& operator=(MemoryBuffer&&) = delete;
+    MemoryBuffer& operator=(MemoryBuffer&&) = default;
 
     ~MemoryBuffer()
     {
@@ -293,9 +250,6 @@ public:
 
         size_ = 0;
         bufferIdx_ = 0;
-
-        fastAllocations_ = 0;
-        slowAllocations_ = 0;
     }
 
     // Copies the data into the buffer and returns a MemoryBufferView to the
@@ -323,7 +277,7 @@ public:
         return Prepare(1).Construct(std::forward<Args>(args)...);
     }
 
-    size_t Capacity() const { return capacity_; }
+    size_t Capacity() const { return bufferSize_ * storage_.size(); }
     size_t Size() const { return size_; }
 
     // Helper method to determine how much memory waste there is.  Due to the
@@ -349,8 +303,11 @@ private:
     // to return a reference to a MemoryPool that can hold at least n more
     // elements, by either finding an existing one with sufficient capacity,
     // or creating a new one that will allocate a fresh batch of memory
-    MemorInnerBuffer& Prepare(size_t n)
+    MemoryInnerBuffer& Prepare(size_t n)
     {
+        if (n > bufferSize_)
+            throw PBException("MemoryBuffer allocation request size too large");
+
         if (!storage_[bufferIdx_].CanHold(n))
         {
             bool found = false;
@@ -366,56 +323,19 @@ private:
 
             if(!found)
             {
-                size_t nextGrowth = 0;
-                size_t fastGrowth = fastRatio * estimatedMaximum_;
-                size_t slowGrowth = slowRatio * size_;
-                if (size_ + fastGrowth < estimatedMaximum_)
-                {
-                    nextGrowth = fastGrowth;
-                    fastAllocations_++;
-                }
-                // Try not to overshoot the estimatedMaximum too badly
-                else if (size_ + fastGrowth - estimatedMaximum_ < 0.25 * fastGrowth)
-                {
-                    nextGrowth = fastGrowth;
-                    fastAllocations_++;
-                }
-                else
-                {
-                    nextGrowth = slowGrowth;
-                    slowAllocations_++;
-                }
-                if (nextGrowth < n) nextGrowth = n;
-
                 try
                 {
-                    PBLOG_DEBUG << " MemoryBuffer::Prepare this:" << (void*) this
-                                << " n:" << n << " slowAllocations_:" << slowAllocations_
-                                << " fastAllocations_:" << fastAllocations_
-                                << " fastGrowth:" << fastGrowth << " slowGrowth:" << slowGrowth
-                                << " fastRatio:" << fastRatio << " estimatedMaximum_:" << estimatedMaximum_
-                                << " size_:" << size_ << " nextGrowth:" << nextGrowth;
-                    storage_.emplace_back(allocator_, nextGrowth);
+                    storage_.emplace_back(allocator_, bufferSize_);
                 }
                 catch(...)
                 {
                     PBLOG_NOTICE    << " MemoryBuffer::Prepare this:" << (void*) this
-                                    << " n:" << n << " slowAllocations_:" << slowAllocations_
-                                    << " fastAllocations_:" << fastAllocations_
-                                    << " fastGrowth:" << fastGrowth << " slowGrowth:" << slowGrowth
-                                    << " fastRatio:" << fastRatio << " estimatedMaximum_:" << estimatedMaximum_
-                                    << " size_:" << size_ << " nextGrowth:" << nextGrowth;
-                    PBLOG_ERROR << "Exception caught during storage_.emplace_back(allocator_.maxSize:"
-                                << allocator_.max_size()
-                                << ", nextGrowth=" << nextGrowth << ")";
+                                    << " n:" << n << " size_:" << size_;
+                    PBLOG_ERROR << "Exception caught while allocating another storage buffer";
                     throw;
                 }
-                capacity_ += storage_.back().capacity();
                 bufferIdx_ = storage_.size()-1;
 
-                if (slowAllocations_ > 100)
-                    // Should fall back to standard 1.5x growth or something in this case?  Obviously provided estimates are bad...
-                    PBLOG_WARN << "Excessive small allocations in MemoryBuffer: " << slowAllocations_;
                 if (FragmentationFraction() > fragmentationWarningThresh && size_ * sizeof(T) > 1000000)
                 {
                     fragmentationWarningThresh += .1;
@@ -432,16 +352,13 @@ private:
     float fragmentationWarningThresh = 0.1;
 
     size_t size_;               // elements currently allocated and initialized
-    size_t capacity_;           // number of elements we've reserved space for
-    size_t estimatedMaximum_;   // Guessed final number of elements needed
-    size_t fastAllocations_;    // Number of "fast" (linear growth) allocations done
-    size_t slowAllocations_;    // Number of "slow" (exponential growth) allocations done
-
+    size_t bufferSize_;         // size (in bytes) of the underlying backend buffers
+                                // we will use
     size_t bufferIdx_;          // Idx of the buffer we're currently filling
-    Allocator<T> allocator_;    // Helper class to actually allocate memory
-    std::vector<MemorInnerBuffer> storage_;  // All memory that has been allocated
+    std::reference_wrapper<Memory::IAllocator> allocator_;    // Helper class to actually allocate memory
+    std::vector<MemoryInnerBuffer> storage_;  // All memory that has been allocated
 };
 
 }} // ::PacBio::Primary
 
-#endif // Sequel_Common_MemoryBuffer_H_
+#endif // PACBIO_BAZIO_WRITING_MEMORY_BUFFER_H_

@@ -33,6 +33,7 @@
 
 // Programmer: Armin Töpfer
 
+#include "bazio/BazEventData.h"
 #include <algorithm>
 #include <boost/multi_array.hpp>
 #include <boost/variant.hpp>
@@ -55,8 +56,8 @@
 #include <bazio/FileHeader.h>
 #include <BazVersion.h>
 
+#include <pacbio/logging/Logger.h>
 #include <pacbio/primary/HDFMultiArrayIO.h>
-
 
 using namespace PacBio;
 using namespace PacBio::Primary;
@@ -163,7 +164,7 @@ public:
     {
         boost::apply_visitor(FillVisitor<T>(zmwIdx, numZmw_, data), dest);
     }
-    
+
     /// Record all metrics values from this ZMW
     void Fill(const ZmwByteData& data)
     {
@@ -629,102 +630,13 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data : zmwData)
                 {
-                    const auto& eventData = ParsePackets(fh, data);
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh, data));
                     if (filter && std::find(whiteList.begin(), whiteList.end(), data.ZmwIndex()) == whiteList.end())
                         continue;
-#if 0
-                    auto& startFrames = eventData.PacketField(PacketFieldName::START_FRAME);
-#endif
                     for (size_t i = 0; i < eventData.NumEvents(); ++i)
                     {
-#if 0
-                        if (startFrames[i] > lastFrame)
-                        {
-                            std::cerr << " Found last frame " << startFrames[i] << " " << lastFrame << std::endl;
-                            break;
-                        }
-#endif
-                        Jval x;
+                        Jval x = eventData.EventToJson(i);
                         x["POS"] = (int)i;
-#if 0
-                        x["START_FRAME"] = startFrames[i];
-#endif
-                        if (eventData.HasPacketField(PacketFieldName::IS_BASE))
-                            x["IS_BASE"] = eventData.PacketField(PacketFieldName::IS_BASE)[i];
-                        if (eventData.HasPacketField(PacketFieldName::IS_PULSE))
-                            x["IS_PULSE"] = eventData.PacketField(PacketFieldName::IS_PULSE)[i];
-
-
-                        for (const auto& kv : packetFieldToBamIDWithOverallQV)
-                        {
-                            if (eventData.HasPacketField(kv.first))
-                            {
-                                switch(kv.second.second)
-                                {
-                                    case FieldType::CHAR:
-                                    {
-                                        std::string t;
-                                        t += static_cast<char>(eventData.PacketField(kv.first)[i]);
-                                        x[kv.first.toString()] = t;
-                                        break;
-                                    }
-                                    case FieldType::UINT8:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint8_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    case FieldType::UINT16:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint16_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    case FieldType::UINT32:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint32_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    default: throw std::runtime_error("Not aware of that FileType!");
-                                }
-                            }
-                        }
-
-                        for (const auto& kv : PacketFieldMap::packetPulseFieldToBamID)
-                        {
-                            if (eventData.HasPacketField(kv.first))
-                            {
-                                switch(kv.second.second)
-                                {
-                                    case FieldType::CHAR:
-                                    {
-                                        std::string t;
-                                        t += static_cast<char>(eventData.PacketField(kv.first)[i]);
-                                        x[kv.first.toString()] = t;
-                                        break;
-                                    }
-                                    case FieldType::UINT8:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint8_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    case FieldType::UINT16:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint16_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    case FieldType::UINT32:
-                                    {
-                                        x[kv.first.toString()] = static_cast<uint32_t>(eventData.PacketField(kv.first)[i]);
-                                        break;
-                                    }
-                                    default: throw std::runtime_error("Not aware of that FileType!");
-                                }
-                            }
-                        }
-                        {
-                            std::string t;
-                            t = static_cast<char>(eventData.PacketField(PacketFieldName::READOUT)[i]);
-                            x["READOUT"] = t;
-                        }
 
                         single["DATA"].append(x);
                     }
@@ -746,30 +658,25 @@ int main(int argc, char* argv[])
         {
             uint64_t events = 0;
             uint64_t explicitBases = 0;
-            uint64_t explicitPulses = 0;
-            std::array<uint64_t,5> explicitCalls;
+            std::map<char,uint32_t> explicitCalls;
             while (reader.HasNext())
             {
                 auto zmwData = reader.NextSlice();
                 for (const auto& data: zmwData)
                 {
-                    const auto& eventData = ParsePackets(fh, data);
-                    bool hasIsBase  = eventData.HasPacketField(PacketFieldName::IS_BASE);
-                    bool hasIsPulse = eventData.HasPacketField(PacketFieldName::IS_PULSE);
-                  //      x["IS_PULSE"] = ;
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh, data));
+                    const bool hasIsBase  = !eventData.IsBase().empty();
                     for (size_t i = 0; i < eventData.NumEvents(); ++i)
                     {
-                        auto b = eventData.PacketField(PacketFieldName::READOUT)[i];
-                        if (b < explicitCalls.size()) explicitCalls[b]++;
-                        if (hasIsBase && eventData.PacketField(PacketFieldName::IS_BASE)[i])   explicitBases++;
-                        if (hasIsPulse && eventData.PacketField(PacketFieldName::IS_PULSE)[i]) explicitPulses++;
+                        auto b = eventData.Readouts()[i];
+                        explicitCalls[b]++;
+                        if (hasIsBase && eventData.IsBase(i)) explicitBases++;
                         events++;
                     }
                 }
             }
             std::cout << "events:" << events << std::endl;
             std::cout << "bases:"  << explicitBases << std::endl;
-            std::cout << "pulses:" << explicitPulses << std::endl;
             for(size_t i = 0;i<explicitCalls.size();i++)
             {
                 std::cout << "call" << i << ":" << explicitCalls[i] << std::endl;
@@ -805,7 +712,7 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data: zmwData)
                 {
-                    const auto& eventData = ParsePackets(fh, data);
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh, data));
                     if (filter && std::find(whiteList.begin(), whiteList.end(), data.ZmwIndex()) == whiteList.end())
                         continue;
 

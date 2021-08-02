@@ -15,7 +15,6 @@ set(SOURCE
     testStatsH5.cpp
     testHist.cpp
     testHQRegionFinderParams.cpp
-    testHQRegionFinderFeatures.cpp
     testInsertFinder.cpp
     testCrfHQRegionFinder.cpp
     testHQRegionFinder.cpp
