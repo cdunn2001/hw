@@ -1,4 +1,4 @@
-  $ baz=/pbi/dept/primary/sim/spider/kestrel-test/internal.baz
+  $ baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/internal.baz
   $ meta=$TESTDIR/data/metadata.xml
   $ bam=out
 
