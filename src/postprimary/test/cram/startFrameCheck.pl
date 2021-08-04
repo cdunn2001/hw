@@ -1,27 +1,27 @@
 #! perl
 
 $errors=0;
+print "zm pd px sf pd+px\n";
 while(<>)
 {
-  ($pd,$px,$sf) = /(pd:\S+).*(px:\S+).*(sf:\S+)/;
+  ($pd,$px,$sf,$zm) = /(pd:\S+).*(px:\S+).*(sf:\S+).*zm:i:(\S+)/;
 
   @pd = split/,/,$pd;
   @px = split/,/,$px;
-  @sf = split/,/,$sf ;
+  @sf = split/,/,$sf;
 
-  $running2= 0;
+  $running = 0;
 
-  print "pd pw px   sf   pd+pw pd+px\n";
-  for $i (0..$#pd)
+  for $i (1..$#pd)
   {
-    $running2 += $pd[$i];
-    $test2="";
-    if ($running2 != $sf[$i]){
+    $running += $pd[$i];
+    $test = "";
+    if ($running != $sf[$i]){
       $errors++;
-      $test2 = "FAIL2";
+      $test = "FAIL2";
     }
-    print "$pd[$i] $px[$i]   $sf[$i]   $running $running2 $test $test2\n";
-    $running2 += $px[$i];
+    print "$zm $pd[$i] $px[$i] $sf[$i] $running $test\n";
+    $running += $px[$i];
   }
 
 }
