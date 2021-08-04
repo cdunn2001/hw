@@ -340,7 +340,7 @@ public: // ctors
     {
         Cuda::Utility::CudaArray<ScalarType<T>, ScalarCount> ret;
         static_assert(sizeof(decltype(ret)) == sizeof(BaseArray), "");
-        std::memcpy(&ret, this, sizeof(ret));
+        std::memcpy(ret.data(), data_.data(), sizeof(ret));
         return ret;
     }
 

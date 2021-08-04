@@ -66,7 +66,7 @@ struct BazBuffer
     };
 public:
     BazBuffer(size_t numZmw, size_t expectedPulseBufferSize,
-              std::unique_ptr<Memory::IAllocator> allocator = std::make_unique<Memory::MallocAllocator>())
+              std::unique_ptr<Memory::IAllocator> allocator = std::make_unique<DataSource::MallocAllocator>())
         : numZmw_(numZmw)
         , expectedPulseBufferSize_(expectedPulseBufferSize)
         , allocator_(std::move(allocator))

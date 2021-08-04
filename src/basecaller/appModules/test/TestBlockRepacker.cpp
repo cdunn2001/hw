@@ -324,9 +324,9 @@ TEST_P(TestBlockRepacker, ParamSweep)
     auto chunk2 = GeneratePacketsChunk(inputLayout, 1*numFrames, numFrames, numZmw);
     auto chunk3 = GeneratePacketsChunk(inputLayout, 2*numFrames, numFrames, numZmw);
 
-    ASSERT_TRUE(chunk1.Valid());
-    ASSERT_TRUE(chunk2.Valid());
-    ASSERT_TRUE(chunk3.Valid());
+    ASSERT_TRUE(chunk1.IsValid());
+    ASSERT_TRUE(chunk2.IsValid());
+    ASSERT_TRUE(chunk3.IsValid());
 
     SMART_ENUM(GraphProfiler, REPACKER, VALIDATOR);
 

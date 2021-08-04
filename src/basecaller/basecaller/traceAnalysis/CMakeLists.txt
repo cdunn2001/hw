@@ -77,6 +77,7 @@ target_include_directories(libMongoBasecallerTraceAnalysis
 target_link_libraries(libMongoBasecallerTraceAnalysis
     PUBLIC
         libMongoDataTypes
+        libFrameLabeler
     PRIVATE
         libEigen
 )

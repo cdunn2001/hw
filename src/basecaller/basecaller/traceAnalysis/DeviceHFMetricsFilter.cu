@@ -563,6 +563,7 @@ __device__ PBShort2 labelBlock(
     features[ActivityLabeler::PKZVARNORM] -= lowpk;
     features[ActivityLabeler::PKZVARNORM] /= PBHalf2(3.0f);
 
+#ifndef NDEBUG
     for (size_t i = 0; i < features.size(); ++i)
     {
         const auto& nanMask = features[i] == features[i];
@@ -570,6 +571,7 @@ __device__ PBShort2 labelBlock(
         assert(nanMask.X());
         assert(nanMask.Y());
     }
+#endif
 
     return PBShort2(traverseCart<0>(features), traverseCart<1>(features));
 }
