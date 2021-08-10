@@ -68,6 +68,8 @@
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
 
+#include <dataTypes/PulseGroups.h>
+
 using namespace PacBio::SmrtData;
 
 namespace PacBio {
@@ -160,7 +162,8 @@ public:
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate,
                               frameRate * chunks_ * seconds_,
-                              readout,
+                              (readout != Readout::PULSES)
+                              ? Mongo::Data::ProductionPulses::Params() : Mongo::Data::InternalPulses::Params(),
                               verbosity,
                               generateExperimentMetadata(relativeAmplitudes_, baseMap_),
                               generateBasecallerConfig("Spider"),
@@ -170,9 +173,6 @@ public:
                               4096, // mFMetricFrames
                               16384, // sliceLengthFrames
                               FileHeaderBuilder::Flags()
-                                .SpiderOnSequel(false)
-                                .NewBazFormat(true)
-                                .UseHalfFloat(true)
                                 .RealTimeActivityLabels(realtimeActivityLabels_)
         );
         return fhb;
@@ -313,7 +313,6 @@ public:
 
         if (summarize_)
         {
-            fhb.EstimatesSummary(std::cout, bps_);
             writer.Summarize(std::cout);
         }
     }

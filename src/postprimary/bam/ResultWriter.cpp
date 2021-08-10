@@ -910,7 +910,7 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
     group.PulseWidthCodec(FrameCodec::RAW);
 
     // Internal tags
-    bool internal = fileHeader.HasPacketField(BazIO::PacketFieldName::IsBase);
+    bool internal = fileHeader.HasPacketField(BazIO::PacketFieldName::IsBase) || fileHeader.Internal();
     if(internal)
     {
         group.BaseFeatureTag(BaseFeature::PULSE_CALL, "pc");

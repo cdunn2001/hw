@@ -2,36 +2,26 @@
 //
 // All rights reserved.
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted (subject to the limitations in the
-// disclaimer below) provided that the following conditions are met:
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
 //
-//  * Redistributions of source code must retain the above copyright
-//    notice, this list of conditions and the following disclaimer.
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
 //
-//  * Redistributions in binary form must reproduce the above
-//    copyright notice, this list of conditions and the following
-//    disclaimer in the documentation and/or other materials provided
-//    with the distribution.
-//
-//  * Neither the name of Pacific Biosciences nor the names of its
-//    contributors may be used to endorse or promote products derived
-//    from this software without specific prior written permission.
-//
-// NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-// GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY PACIFIC
-// BIOSCIENCES AND ITS CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-// OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
-// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
-// USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-// OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-// SUCH DAMAGE.
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cassert>
 #include <iostream>
@@ -82,8 +72,6 @@ void FileHeader::Init(const char* header, const size_t length)
         throw std::runtime_error("Missing BAZ_PATCH_VERSION in BAZ header");
     if (!headerValue.isMember("PACKET"))
         throw std::runtime_error("Missing PACKET in BAZ header");
-    if (!headerValue.isMember("SLICE_LENGTH_FRAMES"))
-        throw std::runtime_error("Missing SLICE_LENGTH_FRAMES in BAZ header");
     if (!headerValue.isMember("FRAME_RATE_HZ"))
         throw std::runtime_error("Missing FRAME_RATE_HZ in BAZ header");
     if (!headerValue.isMember("BASE_CALLER_VERSION"))
@@ -99,7 +87,6 @@ void FileHeader::Init(const char* header, const size_t length)
     bazMajorVersion_ = headerValue["BAZ_MAJOR_VERSION"].asUInt();
     bazMinorVersion_ = headerValue["BAZ_MINOR_VERSION"].asUInt();
     bazPatchVersion_ = headerValue["BAZ_PATCH_VERSION"].asUInt();
-    sliceLengthFrames_ = headerValue["SLICE_LENGTH_FRAMES"].asUInt();
     frameRateHz_ = headerValue["FRAME_RATE_HZ"].asDouble();
     basecallerVersion_ = headerValue["BASE_CALLER_VERSION"].asString();
     bazWriterVersion_ = headerValue["BAZWRITER_VERSION"].asString();
@@ -159,7 +146,7 @@ void FileHeader::Init(const char* header, const size_t length)
     }
 
     // Parse packets and store them as vector of structs
-    ParsePackets(headerValue, packetFields_, packetByteSize_);
+    ParsePackets(headerValue, packetByteSize_);
 
     // Parse metric nodes
     if (headerValue.isMember("HF_METRIC"))
@@ -190,7 +177,6 @@ void FileHeader::Init(const char* header, const size_t length)
     {
         hFbyMFRatio_ = mFMetricFrames_ / hFMetricFrames_;
         hFbyLFRatio_ = lFMetricFrames_ / hFMetricFrames_;
-        numHFMBsPerSlice_ = sliceLengthFrames_ / hFMetricFrames_;
     }
 
     // Parse ZMW ID to NUMBER LUT
@@ -298,29 +284,20 @@ void FileHeader::ParseMetrics(Json::Value& metricNode,
 }
 
 void FileHeader::ParsePackets(Json::Value& root,
-                              std::vector<FieldParams>& packetFields,
                               uint32_t& packetByteSize)
 {
     // Get PACKET node that contains the individual fields
     const auto packetArray = root["PACKET"];
     
     // Iterate over the PACKET JSON array which should
-    // consist of the individual encoding groups and extract
-    // out the members.
+    // consist of the individual encoding groups.
     for (unsigned int i = 0; i < packetArray.size(); ++i)
     {
         // Get current encoding group.
         const auto encodingGroupJson = packetArray[i];
         GroupParams gp(encodingGroupJson);
-
         encodeInfo_.push_back(gp);
-
         packetByteSize += gp.totalBits;
-
-        for (const auto& fp : gp.members)
-        {
-            packetFields_.push_back(fp);
-        }
     }
 }
 

@@ -39,16 +39,16 @@ TEST(BazToPulse, KestrelLosslessCompact)
     FieldParams fp;
     fp.name = PacketFieldName::Label;
     fp.storeSigned = false;
-    fp.transform = NoOp::Params();
+    fp.transform = Transform<NoOp>::Params();
     fp.serialize = TruncateOverflow::Params(NumBits{2});
     info.emplace_back(fp);
 
-    fp.name = PacketFieldName::Pw;
+    fp.name = PacketFieldName::PulseWidth;
     fp.serialize = CompactOverflow::Params(NumBits{7});
     info.emplace_back(fp);
 
     fp.name = PacketFieldName::StartFrame;
-    fp.transform = DeltaCompression::Params();
+    fp.transform = Transform<DeltaCompression>::Params();
     info.emplace_back(fp);
 
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesIn{};
@@ -112,16 +112,16 @@ TEST(BazToPulse, KestrelLosslessSimple)
     FieldParams fp;
     fp.name = PacketFieldName::Label;
     fp.storeSigned = false;
-    fp.transform = NoOp::Params();
+    fp.transform = Transform<NoOp>::Params();
     fp.serialize = TruncateOverflow::Params(NumBits{2});
     info.emplace_back(fp);
 
-    fp.name = PacketFieldName::Pw;
+    fp.name = PacketFieldName::PulseWidth;
     fp.serialize = SimpleOverflow::Params(NumBits{7}, NumBytes{4});
     info.emplace_back(fp);
 
     fp.name = PacketFieldName::StartFrame;
-    fp.transform = DeltaCompression::Params();
+    fp.transform = Transform<DeltaCompression>::Params();
     info.emplace_back(fp);
 
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesIn{};

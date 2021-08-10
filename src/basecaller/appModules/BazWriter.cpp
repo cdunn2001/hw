@@ -26,14 +26,13 @@
 #include <appModules/BazWriter.h>
 
 #include <pacbio/logging/Logger.h>
-#include <pacbio/primary/ZmwResultBuffer.h>
 
 #include <bazio/file/FileHeaderBuilder.h>
-
 #include <common/MongoConstants.h>
-
-#include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/Pulse.h>
+#include <dataTypes/PulseGroups.h>
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
+
 
 using namespace PacBio::Primary;
 using namespace PacBio::Mongo;
@@ -58,7 +57,8 @@ BazWriterBody::BazWriterBody(
     FileHeaderBuilder fh(bazName_,
                          100.0f,
                          expectedFrames,
-                         basecallerConfig.internalMode ? SmrtData::Readout::PULSES : SmrtData::Readout::BASES,
+                         basecallerConfig.internalMode
+                         ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
                          SmrtData::MetricsVerbosity::MINIMAL,
                          "",
                          basecallerConfig.Serialize().toStyledString(),

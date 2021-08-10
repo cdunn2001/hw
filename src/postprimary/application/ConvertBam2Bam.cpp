@@ -495,7 +495,7 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         const std::string currentBases = polyRead.Sequence();
         AppendPacketFields(rawIntPackets[Fields::Label], currentBases, {}, '-');
 
-        auto& pws = rawIntPackets[Fields::Pw];
+        auto& pws = rawIntPackets[Fields::PulseWidth];
         auto& startFrames = rawIntPackets[Fields::StartFrame];
         std::vector<uint32_t> ipds;
 
@@ -537,7 +537,7 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         std::transform(pulseCall.begin(), pulseCall.end(), pulseCall.begin(), ::toupper);
         AppendPacketFields(rawIntPackets[Fields::Label], pulseCall, {}, '-');
 
-        AppendPacketFields(rawIntPackets[Fields::Pw], polyRead.PulseCallWidth().Data());
+        AppendPacketFields(rawIntPackets[Fields::PulseWidth], polyRead.PulseCallWidth().Data());
         AppendPacketFields(rawIntPackets[Fields::StartFrame], polyRead.StartFrame());
         if (polyRead.HasPkmean())
             AppendPacketFields(rawFloatPackets[Fields::Pkmean], polyRead.Pkmean());
@@ -942,9 +942,7 @@ int ConvertBam2Bam::ParseHeader(std::vector<ProgramInfo>* apps)
     if (std::any_of(baseFeatures_.begin(), baseFeatures_.end(), [](const BaseFeature& f) { return f == BaseFeature::PULSE_CALL; }))
     {
         // Internal BAM
-        BazIO::FieldParams fp;
-        fp.name = BazIO::PacketFieldName::IsBase;
-        fh_->AddPacketField(fp);
+        fh_->Internal(true);
     }
 
     return nextBam2bamRun;

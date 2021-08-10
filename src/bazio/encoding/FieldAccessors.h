@@ -80,7 +80,7 @@ struct PulseFieldAccessor<PacketFieldName::IsBase>
     BAZ_CUDA static void Set(P& p, Type val) { p.IsReject(!val); }
 };
 template <>
-struct PulseFieldAccessor<PacketFieldName::Pw>
+struct PulseFieldAccessor<PacketFieldName::PulseWidth>
 {
     using Type = uint32_t;
     template <typename P>

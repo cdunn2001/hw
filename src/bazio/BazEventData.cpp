@@ -158,7 +158,7 @@ BazEventData::BazEventData(const Primary::RawEventData& packets)
                 isBase_ = ConvertIntegral<bool>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
             }
-        case BazIO::PacketFieldName::Pw:
+        case BazIO::PacketFieldName::PulseWidth:
             {
                 pws_ = ConvertIntegral<uint32_t>(raw, field.transform.front(), field.name, BazIO::StoreSigned{field.storeSigned});
                 break;
@@ -235,7 +235,7 @@ BazEventData::BazEventData(const std::map<PacketFieldName, std::vector<uint32_t>
     };
 
     copyVec(PacketFieldName::Label, intFields, readouts_);
-    copyVec(PacketFieldName::Pw, intFields, pws_);
+    copyVec(PacketFieldName::PulseWidth, intFields, pws_);
     copyVec(PacketFieldName::StartFrame, intFields, startFrames_);
 
     if(!copyIfPresent(PacketFieldName::IsBase, intFields, isBase_))

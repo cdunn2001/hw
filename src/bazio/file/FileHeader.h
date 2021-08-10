@@ -2,41 +2,30 @@
 //
 // All rights reserved.
 //
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted (subject to the limitations in the
-// disclaimer below) provided that the following conditions are met:
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
 //
-//  * Redistributions of source code must retain the above copyright
-//    notice, this list of conditions and the following disclaimer.
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
 //
-//  * Redistributions in binary form must reproduce the above
-//    copyright notice, this list of conditions and the following
-//    disclaimer in the documentation and/or other materials provided
-//    with the distribution.
-//
-//  * Neither the name of Pacific Biosciences nor the names of its
-//    contributors may be used to endorse or promote products derived
-//    from this software without specific prior written permission.
-//
-// NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-// GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY PACIFIC
-// BIOSCIENCES AND ITS CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-// OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
-// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
-// USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-// OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-// SUCH DAMAGE.
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifndef PACBIO_BAZIO_FILE_FILE_HEADER_H
 #define PACBIO_BAZIO_FILE_FILE_HEADER_H
 
-#include <atomic>
 #include <map>
 #include <string>
 #include <stdexcept>
@@ -68,15 +57,13 @@ public:
 
     FileHeader(const char* header, const size_t length)
     { Init(header, length); }
-    // Move constructor
+
+    // Allow for copy construction but not assignment so
+    // that the FileHeader is constructed properly.
     FileHeader(FileHeader&&) = default;
-    // Copy constructor
     FileHeader(const FileHeader&) = default;
-    // Move assignment operator
     FileHeader& operator=(FileHeader&&) = default;
-    // Copy assignment operator
     FileHeader& operator=(const FileHeader&) = delete;
-    // Destructor
     ~FileHeader() = default;
 
 public:
@@ -110,9 +97,6 @@ public:
     uint32_t LFMetricByteSize() const
     { return lFMetricByteSize_; }
 
-    uint32_t SliceLengthFrames() const
-    { return sliceLengthFrames_; }
-
     double FrameRateHz() const
     { return frameRateHz_; }
 
@@ -131,17 +115,21 @@ public:
     uint32_t HFbyLFRatio() const
     { return hFbyLFRatio_; }
 
-    uint32_t NumHFMBsPerSlice() const
-    { return numHFMBsPerSlice_; }
-
     uint64_t OffsetFirstChunk() const
     { return offsetFirstChunk_; }
 
+    std::vector<FieldParams> PacketFields() const
+    {
+        std::vector<FieldParams> fp;
+        for (const auto& g : encodeInfo_)
+        {
+            fp.insert(std::end(fp), g.members.begin(), g.members.end());
+        }
+        return fp;
+    }
+
     const std::vector<GroupParams>& PacketGroups() const
     { return encodeInfo_; }
-
-    const std::vector<FieldParams>& PacketFields() const
-    { return packetFields_; }
 
     const std::vector<MetricField>& HFMetricFields() const
     { return hFMetricFields_; }
@@ -154,8 +142,10 @@ public:
 
     bool HasPacketField(PacketFieldName fieldName) const
     {
-        return std::any_of(packetFields_.begin(), packetFields_.end(),
-                           [&fieldName](const FieldParams& fp) { return fp.name == fieldName; });
+        return std::any_of(encodeInfo_.begin(), encodeInfo_.end(),
+                           [&fieldName](const GroupParams& gp)
+                           { return std::any_of(gp.members.begin(), gp.members.end(),
+                                         [&fieldName](const FieldParams& fp) { return fp.name == fieldName; }); });
     }
 
     bool HasHFMField(MetricFieldName fieldName) const
@@ -186,7 +176,7 @@ public:
     }
 
     int MetricFieldScaling(const MetricFieldName fieldName,
-                                  const MetricFrequency fieldFrequency) const
+                           const MetricFrequency fieldFrequency) const
     {
         const std::vector<MetricField>* fields;
         switch (fieldFrequency)
@@ -213,6 +203,7 @@ public:
 
     const std::vector<float> RelativeAmplitudes() const
     {
+        // Returned amplitudes are in the order given by BaseMap().
         std::vector<float> relamps;
         for (const auto& val : experimentMetadata_["DyeSet"]["RelativeAmp"])
         {
@@ -270,7 +261,7 @@ public:
             PBExceptionStream() << "zmwIndex out of range: " << zmwIndex <<" size:"  << zmwUnitFeatures_.size();
     }
 
-    uint64_t FileFooterOffset()
+    uint64_t FileFooterOffset() const
     { return offsetFileFooter_; }
 
     const std::vector<uint32_t>& ZmwUnitFeatures() const
@@ -278,6 +269,9 @@ public:
 
     uint32_t NumSuperChunks() const
     { return numSuperChunks_; }
+
+    bool Internal() const
+    { return internal_; }
 
 public:
     void BazMajorVersion(int v)
@@ -288,15 +282,6 @@ public:
 
     void BazPatchVersion(int v)
     { bazPatchVersion_ = v; }
-
-    std::vector<GroupParams>& PacketGroups()
-    { return encodeInfo_; }
-
-    std::vector<FieldParams>& PacketFields()
-    { return packetFields_; }
-
-    void AddPacketField(const FieldParams fieldName)
-    { packetFields_.emplace_back(fieldName); }
 
     void HFbyMFRatio(uint32_t arg)
     { hFbyMFRatio_ = arg; }
@@ -319,6 +304,9 @@ public:
     void MovieLengthFrames(const uint32_t movieLengthFrames)
     { movieLengthFrames_ = movieLengthFrames; }
 
+    void Internal(bool internal)
+    { internal_ = internal; }
+
 private:
     static const uint8_t MAGICNUMBER0 = 0x02;
     static const uint8_t MAGICNUMBER1 = 'B';
@@ -327,7 +315,6 @@ private:
 
 private:
     std::vector<GroupParams> encodeInfo_;
-    std::vector<FieldParams> packetFields_;
     std::vector<MetricField> hFMetricFields_;
     std::vector<MetricField> mFMetricFields_;
     std::vector<MetricField> lFMetricFields_;
@@ -358,7 +345,6 @@ private:
     uint32_t mFMetricByteSize_ = 0;
     uint32_t lFMetricByteSize_ = 0;
 
-    uint32_t sliceLengthFrames_ = 0;
     double frameRateHz_ = -1;
 
     uint32_t hFMetricFrames_ = 0;
@@ -368,12 +354,11 @@ private:
     uint32_t hFbyMFRatio_ = 0;
     uint32_t hFbyLFRatio_ = 0;
 
-    uint32_t numHFMBsPerSlice_ = 0;
-
     uint32_t movieLengthFrames_ = 0;
 
     bool complete_ = false;
     bool truncated_ = false;
+    bool internal_ = false;
 
     uint32_t numSuperChunks_ = 0;
 
@@ -386,7 +371,6 @@ private:
                       uint32_t& metricFrames);
 
     void ParsePackets(Json::Value& root, 
-                      std::vector<FieldParams>& packetFields,
                       uint32_t& packetByteSize);
 };
 

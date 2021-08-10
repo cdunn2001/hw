@@ -172,8 +172,7 @@ int main(int argc, char* argv[])
                                emptyList,
                                1024,4096,16384,
                                FileHeaderBuilder::Flags()
-                                    .RealTimeActivityLabels(true)
-                                    .UseFullBaz(true));
+                                    .RealTimeActivityLabels(true));
 
         std::cerr << "BAZ size: "
                 << fhb.ExpectedFileByteSize(2.5)

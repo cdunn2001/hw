@@ -168,7 +168,7 @@ EventData SimulateEventData(const ReadConfig& config)
         if (k == 5) k = 0;
         fields[BazIO::PacketFieldName::Label].push_back(baseMap[j]);
         fields[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        fields[BazIO::PacketFieldName::Pw].push_back(fixedPW);
+        fields[BazIO::PacketFieldName::PulseWidth].push_back(fixedPW);
         frame += fixedIPD + fixedPW;
         if (exclude && i % 10 == 0)
         {

@@ -47,6 +47,7 @@
 //      It also can have it's own pulse type, it's currently pegged
 //      to kestrel, but that's not strictly necessary
 #include <dataTypes/Pulse.h>
+#include <dataTypes/PulseGroups.h>
 
 
 namespace PacBio {
@@ -94,11 +95,9 @@ private:
 
     std::unique_ptr<BazIO::BazWriter> writer_;
     std::unique_ptr<BazIO::BazBuffer> buffer_;
-
-    struct InternalPulses;
-    struct ProductionPulses;
-    std::vector<InternalPulses> internalSerializer_;
-    std::vector<ProductionPulses> prodSerializer_;
+    ;
+    std::vector<Mongo::Data::InternalPulses> internalSerializer_;
+    std::vector<Mongo::Data::ProductionPulses> prodSerializer_;
 };
 
 }}

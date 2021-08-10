@@ -32,6 +32,7 @@
 
 #include <dataTypes/configs/PrelimHQConfig.h>
 #include <dataTypes/Pulse.h>
+#include <dataTypes/PulseGroups.h>
 
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Mongo;
@@ -108,67 +109,6 @@ void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
         sm.BaselineSds({metrics.frameBaselineVarianceDWS[zmwIndex]});
     }
 }
-
-using ProductionPulses =
-    PulseToBaz<Field<PacketFieldName::Label,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<2>>
-                     >,
-               Field<PacketFieldName::Pw,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::StartFrame,
-                     StoreSigned_t<false>,
-                     Transform<DeltaCompression>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >
-               >;
-
-using InternalPulses =
-    PulseToBaz<Field<PacketFieldName::Label,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<2>>
-                     >,
-               Field<PacketFieldName::Pw,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::StartFrame,
-                     StoreSigned_t<false>,
-                     Transform<DeltaCompression>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::Pkmax,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-                     >,
-               Field<PacketFieldName::Pkmid,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-                     >,
-               Field<PacketFieldName::Pkmean,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-               >,
-               Field<PacketFieldName::Pkvar,
-                     StoreSigned_t<false>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<2>>
-               >,
-               Field<PacketFieldName::IsBase,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<1>>
-                     >
-               >;
 
 } // anon
 

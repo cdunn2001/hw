@@ -33,7 +33,7 @@
 namespace PacBio {
 namespace BazIO {
 
-SMART_ENUM(PacketFieldName, Label, StartFrame, Pw, IsBase, Pkmax, Pkmid, Pkmean, Pkvar);
+SMART_ENUM(PacketFieldName, Label, StartFrame, PulseWidth, IsBase, Pkmax, Pkmid, Pkmean, Pkvar);
 
 }}
 

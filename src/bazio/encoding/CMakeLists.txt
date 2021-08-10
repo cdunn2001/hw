@@ -12,8 +12,6 @@ add_library(libBazioEncoding STATIC
    FieldSerializers.cpp
    FieldTransforms.h
    FieldTransforms.cpp
-   PulseGroups.h
-   PulseGroups.cpp
    PulseToBaz.h
    PulseToBaz.cpp
 )

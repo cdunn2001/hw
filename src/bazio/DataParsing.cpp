@@ -47,7 +47,7 @@
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/FieldSerializers.h>
 #include <bazio/encoding/EncodingParams.h>
-#include <bazio/encoding/PulseGroups.h>
+#include <dataTypes/PulseGroups.h>
 
 #include <common/utility/Overload.h>
 

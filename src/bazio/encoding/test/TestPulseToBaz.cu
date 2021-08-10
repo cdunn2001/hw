@@ -29,8 +29,8 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
+#include <dataTypes/PulseGroups.h>
 
-#include <bazio/encoding/PulseGroups.h>
 #include <bazio/encoding/PulseToBaz.h>
 
 #include <dataTypes/Pulse.h>
@@ -40,6 +40,7 @@
 using namespace PacBio::BazIO;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Utility;
+using namespace PacBio::Mongo::Data;
 
 // This is annoying.  This function is invoked with HostView arguments
 // on the Host, and DeviceView arguments on the device.  There does not
@@ -122,7 +123,7 @@ TEST(PulseToBaz, KestrelLossyTruncate)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
-                            Field<PacketFieldName::Pw,
+                            Field<PacketFieldName::PulseWidth,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<7>>
@@ -208,7 +209,7 @@ TEST(PulseToBaz, KestrelLosslessSimple)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow,  NumBits_t<2>>
                                   >,
-                            Field<PacketFieldName::Pw,
+                            Field<PacketFieldName::PulseWidth,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
@@ -287,7 +288,7 @@ TEST(PulseToBaz, KestrelLosslessCompact)
                                   Transform<NoOp>,
                                   Serialize<TruncateOverflow, NumBits_t<2>>
                                   >,
-                            Field<PacketFieldName::Pw,
+                            Field<PacketFieldName::PulseWidth,
                                   StoreSigned_t<false>,
                                   Transform<NoOp>,
                                   Serialize<CompactOverflow, NumBits_t<7>>
@@ -363,7 +364,7 @@ TEST(PulseToBaz, Params)
     EXPECT_EQ(1, pp_params.size());
     auto gp = pp_params.front();
     EXPECT_EQ(PacketFieldName::Label, gp.members[0].name);
-    EXPECT_EQ(PacketFieldName::Pw, gp.members[1].name);
+    EXPECT_EQ(PacketFieldName::PulseWidth, gp.members[1].name);
     EXPECT_EQ(PacketFieldName::StartFrame, gp.members[2].name);
     EXPECT_EQ(2, gp.numBits[0]);
     EXPECT_EQ(7, gp.numBits[1]);

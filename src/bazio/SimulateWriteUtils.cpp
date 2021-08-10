@@ -38,69 +38,6 @@
 namespace PacBio {
 namespace BazIO {
 
-struct SimBazWriter::ProductionPulses :
-    PulseToBaz<Field<PacketFieldName::Label,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<2>>
-                     >,
-               Field<PacketFieldName::Pw,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::StartFrame,
-                     StoreSigned_t<false>,
-                     Transform<DeltaCompression>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >
-               >
-{};
-
-struct SimBazWriter::InternalPulses :
-    PulseToBaz<Field<PacketFieldName::Label,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<2>>
-                     >,
-               Field<PacketFieldName::Pw,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::StartFrame,
-                     StoreSigned_t<false>,
-                     Transform<DeltaCompression>,
-                     Serialize<CompactOverflow, NumBits_t<7>>
-                     >,
-               Field<PacketFieldName::Pkmax,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-                     >,
-               Field<PacketFieldName::Pkmid,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-                     >,
-               Field<PacketFieldName::Pkmean,
-                     StoreSigned_t<true>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<8>, NumBytes_t<2>>
-               >,
-               Field<PacketFieldName::Pkvar,
-                     StoreSigned_t<false>,
-                     Transform<FixedPoint, FixedPointScale_t<10>>,
-                     Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<2>>
-               >,
-               Field<PacketFieldName::IsBase,
-                     StoreSigned_t<false>,
-                     Transform<NoOp>,
-                     Serialize<TruncateOverflow, NumBits_t<1>>
-                     >
-               >
-{};
-
 SimBazWriter::~SimBazWriter() = default;
 
 SimBazWriter::SimBazWriter(const std::string& fileName,
@@ -110,34 +47,33 @@ SimBazWriter::SimBazWriter(const std::string& fileName,
     , writer_(std::make_unique<BazIO::BazWriter>(fileName, fhb, conf))
     , buffer_(MakeBuffer())
 {
-    // TODO FIX!
-    internal_ = writer_->GetFileHeaderBuilder().ReadoutConfig() == SmrtData::Readout::PULSES;
+    const auto& fields = writer_->GetFileHeaderBuilder().PacketFields();
+    internal_ = std::any_of(fields.begin(), fields.end(), [](const FieldParams& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });
     if (internal_) internalSerializer_.resize(numZmw_);
     else prodSerializer_.resize(numZmw_);
 }
 
-void SimBazWriter::AddZmwSlice(SimPulse* basecalls,
-                     size_t numEvents,
-                     std::vector<Primary::SpiderMetricBlock>&& metrics, size_t zmw)
+void SimBazWriter::AddZmwSlice(SimPulse* basecalls, size_t numEvents,
+                               std::vector<Primary::SpiderMetricBlock>&& metrics, size_t zmw)
+{
+    totalEvents_ += numEvents;
+    if (!metrics.empty())
     {
-        totalEvents_ += numEvents;
-        if (!metrics.empty())
-        {
-            buffer_->AddMetrics(zmw,
-                                [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
+        buffer_->AddMetrics(zmw,
+                            [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
+                            {
+                                for (size_t i = 0; i < metrics.size(); ++i)
                                 {
-                                    for (size_t i = 0; i < metrics.size(); ++i)
-                                    {
-                                        dest[i] = metrics[i];
-                                    }
-                                },
-                                metrics.size());
-        }
-        if (internal_)
-            buffer_->AddZmw(zmw, basecalls, basecalls + numEvents, internalSerializer_[zmw]);
-        else
-            buffer_->AddZmw(zmw, basecalls, basecalls + numEvents, prodSerializer_[zmw]);
+                                    dest[i] = metrics[i];
+                                }
+                            },
+                            metrics.size());
     }
+    if (internal_)
+        buffer_->AddZmw(zmw, basecalls, basecalls + numEvents, internalSerializer_[zmw]);
+    else
+        buffer_->AddZmw(zmw, basecalls, basecalls + numEvents, prodSerializer_[zmw]);
+}
 
 
 

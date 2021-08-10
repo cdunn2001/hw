@@ -66,6 +66,7 @@
 
 #include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/SimulateWriteUtils.h>
+#include <dataTypes/PulseGroups.h>
 
 namespace PacBio {
 namespace Primary {
@@ -141,7 +142,7 @@ private:
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate_,
                               frameRate_*60*60*3,
-                              readout_,
+                              internal ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
                               metricsVerbosity,
                               generateExperimentMetadata(),
                               generateBasecallerConfig("Spider"),
@@ -151,8 +152,7 @@ private:
                               mFMetricFrames,
                               superChunksFrames_,
                               FileHeaderBuilder::Flags()
-                                .RealTimeActivityLabels(true)
-                                .UseFullBaz(!rtal_)
+                                .RealTimeActivityLabels(rtal_)
         );
 
         const size_t basesPerSuperChunk = bps_ * seconds_;

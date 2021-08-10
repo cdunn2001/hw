@@ -238,16 +238,11 @@ void BazWriter::WriteToDiskLoop()
 
             fileHandle_->Flush();
 
-            double sliceDuration = fh_->SliceLengthFrames() / fh_->FrameRateHz();
             auto elapsed = std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - now);
-            double writeRealtimeRatio = elapsed.count() / sliceDuration;
             PBLOG_INFO << "Finished writing superchunk " << writtenSuperChunks << " to disk";
             PBLOG_INFO << "Wrote " << bytesWritten_ - currBytes << " to disk";
-            PBLOG_INFO << "Write Realtime Ratio: " << writeRealtimeRatio;
             PBLOG_INFO << "There are " << bazBufferQueue_.Size()
-                       << " more baz bufferes queued for writing";
-            if (writeRealtimeRatio > 1.)
-                PBLOG_WARN << "Baz thread is not currently running at realtime!!!";
+                       << " more baz buffers queued for writing";
             writtenSuperChunks++;
         }
     }

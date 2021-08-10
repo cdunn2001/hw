@@ -135,7 +135,7 @@ class BazToPulse
                         startFrame.revert_ = [f = startFrame.revert_, tmp](uint64_t val, StoreSigned storeSigned){ return f(tmp(val, storeSigned), storeSigned); };
                     }
                     break;
-                case PacketFieldName::Pw:
+                case PacketFieldName::PulseWidth:
                     pw.transform_ = transformUInt(info[0]);
                     pw.revert_ = revertUInt(info[0]);
                     for (size_t i = 1; i < info.size(); ++i)
@@ -268,7 +268,7 @@ public:
                 case PacketFieldName::IsBase:
                     val = isBase.transform_(isBase.access_.Get(pulse), StoreSigned{info.storeSigned});
                     break;
-                case PacketFieldName::Pw:
+                case PacketFieldName::PulseWidth:
                     val = pw.transform_(pw.access_.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::StartFrame:
@@ -334,7 +334,7 @@ public:
                     case PacketFieldName::IsBase:
                         isBase.access_.Set(pulse, isBase.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
-                    case PacketFieldName::Pw:
+                    case PacketFieldName::PulseWidth:
                         pw.access_.Set(pulse, pw.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::StartFrame:
@@ -389,7 +389,7 @@ public:
                 case PacketFieldName::IsBase:
                     val = isBase.transform_(isBase.access_.Get(pulse), StoreSigned{info.storeSigned});
                     break;
-                case PacketFieldName::Pw:
+                case PacketFieldName::PulseWidth:
                     val = pw.transform_(pw.access_.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::StartFrame:
@@ -428,7 +428,7 @@ private:
     std::vector<GroupParams> groups_;
     FieldHelpers<PacketFieldName::Label> base;
     FieldHelpers<PacketFieldName::IsBase> isBase;
-    FieldHelpers<PacketFieldName::Pw> pw;
+    FieldHelpers<PacketFieldName::PulseWidth> pw;
     FieldHelpers<PacketFieldName::StartFrame> startFrame;
     FieldHelpers<PacketFieldName::Pkmax> pkmax;
     FieldHelpers<PacketFieldName::Pkmean> pkmean;

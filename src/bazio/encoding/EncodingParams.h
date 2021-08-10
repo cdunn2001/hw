@@ -51,13 +51,13 @@ struct CodecParams : Configuration::PBConfig<CodecParams>
 {
     PB_CONFIG(CodecParams);
 
-    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
+    PB_CONFIG_PARAM(uint16_t, numBits, 0);
 };
 struct FixedPointParams : Configuration::PBConfig<FixedPointParams>
 {
     PB_CONFIG(FixedPointParams);
 
-    PB_CONFIG_PARAM(FixedPointScale::UnderlyingType, scale, 10);
+    PB_CONFIG_PARAM(uint32_t, scale, 0);
 };
 struct TransformsParams : Configuration::PBConfig<TransformsParams>
 {
@@ -70,20 +70,20 @@ struct TruncateParams : Configuration::PBConfig<TruncateParams>
 {
     PB_CONFIG(TruncateParams);
 
-    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
+    PB_CONFIG_PARAM(uint16_t, numBits, 0);
 };
 struct SimpleOverflowParams : Configuration::PBConfig<SimpleOverflowParams>
 {
     PB_CONFIG(SimpleOverflowParams);
 
-    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
-    PB_CONFIG_PARAM(NumBytes::UnderlyingType, overflowBytes, 4);
+    PB_CONFIG_PARAM(uint16_t, numBits, 0);
+    PB_CONFIG_PARAM(uint16_t, overflowBytes, 0);
 };
 struct CompactOverflowParams : Configuration::PBConfig<CompactOverflowParams>
 {
     PB_CONFIG(CompactOverflowParams);
 
-    PB_CONFIG_PARAM(NumBits::UnderlyingType, numBits, 8);
+    PB_CONFIG_PARAM(uint16_t, numBits, 0);
 };
 struct SerializeParams : Configuration::PBConfig<SerializeParams>
 {
