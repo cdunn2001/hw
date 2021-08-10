@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.20)
 
 # Intel complains in this file because there are some functions
 # defined in an anonymous namespace that are never technically

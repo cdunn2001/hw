@@ -1,5 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+
 project(CudaTemplate LANGUAGES CXX CUDA)
-cmake_minimum_required(VERSION 3.8)
 
 add_executable(DataStreamer
     main.cpp
