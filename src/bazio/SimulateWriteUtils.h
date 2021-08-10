@@ -53,6 +53,12 @@
 namespace PacBio {
 namespace BazIO {
 
+// NOTE: These are placeholders as the simulation code should define
+// its own production and internal pulse group encodings and pulse
+// representation to decouple it from Kestrel for testing purposes.
+
+using SimProductionPulseGroups = Mongo::Data::ProductionPulses;
+using SimInternalPulseGroups = Mongo::Data::InternalPulses;
 using SimPulse = Mongo::Data::Pulse;
 
 class SimBazWriter
@@ -95,9 +101,9 @@ private:
 
     std::unique_ptr<BazIO::BazWriter> writer_;
     std::unique_ptr<BazIO::BazBuffer> buffer_;
-    ;
-    std::vector<Mongo::Data::InternalPulses> internalSerializer_;
-    std::vector<Mongo::Data::ProductionPulses> prodSerializer_;
+
+    std::vector<SimInternalPulseGroups> internalSerializer_;
+    std::vector<SimProductionPulseGroups> prodSerializer_;
 };
 
 }}

@@ -122,6 +122,7 @@ std::string FileHeaderBuilder::CreateJSON()
     header["BASE_CALLER_VERSION"] = basecallerVersion_;
     header["BAZWRITER_VERSION"] = bazWriterVersion_;
     header["FRAME_RATE_HZ"] = frameRateHz_;
+    header["OUTPUT_LENGTH_FRAMES"] = sliceLengthFrames_;
     header["MOVIE_LENGTH_FRAMES"] = movieLengthFrames_;
     Primary::validateExperimentMetadata(experimentMetadata_);
     header["EXPERIMENT_METADATA"] = experimentMetadata_;

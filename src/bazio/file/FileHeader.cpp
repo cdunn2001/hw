@@ -74,6 +74,8 @@ void FileHeader::Init(const char* header, const size_t length)
         throw std::runtime_error("Missing PACKET in BAZ header");
     if (!headerValue.isMember("FRAME_RATE_HZ"))
         throw std::runtime_error("Missing FRAME_RATE_HZ in BAZ header");
+    if (!headerValue.isMember("OUTPUT_LENGTH_FRAMES"))
+        throw std::runtime_error("Missing OUTPUT_LENGTH_FRAMES in BAZ header");
     if (!headerValue.isMember("BASE_CALLER_VERSION"))
         throw std::runtime_error("Missing BASE_CALLER_VERSION in BAZ header");
     if (!headerValue.isMember("BAZWRITER_VERSION"))
@@ -88,6 +90,7 @@ void FileHeader::Init(const char* header, const size_t length)
     bazMinorVersion_ = headerValue["BAZ_MINOR_VERSION"].asUInt();
     bazPatchVersion_ = headerValue["BAZ_PATCH_VERSION"].asUInt();
     frameRateHz_ = headerValue["FRAME_RATE_HZ"].asDouble();
+    outputLengthFrames_ = headerValue["OUTPUT_LENGTH_FRAMES"].asUInt();
     basecallerVersion_ = headerValue["BASE_CALLER_VERSION"].asString();
     bazWriterVersion_ = headerValue["BAZWRITER_VERSION"].asString();
     movieName_ = headerValue["MOVIE_NAME"].asString();

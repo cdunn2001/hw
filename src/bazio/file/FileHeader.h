@@ -97,6 +97,9 @@ public:
     uint32_t LFMetricByteSize() const
     { return lFMetricByteSize_; }
 
+    uint32_t OutputLengthFrames() const
+    { return outputLengthFrames_; }
+
     double FrameRateHz() const
     { return frameRateHz_; }
 
@@ -345,6 +348,7 @@ private:
     uint32_t mFMetricByteSize_ = 0;
     uint32_t lFMetricByteSize_ = 0;
 
+    uint32_t outputLengthFrames_ = 0;
     double frameRateHz_ = -1;
 
     uint32_t hFMetricFrames_ = 0;
