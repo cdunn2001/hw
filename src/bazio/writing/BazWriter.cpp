@@ -43,7 +43,7 @@ namespace PacBio {
 namespace BazIO {
 
 BazWriter::BazWriter(const std::string& filePath,
-                     Primary::FileHeaderBuilder& fileHeaderBuilder,
+                     FileHeaderBuilder& fileHeaderBuilder,
                      const Primary::BazIOConfig& ioConf)
     : filePath_(filePath)
     , filePathTmp_(filePath + ".tmp")
@@ -90,7 +90,7 @@ void BazWriter::Init(const Primary::BazIOConfig& ioConfig)
 {
     // Parse ASCII JSON to FileHeader instance,
     // includes sanity checks for validity
-    fh_ = std::make_unique<Primary::FileHeader>(jsonFileHeader_.data(), jsonFileHeader_.size());
+    fh_ = std::make_unique<FileHeader>(jsonFileHeader_.data(), jsonFileHeader_.size());
 
     // Start thread that saves BazBuffers to disk
     writeThreadContinue_ = true;
@@ -238,14 +238,15 @@ void BazWriter::WriteToDiskLoop()
 
             fileHandle_->Flush();
 
-            double sliceDuration = fh_->SliceLengthFrames() / fh_->FrameRateHz();
+            double sliceDuration = fh_->OutputLengthFrames() / fh_->FrameRateHz();
+
             auto elapsed = std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - now);
             double writeRealtimeRatio = elapsed.count() / sliceDuration;
             PBLOG_INFO << "Finished writing superchunk " << writtenSuperChunks << " to disk";
             PBLOG_INFO << "Wrote " << bytesWritten_ - currBytes << " to disk";
             PBLOG_INFO << "Write Realtime Ratio: " << writeRealtimeRatio;
             PBLOG_INFO << "There are " << bazBufferQueue_.Size()
-                       << " more baz bufferes queued for writing";
+                       << " more baz buffers queued for writing";
             if (writeRealtimeRatio > 1.)
                 PBLOG_WARN << "Baz thread is not currently running at realtime!!!";
             writtenSuperChunks++;

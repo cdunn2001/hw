@@ -103,7 +103,7 @@ public: // const data accesors
                     if (!readouts_.empty()) ret[name] = std::string(1, readouts_[idx]);
                     break;
                 }
-            case PacketFieldName::Pw:
+            case PacketFieldName::PulseWidth:
                 {
                     if (!pws_.empty()) ret[name] = pws_[idx];
                     break;

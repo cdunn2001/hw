@@ -72,6 +72,8 @@ set(CPP_LIST
     Pulse.cpp
     PulseBatch.h
     PulseBatch.cpp
+    PulseGroups.h
+    PulseGroups.cpp
     TraceAnalysisMetrics.h
     TraceBatch.h
     TraceBatch.cpp

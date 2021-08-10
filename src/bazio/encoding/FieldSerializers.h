@@ -58,6 +58,7 @@
 #include <limits>
 
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/EncodingParams.h>
 
 #include <bazio/encoding/Types.h>
 
@@ -107,6 +108,11 @@ struct Serialize
     {
         return Base::FromBinary(val, ptr, storeSigned, numBits::val, autoParams::val...);
     }
+
+    static SerializeParams Params()
+    {
+        return Base::Params(numBits::val, autoParams::val...);
+    }
 };
 
 /// \brief Serializer that just truncates the data if it doesn't fit
@@ -136,6 +142,15 @@ struct TruncateOverflow
                 val |= (static_cast<uint64_t>(-1) << numBits);
         }
         return val;
+    }
+
+    static SerializeParams Params(NumBits numBits)
+    {
+        SerializeParams sp;
+        TruncateParams params;
+        params.numBits = numBits;
+        sp.params = params;
+        return sp;
     }
 };
 
@@ -228,6 +243,16 @@ struct SimpleOverflow
             ret = val - signedOffset;
         }
         return ret;
+    }
+
+    static SerializeParams Params(NumBits numBits, NumBytes overflowSize)
+    {
+        SerializeParams sp;
+        SimpleOverflowParams params;
+        params.numBits = numBits;
+        params.overflowBytes = overflowSize;
+        sp.params = params;
+        return sp;
     }
 };
 
@@ -322,6 +347,15 @@ struct CompactOverflow
         if (storeSigned && (ret & (1ul << (currBits-1))))
             ret |= static_cast<uint64_t>(-1) << currBits;
         return ret;
+    }
+
+    static SerializeParams Params(NumBits numBits)
+    {
+        SerializeParams sp;
+        CompactOverflowParams params;
+        params.numBits = numBits;
+        sp.params = params;
+        return sp;
     }
 };
 

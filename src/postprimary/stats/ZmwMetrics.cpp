@@ -106,7 +106,7 @@ float ComputePulseRate(const RegionLabel& hqRegion, const BlockLevelMetrics& met
     return (blockTime > 0) ? meanNumPulses / blockTime : 0;
 }
 
-float ComputePulseWidth(const FileHeader& fh, const RegionLabel& hqRegion, const BlockLevelMetrics& metrics)
+float ComputePulseWidth(const BazIO::FileHeader& fh, const RegionLabel& hqRegion, const BlockLevelMetrics& metrics)
 {
     const auto& metricsRegion = metrics.GetMetricRegion(hqRegion);
 
@@ -148,9 +148,9 @@ AnalogMetricData<uint32_t> BasesPerChannel(const RegionLabel& hqRegion,
     return baseCounts;
 };
 
-float ComputeBaseIpd(const FileHeader& fh,
-              const RegionLabel& hqRegion,
-              const EventData& events)
+float ComputeBaseIpd(const BazIO::FileHeader& fh,
+                     const RegionLabel& hqRegion,
+                     const EventData& events)
 {
     const auto& allIpds = events.Ipds();
     const auto& isBase = events.IsBase();
@@ -192,7 +192,7 @@ float ComputeBaseRate(const RegionLabel& hqRegion, const BlockLevelMetrics& metr
     return (blockTime > 0) ? (meanNumBasesHq / blockTime) : 0;
 }
 
-float ComputeBaseWidth(const FileHeader& fh,
+float ComputeBaseWidth(const BazIO::FileHeader& fh,
                        const RegionLabel& hqRegion,
                        const BlockLevelMetrics& metrics)
 {
@@ -214,7 +214,7 @@ float ComputeBaseWidth(const FileHeader& fh,
     return static_cast<float>(Mean(baseWidths) / fh.FrameRateHz());
 }
 
-float BaseLocalRate(const FileHeader& fh,
+float BaseLocalRate(const BazIO::FileHeader& fh,
                     const RegionLabel& hqRegion,
                     const EventData& events,
                     const BlockLevelMetrics& metrics)
@@ -317,7 +317,7 @@ FilterMetricData<float> ComputeBaseline(const MetricRegion& region,
     return baseline;
 }
 
-float ComputePausiness(const FileHeader& fh, const RegionLabel& hqRegion, const EventData& events)
+float ComputePausiness(const BazIO::FileHeader& fh, const RegionLabel& hqRegion, const EventData& events)
 {
     const float pauseIpdThreshSec = 2.5;
     uint32_t threshold = static_cast<uint32_t>(pauseIpdThreshSec * fh.FrameRateHz());
@@ -367,7 +367,7 @@ AnalogMetricData<float> DMEFilteredAngleEstimate(const MetricRegion& region,
     return static_cast<AnalogMetricData<float>>(filterAngles);
 }
 
-bool ComputeIsRead(const FileHeader& fh, const RegionLabel& hqRegion, const EventData& events, const ProductivityInfo& prod)
+bool ComputeIsRead(const BazIO::FileHeader& fh, const RegionLabel& hqRegion, const EventData& events, const ProductivityInfo& prod)
 {
     static const int minBpPerHr = 100;
     const double bpPerChanThresh = minBpPerHr * fh.MovieTimeInHrs();
@@ -383,7 +383,7 @@ bool ComputeIsRead(const FileHeader& fh, const RegionLabel& hqRegion, const Even
     return false;
 }
 
-uint32_t ZmwFeature(const FileHeader &fh, const EventData &events)
+uint32_t ZmwFeature(const BazIO::FileHeader &fh, const EventData &events)
 {
     return fh.ZmwUnitFeatures(events.ZmwIndex());
 }
@@ -555,7 +555,7 @@ ExcludedPulseMetrics::ExcludedPulseMetrics(const std::vector<InsertState>& inser
     insertLengths_.pausePulse   = insertLengths[InsertState::PAUSE_PULSE];
 }
 
-PulseMetrics::PulseMetrics(const FileHeader& fh,
+PulseMetrics::PulseMetrics(const BazIO::FileHeader& fh,
                            const RegionLabel& hqRegion,
                            const BlockLevelMetrics& metrics)
     : width_(ComputePulseWidth(fh, hqRegion, metrics))
@@ -563,7 +563,7 @@ PulseMetrics::PulseMetrics(const FileHeader& fh,
     , totalCount_(TotalPulseCount(hqRegion, metrics))
 {}
 
-BaseMetrics::BaseMetrics(const FileHeader& fh,
+BaseMetrics::BaseMetrics(const BazIO::FileHeader& fh,
                          const RegionLabel& hqRegion,
                          const BlockLevelMetrics& metrics,
                          const EventData& events)
@@ -576,7 +576,7 @@ BaseMetrics::BaseMetrics(const FileHeader& fh,
     , counts_(BasesPerChannel(hqRegion, events))
 {}
 
-ReadMetrics::ReadMetrics(const FileHeader& fh,
+ReadMetrics::ReadMetrics(const BazIO::FileHeader& fh,
                          const RegionLabel& hqRegion,
                          const EventData& events,
                          const ProductivityInfo& prod)
@@ -588,7 +588,7 @@ ReadMetrics::ReadMetrics(const FileHeader& fh,
     , isRead_(ComputeIsRead(fh, hqRegion, events, prod))
 {}
 
-ZmwMetrics::ZmwMetrics(const FileHeader& fh,
+ZmwMetrics::ZmwMetrics(const BazIO::FileHeader& fh,
                        const RegionLabel& hqRegion,
                        const std::vector<RegionLabel>& adapters,
                        const BlockLevelMetrics& metrics,

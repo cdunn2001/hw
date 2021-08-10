@@ -33,8 +33,8 @@ Compare hqregion
 
 Compare hqregion, doing real region finding on softball data
 
-  $ production_baz=/pbi/dept/primary/sim/spider/kestrel-test/prod.baz
-  $ internal_baz=/pbi/dept/primary/sim/spider/kestrel-test/internal.baz
+  $ production_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/prod.baz
+  $ internal_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/internal.baz
 
   $ baz2bam ${production_baz} -o out_production --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
   $ baz2bam ${internal_baz} -o out_internal --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
@@ -86,9 +86,6 @@ Exercise the various HQRF configurations:
   1
 
 Test ignoreBazActivityLabels:
-  $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_spider_n2.subreadset.xml
-  467
-
   $ baz2bam out_spider.baz -o out_spider_n2_relabel --hqrfConfig N2 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --ignoreBazActivityLabels --enableBarcodedAdapters=False
 
   $ grep -c "ZOFFSET_CART_HMM configured" out_spider_n2_relabel.baz2bam_1.log
@@ -121,7 +118,3 @@ Test Spider RTAL BAZ:
 
   $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_spiderrtal_n2.subreadset.xml
   467
-
-  $ h5dump -d /ZMWMetrics/HQRegionSnrMean out_spider_n2.sts.h5 | tail -n +2 > out_spider_n2_hqregionsnrmean.txt
-  $ h5dump -d /ZMWMetrics/HQRegionSnrMean out_spiderrtal_n2.sts.h5 | tail -n +2 > out_spiderrtal_n2_hqregionsnrmean.txt
-  $ diff out_spider_n2_hqregionsnrmean.txt out_spiderrtal_n2_hqregionsnrmean.txt

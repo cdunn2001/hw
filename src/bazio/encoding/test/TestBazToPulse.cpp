@@ -26,6 +26,8 @@
 #include <gtest/gtest.h>
 
 #include <bazio/encoding/BazToPulse.h>
+#include <bazio/encoding/FieldTransforms.h>
+#include <bazio/encoding/FieldSerializers.h>
 #include <dataTypes/Pulse.h>
 
 using namespace PacBio::BazIO;
@@ -33,21 +35,21 @@ using namespace PacBio::BazIO;
 TEST(BazToPulse, KestrelLosslessCompact)
 {
     std::vector<FieldParams> info;
-    info.push_back({PacketFieldName::Label,
-                    StoreSigned{false},
-                    {NoOpTransformParams{}},
-                    TruncateParams{ NumBits{2} }
-        });
-    info.push_back({PacketFieldName::Pw,
-                    StoreSigned{false},
-                    {NoOpTransformParams{}},
-                    CompactOverflowParams{ NumBits{7} }
-        });
-    info.push_back({PacketFieldName::StartFrame,
-                    StoreSigned{false},
-                    {DeltaCompressionParams{}},
-                    CompactOverflowParams{ NumBits{7} }
-        });
+
+    FieldParams fp;
+    fp.name = PacketFieldName::Label;
+    fp.storeSigned = false;
+    fp.transform = Transform<NoOp>::Params();
+    fp.serialize = TruncateOverflow::Params(NumBits{2});
+    info.emplace_back(fp);
+
+    fp.name = PacketFieldName::PulseWidth;
+    fp.serialize = CompactOverflow::Params(NumBits{7});
+    info.emplace_back(fp);
+
+    fp.name = PacketFieldName::StartFrame;
+    fp.transform = Transform<DeltaCompression>::Params();
+    info.emplace_back(fp);
 
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesIn{};
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesOut{};
@@ -106,21 +108,21 @@ TEST(BazToPulse, KestrelLosslessCompact)
 TEST(BazToPulse, KestrelLosslessSimple)
 {
     std::vector<FieldParams> info;
-    info.push_back({PacketFieldName::Label,
-                    StoreSigned{false},
-                    {NoOpTransformParams{}},
-                    TruncateParams{ NumBits{2} }
-        });
-    info.push_back({PacketFieldName::Pw,
-                    StoreSigned{false},
-                    {NoOpTransformParams{}},
-                    SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
-        });
-    info.push_back({PacketFieldName::StartFrame,
-                    StoreSigned{false},
-                    {DeltaCompressionParams{}},
-                    SimpleOverflowParams{ NumBits{7}, NumBytes{4} }
-        });
+
+    FieldParams fp;
+    fp.name = PacketFieldName::Label;
+    fp.storeSigned = false;
+    fp.transform = Transform<NoOp>::Params();
+    fp.serialize = TruncateOverflow::Params(NumBits{2});
+    info.emplace_back(fp);
+
+    fp.name = PacketFieldName::PulseWidth;
+    fp.serialize = SimpleOverflow::Params(NumBits{7}, NumBytes{4});
+    info.emplace_back(fp);
+
+    fp.name = PacketFieldName::StartFrame;
+    fp.transform = Transform<DeltaCompression>::Params();
+    info.emplace_back(fp);
 
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesIn{};
     std::array<PacBio::Mongo::Data::Pulse, 8> pulsesOut{};

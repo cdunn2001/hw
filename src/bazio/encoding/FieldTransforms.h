@@ -71,6 +71,7 @@
 #include <common/cuda/utility/CudaTuple.h>
 
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/EncodingParams.h>
 
 #include <bazio/encoding/Types.h>
 
@@ -90,6 +91,10 @@ struct Transform
     {
         return b_.template Revert<Ret>(val, storeSigned, autoParams::val...);
     }
+    static std::vector<TransformsParams> Params()
+    {
+        return std::vector<TransformsParams>{Base::Params(autoParams::val...)};
+    }
 private:
     Base b_;
 };
@@ -106,6 +111,10 @@ struct MultiTransform
     BAZ_CUDA Ret Revert(uint64_t val, StoreSigned storeSigned)
     {
         return first_.template Revert<Ret>(rest_.template Revert<uint64_t>(val, storeSigned), storeSigned);
+    }
+    static std::vector<TransformsParams> Params()
+    {
+        return std::vector<TransformsParams>{ Trans1::Params(), TransRest::Params()... };
     }
 private:
     Trans1 first_;
@@ -128,6 +137,14 @@ struct NoOp
     {
         static_assert(std::is_integral<Ret>::value, "");
         return static_cast<Ret>(val);
+    }
+
+    static TransformsParams Params()
+    {
+        TransformsParams tp;
+        NoOpTransformParams params;
+        tp.params = params;
+        return tp;
     }
 };
 
@@ -161,6 +178,15 @@ struct FixedPoint
             return static_cast<float>(static_cast<int64_t>(val)) / scale;
         else
             return static_cast<float>(val) / scale;
+    }
+
+    static TransformsParams Params(FixedPointScale scale)
+    {
+        TransformsParams tp;
+        FixedPointParams params;
+        params.scale = scale;
+        tp.params = params;
+        return tp;
     }
 };
 
@@ -236,6 +262,15 @@ struct LossySequelCodec
         auto base = (multiplier - 1) * F;
         return static_cast<Ret>(base + multiplier * main);
     }
+
+    static TransformsParams Params(NumBits bits)
+    {
+        TransformsParams tp;
+        CodecParams params;
+        params.numBits = bits;
+        tp.params = params;
+        return tp;
+    }
 };
 
 struct DeltaCompression
@@ -254,6 +289,14 @@ struct DeltaCompression
     {
         lastVal += val;
         return lastVal;
+    }
+
+    static TransformsParams Params()
+    {
+        TransformsParams tp;
+        DeltaCompressionParams params;
+        tp.params = params;
+        return tp;
     }
 private:
     // Storing this as unsigned, but really only so

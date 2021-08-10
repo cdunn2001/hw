@@ -533,7 +533,7 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
     return batchByteData;
 }
 
-std::unique_ptr<FileHeader> BazReader::ReadFileHeader()
+std::unique_ptr<BazIO::FileHeader> BazReader::ReadFileHeader()
 {
     // Seek for SANITY block and last position of the file header
     uint64_t headerSize = Sanity::FindAndVerify(file_);
@@ -550,7 +550,7 @@ std::unique_ptr<FileHeader> BazReader::ReadFileHeader()
         throw std::runtime_error("Cannot read file header!");
 
     // Let FileHeader parse JSON header
-    return std::unique_ptr<FileHeader>(new FileHeader(header.get(), headerSize));
+    return std::unique_ptr<BazIO::FileHeader>(new BazIO::FileHeader(header.get(), headerSize));
 }
 
 std::unique_ptr<FileFooter> BazReader::ReadFileFooter()
@@ -585,7 +585,7 @@ std::unique_ptr<FileFooter> BazReader::ReadFileFooter()
     return std::unique_ptr<FileFooter>(new FileFooter(footer.get(), footerSize));
 }
 
-const FileHeader& BazReader::Fileheader()
+const BazIO::FileHeader& BazReader::Fileheader()
 {
     if (!fh_) throw PBException("null Fileheader");
     return *fh_;

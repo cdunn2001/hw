@@ -96,7 +96,7 @@ RegionLabel HQRegionFinder::FindAndAnnotateHQRegion(
 std::unique_ptr<HQRegionFinder> HQRegionFinderFactory(
         const UserParameters& user,
         const std::shared_ptr<PpaAlgoConfig>& ppaAlgoConfig,
-        const FileHeader& header)
+        const PacBio::BazIO::FileHeader& header)
 {
     HQRFMethod hqrfMethod = CoeffLookup(ppaAlgoConfig);
 

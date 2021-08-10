@@ -51,9 +51,10 @@
 #include <pacbio/PBException.h>
 #include <pacbio/process/OptionParser.h>
 
+#include <bazio/file/FileHeader.h>
+
 #include <bazio/BazCore.h>
 #include <bazio/BazReader.h>
-#include <bazio/FileHeader.h>
 #include <BazVersion.h>
 
 #include <pacbio/logging/Logger.h>
@@ -79,11 +80,11 @@ private:
     DataFrame lfMetrics_;
 
     std::vector<int> zmwNumbers_;
-    const FileHeader* fh_;
+    const BazIO::FileHeader* fh_;
     size_t numZmw_;
 
 public:
-    MetricsAggregator(const FileHeader* fh)
+    MetricsAggregator(const BazIO::FileHeader* fh)
         : fh_(fh)
         , numZmw_(fh->MaxNumZMWs())
     {
@@ -319,7 +320,7 @@ std::vector<uint32_t> ParseData(const std::string& data)
 
 using Jval = Json::Value;
 
-static void FillMetrics(const FileHeader* fh, const ZmwByteData& data, const bool internal, const size_t frameLimit, Json::Value& single)
+static void FillMetrics(const BazIO::FileHeader* fh, const ZmwByteData& data, const bool internal, const size_t frameLimit, Json::Value& single)
 {
     single["ZMW_ID"]     = data.ZmwIndex();
     single["ZMW_NUMBER"] = fh->ZmwIdToNumber(data.ZmwIndex());

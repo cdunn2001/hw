@@ -38,10 +38,10 @@ TEST(InsertFinder, RecomputeIPD)
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(1);
         if (200 <= i && i < 300)
-            rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+            rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         else
-            rawPackets[BazIO::PacketFieldName::Pw].push_back(15);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+            rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(15);
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     auto packets = BazIO::BazEventData(rawPackets, {});
@@ -69,15 +69,15 @@ TEST(InsertFinder, RecomputeIPD)
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(1);
         if (100 <= i && i < 400)
         {
-            rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+            rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
             if (i % 2 == 0)
             {
                 rawPackets[BazIO::PacketFieldName::IsBase][i] = 0;
             }
         }
         else
-            rawPackets[BazIO::PacketFieldName::Pw].push_back(15);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+            rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(15);
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     packets = BazIO::BazEventData(rawPackets, {});
@@ -108,11 +108,11 @@ TEST(InsertFinder, TestInterspersedBase)
     for (unsigned int i = 0; i < numPulses; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         auto isBase = (i % 2 == 0) ? true : false;
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(isBase);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     auto packets = BazIO::BazEventData(rawPackets, {});
@@ -145,7 +145,7 @@ TEST(InsertFinder, InterspersedShortPulse)
     for (unsigned int i = 0; i < numPulses; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         auto isBase = (i % 3 == 0) ? true : false;
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(isBase);
         rawPackets[BazIO::PacketFieldName::Label].push_back(pw);
@@ -169,7 +169,7 @@ TEST(InsertFinder, TestShortPulses)
     for (unsigned int i = 0; i < numPulses; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(false);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
         frame += ipd + pw;
@@ -200,7 +200,7 @@ TEST(InsertFinder, ShortBurst)
     for (unsigned int i = 0; i < numPulses; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
         frame += ipd + pw;
@@ -222,48 +222,48 @@ TEST(InsertFinder, LongBurst)
     for (unsigned int i = 0; i < 250; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(12);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(12);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     // Add short pulses that should be identified as burst.
     for (unsigned int i = 0; i < 500; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     for (unsigned int i = 0; i < 250; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(12);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(12);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     // This should get overturned as the burst is below the minimum length of 50.
     for (unsigned int i = 0; i < 40; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(1);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(1);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     for (unsigned int i = 0; i < 160; i++)
     {
         rawPackets[BazIO::PacketFieldName::StartFrame].push_back(frame);
-        rawPackets[BazIO::PacketFieldName::Pw].push_back(12);
+        rawPackets[BazIO::PacketFieldName::PulseWidth].push_back(12);
         rawPackets[BazIO::PacketFieldName::IsBase].push_back(true);
         rawPackets[BazIO::PacketFieldName::Label].push_back(1);
-        frame += ipd + rawPackets[BazIO::PacketFieldName::Pw].back();
+        frame += ipd + rawPackets[BazIO::PacketFieldName::PulseWidth].back();
     }
 
     auto packets = BazIO::BazEventData(rawPackets, {});

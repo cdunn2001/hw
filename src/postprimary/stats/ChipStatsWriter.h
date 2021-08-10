@@ -99,7 +99,7 @@ public: // structors
 
 public:
     void WriteChip(const ChipStats& stats,
-                   const FileHeader& fh, const std::string& schemaVersion)
+                   const BazIO::FileHeader& fh, const std::string& schemaVersion)
     {
         WriteXMLHeader(schemaVersion);
 

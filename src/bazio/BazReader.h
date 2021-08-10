@@ -40,9 +40,10 @@
 #include <functional>
 #include <queue>
 
+#include <bazio/file/FileHeader.h>
+
 #include "DataParsing.h"
 #include "ZmwSliceHeader.h"
-#include "FileHeader.h"
 #include "FileFooter.h"
 
 namespace PacBio {
@@ -85,7 +86,7 @@ public:
     std::vector<ZmwByteData> NextSlice(const std::function<bool(void)>& callBackCheck=nullptr);
 
     /// Parses and provides the file header from the file stream
-    std::unique_ptr<FileHeader> ReadFileHeader();
+    std::unique_ptr<BazIO::FileHeader> ReadFileHeader();
 
     /// Parses and provides the file footer from the file stream
     std::unique_ptr<FileFooter> ReadFileFooter();
@@ -107,7 +108,7 @@ public:
 
 public:
     /// Returns reference to current file header
-    const FileHeader& Fileheader();
+    const BazIO::FileHeader& Fileheader();
 
     /// Returns reference to current file footer
     std::unique_ptr<FileFooter>& Filefooter();
@@ -125,7 +126,7 @@ private:   // data
     FILE*          file_;
     uint32_t       numZMWs_ = 0;
     uint32_t       numSuperchunks_ = 0;
-    std::unique_ptr<FileHeader> fh_;
+    std::unique_ptr<BazIO::FileHeader> fh_;
     std::unique_ptr<FileFooter> ff_;
     std::queue<std::pair<uint32_t, uint32_t>> zmwSlices_;
 
