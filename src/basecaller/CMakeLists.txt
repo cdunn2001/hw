@@ -1,22 +1,22 @@
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 project(MongoBasecaller
     VERSION 0.0
     LANGUAGES C CXX CUDA
 )
 
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+set(CMAKE_CUDA_ARCHITECTURES "70;80")
+
 enable_testing()
 
 include(setup-thirdparty.cmake)
 
-# TODO: Use C++17 when we have a newer version of GCC available.
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Note: C++14 is the latest allowed by CUDA.  Even if we bump
-# the standard for cpp files, we cannot here
-set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 
@@ -64,8 +64,8 @@ add_subdirectory(sequel-common/pacbio/primary sequel-common)
 add_subdirectory(common)
 add_subdirectory(applications)
 add_subdirectory(appModules)
+add_subdirectory(prototypes)
 add_subdirectory(basecaller)
 add_subdirectory(../bazio bazio)
 add_subdirectory(dataTypes)
-add_subdirectory(prototypes)
 add_subdirectory(../postprimary postprimary)

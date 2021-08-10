@@ -1,7 +1,7 @@
 # This exports 3 basic targets
 #  libBazio - all library code and dependencies of that code
 
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required (VERSION 3.20)
 
 # Allow use of std::min in Visual Studio.
 add_definitions(-DNOMINMAX)

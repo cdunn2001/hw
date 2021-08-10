@@ -88,7 +88,9 @@ TEST(BazTransform, Codec)
                 {
                     bool good = ::LossySequelCodec::Apply(frame, StoreSigned{false}, mainBits) == code;
                     if (errors < 10)
+                    {
                         EXPECT_TRUE(good) << code;
+                    }
                     good ? successes++ : errors++;
 
                     if (k == (stride-1)/2) code++;
@@ -115,7 +117,9 @@ TEST(BazTransform, Codec)
             {
                 bool good = ::LossySequelCodec::Apply(frame, StoreSigned{false}, mainBits) == code;
                 if (errors < 10)
+                {
                     EXPECT_TRUE(good) << code;
+                }
                 good ? successes++ : errors++;
             }
             stride *= 2;

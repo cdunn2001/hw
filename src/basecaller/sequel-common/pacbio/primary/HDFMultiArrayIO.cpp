@@ -142,7 +142,7 @@ HDFMultiArrayIO::HDFMultiArrayIO (const std::string& fileName, AccessMode mode)
 	{
         h5File_.reset( new H5::H5File (fileName, mode) );
 	}
-	catch (H5::Exception ex)
+	catch (const H5::Exception& ex)
 	{
 		std::ostringstream msg;
 		msg << ex.getDetailMsg() << ".";
