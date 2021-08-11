@@ -59,6 +59,7 @@ public:
                   size_t expectedFrames,
                   const std::vector<uint32_t>& zmwNumbers,
                   const std::vector<uint32_t>& zmwFeatures,
+                  const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig);
 
     ~BazWriterBody()

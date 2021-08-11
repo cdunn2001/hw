@@ -46,6 +46,7 @@ BazWriterBody::BazWriterBody(
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
+        const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig)
     : bazName_(bazName)
 {

@@ -549,13 +549,13 @@ private:
     }
 
     std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreatePrelimHQFilter(size_t numZmw, size_t numBatches)
+    CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
-        return std::make_unique<PrelimHQFilterBody>(numZmw, numBatches, config_.prelimHQ, config_.internalMode);
+        return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_.prelimHQ, config_.internalMode, config_.multipleBazFiles);
     }
 
     std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreateBazSaver(const DataSourceRunner& source)
+    CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         if (hasBazFile_)
         {
@@ -567,6 +567,7 @@ private:
                                                    source.NumFrames(),
                                                    source.UnitCellIds(),
                                                    features2,
+                                                   poolDims,
                                                    config_);
         } else
         {
@@ -595,8 +596,8 @@ private:
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
-                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims.size()), GraphProfiler::PRE_HQ);
-                preHQ->AddNode(CreateBazSaver(*source), GraphProfiler::BAZWRITER);
+                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;

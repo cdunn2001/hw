@@ -39,8 +39,8 @@ namespace Application {
 class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
-    PrelimHQFilterBody(size_t numZmws, size_t numBatches,
-                       const Mongo::Data::PrelimHQConfig& config, bool internal);
+    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
+                       const Mongo::Data::PrelimHQConfig& config, bool internal, bool multipleBazFiles);
     ~PrelimHQFilterBody();
 
     size_t ConcurrencyLimit() const override { return 1; }
@@ -48,8 +48,10 @@ public:
 
     void Process(Mongo::Data::BatchResult in) override;
 private:
+    struct SingleBuffer;
+    struct MultipleBuffer;
     struct Impl;
-    template <bool internal>
+    template <bool internal, bool multipleBazFiles>
     struct ImplChild;
     std::unique_ptr<Impl> impl_;
 };
