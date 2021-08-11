@@ -108,14 +108,27 @@ struct BazWriterBody::MultipleBazWriter : public BazWriterBody::BazWriter
                       const std::map<uint32_t, BatchDimensions>& poolDims,
                       const SmrtBasecallerConfig& basecallerConfig)
     {
-        PBLOG_INFO << "Opening multiple BAZ files for writing: " << bazName << " zmws: " << zmwNumbers.size();
+        auto removeExtension = [](const std::string& fn) {
+            size_t lastDot = fn.find_last_of(".");
+            if (lastDot == std::string::npos) return fn;
+            return fn.substr(0, lastDot);
+        };
+
+        PBLOG_INFO << "Opening multiple BAZ files for writing with filename prefix: "
+                   << removeExtension(bazName) << " zmws: " << zmwNumbers.size();
 
         const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
+        auto poolZmwNumbersStart = zmwNumbers.begin();
+        auto poolZmwFeaturesStart = zmwFeatures.begin();
         for (const auto& kv : poolDims)
         {
+            std::vector<uint32_t> poolZmwNumbers(poolZmwNumbersStart, poolZmwNumbersStart + kv.second.ZmwsPerBatch());
+            std::vector<uint32_t> poolZmwFeatures(poolZmwFeaturesStart, poolZmwFeaturesStart + kv.second.ZmwsPerBatch());
+
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
-            FileHeaderBuilder fh(bazName,
+            std::string multiBazName = removeExtension(bazName) + "." + std::to_string(kv.first) + ".baz";
+            FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,
                                  basecallerConfig.internalMode
@@ -123,16 +136,19 @@ struct BazWriterBody::MultipleBazWriter : public BazWriterBody::BazWriter
                                  SmrtData::MetricsVerbosity::MINIMAL,
                                  "",
                                  basecallerConfig.Serialize().toStyledString(),
-                                 zmwNumbers,
-                                 zmwFeatures,
+                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + kv.second.ZmwsPerBatch()),
+                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + kv.second.ZmwsPerBatch()),
                                  // Hack, until metrics handling can be rewritten
                                  metricFrames,
                                  metricFrames,
                                  metricFrames);
 
+            poolZmwNumbersStart += kv.second.ZmwsPerBatch();
+            poolZmwFeaturesStart += kv.second.ZmwsPerBatch();
+
             fh.BaseCallerVersion("0.1");
 
-            bazWriters_[kv.first] = std::make_unique<BazIO::BazWriter>(bazName, fh, BazIOConfig{});
+            bazWriters_[kv.first] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, BazIOConfig{});
         }
     }
 

@@ -246,7 +246,7 @@ struct PrelimHQFilterBody::MultipleBuffer
             PBLOG_INFO << "Data out of order, multiple chunks being processed simultaneously";
         }
 
-        size_t currentZmwIndex = pulseBatch.GetMeta().FirstZmw();
+        size_t currentZmwIndex = 0;
         for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
         {
             const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
