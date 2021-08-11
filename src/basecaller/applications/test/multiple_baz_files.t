@@ -11,3 +11,28 @@
   /tmp/cramtests-*/multi.2.baz (glob)
   /tmp/cramtests-*/multi.3.baz (glob)
 
+  $ bazviewer -l --silent ${CRAMTMP}/multi.0.baz | wc -l
+  65
+  $ bazviewer -l --silent ${CRAMTMP}/multi.1.baz | wc -l
+  65
+  $ bazviewer -l --silent ${CRAMTMP}/multi.2.baz | wc -l
+  65
+  $ bazviewer -l --silent ${CRAMTMP}/multi.3.baz | wc -l
+  65
+
+# Compare data between the two files.
+  $ bazviewer --silent -d -n 0 ${CRAMTMP}/test.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > single.txt
+  $ bazviewer --silent -d -n 0 ${CRAMTMP}/multi.0.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > multi.txt
+  $ diff single.txt multi.txt
+
+  $ bazviewer --silent -d -n 64 ${CRAMTMP}/test.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > single.txt
+  $ bazviewer --silent -d -n 64 ${CRAMTMP}/multi.1.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > multi.txt
+  $ diff single.txt multi.txt
+
+  $ bazviewer --silent -d -n 191 ${CRAMTMP}/test.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > single.txt
+  $ bazviewer --silent -d -n 191 ${CRAMTMP}/multi.2.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > multi.txt
+  $ diff single.txt multi.txt
+
+  $ bazviewer --silent -d -n 224 ${CRAMTMP}/test.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > single.txt
+  $ bazviewer --silent -d -n 224 ${CRAMTMP}/multi.3.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g' > multi.txt
+  $ diff single.txt multi.txt
