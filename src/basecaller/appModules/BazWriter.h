@@ -62,12 +62,7 @@ public:
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig);
 
-    ~BazWriterBody()
-    {
-        PBLOG_INFO << "Closing BAZ file: " << bazName_;
-        bazWriter_->WaitForTermination();
-        bazWriter_.reset();
-    }
+    ~BazWriterBody();
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1; }
@@ -75,7 +70,10 @@ public:
     void Process(std::unique_ptr<BazIO::BazBuffer> in) override;
 
 private:
-    std::unique_ptr<BazIO::BazWriter> bazWriter_;
+    struct SingleBazWriter;
+    struct MultipleBazWriter;
+    struct BazWriter;
+    std::unique_ptr<BazWriter> bazWriter_;
     std::string bazName_;
 };
 

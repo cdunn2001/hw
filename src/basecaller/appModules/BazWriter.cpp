@@ -41,6 +41,121 @@ using namespace PacBio::Mongo::Data;
 namespace PacBio {
 namespace Application {
 
+struct BazWriterBody::BazWriter
+{
+    virtual void Flush(std::unique_ptr<BazIO::BazBuffer> buffer) = 0;
+    virtual void WaitForTermination() = 0;
+};
+
+struct BazWriterBody::SingleBazWriter : public BazWriterBody::BazWriter
+{
+    SingleBazWriter(const std::string& bazName,
+                    size_t expectedFrames,
+                    const std::vector<uint32_t>& zmwNumbers,
+                    const std::vector<uint32_t>& zmwFeatures,
+                    const std::map<uint32_t, BatchDimensions>& poolDims,
+                    const SmrtBasecallerConfig& basecallerConfig)
+    {
+        PBLOG_INFO << "Opening BAZ file for writing: " << bazName << " zmws: " << zmwNumbers.size();
+
+        const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
+
+        using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+        FileHeaderBuilder fh(bazName,
+                             100.0f,
+                             expectedFrames,
+                             basecallerConfig.internalMode
+                             ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                             SmrtData::MetricsVerbosity::MINIMAL,
+                             "",
+                             basecallerConfig.Serialize().toStyledString(),
+                             zmwNumbers,
+                             zmwFeatures,
+                             // Hack, until metrics handling can be rewritten
+                             metricFrames,
+                             metricFrames,
+                             metricFrames);
+
+        fh.BaseCallerVersion("0.1");
+
+        bazWriter_ = std::make_unique<BazIO::BazWriter>(bazName, fh, BazIOConfig{});
+    }
+
+    void Flush(std::unique_ptr<BazIO::BazBuffer> buffer)
+    {
+        bazWriter_->Flush(std::move(buffer));
+    }
+
+    void WaitForTermination()
+    {
+        bazWriter_->WaitForTermination();
+    }
+
+    ~SingleBazWriter()
+    {
+        bazWriter_.reset();
+    }
+
+    std::unique_ptr<BazIO::BazWriter> bazWriter_;
+};
+
+struct BazWriterBody::MultipleBazWriter : public BazWriterBody::BazWriter
+{
+    MultipleBazWriter(const std::string& bazName,
+                      size_t expectedFrames,
+                      const std::vector<uint32_t>& zmwNumbers,
+                      const std::vector<uint32_t>& zmwFeatures,
+                      const std::map<uint32_t, BatchDimensions>& poolDims,
+                      const SmrtBasecallerConfig& basecallerConfig)
+    {
+        PBLOG_INFO << "Opening multiple BAZ files for writing: " << bazName << " zmws: " << zmwNumbers.size();
+
+        const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
+
+        for (const auto& kv : poolDims)
+        {
+            using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+            FileHeaderBuilder fh(bazName,
+                                 100.0f,
+                                 expectedFrames,
+                                 basecallerConfig.internalMode
+                                 ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                                 SmrtData::MetricsVerbosity::MINIMAL,
+                                 "",
+                                 basecallerConfig.Serialize().toStyledString(),
+                                 zmwNumbers,
+                                 zmwFeatures,
+                                 // Hack, until metrics handling can be rewritten
+                                 metricFrames,
+                                 metricFrames,
+                                 metricFrames);
+
+            fh.BaseCallerVersion("0.1");
+
+            bazWriters_[kv.first] = std::make_unique<BazIO::BazWriter>(bazName, fh, BazIOConfig{});
+        }
+    }
+
+    void Flush(std::unique_ptr<BazIO::BazBuffer> buffer)
+    {
+        bazWriters_[buffer->PoolId()]->Flush(std::move(buffer));
+    }
+
+    void WaitForTermination()
+    {
+        for (auto& kv : bazWriters_)
+            kv.second->WaitForTermination();
+    }
+
+    ~MultipleBazWriter()
+    {
+        for (auto& kv : bazWriters_)
+            kv.second.reset();
+    }
+
+    std::map<uint32_t, std::unique_ptr<BazIO::BazWriter>> bazWriters_;
+};
+
 BazWriterBody::BazWriterBody(
         const std::string& bazName,
         size_t expectedFrames,
@@ -50,34 +165,24 @@ BazWriterBody::BazWriterBody(
         const SmrtBasecallerConfig& basecallerConfig)
     : bazName_(bazName)
 {
-    PBLOG_INFO << "Opening BAZ file for writing: " << bazName_ << " zmws: " << zmwNumbers.size();
-
-    const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
-
-    using FileHeaderBuilder = BazIO::FileHeaderBuilder;
-    FileHeaderBuilder fh(bazName_,
-                         100.0f,
-                         expectedFrames,
-                         basecallerConfig.internalMode
-                         ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
-                         SmrtData::MetricsVerbosity::MINIMAL,
-                         "",
-                         basecallerConfig.Serialize().toStyledString(),
-                         zmwNumbers,
-                         zmwFeatures,
-                         // Hack, until metrics handling can be rewritten
-                         metricFrames,
-                         metricFrames,
-                         metricFrames);
-
-    fh.BaseCallerVersion("0.1");
-
-    bazWriter_ = std::make_unique<BazIO::BazWriter>(bazName_, fh, BazIOConfig{});
+    if (basecallerConfig.multipleBazFiles)
+        bazWriter_ = std::make_unique<MultipleBazWriter>(bazName, expectedFrames, zmwNumbers,
+                                                         zmwFeatures, poolDims, basecallerConfig);
+    else
+        bazWriter_ = std::make_unique<SingleBazWriter>(bazName, expectedFrames, zmwNumbers,
+                                                       zmwFeatures, poolDims, basecallerConfig);
 }
 
 void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
 {
     bazWriter_->Flush(std::move(in));
+}
+
+BazWriterBody::~BazWriterBody()
+{
+    PBLOG_INFO << "Closing BAZ file: " << bazName_;
+    bazWriter_->WaitForTermination();
+    bazWriter_.reset();
 }
 
 }}

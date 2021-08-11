@@ -146,8 +146,9 @@ constexpr size_t PrelimHQFilterBody::Impl::expectedPulses;
 struct PrelimHQFilterBody::SingleBuffer
 {
     SingleBuffer(PrelimHQFilterBody::Impl* p)
-    : buffer_(std::make_unique<BazIO::BazBuffer>(p->numZmw_, PrelimHQFilterBody::Impl::expectedPulses,
-                                                         CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
+    : buffer_(std::make_unique<BazIO::BazBuffer>(p->numZmw_, 0,
+                                                 PrelimHQFilterBody::Impl::expectedPulses,
+                                                 CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
     { }
 
     template <typename Serializer>
@@ -201,7 +202,7 @@ struct PrelimHQFilterBody::SingleBuffer
             p->batchesSeen_ = 0;
             if (p->chunksSeen_ == p->chunksPerOutput_ - 1)
             {
-                ret = std::make_unique<BazBuffer>(p->numZmw_, p->expectedPulses,
+                ret = std::make_unique<BazBuffer>(p->numZmw_, 0, p->expectedPulses,
                                                   CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
                 std::swap(ret, buffer_);
             }
@@ -219,7 +220,8 @@ struct PrelimHQFilterBody::MultipleBuffer
     {
         for (const auto& kv : p->poolDims_)
         {
-            buffers_[kv.first] = std::make_unique<BazIO::BazBuffer>(kv.second.ZmwsPerBatch(), PrelimHQFilterBody::Impl::expectedPulses,
+            buffers_[kv.first] = std::make_unique<BazIO::BazBuffer>(kv.second.ZmwsPerBatch(), kv.first,
+                                                                    PrelimHQFilterBody::Impl::expectedPulses,
                                                                     CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
         }
     }
@@ -272,7 +274,8 @@ struct PrelimHQFilterBody::MultipleBuffer
         p->batchesSeen_++;
         std::unique_ptr<BazBuffer> ret;
         // We should make a new buffer each time as the pool is complete.
-        ret = std::make_unique<BazBuffer>(pulseBatch.GetMeta().PoolId(), PrelimHQFilterBody::Impl::expectedPulses,
+        ret = std::make_unique<BazBuffer>(buffers_[pulseBatch.GetMeta().PoolId()]->NumZmw(), pulseBatch.GetMeta().PoolId(),
+                                          PrelimHQFilterBody::Impl::expectedPulses,
                                           CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
         std::swap(ret, buffers_[pulseBatch.GetMeta().PoolId()]);
         return ret;
