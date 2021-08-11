@@ -50,8 +50,9 @@
 #include <pbbam/virtual/ZmwReadStitcher.h>
 #include <pbbam/virtual/ZmwWhitelistVirtualReader.h>
 
+#include <bazio/file/FileHeader.h>
+
 #include <bazio/PacketFieldName.h>
-#include <bazio/FileHeader.h>
 
 #include <postprimary/bam/EventData.h>
 #include <postprimary/bam/RuntimeMetaData.h>
@@ -74,6 +75,8 @@ class ResultWriter;
 /// to ResultWriter that have to be written to disk.
 class ConvertBam2Bam
 {
+public:
+    using FileHeader = BazIO::FileHeader;
 public: // structors
     
     /// Creates instance BC labeler, BazReader, and ResultWriter and 

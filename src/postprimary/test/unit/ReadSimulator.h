@@ -7,9 +7,12 @@
 
 #include <pacbio/smrtdata/Readout.h>
 
-#include <bazio/FileHeader.h>
-#include <bazio/FileHeaderBuilder.h>
+#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileHeaderBuilder.h>
+
 #include <bazio/Simulation.h>
+
+#include <dataTypes/PulseGroups.h>
 
 #include <postprimary/insertfinder/InsertState.h>
 #include <postprimary/bam/EventData.h>
@@ -17,6 +20,7 @@
 #include <postprimary/stats/ProductivityMetrics.h>
 #include <postprimary/stats/ZmwStats.h>
 
+using namespace PacBio::Mongo::Data;
 using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
 
@@ -29,6 +33,8 @@ const uint32_t emptyOutlierTime{3};
 // make some values getter only
 struct ReadConfig
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     // DONT go to crazy with the local pulserate or you will overflow the int16
     // max on metric blocks (imposed during a conversion to double)
     //
@@ -88,7 +94,7 @@ struct ReadConfig
                 "SimulatedMovie",
                 80,
                 numFrames,
-                PacBio::SmrtData::Readout::PULSES,
+                ProductionPulses::Params(),
                 PacBio::SmrtData::MetricsVerbosity::HIGH,
                 generateExperimentMetadata(),
                 "{}", // basecaller config
@@ -140,7 +146,7 @@ ZmwMetrics RunMetrics(const EventData& events,
 // own.
 // TODO: Factor out the computation in the ZmwStats object into a public
 // interface so that it can be more easily tested
-std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<FileHeader>> fillstats(
+std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>> fillstats(
         const EventData& events,
         const BlockLevelMetrics& metrics,
         const RegionLabel& hqRegion,

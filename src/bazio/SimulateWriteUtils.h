@@ -47,11 +47,18 @@
 //      It also can have it's own pulse type, it's currently pegged
 //      to kestrel, but that's not strictly necessary
 #include <dataTypes/Pulse.h>
+#include <dataTypes/PulseGroups.h>
 
 
 namespace PacBio {
 namespace BazIO {
 
+// NOTE: These are placeholders as the simulation code should define
+// its own production and internal pulse group encodings and pulse
+// representation to decouple it from Kestrel for testing purposes.
+
+using SimProductionPulseGroups = Mongo::Data::ProductionPulses;
+using SimInternalPulseGroups = Mongo::Data::InternalPulses;
 using SimPulse = Mongo::Data::Pulse;
 
 class SimBazWriter
@@ -62,7 +69,7 @@ class SimBazWriter
     }
 public:
     SimBazWriter(const std::string& fileName,
-                 Primary::FileHeaderBuilder& fhb,
+                 FileHeaderBuilder& fhb,
                  const PacBio::Primary::BazIOConfig& conf, bool);
     ~SimBazWriter();
 
@@ -82,7 +89,7 @@ public:
     }
     void Summarize(std::ostream& out) { writer_->Summarize(out); }
 
-    const Primary::FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
+    const FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
     size_t NumEvents() const { return totalEvents_; }
     size_t BytesWritten() const { return writer_->BytesWritten(); }
     std::string Summary() const { return writer_->Summary(); }
@@ -95,10 +102,8 @@ private:
     std::unique_ptr<BazIO::BazWriter> writer_;
     std::unique_ptr<BazIO::BazBuffer> buffer_;
 
-    struct InternalPulses;
-    struct ProductionPulses;
-    std::vector<InternalPulses> internalSerializer_;
-    std::vector<ProductionPulses> prodSerializer_;
+    std::vector<SimInternalPulseGroups> internalSerializer_;
+    std::vector<SimProductionPulseGroups> prodSerializer_;
 };
 
 }}

@@ -13,8 +13,11 @@
 #include <pacbio/text/PBXml.h>
 #include <pacbio/text/String.h>
 
-#include <bazio/FileHeaderBuilder.h>
+#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/MetricData.h>
+
+#include <dataTypes/PulseGroups.h>
 
 #include <postprimary/bam/ResultWriter.h>
 #include <postprimary/bam/RuntimeMetaData.h>
@@ -25,10 +28,12 @@
 #include "ReadSimulator.h"
 #include "test_data_config.h"
 
+using namespace PacBio::Mongo::Data;
 using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
 
 const std::string SUBREADSET      = std::string(PacBio::PaPpaTestConfig::cmakeCurrentListDir) + "/data/subreadset.xml";
+
 
 /// a wrapper class to expose protected members for the purpose of unit testing.
 class ResultWriterEx : public ResultWriter
@@ -107,6 +112,8 @@ private:
 
 TEST(ResultWriter,Basics)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     PacBio::Logging::LogSeverityContext context(PacBio::Logging::LogLevel::WARN);
 
     PacBio::Dev::TemporaryDirectory tmpdir;
@@ -117,7 +124,7 @@ TEST(ResultWriter,Basics)
     user.savePbi = false;
     std::shared_ptr<RuntimeMetaData> rmd(new RuntimeMetaData);
     FileHeaderBuilder fhb("FakeMovie", 80.0, 80.0*60*60*3,
-            Readout::BASES, MetricsVerbosity::MINIMAL,
+            ProductionPulses::Params(), MetricsVerbosity::MINIMAL,
             generateExperimentMetadata(),
             "{}", {0},{},1024,4096,16384);
     std::string header = fhb.CreateJSON();
@@ -226,6 +233,8 @@ TEST(ResultWriter,Basics)
 /// written to the BAM files with LB and SM tags.
 TEST(ResultWriter,LB_SM_tags)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     PacBio::Logging::LogSeverityContext context(PacBio::Logging::LogLevel::WARN);
     PacBio::Dev::TemporaryDirectory tmpdir;
     tmpdir.Keep();
@@ -236,7 +245,7 @@ TEST(ResultWriter,LB_SM_tags)
     FileHeaderBuilder fhb("LB_SM_movie",
                           80.0, // frame rate hz
                           80 * 60 * 60 * 3, // moie length frames
-                          Readout::BASES,
+                          ProductionPulses::Params(),
                           MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(), //experimentMetadata,
                           "{}", //basecallerConfig,
@@ -389,6 +398,8 @@ TEST(ResultWriter,LB_SM_tags)
 
 TEST(ResultWriter,StreamingToStdout)
 {
+    using FileHeader = PacBio::BazIO::FileHeader;
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
     // This tests that a proper BAM file is written to stdout, and a proper subreadset.xml file is created with
     // a sts.xml as an external resource file.
     // The subreadset.xml will mark the stdout external resource as "-" which is the convention for BamWriter.
@@ -403,7 +414,7 @@ TEST(ResultWriter,StreamingToStdout)
     FileHeaderBuilder fhb("FakeMovie",
                           80.0,
                           80.0 * 60 * 60 * 3,
-                          Readout::BASES,
+                          ProductionPulses::Params(),
                           MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(),
                           "{}",
@@ -411,9 +422,7 @@ TEST(ResultWriter,StreamingToStdout)
                           {},
                           1024,
                           4096,
-                          16384,
-                          FileHeaderBuilder::Flags()
-                            .NewBazFormat(false));
+                          16384);
     std::string header = fhb.CreateJSON();
     FileHeader fileHeader(header.c_str(), header.size());
     const std::vector<PacBio::BAM::ProgramInfo> apps;

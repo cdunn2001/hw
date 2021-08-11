@@ -76,7 +76,7 @@ Test that bam2bam with adapter calling on production bam removes ws/we:
 
 
 Test on other simulated data:
-  $ baz=/pbi/dept/primary/sim/spider/kestrel-test/internal.baz
+  $ baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/internal.baz
   $ meta=$TESTDIR/data/metadata.xml
   $ bam=out_internal
 
@@ -86,7 +86,7 @@ Test on other simulated data:
 Check that sf and ws/we match:
   $ $TESTDIR/scripts/check_wswe_startframes.py ${bam}.zmws.bam
 
-  $ baz=/pbi/dept/primary/sim/spider/kestrel-test/prod.baz
+  $ baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/prod.baz
   $ meta=$TESTDIR/data/metadata.xml
   $ bam=out_production
 

@@ -495,7 +495,7 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         const std::string currentBases = polyRead.Sequence();
         AppendPacketFields(rawIntPackets[Fields::Label], currentBases, {}, '-');
 
-        auto& pws = rawIntPackets[Fields::Pw];
+        auto& pws = rawIntPackets[Fields::PulseWidth];
         auto& startFrames = rawIntPackets[Fields::StartFrame];
         std::vector<uint32_t> ipds;
 
@@ -537,7 +537,7 @@ EventData ConvertBam2Bam::PolyReadToEventData(
         std::transform(pulseCall.begin(), pulseCall.end(), pulseCall.begin(), ::toupper);
         AppendPacketFields(rawIntPackets[Fields::Label], pulseCall, {}, '-');
 
-        AppendPacketFields(rawIntPackets[Fields::Pw], polyRead.PulseCallWidth().Data());
+        AppendPacketFields(rawIntPackets[Fields::PulseWidth], polyRead.PulseCallWidth().Data());
         AppendPacketFields(rawIntPackets[Fields::StartFrame], polyRead.StartFrame());
         if (polyRead.HasPkmean())
             AppendPacketFields(rawFloatPackets[Fields::Pkmean], polyRead.Pkmean());
@@ -936,81 +936,13 @@ int ConvertBam2Bam::ParseHeader(std::vector<ProgramInfo>* apps)
         throw std::runtime_error("No read group in header");
     const auto rg = subreadsHeader.ReadGroups()[0];
     
-    // Determine the different packet fields for the RG description
-    for (const auto& feature : baseFeatures_)
+    // NOTE: This is a hack as this is for BAM files produced by Kestrel currently. We
+    // need to update BaseFeature given the new packet fields we are actually storing.
+    // The below is only necessary to create the ReadGroup correctly in the BAM file.
+    if (std::any_of(baseFeatures_.begin(), baseFeatures_.end(), [](const BaseFeature& f) { return f == BaseFeature::PULSE_CALL; }))
     {
-        switch(feature)
-        {
-            case BaseFeature::DELETION_QV:
-                fh_->AddPacketField(PacketFieldName::DEL_QV);
-                break;
-            case BaseFeature::DELETION_TAG:
-                fh_->AddPacketField(PacketFieldName::DEL_TAG);
-                break;
-            case BaseFeature::INSERTION_QV:
-                fh_->AddPacketField(PacketFieldName::INS_QV);
-                break;
-            case BaseFeature::MERGE_QV:
-                fh_->AddPacketField(PacketFieldName::MRG_QV);
-                break;
-            case BaseFeature::SUBSTITUTION_QV:
-                fh_->AddPacketField(PacketFieldName::SUB_QV);
-                break;
-            case BaseFeature::SUBSTITUTION_TAG:
-                fh_->AddPacketField(PacketFieldName::SUB_TAG);
-                break;
-            case BaseFeature::IPD:
-                switch(rg.IpdCodec())
-                {
-                    case FrameCodec::RAW:
-                        fh_->AddPacketField(PacketFieldName::IPD_LL);
-                        break;
-                    case FrameCodec::V1:
-                        fh_->AddPacketField(PacketFieldName::IPD_V1);
-                        break;
-                    default:
-                        throw std::runtime_error("No read group in header");
-                }
-                break;
-            case BaseFeature::PULSE_WIDTH:
-                switch(rg.PulseWidthCodec())
-                {
-                    case FrameCodec::RAW:
-                        fh_->AddPacketField(PacketFieldName::PW_LL);
-                        break;
-                    case FrameCodec::V1:
-                        fh_->AddPacketField(PacketFieldName::PW_V1);
-                        break;
-                    default:
-                        throw std::runtime_error("No read group in header");
-                }
-                break;
-            case BaseFeature::PKMID:
-                fh_->AddPacketField(PacketFieldName::PKMID_LL);
-                break;
-            case BaseFeature::PKMEAN:
-                fh_->AddPacketField(PacketFieldName::PKMEAN_LL);
-                break;
-            case BaseFeature::PKMID2:
-                fh_->AddPacketField(PacketFieldName::PKMID2_LL);
-                break;
-            case BaseFeature::PKMEAN2:
-                fh_->AddPacketField(PacketFieldName::PKMEAN2_LL);
-                break;
-            case BaseFeature::LABEL:
-                fh_->AddPacketField(PacketFieldName::LABEL);
-                break;
-            case BaseFeature::LABEL_QV:
-                fh_->AddPacketField(PacketFieldName::LAB_QV);
-                break;
-            case BaseFeature::ALT_LABEL:
-                fh_->AddPacketField(PacketFieldName::ALT_LABEL);
-                break;
-            case BaseFeature::ALT_LABEL_QV:
-                fh_->AddPacketField(PacketFieldName::ALT_QV);
-                break;
-            default: break; // Other fields are handled internally.
-        }
+        // Internal BAM
+        fh_->Internal(true);
     }
 
     return nextBam2bamRun;

@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include <bazio/FileHeader.h>
+#include <bazio/file/FileHeader.h>
 #include <bazio/RegionLabel.h>
 #include <pacbio/primary/ZmwStatsFileData.h>
 
@@ -51,6 +51,8 @@ using namespace PacBio::Primary;
 
 class ZmwStats
 {
+public:
+    using FileHeader = BazIO::FileHeader;
 public: // stateless
     static void FillPerZmwStats(const Platform& platform,
                                 const FileHeader& fh,

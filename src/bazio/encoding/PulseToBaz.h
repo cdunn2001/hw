@@ -77,7 +77,10 @@
 #ifndef PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
 #define PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
 
+#include <numeric>
+
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/EncodingParams.h>
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/FieldAccessors.h>
 #include <bazio/encoding/FieldSerializers.h>
@@ -182,6 +185,29 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
         return ptr;
     }
 
+    template <typename TransformParams, typename SerializerParams>
+    static FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
+                           TransformParams transformParams, SerializerParams serializerParams)
+    {
+        FieldParams fp;
+        fp.name = name;
+        fp.storeSigned = storeSigned;
+        fp.transform = transformParams;
+        fp.serialize = serializerParams;
+        return fp;
+    }
+
+    template <typename... Names>
+    static GroupParams Params(Names... names)
+    {
+        GroupParams params;
+        params.members = {FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())...};
+        params.numBits = {Serializers::nBits...};
+        auto worker = {(params.totalBits += Serializers::nBits,0)...};
+        (void)worker;
+        return params;
+    }
+
     PacBio::Cuda::Utility::CudaTuple<Transforms...> transforms_;
 };
 
@@ -255,6 +281,11 @@ struct FieldGroupEncoder
         return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
     }
 
+    static GroupParams Params()
+    {
+        return GroupEncoder::Params(names...);
+    }
+
     GroupEncoder groupEncoder_;
 };
 
@@ -297,6 +328,11 @@ struct PulseEncoder
     BAZ_CUDA void Reset()
     {
         data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
+    }
+
+    static std::vector<GroupParams> Params()
+    {
+        return std::vector<GroupParams>{GroupEncoders::Params()...};
     }
 
 private:

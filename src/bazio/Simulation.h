@@ -68,15 +68,41 @@
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
 
+#include <dataTypes/PulseGroups.h>
+
 using namespace PacBio::SmrtData;
 
 namespace PacBio {
 namespace Primary {
 
-std::string generateExperimentMetadata(const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
-                                       const std::string& basemap="CTAG");
+inline std::string generateExperimentMetadata(const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
+                                              const std::string& basemap="CTAG")
+{
+    std::ostringstream metadata;
+    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
+    metadata << "SequelII";
+    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
+    metadata << basemap;
+    metadata << "\",\"RelativeAmp\":";
+    metadata << "[";
+    std::string sep = "";
+    for (const auto& val : relamps)
+    {
+        metadata << sep << val;
+        sep = ",";
+    }
+    metadata << "]}}";
+    return metadata.str();
+}
 
-std::string generateBasecallerConfig(const std::string& pipename);
+inline std::string generateBasecallerConfig(const std::string& pipename)
+{
+    std::ostringstream metadata;
+    metadata << "{\"algorithm\":{\"pipe\":\"";
+    metadata << pipename;
+    metadata << "\"}}";
+    return metadata.str();
+}
 
 /// Simulates a BASES readout BAZ
 class Simulation
@@ -128,14 +154,16 @@ private: // data
     bool summarize_;
 public:
 
-    FileHeaderBuilder GetFileHeaderBuilder(const Readout readout, const MetricsVerbosity verbosity)
+    BazIO::FileHeaderBuilder GetFileHeaderBuilder(const Readout readout, const MetricsVerbosity verbosity)
     {
         std::vector<uint32_t> emptyList;
         double frameRate = 100.0;
+        using FileHeaderBuilder = BazIO::FileHeaderBuilder;
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate,
                               frameRate * chunks_ * seconds_,
-                              readout,
+                              (readout != Readout::PULSES)
+                              ? Mongo::Data::ProductionPulses::Params() : Mongo::Data::InternalPulses::Params(),
                               verbosity,
                               generateExperimentMetadata(relativeAmplitudes_, baseMap_),
                               generateBasecallerConfig("Spider"),
@@ -145,9 +173,6 @@ public:
                               4096, // mFMetricFrames
                               16384, // sliceLengthFrames
                               FileHeaderBuilder::Flags()
-                                .SpiderOnSequel(false)
-                                .NewBazFormat(true)
-                                .UseHalfFloat(true)
                                 .RealTimeActivityLabels(realtimeActivityLabels_)
         );
         return fhb;
@@ -171,7 +196,7 @@ public:
             currentFrame += ipd + basecall[i].Width();
         }
 
-        FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
+        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
         BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
@@ -251,7 +276,7 @@ public:
 
     void Simulate(const Readout readout, const MetricsVerbosity verbosity, uint16_t numMetrics)
     {
-        FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
+        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
         if (numMetrics == 0) fhb.ClearAllMetricFields();
         BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
@@ -288,7 +313,6 @@ public:
 
         if (summarize_)
         {
-            fhb.EstimatesSummary(std::cout, bps_);
             writer.Summarize(std::cout);
         }
     }

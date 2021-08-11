@@ -904,94 +904,20 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
         }
     }
 
-    bool hasPX = false;
-    bool hasPD = false;
+    // Production tags
+    group.BaseFeatureTag(BaseFeature::START_FRAME, "sf");
+    group.IpdCodec(FrameCodec::RAW);
+    group.PulseWidthCodec(FrameCodec::RAW);
 
-    for (const auto& p : fileHeader.PacketFields())
-    {
-        bool cnt = false;
-        BaseFeature feature;
-        std::string tag;
-        if (PacketFieldMap::packetBaseFieldToBamID.find(p.fieldName) != PacketFieldMap::packetBaseFieldToBamID.cend())
-            tag = PacketFieldMap::packetBaseFieldToBamID[p.fieldName].first;
-        else if (PacketFieldMap::packetPulseFieldToBamID.find(p.fieldName) !=
-                 PacketFieldMap::packetPulseFieldToBamID.cend())
-            tag = PacketFieldMap::packetPulseFieldToBamID[p.fieldName].first;
-        else
-            continue;
-        switch (p.fieldName)
-        {
-        case PacketFieldName::DEL_TAG:
-            feature = BaseFeature::DELETION_TAG;
-            break;
-        case PacketFieldName::SUB_TAG:
-            feature = BaseFeature::SUBSTITUTION_TAG;
-            break;
-        case PacketFieldName::DEL_QV:
-            feature = BaseFeature::DELETION_QV;
-            break;
-        case PacketFieldName::SUB_QV:
-            feature = BaseFeature::SUBSTITUTION_QV;
-            break;
-        case PacketFieldName::INS_QV:
-            feature = BaseFeature::INSERTION_QV;
-            break;
-        case PacketFieldName::MRG_QV:
-            feature = BaseFeature::MERGE_QV;
-            break;
-        case PacketFieldName::IPD_LL:
-            group.IpdCodec(FrameCodec::RAW);
-            hasPD = true;
-            cnt = true;
-            break;
-        case PacketFieldName::IPD_V1:
-            group.IpdCodec(FrameCodec::V1);
-            cnt = true;
-            break;
-        case PacketFieldName::PW_LL:
-            group.PulseWidthCodec(FrameCodec::RAW);
-            hasPX = true;
-            cnt = true;
-            break;
-        case PacketFieldName::PW_V1:
-            group.PulseWidthCodec(FrameCodec::V1);
-            cnt = true;
-            break;
-        case PacketFieldName::PKMID_LL:
-            feature = BaseFeature::PKMID;
-            break;
-        case PacketFieldName::PKMEAN_LL:
-            feature = BaseFeature::PKMEAN;
-            break;
-        case PacketFieldName::PKMID2_LL:
-            feature = BaseFeature::PKMID2;
-            break;
-        case PacketFieldName::PKMEAN2_LL:
-            feature = BaseFeature::PKMEAN2;
-            break;
-        case PacketFieldName::LAB_QV:
-            feature = BaseFeature::LABEL_QV;
-            break;
-        case PacketFieldName::ALT_LABEL:
-            feature = BaseFeature::ALT_LABEL;
-            break;
-        case PacketFieldName::ALT_QV:
-            feature = BaseFeature::ALT_LABEL_QV;
-            break;
-        default:
-            cnt = true;
-        }
-        if (cnt) continue;
-        group.BaseFeatureTag(feature, tag);
-    }
-
-    if (hasPX && hasPD) // internal
+    // Internal tags
+    bool internal = fileHeader.HasPacketField(BazIO::PacketFieldName::IsBase) || fileHeader.Internal();
+    if(internal)
     {
         group.BaseFeatureTag(BaseFeature::PULSE_CALL, "pc");
         group.BaseFeatureTag(BaseFeature::PRE_PULSE_FRAMES, "pd");
         group.BaseFeatureTag(BaseFeature::PULSE_CALL_WIDTH, "px");
-        group.BaseFeatureTag(BaseFeature::PULSE_MERGE_QV, "pg");
-        group.BaseFeatureTag(BaseFeature::START_FRAME, "sf");
+        group.BaseFeatureTag(BaseFeature::PKMEAN, "pa");
+        group.BaseFeatureTag(BaseFeature::PKMID, "pm");
         group.BaseFeatureTag(BaseFeature::PULSE_EXCLUSION, "pe");
     }
 
