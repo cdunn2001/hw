@@ -127,7 +127,7 @@ struct PrelimHQFilterBody::Impl
         , chunksPerOutput_(config.bazBufferChunks)
         , zmwStride_(config.zmwOutputStride)
         , multipleBazFiles_(multipleBazFiles)
-        , buffer_(std::make_unique<BazIO::BazBuffer>(numZmws, expectedPulses, bufferId,
+        , buffer_(std::make_unique<BazIO::BazBuffer>(numZmws, bufferId, expectedPulses,
                                                      CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
     {
     }
