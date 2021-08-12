@@ -55,7 +55,7 @@ public:
     /// measuring a robust compute budget breakdown.
     PB_CONFIG_PARAM(uint32_t, basecallerConcurrency, 5);
 
-    /// The number of threads allowed to be working in the prelim HQ-filter
+    /// The number of threads allowed to be working in either the prelim HQ-filter
     /// and baz writer at any given time.
     PB_CONFIG_PARAM(uint32_t, ioConcurrency, 4);
 

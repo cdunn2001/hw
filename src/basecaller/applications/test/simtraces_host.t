@@ -7,7 +7,7 @@
   $ BAZFILE=${CRAMTMP}/designer.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
-  $ smrt-basecaller --cache --numZmwLanes 64 --config multipleBazFiles=0 --config=system.analyzerHardware=Host --config layout.lanesPerPool=16 --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > ${CRAMTMP}/designer_out.txt
+  $ smrt-basecaller --cache --numZmwLanes 64 --config multipleBazFiles=false --config=system.analyzerHardware=Host --config layout.lanesPerPool=16 --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > ${CRAMTMP}/designer_out.txt
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   4097
@@ -32,7 +32,7 @@
 
   $ BAZFILE=${CRAMTMP}/test4.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
-  $ smrt-basecaller --cache --numZmwLanes 4 --config multipleBazFiles=0 --config layout.lanesPerPool=1 --config=system.analyzerHardware=Host --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > ${CRAMTMP}/test4_out.txt
+  $ smrt-basecaller --cache --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=system.analyzerHardware=Host --frames=32768 --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > ${CRAMTMP}/test4_out.txt
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
 

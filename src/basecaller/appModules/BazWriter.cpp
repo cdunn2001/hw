@@ -69,9 +69,6 @@ BazWriterBody::BazWriterBody(
         auto poolZmwFeaturesStart = zmwFeatures.begin();
         for (size_t b = 0; b < numBatches_; b++)
         {
-            std::vector<uint32_t> poolZmwNumbers(poolZmwNumbersStart, poolZmwNumbersStart + poolDims.at(b).ZmwsPerBatch());
-            std::vector<uint32_t> poolZmwFeatures(poolZmwFeaturesStart, poolZmwFeaturesStart + poolDims.at(b).ZmwsPerBatch());
-
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
             std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
             FileHeaderBuilder fh(multiBazName,
@@ -125,8 +122,7 @@ BazWriterBody::BazWriterBody(
 
 void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
 {
-    size_t poolId = (in->PoolId() == numBatches_) ? 0 : in->PoolId();
-    bazWriters_[poolId]->Flush(std::move(in));
+    bazWriters_[in->BufferId()]->Flush(std::move(in));
 }
 
 }}

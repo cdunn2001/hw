@@ -30,6 +30,7 @@
 #include <pacbio/smrtdata/Basecall.h>
 
 #include <dataTypes/configs/PrelimHQConfig.h>
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
 #include <dataTypes/PulseGroups.h>
 
@@ -119,34 +120,16 @@ struct PrelimHQFilterBody::Impl
 {
     // TODO make configurable somehow.
     static constexpr size_t expectedPulses = 164;
-    Impl(size_t numZmws, const std::map<uint32_t, BatchDimensions>& poolDims,
+    Impl(size_t numZmws, size_t numBatches, uint32_t bufferId,
          bool multipleBazFiles, const PrelimHQConfig& config)
-        : numBatches_(poolDims.size())
+        : numBatches_(numBatches)
         , numZmw_(numZmws)
         , chunksPerOutput_(config.bazBufferChunks)
         , zmwStride_(config.zmwOutputStride)
-        , poolDims_(poolDims)
         , multipleBazFiles_(multipleBazFiles)
+        , buffer_(std::make_unique<BazIO::BazBuffer>(numZmws, expectedPulses, bufferId,
+                                                     CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
     {
-        if (multipleBazFiles_)
-        {
-            for (size_t b = 0; b < numBatches_; b++)
-            {
-                buffers_.push_back(
-                        std::make_unique<BazIO::BazBuffer>(poolDims_[b].ZmwsPerBatch(),
-                                                           b, expectedPulses,
-                                                           CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())));
-            }
-        }
-        else
-        {
-            buffers_.push_back(
-                    std::make_unique<BazIO::BazBuffer>(numZmw_,
-                                                       numBatches_,     // Sentinel value
-                                                       expectedPulses,
-                                                       CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())));
-
-        }
     }
 
     virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
@@ -158,9 +141,8 @@ struct PrelimHQFilterBody::Impl
     size_t numZmw_;
     size_t chunksPerOutput_;
     size_t zmwStride_;
-    std::map<uint32_t, BatchDimensions> poolDims_;
     bool multipleBazFiles_;
-    std::vector<std::unique_ptr<BazIO::BazBuffer>> buffers_;
+    std::unique_ptr<BazIO::BazBuffer> buffer_;
 };
 
 constexpr size_t PrelimHQFilterBody::Impl::expectedPulses;
@@ -168,9 +150,9 @@ constexpr size_t PrelimHQFilterBody::Impl::expectedPulses;
 template <bool internal>
 struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
 {
-    ImplChild(size_t numZmws, const std::map<uint32_t, BatchDimensions>& poolDims,
+    ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
               bool multipleBazFiles, const PrelimHQConfig& config)
-        : Impl(numZmws, poolDims, multipleBazFiles, config)
+        : Impl(numZmws, numBatches, bufferId, multipleBazFiles, config)
         , serializers_(numZmws)
     {}
 
@@ -179,24 +161,19 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
         const auto& pulseBatch = in.pulses;
         const auto& metricsPtr = in.metrics;
 
-        if (!multipleBazFiles_)
+        if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
         {
-            if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
-            {
-                if (batchesSeen_ != 0)
-                    throw PBException("Data out of order, new chunk seen before all batches of previous chunk");
-                currFrame_ = pulseBatch.GetMeta().FirstFrame();
-                chunksSeen_++;
-                if (chunksSeen_ == chunksPerOutput_) chunksSeen_ = 0;
-            }
-            else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
-            {
-                throw PBException("Data out of order, multiple chunks being processed simultaneously");
-            }
+            if (batchesSeen_ != 0)
+                throw PBException("Data out of order, new chunk seen before all batches of previous chunk");
+            currFrame_ = pulseBatch.GetMeta().FirstFrame();
+            chunksSeen_++;
+            if (chunksSeen_ == chunksPerOutput_) chunksSeen_ = 0;
+        } else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
+        {
+            throw PBException("Data out of order, multiple chunks being processed simultaneously");
         }
 
         size_t currentZmwIndex = (multipleBazFiles_) ? 0 : pulseBatch.GetMeta().FirstZmw();
-        uint32_t poolId = (multipleBazFiles_) ? pulseBatch.GetMeta().PoolId() : 0;
         for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
         {
             const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
@@ -205,42 +182,31 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
             {
                 if (metricsPtr)
                 {
-                    buffers_[poolId]->AddMetrics(currentZmwIndex,
-                                                 [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
-                                                 {
-                                                    assert(dest.size() == 1);
-                                                    ConvertMetric(metricsPtr, dest[0], lane, zmw);
-                                                 },
-                                                 1);
+                    buffer_->AddMetrics(currentZmwIndex,
+                                        [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
+                                        {
+                                            assert(dest.size() == 1);
+                                            ConvertMetric(metricsPtr, dest[0], lane, zmw);
+                                        },
+                                        1);
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
-                buffers_[poolId]->AddZmw(currentZmwIndex, pulses, pulses + lanePulses.size(zmw),
-                                         serializers_[currentZmwIndex]);
+                buffer_->AddZmw(currentZmwIndex, pulses, pulses + lanePulses.size(zmw), serializers_[currentZmwIndex]);
                 currentZmwIndex += zmwStride_;
             }
         }
-
         batchesSeen_++;
-        bool chunkDone = false;
+        std::unique_ptr<BazBuffer> ret;
         if (batchesSeen_ == numBatches_)
         {
             batchesSeen_ = 0;
-            if (chunksSeen_ == chunksPerOutput_ - 1)
+            if (chunksSeen_ == chunksPerOutput_-1)
             {
-                chunkDone = true;
+                ret = std::make_unique<BazBuffer>(numZmw_, buffer_->BufferId(), expectedPulses,
+                                                  CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
+                std::swap(ret, buffer_);
             }
         }
-
-        std::unique_ptr<BazBuffer> ret;
-        if (multipleBazFiles_ || chunkDone)
-        {
-            size_t bufferNumZmws = (multipleBazFiles_) ? poolDims_[poolId].ZmwsPerBatch() : numZmw_;
-            size_t bufferPoolId = (multipleBazFiles_) ? poolId : numBatches_;
-            ret = std::make_unique<BazBuffer>(bufferNumZmws, bufferPoolId, expectedPulses,
-                                              CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
-            std::swap(ret, buffers_[poolId]);
-        }
-
         return ret;
     }
 
@@ -249,21 +215,43 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
 };
 
 PrelimHQFilterBody::PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                       const PrelimHQConfig& config, const Mongo::Data::SystemsConfig& sysConfig,
-                                       bool internal, bool multipleBazFiles)
-    : numThreads_(sysConfig.ioConcurrency)
+                                       const SmrtBasecallerConfig& config)
+    : numThreads_(config.system.ioConcurrency)
 {
-    if (internal)
-        impl_ = std::make_unique<ImplChild<true>>(numZmws, poolDims, multipleBazFiles, config);
+    if (config.multipleBazFiles)
+    {
+        for (const auto& kv : poolDims)
+        {
+            if (config.internalMode)
+                impl_.push_back(std::make_unique<ImplChild<true>>(kv.second.ZmwsPerBatch(), 1, kv.first,
+                                                                  config.multipleBazFiles,
+                                                                  config.prelimHQ));
+            else
+                impl_.push_back(std::make_unique<ImplChild<false>>(kv.second.ZmwsPerBatch(), 1, kv.first,
+                                                                   config.multipleBazFiles,
+                                                                   config.prelimHQ));
+        }
+    }
     else
-        impl_ = std::make_unique<ImplChild<false>>(numZmws, poolDims, multipleBazFiles, config);
+    {
+        if (config.internalMode)
+            impl_.push_back(std::make_unique<ImplChild<true>>(numZmws, poolDims.size(), 0,
+                                                              config.multipleBazFiles, config.prelimHQ));
+        else
+            impl_.push_back(std::make_unique<ImplChild<false>>(numZmws, poolDims.size(), 0,
+                                                               config.multipleBazFiles, config.prelimHQ));
+    }
+
+
 }
 
 PrelimHQFilterBody::~PrelimHQFilterBody() = default;
 
 void PrelimHQFilterBody::Process(Mongo::Data::BatchResult in)
 {
-    auto ret = impl_->Process(std::move(in));
+    auto ret = (impl_.size() == 1)
+            ? impl_[0]->Process(std::move(in))
+            : impl_[in.pulses.GetMeta().PoolId()]->Process(std::move(in));
     if (ret) this->PushOut(std::move(ret));
 }
 
