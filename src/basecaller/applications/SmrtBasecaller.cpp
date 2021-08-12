@@ -551,7 +551,7 @@ private:
     std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
-        return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_.prelimHQ, config_.internalMode, config_.multipleBazFiles);
+        return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_.prelimHQ, config_.system, config_.internalMode, config_.multipleBazFiles);
     }
 
     std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>

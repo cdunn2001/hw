@@ -55,6 +55,10 @@ public:
     /// measuring a robust compute budget breakdown.
     PB_CONFIG_PARAM(uint32_t, basecallerConcurrency, 5);
 
+    /// The number of threads allowed to be working in the prelim HQ-filter
+    /// and baz writer at any given time.
+    PB_CONFIG_PARAM(uint32_t, ioConcurrency, 4);
+
     /// The maximum amount of gpu memory dedicated to permanently resident
     /// algorithm state data.  Anything beyond this threshold will have to
     /// be shuttled to-from the GPU on demand

@@ -40,18 +40,18 @@ class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::
 {
 public:
     PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                       const Mongo::Data::PrelimHQConfig& config, bool internal, bool multipleBazFiles);
+                       const Mongo::Data::PrelimHQConfig& config, const Mongo::Data::SystemsConfig& sysConfig,
+                       bool internal, bool multipleBazFiles);
     ~PrelimHQFilterBody();
 
-    size_t ConcurrencyLimit() const override { return 1; }
+    size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
 
     void Process(Mongo::Data::BatchResult in) override;
 private:
-    struct SingleBuffer;
-    struct MultipleBuffer;
+    uint32_t numThreads_;
     struct Impl;
-    template <bool internal, bool multipleBazFiles>
+    template <bool internal>
     struct ImplChild;
     std::unique_ptr<Impl> impl_;
 };
