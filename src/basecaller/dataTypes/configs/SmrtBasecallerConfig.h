@@ -52,6 +52,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_OBJECT(PrelimHQConfig, prelimHQ);
 
     PB_CONFIG_PARAM(bool, internalMode, false);
+    PB_CONFIG_PARAM(bool, multipleBazFiles, true);
 
     /// Minimum duration (in frames) between intermediate reports
     /// for both memory and compute statistics.  Reports will happen

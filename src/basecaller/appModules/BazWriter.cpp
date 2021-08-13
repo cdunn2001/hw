@@ -28,7 +28,6 @@
 #include <pacbio/logging/Logger.h>
 
 #include <bazio/file/FileHeaderBuilder.h>
-#include <common/MongoConstants.h>
 #include <dataTypes/Pulse.h>
 #include <dataTypes/PulseGroups.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
@@ -46,37 +45,84 @@ BazWriterBody::BazWriterBody(
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
+        const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig)
-    : bazName_(bazName)
+    : numThreads_(basecallerConfig.system.ioConcurrency)
+    , numBatches_(poolDims.size())
+    , multipleBazFiles_(basecallerConfig.multipleBazFiles)
+    , bazName_(bazName)
 {
-    PBLOG_INFO << "Opening BAZ file for writing: " << bazName_ << " zmws: " << zmwNumbers.size();
-
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
-    using FileHeaderBuilder = BazIO::FileHeaderBuilder;
-    FileHeaderBuilder fh(bazName_,
-                         100.0f,
-                         expectedFrames,
-                         basecallerConfig.internalMode
-                         ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
-                         SmrtData::MetricsVerbosity::MINIMAL,
-                         "",
-                         basecallerConfig.Serialize().toStyledString(),
-                         zmwNumbers,
-                         zmwFeatures,
-                         // Hack, until metrics handling can be rewritten
-                         metricFrames,
-                         metricFrames,
-                         metricFrames);
+    if (multipleBazFiles_)
+    {
+        auto removeExtension = [](const std::string& fn) {
+            size_t lastDot = fn.find_last_of(".");
+            if (lastDot == std::string::npos) return fn;
+            return fn.substr(0, lastDot);
+        };
 
-    fh.BaseCallerVersion("0.1");
+        PBLOG_INFO << "Opening multiple BAZ files for writing with filename prefix: "
+                   << removeExtension(bazName) << " zmws: " << zmwNumbers.size();
 
-    bazWriter_ = std::make_unique<BazIO::BazWriter>(bazName_, fh, BazIOConfig{});
+        auto poolZmwNumbersStart = zmwNumbers.begin();
+        auto poolZmwFeaturesStart = zmwFeatures.begin();
+        for (size_t b = 0; b < numBatches_; b++)
+        {
+            using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+            std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
+            FileHeaderBuilder fh(multiBazName,
+                                 100.0f,
+                                 expectedFrames,
+                                 basecallerConfig.internalMode
+                                 ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                                 SmrtData::MetricsVerbosity::MINIMAL,
+                                 "",
+                                 basecallerConfig.Serialize().toStyledString(),
+                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + poolDims.at(b).ZmwsPerBatch()),
+                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + poolDims.at(b).ZmwsPerBatch()),
+                                 // Hack, until metrics handling can be rewritten
+                                 metricFrames,
+                                 metricFrames,
+                                 metricFrames);
+
+            poolZmwNumbersStart += poolDims.at(b).ZmwsPerBatch();
+            poolZmwFeaturesStart += poolDims.at(b).ZmwsPerBatch();
+
+            fh.BaseCallerVersion("0.1");
+
+            bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(multiBazName, fh, BazIOConfig{}));
+        }
+    }
+    else
+    {
+        PBLOG_INFO << "Opening BAZ file for writing: " << bazName << " zmws: " << zmwNumbers.size();
+
+        using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+        FileHeaderBuilder fh(bazName,
+                             100.0f,
+                             expectedFrames,
+                             basecallerConfig.internalMode
+                             ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                             SmrtData::MetricsVerbosity::MINIMAL,
+                             "",
+                             basecallerConfig.Serialize().toStyledString(),
+                             zmwNumbers,
+                             zmwFeatures,
+                             // Hack, until metrics handling can be rewritten
+                             metricFrames,
+                             metricFrames,
+                             metricFrames);
+
+        fh.BaseCallerVersion("0.1");
+
+        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, BazIOConfig{}));
+    }
 }
 
 void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
 {
-    bazWriter_->Flush(std::move(in));
+    bazWriters_[in->BufferId()]->Flush(std::move(in));
 }
 
 }}

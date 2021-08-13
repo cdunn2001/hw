@@ -65,9 +65,10 @@ struct BazBuffer
         MemoryBufferView<TMetric> metric;
     };
 public:
-    BazBuffer(size_t numZmw, size_t expectedPulseBufferSize,
+    BazBuffer(size_t numZmw, uint32_t bufferId, size_t expectedPulseBufferSize,
               std::unique_ptr<Memory::IAllocator> allocator = std::make_unique<DataSource::MallocAllocator>())
         : numZmw_(numZmw)
+        , bufferId_(bufferId)
         , expectedPulseBufferSize_(expectedPulseBufferSize)
         , allocator_(std::move(allocator))
           // Hard coded 1MiB for allocation buffer size is not tuned. Feel
@@ -96,6 +97,16 @@ public:
         return numEvents_;
     }
 
+    size_t NumZmw() const
+    {
+        return numZmw_;
+    }
+
+    uint32_t BufferId() const
+    {
+        return bufferId_;
+    }
+
     void Reset()
     {
         packetBuffer_.Reset();
@@ -113,6 +124,7 @@ public:
 private:
     uint64_t numEvents_ = 0;
     size_t numZmw_;
+    uint32_t bufferId_;
     size_t expectedPulseBufferSize_;
     std::unique_ptr<Memory::IAllocator> allocator_;
     MemoryBuffer<uint8_t> packetBuffer_;

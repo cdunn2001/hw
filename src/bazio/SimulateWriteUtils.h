@@ -65,7 +65,7 @@ class SimBazWriter
 {
     std::unique_ptr<BazBuffer> MakeBuffer()
     {
-        return std::make_unique<BazBuffer>(numZmw_, 300);
+        return std::make_unique<BazBuffer>(numZmw_, 0, 300);
     }
 public:
     SimBazWriter(const std::string& fileName,

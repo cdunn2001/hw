@@ -42,8 +42,6 @@ public:
 
     PB_CONFIG_PARAM(uint32_t, BufferSizeMBytes, 32);
     PB_CONFIG_PARAM(float, MaxMBPerSecondWrite, 450.0f);
-    PB_CONFIG_PARAM(uint32_t, numBazBuffers, 3);
-    PB_CONFIG_PARAM(uint32_t, numMetrics, 8);
 };
 
 }}

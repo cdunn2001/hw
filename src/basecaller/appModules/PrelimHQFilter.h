@@ -39,19 +39,20 @@ namespace Application {
 class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
-    PrelimHQFilterBody(size_t numZmws, size_t numBatches,
-                       const Mongo::Data::PrelimHQConfig& config, bool internal);
+    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
+                       const Mongo::Data::SmrtBasecallerConfig& config);
     ~PrelimHQFilterBody();
 
-    size_t ConcurrencyLimit() const override { return 1; }
+    size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
 
     void Process(Mongo::Data::BatchResult in) override;
 private:
+    uint32_t numThreads_;
     struct Impl;
     template <bool internal>
     struct ImplChild;
-    std::unique_ptr<Impl> impl_;
+    std::vector<std::unique_ptr<Impl>> impl_;
 };
 
 
