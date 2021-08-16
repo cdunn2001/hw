@@ -1,5 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+
 project(CudaTemplate LANGUAGES CXX)
-cmake_minimum_required(VERSION 3.8)
 
 if(${CMAKE_CXX_COMPILER} MATCHES "[cg]\\+\\+")
     # this is just a test. It doesn't need to be compiled. I had a problem
