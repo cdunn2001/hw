@@ -5,6 +5,8 @@ add_library(libBazioWriting STATIC
     BazBuffer.cpp
     BazWriter.h
     BazWriter.cpp
+    GrowableArray.h
+    GrowableArray.cpp
     MemoryBuffer.h
     MemoryBuffer.cpp
 )
@@ -25,4 +27,4 @@ ${BAZIO_PROJECT_DIR}/basecaller
         ${BAZIO_PROJECT_DIR}
 )
 
-#add_subdirectory(test)
+add_subdirectory(test)
