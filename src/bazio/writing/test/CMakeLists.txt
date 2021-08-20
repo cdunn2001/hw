@@ -4,6 +4,7 @@ include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
 add_library(libBazioWritingTest OBJECT
+    TestBazAggregator.cpp
     TestGrowableArray.cpp
     TestPacketBuffer.cpp
     TestPacketBufferManager.cpp

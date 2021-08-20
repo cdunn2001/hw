@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 
 add_library(libBazioWriting STATIC
+    BazAggregator.h
+    BazAggregator.cpp
     BazBuffer.h
     BazBuffer.cpp
     BazWriter.h

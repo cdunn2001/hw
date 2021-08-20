@@ -41,6 +41,40 @@ class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
     // think about while the PrelimHQ stage gets implemented for real
     PB_CONFIG_PARAM(size_t, bazBufferChunks, 8);
     PB_CONFIG_PARAM(size_t, zmwOutputStride, 1);
+
+    PB_CONFIG_PARAM(bool, enableLookback, false);
+    PB_CONFIG_PARAM(uint32_t, lookbackSize, 10);
+    // *If* enableLookback is turned on, this fraction controls the
+    // percentage of remaining ZMW allowed to become HQ at once.
+    PB_CONFIG_PARAM(float, hqThrottleFraction, .10f);
+
+    // This is a trash config, but right now nothing in the config
+    // tree knows what the frame rate is yet...
+    PB_CONFIG_PARAM(float, expectedFrameRate, 100);
+
+    // The maximum supported pulse rate.  Note, this is specifically
+    // for the PrelimHQ stage, other computations over different
+    // timescales may have a different max pulse rate.
+    PB_CONFIG_PARAM(float, maxSlicePulseRate, 4);
+
+    // The number of pulses expected per ZMW in a metric block interval.
+    // Note: One would normally prefer to handle such computation in
+    //       the C++ implementation directly rather than as a dependent
+    //       default.  In this case the computation itself needs to be
+    //       overrideable since it's not clear what the best thing to do
+    //       is.  This calculation will reserve enough space for all ZMW
+    //       to go full-tilt at the max rate.  If we reserved a smaller
+    //       ammount of space we might have a lowered memory requirement,
+    //       but we also might have a performance impact as the data for
+    //       a single zmw gets fragmented and scattered amongst more smaller
+    //       allocations.
+    PB_CONFIG_PARAM(size_t, expectedPulsesPerZmw,
+                    Configuration::DefaultFunc(
+                                               [](size_t numFrames, float frameRate, float pulseRate) -> size_t
+                    {
+                        return static_cast<size_t>(std::ceil(numFrames / frameRate * pulseRate));
+                    },
+                    {"Metrics.framesPerHFMetricBlock", "expectedFrameRate", "maxSlicePulseRate"}));
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -23,39 +23,38 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
-#define PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+#include <gtest/gtest.h>
 
-#include <common/graphs/GraphNodeBody.h>
+#include <bazio/writing/BazAggregator.h>
 
-#include <dataTypes/BatchResult.h>
-#include <dataTypes/configs/ConfigForward.h>
+using namespace PacBio::BazIO;
 
-#include <bazio/writing/BazBuffer.h>
-
-namespace PacBio {
-namespace Application {
-
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
+// BazAggregator is currently just a thin wrapper around
+// PacketBufferManager, and may go away.  For now, I'm
+// just testing the only new feature it provides, which
+// is the ability it iterate over nonHQ zmw (to potentially)
+// decide to mark them as HQ
+TEST(BazAggregator, Iterators)
 {
-public:
-    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                       const Mongo::Data::SmrtBasecallerConfig& config);
-    ~PrelimHQFilterBody();
+    uint32_t numZmw = 10;
+    uint32_t bytesPerZmw = 10;
+    BazAggregator agg(numZmw, 0, bytesPerZmw, 1);
 
-    size_t ConcurrencyLimit() const override { return numThreads_; }
-    float MaxDutyCycle() const override { return 1; }
+    EXPECT_EQ(agg.NumZmw(), numZmw);
+    EXPECT_EQ(agg.PreHQData().size(), numZmw);
 
-    void Process(Mongo::Data::BatchResult in) override;
-private:
-    uint32_t numThreads_;
-    class Impl;
-    template <bool internal>
-    class ImplChild;
-    std::vector<std::unique_ptr<Impl>> impl_;
-};
+    int i = 0;
+    for (auto&& zmw : agg.PreHQData())
+    {
+        if (i % 2 == 0) zmw.MarkAsHQ();
+        i++;
+    }
 
+    EXPECT_EQ(agg.PreHQData().size(), numZmw/2);
+    for (auto&& zmw : agg.PreHQData())
+    {
+        zmw.MarkAsHQ();
+    }
 
-}}
-
-#endif //PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+    EXPECT_EQ(agg.PreHQData().size(), 0);
+}

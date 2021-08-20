@@ -203,7 +203,7 @@ void BazWriter::WriteToDiskLoop()
             auto currBytes = bytesWritten_;
 
             // super chunk layout: SMSHHHHSPHMLSPHMLSPHMLSPHML
-            uint32_t numZmws = bazBuffer->ZmwData().size();
+            uint32_t numZmws = bazBuffer->NumZmw();
             headerBuffer.resize(numZmws);
 
             PBLOG_DEBUG << "BazWriter::WriteToDiskLoop()  superchunk writing ... numZmws:" << numZmws;
@@ -320,7 +320,8 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
     size_t iHeader = 0;
 
     // Iterate over all ZmwSlices
-    for (const auto& slice : bazBuffer->ZmwData())
+    size_t zmwIdx = 0;
+    for (size_t i = 0; i < bazBuffer->NumZmw(); ++i)
     {
         if (abort_) return;
         PBLOG_TRACE << " BazWriter::WriteChunkData " << iHeader;
@@ -336,23 +337,26 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         }
         ++iHeader;
 
+        auto slice = bazBuffer->GetSlice(i);
         h.offsetPacket = Ftell();
-        h.zmwIndex = slice.zmwIdx;
-        h.packetsByteSize = slice.packetsByteSize;
-        h.numEvents       = slice.numEvents;
+        h.zmwIndex = zmwIdx;
+        // TODO awkward
+        zmwIdx++;
+        h.packetsByteSize = slice.packets.packetByteSize;
+        h.numEvents       = slice.packets.numEvents;
         h.numHFMBs        = 0;
-        h.numMFMBs        = slice.metric.size();
+        h.numMFMBs        = slice.metrics.size();
         // h.numMFMBs        = (hFbyMFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyMFRatio_ - 1) / hFbyMFRatio_) : 0;
         h.numLFMBs        = 0;//(hFbyLFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyLFRatio_ - 1) / hFbyLFRatio_) : 0;
 
         WriteSanity();
 
         // Write bases/pulses
-        if (slice.packetsByteSize != 0)
+        if (slice.packets.packetByteSize != 0)
         {
-            for (const auto& piece : slice.pieces)
+            for (const auto& piece : slice.packets.pieces)
             {
-                eventsBytes_ += Fwrite(&piece.data_[0], piece.endIdx);
+                eventsBytes_ += Fwrite(piece.data, piece.count);
             }
         }
 
@@ -389,7 +393,7 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
 
             // Write high-frequency metric blocks to buffer
             if (h.numMFMBs > 0)
-                Write(fh_->MFMetricFields(), slice.metric,
+                Write(fh_->MFMetricFields(), slice.metrics,
                       buffer, bufferCounter);
 
             // Things are temporarily hacked to pieces.  We only
