@@ -190,6 +190,7 @@ public:
     void Run()
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+        EnableHostCaching(AllocatorMode::MALLOC);
 
         RunAnalyzer();
         Join();
@@ -643,6 +644,7 @@ private:
                     }
                     else
                     {
+                        PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
                             inputNode->ProcessInput(std::move(batch));
                         const auto& reports = graph.FlushAndReport(chunkDurationMS);
@@ -666,6 +668,7 @@ private:
                             << report.avgOccupancy << "\n";
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
+                        PBLOG_INFO << t.GetElapsedMilliseconds() / 1000 << " seconds to process chunk";
                     }
                     numChunksAnalyzed++;
                     framesSinceBigReports += config_.layout.framesPerChunk;
