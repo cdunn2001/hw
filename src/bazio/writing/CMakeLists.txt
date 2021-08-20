@@ -9,6 +9,8 @@ add_library(libBazioWriting STATIC
     GrowableArray.cpp
     MemoryBuffer.h
     MemoryBuffer.cpp
+    PacketBuffer.h
+    PacketBuffer.cpp
 )
 
 include(pacbio-cplusplus-api)
