@@ -16,12 +16,14 @@ build_basecaller(){
   source module_setup.sh
   ./cmake_setup.sh
   cd build/x86_64/Release_gcc
-  make -j
+  ninja
   ldd applications/smrt-basecaller
-  cd -
-  cd build/x86_64/Release
-  make -j
-  ldd applications/smrt-basecaller
+# There no longer is an Intel build, but this should be
+# revived/replaced in the near term hopefully
+#  cd -
+#  cd build/x86_64/Release
+#  ninja
+#  ldd applications/smrt-basecaller
   )
 }
 
@@ -40,18 +42,19 @@ deploy_basecaller(){
       ;;
   esac
   set -x
-  mkdir -p /mnt/software/m/mongo-basecaller/$moduleVersion/bin-{gcc,intel}
+  mkdir -p /mnt/software/m/mongo-basecaller/$moduleVersion/bin-gcc
+#  mkdir -p /mnt/software/m/mongo-basecaller/$moduleVersion/bin-{gcc,intel}
   cp -a build/x86_64/Release_gcc/mongo/applications/mongo-basecaller \
     /mnt/software/m/mongo-basecaller/$moduleVersion/bin-gcc
-  cp -a build/x86_64/Release/mongo/applications/mongo-basecaller \
-    /mnt/software/m/mongo-basecaller/$moduleVersion/bin-intel
+#  cp -a build/x86_64/Release/mongo/applications/mongo-basecaller \
+#    /mnt/software/m/mongo-basecaller/$moduleVersion/bin-intel
   cat > /mnt/software/modulefiles/mongo-basecaller/${moduleVersion} << EOF
 #%Module
 module load ppa/$bamboo_planRepository_branchName
 
 prepend-path LD_LIBRARY_PATH /mnt/software/m/mongo-basecaller/lib
 set-alias mongo-basecaller-gcc   "/mnt/software/m/mongo-basecaller/${moduleVersion}/bin-gcc/mongo-basecaller"
-set-alias mongo-basecaller-intel "/mnt/software/m/mongo-basecaller/${moduleVersion}/bin-intel/mongo-basecaller"
+#set-alias mongo-basecaller-intel "/mnt/software/m/mongo-basecaller/${moduleVersion}/bin-intel/mongo-basecaller"
 setenv smoke_cmd "mongo-basecaller-gcc --version"
 
 if {[file executable /mnt/software/log/log_usage]} {
