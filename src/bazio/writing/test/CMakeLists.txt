@@ -6,6 +6,7 @@ include(pacbio-gtest)
 add_library(libBazioWritingTest OBJECT
     TestGrowableArray.cpp
     TestPacketBuffer.cpp
+    TestPacketBufferManager.cpp
 )
 
 target_link_libraries(libBazioWritingTest

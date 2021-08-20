@@ -11,6 +11,8 @@ add_library(libBazioWriting STATIC
     MemoryBuffer.cpp
     PacketBuffer.h
     PacketBuffer.cpp
+    PacketBufferManager.h
+    PacketBufferManager.cpp
 )
 
 include(pacbio-cplusplus-api)
