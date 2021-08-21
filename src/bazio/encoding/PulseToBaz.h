@@ -100,6 +100,20 @@ struct FirstOf { using type = T1; };
 template <typename... Ts>
 using FirstOf_t = typename FirstOf<Ts...>::type;
 
+template <auto Name1, auto...Names>
+struct EnumFromNames
+{
+    static_assert((true && ... && std::is_same<
+                   EnumFromRaw_t<decltype(Name1)>,
+                   EnumFromRaw_t<decltype(Names)>
+                   >::value),
+                  "Error: Received entries from multiple different enums");
+
+    using type = EnumFromRaw_t<decltype(Name1)>;
+};
+template <auto...Names>
+using EnumFromNames_t = typename EnumFromNames<Names...>::type;
+
 // Just a helper struct to record a combination of Transformation and Serialization
 // that will end up applied to individual fields.
 template <typename StoreSigned, typename Trans, typename Serial>
@@ -254,18 +268,20 @@ template <typename...T> struct Pack{};
 template <typename GroupEncoder, auto... names>
 struct FieldGroupEncoder
 {
+    using FieldNames = EnumFromNames_t<names...>;
     template <typename P>
     BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
     {
-        return groupEncoder_.Encode(dest, PulseFieldAccessor<names>::Get(pulse)...);
+        return groupEncoder_.Encode(dest, FieldAccessor<P, FieldNames>::template Get<names>(pulse)...);
     }
 
     template <typename P, size_t...ids>
     BAZ_CUDA const uint8_t* DeserializeHelper(P& pulse, const uint8_t* dest, std::index_sequence<ids...>)
     {
-        PacBio::Cuda::Utility::CudaTuple<typename PulseFieldAccessor<names>::Type...> vals;
+        using Accessor = FieldAccessor<P, FieldNames>;
+        PacBio::Cuda::Utility::CudaTuple<typename Accessor::template Type<names>...> vals;
         dest = groupEncoder_.Decode(dest, vals.template Get<ids>()...);
-        (PulseFieldAccessor<names>::Set(pulse, vals.template Get<ids>()) , ...);
+        (Accessor::template Set<names>(pulse, vals.template Get<ids>()) , ...);
         return dest;
     }
 
@@ -278,7 +294,7 @@ struct FieldGroupEncoder
     template <typename P, size_t...ids>
     BAZ_CUDA size_t BytesRequired(const P& pulse)
     {
-        return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
+        return groupEncoder_.BytesRequired(FieldAccessor<P, FieldNames>::template Get<names>(pulse)...);
     }
 
     static auto Params()

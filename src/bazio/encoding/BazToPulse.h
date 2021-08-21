@@ -54,6 +54,28 @@ namespace BazIO {
 // of the serialization/transformation strategies supported.
 class BazToPulse
 {
+    template <PacketFieldName::RawEnum name>
+    struct FieldHelpers
+    {
+        using Accessor = FieldAccessor<Mongo::Data::Pulse, PacketFieldName>;
+        Accessor access_;
+        auto Get(const Mongo::Data::Pulse& p) { return access_.Get<name>(p); }
+        template <typename T>
+        void Set(Mongo::Data::Pulse& p, T val) { access_.Set<name>(p, val); }
+        using T = Accessor::Type<name>;
+        std::function<uint64_t(T, StoreSigned)> transform_;
+        std::function<T(uint64_t, StoreSigned)> revert_;
+    };
+
+    std::vector<GroupParams<PacketFieldName>> groups_;
+    FieldHelpers<PacketFieldName::Label> base;
+    FieldHelpers<PacketFieldName::IsBase> isBase;
+    FieldHelpers<PacketFieldName::PulseWidth> pw;
+    FieldHelpers<PacketFieldName::StartFrame> startFrame;
+    FieldHelpers<PacketFieldName::Pkmax> pkmax;
+    FieldHelpers<PacketFieldName::Pkmean> pkmean;
+    FieldHelpers<PacketFieldName::Pkmid> pkmid;
+    FieldHelpers<PacketFieldName::Pkvar> pkvar;
     void CreateHelpers()
     {
         // Helper to handle the transformation visitation
@@ -263,28 +285,28 @@ public:
                 switch (info.name)
                 {
                 case PacketFieldName::Label:
-                    val = base.transform_(base.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = base.transform_(base.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::IsBase:
-                    val = isBase.transform_(isBase.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = isBase.transform_(isBase.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::PulseWidth:
-                    val = pw.transform_(pw.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pw.transform_(pw.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::StartFrame:
-                    val = startFrame.transform_(startFrame.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = startFrame.transform_(startFrame.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmax:
-                    val = pkmax.transform_(pkmax.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmax.transform_(pkmax.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmean:
-                    val = pkmean.transform_(pkmean.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmean.transform_(pkmean.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmid:
-                    val = pkmid.transform_(pkmid.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmid.transform_(pkmid.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkvar:
-                    val = pkvar.transform_(pkvar.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkvar.transform_(pkvar.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
@@ -329,28 +351,28 @@ public:
                 switch (info.name)
                 {
                     case PacketFieldName::Label:
-                        base.access_.Set(pulse, base.revert_(integral, StoreSigned{info.storeSigned}));
+                        base.Set(pulse, base.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::IsBase:
-                        isBase.access_.Set(pulse, isBase.revert_(integral, StoreSigned{info.storeSigned}));
+                        isBase.Set(pulse, isBase.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::PulseWidth:
-                        pw.access_.Set(pulse, pw.revert_(integral, StoreSigned{info.storeSigned}));
+                        pw.Set(pulse, pw.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::StartFrame:
-                        startFrame.access_.Set(pulse, startFrame.revert_(integral, StoreSigned{info.storeSigned}));
+                        startFrame.Set(pulse, startFrame.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::Pkmax:
-                        pkmax.access_.Set(pulse, pkmax.revert_(integral, StoreSigned{info.storeSigned}));
+                        pkmax.Set(pulse, pkmax.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::Pkmean:
-                        pkmean.access_.Set(pulse, pkmean.revert_(integral, StoreSigned{info.storeSigned}));
+                        pkmean.Set(pulse, pkmean.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::Pkmid:
-                        pkmid.access_.Set(pulse, pkmid.revert_(integral, StoreSigned{info.storeSigned}));
+                        pkmid.Set(pulse, pkmid.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     case PacketFieldName::Pkvar:
-                        pkvar.access_.Set(pulse, pkvar.revert_(integral, StoreSigned{info.storeSigned}));
+                        pkvar.Set(pulse, pkvar.revert_(integral, StoreSigned{info.storeSigned}));
                         break;
                     default:
                         throw PBException("FieldName Not Supported");
@@ -384,28 +406,28 @@ public:
                 switch (info.name)
                 {
                 case PacketFieldName::Label:
-                    val = base.transform_(base.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = base.transform_(base.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::IsBase:
-                    val = isBase.transform_(isBase.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = isBase.transform_(isBase.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::PulseWidth:
-                    val = pw.transform_(pw.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pw.transform_(pw.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::StartFrame:
-                    val = startFrame.transform_(startFrame.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = startFrame.transform_(startFrame.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmax:
-                    val = pkmax.transform_(pkmax.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmax.transform_(pkmax.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmean:
-                    val = pkmean.transform_(pkmean.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmean.transform_(pkmean.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkmid:
-                    val = pkmid.transform_(pkmid.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkmid.transform_(pkmid.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 case PacketFieldName::Pkvar:
-                    val = pkvar.transform_(pkvar.access_.Get(pulse), StoreSigned{info.storeSigned});
+                    val = pkvar.transform_(pkvar.Get(pulse), StoreSigned{info.storeSigned});
                     break;
                 default:
                     throw PBException("FieldName Not Supported");
@@ -416,24 +438,6 @@ public:
         return bytes;
     }
 private:
-    template <PacketFieldName::RawEnum name>
-    struct FieldHelpers
-    {
-        PulseFieldAccessor<name> access_;
-        using T = typename PulseFieldAccessor<name>::Type;
-        std::function<uint64_t(T, StoreSigned)> transform_;
-        std::function<T(uint64_t, StoreSigned)> revert_;
-    };
-
-    std::vector<GroupParams<PacketFieldName>> groups_;
-    FieldHelpers<PacketFieldName::Label> base;
-    FieldHelpers<PacketFieldName::IsBase> isBase;
-    FieldHelpers<PacketFieldName::PulseWidth> pw;
-    FieldHelpers<PacketFieldName::StartFrame> startFrame;
-    FieldHelpers<PacketFieldName::Pkmax> pkmax;
-    FieldHelpers<PacketFieldName::Pkmean> pkmean;
-    FieldHelpers<PacketFieldName::Pkmid> pkmid;
-    FieldHelpers<PacketFieldName::Pkvar> pkvar;
 };
 
 }}

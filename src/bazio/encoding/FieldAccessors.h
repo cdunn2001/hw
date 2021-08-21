@@ -38,93 +38,97 @@
 #ifndef PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
 #define PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
 
-#include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/BazioEnableCuda.h>
+#include <bazio/encoding/FieldNames.h>
+#include <dataTypes/Pulse.h>  //Temporary
 
-namespace PacBio {
-namespace BazIO {
+namespace PacBio::BazIO {
 
-template <PacketFieldName::RawEnum> struct PulseFieldAccessor;
-template <>
-struct PulseFieldAccessor<PacketFieldName::Label>
+// Create specializations of this class to map entries in an enum
+// to accessor functions in Obj.  `FieldNames` is expected to
+// be an instance of a SMART_ENUM, and `Obj` can be effectively
+// anything, but the intention is to be something like a Pulse
+// or Metric object.
+//
+// At a minimum the specialization must include the function:
+//   template <FieldNames::RawEnum Name>
+//   static auto Get(const Obj& obj);
+//
+// If you wish to do deserialization as well as serialization
+// (which is primarily for test paths right now) then you also
+// need something like:
+//
+//   template <FieldName::RawEnum Name>
+//   using Type = decltype(Get<Name>(std::declval<Obj>()));
+//
+//   template <FieldName::RawEnum Name>
+//   static void Set(Obj& p, Type<Name> val);
+//
+template <typename Obj, typename FieldNames>
+struct FieldAccessor
 {
-    using Type = uint8_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Label()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val) { p.Label(static_cast<typename P::NucleotideLabel>(val)); }
+    static_assert(!sizeof(Obj), "Missing specialization for FieldAccessor!");
 };
+
 template <>
-struct PulseFieldAccessor<PacketFieldName::StartFrame>
+struct FieldAccessor<Mongo::Data::Pulse, PacketFieldName>
 {
-    using Type = uint32_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p)
+    template <PacketFieldName::RawEnum Name>
+    BAZ_CUDA static auto Get(const Mongo::Data::Pulse& p)
     {
-        return p.Start();
+        if constexpr (Name == PacketFieldName::Label)
+            return static_cast<uint8_t>(p.Label());
+        else if constexpr (Name == PacketFieldName::StartFrame)
+            return p.Start();
+        else if constexpr (Name == PacketFieldName::PulseWidth)
+            return p.Width();
+        else if constexpr (Name == PacketFieldName::IsBase)
+            return !p.IsReject();
+        else if constexpr (Name == PacketFieldName::Pkmax)
+            return p.MaxSignal();
+        else if constexpr (Name == PacketFieldName::Pkmid)
+            return p.MidSignal();
+        else if constexpr (Name == PacketFieldName::Pkmean)
+            return p.MeanSignal();
+        else if constexpr (Name == PacketFieldName::Pkvar)
+            return p.SignalM2();
+        else
+            static_assert(Name == PacketFieldName::Label,
+                          "FieldAccessor specialization not handling all FieldNames");
+        // NVCC seems to have a diagnostic bug, where it warns about no return statement
+        // in a function not returning void.  This builtin helps silence that, even
+        // though the constexpr statements themselves should be enough.
+        __builtin_unreachable();
     }
 
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val)
+    template <PacketFieldName::RawEnum Name>
+    using Type = decltype(Get<Name>(std::declval<Mongo::Data::Pulse>()));
+
+    template <PacketFieldName::RawEnum Name>
+    BAZ_CUDA static void Set(Mongo::Data::Pulse& p, Type<Name> val)
     {
-        p.Start(val);
+        if constexpr (Name == PacketFieldName::Label)
+            p.Label(static_cast<Mongo::Data::Pulse::NucleotideLabel>(val));
+        else if constexpr (Name == PacketFieldName::StartFrame)
+            p.Start(val);
+        else if constexpr (Name == PacketFieldName::PulseWidth)
+            p.Width(val);
+        else if constexpr (Name == PacketFieldName::IsBase)
+            p.IsReject(!val);
+        else if constexpr (Name == PacketFieldName::Pkmax)
+            p.MaxSignal(val);
+        else if constexpr (Name == PacketFieldName::Pkmid)
+            p.MidSignal(val);
+        else if constexpr (Name == PacketFieldName::Pkmean)
+            p.MeanSignal(val);
+        else if constexpr (Name == PacketFieldName::Pkvar)
+            p.SignalM2(val);
+        else
+            static_assert(Name == PacketFieldName::Label,
+                          "FieldAccessor specialization not handling all FieldNames");
     }
 };
-template <>
-struct PulseFieldAccessor<PacketFieldName::IsBase>
-{
-    using Type = bool;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return !p.IsReject(); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val) { p.IsReject(!val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::PulseWidth>
-{
-    using Type = uint32_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Width()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.Width(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmax>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MaxSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MaxSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmid>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MidSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MidSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmean>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MeanSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MeanSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkvar>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.SignalM2()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.SignalM2(val); }
-};
 
-}}
+}  // namespace PacBio::BazIO
 
-#endif //PACBIO_BAZIO_ENCODING_FIELDNAMES_H
+#endif  // PACBIO_BAZIO_ENCODING_FIELDNAMES_H
