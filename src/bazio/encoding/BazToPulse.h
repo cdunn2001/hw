@@ -198,7 +198,7 @@ public:
     // Accepts a encoding specification, complete with the
     // heirarchy of which fields are grouped together
     // (e.g. to handle cross byte fields)
-    BazToPulse(std::vector<GroupParams> groups)
+    BazToPulse(std::vector<GroupParams<PacketFieldName>> groups)
         : groups_(std::move(groups))
     {
         CreateHelpers();
@@ -207,9 +207,9 @@ public:
     // Accepts a flat list of fields to be serialized.  It will form the
     // groups itself, choosing the smallest groups that fit into integral
     // bytes
-    BazToPulse(const std::vector<FieldParams>& info)
+    BazToPulse(const std::vector<FieldParams<PacketFieldName>>& info)
     {
-        GroupParams currGroup;
+        GroupParams<PacketFieldName> currGroup;
         for (size_t i = 0; i < info.size(); ++i)
         {
             auto numBits = info[i].serialize.params.Visit([](const auto& v) { return v.numBits; });
@@ -217,7 +217,7 @@ public:
                 || currGroup.totalBits + numBits > 64)
             {
                 groups_.push_back(std::move(currGroup));
-                currGroup = GroupParams{};
+                currGroup = GroupParams<PacketFieldName>{};
             }
             currGroup.totalBits += numBits;
             assert(currGroup.totalBits <= 64);
@@ -425,7 +425,7 @@ private:
         std::function<T(uint64_t, StoreSigned)> revert_;
     };
 
-    std::vector<GroupParams> groups_;
+    std::vector<GroupParams<PacketFieldName>> groups_;
     FieldHelpers<PacketFieldName::Label> base;
     FieldHelpers<PacketFieldName::IsBase> isBase;
     FieldHelpers<PacketFieldName::PulseWidth> pw;

@@ -196,7 +196,8 @@ public:
     // where each entry into the outermost vector corresponds to a given
     // PacketFieldName.
     RawEventData(std::vector<std::vector<uint32_t>>&& rawPacketData,
-                 const std::vector<BazIO::FieldParams>& fieldInfo)
+                 // BENTODO namspace business
+                 const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& fieldInfo)
         : data_(std::move(rawPacketData))
         , fieldInfo_(fieldInfo)
     {
@@ -235,7 +236,7 @@ public:  // const data accessors
         return data_[static_cast<uint32_t>(name)];
     };
 
-    const std::vector<BazIO::FieldParams>& FieldInfo() const
+    const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& FieldInfo() const
     {
         return fieldInfo_;
     };
@@ -243,7 +244,7 @@ public:  // const data accessors
 private:
     std::vector<std::vector<uint32_t>> data_;
     size_t numEvents_;
-    std::vector<BazIO::FieldParams> fieldInfo_;
+    std::vector<BazIO::FieldParams<BazIO::PacketFieldName>> fieldInfo_;
 };
 
 class RawMetricData

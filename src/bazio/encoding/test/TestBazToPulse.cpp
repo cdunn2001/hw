@@ -34,9 +34,9 @@ using namespace PacBio::BazIO;
 
 TEST(BazToPulse, KestrelLosslessCompact)
 {
-    std::vector<FieldParams> info;
+    std::vector<FieldParams<PacketFieldName>> info;
 
-    FieldParams fp;
+    FieldParams<PacketFieldName> fp;
     fp.name = PacketFieldName::Label;
     fp.storeSigned = false;
     fp.transform = Transform<NoOp>::Params();
@@ -107,9 +107,9 @@ TEST(BazToPulse, KestrelLosslessCompact)
 
 TEST(BazToPulse, KestrelLosslessSimple)
 {
-    std::vector<FieldParams> info;
+    std::vector<FieldParams<PacketFieldName>> info;
 
-    FieldParams fp;
+    FieldParams<PacketFieldName> fp;
     fp.name = PacketFieldName::Label;
     fp.storeSigned = false;
     fp.transform = Transform<NoOp>::Params();

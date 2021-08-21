@@ -63,7 +63,7 @@ namespace
 const size_t NUM_PACKET_FIELDS = BazIO::PacketFieldName::allValues().size();
 
 std::vector<std::vector<uint32_t>> ParsePacketFields(
-        const std::vector<BazIO::GroupParams>& encoding,
+        const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& encoding,
         const ZmwByteData::ByteStream& data,
         size_t numEvents)
 {

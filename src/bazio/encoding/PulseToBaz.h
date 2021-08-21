@@ -95,6 +95,11 @@ namespace BazIO {
 
 namespace detail {
 
+template <typename T1, typename... Rest>
+struct FirstOf { using type = T1; };
+template <typename... Ts>
+using FirstOf_t = typename FirstOf<Ts...>::type;
+
 // Just a helper struct to record a combination of Transformation and Serialization
 // that will end up applied to individual fields.
 template <typename StoreSigned, typename Trans, typename Serial>
@@ -178,11 +183,12 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
         return ptr;
     }
 
-    template <typename TransformParams, typename SerializerParams>
-    static FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
+    template <typename RawEnum, typename TransformParams, typename SerializerParams>
+    static auto FieldParam(RawEnum name, StoreSigned storeSigned,
                            TransformParams transformParams, SerializerParams serializerParams)
     {
-        FieldParams fp;
+        using FieldName = EnumFromRaw_t<RawEnum>;
+        FieldParams<FieldName> fp;
         fp.name = name;
         fp.storeSigned = storeSigned;
         fp.transform = transformParams;
@@ -191,9 +197,12 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     }
 
     template <typename... Names>
-    static GroupParams Params(Names... names)
+    static auto Params(Names... names)
     {
-        GroupParams params;
+        using FieldName = EnumFromRaw_t<FirstOf_t<Names...>>;
+        static_assert((true && ... && std::is_same<FieldName, EnumFromRaw_t<Names>>::value), "Function called with RawEnums from different SmartEnum classes");
+
+        GroupParams<FieldName> params;
         params.members = {FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())...};
         params.numBits = {Serializers::nBits...};
         params.totalBits = (0 + ... + Serializers::nBits);
@@ -203,8 +212,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     PacBio::Cuda::Utility::CudaTuple<Transforms...> transforms_;
 };
 
-// Like an EncodeInfo, but now we add a particular PacketFieldName to the mix.
-template <PacketFieldName::RawEnum name, typename StoreSigned, typename Trans, typename Serial>
+// Like an EncodeInfo, but now we add a particular FieldName to the mix.
+template <auto name, typename StoreSigned, typename Trans, typename Serial>
 struct Field
 {
     // Add some validation of the template parameters, since this is something
@@ -238,11 +247,11 @@ struct FieldGroup {
 template <typename...T> struct Pack{};
 
 // This class just wraps the functionality of a GroupEncoder, but now
-// associated with a particular list of PacketFieldNames.  This class
+// associated with a particular list of FieldNames.  This class
 // is kept separate from the GroupEncoder mostly to avoid unecessary
 // extra template instantiations, since two groups can have the same
 // formula for encoding fields, just with a different set of fields.
-template <typename GroupEncoder, PacketFieldName::RawEnum... names>
+template <typename GroupEncoder, auto... names>
 struct FieldGroupEncoder
 {
     template <typename P>
@@ -272,7 +281,7 @@ struct FieldGroupEncoder
         return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
     }
 
-    static GroupParams Params()
+    static auto Params()
     {
         return GroupEncoder::Params(names...);
     }
@@ -285,7 +294,7 @@ struct FieldGroupEncoder
 
 template <typename FieldGroup>
 struct GroupToEncoder;
-template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Signed, typename... Transforms, typename... Serializers>
+template <size_t totalBits, auto... names, typename... Signed, typename... Transforms, typename... Serializers>
 struct GroupToEncoder<FieldGroup<totalBits, Field<names, Signed, Transforms, Serializers>...>> {
     using T = FieldGroupEncoder<GroupEncoder<std::make_index_sequence<sizeof...(Transforms)>, EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
 };
@@ -322,9 +331,12 @@ struct PulseEncoder
         data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
     }
 
-    static std::vector<GroupParams> Params()
+    static auto Params()
     {
-        return std::vector<GroupParams>{GroupEncoders::Params()...};
+        using type = FirstOf_t<decltype(GroupEncoders::Params())...>;
+        static_assert((true && ... && std::is_same<type, decltype(GroupEncoders::Params())>::value),
+                      "Function called with RawEnums from different SmartEnum classes");
+        return std::vector<type>{GroupEncoders::Params()...};
     }
 
 private:
@@ -369,7 +381,7 @@ struct GenerateGroups<Pack<ProcessedGroups...>, FieldGroup<currBits, CurrFields.
 // an integral number of bytes, with the exception that a group cannot be
 // larger than 64 bits, and if we have to tie off a ragged group to avoid
 // that limitation then we will.
-template <PacketFieldName::RawEnum name, typename Signed, typename Trans, typename Serial>
+template <auto name, typename Signed, typename Trans, typename Serial>
 using Field = detail::Field<name, Signed, Trans, Serial>;
 template <typename...Fields>
 using PulseToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
