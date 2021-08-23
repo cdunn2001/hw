@@ -63,7 +63,8 @@ const size_t NUM_PACKET_FIELDS = BazIO::PacketFieldName::allValues().size();
 
 std::vector<std::vector<uint32_t>> ParsePacketFields(
         const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& encoding,
-        const ZmwByteData::ByteStream& data,
+        const uint8_t * rawData,
+        size_t rawDataSize,
         size_t numEvents)
 {
     std::vector<std::vector<uint32_t>> packetFields(NUM_PACKET_FIELDS);
@@ -75,9 +76,8 @@ std::vector<std::vector<uint32_t>> ParsePacketFields(
         }
     }
 
-    uint64_t end = data.size();
-    const uint8_t* packetByteStream = data.get();
-    if (end == 0) assert(numEvents == 0);
+    const uint8_t* packetByteStream = rawData;
+    if (rawDataSize == 0) assert(numEvents == 0);
 
     auto decode = [](const SerializeParams& info, uint64_t val, auto& ptr, StoreSigned storeSigned)
     {
@@ -88,7 +88,7 @@ std::vector<std::vector<uint32_t>> ParsePacketFields(
         );
     };
 
-    while (packetByteStream < data.get() + data.size())
+    while (packetByteStream < rawData + rawDataSize)
     {
         for (const auto& group : encoding)
         {
@@ -269,8 +269,25 @@ RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data)
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
 
-    auto rawData = ParsePacketFields(fh.PacketGroups(), data.packetByteStream(), data.NumEvents());
+    auto rawData = ParsePacketFields(fh.PacketGroups(), data.packetByteStream().get(), data.packetByteStream().size(), data.NumEvents());
     return RawEventData(std::move(rawData), fh.PacketFields());
+}
+
+RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& groups,
+                          const uint8_t* data,
+                          size_t dataSize,
+                          size_t numEvents)
+{
+    std::vector<FieldParams<BazIO::PacketFieldName>> params;
+    for (const auto& g : groups)
+    {
+        for (const auto& f : g.members)
+        {
+            params.push_back(f);
+        }
+    }
+    auto rawData = ParsePacketFields(groups, data, dataSize, numEvents);
+    return RawEventData(std::move(rawData), params);
 }
 
 }} // PacBio::BazIO

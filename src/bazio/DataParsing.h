@@ -391,6 +391,10 @@ private:
 
 BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal);
 RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data);
+RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& groups,
+                          const uint8_t* data,
+                          size_t dataSize,
+                          size_t numEvents);
 RawMetricData ParseMetricFields(const std::vector<MetricField>& fields, const ZmwByteData::ByteStream& data);
 
 }}

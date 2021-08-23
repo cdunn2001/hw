@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
 add_library(libBazioEncoding STATIC
-   BazToPulse.h
-   BazToPulse.cpp
    EncodingParams.h
    EncodingParams.cpp
    FieldNames.h
