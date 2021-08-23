@@ -16,7 +16,7 @@ build_basecaller(){
   source module_setup.sh
   ./cmake_setup.sh
   cd build/x86_64/Release_gcc
-  ninja
+  cmake --build . -j
   ldd applications/smrt-basecaller
 # There no longer is an Intel build, but this should be
 # revived/replaced in the near term hopefully
