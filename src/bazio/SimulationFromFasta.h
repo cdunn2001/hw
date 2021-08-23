@@ -64,9 +64,9 @@
 #include "SimulationRNG.h"
 #include "Simulation.h"
 
+#include <bazio/encoding/test/TestingPulse.h>
 #include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/SimulateWriteUtils.h>
-#include <dataTypes/PulseGroups.h>
 
 namespace PacBio {
 namespace Primary {
@@ -142,7 +142,7 @@ private:
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate_,
                               frameRate_*60*60*3,
-                              internal ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                              internal ? BazIO::InternalPulses::Params() : BazIO::ProductionPulses::Params(),
                               metricsVerbosity,
                               generateExperimentMetadata(),
                               generateBasecallerConfig("Spider"),

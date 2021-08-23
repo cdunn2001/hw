@@ -12,15 +12,13 @@
 
 #include <bazio/Simulation.h>
 
-#include <dataTypes/PulseGroups.h>
-
 #include <postprimary/insertfinder/InsertState.h>
 #include <postprimary/bam/EventData.h>
 #include <postprimary/bam/Platform.h>
 #include <postprimary/stats/ProductivityMetrics.h>
 #include <postprimary/stats/ZmwStats.h>
 
-using namespace PacBio::Mongo::Data;
+using namespace PacBio::BazIO;
 using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
 

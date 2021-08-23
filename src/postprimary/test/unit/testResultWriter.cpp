@@ -17,8 +17,6 @@
 #include <bazio/file/FileHeaderBuilder.h>
 #include <bazio/MetricData.h>
 
-#include <dataTypes/PulseGroups.h>
-
 #include <postprimary/bam/ResultWriter.h>
 #include <postprimary/bam/RuntimeMetaData.h>
 #include <postprimary/application/MetadataParser.h>
@@ -28,7 +26,7 @@
 #include "ReadSimulator.h"
 #include "test_data_config.h"
 
-using namespace PacBio::Mongo::Data;
+using namespace PacBio::BazIO;
 using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
 

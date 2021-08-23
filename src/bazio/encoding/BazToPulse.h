@@ -33,6 +33,8 @@
 #include <bazio/encoding/FieldTransforms.h>
 #include <bazio/encoding/FieldSerializers.h>
 
+#include <dataTypes/PulseFieldAccessors.h>
+
 #include <common/utility/Overload.h>
 #include <functional>
 

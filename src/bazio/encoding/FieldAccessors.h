@@ -23,24 +23,13 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-/// \brief Helper classes that can be used to extract a given field from a pulse,
-///        based off a specific PacketFieldName
-//
-//  Note: These classes at least partially exist because we need something stateful
-//        to convert StartFrame to IPD.  It's crossed my mind that we could
-//        potentially let the pulse accumulator handle that conversion, and just
-//        store the IPD in the pulse rather than start frame.  Of course, we'd have
-//        to update the stored IPDs once we start enabling any form of pulse exclusion,
-//        and there might be other issues to deal with as well.  I'm not ready to
-//        untangle all that just now, so leaving this breadcrumb here to make me, or
-//        anyone else, think about it more in the future.
+/// \brief Declares a template class, which client code shall specialize
+///        in order to inject a mapping between entries in SMART_ENUM
+///        and fields in some class/object to be serialized
+///
 
 #ifndef PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
 #define PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
-
-#include <bazio/encoding/BazioEnableCuda.h>
-#include <bazio/encoding/FieldNames.h>
-#include <dataTypes/Pulse.h>  //Temporary
 
 namespace PacBio::BazIO {
 
@@ -68,65 +57,6 @@ template <typename Obj, typename FieldNames>
 struct FieldAccessor
 {
     static_assert(!sizeof(Obj), "Missing specialization for FieldAccessor!");
-};
-
-template <>
-struct FieldAccessor<Mongo::Data::Pulse, PacketFieldName>
-{
-    template <PacketFieldName::RawEnum Name>
-    BAZ_CUDA static auto Get(const Mongo::Data::Pulse& p)
-    {
-        if constexpr (Name == PacketFieldName::Label)
-            return static_cast<uint8_t>(p.Label());
-        else if constexpr (Name == PacketFieldName::StartFrame)
-            return p.Start();
-        else if constexpr (Name == PacketFieldName::PulseWidth)
-            return p.Width();
-        else if constexpr (Name == PacketFieldName::IsBase)
-            return !p.IsReject();
-        else if constexpr (Name == PacketFieldName::Pkmax)
-            return p.MaxSignal();
-        else if constexpr (Name == PacketFieldName::Pkmid)
-            return p.MidSignal();
-        else if constexpr (Name == PacketFieldName::Pkmean)
-            return p.MeanSignal();
-        else if constexpr (Name == PacketFieldName::Pkvar)
-            return p.SignalM2();
-        else
-            static_assert(Name == PacketFieldName::Label,
-                          "FieldAccessor specialization not handling all FieldNames");
-        // NVCC seems to have a diagnostic bug, where it warns about no return statement
-        // in a function not returning void.  This builtin helps silence that, even
-        // though the constexpr statements themselves should be enough.
-        __builtin_unreachable();
-    }
-
-    template <PacketFieldName::RawEnum Name>
-    using Type = decltype(Get<Name>(std::declval<Mongo::Data::Pulse>()));
-
-    template <PacketFieldName::RawEnum Name>
-    BAZ_CUDA static void Set(Mongo::Data::Pulse& p, Type<Name> val)
-    {
-        if constexpr (Name == PacketFieldName::Label)
-            p.Label(static_cast<Mongo::Data::Pulse::NucleotideLabel>(val));
-        else if constexpr (Name == PacketFieldName::StartFrame)
-            p.Start(val);
-        else if constexpr (Name == PacketFieldName::PulseWidth)
-            p.Width(val);
-        else if constexpr (Name == PacketFieldName::IsBase)
-            p.IsReject(!val);
-        else if constexpr (Name == PacketFieldName::Pkmax)
-            p.MaxSignal(val);
-        else if constexpr (Name == PacketFieldName::Pkmid)
-            p.MidSignal(val);
-        else if constexpr (Name == PacketFieldName::Pkmean)
-            p.MeanSignal(val);
-        else if constexpr (Name == PacketFieldName::Pkvar)
-            p.SignalM2(val);
-        else
-            static_assert(Name == PacketFieldName::Label,
-                          "FieldAccessor specialization not handling all FieldNames");
-    }
 };
 
 }  // namespace PacBio::BazIO
