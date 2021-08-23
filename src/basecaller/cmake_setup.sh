@@ -4,15 +4,13 @@ generator=${generator:-Ninja}
 if [[ $distclean != 0 ]]
 then
     echo Removing depcache
-    rm -rf ../depcache
+    rm -rf depcache
 fi
 
 
-rm -rf build/x86_64/Debug_gcc
-rm -rf build/x86_64/Release_gcc
+rm -rf build/x86_64/Debug_gcc    && mkdir -p build/x86_64/Debug_gcc
+rm -rf build/x86_64/Release_gcc  && mkdir -p build/x86_64/Release_gcc
 
-mkdir -p build/x86_64/Debug_gcc
-mkdir -p build/x86_64/Release_gcc
 
 # Note: CMAKE_CUDA_HOST_COMPILER must be set here.  By the time we're in a cmake script (e.g. when parsing the toolchain file) it's already too late
 #       and cuda will have at least partially latched on to whatever random host compiler it managed to find

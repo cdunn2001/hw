@@ -2,26 +2,39 @@
 cmake_minimum_required(VERSION 3.20)
 
 include(pacbio-gtest)
+include(pacbio-gbench)
+include(pacbio-eigen)
 
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonTest OBJECT
+    TestAutocorrAccumulator.cpp
     TestLaneArray.cpp
     TestGraphAPI.cpp
 )
 
 target_link_libraries(libMongoCommonTest
     libMongoCommon
+    libEigen
     libGtest
 )
 
 # Define the test executable specific to mongo basecaller analyzer.
-set(exec testMongoCommonTest)
+set(EXEC testMongoCommonTest)
 
-add_executable(${exec})
+add_executable(${EXEC})
 
-target_link_libraries(${exec}
+target_link_libraries(${EXEC}
     libMongoCommonTest
     libGtestWithMain
 )
 
-add_test(${exec} ${exec} --gtest_output=xml:${exec}.xml)
+add_test(${EXEC} ${EXEC} --gtest_output=xml:${EXEC}.xml)
+
+# Define benchmark project
+add_executable(benchMongoCommon BenchAutocorrAcc.cpp)
+
+target_link_libraries(benchMongoCommon
+    libMongoCommon
+    libEigen
+    libGbenchWithMain
+)
