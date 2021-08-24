@@ -320,8 +320,7 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
     size_t iHeader = 0;
 
     // Iterate over all ZmwSlices
-    size_t zmwIdx = 0;
-    for (size_t i = 0; i < bazBuffer->NumZmw(); ++i)
+    for (size_t zmwIdx = 0; zmwIdx < bazBuffer->NumZmw(); ++zmwIdx)
     {
         if (abort_) return;
         PBLOG_TRACE << " BazWriter::WriteChunkData " << iHeader;
@@ -337,11 +336,9 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         }
         ++iHeader;
 
-        auto slice = bazBuffer->GetSlice(i);
+        auto slice = bazBuffer->GetSlice(zmwIdx);
         h.offsetPacket = Ftell();
         h.zmwIndex = zmwIdx;
-        // TODO awkward
-        zmwIdx++;
         h.packetsByteSize = slice.packets.packetByteSize;
         h.numEvents       = slice.packets.numEvents;
         h.numHFMBs        = 0;

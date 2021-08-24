@@ -23,7 +23,7 @@ target_link_libraries(libMongoBasecallerTest
     libAppModules
 )
 
-# Define the test executable specific  the core basecaller analyzer.
+# Define the test executable specific to the core basecaller analyzer.
 set(exec testMongoBasecallerTest)
 
 add_executable(${exec}

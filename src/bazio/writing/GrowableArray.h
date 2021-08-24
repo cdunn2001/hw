@@ -143,13 +143,16 @@ public:
         }
     }
 
-    // Returns a pointer to a new entry added to the end.
+    /// Adds a new entry to the instance
+    /// \return a pointer to the new entry
     T* AppendOne()
     {
         GrowToSize(size_+1);
         return (*this)[size_-1];
     }
 
+    /// Indexing operator for accessing elements.
+    /// \return a pointer to the requested index
     const T* operator[](size_t idx) const
     {
         assert(idx / allocGranularity_ < allocations_.size());
@@ -157,12 +160,18 @@ public:
             + (idx % allocGranularity_) * allocLen_;
     }
 
+    /// Indexing operator for accessing elements.
+    /// \return a pointer to the requested index
     T* operator[](size_t idx)
     {
         return const_cast<T*>(const_cast<const GrowableArray<T>&>(*this)[idx]);
     }
 
+    /// return The number of entries in this GrowableArray
     size_t Size() const { return size_; }
+    /// \return The number of Ts that belong to each entry in the array
+    ///         (e.g. a value greater than 1 means this instance is effectively
+    ///         a 2D array)
     size_t ElementLen() const { return allocLen_; }
 private:
     size_t allocGranularity_;

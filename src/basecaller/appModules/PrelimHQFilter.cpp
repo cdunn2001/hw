@@ -125,8 +125,6 @@ public:
     virtual ~Impl() = default;
 
     virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
-
-private:
 };
 
 template <bool internal>
