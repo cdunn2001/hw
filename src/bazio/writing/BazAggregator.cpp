@@ -33,63 +33,52 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
-#define PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
-
-#include <cassert>
-#include <memory>
-
-#include <bazio/MetricBlock.h>
-#include <bazio/writing/GrowableArray.h>
-#include <bazio/writing/MemoryBuffer.h>
-#include <bazio/writing/PacketBufferManager.h>
+#include "BazAggregator.h"
 
 namespace PacBio::BazIO {
 
-class BazBuffer
+BazAggregator::BazAggregator(size_t numZmw, uint32_t bufferId, size_t expectedPulseBytesPerZmw)
+    : numZmw_(numZmw)
+    , bufferId_(bufferId)
+    , allocator_(std::make_shared<DataSource::MallocAllocator>())
+    // TODO: this max is an ugly hack.  It's there because oversized
+    // allocations
+    //       are currenlty forbidden in order to play nicely with the
+    //       alocation caching framework.  This needs reworking as metrics get
+    //       revamped
+    , metricsBuffer_(std::max(numZmw_, 100ul), 1, *allocator_)
+    , metrics_(numZmw)
+    , packets_(numZmw, expectedPulseBytesPerZmw)
+{}
+
+BazAggregator::BazAggregator(size_t numZmw,
+                             uint32_t bufferId,
+                             size_t expectedPulseBufferSize,
+                             size_t maxLookback,
+                             std::shared_ptr<Memory::IAllocator> allocator)
+    : numZmw_(numZmw)
+    , bufferId_(bufferId)
+    , allocator_(allocator)
+    // TODO: this max is an ugly hack.  It's there because oversized
+    // allocations
+    //       are currenlty forbidden in order to play nicely with the
+    //       alocation caching framework.  This needs reworking as metrics
+    //       get revamped
+    , metricsBuffer_(std::max(numZmw_, 100ul), 1, *allocator_)
+    , metrics_(numZmw)
+    , packets_(numZmw, expectedPulseBufferSize, maxLookback, allocator)
+{}
+
+std::unique_ptr<BazBuffer> BazAggregator::ProduceBazBuffer()
 {
-    using TMetric = Primary::SpiderMetricBlock;
+    auto currPackets = packets_.CreateCheckpoint();
+    auto ret =
+        std::make_unique<BazBuffer>(bufferId_, std::move(metricsBuffer_), std::move(metrics_), std::move(currPackets));
 
-public:
-    BazBuffer(uint32_t bufferId,
-              MemoryBuffer<TMetric>&& metricsBuffer,
-              std::vector<MemoryBufferView<TMetric>>&& metrics,
-              std::unique_ptr<const PacketBufferManager> packets)
-        : numZmw_(metrics.size())
-        , bufferId_(bufferId)
-        , metricsBuffer_(std::move(metricsBuffer))
-        , metrics_(std::move(metrics))
-        , packets_(std::move(packets))
-    {
-        assert(numZmw_ == packets_->NumZmw());
-    }
+    metricsBuffer_ = MemoryBuffer<TMetric>(std::max(numZmw_, 100ul), 1, *allocator_);
+    metrics_ = std::vector<MemoryBufferView<TMetric>>(numZmw_);
 
-    size_t NumZmw() const { return numZmw_; }
-    uint32_t BufferId() const { return bufferId_; }
-
-    struct Slice
-    {
-        const MemoryBufferView<TMetric>& metrics;
-        PacketBufferManager::PacketSlice packets;
-    };
-    Slice GetSlice(size_t zmw) const { return Slice {metrics_[zmw], packets_->GetSlice(zmw)}; };
-
-    ~BazBuffer() = default;
-
-private:
-    size_t numZmw_;
-    uint32_t bufferId_;
-
-    // Note: This is currently the only usage of this class, and
-    //       metrics are slated to be reworked.  If you need this
-    //       then keeping it is fine.  If you don't, then the
-    //       whole MemoryBuffer file should probably be deleted
-    MemoryBuffer<TMetric> metricsBuffer_;
-    std::vector<MemoryBufferView<TMetric>> metrics_;
-
-    std::unique_ptr<const PacketBufferManager> packets_;
-};
+    return ret;
+}
 
 }  // namespace PacBio::BazIO
-
-#endif  // PACBIO_BAZIO_WRITING_BAZ_BUFFER_H

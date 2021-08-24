@@ -39,7 +39,7 @@
 #include <memory>
 
 #include <bazio/encoding/Types.h>
-#include <bazio/writing/BazBuffer.hpp>
+#include <bazio/writing/BazAggregator.h>
 #include <bazio/writing/BazWriter.h>
 #include <bazio/encoding/PulseToBaz.h>
 
@@ -63,10 +63,6 @@ using SimPulse = Mongo::Data::Pulse;
 
 class SimBazWriter
 {
-    std::unique_ptr<BazBuffer> MakeBuffer()
-    {
-        return std::make_unique<BazBuffer>(numZmw_, 0, 300);
-    }
 public:
     SimBazWriter(const std::string& fileName,
                  FileHeaderBuilder& fhb,
@@ -78,9 +74,7 @@ public:
                      std::vector<Primary::SpiderMetricBlock>&& metrics, size_t zmw);
     void Flush()
     {
-        auto tmp = MakeBuffer();
-        std::swap(tmp, buffer_);
-        writer_->Flush(std::move(tmp));
+        writer_->Flush(aggregator_->ProduceBazBuffer());
     }
 
     void WaitForTermination()
@@ -100,7 +94,7 @@ private:
     bool internal_;
 
     std::unique_ptr<BazIO::BazWriter> writer_;
-    std::unique_ptr<BazIO::BazBuffer> buffer_;
+    std::unique_ptr<BazIO::BazAggregator> aggregator_;
 
     std::vector<SimInternalPulseGroups> internalSerializer_;
     std::vector<SimProductionPulseGroups> prodSerializer_;

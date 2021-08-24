@@ -14,7 +14,7 @@ target_link_libraries(libMongoCommonTest
     libGtest
 )
 
-# Define the test executable specific to mongo basecaller analyzer.
+# Define the test executable specific to the common tests
 set(exec testMongoCommonTest)
 
 add_executable(${exec})

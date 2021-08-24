@@ -287,6 +287,9 @@ struct FieldGroupEncoder
     }
 
     GroupEncoder groupEncoder_;
+    // The nominal number of bytes we expect to use to serialize this group,
+    // neglecting the effects from any overflow mechanisms
+    static constexpr size_t nominalBytes = GroupEncoder::numBytes;
 };
 
 template <typename FieldGroup>
@@ -301,6 +304,9 @@ using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
 template <typename... GroupEncoders>
 struct PulseEncoder
 {
+    // The nominal number of bytes we expect to use to serialize this group,
+    // neglecting the effects from any overflow mechanisms
+    static constexpr size_t nominalBytes = (0 + ... + GroupEncoders::nominalBytes);
 
     template <typename P>
     BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)

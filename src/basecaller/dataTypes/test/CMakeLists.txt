@@ -13,7 +13,7 @@ target_link_libraries(libMongoDataTypesTest
     libGtest
 )
 
-# Define the test executable specific to mongo basecaller analyzer.
+# Define the test executable specific to the data types library
 set(exec testMongoDataTypesTest)
 
 add_executable(${exec})

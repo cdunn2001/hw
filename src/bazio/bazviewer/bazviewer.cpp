@@ -678,9 +678,9 @@ int main(int argc, char* argv[])
             }
             std::cout << "events:" << events << std::endl;
             std::cout << "bases:"  << explicitBases << std::endl;
-            for(size_t i = 0;i<explicitCalls.size();i++)
+            for(const auto& kv : explicitCalls)
             {
-                std::cout << "call" << i << ":" << explicitCalls[i] << std::endl;
+                std::cout << "call " << kv.first << ":" << kv.second << std::endl;
             }
         }
 

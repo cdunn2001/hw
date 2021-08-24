@@ -33,5 +33,10 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#include "BazBuffer.h"
+#include "PacketBuffer.h"
 
+namespace PacBio {
+namespace BazIO {
+
+
+}} // PacBio::BazIO

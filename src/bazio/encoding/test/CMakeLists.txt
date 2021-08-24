@@ -15,7 +15,7 @@ target_link_libraries(libBazioEncodingTest
     libGtest
 )
 
-# Define the test executable specific to mongo basecaller analyzer.
+# Define the test executable specific to bazio encoding
 set(exec testBazioEncoding)
 
 add_executable(${exec})
