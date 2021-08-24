@@ -62,15 +62,17 @@ namespace PacBio::BazIO {
 ///    the oldest will be discarded.
 class PacketBufferManager
 {
+private:
     // We'll reserve memory for this many ZMW at a time.  Too large, and any
     // partially filled allocations will potentially greatly impact our overal
-    // memory consumption.  To small and our allocations will be fragmented.
+    // memory consumption.  Too small and our allocations will be fragmented.
     // If you go to the extreme and set it as 1 then the space overhead of the
     // pointers will be a non-negligable overhead to the actual data payload
     // itself, since a pointer and a size is 16 bytes, and a single ZMW is
     // probably ~320 bytes.
     static constexpr size_t zmwBatchingSize = 4096;
 
+private:
     // An odd "copy" constructor, where we want to copy the contents of most of the
     // other CircularPacketBuffer, with the exception of the hqPackets, which are
     // moved out and we take posession of that data.  The moved-from hqPackets_
@@ -100,10 +102,9 @@ public:
     ///                                 another allocation of the same size will
     ///                                 be reserved for it.
     /// \param maxLookback The number of data buffers we retain before dropping
-    ///                    data Every call to `ProduceBazFile` will create a new
+    ///                    data. Every call to `ProduceBazFile` will create a new
     ///                    data buffer
-    /// \param allocator   An optional IAllocator instance to use for allocating
-    ///                    memory
+    /// \param allocator   An IAllocator instance to use for allocating memory
     PacketBufferManager(size_t numZmw,
                         size_t expectedPulseBufferSize,
                         size_t maxLookback,
@@ -138,7 +139,7 @@ public:
     /// Adds ZMW packet data to the current buffers
     ///
     /// \param zmw   The zmw index of the data
-    /// \param begin An interator to the first pulse to be serialized
+    /// \param begin An iterator to the first pulse to be serialized
     /// \param end   An iterator to one-past-the-end for the pulses to be serialized
     /// \predicate   A boolean functor to determine if a given pulse should be
     ///              serialized (e.g. to skip pulses not marked as bases)

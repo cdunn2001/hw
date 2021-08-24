@@ -37,6 +37,7 @@
 #define PACBIO_BAZIO_WRITING_GROWABLE_ARRAY_H
 
 #include <pacbio/memory/IAllocator.h>
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace BazIO {
@@ -81,7 +82,12 @@ public:
         , allocLen_(allocLen)
         , size_(0)
         , allocator_(allocator)
-    {}
+    {
+        if (allocGranularity == 0)
+            throw PBException("AllocGranularity must be larger than 0");
+        if (allocLen == 0)
+            throw PBException("allocLen must be larger than 0)");
+    }
 
     GrowableArray(const GrowableArray&) = delete;
     GrowableArray(GrowableArray&&) = default;
@@ -146,6 +152,7 @@ public:
 
     const T* operator[](size_t idx) const
     {
+        assert(idx / allocGranularity_ < allocations_.size());
         return allocations_[idx / allocGranularity_].get<T>()
             + (idx % allocGranularity_) * allocLen_;
     }
@@ -164,7 +171,7 @@ private:
     // Helper class to better handle moved-from semantics.  Everything but the
     // size parameter had a sensible "empty" moved from state, so it was either
     // write a wrapper class to set this value to 0 after a move, or write
-    // custome move operators for the outter class that would be more involved,
+    // custom move operators for the outer class that would be more involved,
     // and have to be updated any time a new member was added or removed.
     struct Size {
         Size(size_t s)

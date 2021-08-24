@@ -1,7 +1,6 @@
-This really is a trash cram test, put in to verify some things while structures required for the preHQ 
-algorithm are brought online.  It uses experiemental configurations that are likely to be changed
-or removed.  The whole test can probably be removed once maintenance becomes annoying, as long as
-something else is dropped in its place
+This cram test uses experimental configurations that are likely to be changed or removed, once
+the real preHQ algorithm is brought on line.  The whole test can probably be removed once
+maintenance becomes annoying, as long as something else is dropped in its place 
 
   $ BAZFILE=tmp.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5

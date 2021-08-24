@@ -29,9 +29,7 @@
 
 #include <pacbio/configuration/PBConfig.h>
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
+namespace PacBio::Mongo::Data {
 
 class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
 {
@@ -64,20 +62,20 @@ class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
     //       overrideable since it's not clear what the best thing to do
     //       is.  This calculation will reserve enough space for all ZMW
     //       to go full-tilt at the max rate.  If we reserved a smaller
-    //       ammount of space we might have a lowered memory requirement,
+    //       amount of space we might have a lowered memory requirement,
     //       but we also might have a performance impact as the data for
     //       a single zmw gets fragmented and scattered amongst more smaller
     //       allocations.
-    PB_CONFIG_PARAM(size_t, expectedPulsesPerZmw,
+    PB_CONFIG_PARAM(size_t,
+                    expectedPulsesPerZmw,
                     Configuration::DefaultFunc(
-                                               [](size_t numFrames, float frameRate, float pulseRate) -> size_t
-                    {
-                        return static_cast<size_t>(std::ceil(numFrames / frameRate * pulseRate));
-                    },
-                    {"Metrics.framesPerHFMetricBlock", "expectedFrameRate", "maxSlicePulseRate"}));
+                        [](size_t numFrames, float frameRate, float pulseRate) -> size_t {
+                            return static_cast<size_t>(std::ceil(numFrames / frameRate * pulseRate));
+                        },
+                        {"Metrics.framesPerHFMetricBlock", "expectedFrameRate", "maxSlicePulseRate"}));
 };
 
-}}}     // namespace PacBio::Mongo::Data
+}  // namespace PacBio::Mongo::Data
 
 
-#endif //mongo_dataTypes_configs_PrelimHQConfig_H_
+#endif  // mongo_dataTypes_configs_PrelimHQConfig_H_

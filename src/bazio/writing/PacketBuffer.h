@@ -55,7 +55,7 @@ namespace BazIO {
 /// can be tuned to help promote as much contiguous storage as possible.
 ///
 /// Note: This class uses some fuggly and somewhat brittle bookkeeping to
-///       keep track of ad ad-hoc linked list.  This is because the intended
+///       keep track of an ad-hoc linked list.  This is because the intended
 ///       use case involves literally managing hundres of millions of tiny
 ///       (e.g. 300 byte) pieces of memory.  Early and naive forms of bookkeeping
 ///       were more robust, but ended up with something like a 20% memory overhead.
@@ -64,7 +64,7 @@ class PacketBuffer
 {
 public:
     // Bookkeeping information to keep track of ZMW data as it potentially
-    // grows beyond a single contiguoius snippet of memory.  This is admittedly
+    // grows beyond a single contiguous snippet of memory.  This is admittedly
     // brittle, and focused more on space savings than ease of use.  External
     // code should preferably be interacting instead with PacketBufferManager
     // and the Slice interface it exposes.
@@ -93,7 +93,7 @@ public:
     /// more memory will be reserved for it, and the data will be stitched
     /// together via an sort of ad-hoc linked list.
     ///
-    /// \param numZmw The number of ZMW int his buffer
+    /// \param numZmw The number of ZMWs in this buffer
     /// \param batchSize The number of ZMW to group together into a single
     ///                  allocation.  If it's too large, then a partially
     ///                  filled allocation may noticeably impact overal
@@ -121,11 +121,11 @@ public:
     struct AddResult
     {
         // Number of events added (e.g. possibly excluding pulses)
-        size_t numEvents;
+        uint32_t numEvents;
         // The index for the next bit of data insertion.  It may not
         // be the same as the input index, in case we filled the
         // current buffer and provisioned a new one
-        size_t nextIndex;
+        uint32_t nextIndex;
     };
     /// Adds some ZMW data to a given buffer.
     /// \return The number of events actuall added, as well as the next
@@ -165,7 +165,7 @@ public:
         // I don't see much point in optimizing this API until the
         // necessary usage patterns are settled.
         auto sCopy = serializer;
-        size_t numEvents = 0;
+        uint32_t numEvents = 0;
 
         auto currIndex = index;
         auto* currPiece = pieceData_[index];

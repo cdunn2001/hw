@@ -36,7 +36,7 @@ using namespace PacBio::BazIO;
 // decide to mark them as HQ
 TEST(BazAggregator, Iterators)
 {
-    uint32_t numZmw = 10;
+    uint32_t numZmw = 12;
     uint32_t bytesPerZmw = 10;
     BazAggregator agg(numZmw, 0, bytesPerZmw, 1);
 
@@ -46,11 +46,11 @@ TEST(BazAggregator, Iterators)
     int i = 0;
     for (auto&& zmw : agg.PreHQData())
     {
-        if (i % 2 == 0) zmw.MarkAsHQ();
+        if (i % 3 == 0) zmw.MarkAsHQ();
         i++;
     }
 
-    EXPECT_EQ(agg.PreHQData().size(), numZmw/2);
+    EXPECT_EQ(agg.PreHQData().size(), 2*numZmw/3);
     for (auto&& zmw : agg.PreHQData())
     {
         zmw.MarkAsHQ();

@@ -40,12 +40,18 @@ namespace BazIO {
 
 SimBazWriter::~SimBazWriter() = default;
 
+// Configure the buffer to expect 5 cache lines of data
+// per ZMW.  This corresponds loosely to the expected
+// Kestrel production configuration, but since this is
+// code used just in test, it doesn't really matter here
+static constexpr uint64_t bytesPerZmw = 320;
+
 SimBazWriter::SimBazWriter(const std::string& fileName,
                            BazIO::FileHeaderBuilder& fhb,
                            const PacBio::Primary::BazIOConfig& conf, bool)
     : numZmw_(fhb.MaxNumZmws())
     , writer_(std::make_unique<BazIO::BazWriter>(fileName, fhb, conf))
-    , aggregator_(std::make_unique<BazAggregator>(numZmw_, 0, 300))
+    , aggregator_(std::make_unique<BazAggregator>(numZmw_, 0, bytesPerZmw))
 {
     const auto& fields = writer_->GetFileHeaderBuilder().PacketFields();
     internal_ = std::any_of(fields.begin(), fields.end(), [](const FieldParams& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });

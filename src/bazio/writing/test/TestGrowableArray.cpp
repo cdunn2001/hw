@@ -38,7 +38,7 @@ namespace {
 // actually happen under the hood
 struct TestAllocator : public IAllocator
 {
-    virtual SmartAllocation GetAllocation(size_t count)
+    SmartAllocation GetAllocation(size_t count) override
     {
         return SmartAllocation(count,
                                [this](size_t c)
@@ -58,11 +58,11 @@ struct TestAllocator : public IAllocator
                                    free(ptr);
                                });
     }
-    virtual bool SupportsAllFlags(uint32_t flags) const
+    bool SupportsAllFlags(uint32_t flags) const override
     {
         return flags == 0;
     }
-    virtual std::string Name() const {
+    std::string Name() const override {
         return "Test allocator for GrowableArray";
     }
 
@@ -150,7 +150,7 @@ TEST(GrowableArray, StablePointers)
     auto ptr1 = arr[0];
 
     // Growing should never invalidate pointers.  The data should
-    // never be coppied under the hood
+    // never be copied under the hood
     arr.GrowToSize(10 *batchSize);
     EXPECT_EQ(ptr1, arr[0]);
     EXPECT_EQ(alloc->totalAllocs, alloc->currAllocs);
