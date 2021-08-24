@@ -60,7 +60,7 @@ struct FieldAccessor<Mongo::Data::Pulse, PacketFieldName>
             return p.SignalM2();
         else
             static_assert(Name == PacketFieldName::Label,
-                          "PacketFieldName not supported with Monog::Data::Pulse");
+                          "PacketFieldName not supported with Mongo::Data::Pulse");
         // NVCC seems to have a diagnostic bug, where it warns about no return statement
         // in a function not returning void.  This builtin helps silence that, even
         // though the constexpr statements themselves should be enough.
@@ -91,7 +91,7 @@ struct FieldAccessor<Mongo::Data::Pulse, PacketFieldName>
             p.SignalM2(val);
         else
             static_assert(Name == PacketFieldName::Label,
-                          "PacketFieldName not supported with Monog::Data::Pulse");
+                          "PacketFieldName not supported with Mongo::Data::Pulse");
     }
 };
 

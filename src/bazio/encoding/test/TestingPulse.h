@@ -24,10 +24,13 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file	TestingPulse.h
-/// \brief	A Pulse data structure, which stated as a fork of the Kestrel
-///             pulse, but really serves to decouple the BazIO project from
-///             Kestrel
+/// \file   TestingPulse.h
+/// \brief  A Pulse data structure, along with the necessary pieces to plug
+///         it into the baz serialization framework.  This all started as a
+///         fork of Kestrel code, but the fact that it comes from Kestrel
+///         is incidental.  It really serves to decouple the BazIO project
+///         from the external world, allowing them to potentially diverge
+///         independantly
 
 #ifndef PACBIO_BAZIO_ENCODING_TEST_TESTING_PULSE_H
 #define PACBIO_BAZIO_ENCODING_TEST_TESTING_PULSE_H
@@ -203,7 +206,7 @@ struct FieldAccessor<Pulse, PacketFieldName>
             return p.SignalM2();
         else
             static_assert(Name == PacketFieldName::Label,
-                          "PacketFieldName not supported with Monog::Data::Pulse");
+                          "PacketFieldName not supported with BazIO::Pulse");
         // NVCC seems to have a diagnostic bug, where it warns about no return statement
         // in a function not returning void.  This builtin helps silence that, even
         // though the constexpr statements themselves should be enough.
@@ -234,7 +237,7 @@ struct FieldAccessor<Pulse, PacketFieldName>
             p.SignalM2(val);
         else
             static_assert(Name == PacketFieldName::Label,
-                          "PacketFieldName not supported with Monog::Data::Pulse");
+                          "PacketFieldName not supported with BazIO::Pulse");
     }
 };
 

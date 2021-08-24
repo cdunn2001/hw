@@ -191,13 +191,13 @@ private:
 // reverted
 class RawEventData
 {
+    using PulseFieldParams = BazIO::FieldParams<BazIO::PacketFieldName>;
 public:
     // Accepts the vector of vectors for the parsed packet data, as produced
     // where each entry into the outermost vector corresponds to a given
     // PacketFieldName.
     RawEventData(std::vector<std::vector<uint32_t>>&& rawPacketData,
-                 // BENTODO namspace business
-                 const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& fieldInfo)
+                 const std::vector<PulseFieldParams>& fieldInfo)
         : data_(std::move(rawPacketData))
         , fieldInfo_(fieldInfo)
     {
@@ -236,7 +236,7 @@ public:  // const data accessors
         return data_[static_cast<uint32_t>(name)];
     };
 
-    const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& FieldInfo() const
+    const std::vector<PulseFieldParams>& FieldInfo() const
     {
         return fieldInfo_;
     };
@@ -244,7 +244,7 @@ public:  // const data accessors
 private:
     std::vector<std::vector<uint32_t>> data_;
     size_t numEvents_;
-    std::vector<BazIO::FieldParams<BazIO::PacketFieldName>> fieldInfo_;
+    std::vector<PulseFieldParams> fieldInfo_;
 };
 
 class RawMetricData

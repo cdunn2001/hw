@@ -111,7 +111,7 @@ struct EnumFromNames
 
     using type = EnumFromRaw_t<decltype(Name1)>;
 };
-template <auto...Names>
+template <auto... Names>
 using EnumFromNames_t = typename EnumFromNames<Names...>::type;
 
 // Just a helper struct to record a combination of Transformation and Serialization
@@ -142,7 +142,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     template <typename... Ts>
     BAZ_CUDA size_t BytesRequired(const Ts&... ts)
     {
-        return (numBytes + ... + Serializers::OverflowBytes(transforms_.template Get<idxs>().Apply(ts, Signed::val), Signed::val));
+        return (numBytes + ... +
+                Serializers::OverflowBytes(transforms_.template Get<idxs>().Apply(ts, Signed::val), Signed::val));
     }
 
     // Writes a series of values to a memory location.  The return value is a pointer to the
@@ -189,11 +190,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
             return val;
         };
         ((ts = transforms_.template Get<idxs>().template Revert<Ts>(
-                Serializers::FromBinary(
-                    Extract(Serializers::nBits),
-                    ptr, Signed::val),
-                Signed::val))
-         , ...);
+              Serializers::FromBinary(Extract(Serializers::nBits), ptr, Signed::val), Signed::val)),
+         ...);
         return ptr;
     }
 
@@ -214,7 +212,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     static auto Params(Names... names)
     {
         using FieldName = EnumFromRaw_t<FirstOf_t<Names...>>;
-        static_assert((true && ... && std::is_same<FieldName, EnumFromRaw_t<Names>>::value), "Function called with RawEnums from different SmartEnum classes");
+        static_assert((true && ... && std::is_same<FieldName, EnumFromRaw_t<Names>>::value),
+                      "Function called with RawEnums from different SmartEnum classes");
 
         GroupParams<FieldName> params;
         params.members = {FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())...};
@@ -281,7 +280,7 @@ struct FieldGroupEncoder
         using Accessor = FieldAccessor<P, FieldNames>;
         PacBio::Cuda::Utility::CudaTuple<typename Accessor::template Type<names>...> vals;
         dest = groupEncoder_.Decode(dest, vals.template Get<ids>()...);
-        (Accessor::template Set<names>(pulse, vals.template Get<ids>()) , ...);
+        (Accessor::template Set<names>(pulse, vals.template Get<ids>()), ...);
         return dest;
     }
 
@@ -327,13 +326,13 @@ struct PulseEncoder
     template <typename P>
     BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
     {
-        ((dest = data_.template Get<GroupEncoders>().Serialize(pulse, dest)) , ...);
+        ((dest = data_.template Get<GroupEncoders>().Serialize(pulse, dest)), ...);
         return dest;
     }
     template <typename P>
     BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
     {
-        ((dest = data_.template Get<GroupEncoders>().Deserialize(pulse, dest)) , ...);
+        ((dest = data_.template Get<GroupEncoders>().Deserialize(pulse, dest)), ...);
         return dest;
     }
     template <typename P>
