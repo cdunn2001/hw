@@ -15,7 +15,7 @@ target_link_libraries(libBazioWritingTest
     libGtest
 )
 
-# Define the test executable specific to mongo basecaller analyzer.
+# Define the test executable specific to bazio writing
 set(exec testBazioWriting)
 
 add_executable(${exec})
