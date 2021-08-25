@@ -16,13 +16,15 @@ namespace Mongo {
 template <typename T>
 AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     : stats_ {offset}
-    , lagBuf_ {AutocorrAccumState::lag}
     , m1First_ {0}
     , m1Last_ {0}
     , m2_ {0}
     , canAddSample_ {true}
 {
     static_assert(AutocorrAccumState::lag > 0, "Invalid lag value");
+
+    frontBuf_.reserve(AutocorrAccumState::lag);
+    backBuf_.set_capacity(AutocorrAccumState::lag);
 }
 
 template <typename T>
@@ -30,13 +32,16 @@ void AutocorrAccumulator<T>::AddSample(const T& value)
 {
     assert (canAddSample_);
     const auto offsetVal = value - Offset();
-    if (lagBuf_.full())
+    // back buf
+    if (backBuf_.full())
     {
-        m1First_ += lagBuf_.front();
+        m1First_ += backBuf_.front();
         m1Last_ += offsetVal;
-        m2_ += lagBuf_.front() * offsetVal;
+        m2_ += backBuf_.front() * offsetVal;
+    } else {
+        frontBuf_.push_back(offsetVal);
     }
-    lagBuf_.push_back(offsetVal);
+    backBuf_.push_back(offsetVal);
     stats_.AddSample(value);   // StatAccumulator will subtract the offset itself.
 }
 
@@ -86,24 +91,72 @@ AutocorrAccumulator<T>& AutocorrAccumulator<T>::operator*=(float s)
     m1Last_ *= s;
     m2_ *= s;
     canAddSample_ = false;
-    // TODO: If s == 0, could clear lagBuf_ and set canAddSample_ = true.
-    // TODO: If s == 1, could preserve canAddSample_.
     return *this;
 }
-
 
 template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
 {
-    stats_.Merge(that.stats_);
-    // TODO: If CanAddSample(), could exactly merge m1First_.
-    // TODO: If that.CanAddSample(), could exactly merge m1Last_.
-    // TODO: Would need to add "front lag buffer", to be able exactly merge m2_.
-    m1First_ += that.m1First_;
-    m1Last_ += that.m1Last_;
-    m2_ += that.m2_;
-    canAddSample_ = false;
+    auto lag_ = AutocorrAccumState::lag;
+    // The operation is now not commutative.  *this is the front and "that" is the back
+    if (that.backBuf_.full() || !canAddSample_ || !that.CanAddSample())
+    {
+        stats_.Merge(that.stats_);
+        m1First_ += that.m1First_;
+        m1Last_ += that.m1Last_;
+        m2_ += that.m2_;
+        // "that" has more than lag_ samples i.e. the typical case
+        if (canAddSample_ && that.CanAddSample())
+        {
+            auto backBufIter = backBuf_.begin();
+            auto thatFrontBufIter = that.frontBuf_.begin();
+            // skip (lag_ - backBuf_.size()) entries to preserve lag
+            thatFrontBufIter += (lag_ - backBuf_.size());
+            for (;
+                backBufIter != backBuf_.end() && thatFrontBufIter != that.frontBuf_.end();
+                ++backBufIter, ++thatFrontBufIter)
+            {
+                // add the front
+                m1Last_ += *thatFrontBufIter;
+                m1First_ += *backBufIter;
+                m2_ += (*backBufIter) * (*thatFrontBufIter);
+            }
+            // The "that" output back buffer is appended to the back buffer of "this"
+            for (auto thatBackBufVal : that.backBuf_)
+            {
+                backBuf_.push_back(thatBackBufVal);
+            }
+            // 0 <= nCopyStartBuf <= lag_; it is zero if frontBuf_ is full,
+            // and the loop below is not executed
+            // otherwise, copy the first nCopyStartBuf values from that.frontBuf
+            unsigned nCopyStartBuf = lag_ - frontBuf_.size();
+            // append nCopyStartBuf entries from that.frontBuf_ to this->frontBuf_
+            unsigned iCopy = 0;
+            for (thatFrontBufIter = that.frontBuf_.begin();
+                iCopy < nCopyStartBuf;
+                ++iCopy, ++thatFrontBufIter)
+            {
+                frontBuf_.push_back(*thatFrontBufIter);
+            }
+        } else
+        {
+            canAddSample_ = false;
+        }
+    } else
+    {
+        // "that" sequence is less than lag_ entries long so we can
+        // simply add the data from that to this using AddSample()
+      const auto offsetVal = Offset();
+      for (auto thatFrontBufVal : that.frontBuf_)
+        {
+            // add offset value before adding the sample, since the buffer contains
+            // offset adjusted values
+            AddSample(thatFrontBufVal+offsetVal);
+        }
+    }
+    canAddSample_ &= that.CanAddSample();
+
     return *this;
 }
 
@@ -122,6 +175,7 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
 
 
 // Explicit instantiation.
+// template class AutocorrAccumulator<float>;
 template class AutocorrAccumulator<LaneArray<float, laneSize>>;
 
 }}      // namespace PacBio::Mongo

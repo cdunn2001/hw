@@ -23,16 +23,16 @@ target_link_libraries(libMongoBasecallerTest
     libAppModules
 )
 
-# Define the test executable specific to the core basecaller analyzer.
-set(exec testMongoBasecallerTest)
+# Define the test executable specific to mongo basecaller analyzer.
+set(EXEC testMongoBasecallerTest)
 
-add_executable(${exec}
+add_executable(${EXEC}
     testMongoBasecallerTest.cpp
 )
 
-target_link_libraries(${exec}
+target_link_libraries(${EXEC}
     libMongoBasecallerTest
     libGtest
 )
 
-add_test(${exec} ${exec} --gtest_output=xml:${exec}.xml)
+add_test(${EXEC} ${EXEC} --gtest_output=xml:${EXEC}.xml)

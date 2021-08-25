@@ -30,12 +30,13 @@
 /// \file AutocorrAccumulator.h
 /// Defines class template AutocorrAccumulator.
 
-#include <common/simd/SimdConvTraits.h>
-
+#include "AlignedVector.h"
 #include "AlignedCircularBuffer.h"
 #include "AutocorrAccumState.h"
 #include "NumericUtil.h"
 #include "StatAccumulator.h"
+#include "simd/SimdConvTraits.h"
+
 
 namespace PacBio {
 namespace Mongo {
@@ -165,7 +166,8 @@ public:     // Mutating methods
     void Reset()
     {
         stats_.Reset();
-        lagBuf_.clear();
+        backBuf_.clear();
+        frontBuf_.clear();
         m1First_ = m1Last_ = m2_ = T(0);
         canAddSample_ = true;
     }
@@ -175,11 +177,12 @@ private:    // Data
 
     // TODO: Pretty sure that AlignedCircularBuffer uses heap allocation.
     // Replace with something based on something like boost::static_vector.
-    AlignedCircularBuffer<T> lagBuf_;
+    AlignedCircularBuffer<T> backBuf_;
+    AlignedVector<T> frontBuf_;
 
-    T m1First_;     // First moment of the first Count() - AutocorrAccumState::lag samples.
+    T m1First_;    // First moment of the first Count() - AutocorrAccumState::lag samples.
     T m1Last_;     // First moment of the last Count() - AutocorrAccumState::lag samples.
-    T m2_;      // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
+    T m2_;         // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
     bool canAddSample_;
 };
 
