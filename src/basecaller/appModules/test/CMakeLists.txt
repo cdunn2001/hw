@@ -16,7 +16,7 @@ target_link_libraries(libTestAppModules
     libGtest
 )
 
-# Define the test executable specific to mongo basecaller analyzer.
+# Define the test executable specific to the appModules
 set(exec testAppModules)
 
 add_executable(${exec})

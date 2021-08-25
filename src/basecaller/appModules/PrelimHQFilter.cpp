@@ -26,7 +26,8 @@
 #include "PrelimHQFilter.h"
 
 #include <bazio/MetricBlock.h>
-#include <bazio/writing/BazBuffer.hpp>
+#include <bazio/writing/BazAggregator.h>
+#include <bazio/writing/BazBuffer.h>
 #include <pacbio/smrtdata/Basecall.h>
 
 #include <dataTypes/configs/PrelimHQConfig.h>
@@ -116,43 +117,32 @@ using namespace Cuda::Memory;
 using namespace PacBio::BazIO;
 using namespace PacBio::Mongo::Data;
 
-struct PrelimHQFilterBody::Impl
+class PrelimHQFilterBody::Impl
 {
-    // TODO make configurable somehow.
-    static constexpr size_t expectedPulses = 164;
-    Impl(size_t numZmws, size_t numBatches, uint32_t bufferId,
-         bool multipleBazFiles, const PrelimHQConfig& config)
+public:
+
+    Impl() = default;
+    virtual ~Impl() = default;
+
+    virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
+};
+
+template <bool internal>
+class PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
+{
+public:
+    ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
+              bool multipleBazFiles, const PrelimHQConfig& config)
         : numBatches_(numBatches)
         , numZmw_(numZmws)
         , chunksPerOutput_(config.bazBufferChunks)
         , zmwStride_(config.zmwOutputStride)
         , multipleBazFiles_(multipleBazFiles)
-        , buffer_(std::make_unique<BazIO::BazBuffer>(numZmws, bufferId, expectedPulses,
-                                                     CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
-    {
-    }
-
-    virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
-
-    size_t currFrame_ = 0;
-    size_t batchesSeen_ = 0;
-    size_t chunksSeen_ = 0;
-    size_t numBatches_;
-    size_t numZmw_;
-    size_t chunksPerOutput_;
-    size_t zmwStride_;
-    bool multipleBazFiles_;
-    std::unique_ptr<BazIO::BazBuffer> buffer_;
-};
-
-constexpr size_t PrelimHQFilterBody::Impl::expectedPulses;
-
-template <bool internal>
-struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
-{
-    ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
-              bool multipleBazFiles, const PrelimHQConfig& config)
-        : Impl(numZmws, numBatches, bufferId, multipleBazFiles, config)
+        , aggregator_(std::make_unique<BazIO::BazAggregator>(numZmws, bufferId,
+                                                             config.expectedPulsesPerZmw*expectedBytesPerBase,
+                                                             config.lookbackSize,
+                                                             CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
+        , dummyPreHQ_(config)
         , serializers_(numZmws)
     {}
 
@@ -182,7 +172,7 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
             {
                 if (metricsPtr)
                 {
-                    buffer_->AddMetrics(currentZmwIndex,
+                    aggregator_->AddMetrics(currentZmwIndex,
                                         [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
                                         {
                                             assert(dest.size() == 1);
@@ -191,7 +181,10 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
                                         1);
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
-                buffer_->AddZmw(currentZmwIndex, pulses, pulses + lanePulses.size(zmw), serializers_[currentZmwIndex]);
+                aggregator_->AddZmw(currentZmwIndex, pulses,
+                                    pulses + lanePulses.size(zmw),
+                                    [](const auto& p){ return internal ? true : !p.IsReject(); },
+                                    serializers_[currentZmwIndex]);
                 currentZmwIndex += zmwStride_;
             }
         }
@@ -202,14 +195,69 @@ struct PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
             batchesSeen_ = 0;
             if (chunksSeen_ == chunksPerOutput_-1)
             {
-                ret = std::make_unique<BazBuffer>(numZmw_, buffer_->BufferId(), expectedPulses,
-                                                  CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()));
-                std::swap(ret, buffer_);
+                dummyPreHQ_.NewHQ(*aggregator_);
+                return aggregator_->ProduceBazBuffer();
             }
         }
         return ret;
     }
 
+private:
+    size_t currFrame_ = 0;
+    size_t batchesSeen_ = 0;
+    size_t chunksSeen_ = 0;
+    size_t numBatches_;
+    size_t numZmw_;
+    size_t chunksPerOutput_;
+    size_t zmwStride_;
+    bool multipleBazFiles_;
+    std::unique_ptr<BazIO::BazAggregator> aggregator_;
+
+    // Dummy class to serve as basic placeholder for the preliminary HQ algorithm.
+    // It can be totally burnt to the ground once the real thing is about read.
+    struct DummyPreHQ
+    {
+        DummyPreHQ(const PrelimHQConfig& config)
+            : config_(config)
+        {
+            stride = static_cast<size_t>(std::round(1/config_.hqThrottleFraction));
+        }
+
+        void NewHQ(BazAggregator& agg)
+        {
+            if (!config_.enableLookback)
+            {
+                for (auto&& v : agg.PreHQData()) v.MarkAsHQ();
+                return;
+            }
+
+            seen++;
+            if (seen < config_.lookbackSize) return;
+
+            size_t counter = 0;
+            size_t marked = 0;
+
+            for (auto&& v : agg.PreHQData())
+            {
+                if (counter % stride == 0)
+                {
+                    marked++;
+                    v.MarkAsHQ();
+                }
+                counter++;
+            }
+            PBLOG_INFO << "Enabled " << marked << " ZMW";
+        }
+    private:
+        PrelimHQConfig config_;
+
+        size_t seen = 0;
+        size_t stride;
+    } dummyPreHQ_;
+
+    static_assert(InternalPulses::nominalBytes == 6);
+    static_assert(ProductionPulses::nominalBytes == 2);
+    static constexpr size_t expectedBytesPerBase = internal ? InternalPulses::nominalBytes : ProductionPulses::nominalBytes;
     using Serializer = std::conditional_t<internal, InternalPulses, ProductionPulses>;
     std::vector<Serializer> serializers_;
 };
