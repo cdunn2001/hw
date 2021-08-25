@@ -32,10 +32,39 @@
 #include <dataTypes/PulseGroups.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 
-
 using namespace PacBio::Primary;
 using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
+
+namespace {
+
+inline std::string generateExperimentMetadata(const MovieConfig& movieConfig)
+{
+    // See PTSD-677
+    PBLOG_WARN << "Implementation gap: Generating fake Metadata for baz files";
+
+    std::string basemap;
+    for (const auto& analog : movieConfig.analogs)
+        basemap.push_back(analog.baseLabel);
+    std::ostringstream metadata;
+    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
+    metadata << "SequelII";
+    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
+    metadata << basemap;
+    metadata << "\",\"RelativeAmp\":";
+    metadata << "[";
+    std::string sep = "";
+    for (const auto& analog : movieConfig.analogs)
+    {
+        metadata << sep << analog.relAmplitude;
+        sep = ",";
+    }
+    metadata << "]}}";
+    return metadata.str();
+}
+
+}
+
 
 namespace PacBio {
 namespace Application {
@@ -46,13 +75,16 @@ BazWriterBody::BazWriterBody(
         const std::vector<uint32_t>& zmwNumbers,
         const std::vector<uint32_t>& zmwFeatures,
         const std::map<uint32_t, BatchDimensions>& poolDims,
-        const SmrtBasecallerConfig& basecallerConfig)
+        const SmrtBasecallerConfig& basecallerConfig,
+        const Mongo::Data::MovieConfig& movieConfig)
     : numThreads_(basecallerConfig.system.ioConcurrency)
     , numBatches_(poolDims.size())
     , multipleBazFiles_(basecallerConfig.multipleBazFiles)
     , bazName_(bazName)
 {
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
+
+    const auto& metadata = generateExperimentMetadata(movieConfig);
 
     if (multipleBazFiles_)
     {
@@ -62,13 +94,14 @@ BazWriterBody::BazWriterBody(
             return fn.substr(0, lastDot);
         };
 
-        PBLOG_INFO << "Opening multiple BAZ files for writing with filename prefix: "
+        PBLOG_INFO << "Opening " << numBatches_ << " BAZ files for writing with filename prefix: "
                    << removeExtension(bazName) << " zmws: " << zmwNumbers.size();
 
         auto poolZmwNumbersStart = zmwNumbers.begin();
         auto poolZmwFeaturesStart = zmwFeatures.begin();
         for (size_t b = 0; b < numBatches_; b++)
         {
+            if (b % 10 == 0) PBLOG_INFO << "Opened " << b << " baz files so far";
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
             std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
             FileHeaderBuilder fh(multiBazName,
@@ -77,7 +110,7 @@ BazWriterBody::BazWriterBody(
                                  basecallerConfig.internalMode
                                  ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
                                  SmrtData::MetricsVerbosity::MINIMAL,
-                                 "",
+                                 metadata,
                                  basecallerConfig.Serialize().toStyledString(),
                                  std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + poolDims.at(b).ZmwsPerBatch()),
                                  std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + poolDims.at(b).ZmwsPerBatch()),
@@ -93,6 +126,7 @@ BazWriterBody::BazWriterBody(
 
             bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(multiBazName, fh, BazIOConfig{}));
         }
+        PBLOG_INFO << "Finished opening a total of " << numBatches_ << " baz files";
     }
     else
     {
@@ -105,7 +139,7 @@ BazWriterBody::BazWriterBody(
                              basecallerConfig.internalMode
                              ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
                              SmrtData::MetricsVerbosity::MINIMAL,
-                             "",
+                             metadata,
                              basecallerConfig.Serialize().toStyledString(),
                              zmwNumbers,
                              zmwFeatures,

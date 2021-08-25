@@ -569,7 +569,8 @@ private:
                                                    source.UnitCellIds(),
                                                    features2,
                                                    poolDims,
-                                                   config_);
+                                                   config_,
+                                                   movieConfig_);
         } else
         {
             return std::make_unique<NoopBazWriterBody>();

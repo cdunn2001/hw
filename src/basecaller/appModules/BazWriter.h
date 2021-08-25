@@ -60,13 +60,17 @@ public:
                   const std::vector<uint32_t>& zmwNumbers,
                   const std::vector<uint32_t>& zmwFeatures,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig);
+                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
+                  const Mongo::Data::MovieConfig& movieConfig);
 
     ~BazWriterBody()
     {
         PBLOG_INFO << "Closing BAZ file: " << bazName_;
+        size_t counter = bazWriters_.size();
         for (auto& bzw : bazWriters_)
         {
+            if (counter % 10 == 0) PBLOG_INFO << counter << " baz files left to close";
+            counter--;
             bzw->WaitForTermination();
             bzw.reset();
         }
