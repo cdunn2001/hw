@@ -29,6 +29,8 @@
 
 #include <pacbio/configuration/PBConfig.h>
 
+#include <bazio/BazIOConfig.h>
+
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
 #include <dataTypes/configs/PrelimHQConfig.h>
@@ -50,6 +52,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_OBJECT(SourceConfig, source);
     PB_CONFIG_OBJECT(ROIConfig, traceROI);
     PB_CONFIG_OBJECT(PrelimHQConfig, prelimHQ);
+    PB_CONFIG_OBJECT(Primary::BazIOConfig, bazio);
 
     PB_CONFIG_PARAM(bool, internalMode, false);
     PB_CONFIG_PARAM(bool, multipleBazFiles, true);

@@ -63,18 +63,7 @@ public:
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
                   const Mongo::Data::MovieConfig& movieConfig);
 
-    ~BazWriterBody()
-    {
-        PBLOG_INFO << "Closing BAZ file: " << bazName_;
-        size_t counter = bazWriters_.size();
-        for (auto& bzw : bazWriters_)
-        {
-            if (counter % 10 == 0) PBLOG_INFO << counter << " baz files left to close";
-            counter--;
-            bzw->WaitForTermination();
-            bzw.reset();
-        }
-    }
+    ~BazWriterBody();
 
     size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
@@ -83,7 +72,7 @@ public:
 
 private:
     uint32_t numThreads_;
-    size_t numBatches_;
+    uint32_t numBatches_;
     bool multipleBazFiles_;
     std::vector<std::unique_ptr<BazIO::BazWriter>> bazWriters_;
     std::string bazName_;

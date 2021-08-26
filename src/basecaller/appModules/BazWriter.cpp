@@ -25,6 +25,8 @@
 
 #include <appModules/BazWriter.h>
 
+#include <tbb/parallel_for.h>
+
 #include <pacbio/logging/Logger.h>
 
 #include <bazio/file/FileHeaderBuilder.h>
@@ -85,6 +87,9 @@ BazWriterBody::BazWriterBody(
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
     const auto& metadata = generateExperimentMetadata(movieConfig);
+    const auto pulseSerializationConfig = basecallerConfig.internalMode
+        ? Mongo::Data::InternalPulses::Params()
+        : Mongo::Data::ProductionPulses::Params();
 
     if (multipleBazFiles_)
     {
@@ -97,36 +102,48 @@ BazWriterBody::BazWriterBody(
         PBLOG_INFO << "Opening " << numBatches_ << " BAZ files for writing with filename prefix: "
                    << removeExtension(bazName) << " zmws: " << zmwNumbers.size();
 
-        auto poolZmwNumbersStart = zmwNumbers.begin();
-        auto poolZmwFeaturesStart = zmwFeatures.begin();
-        for (size_t b = 0; b < numBatches_; b++)
+        std::vector<size_t> batchStartZmw;
+        std::vector<size_t> batchNumZmw;
+        batchStartZmw.reserve(numBatches_);
+        batchNumZmw.reserve(numBatches_);
+        size_t startZmwNumber = 0;
+        for (const auto& kv : poolDims)
         {
-            if (b % 10 == 0) PBLOG_INFO << "Opened " << b << " baz files so far";
+            batchStartZmw.push_back(startZmwNumber);
+            batchNumZmw.push_back(kv.second.ZmwsPerBatch());
+            startZmwNumber += batchNumZmw.back();
+        }
+
+        bazWriters_.resize(numBatches_);
+        std::atomic<uint32_t> openedFiles = 0;
+        tbb::parallel_for((uint32_t) {0}, numBatches_, [&](uint32_t b)
+        {
+            auto poolZmwNumbersStart = zmwNumbers.begin() + batchStartZmw[b];
+            auto poolZmwFeaturesStart = zmwFeatures.begin() + batchStartZmw[b];
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
             std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
             FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,
-                                 basecallerConfig.internalMode
-                                 ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                                 pulseSerializationConfig,
                                  SmrtData::MetricsVerbosity::MINIMAL,
                                  metadata,
                                  basecallerConfig.Serialize().toStyledString(),
-                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + poolDims.at(b).ZmwsPerBatch()),
-                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + poolDims.at(b).ZmwsPerBatch()),
+                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + batchNumZmw[b]),
+                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b]),
                                  // Hack, until metrics handling can be rewritten
                                  metricFrames,
                                  metricFrames,
                                  metricFrames);
 
-            poolZmwNumbersStart += poolDims.at(b).ZmwsPerBatch();
-            poolZmwFeaturesStart += poolDims.at(b).ZmwsPerBatch();
-
             fh.BaseCallerVersion("0.1");
 
-            bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(multiBazName, fh, BazIOConfig{}));
-        }
+            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazio);
+            auto openedSnapshot = ++openedFiles;
+            if (openedSnapshot % 10 == 0) PBLOG_INFO << "Opened " << openedSnapshot << " baz files so far";
+        });
         PBLOG_INFO << "Finished opening a total of " << numBatches_ << " baz files";
+        assert(openedFiles == numBatches_);
     }
     else
     {
@@ -136,8 +153,7 @@ BazWriterBody::BazWriterBody(
         FileHeaderBuilder fh(bazName,
                              100.0f,
                              expectedFrames,
-                             basecallerConfig.internalMode
-                             ? Mongo::Data::InternalPulses::Params() : Mongo::Data::ProductionPulses::Params(),
+                             pulseSerializationConfig,
                              SmrtData::MetricsVerbosity::MINIMAL,
                              metadata,
                              basecallerConfig.Serialize().toStyledString(),
@@ -150,8 +166,23 @@ BazWriterBody::BazWriterBody(
 
         fh.BaseCallerVersion("0.1");
 
-        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, BazIOConfig{}));
+        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazio));
     }
+}
+
+BazWriterBody::~BazWriterBody()
+{
+    PBLOG_INFO << "Closing BAZ file: " << bazName_;
+    std::atomic<uint32_t> openedFiles = bazWriters_.size();
+    tbb::parallel_for(size_t{0}, bazWriters_.size(), [&](size_t b)
+    {
+        bazWriters_[b]->WaitForTermination();
+        bazWriters_[b].reset();
+
+        auto openedSnapshot = --openedFiles;
+        if (openedSnapshot % 10 == 0) PBLOG_INFO << openedSnapshot << " baz files left to close";
+    });
+    assert(openedFiles == 0);
 }
 
 void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
