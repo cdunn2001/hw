@@ -59,12 +59,148 @@ public: // static
 
 public: // structors
 
+    struct IOStats
+    {
+        size_t bytesWritten = 0;
+        size_t headerBytes = 0;
+        size_t eventsBytes = 0;
+        size_t metricsBytes = 0;
+        size_t overheadBytes = 0;
+        size_t paddingBytes = 0 ;
+    };
+
+    // Helper class, to coordinate io stat reporting when there are multiple
+    // baz files being simultaneously written.  It's a bit brittle and expects
+    // a certain usage pattern to work, so it's not very suitable for a
+    // broader usage in other contexts
+    class IOStatsAggregator
+    {
+    public:
+
+        explicit IOStatsAggregator(size_t numParticipants)
+            : numParticipants_(numParticipants)
+        {}
+
+        // Indicates that a thread has started doing some io operations that we will want
+        // included in the next report.  It is expected that all participant baz writers
+        // will call this function with the same cadence.  The first call to this function
+        // each "round" will reset the timers used for reporting intermediate stats
+        void StartSegment()
+        {
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            if (startCount_ % numParticipants_ == 0)
+            {
+                timer_.Restart();
+                byteCheckpoint_ = stats_.bytesWritten;
+                PBLOG_INFO << "Starting a round of Baz IO";
+            }
+            ++startCount_;
+        }
+
+        // Aggregates the current stats *without* doing any logging
+        void AggregateSilent(IOStats& m)
+        {
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            AggregateImpl(m);
+        }
+
+        // Aggregates the current stats.  Once the final baz writer checks in
+        // for the current round, a logging statement will be produced with
+        // some basic stats for the last round of IO.
+        void AggregateWithReports(IOStats& m)
+        {
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            AggregateImpl(m);
+
+            ++finishCount_;
+            if (finishCount_ % numParticipants_ == 0)
+            {
+                PBLOG_INFO << "Finished a round of Baz IO: "
+                           << "Wrote " << PrettyPrint(stats_.bytesWritten - byteCheckpoint_)
+                           << " in " << timer_.GetElapsedMilliseconds() / 1000.f << " seconds";
+            }
+        }
+
+        void Summarize(std::ostream& os) const
+        {
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            os << "Header/Footer Bytes : " << PrettyPrint(stats_.headerBytes) << std::endl;
+            os << "Padding Bytes       : " << PrettyPrint(stats_.paddingBytes) << std::endl;
+            os << "OverheadBytes       : " << PrettyPrint(stats_.overheadBytes) << std::endl;
+            os << "EventBytes          : " << PrettyPrint(stats_.eventsBytes) << std::endl;
+            os << "MetricsBytes        : " << PrettyPrint(stats_.metricsBytes) << std::endl;
+            os << "----------------------------------------" << std::endl;
+            os << "Total BytesWritten_ : " << PrettyPrint(stats_.bytesWritten) << std::endl;
+        }
+
+        // BazWriter expects these for testing purposes
+        size_t BytesWritten1() const
+        {
+            return stats_.headerBytes + stats_.paddingBytes + stats_.overheadBytes + stats_.eventsBytes + stats_.metricsBytes;
+        }
+        size_t BytesWritten2() const {
+            return stats_.bytesWritten;
+        }
+
+    public: // Static functions
+
+        static std::string PrettyPrint(size_t bytes)
+        {
+            std::stringstream stream;
+            stream << std::setprecision(4);
+            if (bytes > (1ull << 40))
+                stream <<  bytes / static_cast<float>(1ull << 40) <<  " TiB";
+            else if (bytes > (1ull << 30))
+                stream <<  bytes / static_cast<float>(1ull << 30) <<  " GiB";
+            else if (bytes > (1ull << 20))
+                stream <<  bytes / static_cast<float>(1ull << 20) <<  " MiB";
+            else if (bytes > (1ull << 10))
+                stream <<  bytes / static_cast<float>(1ull << 10) <<  " KiB";
+            else
+                stream <<  bytes <<  " B";
+
+            return stream.str();
+        }
+
+    private:
+
+        // Private function, because it needs the mutex to already
+        // be held before entering
+        void AggregateImpl(IOStats& m)
+        {
+            stats_.bytesWritten += m.bytesWritten;
+            stats_.headerBytes += m.headerBytes;
+            stats_.eventsBytes += m.eventsBytes;
+            stats_.metricsBytes += m.metricsBytes;
+            stats_.overheadBytes += m.overheadBytes;
+            stats_.paddingBytes += m.paddingBytes;
+
+            m = IOStats{};
+        }
+
+        mutable std::mutex m_;
+
+        Dev::QuietAutoTimer timer_;
+        IOStats stats_;
+
+        uint32_t numParticipants_;
+        uint32_t startCount_ = 0;
+        uint32_t finishCount_ = 0;
+        size_t byteCheckpoint_ = 0;
+    };
+
     /// Creates a new BAZ file and writes file header.
     /// \param filePath          File name of the output BAZ file.
     /// \param fileHeaderBuilder JSON of file header from a builder.
     BazWriter(const std::string& filePath,
               FileHeaderBuilder& fileHeaderBuilder,
-              const Primary::BazIOConfig& ioConf);
+              const Primary::BazIOConfig& ioConf,
+              std::shared_ptr<IOStatsAggregator> agg
+                  = std::make_shared<IOStatsAggregator>(1));
 
     BazWriter(BazWriter&&) = delete;
     BazWriter(const BazWriter&) = delete;
@@ -106,14 +242,10 @@ public:
 
     void Summarize(std::ostream& os) const
     {
-        os << "Header/Footer Bytes:" << headerBytes_ << std::endl;
-        os << "Padding Bytes      :" << paddingBytes_ << std::endl;
-        os << "OverheadBytes      :" << overheadBytes_ << std::endl;
-        os << "EventBytes         :" << eventsBytes_ << std::endl;
-        os << "MetricsBytes       :" << metricsBytes_ << std::endl;
-        os << "----------------------------------------" << std::endl;
-        os << "Total BytesWritten_:" << bytesWritten_ << std::endl;
+        ioAggregator_->Summarize(os);
     }
+
+    std::shared_ptr<IOStatsAggregator> GetAggregator() const { return ioAggregator_; }
 
     size_t BytesWritten() const
     {
@@ -130,11 +262,11 @@ public:
 protected:
     size_t BytesWritten1() const
     {
-        return headerBytes_ + paddingBytes_ + overheadBytes_ + eventsBytes_ + metricsBytes_;
+        return ioAggregator_->BytesWritten1();
     }
 
     size_t BytesWritten2() const {
-        return bytesWritten_;
+        return ioAggregator_->BytesWritten2();
     }
 
 private: // types
@@ -161,12 +293,8 @@ private: // data
     bool abort_ = false;
     std::atomic_bool dieGracefully_;
 
-    size_t bytesWritten_ = 0;
-    size_t headerBytes_ = 0;
-    size_t eventsBytes_ = 0;
-    size_t metricsBytes_ = 0;
-    size_t overheadBytes_ = 0;
-    size_t paddingBytes_= 0 ;
+    std::shared_ptr<IOStatsAggregator> ioAggregator_;
+    IOStats ioStats_;
 
 private: // modifying methods
 
@@ -240,7 +368,7 @@ protected:
         if (size > 0)
         {
             fileHandle_->Fwrite(data, size);
-            if (accumulate) bytesWritten_ += size;
+            if (accumulate) ioStats_.bytesWritten += size;
         }
         return size;
     }
@@ -253,8 +381,8 @@ protected:
         fileHandle_->Fwrite(data.data(), 4);
         if (accumulate)
         {
-            bytesWritten_ += 4;
-            overheadBytes_ += 4;
+            ioStats_.bytesWritten += 4;
+            ioStats_.overheadBytes += 4;
         }
     }
 

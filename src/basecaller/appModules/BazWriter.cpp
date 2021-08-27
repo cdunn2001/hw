@@ -93,6 +93,7 @@ BazWriterBody::BazWriterBody(
 
     if (multipleBazFiles_)
     {
+        auto ioStatsAggregator = std::make_shared<BazIO::BazWriter::IOStatsAggregator>(numBatches_);
         auto removeExtension = [](const std::string& fn) {
             size_t lastDot = fn.find_last_of(".");
             if (lastDot == std::string::npos) return fn;
@@ -138,7 +139,7 @@ BazWriterBody::BazWriterBody(
 
             fh.BaseCallerVersion("0.1");
 
-            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazio);
+            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazio, ioStatsAggregator);
             auto openedSnapshot = ++openedFiles;
             if (openedSnapshot % 10 == 0) PBLOG_INFO << "Opened " << openedSnapshot << " baz files so far";
         });
@@ -174,6 +175,7 @@ BazWriterBody::~BazWriterBody()
 {
     PBLOG_INFO << "Closing BAZ file: " << bazName_;
     std::atomic<uint32_t> openedFiles = bazWriters_.size();
+    auto statsAggregator = bazWriters_.front()->GetAggregator();
     tbb::parallel_for(size_t{0}, bazWriters_.size(), [&](size_t b)
     {
         bazWriters_[b]->WaitForTermination();
@@ -183,6 +185,10 @@ BazWriterBody::~BazWriterBody()
         if (openedSnapshot % 10 == 0) PBLOG_INFO << openedSnapshot << " baz files left to close";
     });
     assert(openedFiles == 0);
+    {
+        Logging::LogStream ls(Logging::LogLevel::INFO);
+        statsAggregator->Summarize(ls);
+    }
 }
 
 void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
