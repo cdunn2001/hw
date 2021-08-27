@@ -225,6 +225,7 @@ void BazWriter::WriteToDiskLoop()
 
             // write actual data
             WriteChunkData(bazBuffer, headerBuffer);
+            bazBuffer.reset();
 
             // superchunk is written, but we need to rewind, so keep track of the
             // tail of the file so we can resume on the next superchunk.
