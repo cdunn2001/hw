@@ -736,6 +736,13 @@ int main(int argc, char* argv[])
 {
     try
     {
+        std::stringstream cliArgs;
+        for (int i = 0; i < argc; ++i)
+        {
+            cliArgs << argv[i] << " ";
+        }
+        PBLOG_INFO << cliArgs.str();
+
         auto parser = ProcessBase::OptionParserFactory();
         std::stringstream ss;
         ss << "Prototype to demonstrate mongo basecaller"
