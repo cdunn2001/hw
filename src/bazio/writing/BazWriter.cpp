@@ -86,7 +86,7 @@ BazWriter::~BazWriter()
         PacBio::Logging::PBLogger::Flush();
         std::terminate();
     }
-    ioAggregator_->AggregateSilent(ioStats_);
+    ioAggregator_->AggregateToFull(ioStats_);
 }
 
 void BazWriter::Init(const Primary::BazIOConfig& ioConfig)
@@ -192,7 +192,7 @@ void BazWriter::WriteToDiskLoop()
     std::vector<Primary::ZmwSliceHeader> headerBuffer;
     PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop entered";
     size_t writtenSuperChunks = 0;
-    ioAggregator_->AggregateSilent(ioStats_);
+    ioAggregator_->AggregateToFull(ioStats_);
     while (writeThreadContinue_ && !abort_)
     {
         std::unique_ptr<BazBuffer> bazBuffer;
@@ -201,7 +201,7 @@ void BazWriter::WriteToDiskLoop()
 
         if (bazBufferQueue_.Pop(bazBuffer, std::chrono::milliseconds(500)))
         {
-            ioAggregator_->StartSegment();
+            ioAggregator_->StartSegment(writtenSuperChunks);
             auto now = std::chrono::high_resolution_clock::now();
 
             PBLOG_DEBUG << "Starting writing superchunk " << writtenSuperChunks;
@@ -253,8 +253,8 @@ void BazWriter::WriteToDiskLoop()
                 PBLOG_WARN << "There are " << bazBufferQueue_.Size()
                            << " more baz buffers queued for writing!";
             }
+            ioAggregator_->AggregateToSegment(writtenSuperChunks, ioStats_);
             writtenSuperChunks++;
-            ioAggregator_->AggregateWithReports(ioStats_);
         }
     }
     PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop exited";

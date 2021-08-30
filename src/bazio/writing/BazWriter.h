@@ -85,42 +85,54 @@ public: // structors
         // included in the next report.  It is expected that all participant baz writers
         // will call this function with the same cadence.  The first call to this function
         // each "round" will reset the timers used for reporting intermediate stats
-        void StartSegment()
+        void StartSegment(uint32_t segment)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
 
-            if (startCount_ % numParticipants_ == 0)
+            if (!statsInProgress_.count(segment))
             {
-                timer_.Restart();
-                byteCheckpoint_ = stats_.bytesWritten;
                 PBLOG_INFO << "Starting a round of Baz IO";
             }
-            ++startCount_;
+            statsInProgress_[segment].numStarted++;
         }
 
         // Aggregates the current stats *without* doing any logging
-        void AggregateSilent(IOStats& m)
+        // or intermediate bookkeeping
+        void AggregateToFull(IOStats& m)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
 
-            AggregateImpl(m);
+            AggregateImpl(fullStats_, m);
+            m = IOStats{};
         }
 
         // Aggregates the current stats.  Once the final baz writer checks in
         // for the current round, a logging statement will be produced with
         // some basic stats for the last round of IO.
-        void AggregateWithReports(IOStats& m)
+        void AggregateToSegment(uint32_t segmentID, IOStats& m)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
 
-            AggregateImpl(m);
+            auto itr = statsInProgress_.find(segmentID);
 
-            ++finishCount_;
-            if (finishCount_ % numParticipants_ == 0)
+            if (itr == statsInProgress_.end())
+                throw PBException("Calling AggregateToSegment without calling StartSegment!");
+
+            auto& segment = itr->second;
+
+            AggregateImpl(segment.stats, m);
+            m = IOStats{};
+
+            segment.numFinished++;
+            if (segment.numFinished > segment.numStarted)
+                throw PBException("Call to AggregtaeToSegment without matching call to StartSegment");
+            if (segment.numFinished == numParticipants_)
             {
                 PBLOG_INFO << "Finished a round of Baz IO: "
-                           << "Wrote " << PrettyPrint(stats_.bytesWritten - byteCheckpoint_)
-                           << " in " << timer_.GetElapsedMilliseconds() / 1000.f << " seconds";
+                           << "Wrote " << PrettyPrint(segment.stats.bytesWritten)
+                           << " in " << segment.timer.GetElapsedMilliseconds() / 1000.f << " seconds";
+                AggregateImpl(fullStats_, segment.stats);
+                statsInProgress_.erase(itr);
             }
         }
 
@@ -128,22 +140,36 @@ public: // structors
         {
             auto lg = std::lock_guard<std::mutex>{m_};
 
-            os << "Header/Footer Bytes : " << PrettyPrint(stats_.headerBytes) << std::endl;
-            os << "Padding Bytes       : " << PrettyPrint(stats_.paddingBytes) << std::endl;
-            os << "OverheadBytes       : " << PrettyPrint(stats_.overheadBytes) << std::endl;
-            os << "EventBytes          : " << PrettyPrint(stats_.eventsBytes) << std::endl;
-            os << "MetricsBytes        : " << PrettyPrint(stats_.metricsBytes) << std::endl;
+            if (statsInProgress_.size() != 0)
+                PBLOG_WARN << "Calling Summarize while there are active and unaggregated IO operations\n";
+
+            os << "Header/Footer Bytes : " << PrettyPrint(fullStats_.headerBytes) << std::endl;
+            os << "Padding Bytes       : " << PrettyPrint(fullStats_.paddingBytes) << std::endl;
+            os << "OverheadBytes       : " << PrettyPrint(fullStats_.overheadBytes) << std::endl;
+            os << "EventBytes          : " << PrettyPrint(fullStats_.eventsBytes) << std::endl;
+            os << "MetricsBytes        : " << PrettyPrint(fullStats_.metricsBytes) << std::endl;
             os << "----------------------------------------" << std::endl;
-            os << "Total BytesWritten_ : " << PrettyPrint(stats_.bytesWritten) << std::endl;
+            os << "Total BytesWritten_ : " << PrettyPrint(fullStats_.bytesWritten) << std::endl;
         }
 
         // BazWriter expects these for testing purposes
         size_t BytesWritten1() const
         {
-            return stats_.headerBytes + stats_.paddingBytes + stats_.overheadBytes + stats_.eventsBytes + stats_.metricsBytes;
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            if (statsInProgress_.size() != 0)
+                PBLOG_WARN << "Calling BytesWritten1 while there are active and unaggregated IO operations\n";
+
+            return fullStats_.headerBytes + fullStats_.paddingBytes + fullStats_.overheadBytes + fullStats_.eventsBytes + fullStats_.metricsBytes;
         }
-        size_t BytesWritten2() const {
-            return stats_.bytesWritten;
+        size_t BytesWritten2() const
+        {
+            auto lg = std::lock_guard<std::mutex>{m_};
+
+            if (statsInProgress_.size() != 0)
+                PBLOG_WARN << "Calling BytesWritten2 while there are active and unaggregated IO operations\n";
+
+            return fullStats_.bytesWritten;
         }
 
     public: // Static functions
@@ -170,27 +196,30 @@ public: // structors
 
         // Private function, because it needs the mutex to already
         // be held before entering
-        void AggregateImpl(IOStats& m)
+        static void AggregateImpl(IOStats& left, const IOStats& right)
         {
-            stats_.bytesWritten += m.bytesWritten;
-            stats_.headerBytes += m.headerBytes;
-            stats_.eventsBytes += m.eventsBytes;
-            stats_.metricsBytes += m.metricsBytes;
-            stats_.overheadBytes += m.overheadBytes;
-            stats_.paddingBytes += m.paddingBytes;
-
-            m = IOStats{};
+            left.bytesWritten += right.bytesWritten;
+            left.headerBytes += right.headerBytes;
+            left.eventsBytes += right.eventsBytes;
+            left.metricsBytes += right.metricsBytes;
+            left.overheadBytes += right.overheadBytes;
+            left.paddingBytes += right.paddingBytes;
         }
 
         mutable std::mutex m_;
 
-        Dev::QuietAutoTimer timer_;
-        IOStats stats_;
+        struct Segment
+        {
+            Dev::QuietAutoTimer timer;
+            size_t numStarted = 0;
+            size_t numFinished = 0;
+            IOStats stats;
+        };
+
+        std::map<uint32_t, Segment> statsInProgress_;
+        IOStats fullStats_;
 
         uint32_t numParticipants_;
-        uint32_t startCount_ = 0;
-        uint32_t finishCount_ = 0;
-        size_t byteCheckpoint_ = 0;
     };
 
     /// Creates a new BAZ file and writes file header.
