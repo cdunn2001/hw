@@ -81,23 +81,29 @@ public: // structors
             : numParticipants_(numParticipants)
         {}
 
+        ~IOStatsAggregator()
+        {
+            if (!statsInProgress_.empty())
+                PBLOG_WARN << "Destroying IOStatsAggregator while there are active segments being written!";
+        }
+
         // Indicates that a thread has started doing some io operations that we will want
-        // included in the next report.  It is expected that all participant baz writers
-        // will call this function with the same cadence.  The first call to this function
-        // each "round" will reset the timers used for reporting intermediate stats
+        // included in a particular report.  Ideally only one "segment" is active at a
+        // time, but the aggregate tries to take care and behave corretly even if this is
+        // not the case
         void StartSegment(uint32_t segment)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
 
-            if (!statsInProgress_.count(segment))
+            if (statsInProgress_.count(segment) == 0)
             {
                 PBLOG_INFO << "Starting a round of Baz IO";
             }
             statsInProgress_[segment].numStarted++;
         }
 
-        // Aggregates the current stats *without* doing any logging
-        // or intermediate bookkeeping
+        // Aggregates and resets the stats argument to the full io stats.  The data
+        // supplied here will not be included in any of the "segment" reporting
         void AggregateToFull(IOStats& m)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
@@ -106,9 +112,9 @@ public: // structors
             m = IOStats{};
         }
 
-        // Aggregates the current stats.  Once the final baz writer checks in
-        // for the current round, a logging statement will be produced with
-        // some basic stats for the last round of IO.
+        // Aggregates and resets the stats argument to a particular "segment".  Once
+        // all threads for a given segment have checked in, a brief summary of progress
+        // will be logged
         void AggregateToSegment(uint32_t segmentID, IOStats& m)
         {
             auto lg = std::lock_guard<std::mutex>{m_};
@@ -274,7 +280,7 @@ public:
         ioAggregator_->Summarize(os);
     }
 
-    std::shared_ptr<IOStatsAggregator> GetAggregator() const { return ioAggregator_; }
+    std::shared_ptr<const IOStatsAggregator> GetAggregator() const { return ioAggregator_; }
 
     size_t BytesWritten() const
     {
