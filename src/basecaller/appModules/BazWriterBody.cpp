@@ -93,7 +93,7 @@ BazWriterBody::BazWriterBody(
 
     if (multipleBazFiles_)
     {
-        auto ioStatsAggregator = std::make_shared<BazIO::BazWriter::IOStatsAggregator>(numBatches_);
+        auto ioStatsAggregator = std::make_shared<BazIO::IOStatsAggregator>(numBatches_);
         auto removeExtension = [](const std::string& fn) {
             size_t lastDot = fn.find_last_of(".");
             if (lastDot == std::string::npos) return fn;
@@ -119,10 +119,10 @@ BazWriterBody::BazWriterBody(
         std::atomic<uint32_t> openedFiles = 0;
         tbb::parallel_for((uint32_t) {0}, numBatches_, [&](uint32_t b)
         {
-            auto poolZmwNumbersStart = zmwNumbers.begin() + batchStartZmw[b];
-            auto poolZmwFeaturesStart = zmwFeatures.begin() + batchStartZmw[b];
+            const auto poolZmwNumbersStart = zmwNumbers.begin() + batchStartZmw[b];
+            const auto poolZmwFeaturesStart = zmwFeatures.begin() + batchStartZmw[b];
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
-            std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
+            const std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
             FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,
@@ -139,7 +139,7 @@ BazWriterBody::BazWriterBody(
 
             fh.BaseCallerVersion("0.1");
 
-            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazio, ioStatsAggregator);
+            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazIO, ioStatsAggregator);
             auto openedSnapshot = ++openedFiles;
             if (openedSnapshot % 10 == 0) PBLOG_INFO << "Opened " << openedSnapshot << " baz files so far";
         });
@@ -167,7 +167,7 @@ BazWriterBody::BazWriterBody(
 
         fh.BaseCallerVersion("0.1");
 
-        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazio));
+        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazIO));
     }
 }
 

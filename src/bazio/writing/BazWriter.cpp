@@ -74,6 +74,8 @@ BazWriter::~BazWriter()
         // Terminates writeThread_
         writeThreadContinue_ = false;
         if (writeThread_.joinable()) writeThread_.join();
+
+        ioAggregator_->AggregateToFull(&ioStats_);
     }
     catch(const std::exception& ex)
     {
@@ -86,7 +88,6 @@ BazWriter::~BazWriter()
         PacBio::Logging::PBLogger::Flush();
         std::terminate();
     }
-    ioAggregator_->AggregateToFull(ioStats_);
 }
 
 void BazWriter::Init(const Primary::BazIOConfig& ioConfig)
@@ -192,7 +193,7 @@ void BazWriter::WriteToDiskLoop()
     std::vector<Primary::ZmwSliceHeader> headerBuffer;
     PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop entered";
     size_t writtenSuperChunks = 0;
-    ioAggregator_->AggregateToFull(ioStats_);
+    ioAggregator_->AggregateToFull(&ioStats_);
     while (writeThreadContinue_ && !abort_)
     {
         std::unique_ptr<BazBuffer> bazBuffer;
@@ -253,7 +254,7 @@ void BazWriter::WriteToDiskLoop()
                 PBLOG_WARN << "There are " << bazBufferQueue_.Size()
                            << " more baz buffers queued for writing!";
             }
-            ioAggregator_->AggregateToSegment(writtenSuperChunks, ioStats_);
+            ioAggregator_->AggregateToSegment(writtenSuperChunks, &ioStats_);
             writtenSuperChunks++;
         }
     }

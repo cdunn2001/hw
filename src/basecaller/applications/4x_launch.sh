@@ -14,7 +14,7 @@ dir=$(dirname $0)
 
 BAZ_ARG=${OUTPUT_LOC}/${BAZ_NAME%.baz}
 
-NUM_A100=$(nvidia-smi | grep A100 | wc -l)
+NUM_A100=$(nvidia-smi | grep -c A100)
 if [[ ${NUM_A100} -ne 2 ]]
 then
     echo "Expecting a system with 2 A100 cards, found ${NUM_A100}"
@@ -29,12 +29,9 @@ then
     exit 1
 fi
 
-THREAD_PCNT=$(/usr/bin/nvidia-cuda-mps-control << EOF
-get_default_active_thread_percentage
-EOF
-)
+THREAD_PCNT=$(echo get_default_active_thread_percentage | /usr/bin/nvidia-cuda-mps-control)
 
-if [[ "${THREAD_PCNT}" != 60.0 ]]
+if [[ $(echo ${THREAD_PCNT} != 60 | bc) == 1 ]]
 then
     echo "MPS daemon is not set up with the expected resource provisioning.  Set active thread percentage to 60 or disable this check"
     exit 1
@@ -46,16 +43,16 @@ MAIN_ARGS="--cache --numZmwLanes ${LANES_PER_CHIP} --frames=${FRAMES}  --inputfi
            --config=system.basecallerConcurrency=${BASECALLER_CONCURRENCY} \
            $@"
 
+NUMA_NODE=0 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}0.baz > t2b0.log &
+sleep ${DELAY}
+
 NUMA_NODE=0 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}1.baz > t2b1.log &
 sleep ${DELAY}
 
-NUMA_NODE=0 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}2.baz > t2b2.log &
+NUMA_NODE=1 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}2.baz > t2b2.log &
 sleep ${DELAY}
 
 NUMA_NODE=1 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}3.baz > t2b3.log &
-sleep ${DELAY}
-
-NUMA_NODE=1 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}4.baz > t2b4.log &
 
 wait
 

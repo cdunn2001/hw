@@ -736,7 +736,7 @@ int main(int argc, char* argv[])
 {
     try
     {
-        std::stringstream cliArgs;
+        std::ostringstream cliArgs;
         for (int i = 0; i < argc; ++i)
         {
             cliArgs << argv[i] << " ";
