@@ -24,7 +24,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <appModules/Basecaller.h>
-#include <appModules/BazWriter.h>
+#include <appModules/BazWriterBody.h>
 #include <appModules/BlockRepacker.h>
 #include <appModules/PrelimHQFilter.h>
 #include <appModules/TrivialRepacker.h>

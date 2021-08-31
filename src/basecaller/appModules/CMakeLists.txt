@@ -13,8 +13,8 @@ endif()
 add_library(libAppModules STATIC
         Basecaller.h
         Basecaller.cpp
-        BazWriter.h
-        BazWriter.cpp
+        BazWriterBody.h
+        BazWriterBody.cpp
         BlockRepacker.h
         BlockRepacker.cpp
         PrelimHQFilter.h
