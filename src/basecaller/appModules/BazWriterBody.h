@@ -60,17 +60,10 @@ public:
                   const std::vector<uint32_t>& zmwNumbers,
                   const std::vector<uint32_t>& zmwFeatures,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig);
+                  const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
+                  const Mongo::Data::MovieConfig& movieConfig);
 
-    ~BazWriterBody()
-    {
-        PBLOG_INFO << "Closing BAZ file: " << bazName_;
-        for (auto& bzw : bazWriters_)
-        {
-            bzw->WaitForTermination();
-            bzw.reset();
-        }
-    }
+    ~BazWriterBody();
 
     size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
@@ -79,7 +72,7 @@ public:
 
 private:
     uint32_t numThreads_;
-    size_t numBatches_;
+    uint32_t numBatches_;
     bool multipleBazFiles_;
     std::vector<std::unique_ptr<BazIO::BazWriter>> bazWriters_;
     std::string bazName_;

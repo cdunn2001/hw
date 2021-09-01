@@ -44,13 +44,15 @@ namespace BazIO {
 
 BazWriter::BazWriter(const std::string& filePath,
                      FileHeaderBuilder& fileHeaderBuilder,
-                     const Primary::BazIOConfig& ioConf)
+                     const Primary::BazIOConfig& ioConf,
+                     std::shared_ptr<IOStatsAggregator> agg)
     : filePath_(filePath)
     , filePathTmp_(filePath + ".tmp")
     , fhb_(fileHeaderBuilder)
     , fileHandle_(new Primary::ManuallyBufferedFile(filePathTmp_, ioConf.BufferSizeMBytes, ioConf.MaxMBPerSecondWrite))
     , jsonFileHeader_(fileHeaderBuilder.CreateJSONCharVector())
     , dieGracefully_(false)
+    , ioAggregator_(agg)
 {
     if (!fileHeaderBuilder.MaxNumZmws())
         throw PBException("No ZmwNumber mapping provided in FileHeaderBuilder");
@@ -72,6 +74,8 @@ BazWriter::~BazWriter()
         // Terminates writeThread_
         writeThreadContinue_ = false;
         if (writeThread_.joinable()) writeThread_.join();
+
+        ioAggregator_->AggregateToFull(&ioStats_);
     }
     catch(const std::exception& ex)
     {
@@ -151,8 +155,8 @@ void BazWriter::Align(size_t alignmentSize, bool accumulate)
         fileHandle_->Advance(advance);
         if (accumulate)
         {
-            paddingBytes_ += advance;
-            bytesWritten_ += advance;
+            ioStats_.paddingBytes += advance;
+            ioStats_.bytesWritten += advance;
         }
     }
 }
@@ -168,7 +172,7 @@ void BazWriter::WriteJsonFileHeader(bool accumulate)
         size_t bytesToWriteNow = (1UL << 20); // let's try 1 MiB each loop. 2GiB was too much.
         if (bytesToWriteNow > bytesToWrite) bytesToWriteNow = bytesToWrite;
         const auto justWrote = Fwrite(ptr,bytesToWriteNow, accumulate);
-        if (accumulate) headerBytes_ += justWrote;
+        if (accumulate) ioStats_.headerBytes += justWrote;
         bytesToWrite -= bytesToWriteNow;
         ptr += bytesToWriteNow;
     }
@@ -189,6 +193,7 @@ void BazWriter::WriteToDiskLoop()
     std::vector<Primary::ZmwSliceHeader> headerBuffer;
     PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop entered";
     size_t writtenSuperChunks = 0;
+    ioAggregator_->AggregateToFull(&ioStats_);
     while (writeThreadContinue_ && !abort_)
     {
         std::unique_ptr<BazBuffer> bazBuffer;
@@ -197,10 +202,11 @@ void BazWriter::WriteToDiskLoop()
 
         if (bazBufferQueue_.Pop(bazBuffer, std::chrono::milliseconds(500)))
         {
+            ioAggregator_->StartSegment(writtenSuperChunks);
             auto now = std::chrono::high_resolution_clock::now();
 
-            PBLOG_INFO << "Starting writing superchunk " << writtenSuperChunks;
-            auto currBytes = bytesWritten_;
+            PBLOG_DEBUG << "Starting writing superchunk " << writtenSuperChunks;
+            auto currBytes = ioStats_.bytesWritten;
 
             // super chunk layout: SMSHHHHSPHMLSPHMLSPHMLSPHML
             uint32_t numZmws = bazBuffer->NumZmw();
@@ -220,6 +226,7 @@ void BazWriter::WriteToDiskLoop()
 
             // write actual data
             WriteChunkData(bazBuffer, headerBuffer);
+            bazBuffer.reset();
 
             // superchunk is written, but we need to rewind, so keep track of the
             // tail of the file so we can resume on the next superchunk.
@@ -238,17 +245,16 @@ void BazWriter::WriteToDiskLoop()
 
             fileHandle_->Flush();
 
-            double sliceDuration = fh_->OutputLengthFrames() / fh_->FrameRateHz();
-
             auto elapsed = std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - now);
-            double writeRealtimeRatio = elapsed.count() / sliceDuration;
-            PBLOG_INFO << "Finished writing superchunk " << writtenSuperChunks << " to disk";
-            PBLOG_INFO << "Wrote " << bytesWritten_ - currBytes << " to disk";
-            PBLOG_INFO << "Write Realtime Ratio: " << writeRealtimeRatio;
-            PBLOG_INFO << "There are " << bazBufferQueue_.Size()
-                       << " more baz buffers queued for writing";
-            if (writeRealtimeRatio > 1.)
-                PBLOG_WARN << "Baz thread is not currently running at realtime!!!";
+            PBLOG_DEBUG << "Finished writing superchunk " << writtenSuperChunks << " to disk";
+            PBLOG_DEBUG << "Wrote " << ioStats_.bytesWritten - currBytes << " to disk in "
+                        << elapsed.count() << " seconds";
+            if (bazBufferQueue_.Size() != 0)
+            {
+                PBLOG_WARN << "There are " << bazBufferQueue_.Size()
+                           << " more baz buffers queued for writing!";
+            }
+            ioAggregator_->AggregateToSegment(writtenSuperChunks, &ioStats_);
             writtenSuperChunks++;
         }
     }
@@ -264,7 +270,7 @@ void BazWriter::WriteToDiskLoop()
 
     // Write footer
     const auto jsonFileFooter_ = ffb_.CreateJSONCharVector();
-    headerBytes_ += Fwrite(jsonFileFooter_.data(), jsonFileFooter_.size());
+    ioStats_.headerBytes += Fwrite(jsonFileFooter_.data(), jsonFileFooter_.size());
     WriteSanity();
 
     // Rewrite header
@@ -296,7 +302,7 @@ void BazWriter::WriteSuperChunkMeta(const uint64_t nextPointer,
     size_t written =  Fwrite(&chunkMeta, Primary::SuperChunkMeta::SizeOf(), accumulate);
     if (accumulate)
     {
-        overheadBytes_ += written;
+        ioStats_.overheadBytes += written;
     }
     WriteSanity(accumulate);
 }
@@ -308,7 +314,7 @@ void BazWriter::WriteZmwSliceHeader(std::vector<Primary::ZmwSliceHeader>& header
     for (const auto& h : headerBuffer)
     {
         if (abort_) return;
-        overheadBytes_ += Fwrite(&h, Primary::ZmwSliceHeader::SizeOf());
+        ioStats_.overheadBytes += Fwrite(&h, Primary::ZmwSliceHeader::SizeOf());
     }
 }
 
@@ -353,7 +359,7 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         {
             for (const auto& piece : slice.packets.pieces)
             {
-                eventsBytes_ += Fwrite(piece.data, piece.count);
+                ioStats_.eventsBytes += Fwrite(piece.data, piece.count);
             }
         }
 
@@ -411,7 +417,7 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
 
             // Make sure that buffer has expected size
             assert(bufferCounter == bufferSize);
-            metricsBytes_ +=  Fwrite(buffer.data(), bufferSize);
+            ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
         }
     }
 
