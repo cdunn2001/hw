@@ -453,79 +453,74 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     latent[blockIdx.x].StoreLocal(localLatent);
 }
 
+class FilterStage
+{
+public:
+    virtual void
+    RunFilter(const Mongo::Data::BatchData<int16_t>& in, int numFrames, Mongo::Data::BatchData<int16_t>& out) = 0;
+    virtual size_t Stride() const = 0;
+
+    virtual ~FilterStage() = default;
+};
+
+template <typename Filter, size_t stride, size_t blockThreads>
+class FilterStageImpl : public FilterStage
+{
+public:
+    __host__ FilterStageImpl(const Memory::AllocationMarker& marker,
+                             size_t numLanes,
+                             short val,
+                             Memory::StashableAllocRegistrar* registrar)
+        : filterData_(registrar, marker, numLanes, val)
+    {}
+
+    void
+    RunFilter(const Mongo::Data::BatchData<int16_t>& in, int numFrames, Mongo::Data::BatchData<int16_t>& out) override
+    {
+        const auto& launcher = PBLauncher(
+            StridedFilter<blockThreads, stride, Filter>, filterData_.Size(), blockThreads);
+        launcher(in, filterData_, numFrames, out);
+    }
+
+    size_t Stride() const override { return stride; }
+
+private:
+    Memory::DeviceOnlyArray<Filter> filterData_;
+};
+
 template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2, size_t lag>
 class ComposedFilter
 {
-    using Lower1 = ErodeDilate<blockThreads, width1>;
-    using Lower2 = ErodeDilate<blockThreads, width2>;
-    using Upper1 = DilateErode<blockThreads, width1>;
-    using Upper2 = ErodeDilate<blockThreads, width2>;
-    using LatentBaselineData = LatentBaselineData<blockThreads, lag>;
-
-    Memory::DeviceOnlyArray<Lower1> lower1;
-    Memory::DeviceOnlyArray<Lower2> lower2;
-    Memory::DeviceOnlyArray<Upper1> upper1;
-    Memory::DeviceOnlyArray<Upper2> upper2;
-    Memory::DeviceOnlyArray<LatentBaselineData> latent;
-    size_t numLanes_;
-
 public:
+    using TraceBatch = Mongo::Data::TraceBatch<int16_t>;
+    using BatchData = Mongo::Data::BatchData<int16_t>;
 
-    __host__ ComposedFilter(const Memory::AllocationMarker& marker, size_t numLanes,
-                            short val, Memory::StashableAllocRegistrar* registrar = nullptr)
-        : lower1(registrar, marker, numLanes, val)
-        , lower2(registrar, marker, numLanes, val)
-        , upper1(registrar, marker, numLanes, val)
-        , upper2(registrar, marker, numLanes, val)
-        , numLanes_(numLanes)
+    __host__ ComposedFilter(const Memory::AllocationMarker& marker,
+                            size_t numLanes,
+                            short val,
+                            Memory::StashableAllocRegistrar* registrar = nullptr)
+        : numLanes_(numLanes)
         , latent(registrar, marker, numLanes, 0.0f)
-    {}
+    {
+        lower_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width1>, stride1, blockThreads>>(
+            marker, numLanes, val, registrar));
+        lower_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width2>, stride2, blockThreads>>(
+            marker, numLanes, val, registrar));
+
+        upper_.push_back(std::make_unique<FilterStageImpl<DilateErode<blockThreads, width1>, stride1, blockThreads>>(
+            marker, numLanes, val, registrar));
+        upper_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width2>, stride2, blockThreads>>(
+            marker, numLanes, val, registrar));
+    }
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
     // not do the actual baseline subtraction, nor does it do any bias corrections
-    __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<int16_t>& input,
-                                    Mongo::Data::TraceBatch<int16_t>& output,
-                                    Mongo::Data::BatchData<int16_t>& workspace1,
-                                    Mongo::Data::BatchData<int16_t>& workspace2)
+    __host__ void
+    RunComposedFilter(const TraceBatch& input, TraceBatch& output, BatchData& workspace1, BatchData& workspace2)
     {
-        const uint64_t numFrames = input.NumFrames();
+        RunMorpho(input, output, workspace1, workspace2);
 
-        assert(input.LaneWidth() == 2*blockThreads);
-        assert(input.LanesPerBatch() == numLanes_);
-
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>,
-                                  numLanes_,
-                                  blockThreads);
-        L1(input,
-           lower1,
-           numFrames,
-           workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>,
-                                  numLanes_,
-                                  blockThreads);
-        L2(workspace1,
-           lower2,
-           numFrames/2,
-           workspace1);
-
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>,
-                                  numLanes_,
-                                  blockThreads);
-        U1(input,
-           upper1,
-           numFrames,
-           workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>,
-                                  numLanes_,
-                                  blockThreads);
-        U2(workspace2,
-           upper2,
-           numFrames/2,
-           workspace2);
-
-        const auto& average = PBLauncher(AverageAndExpand<blockThreads, stride1*stride2>,
-                                       numLanes_,
-                                       blockThreads);
+        const auto& average = PBLauncher(AverageAndExpand<blockThreads, stride1 * stride2>, numLanes_, blockThreads);
         average(workspace1, workspace2, output);
     }
 
@@ -535,44 +530,40 @@ public:
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        const uint64_t numFrames = input.NumFrames();
+        RunMorpho(input, output, workspace1, workspace2);
 
-        assert(input.LaneWidth() == 2*blockThreads);
-        assert(input.LanesPerBatch() == numLanes_);
-
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>, numLanes_, blockThreads);
-        L1(input,
-           lower1,
-           numFrames,
-           workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>, numLanes_, blockThreads);
-        L2(workspace1,
-           lower2,
-           numFrames/2,
-           workspace1);
-
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>, numLanes_, blockThreads);
-        U1(input,
-           upper1,
-           numFrames,
-           workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>, numLanes_, blockThreads);
-        U2(workspace2,
-           upper2,
-           numFrames/2,
-           workspace2);
-
-        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, stride1*stride2, lag>, numLanes_, blockThreads);
-        Subtract(input,
-                 latent,
-                 workspace1,
-                 workspace2,
-                 output,
-                 stats);
+        const auto& Subtract = PBLauncher(
+            SubtractBaseline<blockThreads, stride1 * stride2, lag>, numLanes_, blockThreads);
+        Subtract(input, latent, workspace1, workspace2, output, stats);
     }
 
+private:
+    __host__ void RunMorpho(const TraceBatch& input, TraceBatch& output, BatchData& workspace1, BatchData& workspace2)
+    {
+        uint64_t numFrames = input.NumFrames();
+
+        assert(input.LaneWidth() == 2 * blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
+
+        for (size_t i = 0; i < lower_.size(); ++i)
+        {
+            auto* lowerIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace1;
+            auto* upperIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace2;
+            lower_[i]->RunFilter(*lowerIn, numFrames, workspace1);
+            upper_[i]->RunFilter(*upperIn, numFrames, workspace2);
+            numFrames /= lower_[i]->Stride();
+            assert(upper_[i]->Stride() == lower_[i]->Stride());
+        }
+    }
+
+    std::vector<std::unique_ptr<FilterStage>> lower_;
+    std::vector<std::unique_ptr<FilterStage>> upper_;
+    using LatentBaselineData = LatentBaselineData<blockThreads, lag>;
+
+    Memory::DeviceOnlyArray<LatentBaselineData> latent;
+    size_t numLanes_;
 };
 
 }}
 
-#endif //CUDA_BASELINE_FILTER_KERNELS_CUH
+#endif  // CUDA_BASELINE_FILTER_KERNELS_CUH
