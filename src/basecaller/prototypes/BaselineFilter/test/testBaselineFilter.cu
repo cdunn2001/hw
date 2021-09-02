@@ -10,6 +10,8 @@
 #include <BaselineFilter.cuh>
 #include <BaselineFilterKernels.cuh>
 
+using PacBio::Mongo::Basecaller::FilterParamsLookup;
+
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
@@ -198,7 +200,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     using Filter = ComposedFilter<gpuBlockThreads, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
-    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
+    auto params = FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
         filterData.emplace_back(params, SOURCE_MARKER(), dataParams.kernelLanes, 0);

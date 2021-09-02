@@ -163,7 +163,7 @@ TEST(TestHostNoOpBaseliner, Run)
 TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::HostMultiScale);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -179,7 +179,7 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
-                                                                          FilterParamsLookup(baselinerConfig.Method),
+                                                                          FilterParamsLookup(baselinerConfig.Filter),
                                                                           batchConfig.lanesPerPool));
     }
 
@@ -271,7 +271,7 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::HostMultiScale);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -287,7 +287,7 @@ TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
         baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
-                                                                          FilterParamsLookup(baselinerConfig.Method),
+                                                                          FilterParamsLookup(baselinerConfig.Filter),
                                                                           batchConfig.lanesPerPool));
     }
 

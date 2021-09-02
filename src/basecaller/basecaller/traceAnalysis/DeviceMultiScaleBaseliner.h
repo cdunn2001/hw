@@ -84,7 +84,7 @@ public:
 
     ~DeviceMultiScaleBaseliner() override;
 
-    size_t StartupLatency() const override;
+    size_t StartupLatency() const override { return startupLatency_; }
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
@@ -93,6 +93,7 @@ private:    // Customizable implementation
 
     using Filter = Cuda::ComposedFilter<laneSize/2, lag>;
     std::unique_ptr<Filter> filter_;
+    size_t startupLatency_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

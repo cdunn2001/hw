@@ -7,7 +7,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::MethodName& method)
+BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::FilterTypes& type)
 {
     auto logChoice = [](const BaselinerParams& params) {
         std::stringstream ss;
@@ -20,60 +20,50 @@ BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::Method
         ss << "]";
         PBLOG_DEBUG << ss.str();
     };
-    
+
     using Strides = typename BaselinerParams::Strides_t;
     using Widths = typename BaselinerParams::Widths_t;
 
     // Intentionally not placing a 'default' statement, so we can at least get
     // a compiler warning if this switch is ever incomplete.
-    switch (method)
+    switch (type)
     {
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
+        case Data::BasecallerBaselinerConfig::FilterTypes::MultiScaleLarge:
         {
             BaselinerParams ret(Strides{1, 2, 8}, Widths{11, 17, 61}, 2.64f, 0.78f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
+        case Data::BasecallerBaselinerConfig::FilterTypes::MultiScaleMedium:
         {
             BaselinerParams ret(Strides{1, 2, 8}, Widths{9, 17, 31}, 2.41f, 0.69f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
+        case Data::BasecallerBaselinerConfig::FilterTypes::MultiScaleSmall:
         {
             BaselinerParams ret(Strides{1, 2, 8}, Widths{7, 17, 17}, 2.15f, 0.63f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
+        case Data::BasecallerBaselinerConfig::FilterTypes::TwoScaleLarge:
         {
             BaselinerParams ret(Strides{2, 8}, Widths{11, 61}, 2.71f, 0.60f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
+        case Data::BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium:
         {
             BaselinerParams ret(Strides{2, 8}, Widths{9, 31}, 2.44f, 0.50f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+        case Data::BasecallerBaselinerConfig::FilterTypes::TwoScaleSmall:
         {
             BaselinerParams ret(Strides{2, 8}, Widths{7, 17}, 2.07f, 0.41f);
             logChoice(ret);
             return ret;
         }
-        case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-        {
-            // For now the same as TwoScaleMedium
-            BaselinerParams ret(Strides{2, 8}, Widths{9, 31}, 2.44f, 0.50f);
-            logChoice(ret);
-            return ret;
-        }
-        case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            // Should never get here...
-            assert(false);
     }
 
     // Nor here

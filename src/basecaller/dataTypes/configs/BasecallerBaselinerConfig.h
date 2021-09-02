@@ -40,16 +40,18 @@ class BasecallerBaselinerConfig : public Configuration::PBConfig<BasecallerBasel
 public:
     PB_CONFIG(BasecallerBaselinerConfig);
 
-    SMART_ENUM(MethodName,
+    SMART_ENUM(FilterTypes,
                MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
-               TwoScaleLarge, TwoScaleMedium, TwoScaleSmall,
-               DeviceMultiScale,
-               NoOp);
+               TwoScaleLarge, TwoScaleMedium, TwoScaleSmall);
+    PB_CONFIG_PARAM(FilterTypes, Filter, FilterTypes::TwoScaleMedium);
+
+    SMART_ENUM(MethodName, HostMultiScale, DeviceMultiScale, NoOp);
+
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {
                             return device == Basecaller::ComputeDevices::Host ?
-                                MethodName::TwoScaleMedium :
+                                MethodName::HostMultiScale :
                                 MethodName::DeviceMultiScale;
                         },
                         {"analyzerHardware"}

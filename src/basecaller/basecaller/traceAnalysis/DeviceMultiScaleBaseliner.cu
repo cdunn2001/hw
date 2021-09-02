@@ -68,6 +68,7 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      const BaselinerParams& params,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
+    , startupLatency_(params.LatentSize())
 {
     filter_ = std::make_unique<Filter>(
         params,
@@ -78,13 +79,5 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
-
-// BENTODO put this in the base class once we change MethodName
-size_t DeviceMultiScaleBaseliner::StartupLatency() const
-{
-    static const auto params = FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
-
-    return params.LatentSize();
-}
 
 }}}

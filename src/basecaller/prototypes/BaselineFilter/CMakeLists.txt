@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.20)
 project(CudaTemplate LANGUAGES CXX CUDA)
 
 add_library(libBaselineFilter STATIC
-    BaselineRunner.cu
-    BaselineRunner.h
     BaselineFilter.cu
     BaselineFilter.cuh
     BaselineFilterKernels.cu
@@ -33,6 +31,8 @@ set_target_properties(libBaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON
 
 add_executable(BaselineFilter
     main.cpp
+    BaselineRunner.cu
+    BaselineRunner.h
 )
 
 target_link_libraries(BaselineFilter
