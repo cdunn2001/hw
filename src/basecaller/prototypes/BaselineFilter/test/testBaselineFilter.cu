@@ -195,12 +195,13 @@ TEST(BaselineFilterTest, MultiKernelFilter)
 
 
     using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8, 4>;
+    using Filter = ComposedFilter<gpuBlockThreads, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
+    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
     for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterData.emplace_back(params, SOURCE_MARKER(), dataParams.kernelLanes, 0);
         filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 

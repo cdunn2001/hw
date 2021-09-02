@@ -90,10 +90,11 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
     const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
     DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<DeviceMultiScaleBaseliner>> baseliners;
+    const auto& params = FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
 
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
-        baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, batchConfig.lanesPerPool));
+        baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, batchConfig.lanesPerPool, params));
     }
 
     PicketFenceGenerator::Config pfConfig;
@@ -196,10 +197,11 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
     const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
     DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<DeviceMultiScaleBaseliner>> baseliners;
+    const auto& params = FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
 
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
-        baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, batchConfig.lanesPerPool));
+        baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, batchConfig.lanesPerPool, params));
     }
 
     PicketFenceGenerator::Config pfConfig;

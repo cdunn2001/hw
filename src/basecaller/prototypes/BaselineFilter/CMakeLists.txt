@@ -36,7 +36,9 @@ add_executable(BaselineFilter
 )
 
 target_link_libraries(BaselineFilter
-    libBaselineFilter)
+    libBaselineFilter
+    libMongoBasecallerTraceAnalysis 
+)
 
 set_target_properties(BaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
@@ -52,6 +54,7 @@ add_executable(BaselineTests
 target_link_libraries(BaselineTests
     libProtoCommon
     libGtest
+    libMongoBasecallerTraceAnalysis 
 )
 
 target_include_directories(BaselineTests

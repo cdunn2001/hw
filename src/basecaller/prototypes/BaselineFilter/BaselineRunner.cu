@@ -156,7 +156,7 @@ void RunMultipleBaselineFilter(
         size_t simulKernels)
 {
     using Filter = BaselineFilter<laneWidth, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter2 = ComposedFilter<laneWidth, 9, 31, 2, 8, 4>;
+    using Filter2 = ComposedFilter<laneWidth, 4>;
 
     DeviceOnlyArray<Filter> full(SOURCE_MARKER(), dataParams.numZmwLanes, 0);
 
@@ -173,7 +173,7 @@ void RunMultipleBaselineFilter(
     {
         work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
         work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-        filters.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filters.emplace_back(Mongo::Basecaller::FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale), SOURCE_MARKER(), dataParams.kernelLanes, 0);
     }
 
     auto tmp = [dataParams, &work1, &work2, &filters, &full]

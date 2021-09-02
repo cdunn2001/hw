@@ -298,6 +298,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
                              const Data::BatchDimensions& dims,
                              StashableAllocRegistrar& registrar) const
 {
+    const auto& params = FilterParamsLookup(baselinerOpt_);
     // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
     // to represent both the baseliner method and param. When the GPU version
     // is ready to take params, then the Configure() above should store the params
@@ -308,7 +309,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
             return std::make_unique<HostNoOpBaseliner>(poolId);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch, &registrar);
+            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch, params, &registrar);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
         case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
@@ -317,7 +318,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
         case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
             // TODO: scaler currently set to default 1.0f
-            return std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f, FilterParamsLookup(baselinerOpt_),
+            return std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f, params,
                                                              dims.lanesPerBatch);
             break;
         default:

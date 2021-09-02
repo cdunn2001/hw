@@ -1,6 +1,7 @@
 #ifndef CUDA_BASELINE_FILTER_KERNELS_CUH
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
+#include <numeric>
 #include "BaselineFilter.cuh"
 #include "BlockCircularBuffer.cuh"
 #include "LocalCircularBuffer.cuh"
@@ -12,6 +13,8 @@
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/TraceBatch.h>
+
+#include <basecaller/traceAnalysis/BaselinerParams.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -170,10 +173,11 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const PBShort2> in
 
 // Averages the output of the lower and upper filters, and expands the data
 // to back to the original (unstrided) size
-template <size_t blockThreads, size_t stride>
+template <size_t blockThreads>
 __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2> in1,
                                  const Mongo::Data::GpuBatchData<const PBShort2> in2,
-                                 Mongo::Data::GpuBatchData<PBShort2> out)
+                                 Mongo::Data::GpuBatchData<PBShort2> out,
+                                 size_t stride)
 {
     const size_t numFrames = out.NumFrames();
 
@@ -403,8 +407,9 @@ private:
     BlockCircularBuffer<blockThreads, lag> circularBuffer;
 };
 
-template <size_t blockThreads, size_t stride, size_t lag>
+template <size_t blockThreads, size_t lag>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
+                                 size_t stride,
                                  Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
@@ -488,29 +493,59 @@ private:
     Memory::DeviceOnlyArray<Filter> filterData_;
 };
 
-template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2, size_t lag>
+template <size_t blockThreads, size_t lag>
 class ComposedFilter
 {
+    template <template <size_t, size_t> class FilterType>
+    std::unique_ptr<FilterStage> CreateFilter(size_t width,
+                                              size_t stride,
+                                              const Memory::AllocationMarker& marker,
+                                              size_t numLanes,
+                                              short val,
+                                              Memory::StashableAllocRegistrar* registrar)
+    {
+#define ReturnIf(s, w)                                                   \
+    if (s == stride && width == w)                                                                                     \
+        return std::make_unique<FilterStageImpl<FilterType<blockThreads, w>, s, blockThreads>>( \
+            marker, numLanes, val, registrar);
+
+        ReturnIf(1, 7);
+        ReturnIf(1, 9);
+        ReturnIf(1, 11);
+        ReturnIf(2, 7);
+        ReturnIf(2, 9);
+        ReturnIf(2, 11);
+        ReturnIf(2, 17);
+        ReturnIf(8, 17);
+        ReturnIf(8, 31);
+        ReturnIf(8, 61);
+
+        throw PBException("Unsupported and unexpected baseline filter stide/width combo");
+    }
 public:
     using TraceBatch = Mongo::Data::TraceBatch<int16_t>;
     using BatchData = Mongo::Data::BatchData<int16_t>;
 
-    __host__ ComposedFilter(const Memory::AllocationMarker& marker,
+    __host__ ComposedFilter(const Mongo::Basecaller::BaselinerParams& params,
+                            const Memory::AllocationMarker& marker,
                             size_t numLanes,
                             short val,
                             Memory::StashableAllocRegistrar* registrar = nullptr)
         : numLanes_(numLanes)
         , latent(registrar, marker, numLanes, 0.0f)
     {
-        lower_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width1>, stride1, blockThreads>>(
-            marker, numLanes, val, registrar));
-        lower_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width2>, stride2, blockThreads>>(
-            marker, numLanes, val, registrar));
+        const auto& widths = params.Widths();
+        const auto& strides = params.Strides();
 
-        upper_.push_back(std::make_unique<FilterStageImpl<DilateErode<blockThreads, width1>, stride1, blockThreads>>(
-            marker, numLanes, val, registrar));
-        upper_.push_back(std::make_unique<FilterStageImpl<ErodeDilate<blockThreads, width2>, stride2, blockThreads>>(
-            marker, numLanes, val, registrar));
+        fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});;
+
+        lower_.push_back(CreateFilter<ErodeDilate>(widths[0], strides[0], marker, numLanes, val, registrar));
+        upper_.push_back(CreateFilter<DilateErode>(widths[0], strides[0], marker, numLanes, val, registrar));
+        for (size_t i = 1; i < widths.size(); ++i)
+        {
+            lower_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
+            upper_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
+        }
     }
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
@@ -520,8 +555,8 @@ public:
     {
         RunMorpho(input, output, workspace1, workspace2);
 
-        const auto& average = PBLauncher(AverageAndExpand<blockThreads, stride1 * stride2>, numLanes_, blockThreads);
-        average(workspace1, workspace2, output);
+        const auto& average = PBLauncher(AverageAndExpand<blockThreads>, numLanes_, blockThreads);
+        average(workspace1, workspace2, output, fullStride_);
     }
 
     __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
@@ -533,8 +568,8 @@ public:
         RunMorpho(input, output, workspace1, workspace2);
 
         const auto& Subtract = PBLauncher(
-            SubtractBaseline<blockThreads, stride1 * stride2, lag>, numLanes_, blockThreads);
-        Subtract(input, latent, workspace1, workspace2, output, stats);
+            SubtractBaseline<blockThreads, lag>, numLanes_, blockThreads);
+        Subtract(input, fullStride_, latent, workspace1, workspace2, output, stats);
     }
 
 private:
@@ -562,6 +597,7 @@ private:
 
     Memory::DeviceOnlyArray<LatentBaselineData> latent;
     size_t numLanes_;
+    size_t fullStride_;
 };
 
 }}
