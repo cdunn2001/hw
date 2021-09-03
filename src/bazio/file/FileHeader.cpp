@@ -291,14 +291,14 @@ void FileHeader::ParsePackets(Json::Value& root,
 {
     // Get PACKET node that contains the individual fields
     const auto packetArray = root["PACKET"];
-    
+
     // Iterate over the PACKET JSON array which should
     // consist of the individual encoding groups.
     for (unsigned int i = 0; i < packetArray.size(); ++i)
     {
         // Get current encoding group.
         const auto encodingGroupJson = packetArray[i];
-        GroupParams gp(encodingGroupJson);
+        GroupParams<PacketFieldName> gp(encodingGroupJson);
         encodeInfo_.push_back(gp);
         packetByteSize += gp.totalBits;
     }

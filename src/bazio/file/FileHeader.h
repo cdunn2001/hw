@@ -121,9 +121,9 @@ public:
     uint64_t OffsetFirstChunk() const
     { return offsetFirstChunk_; }
 
-    std::vector<FieldParams> PacketFields() const
+    std::vector<FieldParams<PacketFieldName>> PacketFields() const
     {
-        std::vector<FieldParams> fp;
+        std::vector<FieldParams<PacketFieldName>> fp;
         for (const auto& g : encodeInfo_)
         {
             fp.insert(std::end(fp), g.members.begin(), g.members.end());
@@ -131,7 +131,7 @@ public:
         return fp;
     }
 
-    const std::vector<GroupParams>& PacketGroups() const
+    const std::vector<GroupParams<PacketFieldName>>& PacketGroups() const
     { return encodeInfo_; }
 
     const std::vector<MetricField>& HFMetricFields() const
@@ -146,9 +146,9 @@ public:
     bool HasPacketField(PacketFieldName fieldName) const
     {
         return std::any_of(encodeInfo_.begin(), encodeInfo_.end(),
-                           [&fieldName](const GroupParams& gp)
+                           [&fieldName](const GroupParams<PacketFieldName>& gp)
                            { return std::any_of(gp.members.begin(), gp.members.end(),
-                                         [&fieldName](const FieldParams& fp) { return fp.name == fieldName; }); });
+                                         [&fieldName](const auto& fp) { return fp.name == fieldName; }); });
     }
 
     bool HasHFMField(MetricFieldName fieldName) const
@@ -317,7 +317,7 @@ private:
     static const uint8_t MAGICNUMBER3 = 'Z';
 
 private:
-    std::vector<GroupParams> encodeInfo_;
+    std::vector<GroupParams<PacketFieldName>> encodeInfo_;
     std::vector<MetricField> hFMetricFields_;
     std::vector<MetricField> mFMetricFields_;
     std::vector<MetricField> lFMetricFields_;

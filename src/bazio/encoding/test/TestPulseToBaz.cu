@@ -29,18 +29,15 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
-#include <dataTypes/PulseGroups.h>
 
-#include <bazio/encoding/PulseToBaz.h>
-
-#include <dataTypes/Pulse.h>
+#include <bazio/encoding/ObjectToBaz.h>
+#include <bazio/encoding/test/TestingPulse.h>
 
 #include <iostream>
 
 using namespace PacBio::BazIO;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Utility;
-using namespace PacBio::Mongo::Data;
 
 // This is annoying.  This function is invoked with HostView arguments
 // on the Host, and DeviceView arguments on the device.  There does not
@@ -100,8 +97,8 @@ __host__ __device__ void TestPulseToBaz(PulsesIn pulsesIn,
 }
 
 template <typename PulseToBaz_t, size_t expectedLen>
-__global__ void RunGpuTest(DeviceView<const PacBio::Mongo::Data::Pulse> pulsesIn,
-                           DeviceView<PacBio::Mongo::Data::Pulse> pulsesOut,
+__global__ void RunGpuTest(DeviceView<const Pulse> pulsesIn,
+                           DeviceView<Pulse> pulsesOut,
                            DeviceView<bool> overrun)
 {
     // Neither the serializers nor the test itself is multi-threaded
@@ -118,38 +115,38 @@ __global__ void RunGpuTest(DeviceView<const PacBio::Mongo::Data::Pulse> pulsesIn
 // checks/tweaks on the data that we might be tempted to optomize.
 TEST(PulseToBaz, KestrelLossyTruncate)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<7>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<TruncateOverflow,
-                                            NumBits_t<7>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<7>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<TruncateOverflow,
+                                             NumBits_t<7>>
+                                   >
+                             >;
 
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<bool> Overrun{1, SyncDirection::Symmetric, SOURCE_MARKER()};
 
     {
         auto pulsesInV = pulsesIn.GetHostView();
-        pulsesInV[0].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[1].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[2].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[3].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
-        pulsesInV[4].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[5].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[6].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[7].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
+        pulsesInV[0].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[1].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[2].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[3].Label(Pulse::NucleotideLabel::T);
+        pulsesInV[4].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[5].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[6].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[7].Label(Pulse::NucleotideLabel::T);
 
         pulsesInV[0].Width(4);
         pulsesInV[1].Width(120);
@@ -204,37 +201,37 @@ TEST(PulseToBaz, KestrelLossyTruncate)
 // a 4 byte overflow value
 TEST(PulseToBaz, KestrelLosslessSimple)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow,  NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow,  NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
+                                   >
+                             >;
 
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<bool> Overrun{1, SyncDirection::Symmetric, SOURCE_MARKER()};
 
     {
         auto pulsesInV = pulsesIn.GetHostView();
-        pulsesInV[0].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[1].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[2].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[3].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
-        pulsesInV[4].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[5].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[6].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[7].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
+        pulsesInV[0].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[1].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[2].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[3].Label(Pulse::NucleotideLabel::T);
+        pulsesInV[4].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[5].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[6].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[7].Label(Pulse::NucleotideLabel::T);
 
         pulsesInV[0].Width(4);
         pulsesInV[1].Width(120);
@@ -283,37 +280,37 @@ TEST(PulseToBaz, KestrelLosslessSimple)
 // at the cost of one byte per bit to encode if there are subsequent bytes to read/write
 TEST(PulseToBaz, KestrelLosslessCompact)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<CompactOverflow, NumBits_t<7>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<CompactOverflow, NumBits_t<7>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<CompactOverflow, NumBits_t<7>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<CompactOverflow, NumBits_t<7>>
+                                   >
+                             >;
 
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
-    UnifiedCudaArray<PacBio::Mongo::Data::Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<bool> Overrun{1, SyncDirection::Symmetric, SOURCE_MARKER()};
 
     {
         auto pulsesInV = pulsesIn.GetHostView();
-        pulsesInV[0].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[1].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[2].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[3].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
-        pulsesInV[4].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::A);
-        pulsesInV[5].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::C);
-        pulsesInV[6].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::G);
-        pulsesInV[7].Label(PacBio::Mongo::Data::Pulse::NucleotideLabel::T);
+        pulsesInV[0].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[1].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[2].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[3].Label(Pulse::NucleotideLabel::T);
+        pulsesInV[4].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[5].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[6].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[7].Label(Pulse::NucleotideLabel::T);
 
         pulsesInV[0].Width(4);
         pulsesInV[1].Width(120);

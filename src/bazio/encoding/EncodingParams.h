@@ -92,21 +92,23 @@ struct SerializeParams : Configuration::PBConfig<SerializeParams>
     PB_CONFIG_VARIANT(params, TruncateParams, SimpleOverflowParams, CompactOverflowParams);
 };
 
-struct FieldParams : Configuration::PBConfig<FieldParams>
+template <typename FieldNames>
+struct FieldParams : Configuration::PBConfig<FieldParams<FieldNames>>
 {
     PB_CONFIG(FieldParams);
 
-    PB_CONFIG_PARAM(PacketFieldName, name, PacketFieldName::Label);
+    PB_CONFIG_PARAM(FieldNames, name, PacketFieldName::Label);
     PB_CONFIG_PARAM(StoreSigned::UnderlyingType, storeSigned, false);
     PB_CONFIG_OBJECT(std::vector<TransformsParams>, transform);
     PB_CONFIG_OBJECT(SerializeParams, serialize);
 };
 
-struct GroupParams : Configuration::PBConfig<GroupParams>
+template <typename FieldNames>
+struct GroupParams : Configuration::PBConfig<GroupParams<FieldNames>>
 {
     PB_CONFIG(GroupParams);
 
-    PB_CONFIG_OBJECT(std::vector<FieldParams>, members);
+    PB_CONFIG_OBJECT(std::vector<FieldParams<FieldNames>>, members);
     PB_CONFIG_PARAM(std::vector<size_t>, numBits, std::vector<size_t>{});
     PB_CONFIG_PARAM(size_t, totalBits, 0);
 };

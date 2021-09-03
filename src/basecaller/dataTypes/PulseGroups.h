@@ -33,73 +33,59 @@
 #ifndef PACBIO_MONGO_DATA_PULSE_GROUPS_H
 #define PACBIO_MONGO_DATA_PULSE_GROUPS_H
 
-#include <bazio/encoding/PulseToBaz.h>
+#include <bazio/encoding/ObjectToBaz.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
 
 using ProductionPulses =
-    BazIO::PulseToBaz<BazIO::Field<BazIO::PacketFieldName::Label,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::NoOp>,
-                                   BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::PulseWidth,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::NoOp>,
-                                   BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::StartFrame,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::DeltaCompression>,
-                                   BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>
-                                  >
-                     >;
+    BazIO::ObjectToBaz<BazIO::Field<BazIO::PacketFieldName::Label,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::NoOp>,
+                                    BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::PulseWidth,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::NoOp>,
+                                    BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>>,
+                       BazIO::Field<BazIO::PacketFieldName::StartFrame,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::DeltaCompression>,
+                                    BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>>>;
 
 using InternalPulses =
-    BazIO::PulseToBaz<BazIO::Field<BazIO::PacketFieldName::Label,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::NoOp>,
-                                   BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::PulseWidth,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::NoOp>,
-                                   BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::StartFrame,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::DeltaCompression>,
-                                   BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::Pkmax,
-                                   BazIO::StoreSigned_t<true>,
-                                   BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
-                                   BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::Pkmid,
-                                   BazIO::StoreSigned_t<true>,
-                                   BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
-                                   BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::Pkmean,
-                                   BazIO::StoreSigned_t<true>,
-                                   BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
-                                   BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::Pkvar,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
-                                   BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<7>, BazIO::NumBytes_t<2>>
-                                  >,
-                      BazIO::Field<BazIO::PacketFieldName::IsBase,
-                                   BazIO::StoreSigned_t<false>,
-                                   BazIO::Transform<BazIO::NoOp>,
-                                   BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<1>>
-                                  >
-                    >;
-
+    BazIO::ObjectToBaz<BazIO::Field<BazIO::PacketFieldName::Label,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::NoOp>,
+                                    BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::PulseWidth,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::NoOp>,
+                                    BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>>,
+                       BazIO::Field<BazIO::PacketFieldName::StartFrame,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::DeltaCompression>,
+                                    BazIO::Serialize<BazIO::CompactOverflow, BazIO::NumBits_t<7>>>,
+                       BazIO::Field<BazIO::PacketFieldName::Pkmax,
+                                    BazIO::StoreSigned_t<true>,
+                                    BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
+                                    BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::Pkmid,
+                                    BazIO::StoreSigned_t<true>,
+                                    BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
+                                    BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::Pkmean,
+                                    BazIO::StoreSigned_t<true>,
+                                    BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
+                                    BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<8>, BazIO::NumBytes_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::Pkvar,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::FixedPoint, BazIO::FixedPointScale_t<10>>,
+                                    BazIO::Serialize<BazIO::SimpleOverflow, BazIO::NumBits_t<7>, BazIO::NumBytes_t<2>>>,
+                       BazIO::Field<BazIO::PacketFieldName::IsBase,
+                                    BazIO::StoreSigned_t<false>,
+                                    BazIO::Transform<BazIO::NoOp>,
+                                    BazIO::Serialize<BazIO::TruncateOverflow, BazIO::NumBits_t<1>>>>;
 }}} // PacBio::Mongo::Data
 
 #endif //PACBIO_MONGO_DATA_PULSE_GROUPS_H

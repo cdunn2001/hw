@@ -4,7 +4,7 @@ include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
 add_library(libBazioEncodingTest OBJECT
-    TestBazToPulse.cpp
+    TestBazRoundTrip.cpp
     TestFieldSerializers.cpp
     TestFieldTransforms.cpp
     TestPulseToBaz.cu
@@ -12,6 +12,10 @@ add_library(libBazioEncodingTest OBJECT
 
 target_link_libraries(libBazioEncodingTest
     libBazioEncoding
+    # Not the most ideal dep.  It can be removed once DataParsing and BazEventData
+    # get moved to the encoding directory, which can be done after the metrics
+    # are moved to the new framework
+    libBazio
     libGtest
 )
 

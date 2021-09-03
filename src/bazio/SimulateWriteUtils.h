@@ -41,25 +41,20 @@
 #include <bazio/encoding/Types.h>
 #include <bazio/writing/BazAggregator.h>
 #include <bazio/writing/BazWriter.h>
-#include <bazio/encoding/PulseToBaz.h>
-
-// TODO All this Simulate code should be in postprimary, not bazio.
-//      It also can have it's own pulse type, it's currently pegged
-//      to kestrel, but that's not strictly necessary
-#include <dataTypes/Pulse.h>
-#include <dataTypes/PulseGroups.h>
-
+#include <bazio/encoding/ObjectToBaz.h>
+#include <bazio/encoding/test/TestingPulse.h>
 
 namespace PacBio {
 namespace BazIO {
 
-// NOTE: These are placeholders as the simulation code should define
-// its own production and internal pulse group encodings and pulse
-// representation to decouple it from Kestrel for testing purposes.
+// TODO All this Simulate code should be in postprimary, not bazio.
+// Once that happens, these placeholders can potentially be removed
+// and the simulation code define it's own versions, if it doesn't
+// want to be coupled with bazio directly
 
-using SimProductionPulseGroups = Mongo::Data::ProductionPulses;
-using SimInternalPulseGroups = Mongo::Data::InternalPulses;
-using SimPulse = Mongo::Data::Pulse;
+using SimProductionPulseGroups = ProductionPulses;
+using SimInternalPulseGroups = InternalPulses;
+using SimPulse = Pulse;
 
 class SimBazWriter
 {

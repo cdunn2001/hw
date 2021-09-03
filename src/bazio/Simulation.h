@@ -64,11 +64,10 @@
 #include "Timing.h"
 #include "SimulationRNG.h"
 #include <bazio/SimulateWriteUtils.h>
+#include <bazio/encoding/test/TestingPulse.h>
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
-
-#include <dataTypes/PulseGroups.h>
 
 using namespace PacBio::SmrtData;
 
@@ -163,7 +162,7 @@ public:
                               frameRate,
                               frameRate * chunks_ * seconds_,
                               (readout != Readout::PULSES)
-                              ? Mongo::Data::ProductionPulses::Params() : Mongo::Data::InternalPulses::Params(),
+                              ? BazIO::ProductionPulses::Params() : BazIO::InternalPulses::Params(),
                               verbosity,
                               generateExperimentMetadata(relativeAmplitudes_, baseMap_),
                               generateBasecallerConfig("Spider"),
