@@ -30,7 +30,7 @@
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
 
-#include <bazio/encoding/PulseToBaz.h>
+#include <bazio/encoding/ObjectToBaz.h>
 #include <bazio/encoding/test/TestingPulse.h>
 
 #include <iostream>
@@ -115,23 +115,23 @@ __global__ void RunGpuTest(DeviceView<const Pulse> pulsesIn,
 // checks/tweaks on the data that we might be tempted to optomize.
 TEST(PulseToBaz, KestrelLossyTruncate)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<7>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<TruncateOverflow,
-                                            NumBits_t<7>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<7>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<TruncateOverflow,
+                                             NumBits_t<7>>
+                                   >
+                             >;
 
     UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
@@ -201,22 +201,22 @@ TEST(PulseToBaz, KestrelLossyTruncate)
 // a 4 byte overflow value
 TEST(PulseToBaz, KestrelLosslessSimple)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow,  NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow,  NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<SimpleOverflow, NumBits_t<7>, NumBytes_t<4>>
+                                   >
+                             >;
 
     UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
@@ -280,22 +280,22 @@ TEST(PulseToBaz, KestrelLosslessSimple)
 // at the cost of one byte per bit to encode if there are subsequent bytes to read/write
 TEST(PulseToBaz, KestrelLosslessCompact)
 {
-    using Test = PulseToBaz<Field<PacketFieldName::Label,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<TruncateOverflow, NumBits_t<2>>
-                                  >,
-                            Field<PacketFieldName::PulseWidth,
-                                  StoreSigned_t<false>,
-                                  Transform<NoOp>,
-                                  Serialize<CompactOverflow, NumBits_t<7>>
-                                  >,
-                            Field<PacketFieldName::StartFrame,
-                                  StoreSigned_t<false>,
-                                  Transform<DeltaCompression>,
-                                  Serialize<CompactOverflow, NumBits_t<7>>
-                                  >
-                            >;
+    using Test = ObjectToBaz<Field<PacketFieldName::Label,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<TruncateOverflow, NumBits_t<2>>
+                                   >,
+                             Field<PacketFieldName::PulseWidth,
+                                   StoreSigned_t<false>,
+                                   Transform<NoOp>,
+                                   Serialize<CompactOverflow, NumBits_t<7>>
+                                   >,
+                             Field<PacketFieldName::StartFrame,
+                                   StoreSigned_t<false>,
+                                   Transform<DeltaCompression>,
+                                   Serialize<CompactOverflow, NumBits_t<7>>
+                                   >
+                             >;
 
     UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
     UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};

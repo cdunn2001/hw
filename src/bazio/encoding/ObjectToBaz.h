@@ -23,11 +23,11 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-/// \File PulseToBaz.h
-/// \detail This file is a preliminary stab at writing a generic pulse to baz stream
-///         using template metaprogramming.  It is targeted at serializing pulses,
+/// \File ObjectToBaz.h
+/// \detail This file is a generic serializer, for converting data to a baz stream
+///         using template metaprogramming.  It is targeted at serializing pulses and metrics,
 ///         where we are generally under stricter real-time constraints and performance
-///         matters, though it does have the inverse baz to pulse functionality for
+///         matters, though it does have the inverse deserialization functionality for
 ///         test reasons.
 ///
 ///         Some of the generic programming done here is perhaps a bit involved, but
@@ -39,7 +39,7 @@
 ///               never had the time to revisit the code and fix the issues.  Also now
 ///               that Kestrel is dealing with a much more relaxed sub-byte and cross-byte
 ///               possibilities, playing with hand rolled code anytime we wish to make a
-///               change has a high chance of bugs.
+///               change has a higher chance of bugs.
 ///             * We could write a general parser like this, but based off runtime rather
 ///               that compile time information, using switches and/or virtual dispatch.
 ///               This was tried, and at the time of writing this there exists a
@@ -72,10 +72,10 @@
 ///                          up an integral number of bytes) to the actual byte stream.
 ///          * FieldGroupEncoder: Mostly the same, but now knows what field names to
 ///                               associate with the group.
-///          * PulseEncoder: The top level, capable of serializing an entire pulse
+///          * ObjectEncoder: The top level, capable of serializing an entire pulse/metrics object
 
-#ifndef PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
-#define PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
+#ifndef PACBIO_BAZIO_ENCODING_OBJECT_TO_BAZ_H
+#define PACBIO_BAZIO_ENCODING_OBJECT_TO_BAZ_H
 
 #include <cstddef>
 #include <numeric>
@@ -268,32 +268,32 @@ template <typename GroupEncoder, auto... names>
 struct FieldGroupEncoder
 {
     using FieldNames = EnumFromNames_t<names...>;
-    template <typename P>
-    BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA uint8_t* Serialize(const O& obj, uint8_t* dest)
     {
-        return groupEncoder_.Encode(dest, FieldAccessor<P, FieldNames>::template Get<names>(pulse)...);
+        return groupEncoder_.Encode(dest, FieldAccessor<O, FieldNames>::template Get<names>(obj)...);
     }
 
-    template <typename P, size_t...ids>
-    BAZ_CUDA const uint8_t* DeserializeHelper(P& pulse, const uint8_t* dest, std::index_sequence<ids...>)
+    template <typename O, size_t...ids>
+    BAZ_CUDA const uint8_t* DeserializeHelper(O& obj, const uint8_t* dest, std::index_sequence<ids...>)
     {
-        using Accessor = FieldAccessor<P, FieldNames>;
+        using Accessor = FieldAccessor<O, FieldNames>;
         PacBio::Cuda::Utility::CudaTuple<typename Accessor::template Type<names>...> vals;
         dest = groupEncoder_.Decode(dest, vals.template Get<ids>()...);
-        (Accessor::template Set<names>(pulse, vals.template Get<ids>()), ...);
+        (Accessor::template Set<names>(obj, vals.template Get<ids>()), ...);
         return dest;
     }
 
-    template <typename P>
-    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA const uint8_t* Deserialize(O& obj, const uint8_t* dest)
     {
-        return DeserializeHelper(pulse, dest, std::make_index_sequence<sizeof...(names)>{});
+        return DeserializeHelper(obj, dest, std::make_index_sequence<sizeof...(names)>{});
     }
 
-    template <typename P, size_t...ids>
-    BAZ_CUDA size_t BytesRequired(const P& pulse)
+    template <typename O, size_t...ids>
+    BAZ_CUDA size_t BytesRequired(const O& obj)
     {
-        return groupEncoder_.BytesRequired(FieldAccessor<P, FieldNames>::template Get<names>(pulse)...);
+        return groupEncoder_.BytesRequired(FieldAccessor<O, FieldNames>::template Get<names>(obj)...);
     }
 
     static auto Params()
@@ -317,28 +317,28 @@ template <typename Encoding>
 using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
 
 template <typename... GroupEncoders>
-struct PulseEncoder
+struct ObjectEncoder
 {
     // The nominal number of bytes we expect to use to serialize this group,
     // neglecting the effects from any overflow mechanisms
     static constexpr size_t nominalBytes = (0 + ... + GroupEncoders::nominalBytes);
 
-    template <typename P>
-    BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA uint8_t* Serialize(const O& obj, uint8_t* dest)
     {
-        ((dest = data_.template Get<GroupEncoders>().Serialize(pulse, dest)), ...);
+        ((dest = data_.template Get<GroupEncoders>().Serialize(obj, dest)), ...);
         return dest;
     }
-    template <typename P>
-    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA const uint8_t* Deserialize(O& obj, const uint8_t* dest)
     {
-        ((dest = data_.template Get<GroupEncoders>().Deserialize(pulse, dest)), ...);
+        ((dest = data_.template Get<GroupEncoders>().Deserialize(obj, dest)), ...);
         return dest;
     }
-    template <typename P>
-    BAZ_CUDA size_t BytesRequired(const P& pulse)
+    template <typename O>
+    BAZ_CUDA size_t BytesRequired(const O& obj)
     {
-        return (0 + ... + data_.template Get<GroupEncoders>().BytesRequired(pulse));
+        return (0 + ... + data_.template Get<GroupEncoders>().BytesRequired(obj));
     }
 
     BAZ_CUDA void Reset()
@@ -367,7 +367,7 @@ struct GenerateGroups;
 template <typename... ProcessedEncodings,
           typename ProgressEncoding>
 struct GenerateGroups<Pack<ProcessedEncodings...>, ProgressEncoding> {
-    using T = PulseEncoder<GroupToEncoder_t<ProcessedEncodings>..., GroupToEncoder_t<ProgressEncoding>>;
+    using T = ObjectEncoder<GroupToEncoder_t<ProcessedEncodings>..., GroupToEncoder_t<ProgressEncoding>>;
 };
 
 template <typename... ProcessedGroups,
@@ -399,8 +399,8 @@ struct GenerateGroups<Pack<ProcessedGroups...>, FieldGroup<currBits, CurrFields.
 template <auto name, typename Signed, typename Trans, typename Serial>
 using Field = detail::Field<name, Signed, Trans, Serial>;
 template <typename...Fields>
-using PulseToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
+using ObjectToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
 
 }}
 
-#endif //PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
+#endif //PACBIO_BAZIO_ENCODING_OBJECt_TO_BAZ_H

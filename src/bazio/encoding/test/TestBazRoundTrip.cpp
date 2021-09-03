@@ -27,7 +27,7 @@
 
 #include <bazio/BazEventData.h>
 #include <bazio/DataParsing.h>
-#include <bazio/encoding/PulseToBaz.h>
+#include <bazio/encoding/ObjectToBaz.h>
 #include <bazio/encoding/test/TestingPulse.h>
 
 using namespace PacBio::BazIO;
@@ -41,7 +41,7 @@ constexpr std::array<char, 4> charMap {'A', 'C', 'G', 'T'};
 
 TEST(BazRoundTrip, KestrelLosslessCompact)
 {
-    using Serializer = PulseToBaz<
+    using Serializer = ObjectToBaz<
         Field<PacketFieldName::Label,
               StoreSigned_t<false>,
               Transform<NoOp>,
@@ -111,7 +111,7 @@ TEST(BazRoundTrip, KestrelLosslessCompact)
 TEST(BazRoundTrip, KestrelLosslessSimple)
 {
 
-    using Serializer = PulseToBaz<
+    using Serializer = ObjectToBaz<
         Field<PacketFieldName::Label,
               StoreSigned_t<false>,
               Transform<NoOp>,

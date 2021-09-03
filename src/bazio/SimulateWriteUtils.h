@@ -41,7 +41,7 @@
 #include <bazio/encoding/Types.h>
 #include <bazio/writing/BazAggregator.h>
 #include <bazio/writing/BazWriter.h>
-#include <bazio/encoding/PulseToBaz.h>
+#include <bazio/encoding/ObjectToBaz.h>
 #include <bazio/encoding/test/TestingPulse.h>
 
 namespace PacBio {
