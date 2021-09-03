@@ -34,9 +34,6 @@
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 
 #include <common/cuda/memory/ManagedAllocations.h>
-#include <common/DataGenerators/BatchGenerator.h>
-#include <common/DataGenerators/PicketFenceGenerator.h>
-#include <common/ZmwDataManager.h>
 
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>

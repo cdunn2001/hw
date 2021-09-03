@@ -55,6 +55,7 @@ target_link_libraries(BaselineTests
     libProtoCommon
     libGtest
     libMongoBasecallerTraceAnalysis 
+    libAppModules
 )
 
 target_include_directories(BaselineTests

@@ -5,15 +5,15 @@
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
-#include <common/ZmwDataManager.h>
-#include <common/DataGenerators/SawtoothGenerator.h>
+#include <appModules/SimulatedDataSource.h>
 
 #include <ExtremaFilter.cuh>
 #include <ExtremaFilterKernels.cuh>
 
+using namespace PacBio::Application;
 using namespace PacBio::Cuda;
-using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::DataSource;
 using namespace PacBio::Mongo::Data;
 
 namespace {
@@ -21,8 +21,7 @@ namespace {
 void ValidateData(TraceBatch<int16_t>& batch,
                   size_t filterWidth,
                   size_t sawtoothHeight,
-                  size_t startFrame,
-                  const DataManagerParams&)
+                  size_t startFrame)
 {
     for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
     {
@@ -46,134 +45,81 @@ void ValidateData(TraceBatch<int16_t>& batch,
 
 }
 
-TEST(MaxFilterTest, GlobalMemoryMax)
+enum class TestTypes { Global, Shared, Local };
+
+struct ExtremaFilterTests : testing::TestWithParam<TestTypes> {};
+
+TEST_P(ExtremaFilterTests, Max)
 {
     static constexpr int laneWidth = 64;
+    static constexpr int framesPerBlock = 64;
+    static constexpr int lanesPerBatch = 4;
+    static constexpr int numZmw = 16*64;
+    static constexpr int numFrames = 256;
     static constexpr int gpuBlockThreads = laneWidth/2;
     static constexpr int FilterWidth = 7;
     static constexpr int SawtoothHeight = 25;
 
-    auto params = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(16)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(64);
+    SawtoothGenerator::Config sawCfg;
+    sawCfg.minAmp = 0;
+    sawCfg.maxAmp = SawtoothHeight;
+    sawCfg.periodFrames = SawtoothHeight;
+    auto generator = std::make_unique<SawtoothGenerator>(sawCfg);
+
+    SimulatedDataSource::SimConfig simCfg(numZmw, numFrames);
+
+    SimulatedDataSource source(numZmw,
+                               simCfg,
+                               lanesPerBatch,
+                               framesPerBlock,
+                               std::move(generator));
 
     using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
+    for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), lanesPerBatch, 0);
     }
 
-    ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
+    for (const auto& batch : source.AllBatches())
     {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
+        auto firstFrame = batch.GetMeta().FirstFrame();
+        auto batchIdx = batch.GetMeta().PoolId();
 
-        const auto& launcher = PBLauncher(MaxGlobalFilter<gpuBlockThreads, FilterWidth>,
-                                        params.kernelLanes, gpuBlockThreads);
-        launcher(in,
+        auto testFunc = [](){
+            switch (GetParam())
+            {
+            case TestTypes::Global:
+                return MaxGlobalFilter<gpuBlockThreads, FilterWidth>;
+            case TestTypes::Shared:
+                return MaxSharedFilter<gpuBlockThreads, FilterWidth>;
+            case TestTypes::Local:
+                return MaxLocalFilter<gpuBlockThreads, FilterWidth>;
+            default:
+                throw PBException("Missing handler for test case enum");
+            }
+        }();
+
+        const auto& launcher = PBLauncher(testFunc,lanesPerBatch, gpuBlockThreads);
+
+        auto out = TraceBatch<int16_t>(batch.GetMeta(),
+                                       batch.StorageDims(),
+                                       SyncDirection::HostReadDeviceWrite,
+                                       SOURCE_MARKER());
+        launcher(batch,
                  filterData[batchIdx],
                  out);
 
-        ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
-
-        manager.ReturnBatch(std::move(data));
+        ValidateData(out, FilterWidth, SawtoothHeight, firstFrame);
     }
 }
 
-TEST(MaxFilterTest, SharedMemoryMax)
-{
-    static constexpr int laneWidth = 64;
-    static constexpr int gpuBlockThreads = laneWidth/2;
-    static constexpr int FilterWidth = 7;
-    static constexpr int SawtoothHeight = 25;
-
-    auto params = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(16)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(64);
-
-    using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
-    std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
-    {
-        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
-    }
-
-    ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
-    {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
-
-        const auto& launcher = PBLauncher(MaxSharedFilter<gpuBlockThreads, FilterWidth>,
-                                        params.kernelLanes, gpuBlockThreads);
-        launcher(in,
-                 filterData[batchIdx],
-                 out);
-
-        ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
-
-        manager.ReturnBatch(std::move(data));
-    }
-}
-
-TEST(MaxFilterTest, LocalMemoryMax)
-{
-    static constexpr int laneWidth = 64;
-    static constexpr int gpuBlockThreads = laneWidth/2;
-    static constexpr int FilterWidth = 7;
-    static constexpr int SawtoothHeight = 25;
-
-    auto params = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(16)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(64);
-
-    using Filter = ExtremaFilter<gpuBlockThreads, FilterWidth>;
-    std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; ++i)
-    {
-        filterData.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
-    }
-
-    ZmwDataManager<int16_t> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
-    {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
-
-        const auto& launcher = PBLauncher(MaxLocalFilter<gpuBlockThreads, FilterWidth>,
-                                        params.kernelLanes, gpuBlockThreads);
-        launcher(in,
-                 filterData[batchIdx],
-                 out);
-
-        ValidateData(out, FilterWidth, SawtoothHeight, firstFrame, params);
-
-        manager.ReturnBatch(std::move(data));
-    }
-}
+INSTANTIATE_TEST_SUITE_P(,
+                         ExtremaFilterTests,
+                         testing::Values(TestTypes::Global, TestTypes::Shared, TestTypes::Local),
+                         [](const testing::TestParamInfo<TestTypes>& info) {
+                             if (info.param == TestTypes::Global) return "Global";
+                             if (info.param == TestTypes::Shared) return "Shared";
+                             if (info.param == TestTypes::Local) return "Local";
+                             return "NameError";
+                         });
