@@ -407,9 +407,16 @@ private:
     BlockCircularBuffer<blockThreads, lag> circularBuffer;
 };
 
+struct SubtractParams
+{
+    PBHalf2 cSigmaBias;
+    PBHalf2 cMeanBias;
+    PBHalf2 scale;
+};
 template <size_t blockThreads, size_t lag>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
                                  size_t stride,
+                                 SubtractParams sParams,
                                  Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
@@ -420,11 +427,6 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     stats.Reset();
 
     auto localLatent = latent[blockIdx.x].GetLocal();
-
-    // For bias estimate
-    // TODO: these need to be set consistent with filter widths
-    PBHalf2 cSigmaBias(2.44f);
-    PBHalf2 cMeanBias(0.5f);
 
     const size_t numFrames = out.NumFrames();
 
@@ -439,15 +441,15 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     for (int i = 0; i < inputCount; ++i)
     {
         auto baseline = (PBHalf2(upperZmw[i]) + PBHalf2(lowerZmw[i])) / PBHalf2(2.0f);
-        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / cSigmaBias);
-        auto frameBiasEstimate = cMeanBias * sigma;
+        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / sParams.cSigmaBias);
+        auto frameBiasEstimate = sParams.cMeanBias * sigma;
 
         auto start = i*stride;
         auto end = (i+1)*stride;
         for (int j = start; j < end; ++j)
         {
             auto raw = PBHalf2(inZmw[j]);
-            auto val = raw - baseline - frameBiasEstimate;
+            auto val = (raw - baseline - frameBiasEstimate) * sParams.scale;
             localLatent.ProcessFrame(raw, val, stats);
 
             outZmw[j] = ToShort(val);
@@ -504,10 +506,10 @@ class ComposedFilter
                                               short val,
                                               Memory::StashableAllocRegistrar* registrar)
     {
-#define ReturnIf(s, w)                                                   \
-    if (s == stride && width == w)                                                                                     \
-        return std::make_unique<FilterStageImpl<FilterType<blockThreads, w>, s, blockThreads>>( \
-            marker, numLanes, val, registrar);
+    #define ReturnIf(s, w)                                                                          \
+        if (s == stride && width == w)                                                              \
+            return std::make_unique<FilterStageImpl<FilterType<blockThreads, w>, s, blockThreads>>( \
+                marker, numLanes, val, registrar);
 
         ReturnIf(1, 7);
         ReturnIf(1, 9);
@@ -536,6 +538,11 @@ public:
     {
         const auto& widths = params.Widths();
         const auto& strides = params.Strides();
+
+        sParams_.cMeanBias = params.MeanBias();
+        sParams_.cSigmaBias = params.SigmaBias();
+        // TODO this needs to be plumbed through properly still
+        sParams_.scale = 1.0f;
 
         fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});;
 
@@ -569,7 +576,7 @@ public:
 
         const auto& Subtract = PBLauncher(
             SubtractBaseline<blockThreads, lag>, numLanes_, blockThreads);
-        Subtract(input, fullStride_, latent, workspace1, workspace2, output, stats);
+        Subtract(input, fullStride_, sParams_, latent, workspace1, workspace2, output, stats);
     }
 
 private:
@@ -598,6 +605,7 @@ private:
     Memory::DeviceOnlyArray<LatentBaselineData> latent;
     size_t numLanes_;
     size_t fullStride_;
+    SubtractParams sParams_;
 };
 
 }}
