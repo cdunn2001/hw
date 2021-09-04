@@ -45,25 +45,29 @@ set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 include(pacbio-gtest)
 
-add_executable(BaselineTests
+set(testExec BaselineTests)
+
+add_executable(${testExec}
     test/testExtremaFilter.cu
     test/testBaselineFilter.cu
     test/testCircularBuffer.cu
 )
 
-target_link_libraries(BaselineTests
+target_link_libraries(${testExec}
     libProtoCommon
     libGtest
     libMongoBasecallerTraceAnalysis 
     libAppModules
 )
 
-target_include_directories(BaselineTests
+target_include_directories(${testExec}
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(BaselineTests
+target_link_libraries(${testExec}
     libGtestWithMain)
+
+add_test(${testExec} ${testExec} -- gtest_output=xml:${testExec}.xml)
 
 set_target_properties(BaselineTests PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineTests PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
