@@ -2,6 +2,7 @@
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
 #include <numeric>
+
 #include "BaselineFilter.cuh"
 #include "BlockCircularBuffer.cuh"
 #include "LocalCircularBuffer.cuh"
@@ -10,11 +11,11 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
+
+#include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/TraceBatch.h>
-
-#include <basecaller/traceAnalysis/BaselinerParams.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -460,16 +461,21 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     latent[blockIdx.x].StoreLocal(localLatent);
 }
 
+// Virtual interface for an individual filter stage, allowing
+// us to type erase the template parameters describing the
+// filter strides/widths involved
 class FilterStage
 {
 public:
-    virtual void
-    RunFilter(const Mongo::Data::BatchData<int16_t>& in, int numFrames, Mongo::Data::BatchData<int16_t>& out) = 0;
+    virtual void RunFilter(const Mongo::Data::BatchData<int16_t>& in,
+                           int numFrames,
+                           Mongo::Data::BatchData<int16_t>& out) = 0;
     virtual size_t Stride() const = 0;
 
     virtual ~FilterStage() = default;
 };
 
+// Concrete implementation with full template information
 template <typename Filter, size_t stride, size_t blockThreads>
 class FilterStageImpl : public FilterStage
 {
@@ -481,11 +487,13 @@ public:
         : filterData_(registrar, marker, numLanes, val)
     {}
 
-    void
-    RunFilter(const Mongo::Data::BatchData<int16_t>& in, int numFrames, Mongo::Data::BatchData<int16_t>& out) override
+    void RunFilter(const Mongo::Data::BatchData<int16_t>& in,
+                   int numFrames,
+                   Mongo::Data::BatchData<int16_t>& out) override
     {
-        const auto& launcher = PBLauncher(
-            StridedFilter<blockThreads, stride, Filter>, filterData_.Size(), blockThreads);
+        const auto& launcher = PBLauncher(StridedFilter<blockThreads, stride, Filter>,
+                                          filterData_.Size(),
+                                          blockThreads);
         launcher(in, filterData_, numFrames, out);
     }
 
@@ -498,6 +506,10 @@ private:
 template <size_t blockThreads, size_t lag>
 class ComposedFilter
 {
+    // Dispatch function, to elevate things from runtime to compile time
+    // values.  If an unexpected runtime value comes through an exception
+    // will be thrown, which realy just means that another template
+    // instantiation needs to be made
     template <template <size_t, size_t> class FilterType>
     std::unique_ptr<FilterStage> CreateFilter(size_t width,
                                               size_t stride,
@@ -506,21 +518,26 @@ class ComposedFilter
                                               short val,
                                               Memory::StashableAllocRegistrar* registrar)
     {
-    #define ReturnIf(s, w)                                                                          \
+        // I'm not sure of a better way to do things, but the provided macro allows
+        // us to set up an if chain that returns the template instantiation that
+        // corresponds to the requested parameters.  Without the macro we'd be more
+        // susceptible to bugs where the hard values in the if conditional don't match
+        // the values in the return type
+    #define ReturnIfMatches(s, w)                                                                   \
         if (s == stride && width == w)                                                              \
             return std::make_unique<FilterStageImpl<FilterType<blockThreads, w>, s, blockThreads>>( \
                 marker, numLanes, val, registrar);
 
-        ReturnIf(1, 7);
-        ReturnIf(1, 9);
-        ReturnIf(1, 11);
-        ReturnIf(2, 7);
-        ReturnIf(2, 9);
-        ReturnIf(2, 11);
-        ReturnIf(2, 17);
-        ReturnIf(8, 17);
-        ReturnIf(8, 31);
-        ReturnIf(8, 61);
+        ReturnIfMatches(1, 7);
+        ReturnIfMatches(1, 9);
+        ReturnIfMatches(1, 11);
+        ReturnIfMatches(2, 7);
+        ReturnIfMatches(2, 9);
+        ReturnIfMatches(2, 11);
+        ReturnIfMatches(2, 17);
+        ReturnIfMatches(8, 17);
+        ReturnIfMatches(8, 31);
+        ReturnIfMatches(8, 61);
 
         throw PBException("Unsupported and unexpected baseline filter stide/width combo");
     }
@@ -557,10 +574,12 @@ public:
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
     // not do the actual baseline subtraction, nor does it do any bias corrections
-    __host__ void
-    RunComposedFilter(const TraceBatch& input, TraceBatch& output, BatchData& workspace1, BatchData& workspace2)
+    __host__ void RunComposedFilter(const TraceBatch& input,
+                                    TraceBatch& output,
+                                    BatchData& workspace1,
+                                    BatchData& workspace2)
     {
-        RunMorpho(input, output, workspace1, workspace2);
+        RunLowerUpper(input, output, workspace1, workspace2);
 
         const auto& average = PBLauncher(AverageAndExpand<blockThreads>, numLanes_, blockThreads);
         average(workspace1, workspace2, output, fullStride_);
@@ -572,15 +591,26 @@ public:
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        RunMorpho(input, output, workspace1, workspace2);
+        RunLowerUpper(input, output, workspace1, workspace2);
 
-        const auto& Subtract = PBLauncher(
-            SubtractBaseline<blockThreads, lag>, numLanes_, blockThreads);
-        Subtract(input, fullStride_, sParams_, latent, workspace1, workspace2, output, stats);
+        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, lag>,
+                                          numLanes_,
+                                          blockThreads);
+        Subtract(input,
+                 fullStride_,
+                 sParams_,
+                 latent,
+                 workspace1,
+                 workspace2,
+                 output,
+                 stats);
     }
 
 private:
-    __host__ void RunMorpho(const TraceBatch& input, TraceBatch& output, BatchData& workspace1, BatchData& workspace2)
+    __host__ void RunLowerUpper(const TraceBatch& input,
+                                TraceBatch& output,
+                                BatchData& workspace1,
+                                BatchData& workspace2)
     {
         uint64_t numFrames = input.NumFrames();
 
@@ -610,4 +640,4 @@ private:
 
 }}
 
-#endif  // CUDA_BASELINE_FILTER_KERNELS_CUH
+#endif //CUDA_BASELINE_FILTER_KERNELS_CUH

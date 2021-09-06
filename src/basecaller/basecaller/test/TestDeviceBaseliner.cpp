@@ -66,6 +66,7 @@ PB_CONFIG(TestConfig);
     static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::FilterTypes type)
     {
         Json::Value json;
+        json["baselineConfig"]["Method"] = "DeviceMultiScale";
         json["baselineConfig"]["Filter"] = type.toString();
         TestConfig cfg{json};
 
@@ -78,7 +79,7 @@ PB_CONFIG(TestConfig);
 TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::MultiScaleLarge);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -90,7 +91,7 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
     const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
     DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<DeviceMultiScaleBaseliner>> baseliners;
-    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(baselinerConfig.Filter);
 
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
@@ -185,7 +186,7 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
 TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::MultiScaleLarge);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -197,7 +198,7 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
     const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
     DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
     std::vector<std::unique_ptr<DeviceMultiScaleBaseliner>> baseliners;
-    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    auto params = PacBio::Mongo::Basecaller::FilterParamsLookup(baselinerConfig.Filter);
 
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {

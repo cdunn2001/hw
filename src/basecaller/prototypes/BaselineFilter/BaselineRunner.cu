@@ -173,7 +173,12 @@ void RunMultipleBaselineFilter(
     {
         work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
         work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-        filters.emplace_back(Mongo::Basecaller::FilterParamsLookup(Data::BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium), SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        using namespace PacBio::Mongo::Basecaller;
+        using namespace PacBio::Mongo::Data;
+        filters.emplace_back(FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium),
+                             SOURCE_MARKER(),
+                             dataParams.kernelLanes,
+                             0);
     }
 
     auto tmp = [dataParams, &work1, &work2, &filters, &full]

@@ -62,10 +62,11 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 
     PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
 
-    static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::MethodName method)
+    static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::FilterTypes type)
     {
         Json::Value json;
-        json["baselineConfig"]["Method"] = method.toString();
+        json["baselineConfig"]["Method"] = "HostMultiScale";
+        json["baselineConfig"]["Filter"] = type.toString();
         TestConfig cfg{json};
 
         return cfg.baselineConfig;
@@ -77,7 +78,8 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 TEST(TestHostNoOpBaseliner, Run)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp);
+    auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    baselinerConfig.Method = BasecallerBaselinerConfig::MethodName::NoOp;
     HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
 
     const uint32_t numZmwLanes = 4;
@@ -163,7 +165,7 @@ TEST(TestHostNoOpBaseliner, Run)
 TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::HostMultiScale);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -271,7 +273,7 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
 TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::HostMultiScale);
+    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
