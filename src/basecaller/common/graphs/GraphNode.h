@@ -56,6 +56,12 @@
 //        parameter.  This should be a SmartEnum, with each node being associated with
 //        an enum value.  These enums will be used in automatic performance monitoring
 //        and reporting
+//
+//  Note: All Nodes have a FlushNode function, which can be used to recursively traverse
+//        a subtree and do some final bits of work in each node.  It's completely up
+//        to the individual implementations as to what gets done, but the primary
+//        motivation is to handle final cleanup/processing/dumping of any latent data
+//        left over in various nodes once the main compute loop has terminated.
 
 #ifndef PACBIO_GRAPHS_NODE_H
 #define PACBIO_GRAPHS_NODE_H
@@ -82,6 +88,7 @@ namespace detail {
 template <typename T>
 struct WrappedVal
 {
+    uint32_t tag = 0;
     std::shared_ptr<T> val;
 };
 
@@ -108,6 +115,7 @@ public:
     virtual float MaxDutyCycle() const = 0;
     virtual size_t ConcurrencyLimit() const = 0;
 
+    virtual void FlushNode() = 0;
 protected:
 
     detail::NodeMonitor monitor_;
@@ -157,12 +165,12 @@ public:
     template <typename T>
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {
-        if (hasChild_ && !std::is_const<Out>::value)
+        if (!children_.empty() && !std::is_const<Out>::value)
             throw PBException("Cannot have multiple outputs from a graph node if the output type is not const!");
 
         auto * ret = graph_->AddNode(std::move(body), stage);
         graph_->MakeEdge(*this, *ret);
-        hasChild_ = true;
+        children_.push_back(ret);
         return ret;
     }
 
@@ -173,6 +181,22 @@ public:
         WrappedIn tmp;
         tmp.val = std::make_shared<In>(std::move(in));
         if (!node.try_put(tmp)) throw PBException("Failure to launch graph task");
+    }
+
+    void FlushNode() override
+    {
+        auto tokens = body_->GetFlushTokens();
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " with " << tokens.size() << " jobs.";
+        WrappedIn in;
+        for (auto tag : tokens)
+        {
+            in.tag = tag;
+            if (!node.try_put(in)) throw PBException("Failure to launch graph task");
+        }
+        graph_->Synchronize();
+        for (auto* child : children_)
+            child->FlushNode();
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " done.";
     }
 
 private:
@@ -207,10 +231,13 @@ private:
     WrappedOut Run(WrappedIn in)
     {
         auto tmp = this->monitor_.StartScope();
-        if (!hasChild_)
+        if (children_.empty())
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
         WrappedOut out;
-        out.val = std::make_shared<Out>(body_->Process(*in.val));
+        if (in.val)
+            out.val = std::make_shared<Out>(body_->Process(*in.val));
+        else
+            out.val = std::make_shared<Out>(body_->Flush(in.tag));
         return out;
     }
 
@@ -218,17 +245,20 @@ private:
     WrappedOut Run(WrappedIn in)
     {
         auto tmp = this->monitor_.StartScope();
-        if (!hasChild_)
+        if (children_.empty())
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
         WrappedOut out;
-        out.val = std::make_shared<Out>(body_->Process(std::move(*in.val)));
+        if (in.val)
+            out.val = std::make_shared<Out>(body_->Process(std::move(*in.val)));
+        else
+            out.val = std::make_shared<Out>(body_->Flush(in.tag));
         return out;
     }
 
     GraphManager<PerfEnum>* graph_;
     std::unique_ptr<TransformBody<In, Out>> body_;
     tbb::flow::function_node<WrappedIn, WrappedOut> node;
-    std::atomic_bool hasChild_{false};
+    std::vector<INode<PerfEnum>*> children_;
 };
 
 template <typename In, typename Out, typename PerfEnum>
@@ -238,12 +268,12 @@ public:
     template <typename T>
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {
-        if (hasChild_ && !std::is_const<Out>::value)
+        if (!children_.empty() && !std::is_const<Out>::value)
             throw PBException("Cannot have multiple outputs from a graph node if the output type is not const!");
 
         auto * ret = graph_->AddNode(std::move(body), stage);
         graph_->MakeEdge(*this, *ret);
-        hasChild_ = true;
+        children_.push_back(ret);
         return ret;
     }
 
@@ -254,6 +284,22 @@ public:
         WrappedIn tmp;
         tmp.val = std::make_shared<In>(std::move(in));
         if (!node.try_put(tmp)) throw PBException("Failure to launch graph task");
+    }
+
+    void FlushNode() override
+    {
+        auto tokens = body_->GetFlushTokens();
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " with " << tokens.size() << " jobs.";
+        WrappedIn in;
+        for (auto tag : tokens)
+        {
+            in.tag = tag;
+            if (!node.try_put(in)) throw PBException("Failure to launch graph task");
+        }
+        graph_->Synchronize();
+        for (auto* child : children_)
+            child->FlushNode();
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " done.";
     }
 
 private:
@@ -288,10 +334,13 @@ private:
     void Run(WrappedIn in, Output& output)
     {
         auto tmp = this->monitor_.StartScope();
-        if (!hasChild_)
+        if (children_.empty())
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
-        body_->Process(*in.val);
+        if (in.val)
+            body_->Process(*in.val);
+        else
+            body_->Flush(in.tag);
         body_->FlushOutput([&output](auto&& val)
                                {
                                    WrappedOut wrapped;
@@ -304,10 +353,13 @@ private:
     void Run(WrappedIn in, Output& output)
     {
         auto tmp = this->monitor_.StartScope();
-        if (!hasChild_)
+        if (children_.empty())
             throw PBException("Output of TransformNode is ignored, graph is incomplete");
 
-        body_->Process(std::move(*in.val));
+        if (in.val)
+            body_->Process(std::move(*in.val));
+        else
+            body_->Flush(in.tag);
         body_->FlushOutput([&output](auto&& val)
                            {
                                WrappedOut wrapped;
@@ -319,7 +371,7 @@ private:
     GraphManager<PerfEnum>* graph_;
     std::unique_ptr<MultiTransformBody<In, Out>> body_;
     tbb::flow::multifunction_node<WrappedIn, std::tuple<WrappedOut>> node;
-    std::atomic_bool hasChild_{false};
+    std::vector<INode<PerfEnum>*> children_;
 };
 
 template <typename In, typename PerfEnum>
@@ -331,6 +383,20 @@ public:
         WrappedIn tmp;
         tmp.val = std::make_shared<In>(std::move(in));
         if (!node.try_put(tmp)) throw PBException("Failure to launch graph task");
+    }
+
+    void FlushNode() override
+    {
+        auto tokens = body_->GetFlushTokens();
+        WrappedIn in;
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " with " << tokens.size() << " jobs.";
+        for (auto tag : tokens)
+        {
+            in.tag = tag;
+            if (!node.try_put(in)) throw PBException("Failure to launch graph task");
+        }
+        graph_->Synchronize();
+        PBLOG_INFO << "Flushing graph node " << this->stage_.toString() << " done.";
     }
 
 private:
@@ -361,14 +427,20 @@ private:
     void Run(WrappedIn in)
     {
         auto tmp = this->monitor_.StartScope();
-        body_->Process(*in.val);
+        if (in.val)
+            body_->Process(*in.val);
+        else
+            body_->Flush(in.tag);
     }
 
     template <typename T = In, std::enable_if_t<!std::is_const<T>::value, int> = 0>
     void Run(WrappedIn in)
     {
         auto tmp = this->monitor_.StartScope();
-        body_->Process(std::move(*in.val));
+        if (in.val)
+            body_->Process(std::move(*in.val));
+        else
+            body_->Flush(in.tag);
     }
 
     GraphManager<PerfEnum>* graph_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020,2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -51,6 +51,12 @@
 //        for the implementation.  That's not an intentional part of the design,
 //        and this API should be able to diverge significantly away from that of tbb,
 //        and even stop using tbb as an implementation.
+//
+//  Note: In order to handle any latent data/processing left in a given node after
+//        the usual calls to `Process` functions, override the optional GetFlushTokens()
+//        and Flush() virtual functions.  For each token returned by GetFlushTokens,
+//        Flush will be called.  Different tokens may potentially be handled concurrently
+//        by different threads.
 
 #ifndef PACBIO_GRAPHS_NODE_BODY_H
 #define PACBIO_GRAPHS_NODE_BODY_H
@@ -59,6 +65,9 @@
 #include <deque>
 #include <mutex>
 #include <type_traits>
+#include <vector>
+
+#include <pacbio/PBException.h>
 
 namespace PacBio {
 namespace Graphs {
@@ -113,6 +122,20 @@ struct TransformBody : public IGraphNodeBody
     // the output to be a non-const value type, and the input to be a const
     // reference
     virtual std::remove_const_t<Out> Process(detail::ref_if_const_t<In> in) = 0;
+
+    // Override these two functions if you want non-trivial
+    // flush functionality for individual graph nodes.  This is
+    // useful if your nodes contain latent/state data that you
+    // want output/process still once the main processing is done.
+    //
+    // For every token returned by GetFlushTokens, Flush will be called
+    // with that token.  Different tokens may potentially be handled
+    // concurrently by different worker threads
+    virtual std::remove_const_t<Out> Flush(uint32_t tok)
+    {
+        throw PBException("Missing overload for virtual Flush function");
+    };
+    virtual std::vector<uint32_t> GetFlushTokens() { return {}; }
 };
 
 // Single input and no output node
@@ -127,6 +150,20 @@ struct LeafBody : public IGraphNodeBody
     // the output to be a non-const value type, and the input to be a const
     // reference
     virtual void Process(detail::ref_if_const_t<In> in) = 0;
+
+    // Override these two functions if you want non-trivial
+    // flush functionality for individual graph nodes.  This is
+    // useful if your nodes contain latent/state data that you
+    // want output/process still once the main processing is done.
+    //
+    // For every token returned by GetFlushTokens, Flush will be called
+    // with that token.  Different tokens may potentially be handled
+    // concurrently by different worker threads
+    virtual void Flush(uint32_t tok)
+    {
+        throw PBException("Missing overload for virtual Flush function");
+    };
+    virtual std::vector<uint32_t> GetFlushTokens() { return {}; }
 };
 
 // Transformation node capable of generating any number (including 0)

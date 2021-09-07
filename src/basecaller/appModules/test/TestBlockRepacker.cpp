@@ -348,7 +348,7 @@ TEST_P(TestBlockRepacker, ParamSweep)
     {
         repacker->ProcessInput(std::move(packet));
     }
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_TRUE(validator.AllCorrect());
     validator.Reset();
 
@@ -356,7 +356,7 @@ TEST_P(TestBlockRepacker, ParamSweep)
     {
         repacker->ProcessInput(std::move(packet));
     }
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_TRUE(validator.AllCorrect());
     validator.Reset();
 
@@ -364,7 +364,7 @@ TEST_P(TestBlockRepacker, ParamSweep)
     {
         repacker->ProcessInput(std::move(packet));
     }
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_TRUE(validator.AllCorrect());
 }
 

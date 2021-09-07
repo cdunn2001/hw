@@ -92,12 +92,15 @@ decltype(auto) GetPort0(tbb::flow::multifunction_node<T1, T2>& node)
 // Any number of data can be inputed into the graph, by any number of threads, and
 // not all input need to use the same entry point.
 //
-// The Flush() function is provided to block the calling thread until all active computations
+// The Synchronize() function is provided to block the calling thread until all active computations
 // have finished.  Beware that when using in a multithreading context, nothing will prevent
-// other threads from adding more data, and causing the Flush() thread to stall longer.
+// other threads from adding more data, and causing the Synchronize() thread to stall longer.
+// Note: This is separate from the GraphNode::FlushNode function, which is used to recursively
+//       traverse a subtree of the graph and handles any final processing that needs to happen
+//       once the main compute loop has terminated
 //
-// FlushAndReport() does the same, but also produces a performance report, with statistics
-// gathered since the last time FlushAndReport() was called.
+// SynchronizeAndReport() does the same, but also produces a performance report, with statistics
+// gathered since the last time SynchronizeAndReport() was called.
 //
 // Destruction of this object will block until any active computations have completed
 // TODO: could potentially add an abort mechanism.
@@ -154,7 +157,7 @@ public:
     }
 
     // Wait for all tasks to finish
-    void Flush()
+    void Synchronize()
     {
         g.wait_for_all();
     }
@@ -170,9 +173,9 @@ public:
         float idlePercent;
         PerfEnum stage;
     };
-    std::vector<Report> FlushAndReport(double expectedDurationMS)
+    std::vector<Report> SynchronizeAndReport(double expectedDurationMS)
     {
-        Flush();
+        Synchronize();
 
         std::vector<Report> reports;
         reports.resize(graphNodes_.size());
@@ -202,7 +205,7 @@ public:
     {
         try
         {
-            Flush();
+            Synchronize();
         }
         catch(std::exception& e)
         {
