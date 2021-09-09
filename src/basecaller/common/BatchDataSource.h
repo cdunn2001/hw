@@ -255,12 +255,19 @@ public:
     }
 
 private:
-    void vStart() override
+    /// This class needed to implement vStart for some correctness guarantees.
+    /// Any children that need to do any work during the top level `Start` call
+    /// shall override this function instead.
+    virtual void vStartImpl() {}
+
+    void vStart() override final
     {
         // If we're already started, then we're currently being invoked by the
         // DataSourceRunner, but we've already previously called AllBatches or
         // AllChunks
         if(startedSelf_) throw PBException("Detected invalid use of DataSourceRunner");
+
+        vStartImpl();
     }
     bool startedSelf_ = false;
 };
