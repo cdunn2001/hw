@@ -87,9 +87,10 @@ namespace detail {
 ///    in a shared_ptr, both because TBB doesn't support move-only types,
 ///    and so that multiple threads can see/own the same piece of dat
 ///    in the event of one node having multiple children
-/// 2. A `flushToken` that was supplied by the graph node itsend and is
+/// 2. A `flushToken` that was supplied by the graph node itself and is
 ///    used to identify a piece of work when a graph node is being asked
 ///    to flush any latent data/computation that it holds on to internally.
+///    This field is only valid when val is empty
 ///
 /// Only one of these two values will be used at any given point, and
 /// this type will never be exposed externally
