@@ -648,7 +648,7 @@ private:
                         PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
                             inputNode->ProcessInput(std::move(batch));
-                        const auto& reports = graph.FlushAndReport(chunkDurationMS);
+                        const auto& reports = graph.SynchronizeAndReport(chunkDurationMS);
 
                         std::stringstream ss;
                         ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
@@ -691,7 +691,7 @@ private:
                     break;
                 }
             }
-            graph.Flush();
+            inputNode->FlushNode();
 
             PBLOG_INFO << "All chunks analyzed.";
             PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
