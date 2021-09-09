@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020,2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -80,30 +80,30 @@ decltype(auto) GetPort0(tbb::flow::multifunction_node<T1, T2>& node)
 
 } // detail
 
-// This class manages a collection of nodes that form a graph.  Calling AddNode()
-// with an IGraphNodeBody child will create a new graph node with no parents (i.e. a graph input)
-// The function will return a pointer to a graph node, upon which subsequent calls to
-// AddNode() can be made, forming a dependance chain.
-//
-// All node pointers returned by an AddNode() call are non owning.  They should be
-// kept around either only temporarily, if just used to form an execution dependancy
-// chain, or longer term if they are meant to serve as an actual input into the graph.
-//
-// Any number of data can be inputed into the graph, by any number of threads, and
-// not all input need to use the same entry point.
-//
-// The Synchronize() function is provided to block the calling thread until all active computations
-// have finished.  Beware that when using in a multithreading context, nothing will prevent
-// other threads from adding more data, and causing the Synchronize() thread to stall longer.
-// Note: This is separate from the GraphNode::FlushNode function, which is used to recursively
-//       traverse a subtree of the graph and handles any final processing that needs to happen
-//       once the main compute loop has terminated
-//
-// SynchronizeAndReport() does the same, but also produces a performance report, with statistics
-// gathered since the last time SynchronizeAndReport() was called.
-//
-// Destruction of this object will block until any active computations have completed
-// TODO: could potentially add an abort mechanism.
+/// This class manages a collection of nodes that form a graph.  Calling AddNode()
+/// with an IGraphNodeBody child will create a new graph node with no parents (i.e. a graph input)
+/// The function will return a pointer to a graph node, upon which subsequent calls to
+/// AddNode() can be made, forming a dependance chain.
+///
+/// All node pointers returned by an AddNode() call are non owning.  They should be
+/// kept around either only temporarily, if just used to form an execution dependancy
+/// chain, or longer term if they are meant to serve as an actual input into the graph.
+///
+/// Any number of data can be inputed into the graph, by any number of threads, and
+/// not all input need to use the same entry point.
+///
+/// The Synchronize() function is provided to block the calling thread until all active computations
+/// have finished.  Beware that when using in a multithreading context, nothing will prevent
+/// other threads from adding more data, and causing the Synchronize() thread to stall longer.
+/// Note: This is separate from the GraphNode::FlushNode function, which is used to recursively
+///       traverse a subtree of the graph and handles any final processing that needs to happen
+///       once the main compute loop has terminated
+///
+/// SynchronizeAndReport() does the same, but also produces a performance report, with statistics
+/// gathered since the last time SynchronizeAndReport() was called.
+///
+/// Destruction of this object will block until any active computations have completed
+/// TODO: could potentially add an abort mechanism.
 template <typename PerfEnum>
 class GraphManager
 {
@@ -121,27 +121,29 @@ public:
     GraphManager& operator=(const GraphManager&) = delete;
     GraphManager& operator=(GraphManager&&) = delete;
 
-    // Adds a new child node to this node using body as an implementation.
-    // Returns another graph node pointer (with input/output types matching body)
-    // that can be used to add yet more children nodes (unless body is a leaf)
-    // T is going to be a type of "graph node body" (note the static_assert below ensuring that).
-    // In particular T will be a child of:
-    // * TransformBody<In, Out>
-    // * MultiTransformBody<In, Out>
-    // * LeafBody<In>
-    //
-    // The return type will be a pointer to an actual GraphNode.
-    // That GraphNode will be the node that now owns the T handed in here and now
-    // The type of the GraphNode will correspond to the type of the "body" handed in
-    // (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>
-    //
-    // This is a non-owning pointer.  There are two reasons to keep it around:
-    // * The graph node types also have an AddNode function you can call,
-    //    when building up dependency chains in the graph
-    // * The graph nodes have a ProcessInput function you can call to drop
-    //   data into the graph for processing
-    // * If you don't want to do either of these things (e.g a leaf node),
-    //   or you are finished adding dependancies, you can just discard this pointer.
+    /// Adds a new node to this graph using body as an implementation.
+    ///
+    /// The return type will be a pointer to an actual GraphNode.
+    /// That GraphNode will be the node that now owns the T handed in here and now
+    /// The type of the GraphNode will correspond to the type of the "body" handed in
+    /// (e.g. a TransformBody<In, Out> will result in a pointer to a TransformNode<In, Out>
+    ///
+    /// This is a non-owning pointer.  There are two reasons to keep it around:
+    /// * The graph node types also have an AddNode function you can call,
+    ///    when building up dependency chains in the graph
+    /// * The graph nodes have a ProcessInput function you can call to drop
+    ///   data into the graph for processing
+    /// * If you don't want to do either of these things (e.g a leaf node),
+    ///   or you are finished adding dependancies, you can just discard this pointer.
+    ///
+    /// \param body a type of "graph node body" (guaranteed by a static assert in
+    ///             GraphManager::AddNode) In particular T will be a child of:
+    ///             * TransformBody<In, Out>
+    ///             * MultiTransformBody<In, Out>
+    ///             * LeafBody<In>
+    /// \param stage A PerfEnum label to be used when recording performance metrics
+    ///
+    /// \return a non-owning pointer to a graph node, as described above
     template <typename T>
     auto * AddNode(std::unique_ptr<T> body, PerfEnum stage)
     {
@@ -156,13 +158,12 @@ public:
         return ret;
     }
 
-    // Wait for all tasks to finish
+    /// Wait for all outstanding tasks to finish
     void Synchronize()
     {
         g.wait_for_all();
     }
 
-    // Wait for all tasks to finish, and generate a performance report
     struct Report
     {
         bool realtime;
@@ -173,6 +174,7 @@ public:
         float idlePercent;
         PerfEnum stage;
     };
+    /// Wait for all tasks to finish, and generate a performance report
     std::vector<Report> SynchronizeAndReport(double expectedDurationMS)
     {
         Synchronize();

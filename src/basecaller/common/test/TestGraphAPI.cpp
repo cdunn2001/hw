@@ -607,11 +607,11 @@ TEST(GraphAPI, FlushTransform)
     // At this stage, all of the nodes should have a copy of the data
     // in their "intermediate" vectors.
     ASSERT_EQ(transRef.intermediate.size(), vals.size());
-    ASSERT_EQ(transRef.done.size(), 0);
+    EXPECT_EQ(transRef.done.size(), 0);
     ASSERT_EQ(leafRef1.intermediate.size(),  vals.size());
-    ASSERT_EQ(leafRef1.done.size(),  0);
+    EXPECT_EQ(leafRef1.done.size(),  0);
     ASSERT_EQ(leafRef2.intermediate.size(),  vals.size());
-    ASSERT_EQ(leafRef2.done.size(),  0);
+    EXPECT_EQ(leafRef2.done.size(),  0);
 
     for (size_t i = 0; i < vals.size(); ++i)
     {
@@ -633,10 +633,10 @@ TEST(GraphAPI, FlushTransform)
         EXPECT_EQ(vals[i], transRef.done[i]);
     }
 
-    ASSERT_EQ(leafRef1.intermediate.size(),  vals.size()*2);
-    ASSERT_EQ(leafRef1.done.size(),  vals.size()*2);
-    ASSERT_EQ(leafRef2.intermediate.size(),  vals.size()*2);
-    ASSERT_EQ(leafRef2.done.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef1.intermediate.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef1.done.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef2.intermediate.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef2.done.size(),  vals.size()*2);
 }
 
 // Another transform, but this time since a multi-transform can
@@ -695,16 +695,16 @@ TEST(GraphAPI, FlushMultiTransform)
     // This time none of the data should have made it downstream
     // into the children
     ASSERT_EQ(multiTransRef.intermediate.size(), vals.size());
-    ASSERT_EQ(multiTransRef.done.size(), 0);
+    EXPECT_EQ(multiTransRef.done.size(), 0);
     for (size_t i = 0; i < vals.size(); ++i)
     {
         EXPECT_EQ(vals[i], multiTransRef.intermediate[i]);
     }
 
-    ASSERT_EQ(leafRef1.intermediate.size(), 0);
-    ASSERT_EQ(leafRef1.done.size(),  0);
-    ASSERT_EQ(leafRef2.intermediate.size(), 0);
-    ASSERT_EQ(leafRef2.done.size(),  0);
+    EXPECT_EQ(leafRef1.intermediate.size(), 0);
+    EXPECT_EQ(leafRef1.done.size(),  0);
+    EXPECT_EQ(leafRef2.intermediate.size(), 0);
+    EXPECT_EQ(leafRef2.done.size(),  0);
 
     // Now flushing will have pushed data downstream
     // to the children, as well as causing the children
@@ -716,10 +716,10 @@ TEST(GraphAPI, FlushMultiTransform)
         EXPECT_EQ(vals[i], multiTransRef.done[i]);
     }
 
-    ASSERT_EQ(leafRef1.intermediate.size(),  vals.size());
-    ASSERT_EQ(leafRef1.done.size(),  vals.size());
-    ASSERT_EQ(leafRef2.intermediate.size(),  vals.size());
-    ASSERT_EQ(leafRef2.done.size(),  vals.size());
+    EXPECT_EQ(leafRef1.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef1.done.size(),  vals.size());
+    EXPECT_EQ(leafRef2.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef2.done.size(),  vals.size());
 }
 
 } //anon
