@@ -561,7 +561,7 @@ public:
         // TODO this needs to be plumbed through properly still
         sParams_.scale = 1.0f;
 
-        fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});;
+        fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});
 
         lower_.push_back(CreateFilter<ErodeDilate>(widths[0], strides[0], marker, numLanes, val, registrar));
         upper_.push_back(CreateFilter<DilateErode>(widths[0], strides[0], marker, numLanes, val, registrar));
