@@ -88,6 +88,7 @@ public:
 
 private:
     Data::BasecallerBaselinerConfig::MethodName baselinerOpt_;
+    Data::BasecallerBaselinerConfig::FilterTypes baselinerType_;
     Data::BasecallerFrameLabelerConfig::MethodName frameLabelerOpt_;
     Data::BasecallerTraceHistogramConfig::MethodName histAccumOpt_;
     Data::BasecallerBaselineStatsAggregatorConfig::MethodName baselineStatsAggregatorOpt_;

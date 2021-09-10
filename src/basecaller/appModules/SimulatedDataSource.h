@@ -28,6 +28,8 @@
 
 #include <pacbio/datasource/DataSourceBase.h>
 
+#include <common/BatchDataSource.h>
+
 namespace PacBio {
 namespace Application {
 
@@ -43,7 +45,7 @@ public:
 // DataSource implementation for simulated data.  Actual data generation
 // is handled by the SignalGenerator handed in, with this class primarily
 // concerned with data replication and satisfying the DataSourceBase API
-class SimulatedDataSource : public DataSource::DataSourceBase
+class SimulatedDataSource : public Mongo::BatchDataSource
 {
 public:
     // Forward delaration for the class that will hold the generated data
@@ -69,6 +71,14 @@ public:
     SimulatedDataSource(size_t minZmw,
                         const SimConfig& sim,
                         DataSource::DataSourceBase::Configuration cfg,
+                        std::unique_ptr<SignalGenerator> generator);
+
+    // More streamlined ctor, to help facilitate more ergonometric
+    // testing code
+    SimulatedDataSource(size_t minZmw,
+                        const SimConfig& sim,
+                        size_t lanesPerPool,
+                        size_t framesPerChunk,
                         std::unique_ptr<SignalGenerator> generator);
 
     ~SimulatedDataSource();

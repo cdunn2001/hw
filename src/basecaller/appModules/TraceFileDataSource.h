@@ -34,10 +34,12 @@
 #include <pacbio/datasource/SensorPacketsChunk.h>
 #include <pacbio/tracefile/TraceFile.h>
 
+#include <common/BatchDataSource.h>
+
 namespace PacBio {
 namespace Application {
 
-class TraceFileDataSource : public DataSource::DataSourceBase
+class TraceFileDataSource : public Mongo::BatchDataSource
 {
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file

@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.20)
 project(CudaTemplate LANGUAGES CXX CUDA)
 
 add_library(libBaselineFilter STATIC
-    BaselineRunner.cu
-    BaselineRunner.h
     BaselineFilter.cu
     BaselineFilter.cuh
     BaselineFilterKernels.cu
@@ -33,33 +31,43 @@ set_target_properties(libBaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON
 
 add_executable(BaselineFilter
     main.cpp
+    BaselineRunner.cu
+    BaselineRunner.h
 )
 
 target_link_libraries(BaselineFilter
-    libBaselineFilter)
+    libBaselineFilter
+    libMongoBasecallerTraceAnalysis 
+)
 
 set_target_properties(BaselineFilter PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineFilter PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 include(pacbio-gtest)
 
-add_executable(BaselineTests
+set(testExec BaselineTests)
+
+add_executable(${testExec}
     test/testExtremaFilter.cu
     test/testBaselineFilter.cu
     test/testCircularBuffer.cu
 )
 
-target_link_libraries(BaselineTests
+target_link_libraries(${testExec}
     libProtoCommon
     libGtest
+    libMongoBasecallerTraceAnalysis 
+    libAppModules
 )
 
-target_include_directories(BaselineTests
+target_include_directories(${testExec}
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(BaselineTests
+target_link_libraries(${testExec}
     libGtestWithMain)
+
+add_test(${testExec} ${testExec} -- gtest_output=xml:${testExec}.xml)
 
 set_target_properties(BaselineTests PROPERTIES LINKER_LANGUAGE CUDA)
 set_target_properties(BaselineTests PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

@@ -4,16 +4,41 @@
 
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
-#include <common/ZmwDataManager.h>
-#include <common/DataGenerators/PicketFenceGenerator.h>
+
+#include <appModules/SimulatedDataSource.h>
+#include "pacbio/datasource/MallocAllocator.h"
 
 #include <BaselineFilter.cuh>
 #include <BaselineFilterKernels.cuh>
 
+using namespace PacBio::Application;
 using namespace PacBio::Cuda;
-using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::DataSource;
+using namespace PacBio::Mongo;
+using namespace PacBio::Mongo::Basecaller;
 using namespace PacBio::Mongo::Data;
+
+namespace {
+
+SimulatedDataSource CreateSource()
+{
+    static constexpr int lanesPerBatch = 4;
+    static constexpr int framesPerBlock = 512;
+    static constexpr int numZmw = 16*64;
+    static constexpr int numFrames = 2048;
+
+    PicketFenceGenerator::Config pickCfg;
+    pickCfg.generatePoisson = false;
+    pickCfg.baselineSignalLevel = 150;
+    auto generator = std::make_unique<PicketFenceGenerator>(pickCfg);
+
+    SimulatedDataSource::SimConfig simCfg(numZmw, numFrames);
+
+    return SimulatedDataSource(numZmw, simCfg, lanesPerBatch, framesPerBlock, std::move(generator));
+}
+
+}
 
 // Rough tests, that at least makes sure the baseline filter produces results in
 // the correct ballpark.  The baseline filter does not currently gracefully handle
@@ -21,48 +46,29 @@ using namespace PacBio::Mongo::Data;
 // hundred frames as they are not valid.
 TEST(BaselineFilterTest, GlobalMemory)
 {
-    static constexpr size_t laneWidth = 64;
-    static constexpr size_t gpuBlockThreads = laneWidth/2;
-
-    // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
-    // errors in the bookkeeping
-    auto dataParams = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(16)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(512);
-
-    auto picketParams = PicketFenceParams()
-            .NumSignals(1)
-            .BaselineSignalLevel(150);
-
+    static constexpr size_t gpuBlockThreads = laneSize/2;
+    auto source = CreateSource();
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
-    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    ZmwDataManager<int16_t> manager(dataParams,
-                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                  true);
-
-    while (manager.MoreData())
+    for (const auto& batch : source.AllBatches())
     {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
+        auto firstFrame = batch.GetMeta().FirstFrame();
+        auto batchIdx = batch.GetMeta().PoolId();
+        TraceBatch<int16_t> out(batch.GetMeta(),
+                                batch.StorageDims(),
+                                SyncDirection::HostReadDeviceWrite,
+                                SOURCE_MARKER());
 
         const auto& baseliner = PBLauncher(GlobalBaselineFilter<Filter>,
-                                         dataParams.kernelLanes,
-                                         gpuBlockThreads);
-        baseliner(in,
+                                           batch.LanesPerBatch(),
+                                           gpuBlockThreads);
+        baseliner(batch,
                   filterData[batchIdx],
                   out);
 
@@ -87,11 +93,8 @@ TEST(BaselineFilterTest, GlobalMemory)
                     // to dig into this just yet.
                     EXPECT_NEAR(block(j,k), 230, 20);
                 }
-
             }
         }
-
-        manager.ReturnBatch(std::move(data));
     }
 }
 
@@ -99,66 +102,43 @@ TEST(BaselineFilterTest, GlobalMemory)
 // implementations produce identical results
 TEST(BaselineFilterTest, SharedMemory)
 {
-    static constexpr size_t laneWidth = 64;
-    static constexpr size_t gpuBlockThreads = laneWidth/2;
-
-    // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
-    // errors in the bookkeeping
-    auto dataParams = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(16)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(512);
-
-    auto picketParams = PicketFenceParams()
-            .NumSignals(1)
-            .BaselineSignalLevel(150);
-
+    static constexpr size_t gpuBlockThreads = laneSize/2;
+    auto source = CreateSource();
 
     using Filter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
     std::vector<DeviceOnlyArray<Filter>> filterData;
     std::vector<DeviceOnlyArray<Filter>> filterRefData;
-    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    ZmwDataManager<int16_t> manager(dataParams,
-                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                  true);
-
-    BatchDimensions dims;
-    dims.laneWidth = dataParams.laneWidth;
-    dims.framesPerBatch = dataParams.blockLength;
-    dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-
-    while (manager.MoreData())
+    for (const auto& batch : source.AllBatches())
     {
-        auto data = manager.NextBatch();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
+        auto batchIdx = batch.GetMeta().PoolId();
+        BatchData<int16_t> truth(batch.StorageDims(),
+                                 SyncDirection::HostReadDeviceWrite,
+                                 SOURCE_MARKER());
+        BatchData<int16_t> out(batch.StorageDims(),
+                               SyncDirection::HostReadDeviceWrite,
+                               SOURCE_MARKER());
 
         const auto& shared = PBLauncher(SharedBaselineFilter<Filter>,
-                                      dataParams.kernelLanes,
-                                      gpuBlockThreads);
-        shared(in,
+                                        batch.LanesPerBatch(),
+                                        gpuBlockThreads);
+        shared(batch,
                filterData[batchIdx],
                out);
 
         const auto& global = PBLauncher(GlobalBaselineFilter<Filter>,
-                                      dataParams.kernelLanes,
-                                      gpuBlockThreads);
-        global(in,
+                                        batch.LanesPerBatch(),
+                                        gpuBlockThreads);
+        global(batch,
                filterRefData[batchIdx],
                truth);
 
-        for (size_t i = 0; i < in.LanesPerBatch(); ++i)
+        for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
         {
             auto truthView = truth.GetBlockView(i);
             auto view = out.GetBlockView(i);
@@ -167,8 +147,6 @@ TEST(BaselineFilterTest, SharedMemory)
                 EXPECT_EQ(truthView[i], view[i]);
             }
         }
-
-        manager.ReturnBatch(std::move(data));
     }
 }
 
@@ -176,63 +154,47 @@ TEST(BaselineFilterTest, SharedMemory)
 // implementations produce identical results
 TEST(BaselineFilterTest, MultiKernelFilter)
 {
-    static constexpr size_t laneWidth = 64;
-    static constexpr size_t gpuBlockThreads = laneWidth/2;
-    // Have 4 lanes per cuda kernel, and 4 kernel invocations, to flush out
-    // errors in the bookkeeping
-    auto dataParams = DataManagerParams()
-            .LaneWidth(laneWidth)
-            .ImmediateCopy(true)
-            .FrameRate(1000)
-            .NumZmwLanes(4)
-            .KernelLanes(4)
-            .NumBlocks(4)
-            .BlockLength(128);
-
-    auto picketParams = PicketFenceParams()
-            .NumSignals(1)
-            .BaselineSignalLevel(150);
-
+    static constexpr size_t gpuBlockThreads = laneSize/2;
+    auto source = CreateSource();
 
     using RefFilter = BaselineFilter<gpuBlockThreads, IntSeq<2,8>, IntSeq<9,31>>;
-    using Filter = ComposedFilter<gpuBlockThreads, 9, 31, 2, 8, 4>;
+    using Filter = ComposedFilter<gpuBlockThreads, 4>;
     std::vector<DeviceOnlyArray<RefFilter>> filterRefData;
     std::vector<Filter> filterData;
-    for (uint32_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
+    auto params = FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
-        filterRefData.emplace_back(SOURCE_MARKER(), dataParams.kernelLanes, 0);
+        filterData.emplace_back(params, SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
+        filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    ZmwDataManager<int16_t> manager(dataParams,
-                                  std::make_unique<PicketFenceGenerator>(dataParams, picketParams),
-                                  true);
-
-    BatchDimensions dims;
-    dims.laneWidth = dataParams.laneWidth;
-    dims.framesPerBatch = dataParams.blockLength;
-    dims.lanesPerBatch = dataParams.kernelLanes;
-    BatchData<int16_t> truth(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    BatchData<int16_t> work1(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    BatchData<int16_t> work2(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-
-    while (manager.MoreData())
+    for (const auto& batch : source.AllBatches())
     {
-        auto data = manager.NextBatch();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
+        auto batchIdx = batch.GetMeta().PoolId();
+        BatchData<int16_t> truth(batch.StorageDims(),
+                                 SyncDirection::HostReadDeviceWrite,
+                                 SOURCE_MARKER());
+        TraceBatch<int16_t> out(batch.GetMeta(),
+                                batch.StorageDims(),
+                                SyncDirection::HostReadDeviceWrite,
+                                SOURCE_MARKER());
+        BatchData<int16_t> work1(batch.StorageDims(),
+                                 SyncDirection::HostReadDeviceWrite,
+                                 SOURCE_MARKER());
+        BatchData<int16_t> work2(batch.StorageDims(),
+                                 SyncDirection::HostReadDeviceWrite,
+                                 SOURCE_MARKER());
 
-        filterData[batchIdx].RunComposedFilter(in, out, work1, work2);
+        filterData[batchIdx].RunComposedFilter(batch, out, work1, work2);
 
         const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
-                                      dataParams.kernelLanes,
-                                      gpuBlockThreads);
-        global(in,
+                                        batch.LanesPerBatch(),
+                                        gpuBlockThreads);
+        global(batch,
                filterRefData[batchIdx],
                truth);
 
-        for (size_t i = 0; i < in.LanesPerBatch(); ++i)
+        for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
         {
             auto truthView = truth.GetBlockView(i);
             auto view = out.GetBlockView(i);
@@ -241,7 +203,5 @@ TEST(BaselineFilterTest, MultiKernelFilter)
                 EXPECT_EQ(truthView[i], view[i]);
             }
         }
-
-        manager.ReturnBatch(std::move(data));
     }
 }

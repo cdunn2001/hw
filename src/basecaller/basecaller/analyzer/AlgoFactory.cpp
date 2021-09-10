@@ -71,6 +71,7 @@ AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
+    baselinerType_ = bcConfig.baselinerConfig.Filter;
 
     // Histogram accumulator
     histAccumOpt_ = bcConfig.traceHistogramConfig.Method;
@@ -96,12 +97,7 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
         DeviceMultiScaleBaseliner::Finalize();
         break;
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+    case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
         HostMultiScaleBaseliner::Finalize();
         break;
     default:
@@ -184,12 +180,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
         DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
         break;
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
-    case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
-    case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+    case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
         HostMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
         break;
     default:
@@ -298,6 +289,7 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
                              const Data::BatchDimensions& dims,
                              StashableAllocRegistrar& registrar) const
 {
+    const auto& params = FilterParamsLookup(baselinerType_);
     // TODO: We are currently overloading BasecallerBaselinerConfig::MethodName
     // to represent both the baseliner method and param. When the GPU version
     // is ready to take params, then the Configure() above should store the params
@@ -308,16 +300,16 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
             return std::make_unique<HostNoOpBaseliner>(poolId);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-            return std::make_unique<DeviceMultiScaleBaseliner>(poolId, dims.lanesPerBatch, &registrar);
+            return std::make_unique<DeviceMultiScaleBaseliner>(poolId,
+                                                               dims.lanesPerBatch,
+                                                               params,
+                                                               &registrar);
             break;
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::MultiScaleSmall:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleLarge:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium:
-        case Data::BasecallerBaselinerConfig::MethodName::TwoScaleSmall:
+        case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
             // TODO: scaler currently set to default 1.0f
-            return std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f, FilterParamsLookup(baselinerOpt_),
+            return std::make_unique<HostMultiScaleBaseliner>(poolId,
+                                                             1.0f,
+                                                             params,
                                                              dims.lanesPerBatch);
             break;
         default:

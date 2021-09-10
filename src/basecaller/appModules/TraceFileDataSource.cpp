@@ -45,7 +45,7 @@ TraceFileDataSource::TraceFileDataSource(
         bool cache,
         size_t preloadChunks,
         size_t maxQueueSize)
-    : DataSourceBase(std::move(cfg))
+    : BatchDataSource(std::move(cfg))
     , chunkIndex_{0}
     , batchIndex_{0}
     , currZmw_{0}

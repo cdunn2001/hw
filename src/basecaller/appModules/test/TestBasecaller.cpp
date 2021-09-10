@@ -59,7 +59,8 @@ TEST(TestBasecaller, CheckMetadata)
     }();
 
     algoConfig.modelEstimationMode = Data::BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations;
-    algoConfig.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::TwoScaleMedium;
+    algoConfig.baselinerConfig.Method = Data::BasecallerBaselinerConfig::MethodName::HostMultiScale;
+    algoConfig.baselinerConfig.Filter = Data::BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium;
     algoConfig.frameLabelerConfig.Method = Data::BasecallerFrameLabelerConfig::MethodName::NoOp;
     algoConfig.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
     algoConfig.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
