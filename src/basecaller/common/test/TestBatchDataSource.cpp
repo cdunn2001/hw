@@ -60,6 +60,7 @@ public:
     size_t NumZmw() const override { throw PBException("Not Implemented"); }
     double FrameRate() const override { throw PBException("Not Implemented"); }
     HardwareInformation GetHardwareInformation() override { throw PBException("Not Implemented"); }
+    int16_t Pedestal() const override { throw PBException("Not Implemented"); }
 
 private:
     void ContinueProcessing() override

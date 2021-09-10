@@ -57,7 +57,7 @@ TEST(TestTraceSaver, TestA)
         std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
         ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
 
-        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, numSelectedZmws, numFrames);
+        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, TraceFile::TraceDataType::INT16, numSelectedZmws, numFrames);
 
         std::vector<DataSourceBase::LaneIndex> lanes;
         lanes.push_back(0);  // starting at (0,0)
@@ -219,7 +219,7 @@ TEST(Sanity,ROI)
     const uint64_t frames=1024;
     PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
-        auto outputTrcFile = std::make_unique<PacBio::TraceFile::TraceFile>(traceFileName, numZmws, frames);
+        auto outputTrcFile = std::make_unique<PacBio::TraceFile::TraceFile>(traceFileName, TraceFile::TraceDataType::INT16, numZmws, frames);
         TraceSaverBody body(std::move(outputTrcFile), roiFeatures, std::move(blocks));
     }
     {

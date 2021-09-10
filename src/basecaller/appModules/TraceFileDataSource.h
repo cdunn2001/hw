@@ -91,6 +91,7 @@ public:
     size_t NumZmw() const override { return numZmwLanes_ * BlockWidth(); }
     double FrameRate() const override { return frameRate_; }
 
+    int16_t Pedestal() const override { return this->traceFile_.Traces().Pedestal(); }
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {

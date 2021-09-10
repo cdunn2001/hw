@@ -52,7 +52,7 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 #include <pacbio/sensor/SparseROI.h>
-#include <mongo/datasource/WXDataSource.h>
+#include <acquisition/datasource/WXDataSource.h>
 
 #include <git-rev.h>
 
@@ -60,7 +60,7 @@ using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Graphs;
 using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
-using namespace PacBio::Mongo::DataSource;
+using namespace PacBio::Acquisition::DataSource;
 using namespace PacBio::Sensor;
 
 using namespace PacBio::Application;
@@ -529,6 +529,7 @@ private:
             DataSourceBase::LaneSelector blocks(destLanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
             outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
+                                                         TraceDataType::INT16,
                                                          numZmws,
                                                          frames_);
 

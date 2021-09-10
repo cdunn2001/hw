@@ -115,6 +115,11 @@ public:
         return 100.0;
     }
 
+    int16_t Pedestal() const override
+    {
+        return  0;
+    }
+
     DataSource::HardwareInformation GetHardwareInformation() override
     {
         DataSource::HardwareInformation ret;
