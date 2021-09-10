@@ -53,6 +53,39 @@ namespace PacBio::Mongo {
 ///       for any more general application.  The types involved are all
 ///       private intentionally to make them more difficult for external
 ///       code to name them.
+///
+/// A basic example:
+///   const uint64_t framesPerChunk = 512;
+///   const uint64_t lanesPerPool = 64;
+///   auto layout = PacketLayout(PacketLayout::BlockLayoutDense,
+///                              PacketLayout::INT16_t,
+///                              {lanesPerPool, framesPerchunk, Mongo::laneSize});
+///   auto cfg = DataSourceBase::Configuration(layout,
+///                                            std::make_unique<MallocAllocator>());
+///
+///   // Produce 4 chunks
+///   const uint32_t movieFrames = framesPerChunk * 4;
+///   // Each chunk will just have two batches
+///   const uint32_t numZmw = layout.NumZmw() * 2;
+///   auto source = TraceFileDataSource(std::move(cfg),
+///                                     "MyFavoriteData.trc.h5",
+///                                     movieFrames, numZmw,
+///                                     true /* cache the data */)
+///
+///   if (processByChunk)
+///   {
+///       for (const std::vector<TraceBatch<int16_t>>& chunk : source.AllChunks())
+///       {
+///           ProcessFullChunk(chunk);
+///       }
+///   } else {
+///       for (const TraceBatch<int16_t>& batch : source.AllBatches)
+///       {
+///           // batch.Meta() contains full information about
+///           // what frames/zmw belong to this batch.
+///           ProcessSingleBatch(batch);
+///       }
+///   }
 class BatchDataSource : public DataSource::DataSourceBase
 {
     /// Private function, for generating the next chunk.
