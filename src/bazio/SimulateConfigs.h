@@ -23,45 +23,38 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
-#define PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
-
-#include <common/graphs/GraphNodeBody.h>
-
-#include <dataTypes/BatchResult.h>
-#include <dataTypes/configs/ConfigForward.h>
-
-#include <bazio/writing/BazBuffer.h>
+#pragma once
 
 namespace PacBio {
-namespace Application {
+namespace Primary {
 
-template <typename MetricType,typename AggregatedMetricType>
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer<MetricType,AggregatedMetricType>>>
+inline std::string generateExperimentMetadata(const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
+                                              const std::string& basemap="CTAG")
 {
-public:
-    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                       const Mongo::Data::SmrtBasecallerConfig& config);
-    ~PrelimHQFilterBody();
+    std::ostringstream metadata;
+    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
+    metadata << "SequelII";
+    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
+    metadata << basemap;
+    metadata << "\",\"RelativeAmp\":";
+    metadata << "[";
+    std::string sep = "";
+    for (const auto& val : relamps)
+    {
+        metadata << sep << val;
+        sep = ",";
+    }
+    metadata << "]}}";
+    return metadata.str();
+}
 
-    size_t ConcurrencyLimit() const override { return numThreads_; }
-    float MaxDutyCycle() const override { return 1; }
-
-    void Process(Mongo::Data::BatchResult in) override;
-
-    std::vector<uint32_t> GetFlushTokens() override;
-
-    void Flush(uint32_t token) override;
-
-private:
-    uint32_t numThreads_;
-    class Impl;
-    template <bool internal>
-    class ImplChild;
-    std::vector<std::unique_ptr<Impl>> impl_;
-};
-
+inline std::string generateBasecallerConfig(const std::string& pipename)
+{
+    std::ostringstream metadata;
+    metadata << "{\"algorithm\":{\"pipe\":\"";
+    metadata << pipename;
+    metadata << "\"}}";
+    return metadata.str();
+}
 
 }}
-
-#endif //PACBIO_APPLICATION_PRELIM_HQ_FILTER_H

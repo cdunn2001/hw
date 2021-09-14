@@ -33,55 +33,67 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
-#define PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
-
-#include <cassert>
-#include <memory>
+#ifndef PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
+#define PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
 
 #include <bazio/MetricBlock.h>
-#include <bazio/writing/GrowableArray.h>
-#include <bazio/writing/PacketBufferManager.h>
-#include <bazio/writing/MetricBufferManager.h>
 
 namespace PacBio::BazIO {
 
-template <typename MetricBlockT, typename AggregatedMetricBlockT>
-class BazBuffer
+/// CRTP to represent a metric block used by the underlying
+/// metric buffer manager and metric buffer classes. This
+/// allows for the actual metrics to be de-coupled from the
+/// bazio library.
+///
+template <typename T>
+struct MetricBlock
 {
-    using TMetric = Primary::SpiderMetricBlock;
-    using MetricBufferT = MetricBufferManager<MetricBlockT,AggregatedMetricBlockT>;
-public:
-    BazBuffer(uint32_t bufferId,
-              std::unique_ptr<const MetricBufferT> metrics,
-              std::unique_ptr<const PacketBufferManager> packets)
-        : numZmw_(metrics->NumZmw())
-        , bufferId_(bufferId)
-        , metrics_(std::move(metrics))
-        , packets_(std::move(packets))
-    {
-        assert(numZmw_ == packets_->NumZmw());
+    /// Performs aggregation of the input metric block.
+    template <typename U>
+    void Aggregate(const MetricBlock<U>& val)
+    { 
+        static_cast<T*>(this)->Aggregate(static_cast<const U&>(val));
     }
 
-    size_t NumZmw() const { return numZmw_; }
-    uint32_t BufferId() const { return bufferId_; }
-
-    struct Slice
+    /// Sets the metric block to the input metric block.
+    template <typename U>
+    void Set(const MetricBlock<U>& val)
     {
-        const MemoryBufferView<TMetric>& metrics;
-        PacketBufferManager::PacketSlice packets;
-    };
-    Slice GetSlice(size_t zmw) const { return Slice {metrics_->GetMetrics(zmw), packets_->GetSlice(zmw)}; };
+        static_cast<T*>(this)->Set(static_cast<const U&>(val));
+    }
 
-    ~BazBuffer() = default;
+    /// Resets the metric block to default values.
+    void Reset()
+    {
+        static_cast<T*>(this)->Reset();
+    }
 
-private:
-    size_t numZmw_;
-    uint32_t bufferId_;
-    std::unique_ptr<const MetricBufferT> metrics_;
-    std::unique_ptr<const PacketBufferManager> packets_;
+    /// Returns the activity label associated with this metric block.
+    /// Used to determine whether metric blocks can be aggregated.
+    uint8_t ActivityLabel() const
+    {
+        return static_cast<const T*>(this)->ActivityLabel();
+    }
+
+    /// Returns true if metric block contains data.
+    bool HasData() const
+    {
+        return static_cast<const T*>(this)->HasData();
+    }
+
+    /// Stub method for converting to the current output metric block
+    /// format in use by the BAZ file. This should be removed once
+    /// the BAZ metrics have been ported to use the bazio encoding
+    /// framework.
+    void Convert(Primary::SpiderMetricBlock& sm) const
+    {
+        static_cast<const T*>(this)->Convert(sm);
+    }
+
 };
 
-}  // namespace PacBio::BazIO
+} // PacBio::BazIO
 
-#endif  // PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
+#endif  // PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
+
+

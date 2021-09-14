@@ -111,6 +111,7 @@ public:
                         std::shared_ptr<Memory::IAllocator> allocator);
 
     std::unique_ptr<const PacketBufferManager> CreateCheckpoint();
+    void UpdateLookback();
 
     /// \return the number of ZMW belonging to this manager
     size_t NumZmw() const { return indexInfo_.size(); }

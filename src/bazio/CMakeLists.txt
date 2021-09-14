@@ -63,11 +63,6 @@ add_library(libBazio
         RegionLabel.h
         RegionLabelType.h
         Sanity.h
-        Simulation.cpp
-        Simulation.h
-        SimulationRNG.h
-        SimulateWriteUtils.h
-        SimulateWriteUtils.cpp
         SmartBazEnum.h
         SmartMemory.h
         SuperChunkMeta.h

@@ -124,8 +124,8 @@ PacketBufferManager::PacketSlice PacketBufferManager::GetSlice(size_t zmw) const
 
 std::unique_ptr<const PacketBufferManager> PacketBufferManager::CreateCheckpoint()
 {
-    // Coppies the contents of our current instance, with the exception of hqPackets_
-    // that gets destructively moved from
+    // Copies the contents of our current instance, with the exception of hqPackets_
+    // that gets destructively moved.
     auto ret = std::unique_ptr<PacketBufferManager>(new PacketBufferManager(*this));
 
     hqPackets_ = PacketBuffer(numHQ_, zmwBatchingSize, expectedPulseBytesPerZmw_, allocator_);

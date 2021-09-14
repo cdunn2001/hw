@@ -33,10 +33,21 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#include <bazio/SimulateWriteUtils.h>
+#include <dataTypes/BasecallingMetrics.h>
 
-namespace PacBio {
-namespace BazIO {
+#include "SimulateWriteUtils.h"
+
+namespace PacBio::Primary::Postprimary
+{
+
+namespace {
+
+void ConvertMetrics()
+{
+
+}
+
+}
 
 SimBazWriter::~SimBazWriter() = default;
 
@@ -50,11 +61,11 @@ SimBazWriter::SimBazWriter(const std::string& fileName,
                            BazIO::FileHeaderBuilder& fhb,
                            const PacBio::Primary::BazIOConfig& conf, bool)
     : numZmw_(fhb.MaxNumZmws())
-    , writer_(std::make_unique<BazIO::BazWriter>(fileName, fhb, conf))
-    , aggregator_(std::make_unique<BazAggregator>(numZmw_, 0, bytesPerZmw))
+    , writer_(std::make_unique<SimBazWriterT>(fileName, fhb, conf))
+    , aggregator_(std::make_unique<SimBazAggregatorT>(numZmw_, 0, bytesPerZmw))
 {
     const auto& fields = writer_->GetFileHeaderBuilder().PacketFields();
-    internal_ = std::any_of(fields.begin(), fields.end(), [](const FieldParams<PacketFieldName>& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });
+    internal_ = std::any_of(fields.begin(), fields.end(), [](const BazIO::FieldParams<BazIO::PacketFieldName>& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });
     if (internal_) internalSerializer_.resize(numZmw_);
     else prodSerializer_.resize(numZmw_);
 }
@@ -65,6 +76,7 @@ void SimBazWriter::AddZmwSlice(SimPulse* basecalls, size_t numEvents,
     totalEvents_ += numEvents;
     if (!metrics.empty())
     {
+        /*
         aggregator_->AddMetrics(zmw,
                             [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
                             {
@@ -74,13 +86,12 @@ void SimBazWriter::AddZmwSlice(SimPulse* basecalls, size_t numEvents,
                                 }
                             },
                             metrics.size());
+        */
     }
     if (internal_)
-        aggregator_->AddZmw(zmw, basecalls, basecalls + numEvents, [](const auto) { return true; }, internalSerializer_[zmw]);
+        aggregator_->AddPulses(zmw, basecalls, basecalls + numEvents, [](const auto) { return true; }, internalSerializer_[zmw]);
     else
-        aggregator_->AddZmw(zmw, basecalls, basecalls + numEvents, [](const SimPulse& p) { return !p.IsReject(); }, prodSerializer_[zmw]);
+        aggregator_->AddPulses(zmw, basecalls, basecalls + numEvents, [](const SimPulse& p) { return !p.IsReject(); }, prodSerializer_[zmw]);
 }
 
-
-
-}}
+}

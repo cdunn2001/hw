@@ -35,11 +35,16 @@ class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
 {
     PB_CONFIG(PrelimHQConfig);
 
-    // TODO this should maybe be in units of frames?  Something to
-    // think about while the PrelimHQ stage gets implemented for real
-    PB_CONFIG_PARAM(size_t, bazBufferChunks, 8);
+    // BazIO will be tied to a multiple of the metric frequency so this
+    // value is in terms of that, currently hard-coded to 1 as that
+    // is what is currently supported.
+    static constexpr size_t bazBufferMetricBlocks = 1;
+    
     PB_CONFIG_PARAM(size_t, zmwOutputStride, 1);
 
+    // If enable lookback is turned off, then the prelim-HQRF is
+    // turned off and internal metrics will be outputted at the
+    // metric block frequency.
     PB_CONFIG_PARAM(bool, enableLookback, false);
     PB_CONFIG_PARAM(uint32_t, lookbackSize, 10);
     // *If* enableLookback is turned on, this fraction controls the
@@ -73,6 +78,7 @@ class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
                             return static_cast<size_t>(std::ceil(numFrames / frameRate * pulseRate));
                         },
                         {"Metrics.framesPerHFMetricBlock", "expectedFrameRate", "maxSlicePulseRate"}));
+
 };
 
 }  // namespace PacBio::Mongo::Data

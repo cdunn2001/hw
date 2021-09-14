@@ -23,45 +23,13 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
-#define PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+#include <appModules/Metrics.h>
+#include <bazio/writing/BazAggregator.h>
 
-#include <common/graphs/GraphNodeBody.h>
+namespace PacBio::Application {
 
-#include <dataTypes/BatchResult.h>
-#include <dataTypes/configs/ConfigForward.h>
+template struct ProductionMetrics<uint16_t,half_float::half>;
+template struct ProductionMetrics<uint32_t,half_float::half>;
+template struct InternalMetrics<uint16_t,half_float::half>;
 
-#include <bazio/writing/BazBuffer.h>
-
-namespace PacBio {
-namespace Application {
-
-template <typename MetricType,typename AggregatedMetricType>
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer<MetricType,AggregatedMetricType>>>
-{
-public:
-    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                       const Mongo::Data::SmrtBasecallerConfig& config);
-    ~PrelimHQFilterBody();
-
-    size_t ConcurrencyLimit() const override { return numThreads_; }
-    float MaxDutyCycle() const override { return 1; }
-
-    void Process(Mongo::Data::BatchResult in) override;
-
-    std::vector<uint32_t> GetFlushTokens() override;
-
-    void Flush(uint32_t token) override;
-
-private:
-    uint32_t numThreads_;
-    class Impl;
-    template <bool internal>
-    class ImplChild;
-    std::vector<std::unique_ptr<Impl>> impl_;
-};
-
-
-}}
-
-#endif //PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+}

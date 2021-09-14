@@ -33,55 +33,49 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
-#define PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
+#ifndef PACBIO_METRICIO_WRITING_METRIC_BUFFER_H
+#define PACBIO_METRICIO_WRITING_METRIC_BUFFER_H
 
-#include <cassert>
-#include <memory>
+#include <cstdint>
 
-#include <bazio/MetricBlock.h>
+#include <pacbio/memory/IAllocator.h>
+#include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/PBException.h>
+
 #include <bazio/writing/GrowableArray.h>
-#include <bazio/writing/PacketBufferManager.h>
-#include <bazio/writing/MetricBufferManager.h>
 
 namespace PacBio::BazIO {
 
-template <typename MetricBlockT, typename AggregatedMetricBlockT>
-class BazBuffer
+template <typename MetricType>
+class MetricBuffer
 {
-    using TMetric = Primary::SpiderMetricBlock;
-    using MetricBufferT = MetricBufferManager<MetricBlockT,AggregatedMetricBlockT>;
+private:
+    static constexpr size_t zmwBatchingSize = 4096;
 public:
-    BazBuffer(uint32_t bufferId,
-              std::unique_ptr<const MetricBufferT> metrics,
-              std::unique_ptr<const PacketBufferManager> packets)
-        : numZmw_(metrics->NumZmw())
-        , bufferId_(bufferId)
-        , metrics_(std::move(metrics))
-        , packets_(std::move(packets))
+    MetricBuffer(size_t numZmw, std::shared_ptr<Memory::IAllocator> alloc)
+    : metricsData_(alloc, zmwBatchingSize)
+    , nextIndex_(alloc, zmwBatchingSize)
     {
-        assert(numZmw_ == packets_->NumZmw());
+        metricsData_.GrowToSize(numZmw);
+        nextIndex_.GrowToSize(numZmw);
     }
 
-    size_t NumZmw() const { return numZmw_; }
-    uint32_t BufferId() const { return bufferId_; }
-
-    struct Slice
+    void Link(uint32_t thisIdx, uint32_t nextIdx)
     {
-        const MemoryBufferView<TMetric>& metrics;
-        PacketBufferManager::PacketSlice packets;
-    };
-    Slice GetSlice(size_t zmw) const { return Slice {metrics_->GetMetrics(zmw), packets_->GetSlice(zmw)}; };
+        *nextIndex_[thisIdx] = nextIdx;
+    }
 
-    ~BazBuffer() = default;
+    MetricType* Data(size_t idx)
+    { return metricsData_[idx]; }
 
+    uint32_t* Index(size_t idx)
+    { return nextIndex_[idx]; }
 private:
-    size_t numZmw_;
-    uint32_t bufferId_;
-    std::unique_ptr<const MetricBufferT> metrics_;
-    std::unique_ptr<const PacketBufferManager> packets_;
+    GrowableArray<MetricType> metricsData_;
+    GrowableArray<uint32_t> nextIndex_;
 };
 
-}  // namespace PacBio::BazIO
 
-#endif  // PACBIO_BAZIO_WRITING_BAZ_BUFFER_H
+} // namespace PacBio::BazIO
+
+#endif // PACBIO_METRICIO_WRITING_METRIC_BUFFER_H

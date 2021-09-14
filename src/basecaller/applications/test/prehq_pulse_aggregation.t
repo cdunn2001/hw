@@ -4,7 +4,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
 
   $ BAZFILE=tmp.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
-  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=8192 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.bazBufferChunks=1 --config=prelimHQ.enableLookback=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
+  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=8192 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.lookbackSize=1 --config=prelimHQ.enableLookback=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
@@ -37,7 +37,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   CAAGTTGGTTTAGGGCGGACCCGCAGGTAGTGCTTATTCGAACGGCTGAGGGACTTCGAGTCCTCCATACTGAGTATATCTGTCTTGCAACCTGCAGCTAAATCGTAAATCAGCATGCCTGGCAATATACCACAGTCGACACCGTATCGAGTATGCTCTAGGAACGCAAACGGGTCGCACACAGAGCAACAGGGC
 
 Test again with fewer frames, so that nothing is expected to be marked as an hq region yet
-  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=4096 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.bazBufferChunks=1 --config=prelimHQ.enableLookback=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
+  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=4096 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.enableLookback=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
 
   $ bazviewer --silent --summary ${BAZFILE}
   events:0

@@ -41,19 +41,28 @@
 namespace PacBio {
 namespace Application {
 
-class NoopBazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+template <typename MetricType,typename AggregatedMetricType>
+class NoopBazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer<MetricType,AggregatedMetricType>>>
 {
+public:
+    using BazBufferT = BazIO::BazBuffer<MetricType,AggregatedMetricType>;
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer>) override
+    void Process(std::unique_ptr<BazBufferT>) override
     {
     }
+
+
 };
 
-class BazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+template <typename MetricType,typename AggregatedMetricType>
+class BazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer<MetricType,AggregatedMetricType>>>
 {
+public:
+    using BazBufferT = BazIO::BazBuffer<MetricType,AggregatedMetricType>;
+    using BazWriterT = BazIO::BazWriter<MetricType,AggregatedMetricType>;
 public:
     BazWriterBody(const std::string& bazName,
                   size_t expectedFrames,
@@ -68,13 +77,13 @@ public:
     size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer> in) override;
+    void Process(std::unique_ptr<BazBufferT> in) override;
 
 private:
     uint32_t numThreads_;
     uint32_t numBatches_;
     bool multipleBazFiles_;
-    std::vector<std::unique_ptr<BazIO::BazWriter>> bazWriters_;
+    std::vector<std::unique_ptr<BazWriterT>> bazWriters_;
     std::string bazName_;
 };
 

@@ -26,8 +26,13 @@
 #include <gtest/gtest.h>
 
 #include <bazio/writing/BazAggregator.h>
+#include <appModules/Metrics.h>
 
 using namespace PacBio::BazIO;
+using namespace PacBio::Application;
+
+using BazAggregatorT = BazAggregator<ProductionMetricsGroup::MetricT,
+                                     ProductionMetricsGroup::MetricAggregatedT>;
 
 // BazAggregator is currently just a thin wrapper around
 // PacketBufferManager, and may go away.  For now, I'm
@@ -38,7 +43,7 @@ TEST(BazAggregator, Iterators)
 {
     uint32_t numZmw = 12;
     uint32_t bytesPerZmw = 10;
-    BazAggregator agg(numZmw, 0, bytesPerZmw, 1);
+    BazAggregatorT agg(numZmw, 0, bytesPerZmw, 1, true);
 
     EXPECT_EQ(agg.NumZmw(), numZmw);
     EXPECT_EQ(agg.PreHQData().size(), numZmw);

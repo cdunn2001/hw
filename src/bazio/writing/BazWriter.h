@@ -39,15 +39,22 @@
 #include <bazio/file/FileHeader.h>
 #include <bazio/file/FileHeaderBuilder.h>
 
-#include "bazio/ManuallyBufferedFile.h"
+#include <bazio/ManuallyBufferedFile.h>
 #include <bazio/BazIOConfig.h>
 #include <bazio/MetricBlock.h>
 #include <bazio/FileFooterBuilder.h>
 #include <bazio/FileHeader.h>
 #include <bazio/Sanity.h>
-#include <bazio/writing/BazBuffer.h>
+#include <bazio/SuperChunkMeta.h>
 #include <bazio/ZmwSliceHeader.h>
+
+#include <bazio/writing/BazBuffer.h>
+
 #include <pacbio/ipc/ThreadSafeQueue.h>
+
+#include <pacbio/POSIX.h>
+
+
 
 namespace PacBio {
 namespace BazIO {
@@ -221,6 +228,7 @@ private:
     uint32_t numParticipants_;
 };
 
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
 class BazWriter
 {
 public: // static
@@ -235,7 +243,19 @@ public: // structors
               FileHeaderBuilder& fileHeaderBuilder,
               const Primary::BazIOConfig& ioConf,
               std::shared_ptr<IOStatsAggregator> agg
-                  = std::make_shared<IOStatsAggregator>(1));
+                  = std::make_shared<IOStatsAggregator>(1))
+    : filePath_(filePath)
+      , filePathTmp_(filePath + ".tmp")
+      , fhb_(fileHeaderBuilder)
+      , fileHandle_(new Primary::ManuallyBufferedFile(filePathTmp_, ioConf.BufferSizeMBytes, ioConf.MaxMBPerSecondWrite))
+      , jsonFileHeader_(fileHeaderBuilder.CreateJSONCharVector())
+      , dieGracefully_(false)
+      , ioAggregator_(agg)
+    {
+        if (!fileHeaderBuilder.MaxNumZmws())
+            throw PBException("No ZmwNumber mapping provided in FileHeaderBuilder");
+        Init(ioConf);
+    }
 
     BazWriter(BazWriter&&) = delete;
     BazWriter(const BazWriter&) = delete;
@@ -245,7 +265,35 @@ public: // structors
 
     /// Waits for writing thread to finish,
     /// before writing EOF chunk meta.
-    ~BazWriter();
+    ~BazWriter()
+    {
+        try
+        {
+            if (!dieGracefully_)
+            {
+                PBLOG_ERROR << "ABORT";
+                abort_ = true;
+                fhb_.Truncated();
+            }
+
+            // Terminates writeThread_
+            writeThreadContinue_ = false;
+            if (writeThread_.joinable()) writeThread_.join();
+
+            ioAggregator_->AggregateToFull(&ioStats_);
+        }
+        catch(const std::exception& ex)
+        {
+            PBLOG_ERROR << "Exception caught in ~BazWriter " << ex.what();
+        }
+        catch(...)
+        {
+            std::cerr << "Uncaught exception caught in ~BazWriter " << PacBio::GetBackTrace(5);
+            PBLOG_FATAL << "Uncaught exception caught in ~BazWriter "  << PacBio::GetBackTrace(5);
+            PacBio::Logging::PBLogger::Flush();
+            std::terminate();
+        }
+    }
 
     static constexpr int blocksize = 4000;
 public:
@@ -254,11 +302,28 @@ public:
     /// ready to be written to disk.
     ///
     /// \return bool if data was available to be flushed out
-    void Flush(std::unique_ptr<BazBuffer> buffer);
+    void Flush(std::unique_ptr<BazBuffer<MetricBlockT,AggregatedMetricBlockT>> buffer)
+    {
+        if (abort_ || !writeThreadContinue_) return;
+        bazBufferQueue_.Push(std::move(buffer));
+    }
 
     /// Waits until internal buffers have been written. If this method is not
     /// being called, data may get lost.
-    void WaitForTermination();
+    void WaitForTermination()
+    {
+        dieGracefully_ = true;
+
+        // wait for buffer to empty
+        while (bazBufferQueue_.Size() > 0)
+        {
+            PacBio::POSIX::Sleep(0.010);
+        }
+
+        // wait for writing thread to exit
+        writeThreadContinue_ = false;
+        if (writeThread_.joinable()) writeThread_.join();
+    }
 
     // This is used for simulations to avoid flooding RAM.
     inline size_t BufferSize() const
@@ -305,7 +370,8 @@ protected:
     }
 
 private: // types
-    using BufferQueue = PacBio::ThreadSafeQueue<std::unique_ptr<BazBuffer>>;
+    using BazBufferT = BazBuffer<MetricBlockT,AggregatedMetricBlockT>;
+    using BufferQueue = PacBio::ThreadSafeQueue<std::unique_ptr<BazBufferT>>;
 
 private: // data
 
@@ -334,28 +400,281 @@ private: // data
 private: // modifying methods
 
     /// Is executed in its own thread. Writes BazBuffers to disk.
-    void WriteToDiskLoop();
+    void WriteToDiskLoop()
+    {
+        PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() header, length: " << jsonFileHeader_.size();
+        WriteJsonFileHeader(true /* accumulate bytes in statistics */);
+        WriteSanity();
+
+        Align(blocksize);
+
+        std::vector<Primary::ZmwSliceHeader> headerBuffer;
+        PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop entered";
+        size_t writtenSuperChunks = 0;
+        ioAggregator_->AggregateToFull(&ioStats_);
+        while (writeThreadContinue_ && !abort_)
+        {
+            std::unique_ptr<BazBufferT> bazBuffer;
+            // Wait for new data, but only for 500ms. Otherwise restart the loop,
+            // as it could have been the last item and the loop will be exited.
+
+            if (bazBufferQueue_.Pop(bazBuffer, std::chrono::milliseconds(500)))
+            {
+                ioAggregator_->StartSegment(writtenSuperChunks);
+                auto now = std::chrono::high_resolution_clock::now();
+
+                PBLOG_DEBUG << "Starting writing superchunk " << writtenSuperChunks;
+                auto currBytes = ioStats_.bytesWritten;
+
+                // super chunk layout: SMSHHHHSPHMLSPHMLSPHMLSPHML
+                uint32_t numZmws = bazBuffer->NumZmw();
+                headerBuffer.resize(numZmws);
+
+                PBLOG_DEBUG << "BazWriter::WriteToDiskLoop()  superchunk writing ... numZmws:" << numZmws;
+
+                // keep track of where the file pointer, because we will rewind to this location
+                // after the data is written.
+                size_t superChunkStart = Ftell();
+
+                // write temporary SuperChunkMeta, with zeros, in case file gets truncated
+                WriteSuperChunkMeta(0, 0);
+
+                // skip over headers
+                FseekRelative(Primary::ZmwSliceHeader::SizeOf() * numZmws );
+
+                // write actual data
+                WriteChunkData(bazBuffer, headerBuffer);
+                bazBuffer.reset();
+
+                // superchunk is written, but we need to rewind, so keep track of the
+                // tail of the file so we can resume on the next superchunk.
+                size_t nextChunkStart = Ftell();
+
+                // now jump back and rewrite the meta data and headers
+                FseekAbsolute(superChunkStart);
+                WriteSuperChunkMeta(nextChunkStart, numZmws, false); // don't count the second time
+                WriteZmwSliceHeader(headerBuffer);
+
+                // return to the end of the file
+                FseekAbsolute(nextChunkStart);
+                PBLOG_DEBUG << "nextChunkStart:" << std::hex << nextChunkStart << std::dec;
+
+                fhb_.IncSuperChunks();
+
+                fileHandle_->Flush();
+
+                auto elapsed = std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - now);
+                PBLOG_DEBUG << "Finished writing superchunk " << writtenSuperChunks << " to disk";
+                PBLOG_DEBUG << "Wrote " << ioStats_.bytesWritten - currBytes << " to disk in "
+                            << elapsed.count() << " seconds";
+                if (bazBufferQueue_.Size() != 0)
+                {
+                    PBLOG_WARN << "There are " << bazBufferQueue_.Size()
+                               << " more baz buffers queued for writing!";
+                }
+                ioAggregator_->AggregateToSegment(writtenSuperChunks, &ioStats_);
+                writtenSuperChunks++;
+            }
+        }
+        PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() loop exited";
+
+        // write trailing metachunk, to indicate the file is done.
+        WriteSuperChunkMeta(0, 0);
+
+        // update the header to the position of the footer.
+        size_t fileFooterOffset = Ftell();
+        fhb_.FileFooterOffset(fileFooterOffset);
+        fhb_.Done();
+
+        // Write footer
+        const auto jsonFileFooter_ = ffb_.CreateJSONCharVector();
+        ioStats_.headerBytes += Fwrite(jsonFileFooter_.data(), jsonFileFooter_.size());
+        WriteSanity();
+
+        // Rewrite header
+        FseekAbsolute(0);
+        jsonFileHeader_ = fhb_.CreateJSONCharVector();
+        WriteJsonFileHeader(false /* don't double count the Fwrite bytes*/);
+        WriteSanity(false);
+        Align(blocksize,false);
+
+        fileHandle_.reset();
+
+        PBLOG_DEBUG << "BazWriter::WriteToDiskLoop() file closed";
+
+        auto renameResult = std::rename(filePathTmp_.c_str(), filePath_.c_str());
+        if (renameResult)
+            throw PBException("Cannot rename file from " + filePathTmp_ + " to " + filePath_);
+    }
 
 private: // non-modifying methods
 
-    void Init(const Primary::BazIOConfig& ioConfig);
+    void Init(const Primary::BazIOConfig& ioConfig)
+    {
+        // Parse ASCII JSON to FileHeader instance,
+        // includes sanity checks for validity
+        fh_ = std::make_unique<FileHeader>(jsonFileHeader_.data(), jsonFileHeader_.size());
+
+        // Start thread that saves BazBuffers to disk
+        writeThreadContinue_ = true;
+        writeThread_ = std::thread([this](){
+            try
+            {
+                WriteToDiskLoop();
+            }
+            catch(std::exception& err)
+            {
+                // Forward
+                PBLOG_ERROR << err.what();
+                // Set truncated flag
+                fhb_.Truncated();
+                // Empty buffers
+                while (!bazBufferQueue_.Empty())
+                    bazBufferQueue_.Pop();
+                // Die gracefully
+            }
+        });
+    }
 
     /// Writes meta information of super chunk.
     /// \param nextPointer offset to next meta
     /// \param numZmws     number of ZmwSlices in this super chunk
     /// \param accumulate  if true, accumulates bytes written statistics
-    void WriteSuperChunkMeta(const uint64_t nextPointer, uint32_t numZmws, bool accumulate = true);
+    void WriteSuperChunkMeta(const uint64_t nextPointer, uint32_t numZmws, bool accumulate = true)
+    {
+        Primary::SuperChunkMeta chunkMeta;
+        chunkMeta.offsetNextChunk = nextPointer;
+        chunkMeta.numZmws         = numZmws;
+
+        WriteSanity(accumulate);
+        size_t written =  Fwrite(&chunkMeta, Primary::SuperChunkMeta::SizeOf(), accumulate);
+        if (accumulate)
+        {
+            ioStats_.overheadBytes += written;
+        }
+        WriteSanity(accumulate);
+    }
+
 
     /// Writes header information for each ZmwSlice for current super chunk.
     /// \param headerBuffer current header buffer to be written
-    void WriteZmwSliceHeader(std::vector<Primary::ZmwSliceHeader>& headerBuffer);
+    void WriteZmwSliceHeader(std::vector<Primary::ZmwSliceHeader>& headerBuffer)
+    {
+        for (const auto& h : headerBuffer)
+        {
+            if (abort_) return;
+            ioStats_.overheadBytes += Fwrite(&h, Primary::ZmwSliceHeader::SizeOf());
+        }
+    }
 
     /// Writes base calls/pulses and metrics for each ZMW slice
     /// for current super chunk.
     /// \param bazBuffer    current buffer to be written
     /// \param headerBuffer corresponding header buffer for ZmwSlice offsets
-    void WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
-                        std::vector<Primary::ZmwSliceHeader>& headerBuffer);
+    void WriteChunkData(std::unique_ptr<BazBufferT>& bazBuffer,
+                        std::vector<Primary::ZmwSliceHeader>& headerBuffer)
+    {
+        size_t iHeader = 0;
+
+        // Iterate over all ZmwSlices
+        for (size_t zmwIdx = 0; zmwIdx < bazBuffer->NumZmw(); ++zmwIdx)
+        {
+            if (abort_) return;
+            PBLOG_TRACE << " BazWriter::WriteChunkData " << iHeader;
+
+            Primary::ZmwSliceHeader& h = headerBuffer[iHeader];
+
+            Align(4);
+
+            // Align every 1000th ZMW
+            if (iHeader % 1000 == 0 && iHeader > 0)
+            {
+                Align(blocksize);
+            }
+            ++iHeader;
+
+            auto slice = bazBuffer->GetSlice(zmwIdx);
+            h.offsetPacket = Ftell();
+            h.zmwIndex = zmwIdx;
+            h.packetsByteSize = slice.packets.packetByteSize;
+            h.numEvents       = slice.packets.numEvents;
+            h.numHFMBs        = 0;
+            h.numMFMBs        = slice.metrics.size();
+            // h.numMFMBs        = (hFbyMFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyMFRatio_ - 1) / hFbyMFRatio_) : 0;
+            h.numLFMBs        = 0;//(hFbyLFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyLFRatio_ - 1) / hFbyLFRatio_) : 0;
+
+            WriteSanity();
+
+            // Write bases/pulses
+            if (slice.packets.packetByteSize != 0)
+            {
+                for (const auto& piece : slice.packets.pieces)
+                {
+                    ioStats_.eventsBytes += Fwrite(piece.data, piece.count);
+                }
+            }
+
+            if (h.numHFMBs == 0 && (fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() != 0))
+            {
+                //PBLOG_WARN << fh_->HFMetricByteSize() << "," << fh_->MFMetricByteSize() << "," << fh_->LFMetricByteSize();
+                //Error("kv.second->numHFMBs is zero but the metrics sizes are not zero!");
+                //continue;
+            }
+            if (h.numHFMBs != 0 && (fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() == 0))
+            {
+                //PBLOG_WARN << kv.second->numHFMBs;
+                //Error("kv.second->numHFMBs is not zero but the metrics sizes are zero!");
+                continue;
+            }
+
+
+            // If there are no metrics, skip to new ZmwSlice
+            if (h.numMFMBs == 0) continue;
+
+            assert(fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() != 0);
+            // One buffer to rule them all. Minimize to one fwrite.
+            // Buffer has the size for all three consecutive metric blocks
+
+            uint64_t bufferSize =
+                    fh_->HFMetricByteSize() * h.numHFMBs +
+                    fh_->MFMetricByteSize() * h.numMFMBs +
+                    fh_->LFMetricByteSize() * h.numLFMBs;
+
+            if (bufferSize > 0)
+            {
+                std::vector<uint8_t> buffer(bufferSize);
+                size_t bufferCounter = 0;
+
+                // Write high-frequency metric blocks to buffer
+                if (h.numMFMBs > 0)
+                    Write(fh_->MFMetricFields(), slice.metrics,
+                          buffer, bufferCounter);
+
+                // Things are temporarily hacked to pieces.  We only
+                // write at one frequency, which is not aggregated, and
+                // isn't even guanteed consistent with the interval specified
+                // in the header.  This should all change in relatively
+                // short order once metrics handling is re-written
+
+                //// Write medium-frequency metric blocks to buffer
+                //if (h.numMFMBs > 0)
+                //    Write(fh_->MFMetricFields(), slice.hfmbs,
+                //          hFbyMFRatio_, buffer, bufferCounter);
+
+                //// Write low-frequency metric blocks to buffer
+                //if (h.numLFMBs > 0)
+                //    Write(fh_->LFMetricFields(), slice.hfmbs,
+                //          hFbyLFRatio_, buffer, bufferCounter);
+
+                // Make sure that buffer has expected size
+                assert(bufferCounter == bufferSize);
+                ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
+            }
+        }
+
+        Align(blocksize);
+    }
+
 
     /// Write high-frequency metrics blocks to given buffer.
     /// \param hFMetricFields   User-defined high-frequency metric fields
@@ -365,11 +684,29 @@ private: // non-modifying methods
     /// \param c                Reference to buffer index
     void Write(const std::vector<Primary::MetricField>& hFMetricFields,
                const MemoryBufferView<TMetric>& metricBlocks,
-               std::vector<uint8_t>& buffer, size_t& c);
+               std::vector<uint8_t>& buffer, size_t& c)
+    {
+        // Iterate over all HFMBlocks
+        for (size_t i = 0; i < metricBlocks.size(); ++i)
+            metricBlocks[i].AppendToBaz(hFMetricFields, buffer, c);
+    }
 
 protected:
 
-    void Align(size_t alignmentSize, bool accumulate = true);
+    void Align(size_t alignmentSize, bool accumulate = true)
+    {
+        size_t ragged = Ftell() % alignmentSize;
+        if (ragged)
+        {
+            size_t advance = alignmentSize - ragged;
+            fileHandle_->Advance(advance);
+            if (accumulate)
+            {
+                ioStats_.paddingBytes += advance;
+                ioStats_.bytesWritten += advance;
+            }
+        }
+    }
 
     /// C++ wrapper to ftell
     /// \returns byte position from the start of the file
@@ -424,7 +761,21 @@ protected:
     /// Write the header to the fileHandle_. Because the header can be big, this method may loop
     /// over Fwrite as needed.
     /// \param accumulate - if true, then aggregate the bytes written into the statistics
-    void WriteJsonFileHeader(bool accumulate);
+    void WriteJsonFileHeader(bool accumulate)
+    {
+        /// Fwrite doesn't allow to write really big buffers. The write is broken into multiple smaller pieces.
+        size_t bytesToWrite = jsonFileHeader_.size();
+        const auto* ptr = jsonFileHeader_.data();
+        while(bytesToWrite >0)
+        {
+            size_t bytesToWriteNow = (1UL << 20); // let's try 1 MiB each loop. 2GiB was too much.
+            if (bytesToWriteNow > bytesToWrite) bytesToWriteNow = bytesToWrite;
+            const auto justWrote = Fwrite(ptr,bytesToWriteNow, accumulate);
+            if (accumulate) ioStats_.headerBytes += justWrote;
+            bytesToWrite -= bytesToWriteNow;
+            ptr += bytesToWriteNow;
+        }
+    }
 
 };
 

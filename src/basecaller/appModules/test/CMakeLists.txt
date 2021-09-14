@@ -7,6 +7,7 @@ include(pacbio-gtest)
 add_library(libTestAppModules OBJECT
     TestBlockRepacker.cpp
     TestBasecaller.cpp
+    TestMetrics.cpp
     TestSimulatedDataSource.cpp
     TestTraceFileDataSource.cpp
     TestTraceSaver.cpp

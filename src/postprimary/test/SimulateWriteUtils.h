@@ -33,34 +33,38 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#ifndef PACBIO_BAZIO_WRITE_UTILS_H
-#define PACBIO_BAZIO_WRITE_UTILS_H
+#ifndef PACBIO_POSTPRIMARY_WRITE_UTILS_H
+#define PACBIO_POSTPRIMARY_WRITE_UTILS_H
 
 #include <memory>
 
+#include <appModules/Metrics.h>
+#include <bazio/BazIOConfig.h>
 #include <bazio/encoding/Types.h>
-#include <bazio/writing/BazAggregator.h>
-#include <bazio/writing/BazWriter.h>
 #include <bazio/encoding/ObjectToBaz.h>
 #include <bazio/encoding/test/TestingPulse.h>
+#include <bazio/file/FileHeaderBuilder.h>
+#include <bazio/writing/BazAggregator.h>
+#include <bazio/writing/BazWriter.h>
 
-namespace PacBio {
-namespace BazIO {
+namespace PacBio::Primary::Postprimary
+{
 
-// TODO All this Simulate code should be in postprimary, not bazio.
-// Once that happens, these placeholders can potentially be removed
-// and the simulation code define it's own versions, if it doesn't
-// want to be coupled with bazio directly
+using SimProductionPulseGroups = BazIO::ProductionPulses;
+using SimInternalPulseGroups = BazIO::InternalPulses;
+using SimPulse = BazIO::Pulse;
 
-using SimProductionPulseGroups = ProductionPulses;
-using SimInternalPulseGroups = InternalPulses;
-using SimPulse = Pulse;
+using SimMetricT = Application::InternalMetrics<uint16_t,float>;
+using SimMetricAggregatedT = Application::InternalMetrics<uint16_t,float>;
+
+using SimBazWriterT = BazIO::BazWriter<SimMetricT,SimMetricAggregatedT>;
+using SimBazAggregatorT = BazIO::BazAggregator<SimMetricT,SimMetricAggregatedT>;
 
 class SimBazWriter
 {
 public:
     SimBazWriter(const std::string& fileName,
-                 FileHeaderBuilder& fhb,
+                 BazIO::FileHeaderBuilder& fhb,
                  const PacBio::Primary::BazIOConfig& conf, bool);
     ~SimBazWriter();
 
@@ -78,7 +82,7 @@ public:
     }
     void Summarize(std::ostream& out) { writer_->Summarize(out); }
 
-    const FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
+    const BazIO::FileHeaderBuilder& GetFileHeaderBuilder() const { return writer_->GetFileHeaderBuilder(); }
     size_t NumEvents() const { return totalEvents_; }
     size_t BytesWritten() const { return writer_->BytesWritten(); }
     std::string Summary() const { return writer_->Summary(); }
@@ -88,13 +92,13 @@ private:
     size_t numZmw_;
     bool internal_;
 
-    std::unique_ptr<BazIO::BazWriter> writer_;
-    std::unique_ptr<BazIO::BazAggregator> aggregator_;
+    std::unique_ptr<SimBazWriterT> writer_;
+    std::unique_ptr<SimBazAggregatorT> aggregator_;
 
     std::vector<SimInternalPulseGroups> internalSerializer_;
     std::vector<SimProductionPulseGroups> prodSerializer_;
 };
 
-}}
+}
 
 #endif //PACBIO_BAZIO_WRITE_UTILS_H

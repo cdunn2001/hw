@@ -57,19 +57,19 @@
 #include <sstream>
 #include <cstring>
 
-#include "BazCore.h"
-#include "FastaEntry.h"
-#include "FastaUtilities.h"
-#include "Timing.h"
+#include <bazio/BazCore.h>
+#include <bazio/FastaEntry.h>
+#include <bazio/FastaUtilities.h>
+#include <bazio/Timing.h>
+#include <bazio/encoding/test/TestingPulse.h>
+#include <bazio/file/FileHeaderBuilder.h>
+
+#include "SimulateWriteUtils.h"
 #include "SimulationRNG.h"
 #include "Simulation.h"
 
-#include <bazio/encoding/test/TestingPulse.h>
-#include <bazio/file/FileHeaderBuilder.h>
-#include <bazio/SimulateWriteUtils.h>
-
-namespace PacBio {
-namespace Primary {
+namespace PacBio::Primary::Postprimary
+{
 
 /// Simulates internal mode BAZ with sequences from a given FASTA file.
 /// FASTA sequences are split into chunks.
@@ -160,7 +160,7 @@ private:
         size_t superChunkCounter = 0;
         const int numMetrics = 8;
 
-        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         std::vector<uint64_t> currentPulseFrames(numZmws_, 0);
         std::vector<uint64_t> currentBaseFrames(numZmws_, 0);
@@ -215,6 +215,6 @@ private:
     }
 };
 
-}}
+}
 
 

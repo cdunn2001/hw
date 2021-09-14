@@ -17,6 +17,8 @@ add_library(libAppModules STATIC
         BazWriterBody.cpp
         BlockRepacker.h
         BlockRepacker.cpp
+        Metrics.h
+        Metrics.cpp
         PrelimHQFilter.h
         PrelimHQFilter.cpp
         Repacker.h
@@ -31,9 +33,12 @@ add_library(libAppModules STATIC
         SimulatedDataSource.cpp
 )
 
+include(pacbio-half)
+
 target_include_directories(libAppModules
     PUBLIC
         ${MONGO_PROJECT_DIR}
+        libHalf
 )
 
 target_link_libraries(libAppModules

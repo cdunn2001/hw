@@ -23,11 +23,13 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "PrelimHQFilter.h"
+#include <appModules/Metrics.h>
+#include <appModules/PrelimHQFilter.h>
 
 #include <bazio/MetricBlock.h>
 #include <bazio/writing/BazAggregator.h>
 #include <bazio/writing/BazBuffer.h>
+#include <bazio/writing/MetricBlock.h>
 #include <pacbio/smrtdata/Basecall.h>
 
 #include <dataTypes/configs/PrelimHQConfig.h>
@@ -43,111 +45,50 @@ using namespace PacBio::BazIO;
 namespace PacBio {
 namespace Application {
 
-namespace {
-
-void ConvertMetric(const std::unique_ptr<BatchResult::MetricsT>& metricsPtr,
-                   Primary::SpiderMetricBlock& sm,
-                   size_t laneIndex,
-                   size_t zmwIndex)
-{
-    if (metricsPtr)
-    {
-        const auto& metrics = metricsPtr->GetHostView()[laneIndex];
-
-        sm.ActivityLabel(static_cast<Primary::ActivityLabeler::Activity>(metrics.activityLabel[zmwIndex]));
-        sm.TraceAutocorr(metrics.autocorrelation[zmwIndex]);
-
-        sm.BpzvarA(metrics.bpZvar[0][zmwIndex])
-            .BpzvarC(metrics.bpZvar[1][zmwIndex])
-            .BpzvarG(metrics.bpZvar[2][zmwIndex])
-            .BpzvarT(metrics.bpZvar[3][zmwIndex]);
-
-        sm.PkzvarA(metrics.pkZvar[0][zmwIndex])
-            .PkzvarC(metrics.pkZvar[1][zmwIndex])
-            .PkzvarG(metrics.pkZvar[2][zmwIndex])
-            .PkzvarT(metrics.pkZvar[3][zmwIndex]);
-
-        sm.BaseWidth(metrics.numBaseFrames[zmwIndex]);
-        sm.PulseWidth(metrics.numPulseFrames[zmwIndex]);
-
-        sm.NumBasesA(metrics.numBasesByAnalog[0][zmwIndex])
-            .NumBasesC(metrics.numBasesByAnalog[1][zmwIndex])
-            .NumBasesG(metrics.numBasesByAnalog[2][zmwIndex])
-            .NumBasesT(metrics.numBasesByAnalog[3][zmwIndex]);
-
-        sm.NumPulses(metrics.numPulses[zmwIndex]);
-
-        sm.NumPkmidBasesA(metrics.numPkMidBasesByAnalog[0][zmwIndex])
-            .NumBasesC(metrics.numPkMidBasesByAnalog[1][zmwIndex])
-            .NumBasesG(metrics.numPkMidBasesByAnalog[2][zmwIndex])
-            .NumBasesT(metrics.numPkMidBasesByAnalog[3][zmwIndex]);
-
-        sm.NumFrames(metrics.numFrames[zmwIndex]);
-
-        sm.NumPkmidFramesA(metrics.numPkMidFrames[0][zmwIndex])
-            .NumPkmidFramesC(metrics.numPkMidFrames[1][zmwIndex])
-            .NumPkmidFramesG(metrics.numPkMidFrames[2][zmwIndex])
-            .NumPkmidFramesT(metrics.numPkMidFrames[3][zmwIndex]);
-
-        sm.NumPulseLabelStutters(metrics.numPulseLabelStutters[zmwIndex]);
-        sm.NumHalfSandwiches(metrics.numHalfSandwiches[zmwIndex]);
-        sm.NumSandwiches(metrics.numSandwiches[zmwIndex]);
-        sm.PulseDetectionScore(metrics.pulseDetectionScore[zmwIndex]);
-
-        sm.PkmaxA(metrics.pkMax[0][zmwIndex])
-            .PkmaxC(metrics.pkMax[1][zmwIndex])
-            .PkmaxG(metrics.pkMax[2][zmwIndex])
-            .PkmaxT(metrics.pkMax[3][zmwIndex]);
-
-        sm.PixelChecksum(metrics.pixelChecksum[zmwIndex]);;
-
-        sm.PkmidA(metrics.pkMidSignal[0][zmwIndex])
-            .PkmidC(metrics.pkMidSignal[1][zmwIndex])
-            .PkmidG(metrics.pkMidSignal[2][zmwIndex])
-            .PkmidT(metrics.pkMidSignal[3][zmwIndex]);
-
-        sm.NumBaselineFrames({metrics.numFramesBaseline[zmwIndex]});
-        sm.Baselines({metrics.frameBaselineDWS[zmwIndex]});
-        sm.BaselineSds({metrics.frameBaselineVarianceDWS[zmwIndex]});
-    }
-}
-
-} // anon
-
 using namespace Cuda::Memory;
 using namespace PacBio::BazIO;
 using namespace PacBio::Mongo::Data;
 
-class PrelimHQFilterBody::Impl
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+class PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl
 {
+public:
+    using BazBufferT = BazBuffer<MetricBlockT,AggregatedMetricBlockT>;
 public:
 
     Impl() = default;
     virtual ~Impl() = default;
 
-    virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
+    virtual std::unique_ptr<BazBufferT> Process(BatchResult in) = 0;
+    virtual std::unique_ptr<BazBufferT> Flush() = 0;
 };
 
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
 template <bool internal>
-class PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
+class PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::ImplChild : public PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl
 {
+public:
+    using BazAggregatorT = BazIO::BazAggregator<MetricBlockT,AggregatedMetricBlockT>;
+    using BazBufferT = typename PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl::BazBufferT;
 public:
     ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
               bool multipleBazFiles, const PrelimHQConfig& config)
         : numBatches_(numBatches)
         , numZmw_(numZmws)
-        , chunksPerOutput_(config.bazBufferChunks)
+        , bazMetricBlocksPerOutput_(config.bazBufferMetricBlocks)
         , zmwStride_(config.zmwOutputStride)
         , multipleBazFiles_(multipleBazFiles)
-        , aggregator_(std::make_unique<BazIO::BazAggregator>(numZmws, bufferId,
-                                                             config.expectedPulsesPerZmw*expectedBytesPerBase,
-                                                             config.lookbackSize,
-                                                             CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
+        , aggregator_(std::make_unique<BazAggregatorT>(numZmws, bufferId,
+                                                       config.expectedPulsesPerZmw*expectedBytesPerBase,
+                                                       config.lookbackSize,
+                                                       config.enableLookback,
+                                                       CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()),
+                                                       CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
         , dummyPreHQ_(config)
         , serializers_(numZmws)
     {}
 
-    std::unique_ptr<BazBuffer> Process(BatchResult in) override
+    std::unique_ptr<BazBufferT> Process(BatchResult in) override
     {
         const auto& pulseBatch = in.pulses;
         const auto& metricsPtr = in.metrics;
@@ -157,62 +98,68 @@ public:
             if (batchesSeen_ != 0)
                 throw PBException("Data out of order, new chunk seen before all batches of previous chunk");
             currFrame_ = pulseBatch.GetMeta().FirstFrame();
-            chunksSeen_++;
-            if (chunksSeen_ == chunksPerOutput_) chunksSeen_ = 0;
         } else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
         {
             throw PBException("Data out of order, multiple chunks being processed simultaneously");
         }
 
         size_t currentZmwIndex = (multipleBazFiles_) ? 0 : pulseBatch.GetMeta().FirstZmw();
+        bool metricsSeen = false;
         for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
         {
             const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
-
             for (uint32_t zmw = 0; zmw < laneSize; zmw += zmwStride_)
             {
                 if (metricsPtr)
                 {
-                    aggregator_->AddMetrics(currentZmwIndex,
-                                        [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
-                                        {
-                                            assert(dest.size() == 1);
-                                            ConvertMetric(metricsPtr, dest[0], lane, zmw);
-                                        },
-                                        1);
+                    const auto& metrics = metricsPtr->GetHostView()[lane];
+                    aggregator_->AddMetrics(currentZmwIndex, MetricBlockT(metrics, zmw));
+                    metricsSeen = true;
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
-                aggregator_->AddZmw(currentZmwIndex, pulses,
-                                    pulses + lanePulses.size(zmw),
-                                    [](const auto& p){ return internal ? true : !p.IsReject(); },
-                                    serializers_[currentZmwIndex]);
+                aggregator_->AddPulses(currentZmwIndex,
+                                       pulses,pulses + lanePulses.size(zmw),
+                                       [](const auto& p){ return internal ? true : !p.IsReject(); },
+                                       serializers_[currentZmwIndex]);
                 currentZmwIndex += zmwStride_;
             }
         }
         batchesSeen_++;
-        std::unique_ptr<BazBuffer> ret;
+        std::unique_ptr<BazBufferT> ret;
         if (batchesSeen_ == numBatches_)
         {
             batchesSeen_ = 0;
-            if (chunksSeen_ == chunksPerOutput_-1)
+            if (metricsSeen)
             {
-                dummyPreHQ_.NewHQ(*aggregator_);
+                dummyPreHQ_.DetectHQ(*aggregator_);
+                aggregator_->UpdateLookback();
+                metricBlocksSeen_++;
+            }
+
+            if (metricBlocksSeen_ == bazMetricBlocksPerOutput_)
+            {
+                metricBlocksSeen_ = 0;
                 return aggregator_->ProduceBazBuffer();
             }
         }
         return ret;
     }
 
+    std::unique_ptr<BazBufferT> Flush() override
+    {
+        return aggregator_->Flush();
+    }
+
 private:
     size_t currFrame_ = 0;
     size_t batchesSeen_ = 0;
-    size_t chunksSeen_ = 0;
+    size_t metricBlocksSeen_ = 0;
     size_t numBatches_;
     size_t numZmw_;
-    size_t chunksPerOutput_;
+    size_t bazMetricBlocksPerOutput_;
     size_t zmwStride_;
     bool multipleBazFiles_;
-    std::unique_ptr<BazIO::BazAggregator> aggregator_;
+    std::unique_ptr<BazAggregatorT> aggregator_;
 
     // Dummy class to serve as basic placeholder for the preliminary HQ algorithm.
     // It can be totally burnt to the ground once the real thing is about read.
@@ -224,7 +171,7 @@ private:
             stride = static_cast<size_t>(std::round(1/config_.hqThrottleFraction));
         }
 
-        void NewHQ(BazAggregator& agg)
+        void DetectHQ(BazAggregatorT& agg)
         {
             if (!config_.enableLookback)
             {
@@ -233,7 +180,12 @@ private:
             }
 
             seen++;
-            if (seen < config_.lookbackSize) return;
+            if (seen < config_.lookbackSize) 
+            {
+                for (auto&& v : agg.PreHQData())
+                    AddActivityLabel(v.GetRecentActivityLabel());
+                return;
+            }
 
             size_t counter = 0;
             size_t marked = 0;
@@ -242,13 +194,27 @@ private:
             {
                 if (counter % stride == 0)
                 {
-                    marked++;
-                    v.MarkAsHQ();
+                    if (HasPreHQStarted(v.GetRecentActivityLabel()))
+                    {
+                        marked++;
+                        v.MarkAsHQ();
+                    }
                 }
                 counter++;
             }
-            PBLOG_INFO << "Enabled " << marked << " ZMW";
+            PBLOG_DEBUG << "Enabled " << marked << " ZMW";
         }
+
+        void AddActivityLabel(const Mongo::Data::HQRFPhysicalStates& state)
+        {
+            
+        }
+
+        bool HasPreHQStarted(const Mongo::Data::HQRFPhysicalStates& state)
+        {
+            return true;
+        }
+
     private:
         PrelimHQConfig config_;
 
@@ -263,8 +229,11 @@ private:
     std::vector<Serializer> serializers_;
 };
 
-PrelimHQFilterBody::PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                       const SmrtBasecallerConfig& config)
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::PrelimHQFilterBody(
+        size_t numZmws, const std::map<uint32_t,
+        Data::BatchDimensions>& poolDims,
+        const SmrtBasecallerConfig& config)
     : numThreads_(config.system.ioConcurrency)
 {
     if (config.multipleBazFiles)
@@ -290,18 +259,39 @@ PrelimHQFilterBody::PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, 
             impl_.push_back(std::make_unique<ImplChild<false>>(numZmws, poolDims.size(), 0,
                                                                config.multipleBazFiles, config.prelimHQ));
     }
-
-
 }
 
-PrelimHQFilterBody::~PrelimHQFilterBody() = default;
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::~PrelimHQFilterBody() = default;
 
-void PrelimHQFilterBody::Process(Mongo::Data::BatchResult in)
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+void PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Process(Mongo::Data::BatchResult in)
 {
     auto ret = (impl_.size() == 1)
             ? impl_[0]->Process(std::move(in))
             : impl_[in.pulses.GetMeta().PoolId()]->Process(std::move(in));
     if (ret) this->PushOut(std::move(ret));
 }
+
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+std::vector<uint32_t> PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::GetFlushTokens()
+{
+    std::vector<uint32_t> flushTokens;
+    flushTokens.resize(impl_.size());
+    std::iota(flushTokens.begin(), flushTokens.end(), 0);
+    return flushTokens;
+}
+
+template <typename MetricBlockT,typename AggregatedMetricBlockT>
+void PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Flush(uint32_t token)
+{
+    auto ret = impl_[token]->Flush();
+    if (ret) this->PushOut(std::move(ret));
+}
+
+// Explicit instantiations
+
+template class PrelimHQFilterBody<ProductionMetricsGroup::MetricT,ProductionMetricsGroup::MetricAggregatedT>;
+template class PrelimHQFilterBody<InternalMetricsGroup::MetricT,InternalMetricsGroup::MetricAggregatedT>;
 
 }}

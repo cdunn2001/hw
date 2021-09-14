@@ -73,7 +73,7 @@ struct MetricBlock
     Flt      traceAutoCorr_             = 0;
     int16_t  pixelChecksum_             = 0;
     uint8_t  dmeStatus_                 = 0;
-    ActivityLabeler::Activity activityLabel_ = ActivityLabeler::A0;
+    uint8_t activityLabel_ = static_cast<uint8_t>(ActivityLabeler::A0);
 
     // Analog-dependent metrics
     Flt      pkmidA_                    = 0;
@@ -217,7 +217,7 @@ public: // setters
         return *this;
     }
 
-    MetricBlock& ActivityLabel(ActivityLabeler::Activity activityLabel)
+    MetricBlock& ActivityLabel(uint8_t activityLabel)
     {
         activityLabel_ = activityLabel;
         return *this;

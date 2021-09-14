@@ -43,6 +43,7 @@
 #include <bazio/MetricBlock.h>
 #include <bazio/writing/BazBuffer.h>
 #include <bazio/writing/PacketBuffer.h>
+#include <bazio/writing/MetricBuffer.h>
 
 namespace PacBio {
 namespace BazIO {
@@ -64,9 +65,12 @@ namespace BazIO {
 /// and potentially mark is as now being "HQ".  When a ZMW is first marked as
 /// HQ, then the next call to `ProduceBazBuffer` will expose the full lookback
 /// data in the resulting BazBuffer.
+template <typename MetricBlockT, typename AggregatedMetricBlockT>
 class BazAggregator
 {
-    using TMetric = Primary::SpiderMetricBlock;
+public:
+    using BazBufferT = BazBuffer<MetricBlockT,AggregatedMetricBlockT>;
+    using MetricBufferManagerT = MetricBufferManager<MetricBlockT,AggregatedMetricBlockT>;
 public:
     /// Simplified constructor, predominantly meant for simulation/test execution where
     /// we don't care about HQ vs preHQ data.  All data is marked as HQ from the onset,
@@ -79,7 +83,14 @@ public:
     ///                                 consumed by any particular ZMW, then another
     ///                                 allocation of the same size will be reserved for it.
     BazAggregator(size_t numZmw, uint32_t bufferId,
-                  size_t expectedPulseBytesPerZmw);
+                  size_t expectedPulseBytesPerZmw)
+    : numZmw_(numZmw)
+    , bufferId_(bufferId)
+    , packetsAllocator_(std::make_shared<DataSource::MallocAllocator>())
+    , packets_(numZmw, expectedPulseBytesPerZmw)
+    , metricsAllocator_(std::make_shared<DataSource::MallocAllocator>())
+    , metrics_(numZmw)
+    {}
 
     /// Primary constructor, where all ZMW start off as "preHQ" until they are
     /// explicitly marked otherwise
@@ -94,14 +105,26 @@ public:
     /// \param maxLookback The number of data buffers we retain before dropping
     ///                    data Every call to `ProduceBazFile` will create a new
     ///                    data buffer
-    /// \param allocator   An optional IAllocator instance to use for allocating
-    ///                    memory
+    /// \param packetsAllocator   An optional IAllocator instance to use for allocating
+    ///                           packets memory
+    /// \param metricsAllocatr    An optional IAllocator instance to use for allocating
+    ///                           metrics memory
     BazAggregator(size_t numZmw,
                   uint32_t bufferId,
                   size_t expectedPulseBufferSize,
                   size_t maxLookback,
-                  std::shared_ptr<Memory::IAllocator> allocator =
-                      std::make_shared<DataSource::MallocAllocator>());
+                  bool enableLookback,
+                  std::shared_ptr<Memory::IAllocator> packetsAllocator =
+                      std::make_shared<DataSource::MallocAllocator>(),
+                  std::shared_ptr<Memory::IAllocator> metricsAllocator =
+                      std::make_shared<DataSource::MallocAllocator>())
+    : numZmw_(numZmw)
+    , bufferId_(bufferId)
+    , packetsAllocator_(packetsAllocator)
+    , packets_(numZmw, expectedPulseBufferSize, maxLookback, packetsAllocator)
+    , metricsAllocator_(metricsAllocator)
+    , metrics_(numZmw, maxLookback, enableLookback, metricsAllocator)
+    {}
 
     size_t NumZmw() const { return numZmw_; }
     uint32_t BufferId() const { return bufferId_; }
@@ -111,7 +134,29 @@ public:
     /// aggregator restarts them with a clean state.  The baz buffer also gets a shared_pointer
     /// reference to all the preHQ data, so that it can see (and extend the lifetime if necessary)
     /// all the data that wasn't HQ before, but recently has been marked as such.
-    std::unique_ptr<BazBuffer> ProduceBazBuffer();
+    std::unique_ptr<BazBufferT> ProduceBazBuffer()
+    {
+        auto currPackets = packets_.CreateCheckpoint();
+        auto currMetrics = metrics_.CreateCheckpoint();
+        auto ret = std::make_unique<BazBufferT>(bufferId_, std::move(currMetrics), std::move(currPackets));
+        return ret;
+    }
+
+    // Flushes the current buffers of all remaining data.
+    std::unique_ptr<BazBufferT> Flush()
+    {
+        auto currPackets = packets_.CreateCheckpoint();
+        auto currMetrics = metrics_.Flush();
+        auto ret = std::make_unique<BazBufferT>(bufferId_, std::move(currMetrics), std::move(currPackets));
+        return ret;
+    }
+
+    /// Updates the lookback buffers for metrics. This is meant to be
+    /// called at the metric block frequency.
+    void UpdateLookback()
+    {
+        metrics_.UpdateLookback();
+    }
 
     /// Adds ZMW packet data to the current buffers
     ///
@@ -122,11 +167,11 @@ public:
     ///              serialized (e.g. to skip pulses not marked as bases)
     /// \serializer  A serializer that can convert the pulse to a byte stream
     template <typename Iterator, typename Predicate, typename Serializer>
-    void AddZmw(size_t zmw,
-                Iterator begin,
-                Iterator end,
-                Predicate&& predicate,
-                Serializer&& serializer)
+    void AddPulses(size_t zmw,
+                   Iterator begin,
+                   Iterator end,
+                   Predicate&& predicate,
+                   Serializer&& serializer)
     {
         packets_.AddZmw(zmw,
                         begin,
@@ -138,17 +183,10 @@ public:
     /// Adds metric data to the current buffers
     ///
     /// \param zmw   The zmw index of the data
-    /// \param metricsConverter A functor that can convert/generate the TMetrics
-    ///        to be written to disk (This will be re-worked soon)
-    /// \param numMetrics The number of metrics to be written
-    template <typename MetricsConverter>
-    void AddMetrics(size_t zmw, MetricsConverter&& metricsConverter, size_t numMetrics)
+    /// \param mb    The metrics converted to metric block format
+    void AddMetrics(size_t zmw, const MetricBlockT& mb)
     {
-        assert(metrics_.size() > zmw);
-
-        auto& m = metrics_[zmw];
-        m = metricsBuffer_.Allocate(numMetrics);
-        metricsConverter(m);
+        metrics_.AddZmw(zmw, mb);
     }
 
     ~BazAggregator() = default;
@@ -159,9 +197,11 @@ public:
     struct PreHQIterator
     {
         PreHQIterator(size_t idx,
-                      PacketBufferManager& packets)
+                      PacketBufferManager& packets,
+                      MetricBufferManagerT& metrics)
             : idx_(idx)
             , packets_(packets)
+            , metrics_(metrics)
         {}
         // bare minimum to allow range based for loops...
         bool operator!=(const PreHQIterator& o) const
@@ -178,9 +218,6 @@ public:
             } while (idx_ < packets_.get().NumZmw() && packets_.get().IsHQ(idx_));
             return *this;
         }
-
-        // TODO this class should be able to expose the metrics
-        //      to the preHQ algorithm
         struct DerefView
         {
             DerefView(PreHQIterator* itr)
@@ -190,6 +227,12 @@ public:
             void MarkAsHQ()
             {
                 itr_->packets_.get().MarkAsHQ(itr_->idx_);
+                itr_->metrics_.get().MarkAsHQ(itr_->idx_);
+            }
+
+            const Mongo::Data::HQRFPhysicalStates GetRecentActivityLabel()
+            {
+                return itr_->metrics_.get().GetRecentActivityLabel(itr_->idx_);
             }
         private:
             PreHQIterator* itr_;
@@ -199,24 +242,26 @@ public:
     private:
         size_t idx_;
         std::reference_wrapper<PacketBufferManager> packets_;
+        std::reference_wrapper<MetricBufferManagerT> metrics_;
     };
 
     // Wrapper struct, whose sole purpose is to provide the
     // begin/end function necessary for range based for loops
     struct PreHQView
     {
-        PreHQView(PacketBufferManager& packets)
+        PreHQView(PacketBufferManager& packets, MetricBufferManagerT& metrics)
             : packets_(packets)
+            , metrics_(metrics)
         {}
         PreHQIterator begin()
         {
-            PreHQIterator ret{0, packets_};
+            PreHQIterator ret{0, packets_, metrics_};
             if (packets_.get().IsHQ(0)) ++ret;
             return ret;
         }
         PreHQIterator end()
         {
-            return PreHQIterator{packets_.get().NumZmw(), packets_};
+            return PreHQIterator{packets_.get().NumZmw(), packets_, metrics_};
         }
         size_t size() const
         {
@@ -225,25 +270,23 @@ public:
 
     private:
         std::reference_wrapper<PacketBufferManager> packets_;
+        std::reference_wrapper<MetricBufferManagerT> metrics_;
     };
 
     PreHQView PreHQData()
     {
-        return PreHQView{packets_};
+        return PreHQView{packets_, metrics_};
     }
 
 private:
     size_t numZmw_;
     uint32_t bufferId_;
-    std::shared_ptr<Memory::IAllocator> allocator_;
-    // Note: This is currently the only usage of this class, and
-    //       metrics are slated to be reworked.  If you need this
-    //       then keeping it is fine.  If you don't, then the
-    //       whole MemoryBuffer file should probably be deleted
-    MemoryBuffer<TMetric> metricsBuffer_;
-    std::vector<MemoryBufferView<TMetric>> metrics_;
 
+    std::shared_ptr<Memory::IAllocator> packetsAllocator_;
     PacketBufferManager packets_;
+
+    std::shared_ptr<Memory::IAllocator> metricsAllocator_;
+    MetricBufferManagerT metrics_;
 };
 
 

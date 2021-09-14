@@ -37,7 +37,7 @@
 
 #include <json/json.h>
 
-#include "Simulation.h"
+#include <bazio/SimulateConfigs.h>
 
 namespace PacBio {
 namespace Primary {
