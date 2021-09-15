@@ -119,8 +119,9 @@ private:
     // a thread is spawned.  Can greatly increase both startup time and memory footprint,
     // but does allow data processing guaranteed to not have any IO bottlenecking
     void PreloadInputQueue(size_t chunks);
-    void PopulateBlock(size_t traceLane, size_t traceChunk, int16_t* data);
-    void ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, int16_t* data);
+    void PopulateBlock(size_t traceLane, size_t traceChunk, uint8_t* data);
+    template <typename T>
+    void ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, T* data);
 
     size_t numZmwLanes_;
     size_t numChunks_;
@@ -134,11 +135,12 @@ private:
     size_t maxQueueSize_;
 
     float frameRate_;
+    uint32_t bytesPerValue_;
 
     std::string filename_;
 
     TraceFile::TraceFile traceFile_;
-    std::vector<int16_t> traceDataCache_;
+    std::vector<uint8_t> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
