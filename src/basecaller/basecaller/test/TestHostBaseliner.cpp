@@ -52,6 +52,15 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+BatchDimensions Layout2Dims(const PacBio::DataSource::PacketLayout& layout)
+{
+    return BatchDimensions {
+        (uint32_t)layout.NumBlocks(),
+        (uint32_t)layout.NumFrames(),
+        (uint32_t)layout.BlockWidth()
+        };
+}
+
 namespace {
 
 struct TestConfig : public Configuration::PBConfig<TestConfig>
@@ -87,11 +96,11 @@ TEST(TestHostNoOpBaseliner, Run)
 
     Data::BatchLayoutConfig batchConfig;
     batchConfig.lanesPerPool = lanesPerPool;
-    std::vector<std::unique_ptr<HostNoOpBaseliner>> baseliners;
+    std::vector<HostNoOpBaseliner> baseliners;
 
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
-        baseliners.emplace_back(std::make_unique<HostNoOpBaseliner>(poolId));
+        baseliners.emplace_back(HostNoOpBaseliner(poolId));
     }
 
     auto generator = std::make_unique<ConstantGenerator>();
@@ -120,17 +129,13 @@ TEST(TestHostNoOpBaseliner, Run)
                 auto batchIdx = packet.PacketID();
                 BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
                                    packet.StartZmw());
-                BatchDimensions dims;
-                dims.lanesPerBatch = packet.Layout().NumBlocks();
-                dims.framesPerBatch = packet.Layout().NumFrames();
-                dims.laneWidth = packet.Layout().BlockWidth();
                 TraceBatch<int16_t> in(std::move(packet),
                                        meta,
-                                       dims,
+                                       Layout2Dims(packet.Layout()),
                                        SyncDirection::HostWriteDeviceRead,
                                        SOURCE_MARKER());
 
-                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                auto cameraBatch = baseliners[batchIdx].FilterBaseline(in);
                 auto traces = std::move(cameraBatch.first);
                 auto stats = std::move(cameraBatch.second);
                 for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
@@ -160,72 +165,105 @@ TEST(TestHostNoOpBaseliner, Run)
     HostNoOpBaseliner::Finalize();
 }
 
-TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
+struct TestingParams
 {
-    Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+    uint16_t pfg_pulseIpd   = -1;
+    uint16_t pfg_pulseWidth = -1;
+    int16_t  pfg_baseSignalLevel = -1;
+    std::vector<short> pfg_pulseSignalLevels;
+};
 
+struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingParams>
+{
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
-    const size_t numBlocks = 256;
+    const size_t numBlocks = 16;
+
+    float scaler_ = 3.0f;
 
     Data::BatchLayoutConfig batchConfig;
-    batchConfig.lanesPerPool = lanesPerPool;
-    const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
-    HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
-    std::vector<std::unique_ptr<HostMultiScaleBaseliner>> baseliners;
+    std::vector<HostMultiScaleBaseliner> baseliners;
 
-    for (size_t poolId = 0; poolId < numPools; poolId++)
-    {
-        baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
-                                                                          FilterParamsLookup(baselinerConfig.Method),
-                                                                          batchConfig.lanesPerPool));
-    }
-
+    std::unique_ptr<SimulatedDataSource> source;
     PicketFenceGenerator::Config pfConfig;
-    pfConfig.generatePoisson = false;
-    pfConfig.pulseWidth = 0;    // No pulses.
-    pfConfig.pulseIpd = static_cast<uint16_t>(batchConfig.framesPerChunk);
-    auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                        PacketLayout::INT16,
-                        {lanesPerPool, batchConfig.framesPerChunk, laneSize});
-    DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
-    SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
-    sourceConfig.numFrames = simConfig.NumFrames();
-
-    auto source = std::make_unique<SimulatedDataSource>(
-            baseliners.size() * sourceConfig.requestedLayout.NumZmw(),
-            simConfig,
-            std::move(sourceConfig),
-            std::move(generator));
 
     const size_t burnIn = 10;
-    const size_t burnInFrames = burnIn * batchConfig.framesPerChunk;
-    DataSourceRunner runner(std::move(source));
-    runner.Start();
-    while (runner.IsActive())
+    size_t burnInFrames;
+
+    void SetUp() override
+    {
+        auto params = GetParam();
+        pfConfig.generatePoisson = false;
+        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? params.pfg_pulseIpd          : pfConfig.pulseIpd); 
+        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? params.pfg_pulseWidth        : pfConfig.pulseWidth);
+        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
+        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
+
+        Data::MovieConfig movConfig;
+        const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+        HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+
+        for (size_t poolId = 0; poolId < numPools; poolId++)
+        {
+            baseliners.emplace_back(HostMultiScaleBaseliner(poolId, Scale(),
+                                                            FilterParamsLookup(baselinerConfig.Method),
+                                                            lanesPerPool));
+        }
+
+        batchConfig.lanesPerPool = lanesPerPool;
+
+        burnInFrames = burnIn * batchConfig.framesPerChunk;
+
+        PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
+                            PacketLayout::INT16,
+                            {lanesPerPool, batchConfig.framesPerChunk, laneSize});
+        const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
+        SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
+        DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+        sourceConfig.numFrames = numFrames;
+        auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
+        source = std::make_unique<SimulatedDataSource>(
+                baseliners.size() * sourceConfig.requestedLayout.NumZmw(),
+                simConfig,
+                std::move(sourceConfig),
+                std::move(generator));
+    }
+
+    // Conversion between DN and e-
+    float Scale() const { return scaler_; }
+
+    void TearDown() override
+    {
+        HostMultiScaleBaseliner::Finalize();
+    }
+};
+
+class HostMultiScaleBaselinerChunk : public HostMultiScaleBaselinerTest {};
+
+TEST_P(HostMultiScaleBaselinerChunk, Chunk)
+{
+    while (source->IsRunning())
     {
         SensorPacketsChunk currChunk;
-        if(runner.PopChunk(currChunk, std::chrono::milliseconds{10}))
+        source->ContinueProcessing();
+        if (source->PopChunk(currChunk, std::chrono::milliseconds(10)))
         {
-            for (auto& packet : currChunk)
+            // ASSERT_EQ(currChunk.NumPackets(), hists.size());
+            for (auto&& packet : currChunk)
             {
                 auto batchIdx = packet.PacketID();
-                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
-                                   packet.StartZmw());
-                BatchDimensions dims;
-                dims.lanesPerBatch = packet.Layout().NumBlocks();
-                dims.framesPerBatch = packet.Layout().NumFrames();
-                dims.laneWidth = packet.Layout().BlockWidth();
-                TraceBatch<int16_t> in(std::move(packet),
-                                       meta,
-                                       dims,
-                                       SyncDirection::HostWriteDeviceRead,
-                                       SOURCE_MARKER());
+                auto startFrame = packet.StartFrame(); auto endFrame = packet.StartFrame() + packet.NumFrames();
+                BatchMetadata meta(batchIdx, startFrame, endFrame, packet.StartZmw());
 
-                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                TraceBatch<int16_t> in(std::move(packet),
+                                        meta,
+                                        Layout2Dims(packet.Layout()),
+                                        SyncDirection::HostWriteDeviceRead,
+                                        SOURCE_MARKER());
+
+                // ACTION
+                auto cameraBatch = baseliners[batchIdx].FilterBaseline(in);
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 
@@ -243,137 +281,151 @@ TEST(TestHostMultiScaleBaseliner, AllBaselineFrames)
                     const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
 
                     EXPECT_NEAR(count,
-                                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
-                                pfConfig.pulseIpd, 20)
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    // Account for bias.
-                    EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                6 * pfConfig.baselineSigma)
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                6 * (pfConfig.baselineSigma / std::sqrt(count)))
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
+                                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd,
+                                20)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+                    EXPECT_NEAR(mean/Scale(), 0, 
+                                5 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+                    EXPECT_NEAR(var/Scale()/Scale(), pfConfig.baselineSigma * pfConfig.baselineSigma,
+                                5 * pfConfig.baselineSigma)
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+                    EXPECT_NEAR(rawMean/Scale(), pfConfig.baselineSignalLevel,
+                                5 * (pfConfig.baselineSigma / std::sqrt(count)))
+                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
                 }
+
+                break;
             }
         }
     }
-
-    HostMultiScaleBaseliner::Finalize();
 }
 
+class HostMultiScaleBaselinerSmallBatch : public HostMultiScaleBaselinerTest {};
 
-TEST(TestHostMultiScaleBaseliner, OneSignalLevel)
+TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
 {
-    Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+    // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for 
+    // BasecallerBaselinerConfig::MethodName::TwoScaleMedium
+    BaselinerParams blp({2, 8}, {5, 5}, 2.44f, 0.50f); // strides, widths, sigma, mean
+    // LatentSize in blp should be small? check with Curtis
 
-    const uint32_t numZmwLanes = 4;
-    const uint32_t numPools = 2;
-    const uint32_t lanesPerPool = numZmwLanes / numPools;
-    const size_t numBlocks = 256;
+    uint32_t lanesPerPool_ = 1;
+    HostMultiScaleBaseliner baseliner(0, Scale(), blp, lanesPerPool_);
 
-    Data::BatchLayoutConfig batchConfig;
-    batchConfig.lanesPerPool = lanesPerPool;
-    const size_t numFrames = numBlocks * batchConfig.framesPerChunk;
-    HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
-    std::vector<std::unique_ptr<HostMultiScaleBaseliner>> baseliners;
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
+                            //      blocks                      frames     width
+                            {lanesPerPool_, batchConfig.framesPerChunk, laneSize});
+    size_t framesPerBlock = layout.NumFrames(), zmwPerBlock = layout.BlockWidth();
 
-    for (size_t poolId = 0; poolId < numPools; poolId++)
+    size_t signalIdx = 0;
+    PicketFenceGenerator generator(pfConfig);
+
+    boost::multi_array<int16_t, 2> data_(boost::extents[framesPerBlock][zmwPerBlock]);
+
+    for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx)
     {
-        baseliners.emplace_back(std::make_unique<HostMultiScaleBaseliner>(poolId, 1.0f,
-                                                                          FilterParamsLookup(baselinerConfig.Method),
-                                                                          batchConfig.lanesPerPool));
-    }
+        size_t frame = 0;
+        auto signal = generator.GenerateSignal(framesPerBlock, signalIdx++);
 
-    PicketFenceGenerator::Config pfConfig;
-    pfConfig.generatePoisson = false;
-    pfConfig.pulseSignalLevels = { 600 };
-    pfConfig.pulseWidth = 24;
-    pfConfig.pulseIpd = 20;
-    auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                        PacketLayout::INT16,
-                        {lanesPerPool, batchConfig.framesPerChunk, laneSize});
-    DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
-    SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
-    sourceConfig.numFrames = simConfig.NumFrames();
-
-    auto source = std::make_unique<SimulatedDataSource>(
-            baseliners.size() * sourceConfig.requestedLayout.NumZmw(),
-            simConfig,
-            std::move(sourceConfig),
-            std::move(generator));
-
-    const size_t burnIn = 10;
-    const size_t burnInFrames = burnIn * batchConfig.framesPerChunk;
-    DataSourceRunner runner(std::move(source));
-    runner.Start();
-    while (runner.IsActive())
-    {
-        SensorPacketsChunk currChunk;
-        if(runner.PopChunk(currChunk, std::chrono::milliseconds{10}))
+        for (size_t frameIdx = 0; frameIdx < framesPerBlock; ++frameIdx, ++frame)
         {
-            for (auto& packet : currChunk)
-            {
-                auto batchIdx = packet.PacketID();
-                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
-                                   packet.StartZmw());
-                BatchDimensions dims;
-                dims.lanesPerBatch = packet.Layout().NumBlocks();
-                dims.framesPerBatch = packet.Layout().NumFrames();
-                dims.laneWidth = packet.Layout().BlockWidth();
-                TraceBatch<int16_t> in(std::move(packet),
-                                       meta,
-                                       dims,
-                                       SyncDirection::HostWriteDeviceRead,
-                                       SOURCE_MARKER());
-
-                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
-
-                if (currChunk.StartFrame() < burnInFrames) continue;
-
-                auto traces = std::move(cameraBatch.first);
-                auto stats = std::move(cameraBatch.second);
-                for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
-                {
-                    const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];
-                    const auto& baselineStats = baselinerStatAccumState.baselineStats;
-
-                    const auto count = baselineStats.moment0[0];
-                    const auto mean = baselineStats.moment1[0] / baselineStats.moment0[0];
-                    auto var = baselineStats.moment1[0] * baselineStats.moment1[0] / baselineStats.moment0[0];
-                    var = (baselineStats.moment2[0] - var) / (baselineStats.moment0[0] - 1.0f);
-                    const auto rawMean = baselinerStatAccumState.rawBaselineSum[0] / baselineStats.moment0[0];
-
-                    EXPECT_NEAR(count,
-                                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) *
-                                (pfConfig.pulseIpd - 1), 20)
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    // Account for bias.
-                    EXPECT_NEAR(mean, 0, 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    EXPECT_NEAR(var, pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                6 * pfConfig.baselineSigma)
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                    EXPECT_NEAR(rawMean, pfConfig.baselineSignalLevel,
-                                6 * (pfConfig.baselineSigma / std::sqrt(count)))
-                                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw() << " laneIdx="
-                                << laneIdx << " startframe=" << meta.FirstFrame();
-                }
-            }
+            data_[frameIdx][zmwIdx] = signal[frame];
         }
     }
 
-    HostMultiScaleBaseliner::Finalize();
+    auto batchIdx = 0; auto startFrame = 0; auto endFrame = framesPerBlock; auto startZmw = 0;
+    BatchMetadata meta(batchIdx, startFrame, endFrame, startZmw);
+
+    TraceBatch<int16_t> in(meta, Layout2Dims(layout),
+                        SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+
+    auto li = 0 /* laneIdx */;
+    std::memcpy(in.GetBlockView(li).Data(), data_[li].origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
+
+    // ACTION !!!!! baselineStats is new for each call !!!!!
+    std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;
+    cameraOutput.push_back(baseliner.FilterBaseline(in));
+    cameraOutput.push_back(baseliner.FilterBaseline(in));
+    cameraOutput.push_back(baseliner.FilterBaseline(in));
+
+    std::vector<BlockView<int16_t>> traces; std::vector<StatAccumState> blStats;
+    for (auto &e : cameraOutput) 
+    {
+        traces.push_back(e.first.GetBlockView(li));
+        blStats.push_back(e.second.baselinerStats.GetHostView()[li].baselineStats);
+    }
+
+    // Assert statistics
+    auto rnd_ = time(NULL);
+    auto zi = rnd_ % zmwPerBlock;   // random zmwIdx
+    auto fi = rnd_ % 128;           // random frameIdx
+    std::vector<float> trCount; std::vector<float> mfMean; std::vector<float> trVar;
+    for (auto &stat : blStats) {
+        trCount.push_back(stat.moment0[zi]);
+        mfMean.push_back(stat.moment1[zi]/stat.moment0[zi]);
+        auto _v = stat.moment1[zi]*stat.moment1[zi] / stat.moment0[zi];
+        trVar.push_back((stat.moment2[zi] - _v) / (stat.moment0[zi] - 1));
+    }
+
+    auto laneIdx = li, pi = 1;
+    auto count = trCount[pi]; auto mean = mfMean[pi]; auto var = trVar[pi];
+    EXPECT_NEAR(count,
+                (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd,
+                64)
+                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+    EXPECT_NEAR(mean/Scale(),
+                0, 
+                5 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+    EXPECT_NEAR(var/Scale()/Scale(),
+                pfConfig.baselineSigma * pfConfig.baselineSigma,
+                5 * pfConfig.baselineSigma)
+                << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
+                << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
+
+    // Assert baseline converted from DN to e-
+    EXPECT_EQ(traces[0][fi*laneSize+zi], data_[fi][zi] * Scale());
+    // Assert baseline filtered
+    EXPECT_LT(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
+    // Assert next window value produces same results
+    EXPECT_EQ(traces[2][fi*laneSize+zi], traces[1][fi*laneSize+zi]);
 }
 
+
+#if 1
+//-----------------------------------------Testing parameters---------------------------//
+
+// Start with AllBaselineFrames
+INSTANTIATE_TEST_SUITE_P(HostMultiScaleBaselinerGroup1,
+                        HostMultiScaleBaselinerChunk,
+                        testing::Values(
+                            TestingParams{
+                                512,  /* pulseIpd          */
+                                0,    /* pulseWidth        */  // no pulses
+                            },
+                            TestingParams{
+                                22,     /* pulseIpd          */
+                                25,     /* pulseWidth        */  // pulse period doesn't fit 512
+                                200,    /* baseSignalLevel   */
+                                { 600 } /* pulseSignalLevels */
+                            }
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(HostMultiScaleBaselinerGroup2,
+                        HostMultiScaleBaselinerSmallBatch,
+                        testing::Values(
+                            TestingParams{
+                                512,  /* pulseIpd          */
+                                0,    /* pulseWidth        */  // no pulses
+                            }
+                            ));
+
+#endif // 0
 }}} // PacBio::Mongo::Basecaller

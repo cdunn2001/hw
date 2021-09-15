@@ -83,7 +83,7 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
-    const size_t numBlocks = 256;
+    const size_t numBlocks = 16;
 
     Data::BatchLayoutConfig batchConfig;
     batchConfig.lanesPerPool = lanesPerPool;
@@ -138,7 +138,7 @@ TEST(TestDeviceMultiScaleBaseliner, AllBaselineFrames)
                                        SyncDirection::HostWriteDeviceRead,
                                        SOURCE_MARKER());
 
-                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                auto cameraBatch = baseliners[batchIdx]->FilterBaseline(in);
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 
@@ -189,7 +189,7 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
     const uint32_t lanesPerPool = numZmwLanes / numPools;
-    const size_t numBlocks = 256;
+    const size_t numBlocks = 16;
 
     Data::BatchLayoutConfig batchConfig;
     batchConfig.lanesPerPool = lanesPerPool;
@@ -245,7 +245,7 @@ TEST(TestDeviceMultiScaleBaseliner, OneSignalLevel)
                                        SyncDirection::HostWriteDeviceRead,
                                        SOURCE_MARKER());
 
-                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
+                auto cameraBatch = baseliners[batchIdx]->FilterBaseline(in);
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 

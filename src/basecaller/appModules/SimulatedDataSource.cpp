@@ -37,42 +37,37 @@ namespace Application {
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
 
-class SimulatedDataSource::DataCache {
-public:
+size_t RoundUp(size_t count, size_t blksz)
+{
+    return (count + blksz - 1) / blksz * blksz;
+}
 
-    DataCache(const SimulatedDataSource::SimConfig& config,
+class SimulatedDataSource::DataCache
+{
+public:
+    DataCache(size_t numSignals, size_t numFrames,
               size_t zmwPerBlock, size_t framesPerBlock,
               std::unique_ptr<SignalGenerator> generator)
     {
-        auto RoundUp = [](size_t count, size_t quantum)
-        {
-            auto numQuanta = (count + quantum - 1) / quantum;
-            return numQuanta * quantum;
-        };
+        // Extend the tiling with rounding up
+        const auto numSignalsUpper = RoundUp(numSignals, zmwPerBlock);
+        const auto numFramesUpper  = RoundUp(numFrames, framesPerBlock);
 
-        // Need to handle the case where the requested extents don't tile easily into
-        // the block size.  Just roudning them up as a simple solution that lets us only
-        // worry about data replication on the block level.
-        const auto numSignals = RoundUp(config.NumSignals(), zmwPerBlock);
-        const auto numFrames = RoundUp(config.NumFrames(), framesPerBlock);
-
-        numChunks_ = numFrames / framesPerBlock;
+        numChunks_ = numFramesUpper / framesPerBlock;
         framesPerBlock_ = framesPerBlock;
-        numLanes_ = numSignals / zmwPerBlock;
+        numLanes_ = numSignalsUpper / zmwPerBlock;
         zmwPerBlock_ = zmwPerBlock;
 
-        // Set up a data cache that is populated with integral blocks.  This makes it easy to
+        // Set up a data cache that is populated with integral blocks. This makes it easy to
         // replicate it out as requests for new blocks come in (you just modulo the lane/chunk idx)
         data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_]);
 
-        size_t lane = 0;
-        for (size_t signalIdx = 0; signalIdx < numSignals; lane++)
+        for (size_t lane = 0, signalIdx = 0; signalIdx < numSignalsUpper; lane++)
         {
             for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx, ++signalIdx)
             {
-                const auto& signal = generator->GenerateSignal(numFrames, signalIdx);
-                size_t chunk = 0;
-                for (size_t frame = 0; frame < numFrames; ++chunk)
+                const auto& signal = generator->GenerateSignal(numFramesUpper, signalIdx);
+                for (size_t chunk = 0, frame = 0; frame < numFramesUpper; ++chunk)
                 {
                     for (size_t frameIdx = 0; frameIdx < framesPerBlock; ++frameIdx, ++frame)
                     {
@@ -109,8 +104,9 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
                                          std::unique_ptr<SignalGenerator> generator)
     : DataSource::DataSourceBase(std::move(cfg)),
       cache_(std::make_unique<DataCache>(
-          sim, GetConfig().requestedLayout.BlockWidth(),
-          GetConfig().requestedLayout.NumFrames(), std::move(generator))),
+          sim.NumSignals(), sim.NumFrames(), 
+          GetConfig().requestedLayout.BlockWidth(), GetConfig().requestedLayout.NumFrames(), 
+          std::move(generator))),
       numZmw_((minZmw + laneSize - 1) / laneSize * laneSize)
 {
     const auto& reqLayout = GetConfig().requestedLayout;
@@ -118,24 +114,21 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
         PBLOG_WARN << "Unexpected block width requested for SimulatedDataSource. "
                    << "Requested value will be ignored and we will use: " << laneSize;
 
-    std::array<size_t, 3> layoutDims {
-        reqLayout.NumBlocks(),
-        reqLayout.NumFrames(),
-        laneSize};
+    std::array<size_t, 3> layoutDims { reqLayout.NumBlocks(), reqLayout.NumFrames(), laneSize};
     PacketLayout nominalLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
                                PacketLayout::INT16,
                                layoutDims);
     const auto numPools = (numZmw_ + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
-    layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
-    PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                            PacketLayout::INT16,
-                            layoutDims);
-
     for (size_t i = 0; i < numPools-1; ++i)
     {
         layouts_[i] = nominalLayout;
     }
-    layouts_[numPools-1] = lastLayout;
+
+    // Last layout is different
+    layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
+    layouts_[numPools-1] = PacketLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
+                            PacketLayout::INT16,
+                            layoutDims);
 
     currChunk_ = SensorPacketsChunk(0, GetConfig().requestedLayout.NumFrames());
     currChunk_.SetZmwRange(0, numZmw_);
@@ -144,9 +137,8 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
 void SimulatedDataSource::ContinueProcessing()
 {
     const auto& layout = layouts_[batchIdx_];
-    const auto startFrame = chunkIdx_ * layout.NumFrames();
     SensorPacket batchData(layout, batchIdx_, currZmw_,
-                           startFrame,
+                           chunkIdx_ * layout.NumFrames(),
                            *GetConfig().allocator);
     for (size_t i = 0; i < layout.NumBlocks(); ++i)
     {
@@ -196,75 +188,49 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
 {
     std::mt19937 gen(config_.seedFunc(idx));
 
-    auto GetBaselineSignal = [&](uint16_t frames)
+    auto GetBaselineSignal = [&](size_t frames)
     {
-        std::normal_distribution<> rng(config_.baselineSignalLevel, config_.baselineSigma);
-        std::vector<short> baselineSignal;
-        for (size_t f = 0; f < frames; ++f)
-        {
-            baselineSignal.push_back(std::floor(rng(gen)));
-        }
+        std::vector<short> baselineSignal(frames);
+        std::normal_distribution<> dist(config_.baselineSignalLevel, config_.baselineSigma);
+        for (auto &b : baselineSignal) b = std::floor(dist(gen));
         return baselineSignal;
     };
 
-    auto GetPulseSignal = [&](uint16_t frames)
+    auto GetPulseSignal = [&](size_t frames)
     {
         std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
         auto pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
-        std::vector<short> baselineSignal = GetBaselineSignal(frames);
-
-        std::vector<short> pulseSignal;
-        for (size_t f = 0; f < frames; ++f)
-        {
-            pulseSignal.push_back(baselineSignal[f] + pulseLevel);
-        }
+        auto pulseSignal = GetBaselineSignal(frames);
+        for (auto &b : pulseSignal) b += pulseLevel;
         return pulseSignal;
     };
 
+    std::exponential_distribution<> expWidth(config_.pulseWidthRate), expIpd(config_.pulseIpdRate);
     auto GetPulseWidth = [&]()
     {
-        if (config_.generatePoisson)
-        {
-            std::exponential_distribution<> rng(config_.pulseWidthRate);
-            return static_cast<uint16_t>(std::ceil(rng(gen)));
-        }
-        else
-        {
-            return config_.pulseWidth;
-        }
+        return config_.generatePoisson ? 
+            static_cast<uint16_t>(std::ceil(expWidth(gen))) : config_.pulseWidth;
     };
 
     auto GetPulseIpd = [&]()
     {
-        if (config_.generatePoisson)
-        {
-            std::exponential_distribution<> rng(config_.pulseIpdRate);
-            return static_cast<uint16_t>(std::ceil(rng(gen)));
-        }
-        else
-        {
-            return config_.pulseIpd;
-        }
+        return (config_.generatePoisson) ? 
+            static_cast<uint16_t>(std::ceil(expIpd(gen))) : config_.pulseIpd;
     };
 
-    std::vector<int16_t> signal;
-
     size_t frame = 0;
+    std::vector<int16_t> signal; signal.reserve(numFrames);
     while (frame < numFrames)
     {
-        // Generate IPD followed by PW.
-        uint16_t pulseIpd = GetPulseIpd();
-        uint16_t nIpdFrames = std::min(numFrames - frame, static_cast<size_t>(pulseIpd));
-        std::vector<short> baselineSignal = GetBaselineSignal(pulseIpd);
-        signal.insert(std::end(signal), std::begin(baselineSignal),
-                      std::begin(baselineSignal) + nIpdFrames);
+        // Generate IPD followed by PW
+        uint16_t nIpdFrames = std::min<size_t>(numFrames - frame, GetPulseIpd());
+        std::vector<short> baselineSignal = GetBaselineSignal(nIpdFrames);
+        signal.insert(signal.end(), baselineSignal.begin(), baselineSignal.end());
         frame += nIpdFrames;
 
-        uint16_t pulseWidth = GetPulseWidth();
-        uint16_t nPwFrames = std::min(numFrames - frame, static_cast<size_t>(pulseWidth));
-        std::vector<short> pulseSignal = GetPulseSignal(pulseWidth);
-        signal.insert(std::end(signal), std::begin(pulseSignal),
-                           std::begin(pulseSignal) + nPwFrames);
+        uint16_t nPwFrames = std::min<size_t>(numFrames - frame, GetPulseWidth());
+        std::vector<short> pulseSignal = GetPulseSignal(nPwFrames);
+        signal.insert(signal.end(), pulseSignal.begin(), pulseSignal.end());
         frame += nPwFrames;
     }
     assert(signal.size() == numFrames);

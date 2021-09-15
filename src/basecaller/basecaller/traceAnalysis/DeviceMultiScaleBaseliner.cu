@@ -26,7 +26,7 @@
 //  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 //  POSSIBILITY OF SUCH DAMAGE.
 
-#include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include "DeviceMultiScaleBaseliner.h"
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
@@ -55,7 +55,7 @@ void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+DeviceMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
@@ -112,4 +112,4 @@ size_t DeviceMultiScaleBaseliner::StartupLatency() const
     return params.LatentSize();
 }
 
-}}}
+}}}      // namespace PacBio::Mongo::Basecaller

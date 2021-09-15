@@ -19,7 +19,7 @@ void HostNoOpBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-HostNoOpBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+HostNoOpBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 

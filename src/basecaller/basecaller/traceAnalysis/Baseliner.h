@@ -48,11 +48,11 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
-              Data::BaselinerMetrics>
-    operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+                      Data::BaselinerMetrics>
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return Process(std::move(rawTrace));
+        return FilterBaseline_(rawTrace);
     }
 
     float Scale() const { return scaler_; }
@@ -65,7 +65,7 @@ public:
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
+    FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;
