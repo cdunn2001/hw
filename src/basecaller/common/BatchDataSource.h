@@ -98,6 +98,9 @@ class BatchDataSource : public DataSource::DataSourceBase
     ///         will return an empty vector;
     std::vector<Data::TraceBatch<int16_t>> NextChunk()
     {
+        if (GetConfig().requestedLayout.Encoding() != DataSource::PacketLayout::INT16)
+            throw PBException("The BatchDataSource functionality currently only supports 16 bit data");
+
         while (IsRunning() && !ChunksReady())
         {
             ContinueProcessing();
