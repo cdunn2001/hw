@@ -54,7 +54,7 @@ SimBazWriter::SimBazWriter(const std::string& fileName,
     , aggregator_(std::make_unique<BazAggregator>(numZmw_, 0, bytesPerZmw))
 {
     const auto& fields = writer_->GetFileHeaderBuilder().PacketFields();
-    internal_ = std::any_of(fields.begin(), fields.end(), [](const FieldParams& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });
+    internal_ = std::any_of(fields.begin(), fields.end(), [](const FieldParams<PacketFieldName>& fp) { return fp.name == BazIO::PacketFieldName::IsBase; });
     if (internal_) internalSerializer_.resize(numZmw_);
     else prodSerializer_.resize(numZmw_);
 }

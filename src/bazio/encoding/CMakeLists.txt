@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
 add_library(libBazioEncoding STATIC
-   BazToPulse.h
-   BazToPulse.cpp
    EncodingParams.h
    EncodingParams.cpp
    FieldNames.h
@@ -12,8 +10,8 @@ add_library(libBazioEncoding STATIC
    FieldSerializers.cpp
    FieldTransforms.h
    FieldTransforms.cpp
-   PulseToBaz.h
-   PulseToBaz.cpp
+   ObjectToBaz.h
+   ObjectToBaz.cpp
 )
 
 include(pacbio-cplusplus-api)

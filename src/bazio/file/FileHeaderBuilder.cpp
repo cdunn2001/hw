@@ -51,7 +51,7 @@ namespace BazIO {
 FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
                                      const float frameRateHz,
                                      const uint32_t movieLengthFrames,
-                                     const std::vector<GroupParams>& pulseGroups,
+                                     const std::vector<GroupParams<PacketFieldName>>& pulseGroups,
                                      const MetricsVerbosity metricsVerbosity,
                                      const std::string& experimentMetadata,
                                      const std::string& basecallerConfig,

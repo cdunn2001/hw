@@ -23,108 +23,42 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-/// \brief Helper classes that can be used to extract a given field from a pulse,
-///        based off a specific PacketFieldName
-//
-//  Note: These classes at least partially exist because we need something stateful
-//        to convert StartFrame to IPD.  It's crossed my mind that we could
-//        potentially let the pulse accumulator handle that conversion, and just
-//        store the IPD in the pulse rather than start frame.  Of course, we'd have
-//        to update the stored IPDs once we start enabling any form of pulse exclusion,
-//        and there might be other issues to deal with as well.  I'm not ready to
-//        untangle all that just now, so leaving this breadcrumb here to make me, or
-//        anyone else, think about it more in the future.
+/// \brief Declares a template class, which client code shall specialize
+///        in order to inject a mapping between entries in SMART_ENUM
+///        and fields in some class/object to be serialized
+///
 
 #ifndef PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
 #define PACBIO_BAZIO_ENCODING_FIELD_ACCESSORS_H
 
-#include <bazio/encoding/FieldNames.h>
-#include <bazio/encoding/BazioEnableCuda.h>
+namespace PacBio::BazIO {
 
-namespace PacBio {
-namespace BazIO {
-
-template <PacketFieldName::RawEnum> struct PulseFieldAccessor;
-template <>
-struct PulseFieldAccessor<PacketFieldName::Label>
+// Create specializations of this class to map entries in an enum
+// to accessor functions in Obj.  `FieldNames` is expected to
+// be an instance of a SMART_ENUM, and `Obj` can be effectively
+// anything, but the intention is to be something like a Pulse
+// or Metric object.
+//
+// At a minimum the specialization must include the function:
+//   template <FieldNames::RawEnum Name>
+//   static auto Get(const Obj& obj);
+//
+// If you wish to do deserialization as well as serialization
+// (which is primarily for test paths right now) then you also
+// need something like:
+//
+//   template <FieldName::RawEnum Name>
+//   using Type = decltype(Get<Name>(std::declval<Obj>()));
+//
+//   template <FieldName::RawEnum Name>
+//   static void Set(Obj& p, Type<Name> val);
+//
+template <typename Obj, typename FieldNames>
+struct FieldAccessor
 {
-    using Type = uint8_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Label()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val) { p.Label(static_cast<typename P::NucleotideLabel>(val)); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::StartFrame>
-{
-    using Type = uint32_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p)
-    {
-        return p.Start();
-    }
-
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val)
-    {
-        p.Start(val);
-    }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::IsBase>
-{
-    using Type = bool;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return !p.IsReject(); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, Type val) { p.IsReject(!val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::PulseWidth>
-{
-    using Type = uint32_t;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.Width()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.Width(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmax>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MaxSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MaxSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmid>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MidSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MidSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkmean>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.MeanSignal()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.MeanSignal(val); }
-};
-template <>
-struct PulseFieldAccessor<PacketFieldName::Pkvar>
-{
-    using Type = float;
-    template <typename P>
-    BAZ_CUDA static Type Get(const P& p) { return static_cast<Type>(p.SignalM2()); }
-    template <typename P>
-    BAZ_CUDA static void Set(P& p, const Type& val) { p.SignalM2(val); }
+    static_assert(!sizeof(Obj), "Missing specialization for FieldAccessor!");
 };
 
-}}
+}  // namespace PacBio::BazIO
 
-#endif //PACBIO_BAZIO_ENCODING_FIELDNAMES_H
+#endif  // PACBIO_BAZIO_ENCODING_FIELDNAMES_H

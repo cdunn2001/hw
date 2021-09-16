@@ -35,6 +35,22 @@ namespace BazIO {
 
 SMART_ENUM(PacketFieldName, Label, StartFrame, PulseWidth, IsBase, Pkmax, Pkmid, Pkmean, Pkvar);
 
+namespace detail {
+
+template <typename T>
+struct EnumFromRaw;
+
+template <>
+struct EnumFromRaw<PacketFieldName::RawEnum>
+{
+    using type = PacketFieldName;
+};
+
+}
+
+template <typename T>
+using EnumFromRaw_t = typename detail::EnumFromRaw<T>::type;
+
 }}
 
 #endif //PACBIO_BAZIO_ENCODING_FIELDNAMES_H

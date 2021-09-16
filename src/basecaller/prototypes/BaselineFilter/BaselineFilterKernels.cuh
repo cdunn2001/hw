@@ -1,6 +1,8 @@
 #ifndef CUDA_BASELINE_FILTER_KERNELS_CUH
 #define CUDA_BASELINE_FILTER_KERNELS_CUH
 
+#include <numeric>
+
 #include "BaselineFilter.cuh"
 #include "BlockCircularBuffer.cuh"
 #include "LocalCircularBuffer.cuh"
@@ -9,6 +11,8 @@
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 #include <common/cuda/utility/CudaArray.h>
+
+#include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/TraceBatch.h>
@@ -170,10 +174,11 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const PBShort2> in
 
 // Averages the output of the lower and upper filters, and expands the data
 // to back to the original (unstrided) size
-template <size_t blockThreads, size_t stride>
+template <size_t blockThreads>
 __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2> in1,
                                  const Mongo::Data::GpuBatchData<const PBShort2> in2,
-                                 Mongo::Data::GpuBatchData<PBShort2> out)
+                                 Mongo::Data::GpuBatchData<PBShort2> out,
+                                 size_t stride)
 {
     const size_t numFrames = out.NumFrames();
 
@@ -403,8 +408,16 @@ private:
     BlockCircularBuffer<blockThreads, lag> circularBuffer;
 };
 
-template <size_t blockThreads, size_t stride, size_t lag>
+struct SubtractParams
+{
+    PBHalf2 cSigmaBias;
+    PBHalf2 cMeanBias;
+    PBHalf2 scale;
+};
+template <size_t blockThreads, size_t lag>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
+                                 size_t stride,
+                                 SubtractParams sParams,
                                  Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
                                  const Mongo::Data::GpuBatchData<const PBShort2> lower,
                                  const Mongo::Data::GpuBatchData<const PBShort2> upper,
@@ -415,11 +428,6 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     stats.Reset();
 
     auto localLatent = latent[blockIdx.x].GetLocal();
-
-    // For bias estimate
-    // TODO: these need to be set consistent with filter widths
-    PBHalf2 cSigmaBias(2.44f);
-    PBHalf2 cMeanBias(0.5f);
 
     const size_t numFrames = out.NumFrames();
 
@@ -434,15 +442,15 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     for (int i = 0; i < inputCount; ++i)
     {
         auto baseline = (PBHalf2(upperZmw[i]) + PBHalf2(lowerZmw[i])) / PBHalf2(2.0f);
-        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / cSigmaBias);
-        auto frameBiasEstimate = cMeanBias * sigma;
+        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / sParams.cSigmaBias);
+        auto frameBiasEstimate = sParams.cMeanBias * sigma;
 
         auto start = i*stride;
         auto end = (i+1)*stride;
         for (int j = start; j < end; ++j)
         {
             auto raw = PBHalf2(inZmw[j]);
-            auto val = raw - baseline - frameBiasEstimate;
+            auto val = (raw - baseline - frameBiasEstimate) * sParams.scale;
             localLatent.ProcessFrame(raw, val, stats);
 
             outZmw[j] = ToShort(val);
@@ -453,80 +461,128 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     latent[blockIdx.x].StoreLocal(localLatent);
 }
 
-template <size_t blockThreads, size_t width1, size_t width2, size_t stride1, size_t stride2, size_t lag>
+// Virtual interface for an individual filter stage, allowing
+// us to type erase the template parameters describing the
+// filter strides/widths involved
+class FilterStage
+{
+public:
+    virtual void RunFilter(const Mongo::Data::BatchData<int16_t>& in,
+                           int numFrames,
+                           Mongo::Data::BatchData<int16_t>& out) = 0;
+    virtual size_t Stride() const = 0;
+
+    virtual ~FilterStage() = default;
+};
+
+// Concrete implementation with full template information
+template <typename Filter, size_t stride, size_t blockThreads>
+class FilterStageImpl : public FilterStage
+{
+public:
+    __host__ FilterStageImpl(const Memory::AllocationMarker& marker,
+                             size_t numLanes,
+                             short val,
+                             Memory::StashableAllocRegistrar* registrar)
+        : filterData_(registrar, marker, numLanes, val)
+    {}
+
+    void RunFilter(const Mongo::Data::BatchData<int16_t>& in,
+                   int numFrames,
+                   Mongo::Data::BatchData<int16_t>& out) override
+    {
+        const auto& launcher = PBLauncher(StridedFilter<blockThreads, stride, Filter>,
+                                          filterData_.Size(),
+                                          blockThreads);
+        launcher(in, filterData_, numFrames, out);
+    }
+
+    size_t Stride() const override { return stride; }
+
+private:
+    Memory::DeviceOnlyArray<Filter> filterData_;
+};
+
+template <size_t blockThreads, size_t lag>
 class ComposedFilter
 {
-    using Lower1 = ErodeDilate<blockThreads, width1>;
-    using Lower2 = ErodeDilate<blockThreads, width2>;
-    using Upper1 = DilateErode<blockThreads, width1>;
-    using Upper2 = ErodeDilate<blockThreads, width2>;
-    using LatentBaselineData = LatentBaselineData<blockThreads, lag>;
+    // Dispatch function, to elevate things from runtime to compile time
+    // values.  If an unexpected runtime value comes through an exception
+    // will be thrown, which realy just means that another template
+    // instantiation needs to be made
+    template <template <size_t, size_t> class FilterType>
+    std::unique_ptr<FilterStage> CreateFilter(size_t width,
+                                              size_t stride,
+                                              const Memory::AllocationMarker& marker,
+                                              size_t numLanes,
+                                              short val,
+                                              Memory::StashableAllocRegistrar* registrar)
+    {
+        // I'm not sure of a better way to do things, but the provided macro allows
+        // us to set up an if chain that returns the template instantiation that
+        // corresponds to the requested parameters.  Without the macro we'd be more
+        // susceptible to bugs where the hard values in the if conditional don't match
+        // the values in the return type
+    #define ReturnIfMatches(s, w)                                                                   \
+        if (s == stride && width == w)                                                              \
+            return std::make_unique<FilterStageImpl<FilterType<blockThreads, w>, s, blockThreads>>( \
+                marker, numLanes, val, registrar);
 
-    Memory::DeviceOnlyArray<Lower1> lower1;
-    Memory::DeviceOnlyArray<Lower2> lower2;
-    Memory::DeviceOnlyArray<Upper1> upper1;
-    Memory::DeviceOnlyArray<Upper2> upper2;
-    Memory::DeviceOnlyArray<LatentBaselineData> latent;
-    size_t numLanes_;
+        ReturnIfMatches(1, 7);
+        ReturnIfMatches(1, 9);
+        ReturnIfMatches(1, 11);
+        ReturnIfMatches(2, 7);
+        ReturnIfMatches(2, 9);
+        ReturnIfMatches(2, 11);
+        ReturnIfMatches(2, 17);
+        ReturnIfMatches(8, 17);
+        ReturnIfMatches(8, 31);
+        ReturnIfMatches(8, 61);
 
+        throw PBException("Unsupported and unexpected baseline filter stide/width combo");
+    }
 public:
+    using TraceBatch = Mongo::Data::TraceBatch<int16_t>;
+    using BatchData = Mongo::Data::BatchData<int16_t>;
 
-    __host__ ComposedFilter(const Memory::AllocationMarker& marker, size_t numLanes,
-                            short val, Memory::StashableAllocRegistrar* registrar = nullptr)
-        : lower1(registrar, marker, numLanes, val)
-        , lower2(registrar, marker, numLanes, val)
-        , upper1(registrar, marker, numLanes, val)
-        , upper2(registrar, marker, numLanes, val)
-        , numLanes_(numLanes)
+    __host__ ComposedFilter(const Mongo::Basecaller::BaselinerParams& params,
+                            const Memory::AllocationMarker& marker,
+                            size_t numLanes,
+                            short val,
+                            Memory::StashableAllocRegistrar* registrar = nullptr)
+        : numLanes_(numLanes)
         , latent(registrar, marker, numLanes, 0.0f)
-    {}
+    {
+        const auto& widths = params.Widths();
+        const auto& strides = params.Strides();
+
+        sParams_.cMeanBias = params.MeanBias();
+        sParams_.cSigmaBias = params.SigmaBias();
+        // TODO this needs to be plumbed through properly still
+        sParams_.scale = 1.0f;
+
+        fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});
+
+        lower_.push_back(CreateFilter<ErodeDilate>(widths[0], strides[0], marker, numLanes, val, registrar));
+        upper_.push_back(CreateFilter<DilateErode>(widths[0], strides[0], marker, numLanes, val, registrar));
+        for (size_t i = 1; i < widths.size(); ++i)
+        {
+            lower_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
+            upper_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
+        }
+    }
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
     // not do the actual baseline subtraction, nor does it do any bias corrections
-    __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<int16_t>& input,
-                                    Mongo::Data::TraceBatch<int16_t>& output,
-                                    Mongo::Data::BatchData<int16_t>& workspace1,
-                                    Mongo::Data::BatchData<int16_t>& workspace2)
+    __host__ void RunComposedFilter(const TraceBatch& input,
+                                    TraceBatch& output,
+                                    BatchData& workspace1,
+                                    BatchData& workspace2)
     {
-        const uint64_t numFrames = input.NumFrames();
+        RunLowerUpper(input, output, workspace1, workspace2);
 
-        assert(input.LaneWidth() == 2*blockThreads);
-        assert(input.LanesPerBatch() == numLanes_);
-
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>,
-                                  numLanes_,
-                                  blockThreads);
-        L1(input,
-           lower1,
-           numFrames,
-           workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>,
-                                  numLanes_,
-                                  blockThreads);
-        L2(workspace1,
-           lower2,
-           numFrames/2,
-           workspace1);
-
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>,
-                                  numLanes_,
-                                  blockThreads);
-        U1(input,
-           upper1,
-           numFrames,
-           workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>,
-                                  numLanes_,
-                                  blockThreads);
-        U2(workspace2,
-           upper2,
-           numFrames/2,
-           workspace2);
-
-        const auto& average = PBLauncher(AverageAndExpand<blockThreads, stride1*stride2>,
-                                       numLanes_,
-                                       blockThreads);
-        average(workspace1, workspace2, output);
+        const auto& average = PBLauncher(AverageAndExpand<blockThreads>, numLanes_, blockThreads);
+        average(workspace1, workspace2, output, fullStride_);
     }
 
     __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
@@ -535,35 +591,14 @@ public:
                                     Mongo::Data::BatchData<int16_t>& workspace1,
                                     Mongo::Data::BatchData<int16_t>& workspace2)
     {
-        const uint64_t numFrames = input.NumFrames();
+        RunLowerUpper(input, output, workspace1, workspace2);
 
-        assert(input.LaneWidth() == 2*blockThreads);
-        assert(input.LanesPerBatch() == numLanes_);
-
-        const auto& L1 = PBLauncher(StridedFilter<blockThreads, stride1, Lower1>, numLanes_, blockThreads);
-        L1(input,
-           lower1,
-           numFrames,
-           workspace1);
-        const auto& L2 = PBLauncher(StridedFilter<blockThreads, stride2, Lower2>, numLanes_, blockThreads);
-        L2(workspace1,
-           lower2,
-           numFrames/2,
-           workspace1);
-
-        const auto& U1 = PBLauncher(StridedFilter<blockThreads, stride1, Upper1>, numLanes_, blockThreads);
-        U1(input,
-           upper1,
-           numFrames,
-           workspace2);
-        const auto& U2 = PBLauncher(StridedFilter<blockThreads, stride2, Upper2>, numLanes_, blockThreads);
-        U2(workspace2,
-           upper2,
-           numFrames/2,
-           workspace2);
-
-        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, stride1*stride2, lag>, numLanes_, blockThreads);
+        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, lag>,
+                                          numLanes_,
+                                          blockThreads);
         Subtract(input,
+                 fullStride_,
+                 sParams_,
                  latent,
                  workspace1,
                  workspace2,
@@ -571,6 +606,36 @@ public:
                  stats);
     }
 
+private:
+    __host__ void RunLowerUpper(const TraceBatch& input,
+                                TraceBatch& output,
+                                BatchData& workspace1,
+                                BatchData& workspace2)
+    {
+        uint64_t numFrames = input.NumFrames();
+
+        assert(input.LaneWidth() == 2 * blockThreads);
+        assert(input.LanesPerBatch() == numLanes_);
+
+        for (size_t i = 0; i < lower_.size(); ++i)
+        {
+            auto* lowerIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace1;
+            auto* upperIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace2;
+            lower_[i]->RunFilter(*lowerIn, numFrames, workspace1);
+            upper_[i]->RunFilter(*upperIn, numFrames, workspace2);
+            numFrames /= lower_[i]->Stride();
+            assert(upper_[i]->Stride() == lower_[i]->Stride());
+        }
+    }
+
+    std::vector<std::unique_ptr<FilterStage>> lower_;
+    std::vector<std::unique_ptr<FilterStage>> upper_;
+    using LatentBaselineData = LatentBaselineData<blockThreads, lag>;
+
+    Memory::DeviceOnlyArray<LatentBaselineData> latent;
+    size_t numLanes_;
+    size_t fullStride_;
+    SubtractParams sParams_;
 };
 
 }}

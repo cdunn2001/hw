@@ -182,6 +182,9 @@ public:
         return data_->GetDeviceHandle<const T>(info);
     }
 
+    /// \return size of the array
+    size_t Size() const { return count_; }
+
     /// Coppies the data in this array to a UnifiedCudaArray
     ///
     /// \param dir The SyncDirection to be used in the UnifiedCudaArray

@@ -10,10 +10,12 @@ add_library(libMongoCommonTest OBJECT
     TestAutocorrAccumulator.cpp
     TestLaneArray.cpp
     TestGraphAPI.cpp
+    TestBatchDataSource.cpp
 )
 
 target_link_libraries(libMongoCommonTest
     libMongoCommon
+    libMongoCommonCuda
     libEigen
     libGtest
 )

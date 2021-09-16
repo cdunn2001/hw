@@ -3,32 +3,21 @@
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
-#include <common/ZmwDataManager.h>
-#include <common/DataGenerators/SawtoothGenerator.h>
+#include <appModules/SimulatedDataSource.h>
 
 #include <BlockCircularBuffer.cuh>
 #include <LocalCircularBuffer.cuh>
 #include <CircularBufferKernels.cuh>
 
-
+using namespace PacBio::Application;
 using namespace PacBio::Cuda;
-using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
+using namespace PacBio::DataSource;
 using namespace PacBio::Mongo::Data;
-
 
 static constexpr int laneWidth = 64;
 static constexpr int gpuBlockThreads = laneWidth/2;
 static constexpr int lag = 4;
-
-auto params = DataManagerParams()
-        .LaneWidth(laneWidth)
-        .ImmediateCopy(true)
-        .FrameRate(100)
-        .NumZmwLanes(16)
-        .KernelLanes(4)
-        .NumBlocks(4)
-        .BlockLength(128);
 
 namespace
 {
@@ -56,86 +45,75 @@ namespace
     }
 }
 
-TEST(BlockCircularBuffer, GlobalMemory)
+enum class TestTypes { Global, Shared, Local };
+
+struct BlockCircularBufferTest : testing::TestWithParam<TestTypes> {};
+
+TEST_P(BlockCircularBufferTest, Basic)
 {
+    static constexpr int SawtoothHeight = 25;
+    static constexpr int lanesPerBatch = 4;
+    static constexpr int framesPerBlock = 128;
+    static constexpr int numZmw = 16*64;
+    static constexpr int numLanes = 16;
+    static constexpr int numFrames = 512;
+
+    SawtoothGenerator::Config sawCfg;
+    sawCfg.minAmp = 0;
+    sawCfg.maxAmp = SawtoothHeight;
+    sawCfg.periodFrames = SawtoothHeight;
+    auto generator = std::make_unique<SawtoothGenerator>(sawCfg);
+
+    SimulatedDataSource::SimConfig simCfg(numZmw, numFrames);
+
+    SimulatedDataSource source(numZmw,
+                               simCfg,
+                               lanesPerBatch,
+                               framesPerBlock,
+                               std::move(generator));
+
     std::vector<DeviceOnlyArray<BlockCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
+    for (uint32_t i = 0; i < numLanes / lanesPerBatch; i++)
     {
-        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
+        circularBuffers.emplace_back(SOURCE_MARKER(), lanesPerBatch, 0);
     }
 
-    ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
+    for (const auto& batch: source.AllBatches())
     {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
+        auto firstFrame = batch.GetMeta().FirstFrame();
+        auto batchIdx = batch.Metadata().PoolId();
+        TraceBatch<int16_t> out(batch.GetMeta(),
+                                batch.StorageDims(),
+                                SyncDirection::HostReadDeviceWrite,
+                                SOURCE_MARKER());
+        auto testFunc = [](){
+            switch (GetParam())
+            {
+            case TestTypes::Global:
+                return GlobalMemCircularBuffer<gpuBlockThreads, lag, BlockCircularBuffer>;
+            case TestTypes::Shared:
+                return SharedMemCircularBuffer<gpuBlockThreads, lag, BlockCircularBuffer>;
+            case TestTypes::Local:
+                return LocalMemCircularBuffer<gpuBlockThreads, lag, BlockCircularBuffer>;
+            default:
+                throw PBException("Missing handler for test case enum");
+            }
+        }();
 
-        const auto& launcher = PBLauncher(GlobalMemCircularBuffer<gpuBlockThreads,lag,BlockCircularBuffer>,
-                                          params.kernelLanes, gpuBlockThreads);
+        const auto& launcher = PBLauncher(testFunc, lanesPerBatch, gpuBlockThreads);
 
-        launcher(in, circularBuffers[batchIdx], out);
+        launcher(batch, circularBuffers[batchIdx], out);
 
-        ValidateData(in, out);
-
-        manager.ReturnBatch(std::move(data));
-    }
-}
-
-TEST(CircularBuffer, SharedMemory)
-{
-    std::vector<DeviceOnlyArray<BlockCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
-    {
-        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes, 0);
-    }
-
-    ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
-    {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
-
-        const auto& launcher = PBLauncher(SharedMemCircularBuffer<gpuBlockThreads,lag,BlockCircularBuffer>,
-                                          params.kernelLanes, gpuBlockThreads);
-
-        launcher(in, circularBuffers[batchIdx], out);
-
-        ValidateData(in, out);
-
-        manager.ReturnBatch(std::move(data));
+        ValidateData(batch, out);
     }
 }
 
-TEST(CircularBufferShift, LocalMemory)
-{
-    std::vector<DeviceOnlyArray<LocalCircularBuffer<gpuBlockThreads,lag>>> circularBuffers;
-    for (uint32_t i = 0; i < params.numZmwLanes / params.kernelLanes; i++)
-    {
-        circularBuffers.emplace_back(SOURCE_MARKER(), params.kernelLanes);
-    }
-
-    ZmwDataManager<short> manager(params, std::make_unique<SawtoothGenerator>(params), true);
-    while (manager.MoreData())
-    {
-        auto data = manager.NextBatch();
-        auto firstFrame = data.FirstFrame();
-        auto batchIdx = data.Batch();
-        auto& in = data.KernelInput();
-        auto& out = data.KernelOutput();
-
-        const auto& launcher = PBLauncher(LocalMemCircularBuffer<gpuBlockThreads,lag,LocalCircularBuffer>,
-                                          params.kernelLanes, gpuBlockThreads);
-
-        launcher(in, circularBuffers[batchIdx], out);
-
-        ValidateData(in, out);
-
-        manager.ReturnBatch(std::move(data));
-    }
-}
+INSTANTIATE_TEST_SUITE_P(,
+                         BlockCircularBufferTest,
+                         testing::Values(TestTypes::Global, TestTypes::Shared, TestTypes::Local),
+                         [](const testing::TestParamInfo<TestTypes>& info) {
+                             if (info.param == TestTypes::Global) return "Global";
+                             if (info.param == TestTypes::Shared) return "Shared";
+                             if (info.param == TestTypes::Local) return "Local";
+                             return "NameError";
+                         });

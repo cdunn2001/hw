@@ -23,11 +23,11 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-/// \File PulseToBaz.h
-/// \detail This file is a preliminary stab at writing a generic pulse to baz stream
-///         using template metaprogramming.  It is targeted at serializing pulses,
+/// \File ObjectToBaz.h
+/// \detail This file is a generic serializer, for converting data to a baz stream
+///         using template metaprogramming.  It is targeted at serializing pulses and metrics,
 ///         where we are generally under stricter real-time constraints and performance
-///         matters, though it does have the inverse baz to pulse functionality for
+///         matters, though it does have the inverse deserialization functionality for
 ///         test reasons.
 ///
 ///         Some of the generic programming done here is perhaps a bit involved, but
@@ -39,7 +39,7 @@
 ///               never had the time to revisit the code and fix the issues.  Also now
 ///               that Kestrel is dealing with a much more relaxed sub-byte and cross-byte
 ///               possibilities, playing with hand rolled code anytime we wish to make a
-///               change has a high chance of bugs.
+///               change has a higher chance of bugs.
 ///             * We could write a general parser like this, but based off runtime rather
 ///               that compile time information, using switches and/or virtual dispatch.
 ///               This was tried, and at the time of writing this there exists a
@@ -72,12 +72,14 @@
 ///                          up an integral number of bytes) to the actual byte stream.
 ///          * FieldGroupEncoder: Mostly the same, but now knows what field names to
 ///                               associate with the group.
-///          * PulseEncoder: The top level, capable of serializing an entire pulse
+///          * ObjectEncoder: The top level, capable of serializing an entire pulse/metrics object
 
-#ifndef PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
-#define PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
+#ifndef PACBIO_BAZIO_ENCODING_OBJECT_TO_BAZ_H
+#define PACBIO_BAZIO_ENCODING_OBJECT_TO_BAZ_H
 
+#include <cstddef>
 #include <numeric>
+#include <utility>
 
 #include <bazio/encoding/BazioEnableCuda.h>
 #include <bazio/encoding/EncodingParams.h>
@@ -92,6 +94,25 @@ namespace PacBio {
 namespace BazIO {
 
 namespace detail {
+
+template <typename T1, typename... Rest>
+struct FirstOf { using type = T1; };
+template <typename... Ts>
+using FirstOf_t = typename FirstOf<Ts...>::type;
+
+template <auto Name1, auto...Names>
+struct EnumFromNames
+{
+    static_assert((true && ... && std::is_same<
+                   EnumFromRaw_t<decltype(Name1)>,
+                   EnumFromRaw_t<decltype(Names)>
+                   >::value),
+                  "Error: Received entries from multiple different enums");
+
+    using type = EnumFromRaw_t<decltype(Name1)>;
+};
+template <auto... Names>
+using EnumFromNames_t = typename EnumFromNames<Names...>::type;
 
 // Just a helper struct to record a combination of Transformation and Serialization
 // that will end up applied to individual fields.
@@ -110,10 +131,7 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     // any data-dependent overflow bytes
     BAZ_CUDA static constexpr size_t TotalBits()
     {
-        size_t ret = 0;
-        auto worker = {(ret += Serializers::nBits, 0)...};
-        (void) worker;
-        return ret;
+        return (0 + ... + Serializers::nBits);
     }
     static constexpr size_t numBytes = (TotalBits() + 7) / 8;
 
@@ -124,11 +142,8 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     template <typename... Ts>
     BAZ_CUDA size_t BytesRequired(const Ts&... ts)
     {
-        size_t ret = numBytes;
-        auto worker = {(ret += Serializers::OverflowBytes(transforms_.template Get<idxs>().Apply(ts, Signed::val), Signed::val)
-                        ,0)...};
-        (void)worker;
-        return ret;
+        return (numBytes + ... +
+                Serializers::OverflowBytes(transforms_.template Get<idxs>().Apply(ts, Signed::val), Signed::val));
     }
 
     // Writes a series of values to a memory location.  The return value is a pointer to the
@@ -148,12 +163,11 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
             pos += bits;
         };
 
-        auto worker = {(Insert(Serializers::ToBinary(transforms_.template Get<idxs>().Apply(ts, Signed::val),
-                                                     ptr2,
-                                                     Signed::val),
-                               Serializers::nBits)
-                        ,0)...};
-        (void)worker;
+        (Insert(Serializers::ToBinary(transforms_.template Get<idxs>().Apply(ts, Signed::val),
+                                      ptr2,
+                                      Signed::val),
+                Serializers::nBits)
+         , ...);
 
         std::memcpy(ptr, &data, numBytes);
 
@@ -175,21 +189,18 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
             data = data >> bits;
             return val;
         };
-        auto worker = {(ts = transforms_.template Get<idxs>().template Revert<Ts>(
-                                 Serializers::FromBinary(
-                                     Extract(Serializers::nBits),
-                                     ptr, Signed::val),
-                                 Signed::val)
-                        ,0)...};
-        (void)worker;
+        ((ts = transforms_.template Get<idxs>().template Revert<Ts>(
+              Serializers::FromBinary(Extract(Serializers::nBits), ptr, Signed::val), Signed::val)),
+         ...);
         return ptr;
     }
 
-    template <typename TransformParams, typename SerializerParams>
-    static FieldParams FieldParam(PacketFieldName::RawEnum name, StoreSigned storeSigned,
+    template <typename RawEnum, typename TransformParams, typename SerializerParams>
+    static auto FieldParam(RawEnum name, StoreSigned storeSigned,
                            TransformParams transformParams, SerializerParams serializerParams)
     {
-        FieldParams fp;
+        using FieldName = EnumFromRaw_t<RawEnum>;
+        FieldParams<FieldName> fp;
         fp.name = name;
         fp.storeSigned = storeSigned;
         fp.transform = transformParams;
@@ -198,21 +209,24 @@ struct GroupEncoder<std::index_sequence<idxs...>, EncodeInfo<Signed, Transforms,
     }
 
     template <typename... Names>
-    static GroupParams Params(Names... names)
+    static auto Params(Names... names)
     {
-        GroupParams params;
+        using FieldName = EnumFromRaw_t<FirstOf_t<Names...>>;
+        static_assert((true && ... && std::is_same<FieldName, EnumFromRaw_t<Names>>::value),
+                      "Function called with RawEnums from different SmartEnum classes");
+
+        GroupParams<FieldName> params;
         params.members = {FieldParam(names, Signed::val, Transforms::Params(), Serializers::Params())...};
         params.numBits = {Serializers::nBits...};
-        auto worker = {(params.totalBits += Serializers::nBits,0)...};
-        (void)worker;
+        params.totalBits = (0 + ... + Serializers::nBits);
         return params;
     }
 
     PacBio::Cuda::Utility::CudaTuple<Transforms...> transforms_;
 };
 
-// Like an EncodeInfo, but now we add a particular PacketFieldName to the mix.
-template <PacketFieldName::RawEnum name, typename StoreSigned, typename Trans, typename Serial>
+// Like an EncodeInfo, but now we add a particular FieldName to the mix.
+template <auto name, typename StoreSigned, typename Trans, typename Serial>
 struct Field
 {
     // Add some validation of the template parameters, since this is something
@@ -246,42 +260,43 @@ struct FieldGroup {
 template <typename...T> struct Pack{};
 
 // This class just wraps the functionality of a GroupEncoder, but now
-// associated with a particular list of PacketFieldNames.  This class
+// associated with a particular list of FieldNames.  This class
 // is kept separate from the GroupEncoder mostly to avoid unecessary
 // extra template instantiations, since two groups can have the same
 // formula for encoding fields, just with a different set of fields.
-template <typename GroupEncoder, PacketFieldName::RawEnum... names>
+template <typename GroupEncoder, auto... names>
 struct FieldGroupEncoder
 {
-    template <typename P>
-    BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
+    using FieldNames = EnumFromNames_t<names...>;
+    template <typename O>
+    BAZ_CUDA uint8_t* Serialize(const O& obj, uint8_t* dest)
     {
-        return groupEncoder_.Encode(dest, PulseFieldAccessor<names>::Get(pulse)...);
+        return groupEncoder_.Encode(dest, FieldAccessor<O, FieldNames>::template Get<names>(obj)...);
     }
 
-    template <typename P, size_t...ids>
-    BAZ_CUDA const uint8_t* DeserializeHelper(P& pulse, const uint8_t* dest, std::index_sequence<ids...>)
+    template <typename O, size_t...ids>
+    BAZ_CUDA const uint8_t* DeserializeHelper(O& obj, const uint8_t* dest, std::index_sequence<ids...>)
     {
-        PacBio::Cuda::Utility::CudaTuple<typename PulseFieldAccessor<names>::Type...> vals;
+        using Accessor = FieldAccessor<O, FieldNames>;
+        PacBio::Cuda::Utility::CudaTuple<typename Accessor::template Type<names>...> vals;
         dest = groupEncoder_.Decode(dest, vals.template Get<ids>()...);
-        auto worker = {(PulseFieldAccessor<names>::Set(pulse, vals.template Get<ids>()),0)...};
-        (void)worker;
+        (Accessor::template Set<names>(obj, vals.template Get<ids>()), ...);
         return dest;
     }
 
-    template <typename P>
-    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA const uint8_t* Deserialize(O& obj, const uint8_t* dest)
     {
-        return DeserializeHelper(pulse, dest, std::make_index_sequence<sizeof...(names)>{});
+        return DeserializeHelper(obj, dest, std::make_index_sequence<sizeof...(names)>{});
     }
 
-    template <typename P, size_t...ids>
-    BAZ_CUDA size_t BytesRequired(const P& pulse)
+    template <typename O, size_t...ids>
+    BAZ_CUDA size_t BytesRequired(const O& obj)
     {
-        return groupEncoder_.BytesRequired(PulseFieldAccessor<names>::Get(pulse)...);
+        return groupEncoder_.BytesRequired(FieldAccessor<O, FieldNames>::template Get<names>(obj)...);
     }
 
-    static GroupParams Params()
+    static auto Params()
     {
         return GroupEncoder::Params(names...);
     }
@@ -294,7 +309,7 @@ struct FieldGroupEncoder
 
 template <typename FieldGroup>
 struct GroupToEncoder;
-template <size_t totalBits, PacketFieldName::RawEnum... names, typename... Signed, typename... Transforms, typename... Serializers>
+template <size_t totalBits, auto... names, typename... Signed, typename... Transforms, typename... Serializers>
 struct GroupToEncoder<FieldGroup<totalBits, Field<names, Signed, Transforms, Serializers>...>> {
     using T = FieldGroupEncoder<GroupEncoder<std::make_index_sequence<sizeof...(Transforms)>, EncodeInfo<Signed, Transforms, Serializers>...>, names...>;
 };
@@ -302,33 +317,28 @@ template <typename Encoding>
 using GroupToEncoder_t = typename GroupToEncoder<Encoding>::T;
 
 template <typename... GroupEncoders>
-struct PulseEncoder
+struct ObjectEncoder
 {
     // The nominal number of bytes we expect to use to serialize this group,
     // neglecting the effects from any overflow mechanisms
     static constexpr size_t nominalBytes = (0 + ... + GroupEncoders::nominalBytes);
 
-    template <typename P>
-    BAZ_CUDA uint8_t* Serialize(const P& pulse, uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA uint8_t* Serialize(const O& obj, uint8_t* dest)
     {
-        auto worker = {(dest = data_.template Get<GroupEncoders>().Serialize(pulse, dest),0)...};
-        (void)worker;
+        ((dest = data_.template Get<GroupEncoders>().Serialize(obj, dest)), ...);
         return dest;
     }
-    template <typename P>
-    BAZ_CUDA const uint8_t* Deserialize(P& pulse, const uint8_t* dest)
+    template <typename O>
+    BAZ_CUDA const uint8_t* Deserialize(O& obj, const uint8_t* dest)
     {
-        auto worker = {(dest = data_.template Get<GroupEncoders>().Deserialize(pulse, dest),0)...};
-        (void)worker;
+        ((dest = data_.template Get<GroupEncoders>().Deserialize(obj, dest)), ...);
         return dest;
     }
-    template <typename P>
-    BAZ_CUDA size_t BytesRequired(const P& pulse)
+    template <typename O>
+    BAZ_CUDA size_t BytesRequired(const O& obj)
     {
-        size_t ret = 0;
-        auto worker = {(ret += data_.template Get<GroupEncoders>().BytesRequired(pulse),0)...};
-        (void)worker;
-        return ret;
+        return (0 + ... + data_.template Get<GroupEncoders>().BytesRequired(obj));
     }
 
     BAZ_CUDA void Reset()
@@ -336,9 +346,12 @@ struct PulseEncoder
         data_ = PacBio::Cuda::Utility::CudaTuple<GroupEncoders...>{};
     }
 
-    static std::vector<GroupParams> Params()
+    static auto Params()
     {
-        return std::vector<GroupParams>{GroupEncoders::Params()...};
+        using type = FirstOf_t<decltype(GroupEncoders::Params())...>;
+        static_assert((true && ... && std::is_same<type, decltype(GroupEncoders::Params())>::value),
+                      "Function called with RawEnums from different SmartEnum classes");
+        return std::vector<type>{GroupEncoders::Params()...};
     }
 
 private:
@@ -354,7 +367,7 @@ struct GenerateGroups;
 template <typename... ProcessedEncodings,
           typename ProgressEncoding>
 struct GenerateGroups<Pack<ProcessedEncodings...>, ProgressEncoding> {
-    using T = PulseEncoder<GroupToEncoder_t<ProcessedEncodings>..., GroupToEncoder_t<ProgressEncoding>>;
+    using T = ObjectEncoder<GroupToEncoder_t<ProcessedEncodings>..., GroupToEncoder_t<ProgressEncoding>>;
 };
 
 template <typename... ProcessedGroups,
@@ -383,11 +396,11 @@ struct GenerateGroups<Pack<ProcessedGroups...>, FieldGroup<currBits, CurrFields.
 // an integral number of bytes, with the exception that a group cannot be
 // larger than 64 bits, and if we have to tie off a ragged group to avoid
 // that limitation then we will.
-template <PacketFieldName::RawEnum name, typename Signed, typename Trans, typename Serial>
+template <auto name, typename Signed, typename Trans, typename Serial>
 using Field = detail::Field<name, Signed, Trans, Serial>;
 template <typename...Fields>
-using PulseToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
+using ObjectToBaz = typename detail::GenerateGroups<detail::Pack<>, detail::FieldGroup<0>, Fields...>::T;
 
 }}
 
-#endif //PACBIO_BAZIO_ENCODING_PULSE_TO_BAZ_H
+#endif //PACBIO_BAZIO_ENCODING_OBJECt_TO_BAZ_H

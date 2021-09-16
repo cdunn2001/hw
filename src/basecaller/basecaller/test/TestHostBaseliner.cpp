@@ -71,10 +71,11 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 
     PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
 
-    static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::MethodName method)
+    static BasecallerBaselinerConfig BaselinerConfig(BasecallerBaselinerConfig::FilterTypes type)
     {
         Json::Value json;
-        json["baselineConfig"]["Method"] = method.toString();
+        json["baselineConfig"]["Method"] = "HostMultiScale";
+        json["baselineConfig"]["Filter"] = type.toString();
         TestConfig cfg{json};
 
         return cfg.baselineConfig;
@@ -86,7 +87,8 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 TEST(TestHostNoOpBaseliner, Run)
 {
     Data::MovieConfig movConfig;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp);
+    auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    baselinerConfig.Method = BasecallerBaselinerConfig::MethodName::NoOp;
     HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
 
     const uint32_t numZmwLanes = 4;
@@ -201,13 +203,13 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
         pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
 
         Data::MovieConfig movConfig;
-        const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::TwoScaleMedium);
+        const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
             baseliners.emplace_back(HostMultiScaleBaseliner(poolId, Scale(),
-                                                            FilterParamsLookup(baselinerConfig.Method),
+                                                            FilterParamsLookup(baselinerConfig.Filter),
                                                             lanesPerPool));
         }
 
@@ -399,7 +401,6 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
 }
 
 
-#if 1
 //-----------------------------------------Testing parameters---------------------------//
 
 // Start with AllBaselineFrames
@@ -426,6 +427,4 @@ INSTANTIATE_TEST_SUITE_P(HostMultiScaleBaselinerGroup2,
                                 0,    /* pulseWidth        */  // no pulses
                             }
                             ));
-
-#endif // 0
 }}} // PacBio::Mongo::Basecaller

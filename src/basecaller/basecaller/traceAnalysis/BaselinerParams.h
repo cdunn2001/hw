@@ -76,7 +76,7 @@ private:
 
 };
 
-BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::MethodName& method);
+BaselinerParams FilterParamsLookup(const Data::BasecallerBaselinerConfig::FilterTypes& type);
 
 }}}    // namespace PacBio::Mongo::Basecaller
 

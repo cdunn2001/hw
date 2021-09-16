@@ -34,6 +34,7 @@
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
 #include <dataTypes/PulseGroups.h>
+#include <dataTypes/PulseFieldAccessors.h>
 
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Mongo;

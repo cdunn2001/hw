@@ -27,7 +27,6 @@
 //  POSSIBILITY OF SUCH DAMAGE.
 
 #include "DeviceMultiScaleBaseliner.h"
-#include <basecaller/traceAnalysis/BaselinerParams.h>
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
 #include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
@@ -38,10 +37,6 @@ namespace Basecaller {
 
 using namespace PacBio::Cuda::Memory;
 
-constexpr size_t DeviceMultiScaleBaseliner::width1;
-constexpr size_t DeviceMultiScaleBaseliner::width2;
-constexpr size_t DeviceMultiScaleBaseliner::stride1;
-constexpr size_t DeviceMultiScaleBaseliner::stride2;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
@@ -70,10 +65,13 @@ DeviceMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      uint32_t lanesPerPool,
+                                                     const BaselinerParams& params,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
+    , startupLatency_(params.LatentSize())
 {
     filter_ = std::make_unique<Filter>(
+        params,
         SOURCE_MARKER(),
         lanesPerPool,
         initVal,
@@ -81,35 +79,5 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
-
-size_t DeviceMultiScaleBaseliner::StartupLatency() const
-{
-    static const auto params = FilterParamsLookup(Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale);
-
-    // Just check to make sure no one changed the hard coded filter parameters
-    // without updating this here.
-    assert([&]() -> bool
-    {
-        const auto& strides = params.Strides();
-        const auto& widths = params.Widths();
-
-        bool valid = true;
-        valid &= strides.size() == 2;
-        valid &= widths.size() == 2;
-        if (!valid) throw PBException("Unexpected number of baseline filters");
-
-        valid &= widths[0] == width1;
-        valid &= widths[1] == width2;
-        valid &= strides[0] == stride1;
-        valid &= strides[1] == stride2;
-
-        if (!valid)
-            throw PBException("Unexpected filter settings in DeviceMultiScaleBaseliner");
-
-        return valid;
-    }());
-
-    return params.LatentSize();
-}
 
 }}}      // namespace PacBio::Mongo::Basecaller

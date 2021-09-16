@@ -29,6 +29,8 @@
 
 #include <boost/multi_array.hpp>
 
+#include <pacbio/datasource/MallocAllocator.h>
+
 #include <common/MongoConstants.h>
 
 namespace PacBio {
@@ -102,7 +104,7 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
                                          const SimConfig &sim,
                                          DataSource::DataSourceBase::Configuration cfg,
                                          std::unique_ptr<SignalGenerator> generator)
-    : DataSource::DataSourceBase(std::move(cfg)),
+    : BatchDataSource(std::move(cfg)),
       cache_(std::make_unique<DataCache>(
           sim.NumSignals(), sim.NumFrames(), 
           GetConfig().requestedLayout.BlockWidth(), GetConfig().requestedLayout.NumFrames(), 
@@ -253,4 +255,18 @@ std::vector<int16_t> RandomizedGenerator::GenerateSignal(size_t numFrames, size_
     return signal;
 }
 
-}} //::PacBio::Application
+SimulatedDataSource::SimulatedDataSource(size_t minZmw,
+                                         const SimConfig& sim,
+                                         size_t lanesPerPool,
+                                         size_t framesPerChunk,
+                                         std::unique_ptr<SignalGenerator> generator)
+    : SimulatedDataSource(minZmw,
+                          sim,
+                          DataSourceBase::Configuration(PacketLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
+                                                                     PacketLayout::EncodingFormat::INT16,
+                                                                     {lanesPerPool, framesPerChunk, Mongo::laneSize}),
+                                                        std::make_unique<MallocAllocator>()),
+                          std::move(generator))
+{}
+
+}}  // namespace PacBio::Application

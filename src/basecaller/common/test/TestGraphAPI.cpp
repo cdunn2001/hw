@@ -154,7 +154,7 @@ TEST(GraphAPI, LeafNode)
     std::array<int, 8> vals {1,4,67,3,7,4,5,23};
     for (auto val : vals) inputNode->ProcessInput(val);
 
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_EQ(std::accumulate(vals.begin(), vals.end(), 0), sum);
 }
 
@@ -171,7 +171,7 @@ TEST(GraphAPI, TransformNode)
     std::array<int, 8> vals {1,4,67,3,7,4,5,23};
     for (auto val : vals) inputNode->ProcessInput(val);
 
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_EQ(std::accumulate(vals.begin(), vals.end(), 0, [](int sum, int val) { return sum += val*val; }), sum);
 }
 
@@ -191,11 +191,11 @@ TEST(GraphAPI, MultiTransformNode)
     for (int i = 0; i < 7; ++i)
         inputNode->ProcessInput(vals[i]);
 
-    graph.Flush();
+    graph.Synchronize();
     EXPECT_EQ(0, result);
 
     inputNode->ProcessInput(vals[7]);
-    graph.Flush();
+    graph.Synchronize();
 
     auto min = *std::min_element(vals.begin(), vals.end());
     auto equation = [min](int sum, int val) { val -= min; return sum += val*val; };
@@ -436,7 +436,7 @@ TEST(GraphAPI, DISABLED_ConcurrencyLimits)
         {
             input->ProcessInput(10000);
         }
-        const auto& reports = graph.FlushAndReport(0);
+        const auto& reports = graph.SynchronizeAndReport(0);
         ASSERT_EQ(reports.size(), 1);
 
         const auto& report = reports[0];
@@ -454,7 +454,7 @@ TEST(GraphAPI, DISABLED_ConcurrencyLimits)
         {
             input->ProcessInput(1000000);
         }
-        const auto& reports = graph.FlushAndReport(0);
+        const auto& reports = graph.SynchronizeAndReport(0);
         ASSERT_EQ(reports.size(), 3);
 
         auto validate = [](auto report) {
@@ -476,6 +476,250 @@ TEST(GraphAPI, DISABLED_ConcurrencyLimits)
         validate(reports[0]);
         validate(reports[1]);
     }
+}
+
+// Leaf node that doesn't do anything but store the inputs it receives
+// into an intermediate vector.  Only upon receiving a flush command
+// does it move those values into a "final" location
+struct FlushLeaf : LeafBody<const int>
+{
+    size_t ConcurrencyLimit() const override { return 1; };
+    float MaxDutyCycle() const override { return 1; };
+
+    void Process(const int& val) override
+    {
+        intermediate.push_back(val);
+    }
+
+    std::vector<uint32_t> GetFlushTokens() override
+    {
+        done.resize(intermediate.size());
+        std::vector<uint32_t> ret(intermediate.size());
+        std::iota(ret.begin(), ret.end(), 0);
+        return ret;
+    }
+
+    void Flush(uint32_t token) override
+    {
+        done[token] = intermediate[token];
+    }
+
+    std::vector<int> intermediate;
+    std::vector<int> done;
+};
+
+TEST(GraphAPI, FlushLeaf)
+{
+    PacBio::Logging::LogSeverityContext lsc(PacBio::Logging::LogLevel::WARN);
+
+    auto leafPtr = std::make_unique<FlushLeaf>();
+    auto& leafRef = *leafPtr;
+    GraphManager<STAGES> graph;
+    auto* inputNode = graph.AddNode(std::move(leafPtr), STAGES::ONE);
+
+    std::array<int, 8> vals {1,3,5,7,9,11,13,15};
+    for (auto val : vals) inputNode->ProcessInput(val);
+
+    graph.Synchronize();
+
+    // The initial processing shouldn't have done anything but
+    // place all the valuees into the "intermediate" vector.
+    ASSERT_EQ(leafRef.intermediate.size(), vals.size());
+    ASSERT_EQ(leafRef.done.size(), 0);
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], leafRef.intermediate[i]);
+    }
+
+    // Flushing the node should result in all the values copied from
+    // the intermediate to the "done" vector
+    inputNode->FlushNode();
+    ASSERT_EQ(leafRef.done.size(), vals.size());
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], leafRef.done[i]);
+    }
+}
+
+// A transform node where every input is effectively duplicated.
+// The main process command both forwards the input (because a
+// transform must have an input), and also stores it in an
+// "intermediate" vector again.  Upon receiving a flush command
+// the inputs are both moved to the "done" vector as well as
+// pushed downstream a second time
+struct FlushTransform : TransformBody<const int, const int>
+{
+    size_t ConcurrencyLimit() const override { return 1; };
+    float MaxDutyCycle() const override { return 1; };
+
+    int Process(const int& val) override
+    {
+        intermediate.push_back(val);
+        return val;
+    }
+
+    std::vector<uint32_t> GetFlushTokens() override
+    {
+        done.resize(intermediate.size());
+        std::vector<uint32_t> ret(intermediate.size());
+        std::iota(ret.begin(), ret.end(), 0);
+        return ret;
+    }
+
+    int Flush(uint32_t token) override
+    {
+        done[token] = intermediate[token];
+        return token;
+    }
+
+    std::vector<int> intermediate;
+    std::vector<int> done;
+};
+
+// Since a graph is required to terminate in leaf nodes,
+// here we both check that a TransformNode functions properly
+// with flushing, as well as that flushing one node also
+// flushes it's children
+TEST(GraphAPI, FlushTransform)
+{
+    PacBio::Logging::LogSeverityContext lsc(PacBio::Logging::LogLevel::WARN);
+
+    // We're going to make sure that we can handle multiple children
+    // while we are at it.
+    auto leafPtr1 = std::make_unique<FlushLeaf>();
+    auto leafPtr2 = std::make_unique<FlushLeaf>();
+    auto& leafRef1 = *leafPtr1;
+    auto& leafRef2 = *leafPtr2;
+
+    auto transPtr = std::make_unique<FlushTransform>();
+    auto& transRef = *transPtr;
+    GraphManager<STAGES> graph;
+    auto* inputNode = graph.AddNode(std::move(transPtr), STAGES::ONE);
+
+    inputNode->AddNode(std::move(leafPtr1), STAGES::TWO);
+    inputNode->AddNode(std::move(leafPtr2), STAGES::THREE);
+
+    std::array<int, 8> vals {1,3,5,7,9,11,13,15};
+    for (auto val : vals) inputNode->ProcessInput(val);
+
+    graph.Synchronize();
+
+    // At this stage, all of the nodes should have a copy of the data
+    // in their "intermediate" vectors.
+    ASSERT_EQ(transRef.intermediate.size(), vals.size());
+    EXPECT_EQ(transRef.done.size(), 0);
+    ASSERT_EQ(leafRef1.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef1.done.size(),  0);
+    ASSERT_EQ(leafRef2.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef2.done.size(),  0);
+
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], transRef.intermediate[i]);
+        EXPECT_EQ(vals[i], leafRef1.intermediate[i]);
+        EXPECT_EQ(vals[i], leafRef2.intermediate[i]);
+    }
+
+    // Flushing the transform node should do two things:
+    // 1. Flushing the transform node directly should both move the
+    //    original data to the "done" vector as well as duplicate it
+    //    by pushing it downstream again
+    // 2. Cause both children nodes to get flushed as well, moving their
+    //    data into the done vector as well
+    inputNode->FlushNode();
+    ASSERT_EQ(transRef.done.size(), vals.size());
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], transRef.done[i]);
+    }
+
+    EXPECT_EQ(leafRef1.intermediate.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef1.done.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef2.intermediate.size(),  vals.size()*2);
+    EXPECT_EQ(leafRef2.done.size(),  vals.size()*2);
+}
+
+// Another transform, but this time since a multi-transform can
+// have zero output, we're not going to duplicate the data.  We
+// only send it downstream during the flush operation
+struct FlushMultiTransform : MultiTransformBody<const int, const int>
+{
+    size_t ConcurrencyLimit() const override { return 1; };
+    float MaxDutyCycle() const override { return 1; };
+
+    void Process(const int& val) override
+    {
+        intermediate.push_back(val);
+    }
+
+    std::vector<uint32_t> GetFlushTokens() override
+    {
+        done.resize(intermediate.size());
+        return {0};
+    }
+
+    void Flush(uint32_t token) override
+    {
+        assert(token == 0);
+        done = intermediate;
+        for (auto val : done) PushOut(val);
+    }
+
+    std::vector<int> intermediate;
+    std::vector<int> done;
+};
+
+TEST(GraphAPI, FlushMultiTransform)
+{
+    PacBio::Logging::LogSeverityContext lsc(PacBio::Logging::LogLevel::WARN);
+
+    // Again testing multiple children while we're at it
+    auto leafPtr1 = std::make_unique<FlushLeaf>();
+    auto leafPtr2 = std::make_unique<FlushLeaf>();
+    auto& leafRef1 = *leafPtr1;
+    auto& leafRef2 = *leafPtr2;
+
+    auto multiTransPtr = std::make_unique<FlushMultiTransform>();
+    auto& multiTransRef = *multiTransPtr;
+    GraphManager<STAGES> graph;
+    auto* inputNode = graph.AddNode(std::move(multiTransPtr), STAGES::ONE);
+
+    inputNode->AddNode(std::move(leafPtr1), STAGES::TWO);
+    inputNode->AddNode(std::move(leafPtr2), STAGES::THREE);
+
+    std::array<int, 8> vals {1,3,5,7,9,11,13,15};
+    for (auto val : vals) inputNode->ProcessInput(val);
+
+    graph.Synchronize();
+
+    // This time none of the data should have made it downstream
+    // into the children
+    ASSERT_EQ(multiTransRef.intermediate.size(), vals.size());
+    EXPECT_EQ(multiTransRef.done.size(), 0);
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], multiTransRef.intermediate[i]);
+    }
+
+    EXPECT_EQ(leafRef1.intermediate.size(), 0);
+    EXPECT_EQ(leafRef1.done.size(),  0);
+    EXPECT_EQ(leafRef2.intermediate.size(), 0);
+    EXPECT_EQ(leafRef2.done.size(),  0);
+
+    // Now flushing will have pushed data downstream
+    // to the children, as well as causing the children
+    // to flush as well
+    inputNode->FlushNode();
+    ASSERT_EQ(multiTransRef.done.size(), vals.size());
+    for (size_t i = 0; i < vals.size(); ++i)
+    {
+        EXPECT_EQ(vals[i], multiTransRef.done[i]);
+    }
+
+    EXPECT_EQ(leafRef1.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef1.done.size(),  vals.size());
+    EXPECT_EQ(leafRef2.intermediate.size(),  vals.size());
+    EXPECT_EQ(leafRef2.done.size(),  vals.size());
 }
 
 } //anon

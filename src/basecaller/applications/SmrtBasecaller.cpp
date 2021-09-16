@@ -24,7 +24,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <appModules/Basecaller.h>
-#include <appModules/BazWriter.h>
+#include <appModules/BazWriterBody.h>
 #include <appModules/BlockRepacker.h>
 #include <appModules/PrelimHQFilter.h>
 #include <appModules/TrivialRepacker.h>
@@ -569,7 +569,8 @@ private:
                                                    source.UnitCellIds(),
                                                    features2,
                                                    poolDims,
-                                                   config_);
+                                                   config_,
+                                                   movieConfig_);
         } else
         {
             return std::make_unique<NoopBazWriterBody>();
@@ -647,7 +648,7 @@ private:
                         PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
                             inputNode->ProcessInput(std::move(batch));
-                        const auto& reports = graph.FlushAndReport(chunkDurationMS);
+                        const auto& reports = graph.SynchronizeAndReport(chunkDurationMS);
 
                         std::stringstream ss;
                         ss << "Chunk finished: Duty Cycle%, Avg Occupancy:\n";
@@ -690,7 +691,7 @@ private:
                     break;
                 }
             }
-            graph.Flush();
+            inputNode->FlushNode();
 
             PBLOG_INFO << "All chunks analyzed.";
             PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
@@ -735,6 +736,13 @@ int main(int argc, char* argv[])
 {
     try
     {
+        std::ostringstream cliArgs;
+        for (int i = 0; i < argc; ++i)
+        {
+            cliArgs << argv[i] << " ";
+        }
+        PBLOG_INFO << cliArgs.str();
+
         auto parser = ProcessBase::OptionParserFactory();
         std::stringstream ss;
         ss << "Prototype to demonstrate mongo basecaller"

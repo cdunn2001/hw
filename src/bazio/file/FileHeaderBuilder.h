@@ -91,7 +91,7 @@ public:
     FileHeaderBuilder(const std::string& movieName,
                       const float frameRateHz,
                       const uint32_t movieLengthFrames,
-                      const std::vector<GroupParams>& pulseGroups,
+                      const std::vector<GroupParams<PacketFieldName>>& pulseGroups,
                       const SmrtData::MetricsVerbosity metricsVerbosity,
                       const std::string& experimentMetadata,
                       const std::string& basecallerConfig,
@@ -109,9 +109,9 @@ public:
     ~FileHeaderBuilder() = default;
 
 public:
-    inline std::vector<FieldParams> PacketFields() const
+    inline std::vector<FieldParams<PacketFieldName>> PacketFields() const
     {
-        std::vector<FieldParams> fps;
+        std::vector<FieldParams<PacketFieldName>> fps;
         for (const auto& g : encodeInfo_)
             for (const auto& f : g.members)
                 fps.push_back(f);
@@ -276,7 +276,7 @@ public:
     { fileFooterOffset_ = fileFooterOffset; }
 
 private:
-    std::vector<GroupParams> encodeInfo_;
+    std::vector<GroupParams<PacketFieldName>> encodeInfo_;
     std::vector<MetricField> hFMetricFields_;
     std::vector<MetricField> mFMetricFields_;
     std::vector<MetricField> lFMetricFields_;

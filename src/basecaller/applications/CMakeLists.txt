@@ -7,6 +7,7 @@ add_executable(smrt-basecaller
 )
 
 configure_file(numa_launch.sh numa_launch.sh COPYONLY)
+configure_file(4x_launch.sh 4x_launch.sh COPYONLY)
 
 
 target_link_libraries(smrt-basecaller
