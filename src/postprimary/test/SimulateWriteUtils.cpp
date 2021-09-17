@@ -42,9 +42,75 @@ namespace PacBio::Primary::Postprimary
 
 namespace {
 
-void ConvertMetrics()
+std::vector<SimMetricT> ConvertMetrics(const std::vector<Primary::SpiderMetricBlock>& sms)
 {
+    std::vector<SimMetricT> smts;
+    for (const auto& sm : sms)
+    {
+        Mongo::Data::BasecallingMetrics bcm;
 
+        bcm.activityLabel = static_cast<Mongo::Data::HQRFPhysicalStates>(sm.activityLabel_);
+        bcm.numPulseFrames = sm.pulseWidth_;
+        bcm.numBaseFrames = sm.baseWidth_;
+        bcm.numSandwiches = sm.numSandwiches_;
+        bcm.numHalfSandwiches = sm.numHalfSandwiches_;
+        bcm.numPulseLabelStutters = sm.numPulseLabelStutters_;
+        bcm.numBases = sm.numBasesA_ + sm.numBasesC_ + sm.numBasesG_ + sm.numBasesT_;
+        bcm.numPulses = sm.numPulses_;
+
+        bcm.pkMidSignal[0] = sm.pkmidA_;
+        bcm.pkMidSignal[1] = sm.pkmidC_;
+        bcm.pkMidSignal[2] = sm.pkmidG_;
+        bcm.pkMidSignal[3] = sm.pkmidT_;
+
+        bcm.bpZvar[0] = sm.bpzvarA_;
+        bcm.bpZvar[1] = sm.bpzvarC_;
+        bcm.bpZvar[2] = sm.bpzvarG_;
+        bcm.bpZvar[3] = sm.bpzvarT_;
+
+        bcm.pkZvar[0] = sm.pkzvarA_;
+        bcm.pkZvar[1] = sm.pkzvarC_;
+        bcm.pkZvar[2] = sm.pkzvarG_;
+        bcm.pkZvar[3] = sm.pkzvarT_;
+
+        bcm.pkMax[0] = sm.pkmaxA_;
+        bcm.pkMax[1] = sm.pkmaxC_;
+        bcm.pkMax[2] = sm.pkmaxG_;
+        bcm.pkMax[3] = sm.pkmaxT_;
+
+        bcm.numPkMidFrames[0] = sm.numpkmidFramesA_;
+        bcm.numPkMidFrames[1] = sm.numpkmidFramesC_;
+        bcm.numPkMidFrames[2] = sm.numpkmidFramesG_;
+        bcm.numPkMidFrames[3] = sm.numpkmidFramesT_;
+
+        bcm.numPkMidBasesByAnalog[0] = sm.numPkmidBasesA_;
+        bcm.numPkMidBasesByAnalog[1] = sm.numPkmidBasesC_;
+        bcm.numPkMidBasesByAnalog[2] = sm.numPkmidBasesG_;
+        bcm.numPkMidBasesByAnalog[3] = sm.numPkmidBasesT_;
+
+        bcm.numBasesByAnalog[0] = sm.numBasesA_;
+        bcm.numBasesByAnalog[1] = sm.numBasesC_;
+        bcm.numBasesByAnalog[2] = sm.numBasesG_;
+        bcm.numBasesByAnalog[3] = sm.numBasesT_;
+
+        bcm.numPulsesByAnalog[0] = 0;
+        bcm.numPulsesByAnalog[1] = 0;
+        bcm.numPulsesByAnalog[2] = 0;
+        bcm.numPulsesByAnalog[3] = 0;
+
+        bcm.frameBaselineDWS = sm.baselines_[0];
+        bcm.frameBaselineVarianceDWS = sm.baselineSds_[0] * sm.baselineSds_[0];
+        bcm.numFramesBaseline = sm.numBaselineFrames_[0];
+        bcm.startFrame = 0;
+        bcm.numFrames = sm.numFrames_;
+        bcm.autocorrelation = sm.traceAutoCorr_;
+        bcm.pulseDetectionScore = sm.pulseDetectionScore_;
+        bcm.pixelChecksum = sm.pixelChecksum_;
+
+        smts.emplace_back(SimMetricT{bcm, 0});
+    }
+
+    return smts;
 }
 
 }
@@ -61,7 +127,7 @@ SimBazWriter::SimBazWriter(const std::string& fileName,
                            BazIO::FileHeaderBuilder& fhb,
                            const PacBio::Primary::BazIOConfig& conf, bool)
     : numZmw_(fhb.MaxNumZmws())
-    , writer_(std::make_unique<SimBazWriterT>(fileName, fhb, conf))
+    , writer_(std::make_unique<BazIO::BazWriter>(fileName, fhb, conf))
     , aggregator_(std::make_unique<SimBazAggregatorT>(numZmw_, 0, bytesPerZmw))
 {
     const auto& fields = writer_->GetFileHeaderBuilder().PacketFields();
@@ -76,17 +142,7 @@ void SimBazWriter::AddZmwSlice(SimPulse* basecalls, size_t numEvents,
     totalEvents_ += numEvents;
     if (!metrics.empty())
     {
-        /*
-        aggregator_->AddMetrics(zmw,
-                            [&](BazIO::MemoryBufferView<Primary::SpiderMetricBlock>& dest)
-                            {
-                                for (size_t i = 0; i < metrics.size(); ++i)
-                                {
-                                    dest[i] = metrics[i];
-                                }
-                            },
-                            metrics.size());
-        */
+        aggregator_->AddMetrics(zmw, ConvertMetrics(metrics));
     }
     if (internal_)
         aggregator_->AddPulses(zmw, basecalls, basecalls + numEvents, [](const auto) { return true; }, internalSerializer_[zmw]);

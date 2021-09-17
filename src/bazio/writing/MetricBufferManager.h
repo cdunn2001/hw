@@ -139,13 +139,13 @@ public:
 
 
 public:
-    void AddZmw(size_t zmwIndex, const MetricBlockT& metrics)
+    void AddZmw(size_t zmwIndex, const std::vector<MetricBlockT>& metrics)
     {
-        mostRecentActivityLabels_[zmwIndex] = static_cast<Mongo::Data::HQRFPhysicalStates>(metrics.ActivityLabel());
+        mostRecentActivityLabels_[zmwIndex] = static_cast<Mongo::Data::HQRFPhysicalStates>(metrics[0].ActivityLabel());
         if (lookbackWindow_.empty())
             AddInternalMetrics(zmwIndex, metrics);
         else
-            AddProductionMetrics(zmwIndex, metrics);
+            AddProductionMetrics(zmwIndex, metrics[0]);
     }
 
     void MarkAsHQ(size_t zmw)
@@ -233,15 +233,20 @@ public:
 
 private:
 
-    void AddInternalMetrics(size_t zmwIndex, const MetricBlockT& metrics)
+    void AddInternalMetrics(size_t zmwIndex, const std::vector<MetricBlockT>& metrics)
     {
         auto& metricsOut = metrics_[zmwIndex];
-        metricsOut = metricsBuffer_.Allocate(1);
-        metrics.Convert(metricsOut[0]);
+        metricsOut = metricsBuffer_.Allocate(metrics.size());
+
+        for (size_t i = 0; i < metrics.size(); i++)
+        {
+            metrics[i].Convert(metricsOut[i]);
+        }
     }
 
     void AddProductionMetrics(size_t zmwIndex, const MetricBlockT& metrics)
     {
+
         if (!indexInfo_[zmwIndex].hqStarted_)
         {
             // Haven't started the preHQ region, add to the last

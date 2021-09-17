@@ -57,7 +57,6 @@ using SimPulse = BazIO::Pulse;
 using SimMetricT = Application::InternalMetrics<uint16_t,float>;
 using SimMetricAggregatedT = Application::InternalMetrics<uint16_t,float>;
 
-using SimBazWriterT = BazIO::BazWriter<SimMetricT,SimMetricAggregatedT>;
 using SimBazAggregatorT = BazIO::BazAggregator<SimMetricT,SimMetricAggregatedT>;
 
 class SimBazWriter
@@ -92,7 +91,7 @@ private:
     size_t numZmw_;
     bool internal_;
 
-    std::unique_ptr<SimBazWriterT> writer_;
+    std::unique_ptr<BazIO::BazWriter> writer_;
     std::unique_ptr<SimBazAggregatorT> aggregator_;
 
     std::vector<SimInternalPulseGroups> internalSerializer_;

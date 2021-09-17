@@ -191,7 +191,7 @@ public:
     ///
     /// \param zmw   The zmw index of the data
     /// \param mb    The metrics converted to metric block format
-    void AddMetrics(size_t zmw, const MetricBlockT& mb)
+    void AddMetrics(size_t zmw, const std::vector<MetricBlockT>& mb)
     {
         metrics_.AddZmw(zmw, mb);
     }

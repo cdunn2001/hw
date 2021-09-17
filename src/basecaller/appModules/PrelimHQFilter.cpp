@@ -117,7 +117,7 @@ public:
                 if (metricsPtr)
                 {
                     const auto& metrics = metricsPtr->GetHostView()[lane];
-                    aggregator_->AddMetrics(currentZmwIndex, {metrics, zmw});
+                    aggregator_->AddMetrics(currentZmwIndex, { {metrics, zmw} });
                     metricsSeen = true;
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
