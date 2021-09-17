@@ -23,7 +23,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <appModules/Metrics.h>
 #include <appModules/BazWriterBody.h>
 
 #include <tbb/parallel_for.h>
@@ -72,8 +71,7 @@ inline std::string generateExperimentMetadata(const MovieConfig& movieConfig)
 namespace PacBio {
 namespace Application {
 
-template <typename MetricType,typename AggregatedMetricType>
-BazWriterBody<MetricType,AggregatedMetricType>::BazWriterBody(
+BazWriterBody::BazWriterBody(
         const std::string& bazName,
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
@@ -141,7 +139,7 @@ BazWriterBody<MetricType,AggregatedMetricType>::BazWriterBody(
 
             fh.BaseCallerVersion("0.1");
 
-            bazWriters_[b] = std::make_unique<BazWriterT>(multiBazName, fh, basecallerConfig.bazIO, ioStatsAggregator);
+            bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazIO, ioStatsAggregator);
             auto openedSnapshot = ++openedFiles;
             if (openedSnapshot % 10 == 0) PBLOG_INFO << "Opened " << openedSnapshot << " baz files so far";
         });
@@ -169,12 +167,11 @@ BazWriterBody<MetricType,AggregatedMetricType>::BazWriterBody(
 
         fh.BaseCallerVersion("0.1");
 
-        bazWriters_.push_back(std::make_unique<BazWriterT>(bazName, fh, basecallerConfig.bazIO));
+        bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazIO));
     }
 }
 
-template <typename MetricType,typename AggregatedMetricType>
-BazWriterBody<MetricType,AggregatedMetricType>::~BazWriterBody()
+BazWriterBody::~BazWriterBody()
 {
     PBLOG_INFO << "Closing BAZ file: " << bazName_;
     std::atomic<uint32_t> openedFiles = bazWriters_.size();
@@ -194,16 +191,9 @@ BazWriterBody<MetricType,AggregatedMetricType>::~BazWriterBody()
     }
 }
 
-template <typename MetricType,typename AggregatedMetricType>
-void BazWriterBody<MetricType,AggregatedMetricType>::Process(std::unique_ptr<BazBufferT> in)
+void BazWriterBody::Process(std::unique_ptr<BazIO::BazBuffer> in)
 {
     bazWriters_[in->BufferId()]->Flush(std::move(in));
 }
-
-// Explicit instantiations
-template class NoopBazWriterBody<ProductionMetricsGroup::MetricT,ProductionMetricsGroup::MetricAggregatedT>;
-template class BazWriterBody<ProductionMetricsGroup::MetricT,ProductionMetricsGroup::MetricAggregatedT>;
-template class NoopBazWriterBody<InternalMetricsGroup::MetricT,InternalMetricsGroup::MetricAggregatedT>;
-template class BazWriterBody<InternalMetricsGroup::MetricT,InternalMetricsGroup::MetricAggregatedT>;
 
 }}

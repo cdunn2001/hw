@@ -49,27 +49,31 @@ using namespace Cuda::Memory;
 using namespace PacBio::BazIO;
 using namespace PacBio::Mongo::Data;
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-class PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl
+class PrelimHQFilterBody::Impl
 {
-public:
-    using BazBufferT = BazBuffer<MetricBlockT,AggregatedMetricBlockT>;
 public:
 
     Impl() = default;
     virtual ~Impl() = default;
 
-    virtual std::unique_ptr<BazBufferT> Process(BatchResult in) = 0;
-    virtual std::unique_ptr<BazBufferT> Flush() = 0;
+    virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
+    virtual std::unique_ptr<BazBuffer> Flush() = 0;
 };
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
 template <bool internal>
-class PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::ImplChild : public PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl
+class PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
 {
-public:
-    using BazAggregatorT = BazIO::BazAggregator<MetricBlockT,AggregatedMetricBlockT>;
-    using BazBufferT = typename PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Impl::BazBufferT;
+private:
+    static_assert(InternalPulses::nominalBytes == 6);
+    static_assert(ProductionPulses::nominalBytes == 2);
+    static constexpr size_t expectedBytesPerBase = internal
+            ? InternalPulses::nominalBytes : ProductionPulses::nominalBytes;
+    using Serializer = std::conditional_t<internal, InternalPulses, ProductionPulses>;
+    using BazAggregatorT = std::conditional_t<internal,
+                            BazAggregator<Application::InternalMetricsGroup::MetricT,
+                                          Application::InternalMetricsGroup::MetricAggregatedT>,
+                            BazAggregator<Application::ProductionMetricsGroup::MetricT,
+                                          Application::ProductionMetricsGroup::MetricAggregatedT>>;
 public:
     ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
               bool multipleBazFiles, const PrelimHQConfig& config)
@@ -88,7 +92,7 @@ public:
         , serializers_(numZmws)
     {}
 
-    std::unique_ptr<BazBufferT> Process(BatchResult in) override
+    std::unique_ptr<BazBuffer> Process(BatchResult in) override
     {
         const auto& pulseBatch = in.pulses;
         const auto& metricsPtr = in.metrics;
@@ -113,7 +117,7 @@ public:
                 if (metricsPtr)
                 {
                     const auto& metrics = metricsPtr->GetHostView()[lane];
-                    aggregator_->AddMetrics(currentZmwIndex, MetricBlockT(metrics, zmw));
+                    aggregator_->AddMetrics(currentZmwIndex, {metrics, zmw});
                     metricsSeen = true;
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
@@ -125,7 +129,7 @@ public:
             }
         }
         batchesSeen_++;
-        std::unique_ptr<BazBufferT> ret;
+        std::unique_ptr<BazBuffer> ret;
         if (batchesSeen_ == numBatches_)
         {
             batchesSeen_ = 0;
@@ -145,7 +149,7 @@ public:
         return ret;
     }
 
-    std::unique_ptr<BazBufferT> Flush() override
+    std::unique_ptr<BazBuffer> Flush() override
     {
         return aggregator_->Flush();
     }
@@ -222,15 +226,10 @@ private:
         size_t stride;
     } dummyPreHQ_;
 
-    static_assert(InternalPulses::nominalBytes == 6);
-    static_assert(ProductionPulses::nominalBytes == 2);
-    static constexpr size_t expectedBytesPerBase = internal ? InternalPulses::nominalBytes : ProductionPulses::nominalBytes;
-    using Serializer = std::conditional_t<internal, InternalPulses, ProductionPulses>;
     std::vector<Serializer> serializers_;
 };
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::PrelimHQFilterBody(
+PrelimHQFilterBody::PrelimHQFilterBody(
         size_t numZmws, const std::map<uint32_t,
         Data::BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& config)
@@ -261,11 +260,9 @@ PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::PrelimHQFilterBody(
     }
 }
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::~PrelimHQFilterBody() = default;
+PrelimHQFilterBody::~PrelimHQFilterBody() = default;
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-void PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Process(Mongo::Data::BatchResult in)
+void PrelimHQFilterBody::Process(Mongo::Data::BatchResult in)
 {
     auto ret = (impl_.size() == 1)
             ? impl_[0]->Process(std::move(in))
@@ -273,8 +270,7 @@ void PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Process(Mongo::Dat
     if (ret) this->PushOut(std::move(ret));
 }
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-std::vector<uint32_t> PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::GetFlushTokens()
+std::vector<uint32_t> PrelimHQFilterBody::GetFlushTokens()
 {
     std::vector<uint32_t> flushTokens;
     flushTokens.resize(impl_.size());
@@ -282,16 +278,10 @@ std::vector<uint32_t> PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::G
     return flushTokens;
 }
 
-template <typename MetricBlockT,typename AggregatedMetricBlockT>
-void PrelimHQFilterBody<MetricBlockT,AggregatedMetricBlockT>::Flush(uint32_t token)
+void PrelimHQFilterBody::Flush(uint32_t token)
 {
     auto ret = impl_[token]->Flush();
     if (ret) this->PushOut(std::move(ret));
 }
-
-// Explicit instantiations
-
-template class PrelimHQFilterBody<ProductionMetricsGroup::MetricT,ProductionMetricsGroup::MetricAggregatedT>;
-template class PrelimHQFilterBody<InternalMetricsGroup::MetricT,InternalMetricsGroup::MetricAggregatedT>;
 
 }}

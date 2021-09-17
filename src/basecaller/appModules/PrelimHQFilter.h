@@ -36,8 +36,7 @@
 namespace PacBio {
 namespace Application {
 
-template <typename MetricType,typename AggregatedMetricType>
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer<MetricType,AggregatedMetricType>>>
+class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
     PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,

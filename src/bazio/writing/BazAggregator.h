@@ -44,6 +44,7 @@
 #include <bazio/writing/BazBuffer.h>
 #include <bazio/writing/PacketBuffer.h>
 #include <bazio/writing/MetricBuffer.h>
+#include <bazio/writing/MetricBufferManager.h>
 
 namespace PacBio {
 namespace BazIO {
@@ -69,7 +70,6 @@ template <typename MetricBlockT, typename AggregatedMetricBlockT>
 class BazAggregator
 {
 public:
-    using BazBufferT = BazBuffer<MetricBlockT,AggregatedMetricBlockT>;
     using MetricBufferManagerT = MetricBufferManager<MetricBlockT,AggregatedMetricBlockT>;
 public:
     /// Simplified constructor, predominantly meant for simulation/test execution where
@@ -134,20 +134,27 @@ public:
     /// aggregator restarts them with a clean state.  The baz buffer also gets a shared_pointer
     /// reference to all the preHQ data, so that it can see (and extend the lifetime if necessary)
     /// all the data that wasn't HQ before, but recently has been marked as such.
-    std::unique_ptr<BazBufferT> ProduceBazBuffer()
+    std::unique_ptr<BazBuffer> ProduceBazBuffer()
     {
         auto currPackets = packets_.CreateCheckpoint();
-        auto currMetrics = metrics_.CreateCheckpoint();
-        auto ret = std::make_unique<BazBufferT>(bufferId_, std::move(currMetrics), std::move(currPackets));
+        auto currMetrics = metrics_.GetMetrics();
+        auto ret = std::make_unique<BazBuffer>(bufferId_,
+                                               std::move(currMetrics.first),
+                                               std::move(currMetrics.second),
+                                               std::move(currPackets));
         return ret;
     }
 
     // Flushes the current buffers of all remaining data.
-    std::unique_ptr<BazBufferT> Flush()
+    std::unique_ptr<BazBuffer> Flush()
     {
         auto currPackets = packets_.CreateCheckpoint();
-        auto currMetrics = metrics_.Flush();
-        auto ret = std::make_unique<BazBufferT>(bufferId_, std::move(currMetrics), std::move(currPackets));
+        metrics_.Flush();
+        auto currMetrics = metrics_.GetMetrics();
+        auto ret = std::make_unique<BazBuffer>(bufferId_,
+                                               std::move(currMetrics.first),
+                                               std::move(currMetrics.second),
+                                               std::move(currPackets));
         return ret;
     }
 

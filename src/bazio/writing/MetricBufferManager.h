@@ -124,11 +124,19 @@ public:
     /// \return The number of ZMW belonging to this manager.
     size_t NumZmw() const { return indexInfo_.size(); }
 
-    /// \return The metrics to be written to be written.
-    const MemoryBufferView<OutputMetricT>& GetMetrics(size_t zmw) const { return metrics_[zmw]; }
-
     /// \return The most recent activity label for the given zmw.
     Mongo::Data::HQRFPhysicalStates GetRecentActivityLabel(size_t zmw) const { return mostRecentActivityLabels_[zmw]; }
+
+public:
+
+    std::pair<MemoryBuffer<OutputMetricT>,std::vector<MemoryBufferView<OutputMetricT>>> GetMetrics()
+    {
+        auto p =  std::make_pair(std::move(metricsBuffer_), std::move(metrics_));
+        metricsBuffer_ = MemoryBuffer<OutputMetricT>(std::max(indexInfo_.size(), 100ul), 1, *allocator_);
+        metrics_ = std::vector<MemoryBufferView<OutputMetricT>>(indexInfo_.size());
+        return p;
+    }
+
 
 public:
     void AddZmw(size_t zmwIndex, const MetricBlockT& metrics)
@@ -150,19 +158,7 @@ public:
         newHQ_[zmw] = true;
     }
 
-    std::unique_ptr<const MetricBufferManager> CreateCheckpoint()
-    {
-        // Copies the contents of our current instance, with the exception of metricsBuffer_
-        // and metrics_ that gets destructively moved.
-        auto ret = std::unique_ptr<MetricBufferManager>(new MetricBufferManager(*this));
-
-        metricsBuffer_ = MemoryBuffer<OutputMetricT>(std::max(indexInfo_.size(), 100ul), 1, *allocator_);
-        metrics_ = std::vector<MemoryBufferView<OutputMetricT>>(indexInfo_.size());
-
-        return ret;
-    }
-
-    std::unique_ptr<const MetricBufferManager> Flush()
+    void Flush()
     {
         if (!lookbackWindow_.empty())
         {
@@ -177,9 +173,6 @@ public:
                 }
             }
         }
-
-        auto ret = std::unique_ptr<MetricBufferManager>(new MetricBufferManager(*this));
-        return ret;
     }
 
     // Updates the lookback buffer, meant to be called at metric block intervals.
@@ -239,20 +232,6 @@ public:
     }
 
 private:
-
-    // Copy constructor where the metrics are "moved".
-    MetricBufferManager(MetricBufferManager& other)
-    : allocator_(other.allocator_)
-    , mostRecentActivityLabels_(other.mostRecentActivityLabels_)
-    , indexInfo_(other.indexInfo_)
-    , newHQ_(other.newHQ_)
-    , numHQ_(other.numHQ_)
-    , maxLookBack_(other.maxLookBack_)
-    , lookbackWindow_(other.lookbackWindow_)
-    // These are moved.
-    , metricsBuffer_(std::move(other.metricsBuffer_))
-    , metrics_(std::move(other.metrics_))
-    {}
 
     void AddInternalMetrics(size_t zmwIndex, const MetricBlockT& metrics)
     {

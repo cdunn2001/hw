@@ -41,22 +41,23 @@
 
 #include <bazio/MetricBlock.h>
 #include <bazio/writing/GrowableArray.h>
+#include <bazio/writing/MemoryBuffer.h>
 #include <bazio/writing/PacketBufferManager.h>
-#include <bazio/writing/MetricBufferManager.h>
 
 namespace PacBio::BazIO {
 
-template <typename MetricBlockT, typename AggregatedMetricBlockT>
 class BazBuffer
 {
     using TMetric = Primary::SpiderMetricBlock;
-    using MetricBufferT = MetricBufferManager<MetricBlockT,AggregatedMetricBlockT>;
+
 public:
     BazBuffer(uint32_t bufferId,
-              std::unique_ptr<const MetricBufferT> metrics,
+              MemoryBuffer<TMetric>&& metricsBuffer,
+              std::vector<MemoryBufferView<TMetric>>&& metrics,
               std::unique_ptr<const PacketBufferManager> packets)
-        : numZmw_(metrics->NumZmw())
+        : numZmw_(metrics.size())
         , bufferId_(bufferId)
+        , metricsBuffer_(std::move(metricsBuffer))
         , metrics_(std::move(metrics))
         , packets_(std::move(packets))
     {
@@ -71,14 +72,17 @@ public:
         const MemoryBufferView<TMetric>& metrics;
         PacketBufferManager::PacketSlice packets;
     };
-    Slice GetSlice(size_t zmw) const { return Slice {metrics_->GetMetrics(zmw), packets_->GetSlice(zmw)}; };
+    Slice GetSlice(size_t zmw) const { return Slice {metrics_[zmw], packets_->GetSlice(zmw)}; };
 
     ~BazBuffer() = default;
 
 private:
     size_t numZmw_;
     uint32_t bufferId_;
-    std::unique_ptr<const MetricBufferT> metrics_;
+
+    MemoryBuffer<TMetric> metricsBuffer_;
+    std::vector<MemoryBufferView<TMetric>> metrics_;
+
     std::unique_ptr<const PacketBufferManager> packets_;
 };
 

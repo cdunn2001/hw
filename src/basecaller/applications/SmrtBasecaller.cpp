@@ -26,7 +26,6 @@
 #include <appModules/Basecaller.h>
 #include <appModules/BazWriterBody.h>
 #include <appModules/BlockRepacker.h>
-#include <appModules/Metrics.h>
 #include <appModules/PrelimHQFilter.h>
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
@@ -551,37 +550,33 @@ private:
                                                 config_.system);
     }
 
-    template <bool internal>
-    auto CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
+    std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
-        using PrelimHQFilterBodyT = std::conditional_t<internal,
-                                                       PrelimHQFilterBody<InternalMetricsGroup::MetricT,
-                                                                          InternalMetricsGroup::MetricAggregatedT>,
-                                                       PrelimHQFilterBody<ProductionMetricsGroup::MetricT,
-                                                                          ProductionMetricsGroup::MetricAggregatedT>>;
-        return std::make_unique<PrelimHQFilterBodyT>(numZmw, poolDims, config_);
+        return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_);
     }
 
-    template <bool internal>
-    auto CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
+    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
-        using BazWriterBodyT = std::conditional_t<internal,
-                                                  BazWriterBody<InternalMetricsGroup::MetricT,
-                                                                InternalMetricsGroup::MetricAggregatedT>,
-                                                  BazWriterBody<ProductionMetricsGroup::MetricT,
-                                                                ProductionMetricsGroup::MetricAggregatedT>>;
+        if (hasBazFile_)
+        {
+            auto features1 = source.GetUnitCellProperties();
+            std::vector<uint32_t> features2;
+            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
 
-        auto features1 = source.GetUnitCellProperties();
-        std::vector<uint32_t> features2;
-        transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
+            return std::make_unique<BazWriterBody>(outputBazFile_,
+                                                   source.NumFrames(),
+                                                   source.UnitCellIds(),
+                                                   features2,
+                                                   poolDims,
+                                                   config_,
+                                                   movieConfig_);
+        } else
+        {
+            return std::make_unique<NoopBazWriterBody>();
 
-        return std::make_unique<BazWriterBodyT>(outputBazFile_,
-                                               source.NumFrames(),
-                                               source.UnitCellIds(),
-                                               features2,
-                                               poolDims,
-                                               config_,
-                                               movieConfig_);
+        }
     }
 
     void RunAnalyzer()
@@ -604,37 +599,8 @@ private:
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
-                if (config_.prelimHQ.enableLookback)
-                {
-                    auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter<false>(source->NumZmw(), poolDims),
-                                                    GraphProfiler::PRE_HQ);
-                    if (hasBazFile_)
-                    {
-                        preHQ->AddNode(CreateBazSaver<false>(*source, poolDims), GraphProfiler::BAZWRITER);
-                    }
-                    else
-                    {
-                        using NoopBazWriterBodyT = NoopBazWriterBody<ProductionMetricsGroup::MetricT,
-                                                                     ProductionMetricsGroup::MetricAggregatedT>;
-                        preHQ->AddNode(std::make_unique<NoopBazWriterBodyT>(), GraphProfiler::BAZWRITER);
-                    }
-                }
-                else
-                {
-                    // Internal metrics mode
-                    auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter<true>(source->NumZmw(), poolDims),
-                                                    GraphProfiler::PRE_HQ);
-                    if (hasBazFile_)
-                    {
-                        preHQ->AddNode(CreateBazSaver<true>(*source, poolDims), GraphProfiler::BAZWRITER);
-                    }
-                    else
-                    {
-                        using NoopBazWriterBodyT = NoopBazWriterBody<InternalMetricsGroup::MetricT,
-                                                                     InternalMetricsGroup::MetricAggregatedT>;
-                        preHQ->AddNode(std::make_unique<NoopBazWriterBodyT>(), GraphProfiler::BAZWRITER);
-                    }
-                }
+                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
