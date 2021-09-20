@@ -301,9 +301,10 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             return std::make_unique<DeviceMultiScaleBaseliner>(poolId,
-                                                               dims.lanesPerBatch,
-                                                               params,
-                                                               &registrar);
+                                                                1.0f,
+                                                                params,
+                                                                dims.lanesPerBatch,
+                                                                &registrar);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
             // TODO: scaler currently set to default 1.0f

@@ -77,8 +77,7 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool,
-                              const BaselinerParams& params,
+    DeviceMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& params, uint32_t lanesPerPool,
                               Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     DeviceMultiScaleBaseliner(const DeviceMultiScaleBaseliner&) = delete;

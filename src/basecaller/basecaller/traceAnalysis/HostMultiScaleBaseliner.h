@@ -86,12 +86,12 @@ private:
     class MultiScaleBaseliner
     {
     public:
-        MultiScaleBaseliner(const BaselinerParams& config, float scaler)
-            : msLowerOpen_(config.Strides(), config.Widths())
-            , msUpperOpen_(config.Strides(), config.Widths())
-            , stride_(config.AggregateStride())
-            , cSigmaBias_{config.SigmaBias()}
-            , cMeanBias_{config.MeanBias()}
+        MultiScaleBaseliner(const BaselinerParams& params, float scaler)
+            : msLowerOpen_(params.Strides(), params.Widths())
+            , msUpperOpen_(params.Strides(), params.Widths())
+            , stride_(params.AggregateStride())
+            , cSigmaBias_{params.SigmaBias()}
+            , cMeanBias_{params.MeanBias()}
             , scaler_(scaler)
         { }
 
@@ -102,7 +102,7 @@ private:
     public:
         size_t Stride() const { return stride_; }
 
-        float Scale() const { return scaler_; }
+        float Scale() const { return scaler_; }    // Converts DN quantization to e- values
 
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,

@@ -107,19 +107,16 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma);
         const auto& frameBiasEstimate = cMeanBias_ * smoothedBkgndSigma;
 
-        auto zz = 56 + frameBiasEstimate;
-
         // Estimates are scattered on stride intervals.
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
+            // Data scaled first
             const auto& rawSignal = trIt.Extract() * Scale();
             LaneArray out(rawSignal - (bias + frameBiasEstimate) * Scale());
-            
+            // ... then added to statistics
             blsIt.Store(out);
             AddToBaselineStats(rawSignal, out, baselinerStats);
         }
-
-        zz = zz - frameBiasEstimate;
     }
 
     return baselinerStats;

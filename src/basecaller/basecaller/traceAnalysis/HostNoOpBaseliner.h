@@ -28,7 +28,7 @@ public:
 
 public:
     HostNoOpBaseliner(uint32_t poolId)
-        : Baseliner(poolId)
+        : Baseliner(poolId, 1.0f)
     { }
 
     HostNoOpBaseliner(const HostNoOpBaseliner&) = delete;

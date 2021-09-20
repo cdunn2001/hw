@@ -159,7 +159,7 @@ void TraceFileDataSource::ContinueProcessing()
     for (size_t lane = 0; lane < currLayout.NumBlocks(); lane++)
     {
         auto block = batchData.BlockData(lane);
-        assert(block.Count() * BlockWidth()*BlockLen()*sizeof(int16_t));
+        assert((block.Count() * BlockWidth()*BlockLen()*sizeof(int16_t)) != 0);
 
         uint32_t wrappedLane = (traceStartZmwLane + lane) % NumTraceLanes();
         PopulateBlock(wrappedLane, wrappedChunkIndex, reinterpret_cast<int16_t*>(block.Data()));

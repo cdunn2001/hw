@@ -63,18 +63,18 @@ DeviceMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>
     return out;
 }
 
-DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
-                                                     uint32_t lanesPerPool,
-                                                     const BaselinerParams& params,
-                                                     StashableAllocRegistrar* registrar)
-    : Baseliner(poolId)
+DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, float scaler, 
+                                                        const BaselinerParams& params, uint32_t lanesPerPool,
+                                                        StashableAllocRegistrar* registrar)
+    : Baseliner(poolId, scaler)
     , startupLatency_(params.LatentSize())
 {
     filter_ = std::make_unique<Filter>(
         params,
-        SOURCE_MARKER(),
+        scaler,
         lanesPerPool,
         initVal,
+        SOURCE_MARKER(),
         registrar);
 }
 

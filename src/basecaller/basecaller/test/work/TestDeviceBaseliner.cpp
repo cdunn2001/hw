@@ -125,6 +125,7 @@ struct DeviceMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPa
 
         burnInFrames = burnIn * batchConfig.framesPerChunk;
 
+        auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
                             {lanesPerPool, batchConfig.framesPerChunk, laneSize});
@@ -132,7 +133,7 @@ struct DeviceMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPa
         SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
         DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
         sourceConfig.numFrames = numFrames;
-        auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
+
         source = std::make_unique<SimulatedDataSource>(
                 baseliners.size() * sourceConfig.requestedLayout.NumZmw(),
                 simConfig,

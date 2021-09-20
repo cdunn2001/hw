@@ -38,7 +38,7 @@ protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
 
 public:
-    Baseliner(uint32_t poolId, float scaler = 1.0f)
+    Baseliner(uint32_t poolId, float scaler)
         : poolId_(poolId)
         , scaler_(scaler)
     { }

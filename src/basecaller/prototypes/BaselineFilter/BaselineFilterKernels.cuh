@@ -546,9 +546,10 @@ public:
     using BatchData = Mongo::Data::BatchData<int16_t>;
 
     __host__ ComposedFilter(const Mongo::Basecaller::BaselinerParams& params,
-                            const Memory::AllocationMarker& marker,
+                            float scale,
                             size_t numLanes,
                             short val,
+                            const Memory::AllocationMarker& marker,
                             Memory::StashableAllocRegistrar* registrar = nullptr)
         : numLanes_(numLanes)
         , latent(registrar, marker, numLanes, 0.0f)
@@ -559,7 +560,7 @@ public:
         sParams_.cMeanBias = params.MeanBias();
         sParams_.cSigmaBias = params.SigmaBias();
         // TODO this needs to be plumbed through properly still
-        sParams_.scale = 1.0f;
+        sParams_.scale = scale;
 
         fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});
 
