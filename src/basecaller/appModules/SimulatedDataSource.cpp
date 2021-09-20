@@ -48,7 +48,8 @@ public:
               size_t zmwPerBlock, size_t framesPerBlock,
               std::unique_ptr<SignalGenerator> generator,
               T* /*dummy to deduce T*/)
-        : pedestal_(generator->Pedestal())
+        : bytesPerVal_(sizeof(T))
+        , pedestal_(generator->Pedestal())
     {
         static_assert(std::is_same<T, int16_t>::value
                       || std::is_same<T, uint8_t>::value);
@@ -64,7 +65,6 @@ public:
         const auto numSignals = RoundUp(config.NumSignals(), zmwPerBlock);
         const auto numFrames = RoundUp(config.NumFrames(), framesPerBlock);
 
-        bytesPerVal_ = sizeof(T);
         numChunks_ = numFrames / framesPerBlock;
         framesPerBlock_ = framesPerBlock;
         numLanes_ = numSignals / zmwPerBlock;

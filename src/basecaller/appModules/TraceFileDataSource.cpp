@@ -83,7 +83,7 @@ TraceFileDataSource::TraceFileDataSource(
         case PacBio::DataSource::PacketLayout::UINT8:
             return 1;
         default:
-            throw PBException("Unsuported encoding");
+            throw PBException("Unsupported encoding");
         }
     }();
 
@@ -144,10 +144,11 @@ TraceFileDataSource::TraceFileDataSource(
         traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen()*bytesPerValue_);
         for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
         {
+            auto* lanePtr = traceDataCache_.data() +
+                traceLane * BlockWidth() * BlockLen() * NumTraceChunks() * bytesPerValue_;
             for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
-                auto* ptr = traceDataCache_.data() +
-                            traceLane * BlockWidth() * BlockLen() * NumTraceChunks() * bytesPerValue_ +
+                auto* ptr = lanePtr +
                             traceChunk * BlockWidth() * BlockLen() * bytesPerValue_;
                 switch(GetConfig().requestedLayout.Encoding())
                 {
