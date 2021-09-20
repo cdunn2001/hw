@@ -140,7 +140,7 @@ TEST(TestTraceSaver, TestA)
                 TEST_COUT << ss.str();
 #endif
 
-                traceSaver.Process(traceBatch);  // blah
+                traceSaver.Process(std::move(traceBatch));  // blah
             }
         }
     }

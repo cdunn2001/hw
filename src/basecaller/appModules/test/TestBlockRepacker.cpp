@@ -256,7 +256,7 @@ private:
 };
 
 // Small class, to plug the above validator into a compute graph
-class ValidatorBody final : public LeafBody<const TraceBatch<int16_t>>
+class ValidatorBody final : public LeafBody<const TraceVariant>
 {
 public:
     ValidatorBody(Validator* validator)
@@ -266,9 +266,10 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1.0f; }
 
-    void Process(const TraceBatch<int16_t>& in) override
+    void Process(const TraceVariant& in) override
     {
-        validator_->Validate(in);
+        const auto& trace = std::get<TraceBatch<int16_t>>(in);
+        validator_->Validate(trace);
     }
 private:
     Validator* validator_;

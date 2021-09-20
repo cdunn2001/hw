@@ -1,7 +1,7 @@
 #ifndef mongo_dataTypes_BatchData_H_
 #define mongo_dataTypes_BatchData_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //

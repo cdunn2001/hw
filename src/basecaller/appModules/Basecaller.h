@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -49,7 +49,7 @@
 namespace PacBio {
 namespace Application {
 
-class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatch<int16_t>, Mongo::Data::BatchResult>
+class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceVariant, Mongo::Data::BatchResult>
 {
     using BatchAnalyzer = Mongo::Basecaller::BatchAnalyzer;
 public:
@@ -171,8 +171,19 @@ public:
     //               5 total active streams without reusing priority values.  The main reason
     //               this wasn't done this round is that approach does make the timelines a bit
     //               harder to parse in the cuda profilers.
-    Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatch<int16_t>& in) override
+    Mongo::Data::BatchResult Process(const Mongo::Data::TraceVariant& traceVariant) override
     {
+        const auto& in = [&]() ->decltype(auto)
+        {
+            try
+            {
+                return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
+            } catch (const std::exception&)
+            {
+                throw PBException("Basecaller currently only supports int16_t trace data");
+            }
+        }();
+
         using IOProfiler = Mongo::Basecaller::IOProfiler;
         using IOStages = Mongo::Basecaller::IOStages;
         IOProfiler profiler(IOProfiler::Mode::OBSERVE, 100, 100);

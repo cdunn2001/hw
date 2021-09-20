@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -482,7 +482,7 @@ private:
     }
 
 
-    std::unique_ptr <LeafBody<const TraceBatch <int16_t>>> CreateTraceSaver(const DataSourceBase& dataSource)
+    std::unique_ptr <LeafBody<const TraceVariant>> CreateTraceSaver(const DataSourceBase& dataSource)
     {
         if (outputTrcFileName_ != "")
         {
@@ -541,7 +541,7 @@ private:
         }
     }
 
-    std::unique_ptr <TransformBody<const TraceBatch <int16_t>, BatchResult>>
+    std::unique_ptr <TransformBody<const TraceVariant, BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
