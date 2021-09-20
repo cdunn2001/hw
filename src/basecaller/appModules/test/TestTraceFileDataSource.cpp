@@ -33,7 +33,16 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Memory;
 using namespace PacBio::Mongo;
 
-struct TestTraceFileDataSource : testing::TestWithParam<std::pair<bool, std::string>> {};
+struct TestParams
+{
+    bool cacheInput;
+    std::string traceFile;
+    // The number of values the test expects to skip because the value doesn't fit
+    // in a uint8_t
+    uint32_t expectedSkip;
+};
+struct TestTraceFileDataSource : testing::TestWithParam<TestParams> {};
+
 
 TEST_P(TestTraceFileDataSource, Read8And16)
 {
@@ -50,17 +59,17 @@ TEST_P(TestTraceFileDataSource, Read8And16)
     DataSourceBase::Configuration cfg16(layout16, std::make_unique<MallocAllocator>());
     DataSourceBase::Configuration cfg8(layout8, std::make_unique<MallocAllocator>());
 
-    const std::string trc = GetParam().second;
+    const std::string& trc = GetParam().traceFile;
     TraceFileDataSource source16(std::move(cfg16),
                                  trc,
                                  framesPerBlock,
                                  lanesPerPool*laneSize,
-                                 GetParam().first);
+                                 GetParam().cacheInput);
     TraceFileDataSource source8(std::move(cfg8),
                                 trc,
                                 framesPerBlock,
                                 lanesPerPool*laneSize,
-                                GetParam().first);
+                                GetParam().cacheInput);
 
     while (!source16.ChunksReady()) source16.ContinueProcessing();
     while (!source8.ChunksReady()) source8.ContinueProcessing();
@@ -105,26 +114,26 @@ TEST_P(TestTraceFileDataSource, Read8And16)
                 EXPECT_EQ(data8[j], 255);
                 skipped++;
             } else {
-                EXPECT_EQ(data8[j], static_cast<int8_t>(data16[j]))
+                EXPECT_EQ(data8[j], static_cast<uint8_t>(data16[j]))
                     << j << " " << data8[j] << " " << data16[j];
                 checked++;
             }
         }
     }
-    // Just a quick check to make sure the data file was suitable,
-    // and we aren't truncating/saturating more than not.
-    EXPECT_GT(checked, skipped);
+    ASSERT_GT(checked, skipped);
+    // Make sure the expected number of values were checked
+    EXPECT_EQ(skipped, GetParam().expectedSkip);
 }
 
 INSTANTIATE_TEST_SUITE_P(,
                          TestTraceFileDataSource,
-                         ::testing::Values(std::make_pair(true,std::string{"/pbi/dept/primary/unitTestInput/mongo/test.trc.h5"}),
-                                           std::make_pair(false,std::string{"/pbi/dept/primary/unitTestInput/mongo/test.trc.h5"})),
-                                           [](const testing::TestParamInfo<std::pair<bool, std::string>>& info) {
+                         ::testing::Values(TestParams{true,std::string{"/pbi/dept/primary/unitTestInput/mongo/test.trc.h5"}, 132784},
+                                           TestParams{false,std::string{"/pbi/dept/primary/unitTestInput/mongo/test.trc.h5"}, 132784}),
+                                           [](const testing::TestParamInfo<TestParams>& info) {
                              std::string ret;
-                             if (info.param.first) ret = "Cached";
+                             if (info.param.cacheInput) ret = "Cached";
                              else ret = "NotCached";
-                             if (info.param.second.find("test.trc.h5") != std::string::npos) ret += "16BitInput";
+                             if (info.param.traceFile.find("test.trc.h5") != std::string::npos) ret += "16BitInput";
                              else ret += "8BitInput";
                              return ret;
                          });
