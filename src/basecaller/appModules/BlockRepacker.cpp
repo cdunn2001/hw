@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -35,7 +35,8 @@ using namespace PacBio::Cuda::Memory;
 namespace {
 
 // Helper factory function to create a TraceBatch for us
-TraceBatch<int16_t> CreateBatch(BatchDimensions dims, size_t startFrame, size_t startZmw, size_t maxZmw)
+template <typename T>
+TraceBatch<T> CreateBatch(BatchDimensions dims, size_t startFrame, size_t startZmw, size_t maxZmw)
 {
     const uint32_t poolId = startZmw / dims.ZmwsPerBatch();
     BatchMetadata meta(poolId, startFrame, startFrame + dims.framesPerBatch, startZmw);
@@ -44,7 +45,7 @@ TraceBatch<int16_t> CreateBatch(BatchDimensions dims, size_t startFrame, size_t 
     // full number of blocks specified by the specified dims
     dims.lanesPerBatch = std::min(static_cast<size_t>(dims.lanesPerBatch),
                                  (maxZmw - startZmw) / dims.laneWidth);
-    return TraceBatch<int16_t>(meta, dims, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+    return TraceBatch<T>(meta, dims, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 }
 
 // Implements a mutex that can be used in movable objects.
@@ -196,13 +197,13 @@ enum class RepackerMode
 //
 // This class is not thread safe.  It is the responsibility of calling classes to
 // make sure only one thread uses any given BatchFiller at one time.
-template <RepackerMode mode>
+template <typename T, RepackerMode mode>
 class BatchFiller
 {
 public:
     BatchFiller(const BatchDimensions& dims, size_t startFrame,
                 size_t startZmw, size_t maxZmw)
-        : batch_(CreateBatch(dims, startFrame, startZmw, maxZmw))
+        : batch_(CreateBatch<T>(dims, startFrame, startZmw, maxZmw))
         , currZmw_(startZmw)
         , currFrame_(startFrame)
     {}
@@ -234,7 +235,7 @@ public:
         return true;
     }
 
-    const TraceBatch<int16_t>& Batch() const
+    const TraceBatch<T>& Batch() const
     {
         return batch_;
     }
@@ -242,7 +243,7 @@ public:
     // Only callable on rvalue references.  It will move
     // out the batch.  Leaves this object in a moved-from
     // state that isn't good for anything except destruction
-    TraceBatch<int16_t> ExtractBatch() &&
+    TraceBatch<T> ExtractBatch() &&
     {
         assert(Done());
         return std::move(batch_);
@@ -252,9 +253,12 @@ public:
     // that belongs to this batch
     void Process(const SensorPacket& packet)
     {
-        // We only handle 16 bit data, so there
-        // are 32 zmw in a cache line.
-        constexpr size_t cacheLineZmw = 32;
+        // We only handle full cache lines, which is either
+        // 32 or 64 ZMW depending on the data type
+        static_assert(std::is_same_v<T, int16_t> || std::is_same_v<T, uint8_t>);
+        constexpr size_t cacheLineZmw = std::is_same_v<T, int16_t> ? 32 : 64;
+
+        assert(packet.Layout().BlockWidth() % cacheLineZmw == 0);
 
         assert(packet.StartZmw() <= currZmw_);
         // Find the zmw range that is the union of this batch and the packet
@@ -286,7 +290,7 @@ public:
         for (size_t packetBlockIdx = packetStartBlock; packetBlockIdx < packetEndBlock; ++packetBlockIdx)
         {
             const auto  packetBlockZmw = packetBlockIdx * packetBlockWidth + packetStartZmw;
-            const auto* packetBlockData = reinterpret_cast<const int16_t*>(packet.BlockData(packetBlockIdx).Data());
+            const auto* packetBlockData = reinterpret_cast<const T*>(packet.BlockData(packetBlockIdx).Data());
             for (size_t packetFrameIdx = 0; packetFrameIdx < packetNumFrames; ++packetFrameIdx, packetBlockData += packetBlockWidth)
             {
                 size_t batchFrameIdx = packetFrameIdx + (currFrame_ - batchFirstFrame);
@@ -340,8 +344,7 @@ public:
     }
 
 private:
-
-    TraceBatch<int16_t> batch_;
+    TraceBatch<T> batch_;
     size_t currZmw_;
     size_t currFrame_;
 };
@@ -366,7 +369,7 @@ private:
 // progress only for a trivial amount of time compared to the actual
 // data shuffle.  Enforcing a sort ourselves makes the logic for
 // ensuring all expected data pieces has arrived that much simpler.
-template <RepackerMode mode>
+template <typename T, RepackerMode mode>
 class PoolArena
 {
 public:
@@ -560,7 +563,7 @@ private:
     // packets waiting to be repacked into batches
     PacketPriorityQueue packetsToWrite_;
     // The set of batches currently being populated
-    std::deque<BatchFiller<mode>> currBatches_;
+    std::deque<BatchFiller<T, mode>> currBatches_;
 
     // Pointer to the top level BlockRepacker.  This inherits
     // from a GraphBodyNode, and has the output queue we need
@@ -578,7 +581,7 @@ private:
 // chunk.  Any packets that come through are just
 // forwarded to the different arenas, where different
 // threads can work in different arenas concurrently
-template <RepackerMode mode>
+template <typename T, RepackerMode mode>
 class ImplChild : public BlockRepacker::Impl
 {
 public:
@@ -666,7 +669,7 @@ public:
     }
 
 private:
-    std::vector<PoolArena<mode>> arenas_;
+    std::vector<PoolArena<T, mode>> arenas_;
     std::map<uint32_t, BatchDimensions> dims_;
 };
 
@@ -685,24 +688,52 @@ BlockRepacker::BlockRepacker(const std::map<uint32_t, DataSource::PacketLayout>&
         throw PBException("Number of zmw must be a multiple of the lane size");
 
     const auto expectedFrames = expectedInputLayouts.begin()->second.NumFrames();
+    const auto encoding = expectedInputLayouts.begin()->second.Encoding();
+    const auto minBlockWidth = [&](){
+        switch(encoding)
+        {
+        case PacBio::DataSource::PacketLayout::INT16:
+            return 32;
+        case PacBio::DataSource::PacketLayout::UINT8:
+            return 64;
+        default:
+            throw PBException("Unsupported packet layout");
+        }
+    }();
     for (const auto& kv : expectedInputLayouts)
     {
         const auto& layout = kv.second;
-        if (layout.Encoding() != PacketLayout::INT16)
-            throw PBException("BlockRepacker only supports 16 bit data");
+        if (layout.Encoding() != encoding)
+            throw PBException("Inconsistent encodings in layout map");
         if (layout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
             throw PBException("BlockRepacker only supports dense block layouts");
         if (layout.NumFrames() != expectedFrames)
             throw PBException("BlockRepacker requires uniform frame counts");
-        if (layout.BlockWidth() % 32 != 0)
-            throw PBException("BlockRepacker requires blocks that are a multiple of 32 pixels");
+        if (layout.BlockWidth() % minBlockWidth != 0)
+            throw PBException("BlockRepacker requires blocks that are a multiple of 64 bytes");
     }
 
-    impl_ = std::make_unique<ImplChild<RepackerMode::DEFAULT>>(
-                outputDims,
-                numZmw,
-                this,
-                concurrencyLimit);
+    switch (encoding)
+    {
+        case PacketLayout::INT16:
+        {
+            impl_ = std::make_unique<ImplChild<int16_t, RepackerMode::DEFAULT>>(outputDims,
+                                                                                numZmw,
+                                                                                this,
+                                                                                concurrencyLimit);
+            break;
+        }
+        case PacketLayout::UINT8:
+        {
+            impl_ = std::make_unique<ImplChild<uint8_t, RepackerMode::DEFAULT>>(outputDims,
+                                                                                numZmw,
+                                                                                this,
+                                                                                concurrencyLimit);
+            break;
+        }
+        default:
+            throw PBException("Unsupported layout requested for BlockRepacker");
+    }
 }
 
 std::map<uint32_t, BatchDimensions> BlockRepacker::BatchLayouts() const

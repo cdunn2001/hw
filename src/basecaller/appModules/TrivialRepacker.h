@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -51,8 +51,11 @@ public:
             const auto& layout = kv.second;
             if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
                 throw PBException("Frame layout not supported");
-            if (layout.Encoding() != DataSource::PacketLayout::INT16)
-                throw PBException("Only int16 is supported");
+            if (layout.Encoding() != DataSource::PacketLayout::INT16
+                && layout.Encoding() != DataSource::PacketLayout::UINT8)
+            {
+                throw PBException("Unsupported layout encoding for TrivialRepacker");
+            }
             if (layout.BlockWidth() != Mongo::laneSize)
                 throw PBException("Invalid block width");
             Mongo::Data::BatchDimensions dims;
@@ -77,8 +80,6 @@ public:
     {
         const auto& dims = expectedDims_[packet.PacketID()];
         // Make sure packet is valid
-        if (packet.Layout().Encoding() != DataSource::PacketLayout::INT16)
-            throw PBException("TrivialRepacker only supports INT16 encoding");
         if (packet.Layout().Type() != DataSource::PacketLayout::BLOCK_LAYOUT_DENSE)
             throw PBException("TrivialRepacker only supports BLOCK_LAYOUT_DENSE");
         if (dims.lanesPerBatch != packet.Layout().NumBlocks())
@@ -96,11 +97,29 @@ public:
             packet.StartFrame(),
             packet.StartFrame() + packet.NumFrames(),
             packet.StartZmw());
-        PushOut(Mongo::Data::TraceBatch<int16_t>(std::move(packet),
-                                    meta,
-                                    dims,
-                                    PacBio::Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                                    SOURCE_MARKER()));
+        switch (packet.Layout().Encoding())
+        {
+            case DataSource::PacketLayout::INT16:
+            {
+                PushOut(Mongo::Data::TraceBatch<int16_t>(std::move(packet),
+                                                         meta,
+                                                         dims,
+                                                         PacBio::Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                                         SOURCE_MARKER()));
+                break;
+            }
+            case DataSource::PacketLayout::UINT8:
+            {
+                PushOut(Mongo::Data::TraceBatch<uint8_t>(std::move(packet),
+                                                         meta,
+                                                         dims,
+                                                         PacBio::Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                                         SOURCE_MARKER()));
+                break;
+            }
+            default:
+                throw PBException("Unsupported packet encoding in TrivialRepacker");
+        }
     }
 private:
     std::map<uint32_t, Mongo::Data::BatchDimensions> expectedDims_;
