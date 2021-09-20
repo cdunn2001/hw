@@ -102,8 +102,6 @@ private:
     public:
         size_t Stride() const { return stride_; }
 
-        float Scale() const { return scaler_; }    // Converts DN quantization to e- values
-
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                         Data::BlockView<ElementTypeIn> upperBuffer,
@@ -186,7 +184,7 @@ private:
         const size_t stride_;
         const FloatArray cSigmaBias_;
         const FloatArray cMeanBias_;
-        float scaler_;
+        float scaler_;  // Converts DN quantization to e- values
 
         FloatArray bgSigma_{0};
         LaneArray latData_{0};
