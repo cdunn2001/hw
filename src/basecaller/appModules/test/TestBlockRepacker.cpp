@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021 Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -61,12 +61,42 @@ struct IrregularPacketInfo
     size_t numBlocks = 0;
 };
 
+template <typename T>
+SensorPacket GeneratePacket(const PacketLayout& layout,
+                            size_t packetID,
+                            size_t startZmw,
+                            size_t startFrame,
+                            IAllocator& alloc)
+{
+    SensorPacket packet(layout, packetID, startZmw, startFrame, alloc);
+    packetID++;
+
+    static constexpr auto numBits = sizeof(T) * 8 / 2;
+    static constexpr auto moduloMask = (1<<numBits)-1;
+
+    //populate data
+    for (size_t b = 0; b < layout.NumBlocks(); ++b)
+    {
+        auto* bdata = reinterpret_cast<T*>(packet.BlockData(b).Data());
+        for (size_t frame = 0; frame < layout.NumFrames(); ++frame)
+        {
+            for (size_t zmw = 0; zmw < layout.BlockWidth(); ++zmw)
+            {
+                auto zdata = (startZmw + zmw + b * layout.BlockWidth()) & moduloMask;
+                auto fdata = (startFrame + frame) & moduloMask;
+                bdata[zmw + frame*layout.BlockWidth()] = (fdata << numBits) | zdata;
+            }
+        }
+    }
+    return packet;
+}
+
 // Populates a chunk full of sensor packets.  Most packets will
 // have the shape of `defaultLayout`, but `irregular` can be
 // used to sneak in periodic chunks with more or fewer blocks.
 //
-// Will use a very basic test pattern where the low 8 bits
-// hold the (modulo) zmw number, and the high 8 hold the
+// Will use a very basic test pattern where the low half
+// holds the (modulo) zmw number, and the high half holds the
 // (modulo) frame index.
 SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
                                         IrregularPacketInfo irregular,
@@ -74,8 +104,19 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
                                         size_t numFrames,
                                         size_t numZmw)
 {
-    if (numZmw % 32 != 0) throw PBException("numZmw must be a multiple of 32");
-    if (defaultLayout.BlockWidth() % 32 != 0) throw PBException("block width must be a multiple of 32");
+    const auto minZmw = [&](){
+        switch (defaultLayout.Encoding())
+        {
+        case PacBio::DataSource::PacketLayout::INT16:
+            return 32;
+        case PacBio::DataSource::PacketLayout::UINT8:
+            return 64;
+        default:
+            throw PBException("Misconfigured test");
+        }
+    }();
+    if (numZmw % minZmw != 0) throw PBException("numZmw must be a multiple of a cache line");
+    if (defaultLayout.BlockWidth() % minZmw != 0) throw PBException("block width must be a multiple of a cache line");
     if (startFrame % defaultLayout.NumFrames()) throw PBException("startFrame must be evenly divisible by the layout frames");
     if (numFrames % defaultLayout.NumFrames() != 0) throw PBException("numFrames must be evenly divisible by the layout frames");
     if (irregular.frequency != 0 && irregular.numBlocks == 0) throw PBException("Invalid specification for irregular");
@@ -104,25 +145,29 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
             const size_t endZmw = std::min(numZmw, currZmw + numBlocks * defaultLayout.BlockWidth());
             numBlocks = (endZmw - currZmw) / defaultLayout.BlockWidth();
 
-            PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
+            PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, defaultLayout.Encoding(),
                                 {numBlocks, defaultLayout.NumFrames(), defaultLayout.BlockWidth()});
-            SensorPacket packet(layout, packetID, currZmw, startFrame + i * defaultLayout.NumFrames(), alloc);
-            packetID++;
 
-            //populate data
-            for (size_t b = 0; b < numBlocks; ++b)
-            {
-                auto bdata = reinterpret_cast<int16_t*>(packet.BlockData(b).Data());
-                for (size_t frame = 0; frame < layout.NumFrames(); ++frame)
+            auto packet = [&](){
+                switch (defaultLayout.Encoding())
                 {
-                    for (size_t zmw = 0; zmw < layout.BlockWidth(); ++zmw)
-                    {
-                        auto zdata = (currZmw + zmw + b * layout.BlockWidth()) % std::numeric_limits<uint8_t>::max();
-                        auto fdata = (startFrame + frame + i * layout.NumFrames()) % std::numeric_limits<int8_t>::max();
-                        bdata[zmw + frame*layout.BlockWidth()] = (fdata << 8) | zdata;
-                    }
+                case PacBio::DataSource::PacketLayout::INT16:
+                    return GeneratePacket<int16_t>(layout,
+                                                   packetID,
+                                                   currZmw,
+                                                   startFrame + i*defaultLayout.NumFrames(),
+                                                   alloc);
+                case PacBio::DataSource::PacketLayout::UINT8:
+                    return GeneratePacket<uint8_t>(layout,
+                                                   packetID,
+                                                   currZmw,
+                                                   startFrame + i*defaultLayout.NumFrames(),
+                                                   alloc);
+                default:
+                    throw PBException("Unexpected layout in TestBlockRepacker");
                 }
-            }
+            }();
+            packetID++;
 
             ret.AddPacket(std::move(packet));
             currZmw = endZmw;
@@ -132,7 +177,7 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
     // Re-order the packets, just for the fun of it. Don't want
     // the order to change between runs, nor do we really care
     // if the shuffle is all that random.  We just want to
-    // present data that is already sorted
+    // present data that isn't already sorted
     std::mt19937 g(12345);
     std::shuffle(ret.begin(), ret.end(), g);
 
@@ -174,7 +219,8 @@ public:
         seenBlocks_ = std::vector<bool>(numBlocks, false);
     }
 
-    void Validate(const TraceBatch<int16_t>& in)
+    template <typename T>
+    void Validate(const TraceBatch<T>& in)
     {
         if (in.StorageDims().framesPerBatch != dims_.framesPerBatch) batchError_ = true;
         if (in.StorageDims().laneWidth != dims_.laneWidth) batchError_ = true;
@@ -184,6 +230,9 @@ public:
 
         if (batchError_) return;
         if(batchError_) assert(false);
+
+        static constexpr auto numBits = sizeof(T) * 8 / 2;
+        static constexpr auto moduloMask = (1<<numBits)-1;
 
         const size_t bIdx = in.Metadata().FirstZmw() / dims_.laneWidth;
         for (size_t b = 0; b < in.LanesPerBatch(); ++b)
@@ -199,10 +248,10 @@ public:
             {
                 for (size_t zmw = 0; zmw < dims_.laneWidth; ++zmw)
                 {
-                    int16_t zdata = (in.Metadata().FirstZmw() + zmw + b * dims_.laneWidth) % std::numeric_limits<uint8_t>::max();
-                    int16_t fdata = (frame + in.GetMeta().FirstFrame()) % std::numeric_limits<int8_t>::max();
-                    auto answer = (fdata << 8) | zdata;
-                    auto result = block[zmw + frame*dims_.laneWidth];
+                    auto zdata = (in.Metadata().FirstZmw() + zmw + b * dims_.laneWidth) & moduloMask;
+                    auto fdata = (frame + in.GetMeta().FirstFrame()) & moduloMask;
+                    T answer = static_cast<T>((fdata << numBits) | zdata);
+                    T result = block[zmw + frame*dims_.laneWidth];
                     if (result != answer) blockError = true;
                     assert(!blockError);
                 }
@@ -268,8 +317,8 @@ public:
 
     void Process(const TraceVariant& in) override
     {
-        const auto& trace = std::get<TraceBatch<int16_t>>(in);
-        validator_->Validate(trace);
+        std::visit([&](const auto& batch) { validator_->Validate(batch);},
+                   in);
     }
 private:
     Validator* validator_;
@@ -295,16 +344,18 @@ struct BatchBlocks : public Wrapper<size_t> { using Wrapper::Wrapper; };
 struct PacketFrames : public Wrapper<size_t> { using Wrapper::Wrapper; };
 struct PacketBlocks : public Wrapper<size_t> { using Wrapper::Wrapper; };
 struct PacketBlockWidth : public Wrapper<size_t> { using Wrapper::Wrapper; };
+struct Encoding : public Wrapper<PacketLayout::EncodingFormat> { using Wrapper::Wrapper; };
 
 }
 
 struct TestBlockRepacker : testing::TestWithParam<std::tuple<NumZmw, NumFrames, BatchBlocks,
-                                                             PacketFrames, PacketBlocks, PacketBlockWidth
+                                                             PacketFrames, PacketBlocks,
+                                                             PacketBlockWidth, Encoding
                                                              >
                                                   >
 {};
 
-TEST_P(TestBlockRepacker, ParamSweep)
+TEST_P(TestBlockRepacker, ThreeChunkRepack)
 {
     LogSeverityContext context(LogLevel::WARN);
 
@@ -317,9 +368,11 @@ TEST_P(TestBlockRepacker, ParamSweep)
     const size_t   packetBlocks = std::get<PacketBlocks>(GetParam());
     const size_t   packetBlockWidth = std::get<PacketBlockWidth>(GetParam());
 
+    const auto     encoding = std::get<Encoding>(GetParam());
+
     const size_t numThreads = 4;
 
-    PacketLayout inputLayout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, {packetBlocks, packetFrames, packetBlockWidth});
+    PacketLayout inputLayout(PacketLayout::BLOCK_LAYOUT_DENSE, encoding, {packetBlocks, packetFrames, packetBlockWidth});
     BatchDimensions outputDims {batchBlocks, numFrames, blockWidth};
     auto chunk1 = GeneratePacketsChunk(inputLayout, 0*numFrames, numFrames, numZmw);
     auto chunk2 = GeneratePacketsChunk(inputLayout, 1*numFrames, numFrames, numZmw);
@@ -369,22 +422,39 @@ TEST_P(TestBlockRepacker, ParamSweep)
     EXPECT_TRUE(validator.AllCorrect());
 }
 
-INSTANTIATE_TEST_SUITE_P(BlockRepackers,
+static std::string TestNameGenerator(const testing::TestParamInfo<TestBlockRepacker::ParamType>& info)
+{
+    std::string ret;
+    ret += "Zmw" + std::to_string(std::get<NumZmw>(info.param)) + "_";
+    ret += "Frames" + std::to_string(std::get<NumFrames>(info.param)) + "_";
+    ret += "BatchBlocks" + std::to_string(std::get<BatchBlocks>(info.param)) + "_";
+    ret += "PacketFrames" + std::to_string(std::get<PacketFrames>(info.param)) + "_";
+    ret += "PacketBlocks" + std::to_string(std::get<PacketBlocks>(info.param)) + "_";
+    ret += "PacketBlockWidth" + std::to_string(std::get<PacketBlockWidth>(info.param));
+    return ret;
+};
+
+INSTANTIATE_TEST_SUITE_P(INT16ParamSweep,
     TestBlockRepacker,
     ::testing::Combine(
-                       ::testing::Values(16384, 163840),// NumZmw
-                       ::testing::Values(256),          // NumFrames
-                       ::testing::Values(16, 256),      // BatchBlocks
-                       ::testing::Values(64, 256),      // PacketFrames
-                       ::testing::Values(50),           // PacketBlocks
-                       ::testing::Values(32, 64, 128)), // PacketBlockWidth
-    [](const testing::TestParamInfo<TestBlockRepacker::ParamType>& info) {
-        std::string ret;
-        ret += "Zmw" + std::to_string(std::get<NumZmw>(info.param)) + "_";
-        ret += "Frames" + std::to_string(std::get<NumFrames>(info.param)) + "_";
-        ret += "BatchBlocks" + std::to_string(std::get<BatchBlocks>(info.param)) + "_";
-        ret += "PacketFrames" + std::to_string(std::get<PacketFrames>(info.param)) + "_";
-        ret += "PacketBlocks" + std::to_string(std::get<PacketBlocks>(info.param)) + "_";
-        ret += "PacketBlockWidth" + std::to_string(std::get<PacketBlockWidth>(info.param));
-        return ret;
-    });
+        ::testing::Values(16384, 163840),// NumZmw
+        ::testing::Values(256),          // NumFrames
+        ::testing::Values(16, 256),      // BatchBlocks
+        ::testing::Values(64, 256),      // PacketFrames
+        ::testing::Values(50),           // PacketBlocks
+        ::testing::Values(32, 64, 128),  // PacketBlockWidth
+        ::testing::Values(PacketLayout::INT16)),
+    TestNameGenerator);
+
+INSTANTIATE_TEST_SUITE_P(UINT8ParamSweep,
+    TestBlockRepacker,
+    ::testing::Combine(
+        ::testing::Values(16384, 163840),// NumZmw
+        ::testing::Values(256),          // NumFrames
+        ::testing::Values(16, 256),      // BatchBlocks
+        ::testing::Values(64, 256),      // PacketFrames
+        ::testing::Values(50),           // PacketBlocks
+        // 8 bit repacking can't do 32 pixel lanes
+        ::testing::Values(64, 128),      // PacketBlockWidth
+        ::testing::Values(PacketLayout::UINT8)),
+    TestNameGenerator);
