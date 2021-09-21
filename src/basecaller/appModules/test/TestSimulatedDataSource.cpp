@@ -48,7 +48,7 @@ using namespace PacBio::Mongo;
 // so as to not flood the output with failure data.  It is expected that the true/false
 // output of this function will also be tossed into a gtest assert, so that higher
 // level information about which batch is failing also gets output.
-template <typename ExpectedFunc>
+template <typename T, typename ExpectedFunc>
 bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
 {
     const auto& layout = packet.Layout();
@@ -57,7 +57,7 @@ bool ValidatePacket(const ExpectedFunc& expected, const SensorPacket& packet)
     constexpr size_t maxErrors = 10;
     for (size_t i = 0; i < layout.NumBlocks(); ++i)
     {
-        auto data = reinterpret_cast<const int16_t*>(packet.BlockData(i).Data());
+        auto data = reinterpret_cast<const T*>(packet.BlockData(i).Data());
         auto chunkFrame = packet.StartFrame();
         for (size_t frameIdx = 0; frameIdx < layout.NumFrames(); ++frameIdx)
         {
@@ -102,7 +102,9 @@ size_t ValidateData(const ExpectedFunc& expected, SimulatedDataSource& source)
 
             for (const auto& packet : chunk)
             {
-                auto packetValid = ValidatePacket(expected, packet);
+                auto packetValid = packet.Layout().Encoding() == PacketLayout::INT16
+                    ? ValidatePacket<int16_t>(expected, packet)
+                    : ValidatePacket<uint8_t>(expected, packet);
                 EXPECT_TRUE(packetValid) << "Packet failed, StartZmw/StartFrame: " << packet.StartZmw() << "/" << packet.StartFrame();
                 if (packetValid) numValidPackets++;
             }
@@ -198,6 +200,52 @@ TEST_P(SimDataSource, LongSawtooth)
         auto slope = range / static_cast<double>(sawConfig.periodFrames);
         auto ret = sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
         return static_cast<int16_t>(ret);
+    };
+
+    const auto expectedChunks = params.totalFrames / params.framesPerBlock;
+    const auto expectedPools = params.numZmw / (params.lanesPerPool * laneSize);
+    EXPECT_EQ(ValidateData(Expected, source), expectedChunks * expectedPools);
+}
+
+// Make sure that we can generate 8 bit data, but also that any
+// out of bounds values that are generated are clamped to the
+// 0-255 range
+TEST_P(SimDataSource, 8BitWithSaturation)
+{
+    const auto params = GetParam();
+
+    PacBio::Logging::LogSeverityContext severity(PacBio::Logging::LogLevel::WARN);
+
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8,
+                        {params.lanesPerPool, params.framesPerBlock, laneSize});
+    SimulatedDataSource::SimConfig simConf(params.numSignals, params.signalFrames);
+
+    DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
+    cfg.numFrames = params.totalFrames;
+
+    // Picking parameters that are mostly in bounds, but require some amount
+    // of clamping to be 0-255
+    SawtoothGenerator::Config sawConfig;
+    sawConfig.periodFrames = 270;
+    sawConfig.minAmp = -9;
+    sawConfig.maxAmp = 260;
+    sawConfig.startFrameStagger = 1;
+    SimulatedDataSource source(params.numZmw,
+                               simConf,
+                               std::move(cfg),
+                               std::make_unique<SawtoothGenerator>(sawConfig));
+
+    auto Expected = [&](size_t zmw, size_t frame) -> uint8_t {
+        auto expectedSignals = (params.numSignals + laneSize - 1) / laneSize * laneSize;
+        auto expectedSimFrames = (params.signalFrames + params.framesPerBlock - 1) / params.framesPerBlock * params.framesPerBlock;
+
+        auto wrappedZmw = zmw % expectedSignals;
+        auto wrappedFrame = frame % expectedSimFrames;
+
+        auto range = sawConfig.maxAmp - sawConfig.minAmp + 1;
+        auto slope = range / static_cast<double>(sawConfig.periodFrames);
+        auto ret = sawConfig.minAmp + static_cast<int16_t>((wrappedFrame + wrappedZmw * sawConfig.startFrameStagger) * slope) % range;
+        return static_cast<uint8_t>(std::clamp(ret, 0, 255));
     };
 
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;

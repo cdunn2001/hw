@@ -8,6 +8,7 @@ add_library(libTestAppModules OBJECT
     TestBlockRepacker.cpp
     TestBasecaller.cpp
     TestSimulatedDataSource.cpp
+    TestTraceFileDataSource.cpp
     TestTraceSaver.cpp
 )
 

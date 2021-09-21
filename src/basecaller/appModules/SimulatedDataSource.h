@@ -39,12 +39,16 @@ class SignalGenerator
 {
 public:
     virtual std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) = 0;
+    virtual int16_t Pedestal() const = 0;
     virtual ~SignalGenerator() = default;
 };
 
 // DataSource implementation for simulated data.  Actual data generation
 // is handled by the SignalGenerator handed in, with this class primarily
 // concerned with data replication and satisfying the DataSourceBase API
+// However, if any of the data provided by the SignalGenerator is out of
+// bounds for the configured SensorPacket encoding, the values will be
+// clamped to be in bounds.
 class SimulatedDataSource : public Mongo::BatchDataSource
 {
 public:
@@ -115,6 +119,8 @@ public:
         return 100.0;
     }
 
+    int16_t Pedestal() const override;
+
     DataSource::HardwareInformation GetHardwareInformation() override
     {
         DataSource::HardwareInformation ret;
@@ -143,9 +149,10 @@ public:
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override
     {
-        std::vector<int16_t> ret(numFrames, idx);
-        return ret;
+        return std::vector<int16_t>(numFrames, idx);
     }
+
+    int16_t Pedestal() const override { return 0; }
 };
 
 // Generates a crude sequence of baseline/pulses.
@@ -176,12 +183,17 @@ public:
         // Optional function controlling rng seed.  Input will be the
         // signal number.
         std::function<size_t(size_t)> seedFunc = [](size_t i) { return i; };
+        // Value to add to the trace data, to help keep within a certain range,
+        // e.g. make the data positive for storage in uint8_t
+        int16_t pedestal = 0;
     };
     PicketFenceGenerator(const Config& config)
         : config_(config)
     {}
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
+
+    int16_t Pedestal() const override { return config_.pedestal; }
 
 private:
     Config config_;
@@ -210,6 +222,8 @@ public:
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
+    int16_t Pedestal() const override { return 0; }
+
 private:
     Config config_;
 };
@@ -231,6 +245,8 @@ public:
     {}
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
+
+    int16_t Pedestal() const override { return gen_->Pedestal(); }
 private:
     std::unique_ptr<SignalGenerator> gen_;
 };
@@ -257,6 +273,8 @@ public:
     {}
 
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
+
+    int16_t Pedestal() const override { return gen_->Pedestal(); }
 private:
     std::unique_ptr<SignalGenerator> gen_;
     Config config_;

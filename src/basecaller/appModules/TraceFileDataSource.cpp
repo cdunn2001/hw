@@ -66,8 +66,26 @@ TraceFileDataSource::TraceFileDataSource(
     // SPARSE will be appropriate to allow once we fully support TraceFile Re-Analysis
     if (config.requestedLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
         throw PBException("Trace file source currently only supports dense block layout");
-    if (config.requestedLayout.Encoding() != PacketLayout::INT16)
-        throw PBException("Trace file source currently only supports 16 bit encoding");
+
+    auto storageType = traceFile_.Traces().StorageType();
+    if (storageType == TraceFile::TraceDataType::INT16
+        && config.requestedLayout.Encoding() == PacketLayout::UINT8)
+    {
+        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  Values may potentially be truncated/saturated";
+    }
+
+    bytesPerValue_ = [&]()
+    {
+        switch(config.requestedLayout.Encoding())
+        {
+        case PacBio::DataSource::PacketLayout::INT16:
+            return 2;
+        case PacBio::DataSource::PacketLayout::UINT8:
+            return 1;
+        default:
+            throw PBException("Unsupported encoding");
+        }
+    }();
 
     if (config.requestedLayout.BlockWidth() != laneSize)
         throw PBException("Unexpected lane width requested");
@@ -123,22 +141,33 @@ TraceFileDataSource::TraceFileDataSource(
     if (cache_)
     {
         // Cache requested portion of trace file into memory.
-        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen());
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen()*bytesPerValue_);
         for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
         {
+            auto* lanePtr = traceDataCache_.data() +
+                traceLane * BlockWidth() * BlockLen() * NumTraceChunks() * bytesPerValue_;
             for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
-                ReadBlockFromTraceFile(traceLane, traceChunk,
-                                       traceDataCache_.data() +
-                                       (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
-                                       (traceChunk*BlockWidth()*BlockLen()));
+                auto* ptr = lanePtr +
+                            traceChunk * BlockWidth() * BlockLen() * bytesPerValue_;
+                switch(GetConfig().requestedLayout.Encoding())
+                {
+                case PacBio::DataSource::PacketLayout::INT16:
+                    ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
+                    break;
+                case PacBio::DataSource::PacketLayout::UINT8:
+                    ReadBlockFromTraceFile(traceLane, traceChunk, ptr);
+                    break;
+                default:
+                    throw PBException("Unsupported Encoding");
+                }
             }
         }
     }
     else
     {
         // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
-        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*BlockLen());
+        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*BlockLen()*bytesPerValue_);
         laneCurrentChunk_.resize(NumTraceLanes(), std::numeric_limits<size_t>::max());
     }
 
@@ -159,10 +188,10 @@ void TraceFileDataSource::ContinueProcessing()
     for (size_t lane = 0; lane < currLayout.NumBlocks(); lane++)
     {
         auto block = batchData.BlockData(lane);
-        assert(block.Count() * BlockWidth()*BlockLen()*sizeof(int16_t));
+        assert(block.Count() == BlockWidth()*BlockLen()*bytesPerValue_);
 
         uint32_t wrappedLane = (traceStartZmwLane + lane) % NumTraceLanes();
-        PopulateBlock(wrappedLane, wrappedChunkIndex, reinterpret_cast<int16_t*>(block.Data()));
+        PopulateBlock(wrappedLane, wrappedChunkIndex, block.Data());
     }
 
     currChunk_.AddPacket(std::move(batchData));
@@ -236,38 +265,50 @@ void TraceFileDataSource::PreloadInputQueue(size_t chunks)
     }
 }
 
-void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, int16_t* data)
+void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, uint8_t* data)
 {
     if (cache_)
     {
         std::memcpy(data,
                     traceDataCache_.data() +
-                    (traceLane*BlockWidth()*BlockLen()*NumTraceChunks()) +
-                    (traceChunk*BlockWidth()*BlockLen()),
-                    BlockLen()*BlockWidth()*sizeof(int16_t));
+                    (traceLane*BlockWidth()*BlockLen()*NumTraceChunks())*bytesPerValue_ +
+                    (traceChunk*BlockWidth()*BlockLen())*bytesPerValue_,
+                    BlockLen()*BlockWidth()*bytesPerValue_);
     }
     else
     {
         if (laneCurrentChunk_[traceLane] != traceChunk)
         {
-            ReadBlockFromTraceFile(traceLane, traceChunk,
-                                   traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()));
+            auto* ptr = traceDataCache_.data()
+                      + traceLane * BlockWidth() * BlockLen() * bytesPerValue_;
+            switch(GetConfig().requestedLayout.Encoding())
+            {
+            case PacBio::DataSource::PacketLayout::INT16:
+                ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
+                break;
+            case PacBio::DataSource::PacketLayout::UINT8:
+                ReadBlockFromTraceFile(traceLane, traceChunk, ptr);
+                break;
+            default:
+                throw PBException("Unsupported Encoding");
+            }
             laneCurrentChunk_[traceLane] = traceChunk;
         }
-        std::memcpy(data, traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen()),
-                    BlockWidth()*BlockLen()*sizeof(int16_t));
+        std::memcpy(data, traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen())*bytesPerValue_,
+                    BlockWidth()*BlockLen()*bytesPerValue_);
     }
 }
 
-void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, int16_t* data)
+template <typename T>
+void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, T* data)
 {
     size_t nZmwsToRead = std::min(BlockWidth(), NumTraceZmws() - (traceLane*BlockWidth()));
     size_t nFramesToRead = std::min(BlockLen(), NumTraceFrames() - (traceChunk*BlockLen()));
     using range = boost::multi_array_types::extent_range;
     const range zmwRange(traceLane*BlockWidth(), (traceLane*BlockWidth()) + nZmwsToRead);
     const range frameRange(traceChunk*BlockLen(), (traceChunk*BlockLen()) + nFramesToRead);
-    boost::multi_array<int16_t,2> d{boost::extents[zmwRange][frameRange]};
-    boost::multi_array_ref<int16_t,2> out{data, boost::extents[nFramesToRead][nZmwsToRead]};
+    boost::multi_array<T,2> d{boost::extents[zmwRange][frameRange]};
+    boost::multi_array_ref<T,2> out{data, boost::extents[nFramesToRead][nZmwsToRead]};
     traceFile_.Traces().ReadTraceBlock(d);
     d.reindex(0);
     for (size_t zmw = 0; zmw < nZmwsToRead; zmw++)
@@ -290,4 +331,3 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
 }
 
 }}
-

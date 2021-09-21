@@ -39,13 +39,20 @@ namespace Application {
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
 
-class SimulatedDataSource::DataCache {
+class SimulatedDataSource::DataCache
+{
 public:
 
+    template <typename T>
     DataCache(const SimulatedDataSource::SimConfig& config,
               size_t zmwPerBlock, size_t framesPerBlock,
-              std::unique_ptr<SignalGenerator> generator)
+              std::unique_ptr<SignalGenerator> generator,
+              T* /*dummy to deduce T*/)
+        : bytesPerVal_(sizeof(T))
+        , pedestal_(generator->Pedestal())
     {
+        static_assert(std::is_same<T, int16_t>::value
+                      || std::is_same<T, uint8_t>::value);
         auto RoundUp = [](size_t count, size_t quantum)
         {
             auto numQuanta = (count + quantum - 1) / quantum;
@@ -65,9 +72,10 @@ public:
 
         // Set up a data cache that is populated with integral blocks.  This makes it easy to
         // replicate it out as requests for new blocks come in (you just modulo the lane/chunk idx)
-        data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_]);
+        data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_*bytesPerVal_]);
 
         size_t lane = 0;
+        size_t outOfRangeCount = 0;
         for (size_t signalIdx = 0; signalIdx < numSignals; lane++)
         {
             for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx, ++signalIdx)
@@ -78,41 +86,80 @@ public:
                 {
                     for (size_t frameIdx = 0; frameIdx < framesPerBlock; ++frameIdx, ++frame)
                     {
-                        data_[chunk][lane][frameIdx][zmwIdx] = signal[frame];
+                        auto * ptr = reinterpret_cast<T*>(data_[chunk][lane][frameIdx].origin());
+                        T val = std::clamp<int16_t>(signal[frame],
+                                                    std::numeric_limits<T>::lowest(),
+                                                    std::numeric_limits<T>::max());
+                        if (val != signal[frame]) outOfRangeCount++;
+                        ptr[zmwIdx] = val;
                     }
                 }
             }
         }
-
+        if (outOfRangeCount > 0)
+            PBLOG_WARN << "SimulatedDataSource saturated " << outOfRangeCount
+                       << " values out of " << data_.num_elements() / bytesPerVal_;
     }
 
     // Takes a block from the cache and uses it to populate a block in a SensorPacket
     void FillBlock(size_t laneIdx, size_t chunkIdx, SensorPacket::DataView data)
     {
+        assert(data.Count() == zmwPerBlock_ * framesPerBlock_ * bytesPerVal_);
         auto cacheBlock = data_[chunkIdx % numChunks_][laneIdx % numLanes_].origin();
         memcpy(data.Data(),
                cacheBlock,
-               framesPerBlock_*zmwPerBlock_*sizeof(int16_t));
+               framesPerBlock_*zmwPerBlock_*bytesPerVal_);
     }
 
+    int16_t Pedestal() const { return pedestal_; }
+
 private:
+    size_t bytesPerVal_ = 0;
     size_t numLanes_ = 0;
     size_t numChunks_ = 0;
     size_t zmwPerBlock_ = 0;
     size_t framesPerBlock_ = 0;
-    boost::multi_array<int16_t, 4> data_;
+    boost::multi_array<uint8_t, 4> data_;
+
+    int16_t pedestal_ = 0;
 };
 
 SimulatedDataSource::~SimulatedDataSource() = default;
+
+template <typename Generator>
+std::unique_ptr<SimulatedDataSource::DataCache> MakeCache(PacketLayout::EncodingFormat encoding,
+                                                          const SimulatedDataSource::SimConfig& sim,
+                                                          size_t zmwPerBlock,
+                                                          size_t framesPerBlock,
+                                                          std::unique_ptr<Generator> generator)
+{
+    if (encoding == PacketLayout::INT16)
+    {
+        return std::make_unique<SimulatedDataSource::DataCache>(sim,
+                                                                zmwPerBlock,
+                                                                framesPerBlock,
+                                                                std::move(generator),
+                                                                static_cast<int16_t*>(nullptr));
+    }
+    if (encoding == PacketLayout::UINT8)
+    {
+        return std::make_unique<SimulatedDataSource::DataCache>(sim,
+                                                                zmwPerBlock,
+                                                                framesPerBlock,
+                                                                std::move(generator),
+                                                                static_cast<uint8_t*>(nullptr));
+    }
+    throw PBException("Unsupported packet encoding");
+}
 
 SimulatedDataSource::SimulatedDataSource(size_t minZmw,
                                          const SimConfig &sim,
                                          DataSource::DataSourceBase::Configuration cfg,
                                          std::unique_ptr<SignalGenerator> generator)
     : BatchDataSource(std::move(cfg)),
-      cache_(std::make_unique<DataCache>(
-          sim, GetConfig().requestedLayout.BlockWidth(),
-          GetConfig().requestedLayout.NumFrames(), std::move(generator))),
+      cache_(MakeCache(GetConfig().requestedLayout.Encoding(),
+                       sim, GetConfig().requestedLayout.BlockWidth(),
+                       GetConfig().requestedLayout.NumFrames(), std::move(generator))),
       numZmw_((minZmw + laneSize - 1) / laneSize * laneSize)
 {
     const auto& reqLayout = GetConfig().requestedLayout;
@@ -125,12 +172,12 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
         reqLayout.NumFrames(),
         laneSize};
     PacketLayout nominalLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                               PacketLayout::INT16,
+                               reqLayout.Encoding(),
                                layoutDims);
     const auto numPools = (numZmw_ + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
     layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
     PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                            PacketLayout::INT16,
+                            reqLayout.Encoding(),
                             layoutDims);
 
     for (size_t i = 0; i < numPools-1; ++i)
@@ -142,6 +189,8 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
     currChunk_ = SensorPacketsChunk(0, GetConfig().requestedLayout.NumFrames());
     currChunk_.SetZmwRange(0, numZmw_);
 }
+
+int16_t SimulatedDataSource::Pedestal() const { return cache_->Pedestal(); }
 
 void SimulatedDataSource::ContinueProcessing()
 {
@@ -204,7 +253,7 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
         std::vector<short> baselineSignal;
         for (size_t f = 0; f < frames; ++f)
         {
-            baselineSignal.push_back(std::floor(rng(gen)));
+            baselineSignal.push_back(std::floor(rng(gen)) + config_.pedestal);
         }
         return baselineSignal;
     };
@@ -218,7 +267,7 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
         std::vector<short> pulseSignal;
         for (size_t f = 0; f < frames; ++f)
         {
-            pulseSignal.push_back(baselineSignal[f] + pulseLevel);
+            pulseSignal.push_back(baselineSignal[f] + pulseLevel + config_.pedestal);
         }
         return pulseSignal;
     };
