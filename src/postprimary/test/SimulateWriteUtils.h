@@ -38,7 +38,8 @@
 
 #include <memory>
 
-#include <appModules/Metrics.h>
+#include <dataTypes/Metrics.h>
+
 #include <bazio/BazIOConfig.h>
 #include <bazio/encoding/Types.h>
 #include <bazio/encoding/ObjectToBaz.h>
@@ -54,8 +55,8 @@ using SimProductionPulseGroups = BazIO::ProductionPulses;
 using SimInternalPulseGroups = BazIO::InternalPulses;
 using SimPulse = BazIO::Pulse;
 
-using SimMetricT = Application::InternalMetrics<uint16_t,float>;
-using SimMetricAggregatedT = Application::InternalMetrics<uint16_t,float>;
+using SimMetricT = Mongo::Data::CompleteMetrics<uint32_t,float>;
+using SimMetricAggregatedT = Mongo::Data::CompleteMetrics<uint32_t,float>;
 
 using SimBazAggregatorT = BazIO::BazAggregator<SimMetricT,SimMetricAggregatedT>;
 

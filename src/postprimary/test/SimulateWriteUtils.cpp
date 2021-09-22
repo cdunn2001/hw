@@ -58,10 +58,10 @@ std::vector<SimMetricT> ConvertMetrics(const std::vector<Primary::SpiderMetricBl
         bcm.numBases = sm.numBasesA_ + sm.numBasesC_ + sm.numBasesG_ + sm.numBasesT_;
         bcm.numPulses = sm.numPulses_;
 
-        bcm.pkMidSignal[0] = sm.pkmidA_;
-        bcm.pkMidSignal[1] = sm.pkmidC_;
-        bcm.pkMidSignal[2] = sm.pkmidG_;
-        bcm.pkMidSignal[3] = sm.pkmidT_;
+        bcm.pkMidSignal[0] = sm.pkmidA_ * sm.numpkmidFramesA_;
+        bcm.pkMidSignal[1] = sm.pkmidC_ * sm.numpkmidFramesC_;
+        bcm.pkMidSignal[2] = sm.pkmidG_ * sm.numpkmidFramesG_;
+        bcm.pkMidSignal[3] = sm.pkmidT_ * sm.numpkmidFramesT_;
 
         bcm.bpZvar[0] = sm.bpzvarA_;
         bcm.bpZvar[1] = sm.bpzvarC_;

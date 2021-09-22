@@ -23,7 +23,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <appModules/Metrics.h>
 #include <appModules/PrelimHQFilter.h>
 
 #include <bazio/MetricBlock.h>
@@ -35,6 +34,7 @@
 #include <dataTypes/configs/PrelimHQConfig.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
+#include <dataTypes/Metrics.h>
 #include <dataTypes/PulseGroups.h>
 #include <dataTypes/PulseFieldAccessors.h>
 
@@ -70,10 +70,10 @@ private:
             ? InternalPulses::nominalBytes : ProductionPulses::nominalBytes;
     using Serializer = std::conditional_t<internal, InternalPulses, ProductionPulses>;
     using BazAggregatorT = std::conditional_t<internal,
-                            BazAggregator<Application::InternalMetricsGroup::MetricT,
-                                          Application::InternalMetricsGroup::MetricAggregatedT>,
-                            BazAggregator<Application::ProductionMetricsGroup::MetricT,
-                                          Application::ProductionMetricsGroup::MetricAggregatedT>>;
+                            BazAggregator<CompleteMetricsGroup::MetricT,
+                                          CompleteMetricsGroup::MetricAggregatedT>,
+                            BazAggregator<ProductionMetricsGroup::MetricT,
+                                          ProductionMetricsGroup::MetricAggregatedT>>;
 public:
     ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
               bool multipleBazFiles, const PrelimHQConfig& config)
@@ -85,9 +85,9 @@ public:
         , aggregator_(std::make_unique<BazAggregatorT>(numZmws, bufferId,
                                                        config.expectedPulsesPerZmw*expectedBytesPerBase,
                                                        config.lookbackSize,
-                                                       config.enableLookback,
-                                                       CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER()),
-                                                       CreateAllocator(AllocatorMode::MALLOC, SOURCE_MARKER())))
+                                                       config.enablePreHQ,
+                                                       CreateAllocator(AllocatorMode::MALLOC, std::string("PrelimHQFilter_packetsAllocator")),
+                                                       CreateAllocator(AllocatorMode::MALLOC, std::string("PrelimHQFilter_metricsAllocator"))))
         , dummyPreHQ_(config)
         , serializers_(numZmws)
     {}
@@ -177,7 +177,7 @@ private:
 
         void DetectHQ(BazAggregatorT& agg)
         {
-            if (!config_.enableLookback)
+            if (!config_.enablePreHQ)
             {
                 for (auto&& v : agg.PreHQData()) v.MarkAsHQ();
                 return;

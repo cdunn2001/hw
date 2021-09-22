@@ -105,6 +105,7 @@ public:
     /// \param maxLookback The number of data buffers we retain before dropping
     ///                    data Every call to `ProduceBazFile` will create a new
     ///                    data buffer
+    /// \param enablePreHQ Enable preHQ algorithm
     /// \param packetsAllocator   An optional IAllocator instance to use for allocating
     ///                           packets memory
     /// \param metricsAllocatr    An optional IAllocator instance to use for allocating
@@ -113,7 +114,7 @@ public:
                   uint32_t bufferId,
                   size_t expectedPulseBufferSize,
                   size_t maxLookback,
-                  bool enableLookback,
+                  bool enablePreHQ,
                   std::shared_ptr<Memory::IAllocator> packetsAllocator =
                       std::make_shared<DataSource::MallocAllocator>(),
                   std::shared_ptr<Memory::IAllocator> metricsAllocator =
@@ -123,7 +124,7 @@ public:
     , packetsAllocator_(packetsAllocator)
     , packets_(numZmw, expectedPulseBufferSize, maxLookback, packetsAllocator)
     , metricsAllocator_(metricsAllocator)
-    , metrics_(numZmw, maxLookback, enableLookback, metricsAllocator)
+    , metrics_(numZmw, maxLookback, enablePreHQ, metricsAllocator)
     {}
 
     size_t NumZmw() const { return numZmw_; }

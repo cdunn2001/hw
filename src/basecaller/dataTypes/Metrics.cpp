@@ -23,13 +23,16 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <appModules/Metrics.h>
+#include <half.hpp>
+
+#include <dataTypes/Metrics.h>
 #include <bazio/writing/BazAggregator.h>
 
-namespace PacBio::Application {
+namespace PacBio::Mongo::Data {
 
 template struct ProductionMetrics<uint16_t,half_float::half>;
-template struct ProductionMetrics<uint32_t,half_float::half>;
-template struct InternalMetrics<uint16_t,half_float::half>;
+template struct ProductionMetrics<uint32_t,float>;
+template struct CompleteMetrics<uint16_t,half_float::half>;
+template struct CompleteMetrics<uint32_t,float>;
 
 }

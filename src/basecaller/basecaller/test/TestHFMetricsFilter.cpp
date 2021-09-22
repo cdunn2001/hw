@@ -366,7 +366,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                     ASSERT_EQ(15, mb.pkMax[2][z]);
                     ASSERT_EQ(35, mb.pkMax[3][z]);
                     EXPECT_NEAR(0.0171916, mb.bpZvar[0][z], 0.001);
-                    EXPECT_NEAR(0.0043878, mb.bpZvar[1][z],.001);
+                    EXPECT_NEAR(0.0043878, mb.bpZvar[1][z], 0.001);
                     EXPECT_NEAR(0.0192236, mb.bpZvar[2][z], 0.001);
                     EXPECT_NEAR(0.0065546, mb.bpZvar[3][z], 0.001);
                     EXPECT_NEAR(0.0706076, mb.pkZvar[0][z], 0.001);

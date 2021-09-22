@@ -51,21 +51,9 @@ struct MetricBlock
     /// Performs aggregation of the input metric block.
     template <typename U>
     void Aggregate(const MetricBlock<U>& val)
-    { 
+    {
+        static_assert(std::is_base_of<MetricBlock<T>,T>::value, "T must be derived from MetricBlock<T>!");
         static_cast<T*>(this)->Aggregate(static_cast<const U&>(val));
-    }
-
-    /// Sets the metric block to the input metric block.
-    template <typename U>
-    void Set(const MetricBlock<U>& val)
-    {
-        static_cast<T*>(this)->Set(static_cast<const U&>(val));
-    }
-
-    /// Resets the metric block to default values.
-    void Reset()
-    {
-        static_cast<T*>(this)->Reset();
     }
 
     /// Returns the activity label associated with this metric block.

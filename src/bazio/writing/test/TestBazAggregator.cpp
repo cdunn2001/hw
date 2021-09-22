@@ -26,10 +26,10 @@
 #include <gtest/gtest.h>
 
 #include <bazio/writing/BazAggregator.h>
-#include <appModules/Metrics.h>
+#include <dataTypes/Metrics.h>
 
 using namespace PacBio::BazIO;
-using namespace PacBio::Application;
+using namespace PacBio::Mongo::Data;
 
 using BazAggregatorT = BazAggregator<ProductionMetricsGroup::MetricT,
                                      ProductionMetricsGroup::MetricAggregatedT>;

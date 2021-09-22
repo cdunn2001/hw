@@ -42,12 +42,13 @@ class PrelimHQConfig : public Configuration::PBConfig<PrelimHQConfig>
     
     PB_CONFIG_PARAM(size_t, zmwOutputStride, 1);
 
-    // If enable lookback is turned off, then the prelim-HQRF is
-    // turned off and internal metrics will be outputted at the
+    // *If* enablePreHQ is turned off, then the prelim-HQRF is
+    // turned off and complete metrics will be outputted at the
     // metric block frequency.
-    PB_CONFIG_PARAM(bool, enableLookback, false);
+    PB_CONFIG_PARAM(bool, enablePreHQ, false);
+    // Lookback size in terms of metric blocks
     PB_CONFIG_PARAM(uint32_t, lookbackSize, 10);
-    // *If* enableLookback is turned on, this fraction controls the
+    // *If* enablePreHQ is turned on, this fraction controls the
     // percentage of remaining ZMW allowed to become HQ at once.
     PB_CONFIG_PARAM(float, hqThrottleFraction, .10f);
 

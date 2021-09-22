@@ -36,6 +36,7 @@
 #ifndef PACBIO_METRICIO_WRITING_METRIC_BUFFER_MANAGER_H
 #define PACBIO_METRICIO_WRITING_METRIC_BUFFER_MANAGER_H
 
+#include <tuple>
 
 #include <bazio/writing/MemoryBuffer.h>
 #include <bazio/writing/MetricBlock.h>
@@ -57,11 +58,11 @@ namespace PacBio::BazIO {
 /// by activity label) are written to disk. From there, metric blocks
 /// are aggregated based on activity label and written to disk.
 ///
-/// Internal mode:
-/// Internal metrics are not aggregated and written at the metric block
-/// frequency level. Given the I/O load for this mode, this is meant
-/// to be run off-line and on a subset of the chip for both preHQ
-/// and HQRF algorithm training purposes.
+/// Complete metrics mode:
+/// Complete metrics are outputed where they are not aggregated and
+/// are written at the metric block frequency level. Given the I/O load for
+/// this mode, this is meant to be run off-line and on a subset of the chip
+/// for both preHQ and HQRF algorithm training purposes.
 ///
 /// \tparam MetricBlockT            The metric block type that inherits from the MetricBlock CRTP
 /// \tparam AggregatedMetricBlockT  The aggregated metric block type that inherits from the MetricBlock CRTP
@@ -75,38 +76,37 @@ public:
 public:
     // Simplified constructor for simulation/testing
     MetricBufferManager(size_t numZmw)
-    : allocator_(std::make_shared<DataSource::MallocAllocator>())
-    , mostRecentActivityLabels_(numZmw, Mongo::Data::HQRFPhysicalStates::NUM_PHYS_STATES)
-    , indexInfo_(numZmw)
-    , newHQ_(numZmw, true)
-    , numHQ_(numZmw)
-    , maxLookBack_(0)
-    , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
-    , metrics_(numZmw)
+        : allocator_(std::make_shared<DataSource::MallocAllocator>())
+        , mostRecentActivityLabels_(numZmw, Mongo::Data::HQRFPhysicalStates::NUM_PHYS_STATES)
+        , indexInfo_(numZmw)
+        , newHQ_(numZmw, true)
+        , numHQ_(numZmw)
+        , maxLookBack_(0)
+        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
+        , metrics_(numZmw)
     {
         for (size_t zmw = 0; zmw < numZmw; ++zmw)
         {
             indexInfo_[zmw].hqStarted_ = true;
             indexInfo_[zmw].currentIndex_ = zmw;
             indexInfo_[zmw].recentIndex_ = zmw;
-            aggregatedMetrics_->Data(zmw)->Reset();
         }
     }
 
     // Constructor
-    MetricBufferManager(size_t numZmw, size_t maxLookBack, bool enableLookback,
+    MetricBufferManager(size_t numZmw, size_t maxLookBack, bool enablePreHQ,
                         std::shared_ptr<Memory::IAllocator> allocator)
-    : allocator_(allocator)
-    , mostRecentActivityLabels_(numZmw, Mongo::Data::HQRFPhysicalStates::NUM_PHYS_STATES)
-    , indexInfo_(numZmw)
-    , newHQ_(numZmw, false)
-    , numHQ_(0)
-    , aggregatedMetrics_(std::make_unique<AggregatedMetricBufferT>(numZmw, allocator_))
-    , maxLookBack_(maxLookBack)
-    , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
-    , metrics_(numZmw)
+        : allocator_(allocator)
+        , mostRecentActivityLabels_(numZmw, Mongo::Data::HQRFPhysicalStates::NUM_PHYS_STATES)
+        , indexInfo_(numZmw)
+        , newHQ_(numZmw, false)
+        , numHQ_(0)
+        , aggregatedMetrics_(std::make_unique<AggregatedMetricBufferT>(numZmw, allocator_))
+        , maxLookBack_(maxLookBack)
+        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
+        , metrics_(numZmw)
     {
-        if (enableLookback)
+        if (enablePreHQ)
         {
             lookbackWindow_.push_back(std::make_shared<MetricBufferT>(numZmw, allocator_));
         }
@@ -116,7 +116,7 @@ public:
             indexInfo_[zmw].hqStarted_ = false;
             indexInfo_[zmw].currentIndex_ = zmw;
             indexInfo_[zmw].recentIndex_ = zmw;
-            aggregatedMetrics_->Data(zmw)->Reset();
+            *aggregatedMetrics_->Data(zmw) = AggregatedMetricBlockT();
         }
     }
 
@@ -143,7 +143,7 @@ public:
     {
         mostRecentActivityLabels_[zmwIndex] = static_cast<Mongo::Data::HQRFPhysicalStates>(metrics[0].ActivityLabel());
         if (lookbackWindow_.empty())
-            AddInternalMetrics(zmwIndex, metrics);
+            AddCompleteMetrics(zmwIndex, metrics);
         else
             AddProductionMetrics(zmwIndex, metrics[0]);
     }
@@ -189,17 +189,16 @@ public:
                 if (newHQ_[zmw])
                 {
                     // Newly created HQ-region.
-                    size_t numActivityLabels = NumActivityLabels(zmw);
+                    size_t numTransitions = NumTransitionsInLookbackWindow(zmw);
                     auto& metricsOut = metrics_[zmw];
-                    metricsOut = metricsBuffer_.Allocate(numActivityLabels + 1);
+                    metricsOut = metricsBuffer_.Allocate(numTransitions);
 
                     // Add preHQ aggregated metric block to output buffer.
                     auto& aggregatedMb = *aggregatedMetrics_->Data(zmw);
                     aggregatedMb.Convert(metricsOut[0]);
-                    aggregatedMb.Reset();
 
                     // Go through lookback window, aggregate and add to output buffer.
-                    AddLookbackWindowMetricBlocks(zmw);
+                    AddLookbackWindowMetricBlocks(zmw, numTransitions);
                 }
             }
             else
@@ -233,7 +232,10 @@ public:
 
 private:
 
-    void AddInternalMetrics(size_t zmwIndex, const std::vector<MetricBlockT>& metrics)
+    // FIXME: The complete metrics takes a vector currently because the simulation code
+    // still generates multiple metric blocks. Once the simulation code is updated, we
+    // remove this.
+    void AddCompleteMetrics(size_t zmwIndex, const std::vector<MetricBlockT>& metrics)
     {
         auto& metricsOut = metrics_[zmwIndex];
         metricsOut = metricsBuffer_.Allocate(metrics.size());
@@ -246,12 +248,12 @@ private:
 
     void AddProductionMetrics(size_t zmwIndex, const MetricBlockT& metrics)
     {
-
         if (!indexInfo_[zmwIndex].hqStarted_)
         {
             // Haven't started the preHQ region, add to the last
             // (most recent) buffer in the lookback window.
-            lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_)->Set(metrics);
+            *lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_) = MetricBlockT();
+            lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_)->Aggregate(metrics);
         }
         else
         {
@@ -274,57 +276,58 @@ private:
                     aggregatedMb.Convert(metricsOut[0]);
                 }
 
-                aggregatedMb.Set(metrics);
+                aggregatedMb = AggregatedMetricBlockT();
+                aggregatedMb.Aggregate(metrics);
             }
         }
     }
 
-    // Goes through the lookback buffer and counts the number of
-    // different contiguous activity labels.
-    size_t NumActivityLabels(size_t zmw)
+    // Goes through the lookback buffer and counts the number of transitions.
+    size_t NumTransitionsInLookbackWindow(size_t zmw)
     {
         uint32_t currentIndex = indexInfo_[zmw].currentIndex_;
-        size_t numActivityLabels = 0;
+        size_t numTransitions = 0;
         uint8_t currActivityLabel = static_cast<uint8_t>(Mongo::Data::HQRFPhysicalStates::NUM_PHYS_STATES);
         for (const auto& metricBuffer : lookbackWindow_)
         {
             const auto& metricBlock = *metricBuffer->Data(currentIndex);
             if (metricBlock.ActivityLabel() != currActivityLabel)
             {
-                numActivityLabels++;
+                numTransitions++;
                 currActivityLabel = metricBlock.ActivityLabel();
             }
             currentIndex = *metricBuffer->Index(currentIndex);
         }
-        return numActivityLabels;
+        return numTransitions;
     }
 
-    void AddLookbackWindowMetricBlocks(size_t zmw)
+    void AddLookbackWindowMetricBlocks(size_t zmw, size_t numTransitions)
     {
         uint32_t currentIndex = indexInfo_[zmw].currentIndex_;
         const auto& frontMb = *lookbackWindow_.front()->Data(currentIndex);
         uint8_t currActivityLabel = frontMb.ActivityLabel();
-        AggregatedMetricBlockT aggregatedMb;
-        aggregatedMb.Set(frontMb);
+        AggregatedMetricBlockT amb;
+        amb.Aggregate(frontMb);
         size_t outputBlock = 1;
         auto& metricsOut = metrics_[zmw];
+        assert(metricsOut.size() == numTransitions);
         for (auto metricBuffer = lookbackWindow_.begin()+1; metricBuffer != lookbackWindow_.end(); metricBuffer++)
         {
             const auto& mb = *(*metricBuffer)->Data(currentIndex);
             if (mb.ActivityLabel() != currActivityLabel)
             {
-                aggregatedMb.Convert(metricsOut[outputBlock]);
+                amb.Convert(metricsOut[outputBlock]);
                 outputBlock++;
                 currActivityLabel = mb.ActivityLabel();
-                aggregatedMb.Set(mb);
+                amb = AggregatedMetricBlockT();
             }
-            else
-            {
-                aggregatedMb.Aggregate(mb);
-            }
+            amb.Aggregate(mb);
             currentIndex = *(*metricBuffer)->Index(currentIndex);
         }
-        aggregatedMb.Convert(metricsOut[outputBlock]);
+        // Last transition is not written out but set to the aggregated metric block.
+        auto& aggregatedMb = *aggregatedMetrics_->Data(zmw);
+        aggregatedMb = AggregatedMetricBlockT();
+        aggregatedMb.Aggregate(amb);
     }
 
 private:

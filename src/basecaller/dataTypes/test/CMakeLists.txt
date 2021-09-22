@@ -6,10 +6,14 @@ include(pacbio-gtest)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoDataTypesTest OBJECT
     TestLabelsBatch.cpp
+    TestMetrics.cpp
 )
+
+include(pacbio-half)
 
 target_link_libraries(libMongoDataTypesTest
     libMongoDataTypes
+    libHalf
     libGtest
 )
 

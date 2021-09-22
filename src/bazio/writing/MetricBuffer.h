@@ -53,8 +53,8 @@ private:
     static constexpr size_t zmwBatchingSize = 4096;
 public:
     MetricBuffer(size_t numZmw, std::shared_ptr<Memory::IAllocator> alloc)
-    : metricsData_(alloc, zmwBatchingSize)
-    , nextIndex_(alloc, zmwBatchingSize)
+        : metricsData_(alloc, zmwBatchingSize)
+        , nextIndex_(alloc, zmwBatchingSize)
     {
         metricsData_.GrowToSize(numZmw);
         nextIndex_.GrowToSize(numZmw);
@@ -70,6 +70,7 @@ public:
 
     uint32_t* Index(size_t idx)
     { return nextIndex_[idx]; }
+
 private:
     GrowableArray<MetricType> metricsData_;
     GrowableArray<uint32_t> nextIndex_;
