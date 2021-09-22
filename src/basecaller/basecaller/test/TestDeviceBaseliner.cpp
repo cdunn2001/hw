@@ -174,7 +174,7 @@ TEST_P(DeviceMultiScaleBaselinerChunk, Chunk)
                                        SOURCE_MARKER());
 
                 // ACTION
-                auto cameraBatch = baseliners[batchIdx]->FilterBaseline(in);
+                auto cameraBatch = (*baseliners[batchIdx])(in);
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 
@@ -260,8 +260,8 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
 
     // ACTION !!!!! baselineStats is new for each call !!!!!
     std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;
-    cameraOutput.push_back(baseliner.FilterBaseline(in));
-    cameraOutput.push_back(baseliner.FilterBaseline(in));
+    cameraOutput.push_back(baseliner(in));
+    cameraOutput.push_back(baseliner(in));
 
     std::vector<BlockView<int16_t>> traces; std::vector<StatAccumState> blStats;
     for (auto &e : cameraOutput) 

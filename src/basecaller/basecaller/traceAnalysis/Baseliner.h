@@ -49,7 +49,7 @@ public:
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+    operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
         return FilterBaseline_(rawTrace);

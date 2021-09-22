@@ -173,7 +173,7 @@ TEST_P(DeviceMultiScaleBaselinerChunk, Chunk)
                                        SOURCE_MARKER());
 
                 // ACTION
-                auto cameraBatch = baseliners[batchIdx]->FilterBaseline(in);
+                auto cameraBatch = (*baseliners[batchIdx])(in);
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 

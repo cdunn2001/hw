@@ -236,7 +236,7 @@ public:
 
         m0B_[threadIdx.x] += Blend(baselineMask, one, zero);
         m1B_[threadIdx.x] += Blend(baselineMask, bs, zero);
-        m2B_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);
+        m2B_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);  // bs*bs overflows half if scale > 4 and bs > 65
     }
 
     __device__ void AddAutoCorrData(PBHalf2 bs,

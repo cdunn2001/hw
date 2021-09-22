@@ -179,7 +179,7 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
 
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = baseliner_->FilterBaseline(tbatch);
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -220,7 +220,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
     assert(baseliner_);
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = baseliner_->FilterBaseline(tbatch);
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -321,7 +321,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // Includes computing baseline moments.
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = baseliner_->FilterBaseline(tbatch);
+    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
