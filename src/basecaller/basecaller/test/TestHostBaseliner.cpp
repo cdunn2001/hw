@@ -181,7 +181,7 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 16;
 
-    float scaler_ = 3.0f;
+    float scaler_ = 3.46410f; // sqrt(12)
 
     Data::BatchLayoutConfig batchConfig;
     std::vector<HostMultiScaleBaseliner> baseliners;
@@ -287,15 +287,15 @@ TEST_P(HostMultiScaleBaselinerChunk, Chunk)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
                     EXPECT_NEAR(mean/Scale(), 0, 
-                                5 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                                6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
                     EXPECT_NEAR(var/Scale()/Scale(), pfConfig.baselineSigma * pfConfig.baselineSigma,
-                                5 * pfConfig.baselineSigma)
+                                6 * pfConfig.baselineSigma)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
                     EXPECT_NEAR(rawMean/Scale(), pfConfig.baselineSignalLevel,
-                                5 * (pfConfig.baselineSigma / std::sqrt(count)))
+                                6 * (pfConfig.baselineSigma / std::sqrt(count)))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
                 }
@@ -310,10 +310,8 @@ class HostMultiScaleBaselinerSmallBatch : public HostMultiScaleBaselinerTest {};
 
 TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
 {
-    // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for 
-    // BasecallerBaselinerConfig::MethodName::TwoScaleMedium
+    // Modified params for BasecallerBaselinerConfig::MethodName::TwoScaleMedium
     BaselinerParams blp({2, 8}, {5, 5}, 2.44f, 0.50f); // strides, widths, sigma, mean
-    // LatentSize in blp should be small? check with Curtis
 
     uint32_t lanesPerPool_ = 1;
     HostMultiScaleBaseliner baseliner(0, Scale(), blp, lanesPerPool_);
@@ -382,19 +380,19 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
     EXPECT_NEAR(mean/Scale(),
                 0, 
-                5 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
+                6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
     EXPECT_NEAR(var/Scale()/Scale(),
                 pfConfig.baselineSigma * pfConfig.baselineSigma,
-                5 * pfConfig.baselineSigma)
+                6 * pfConfig.baselineSigma)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
 
     // Assert baseline converted from DN to e-
-    EXPECT_EQ(traces[0][fi*laneSize+zi], data_[fi][zi] * Scale());
+    EXPECT_NEAR(traces[0][fi*laneSize+zi], data_[fi][zi] * Scale(), 1);   // Within a rounding error
     // Assert baseline filtered
-    EXPECT_LT(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
+    EXPECT_LE(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
     // Assert next window value produces same results
     EXPECT_EQ(traces[2][fi*laneSize+zi], traces[1][fi*laneSize+zi]);
 }

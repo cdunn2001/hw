@@ -228,8 +228,7 @@ public:
                                     PBHalf2 bs, //baseline subtracted
                                     PBBool2 baselineMask)
     {
-        PBHalf2 zero(0.0f);
-        PBHalf2 one(1.0f);
+        PBHalf2 zero(0.0f), one(1.0f);
 
         minB_[threadIdx.x] = min(bs, minB_[threadIdx.x]);
         maxB_[threadIdx.x] = max(bs, maxB_[threadIdx.x]);
@@ -352,12 +351,14 @@ struct LatentBaselineData
 
         __device__ void ProcessFrame(PBHalf2 raw,
                                      PBHalf2 subtracted,
+                                     PBHalf2 scale,
                                      StatAccumulator<blockThreads, lag>& stats)
         {
-            auto maskHp1 = subtracted < thrHigh;
+            auto maskHp1 = subtracted < thrHigh * scale;
+
             auto mask = latHMask1 && latLMask && maskHp1;
 
-            latLMask = subtracted < thrLow;
+            latLMask = subtracted < thrLow * scale;
             latHMask2 = latHMask1;
             latHMask1 = maskHp1;
 
@@ -434,26 +435,28 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     assert(numFrames % stride == 0);
     int inputCount = numFrames / stride;
 
-    const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
+    const auto& inZmw    = input.ZmwData(blockIdx.x, threadIdx.x);
     const auto& lowerZmw = lower.ZmwData(blockIdx.x, threadIdx.x);
     const auto& upperZmw = upper.ZmwData(blockIdx.x, threadIdx.x);
-    auto outZmw = out.ZmwData(blockIdx.x, threadIdx.x);
+    auto outZmw          =   out.ZmwData(blockIdx.x, threadIdx.x);
+
+    auto sbInv = PBHalf2(1.0f) / sParams.cSigmaBias;
 
     for (int i = 0; i < inputCount; ++i)
     {
-        auto baseline = (PBHalf2(upperZmw[i]) + PBHalf2(lowerZmw[i])) / PBHalf2(2.0f);
-        auto sigma = localLatent.SmoothedSigma((PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) / sParams.cSigmaBias);
-        auto frameBiasEstimate = sParams.cMeanBias * sigma;
+        auto bias = (PBHalf2(upperZmw[i]) + PBHalf2(lowerZmw[i])) * PBHalf2(0.5f);
+        auto framebkgndSigma = (PBHalf2(upperZmw[i]) - PBHalf2(lowerZmw[i])) * sbInv ;
+        auto smoothedBkgndSigma = localLatent.SmoothedSigma(framebkgndSigma);
+        auto baselineEstimate = (bias + sParams.cMeanBias * smoothedBkgndSigma) * sParams.scale;
 
         auto start = i*stride;
         auto end = (i+1)*stride;
         for (int j = start; j < end; ++j)
         {
-            auto raw = PBHalf2(inZmw[j]);
-            auto val = (raw - baseline - frameBiasEstimate) * sParams.scale;
-            localLatent.ProcessFrame(raw, val, stats);
-
-            outZmw[j] = ToShort(val);
+            auto rawSignal = inZmw[j] * sParams.scale + 0.5;
+            auto blSubtractedFrame = rawSignal - baselineEstimate;
+            localLatent.ProcessFrame(rawSignal, blSubtractedFrame, sParams.scale, stats);
+            outZmw[j] = ToShort(blSubtractedFrame);
         }
     }
 
@@ -559,7 +562,6 @@ public:
 
         sParams_.cMeanBias = params.MeanBias();
         sParams_.cSigmaBias = params.SigmaBias();
-        // TODO this needs to be plumbed through properly still
         sParams_.scale = scale;
 
         fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});
