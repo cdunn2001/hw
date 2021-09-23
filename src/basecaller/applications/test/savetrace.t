@@ -1,7 +1,7 @@
   $ TRCOUT=${CRAMTMP}/out.trc.h5
   $ TRCIN=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
-  $ smrt-basecaller --frames=8192 --numZmwLanes=4 --inputfile=${TRCIN} \
-  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,128],[192,64]] > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'"}' \
+  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192,64]] > /dev/null
 
   $ h5ls ${TRCOUT}/TraceData
   HoleNumber               Dataset {192}

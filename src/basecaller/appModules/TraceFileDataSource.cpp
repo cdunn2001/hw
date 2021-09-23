@@ -41,11 +41,12 @@ TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
         std::string file,
         uint32_t frames,
-        uint32_t numZmw,
+        uint32_t numZmwLanes,
         bool cache,
         size_t preloadChunks,
         size_t maxQueueSize)
     : BatchDataSource(std::move(cfg))
+    , numZmwLanes_(numZmwLanes)
     , chunkIndex_{0}
     , batchIndex_{0}
     , currZmw_{0}
@@ -97,15 +98,6 @@ TraceFileDataSource::TraceFileDataSource(
     assert(config.requestedLayout.Encoding() == PacketLayout::INT16);
     assert(config.requestedLayout.BlockWidth() == laneSize);
 
-    // Could potentially round up to the nearest lane size, but no matter
-    // what we require 64 zmw lanes, both in the trace file and in our
-    // analysis pipeline
-    if (numZmw % config.requestedLayout.BlockWidth() != 0)
-    {
-        throw PBException("Requested numZmw must be an even multiple of laneSize (64)");
-    }
-
-    numZmwLanes_ = numZmw / (config.requestedLayout.BlockWidth());
     numChunks_ = (frames + BlockLen() - 1) / BlockLen();
 
     const auto numFullPools = numZmwLanes_ / config.requestedLayout.NumBlocks();

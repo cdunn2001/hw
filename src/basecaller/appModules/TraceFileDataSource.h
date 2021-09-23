@@ -36,6 +36,8 @@
 
 #include <common/BatchDataSource.h>
 
+#include <dataTypes/configs/SourceConfig.h>
+
 namespace PacBio {
 namespace Application {
 
@@ -43,9 +45,9 @@ class TraceFileDataSource : public Mongo::BatchDataSource
 {
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
-    TraceFileDataSource(DataSourceBase::Configuration config,
-                        std::string file)
-        : TraceFileDataSource(std::move(config), file, 0, 0, false, 0, 0)
+    TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
+                        const Mongo::Data::TraceReanalysis& trcCfg)
+        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, 0, 0, false, 0, 0)
     {
         // Need to update the layouts_ member to know how to extract the
         // required info from the tracefile
@@ -58,10 +60,19 @@ public:
     // Performance testing ctor.  Data dimensions are specified and data
     // will be replicated as necessary.  Caching and preloading options are
     // also provided, to help remove file IO as a bottleneck.
+    TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
+                        const Mongo::Data::TraceReplication& trcCfg)
+        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
+                              trcCfg.numZmwLanes, trcCfg.cache,
+                              trcCfg.preloadChunks, trcCfg.mazQueueSize)
+    {}
+
+    // Low level Ctor that actually does the work.  The other ctors
+    // provide a simpler interface but delegate to this
     TraceFileDataSource(DataSourceBase::Configuration cfg,
                         std::string file,
                         uint32_t frames,
-                        uint32_t numZmw,
+                        uint32_t numZmwLanes,
                         bool cache,
                         size_t preloadChunks = 0,
                         size_t maxQueueSize = 0);

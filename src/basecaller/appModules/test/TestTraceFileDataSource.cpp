@@ -59,17 +59,14 @@ TEST_P(TestTraceFileDataSource, Read8And16)
     DataSourceBase::Configuration cfg16(layout16, std::make_unique<MallocAllocator>());
     DataSourceBase::Configuration cfg8(layout8, std::make_unique<MallocAllocator>());
 
-    const std::string& trc = GetParam().traceFile;
-    TraceFileDataSource source16(std::move(cfg16),
-                                 trc,
-                                 framesPerBlock,
-                                 lanesPerPool*laneSize,
-                                 GetParam().cacheInput);
-    TraceFileDataSource source8(std::move(cfg8),
-                                trc,
-                                framesPerBlock,
-                                lanesPerPool*laneSize,
-                                GetParam().cacheInput);
+    Data::TraceReplication trcConfig;
+    trcConfig.traceFile = GetParam().traceFile;
+    trcConfig.numFrames = framesPerBlock;
+    trcConfig.numZmwLanes = lanesPerPool;
+    trcConfig.cache = GetParam().cacheInput;
+
+    TraceFileDataSource source16(std::move(cfg16), trcConfig);
+    TraceFileDataSource source8(std::move(cfg8), trcConfig);
 
     while (!source16.ChunksReady()) source16.ContinueProcessing();
     while (!source8.ChunksReady()) source8.ContinueProcessing();

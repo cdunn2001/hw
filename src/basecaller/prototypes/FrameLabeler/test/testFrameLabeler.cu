@@ -85,7 +85,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
             std::move(cfg),
             traceFile,
             numBlocks * blockLen,
-            layout.NumZmw()*poolsPerChip,
+            layout.NumBlocks()*poolsPerChip,
             true);
 
     // Hard code our models to match this specific trace file
