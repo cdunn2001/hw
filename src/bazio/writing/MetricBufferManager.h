@@ -250,10 +250,9 @@ private:
     {
         if (!indexInfo_[zmwIndex].hqStarted_)
         {
-            // Haven't started the preHQ region, add to the last
+            // Haven't started the preHQ region, set to the last
             // (most recent) buffer in the lookback window.
-            *lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_) = MetricBlockT();
-            lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_)->Aggregate(metrics);
+            *lookbackWindow_.back()->Data(indexInfo_[zmwIndex].recentIndex_) = metrics;
         }
         else
         {

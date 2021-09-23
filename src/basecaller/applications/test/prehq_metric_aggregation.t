@@ -2,6 +2,10 @@ This cram test uses experimental configurations that are likely to be changed or
 the real preHQ algorithm is brought on line.  The whole test can probably be removed once
 maintenance becomes annoying, as long as something else is dropped in its place
 
+# This first test runs under 2^16 frames as the SpiderMetricBlock that is used for outputting to the BAZ file only supports numFrames as 16-bit. This means aggregating
+# beyond 2^16 frames will results in an incorrect number of frames so we limit the current tests to less than that to validate the number of frames are correct from
+# a metrics aggregation standpoint. The test below has the HQ-region all starting at the same time so that the preHQ metric block should be empty and all the subsequent
+# metric blocks should be aggregated into one as the activity labels are all the same.
   $ BAZFILE=tmp.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=57344 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
@@ -102,7 +106,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
 
-# Run again but set the hqThrottleFraction so start of HQ-region is different. 
+# Run again but set the hqThrottleFraction=0.25 so start of HQ-region is different resulting in a preHQ metric block with data.
   $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=57344 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=0.25 > /dev/null
 
   $ bazviewer --silent -m -i0 ${BAZFILE} 
@@ -336,7 +340,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"PKMID_FRAMES_G" : 880, (esc)
   \t\t\t\t\t"PKMID_FRAMES_T" : 844, (esc)
   \t\t\t\t\t"PKMID_G" : 99.625, (esc)
-  \t\t\t\t\t"PKMID_T" : 62.71875, (esc)
+  \t\t\t\t\t"PKMID_T" : 62.75, (esc)
   \t\t\t\t\t"PKZVAR_A" : 0, (esc)
   \t\t\t\t\t"PKZVAR_C" : 0, (esc)
   \t\t\t\t\t"PKZVAR_G" : 0, (esc)
@@ -376,7 +380,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"PKMID_FRAMES_G" : 5280, (esc)
   \t\t\t\t\t"PKMID_FRAMES_T" : 5070, (esc)
   \t\t\t\t\t"PKMID_G" : 99.625, (esc)
-  \t\t\t\t\t"PKMID_T" : 62.71875, (esc)
+  \t\t\t\t\t"PKMID_T" : 62.75, (esc)
   \t\t\t\t\t"PKZVAR_A" : 0, (esc)
   \t\t\t\t\t"PKZVAR_C" : 0, (esc)
   \t\t\t\t\t"PKZVAR_G" : 0, (esc)

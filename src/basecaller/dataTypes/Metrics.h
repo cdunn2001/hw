@@ -364,13 +364,13 @@ private:
 
 struct ProductionMetricsGroup
 {
-    using MetricT = ProductionMetrics<uint32_t,float>;
+    using MetricT = ProductionMetrics<uint16_t,half_float::half>;
     using MetricAggregatedT = ProductionMetrics<uint32_t,float>;
 };
 
 struct CompleteMetricsGroup
 {
-    using MetricT = CompleteMetrics<uint32_t,float>;
+    using MetricT = CompleteMetrics<uint16_t,half_float::half>;
     using MetricAggregatedT = CompleteMetrics<uint32_t,float>;
 };
 
