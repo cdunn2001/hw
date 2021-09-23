@@ -58,20 +58,20 @@
 #include <tuple>
 #include <cstring>
 
-#include "MetricBlock.h"
-#include "BazCore.h"
-#include "BlockActivityLabels.h"
-#include "Timing.h"
+#include <bazio/MetricBlock.h>
+#include <bazio/BazCore.h>
+#include <bazio/BlockActivityLabels.h>
+#include <bazio/Timing.h>
 
-#include <bazio/SimulateWriteUtils.h>
+#include "SimulateWriteUtils.h"
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
 
 using PacBio::SmrtData::NucleotideLabel;
 
-namespace PacBio {
-namespace Primary {
+namespace PacBio::Primary::Postprimary
+{
 
 /// Produces random numbers for given ranges
 class SimulationRNG
@@ -153,13 +153,13 @@ public:
         }
         return metrics;
     }
-    std::unique_ptr<BazIO::SimPulse[]> SimulateBaseCalls(
+    std::unique_ptr<SimPulse[]> SimulateBaseCalls(
             const uint16_t numEvents,
             uint64_t* currentPulseFrame,
             uint64_t* currentBaseFrame,
             bool internal = false)
     {
-        auto basecall = std::make_unique<BazIO::SimPulse[]>(numEvents);
+        auto basecall = std::make_unique<SimPulse[]>(numEvents);
         for (int i = 0; i < numEvents; ++i)
         {
             bool isBase;
@@ -167,7 +167,7 @@ public:
             if (internal)
             {
                 isBase = NextOneBit() != 0;
-                basecall[i].Label(isBase ? NextBase() : BazIO::SimPulse::NucleotideLabel::A);
+                basecall[i].Label(isBase ? NextBase() : SimPulse::NucleotideLabel::A);
             }
             else
             {
@@ -187,34 +187,34 @@ public:
         }
         return basecall;
     }
-    std::unique_ptr<BazIO::SimPulse[]> SimulateBaseCalls(
+    std::unique_ptr<SimPulse[]> SimulateBaseCalls(
             const std::string& sequence, size_t* numEvents,
             uint64_t* currentPulseFrame,
             uint64_t* currentBaseFrame,
             bool internal = false)
     {
-        std::vector<BazIO::SimPulse> basecall;
+        std::vector<SimPulse> basecall;
         basecall.reserve(sequence.size() * 3);
         size_t i = 0;
         while (i < sequence.size())
         {
-            BazIO::SimPulse b;
+            SimPulse b;
             bool isBase;
             int ipd = NextFourBit() >= 14 ? NextFourByte() : NextEightBit();
             uint8_t cbase = sequence.at(i);
-            BazIO::SimPulse::NucleotideLabel base;
+            SimPulse::NucleotideLabel base;
             switch(cbase)
             {
-                case 'A': base = BazIO::SimPulse::NucleotideLabel::A; break;
-                case 'C': base = BazIO::SimPulse::NucleotideLabel::C; break;
-                case 'G': base = BazIO::SimPulse::NucleotideLabel::G; break;
-                case 'T': base = BazIO::SimPulse::NucleotideLabel::T; break;
+                case 'A': base = SimPulse::NucleotideLabel::A; break;
+                case 'C': base = SimPulse::NucleotideLabel::C; break;
+                case 'G': base = SimPulse::NucleotideLabel::G; break;
+                case 'T': base = SimPulse::NucleotideLabel::T; break;
                 default: throw std::runtime_error("Not aware of base " + std::to_string(cbase));
             }
             if (internal)
             {
                 isBase = NextOneBit() != 0;
-                b.Label(isBase ? base : BazIO::SimPulse::NucleotideLabel::NONE);
+                b.Label(isBase ? base : SimPulse::NucleotideLabel::NONE);
             }
             else
             {
@@ -235,22 +235,22 @@ public:
             }
         }
         (*numEvents) = basecall.size();
-        auto basecallArray = std::make_unique<BazIO::SimPulse[]>(basecall.size());
+        auto basecallArray = std::make_unique<SimPulse[]>(basecall.size());
         std::copy(basecall.begin(), basecall.end(), basecallArray.get());
         return basecallArray;
     }
 
-    inline BazIO::SimPulse::NucleotideLabel NextBase()
+    inline SimPulse::NucleotideLabel NextBase()
     { return ToNucleotideLabel(NextTwoBit()); }
 
-    inline BazIO::SimPulse::NucleotideLabel ToNucleotideLabel(uint8_t value)
+    inline SimPulse::NucleotideLabel ToNucleotideLabel(uint8_t value)
     {
         switch(value)
         {
-            case 0: return BazIO::SimPulse::NucleotideLabel::A;
-            case 1: return BazIO::SimPulse::NucleotideLabel::C;
-            case 2: return BazIO::SimPulse::NucleotideLabel::G;
-            case 3: return BazIO::SimPulse::NucleotideLabel::T;
+            case 0: return SimPulse::NucleotideLabel::A;
+            case 1: return SimPulse::NucleotideLabel::C;
+            case 2: return SimPulse::NucleotideLabel::G;
+            case 3: return SimPulse::NucleotideLabel::T;
             default:
                 throw std::runtime_error("Not aware of that base in simulation");
         }
@@ -320,5 +320,5 @@ private: // data
     int fourByteCounter_ = 0;
 };
 
-}}
+}
 

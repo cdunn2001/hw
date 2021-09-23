@@ -10,15 +10,28 @@ add_subdirectory(cram)
 
 # simbazwriter
 
+add_library(libSimBazWriter OBJECT
+    SimulateWriteUtils.h
+    SimulateWriteUtils.cpp
+    Simulation.h
+    Simulation.cpp
+    SimulationFromFasta.h
+    SimulationRNG.h
+)
+
+target_link_libraries(libSimBazWriter
+    libBazio
+    libSequelCommon1
+    libZlib
+)
+
 add_executable(simbazwriter
     simbazwriter.cpp
 )
 
 target_link_libraries(simbazwriter
     PUBLIC
-        libBazio
-        libSequelCommon1
-        libZlib
+        libSimBazWriter
 )
 
 # need access to the ipcat binary as well.  It's either in our depcache for normal builds,

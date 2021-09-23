@@ -31,11 +31,6 @@ add_library(libAppModules STATIC
         SimulatedDataSource.cpp
 )
 
-target_include_directories(libAppModules
-    PUBLIC
-        ${MONGO_PROJECT_DIR}
-)
-
 target_link_libraries(libAppModules
     PUBLIC
         libMongoBasecallerAnalyzer

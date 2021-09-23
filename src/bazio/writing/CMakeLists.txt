@@ -11,6 +11,10 @@ add_library(libBazioWriting STATIC
     GrowableArray.cpp
     MemoryBuffer.h
     MemoryBuffer.cpp
+    MetricBuffer.h
+    MetricBuffer.cpp
+    MetricBufferManager.h
+    MetricBufferManager.cpp
     PacketBuffer.h
     PacketBuffer.cpp
     PacketBufferManager.h

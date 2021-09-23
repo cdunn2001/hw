@@ -33,4 +33,50 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#include "BazAggregator.h"
+#ifndef PACBIO_METRICIO_WRITING_METRIC_BUFFER_H
+#define PACBIO_METRICIO_WRITING_METRIC_BUFFER_H
+
+#include <cstdint>
+
+#include <pacbio/memory/IAllocator.h>
+#include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/PBException.h>
+
+#include <bazio/writing/GrowableArray.h>
+
+namespace PacBio::BazIO {
+
+template <typename MetricType>
+class MetricBuffer
+{
+private:
+    static constexpr size_t zmwBatchingSize = 4096;
+public:
+    MetricBuffer(size_t numZmw, std::shared_ptr<Memory::IAllocator> alloc)
+        : metricsData_(alloc, zmwBatchingSize)
+        , nextIndex_(alloc, zmwBatchingSize)
+    {
+        metricsData_.GrowToSize(numZmw);
+        nextIndex_.GrowToSize(numZmw);
+    }
+
+    void Link(uint32_t thisIdx, uint32_t nextIdx)
+    {
+        *nextIndex_[thisIdx] = nextIdx;
+    }
+
+    MetricType* Data(size_t idx)
+    { return metricsData_[idx]; }
+
+    uint32_t* Index(size_t idx)
+    { return nextIndex_[idx]; }
+
+private:
+    GrowableArray<MetricType> metricsData_;
+    GrowableArray<uint32_t> nextIndex_;
+};
+
+
+} // namespace PacBio::BazIO
+
+#endif // PACBIO_METRICIO_WRITING_METRIC_BUFFER_H

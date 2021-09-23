@@ -33,4 +33,55 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
-#include "BazAggregator.h"
+#ifndef PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
+#define PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
+
+#include <bazio/MetricBlock.h>
+
+namespace PacBio::BazIO {
+
+/// CRTP to represent a metric block used by the underlying
+/// metric buffer manager and metric buffer classes. This
+/// allows for the actual metrics to be de-coupled from the
+/// bazio library.
+///
+template <typename T>
+struct MetricBlock
+{
+    /// Performs aggregation of the input metric block.
+    template <typename U>
+    void Aggregate(const MetricBlock<U>& val)
+    {
+        static_assert(std::is_base_of<MetricBlock<T>,T>::value, "T must be derived from MetricBlock<T>!");
+        static_cast<T*>(this)->Aggregate(static_cast<const U&>(val));
+    }
+
+    /// Returns the activity label associated with this metric block.
+    /// Used to determine whether metric blocks can be aggregated.
+    uint8_t ActivityLabel() const
+    {
+        return static_cast<const T*>(this)->ActivityLabel();
+    }
+
+    /// Returns true if metric block contains data.
+    bool HasData() const
+    {
+        return static_cast<const T*>(this)->HasData();
+    }
+
+    /// Stub method for converting to the current output metric block
+    /// format in use by the BAZ file. This should be removed once
+    /// the BAZ metrics have been ported to use the bazio encoding
+    /// framework.
+    void Convert(Primary::SpiderMetricBlock& sm) const
+    {
+        static_cast<const T*>(this)->Convert(sm);
+    }
+
+};
+
+} // PacBio::BazIO
+
+#endif  // PACBIO_METRICIO_WRITING_METRIC_BLOCK_H
+
+

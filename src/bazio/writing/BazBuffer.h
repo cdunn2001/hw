@@ -80,10 +80,6 @@ private:
     size_t numZmw_;
     uint32_t bufferId_;
 
-    // Note: This is currently the only usage of this class, and
-    //       metrics are slated to be reworked.  If you need this
-    //       then keeping it is fine.  If you don't, then the
-    //       whole MemoryBuffer file should probably be deleted
     MemoryBuffer<TMetric> metricsBuffer_;
     std::vector<MemoryBufferView<TMetric>> metrics_;
 

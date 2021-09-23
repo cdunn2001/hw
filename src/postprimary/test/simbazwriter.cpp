@@ -39,15 +39,16 @@
 
 #include <pacbio/process/OptionParser.h>
 
-#include <bazio/Simulation.h>
 #include <bazio/BazCore.h>
 #include <bazio/BazReader.h>
+#include <bazio/SimulateConfigs.h>
 #include <BazVersion.h>
 
-//#include <pacbio/primary/SimulationFuture.h>
-#include <bazio/SimulationFromFasta.h>
+#include "Simulation.h"
+#include "SimulationFromFasta.h"
 
 using namespace PacBio::Primary;
+using namespace PacBio::Primary::Postprimary;
 
 static const std::string EXPERIMENT_METADATA = generateExperimentMetadata();
 

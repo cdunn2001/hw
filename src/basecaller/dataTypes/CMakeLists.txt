@@ -66,6 +66,8 @@ set(CPP_LIST
     LaneDetectionModel.cpp
     LabelsBatch.h
     LabelsBatch.cpp
+    Metrics.h
+    Metrics.cpp
     PoolHistogram.h
     PoolHistogram.cpp
     Pulse.h
@@ -96,12 +98,15 @@ add_library(libMongoDataTypes STATIC
     ${CUDA_LIST}
 )
 
+include(pacbio-half)
+
 target_link_libraries(libMongoDataTypes
     PUBLIC
 libBazio
         libMongoCommon
         libMongoCommonCuda
         libPacbioCplusplusApi
+        libHalf
 )
 
 target_include_directories(libMongoDataTypes

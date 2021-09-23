@@ -299,7 +299,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
                 const auto& bs = pdMetrics.baselineStats.GetHostView()[l];
-                ASSERT_EQ(sizeof(mb), 8960);
+                ASSERT_EQ(sizeof(mb), 8768);
                 for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB

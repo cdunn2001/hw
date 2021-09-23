@@ -60,48 +60,21 @@
 #include <utility>
 #include <vector>
 
-#include "BazCore.h"
-#include "Timing.h"
-#include "SimulationRNG.h"
-#include <bazio/SimulateWriteUtils.h>
+#include <bazio/BazCore.h>
+#include <bazio/SimulateConfigs.h>
+#include <bazio/Timing.h>
 #include <bazio/encoding/test/TestingPulse.h>
+
+#include "SimulationRNG.h"
+#include "SimulateWriteUtils.h"
 
 #include <pacbio/smrtdata/Basecall.h>
 #include <pacbio/smrtdata/Pulse.h>
 
 using namespace PacBio::SmrtData;
 
-namespace PacBio {
-namespace Primary {
-
-inline std::string generateExperimentMetadata(const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
-                                              const std::string& basemap="CTAG")
+namespace PacBio::Primary::Postprimary
 {
-    std::ostringstream metadata;
-    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
-    metadata << "SequelII";
-    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
-    metadata << basemap;
-    metadata << "\",\"RelativeAmp\":";
-    metadata << "[";
-    std::string sep = "";
-    for (const auto& val : relamps)
-    {
-        metadata << sep << val;
-        sep = ",";
-    }
-    metadata << "]}}";
-    return metadata.str();
-}
-
-inline std::string generateBasecallerConfig(const std::string& pipename)
-{
-    std::ostringstream metadata;
-    metadata << "{\"algorithm\":{\"pipe\":\"";
-    metadata << pipename;
-    metadata << "\"}}";
-    return metadata.str();
-}
 
 /// Simulates a BASES readout BAZ
 class Simulation
@@ -182,12 +155,12 @@ public:
         const MetricsVerbosity verbosity = MetricsVerbosity::MINIMAL;
         const uint16_t numMetrics = 16;
         const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
-        auto basecall = std::make_unique<BazIO::SimPulse[]>(numEvents);
+        auto basecall = std::make_unique<SimPulse[]>(numEvents);
         int currentFrame = 0;
         for (uint32_t i = 0; i < numEvents; ++i)
         {
             int ipd = 20;
-            basecall[i].Label(BazIO::SimPulse::NucleotideLabel::A);
+            basecall[i].Label(SimPulse::NucleotideLabel::A);
             basecall[i].MeanSignal(20/10.0);
             basecall[i].MidSignal(20/10.0);
             basecall[i].Start(currentFrame + ipd);
@@ -197,7 +170,7 @@ public:
 
         BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
-        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         for (int c = 0; c < chunks_; ++c)
         {
@@ -278,7 +251,7 @@ public:
         BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
 
         if (numMetrics == 0) fhb.ClearAllMetricFields();
-        BazIO::SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
+        SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         std::vector<uint64_t> currentPulseFrames(zmws_, 0);
         std::vector<uint64_t> currentBaseFrames(zmws_, 0);
@@ -342,5 +315,5 @@ public:
     }
 };
 
-}}
+}
 
