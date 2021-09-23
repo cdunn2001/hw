@@ -39,76 +39,127 @@ namespace Application {
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
 
-size_t RoundUp(size_t count, size_t blksz)
-{
-    return (count + blksz - 1) / blksz * blksz;
-}
-
 class SimulatedDataSource::DataCache
 {
 public:
-    DataCache(size_t numSignals, size_t numFrames,
-              size_t zmwPerBlock, size_t framesPerBlock,
-              std::unique_ptr<SignalGenerator> generator)
-    {
-        // Extend the tiling with rounding up
-        const auto numSignalsUpper = RoundUp(numSignals, zmwPerBlock);
-        const auto numFramesUpper  = RoundUp(numFrames, framesPerBlock);
 
-        numChunks_ = numFramesUpper / framesPerBlock;
+    template <typename T>
+    DataCache(const SimulatedDataSource::SimConfig& config,
+              size_t zmwPerBlock, size_t framesPerBlock,
+              std::unique_ptr<SignalGenerator> generator,
+              T* /*dummy to deduce T*/)
+        : bytesPerVal_(sizeof(T))
+        , pedestal_(generator->Pedestal())
+    {
+        static_assert(std::is_same<T, int16_t>::value
+                      || std::is_same<T, uint8_t>::value);
+        auto RoundUp = [](size_t count, size_t quantum)
+        {
+            auto numQuanta = (count + quantum - 1) / quantum;
+            return numQuanta * quantum;
+        };
+
+        // Need to handle the case where the requested extents don't tile easily into
+        // the block size.  Just roudning them up as a simple solution that lets us only
+        // worry about data replication on the block level.
+        const auto numSignals = RoundUp(config.NumSignals(), zmwPerBlock);
+        const auto numFrames = RoundUp(config.NumFrames(), framesPerBlock);
+
+        numChunks_ = numFrames / framesPerBlock;
         framesPerBlock_ = framesPerBlock;
-        numLanes_ = numSignalsUpper / zmwPerBlock;
+        numLanes_ = numSignals / zmwPerBlock;
         zmwPerBlock_ = zmwPerBlock;
 
-        // Set up a data cache that is populated with integral blocks. This makes it easy to
+        // Set up a data cache that is populated with integral blocks.  This makes it easy to
         // replicate it out as requests for new blocks come in (you just modulo the lane/chunk idx)
-        data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_]);
+        data_.resize(boost::extents[numChunks_][numLanes_][framesPerBlock_][zmwPerBlock_*bytesPerVal_]);
 
-        for (size_t lane = 0, signalIdx = 0; signalIdx < numSignalsUpper; lane++)
+        size_t lane = 0;
+        size_t outOfRangeCount = 0;
+        for (size_t signalIdx = 0; signalIdx < numSignals; lane++)
         {
             for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx, ++signalIdx)
             {
-                const auto& signal = generator->GenerateSignal(numFramesUpper, signalIdx);
-                for (size_t chunk = 0, frame = 0; frame < numFramesUpper; ++chunk)
+                const auto& signal = generator->GenerateSignal(numFrames, signalIdx);
+                size_t chunk = 0;
+                for (size_t frame = 0; frame < numFrames; ++chunk)
                 {
                     for (size_t frameIdx = 0; frameIdx < framesPerBlock; ++frameIdx, ++frame)
                     {
-                        data_[chunk][lane][frameIdx][zmwIdx] = signal[frame];
+                        auto * ptr = reinterpret_cast<T*>(data_[chunk][lane][frameIdx].origin());
+                        T val = std::clamp<int16_t>(signal[frame],
+                                                    std::numeric_limits<T>::lowest(),
+                                                    std::numeric_limits<T>::max());
+                        if (val != signal[frame]) outOfRangeCount++;
+                        ptr[zmwIdx] = val;
                     }
                 }
             }
         }
-
+        if (outOfRangeCount > 0)
+            PBLOG_WARN << "SimulatedDataSource saturated " << outOfRangeCount
+                       << " values out of " << data_.num_elements() / bytesPerVal_;
     }
 
     // Takes a block from the cache and uses it to populate a block in a SensorPacket
     void FillBlock(size_t laneIdx, size_t chunkIdx, SensorPacket::DataView data)
     {
+        assert(data.Count() == zmwPerBlock_ * framesPerBlock_ * bytesPerVal_);
         auto cacheBlock = data_[chunkIdx % numChunks_][laneIdx % numLanes_].origin();
         memcpy(data.Data(),
                cacheBlock,
-               framesPerBlock_*zmwPerBlock_*sizeof(int16_t));
+               framesPerBlock_*zmwPerBlock_*bytesPerVal_);
     }
 
+    int16_t Pedestal() const { return pedestal_; }
+
 private:
+    size_t bytesPerVal_ = 0;
     size_t numLanes_ = 0;
     size_t numChunks_ = 0;
     size_t zmwPerBlock_ = 0;
     size_t framesPerBlock_ = 0;
-    boost::multi_array<int16_t, 4> data_;
+    boost::multi_array<uint8_t, 4> data_;
+
+    int16_t pedestal_ = 0;
 };
 
 SimulatedDataSource::~SimulatedDataSource() = default;
+
+template <typename Generator>
+std::unique_ptr<SimulatedDataSource::DataCache> MakeCache(PacketLayout::EncodingFormat encoding,
+                                                          const SimulatedDataSource::SimConfig& sim,
+                                                          size_t zmwPerBlock,
+                                                          size_t framesPerBlock,
+                                                          std::unique_ptr<Generator> generator)
+{
+    if (encoding == PacketLayout::INT16)
+    {
+        return std::make_unique<SimulatedDataSource::DataCache>(sim,
+                                                                zmwPerBlock,
+                                                                framesPerBlock,
+                                                                std::move(generator),
+                                                                static_cast<int16_t*>(nullptr));
+    }
+    if (encoding == PacketLayout::UINT8)
+    {
+        return std::make_unique<SimulatedDataSource::DataCache>(sim,
+                                                                zmwPerBlock,
+                                                                framesPerBlock,
+                                                                std::move(generator),
+                                                                static_cast<uint8_t*>(nullptr));
+    }
+    throw PBException("Unsupported packet encoding");
+}
 
 SimulatedDataSource::SimulatedDataSource(size_t minZmw,
                                          const SimConfig &sim,
                                          DataSource::DataSourceBase::Configuration cfg,
                                          std::unique_ptr<SignalGenerator> generator)
     : BatchDataSource(std::move(cfg)),
-      cache_(std::make_unique<DataCache>(
-          sim.NumSignals(), sim.NumFrames(), 
-          GetConfig().requestedLayout.BlockWidth(), GetConfig().requestedLayout.NumFrames(), 
-          std::move(generator))),
+      cache_(MakeCache(GetConfig().requestedLayout.Encoding(),
+                       sim, GetConfig().requestedLayout.BlockWidth(),
+                       GetConfig().requestedLayout.NumFrames(), std::move(generator))),
       numZmw_((minZmw + laneSize - 1) / laneSize * laneSize)
 {
     const auto& reqLayout = GetConfig().requestedLayout;
@@ -116,31 +167,37 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
         PBLOG_WARN << "Unexpected block width requested for SimulatedDataSource. "
                    << "Requested value will be ignored and we will use: " << laneSize;
 
-    std::array<size_t, 3> layoutDims { reqLayout.NumBlocks(), reqLayout.NumFrames(), laneSize};
+    std::array<size_t, 3> layoutDims {
+        reqLayout.NumBlocks(),
+        reqLayout.NumFrames(),
+        laneSize};
     PacketLayout nominalLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                               PacketLayout::INT16,
+                               reqLayout.Encoding(),
                                layoutDims);
     const auto numPools = (numZmw_ + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
+    layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
+    PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
+                            reqLayout.Encoding(),
+                            layoutDims);
+
     for (size_t i = 0; i < numPools-1; ++i)
     {
         layouts_[i] = nominalLayout;
     }
-
-    // Last layout is different
-    layoutDims[0] = (numZmw_ - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
-    layouts_[numPools-1] = PacketLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                            PacketLayout::INT16,
-                            layoutDims);
+    layouts_[numPools-1] = lastLayout;
 
     currChunk_ = SensorPacketsChunk(0, GetConfig().requestedLayout.NumFrames());
     currChunk_.SetZmwRange(0, numZmw_);
 }
 
+int16_t SimulatedDataSource::Pedestal() const { return cache_->Pedestal(); }
+
 void SimulatedDataSource::ContinueProcessing()
 {
     const auto& layout = layouts_[batchIdx_];
+    const auto startFrame = chunkIdx_ * layout.NumFrames();
     SensorPacket batchData(layout, batchIdx_, currZmw_,
-                           chunkIdx_ * layout.NumFrames(),
+                           startFrame,
                            *GetConfig().allocator);
     for (size_t i = 0; i < layout.NumBlocks(); ++i)
     {
@@ -190,34 +247,53 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
 {
     std::mt19937 gen(config_.seedFunc(idx));
 
-    auto GetBaselineSignal = [&](size_t frames)
+    auto GetBaselineSignal = [&](uint16_t frames)
     {
-        std::vector<short> baselineSignal(frames);
-        std::normal_distribution<> dist(config_.baselineSignalLevel, config_.baselineSigma);
-        for (auto &b : baselineSignal) b = std::floor(dist(gen));
+        std::normal_distribution<> rng(config_.baselineSignalLevel, config_.baselineSigma);
+        std::vector<short> baselineSignal;
+        for (size_t f = 0; f < frames; ++f)
+        {
+            baselineSignal.push_back(std::floor(rng(gen)) + config_.pedestal);
+        }
         return baselineSignal;
     };
 
-    auto GetPulseSignal = [&](size_t frames)
+    auto GetPulseSignal = [&](uint16_t frames)
     {
         std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
         auto pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
         auto pulseSignal = GetBaselineSignal(frames);
-        for (auto &b : pulseSignal) b += pulseLevel;
+        for (size_t f = 0; f < frames; ++f)
+        {
+            pulseSignal[f] += pulseLevel + config_.pedestal;
+        }
         return pulseSignal;
     };
 
-    std::exponential_distribution<> expWidth(config_.pulseWidthRate), expIpd(config_.pulseIpdRate);
     auto GetPulseWidth = [&]()
     {
-        return config_.generatePoisson ? 
-            static_cast<uint16_t>(std::ceil(expWidth(gen))) : config_.pulseWidth;
+        if (config_.generatePoisson)
+        {
+            std::exponential_distribution<> rng(config_.pulseWidthRate);
+            return static_cast<uint16_t>(std::ceil(rng(gen)));
+        }
+        else
+        {
+            return config_.pulseWidth;
+        }
     };
 
     auto GetPulseIpd = [&]()
     {
-        return (config_.generatePoisson) ? 
-            static_cast<uint16_t>(std::ceil(expIpd(gen))) : config_.pulseIpd;
+        if (config_.generatePoisson)
+        {
+            std::exponential_distribution<> rng(config_.pulseIpdRate);
+            return static_cast<uint16_t>(std::ceil(rng(gen)));
+        }
+        else
+        {
+            return config_.pulseIpd;
+        }
     };
 
     size_t frame = 0;

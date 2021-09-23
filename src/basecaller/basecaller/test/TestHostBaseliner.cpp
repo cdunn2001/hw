@@ -346,7 +346,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     auto li = 0 /* laneIdx */;
     std::memcpy(in.GetBlockView(li).Data(), data_[li].origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
 
-    // ACTION !!!!! baselineStats is new for each call !!!!!
+    // ACTION
     std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;
     cameraOutput.push_back(baseliner(in));
     cameraOutput.push_back(baseliner(in));

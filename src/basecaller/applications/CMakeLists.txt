@@ -13,7 +13,7 @@ configure_file(4x_launch.sh 4x_launch.sh COPYONLY)
 target_link_libraries(smrt-basecaller
     PRIVATE
         libAppModules
-        libPacbioHwMongo
+        libPacbioHwAcquisition
         GitVersionInfo
 )
 add_subdirectory(test)
