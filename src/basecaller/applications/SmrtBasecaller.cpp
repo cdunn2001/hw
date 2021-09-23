@@ -487,7 +487,8 @@ private:
         if (outputTrcFileName_ != "")
         {
             auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const auto sourceLaneWidth = dataSource.PacketLayouts().begin()->second.BlockWidth();
+            const auto& sampleLayout = dataSource.PacketLayouts().begin()->second;
+            const auto sourceLaneWidth = sampleLayout.BlockWidth();
             const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
@@ -528,10 +529,22 @@ private:
             }
             DataSourceBase::LaneSelector blocks(destLanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
+            TraceDataType outputType = TraceDataType::INT16;
+            if (config_.traceROI.outFormat == ROIConfig::OutFormat::UINT8)
+            {
+                outputType = TraceDataType::UINT8;
+            } else if (config_.traceROI.outFormat == ROIConfig::OutFormat::Natural)
+            {
+                if (sampleLayout.Encoding() == PacketLayout::UINT8)
+                {
+                    outputType = TraceDataType::UINT8;
+                }
+            }
             outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
-                                                         TraceDataType::INT16,
+                                                         outputType,
                                                          numZmws,
                                                          frames_);
+            outputTrcFile_->Traces().Pedestal(dataSource.Pedestal());
 
             return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), roiFeatures, std::move(blocks));
         }

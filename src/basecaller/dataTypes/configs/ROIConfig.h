@@ -40,6 +40,11 @@ struct ROIConfig  : public Configuration::PBConfig<ROIConfig>
     PB_CONFIG(ROIConfig);
 
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
+
+    // "Natural" means just match whatever data type the rest
+    // of the pipeline is configured to produce.
+    SMART_ENUM(OutFormat, Natural, INT16, UINT8);
+    PB_CONFIG_PARAM(OutFormat, outFormat, OutFormat::Natural);
 };
 
 }}}     // namespace PacBio::Mongo::Data

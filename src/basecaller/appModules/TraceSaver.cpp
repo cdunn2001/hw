@@ -56,7 +56,7 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
             holexy[i][1] = static_cast<int16_t>(features[i].y);
             // TODO: a conversion from "flags" to "holeType". The connection needs to be made here:
             (void) features[i].flags;
-            holeType[i] = 0; 
+            holeType[i] = 0;
             // TODO: holeNumber[i] = features[i].holeNumber;
         }
         writer_->Traces().HoleXY(holexy);
@@ -69,18 +69,10 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
 
 void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
-    const auto& traceBatch = [&]() ->decltype(auto)
+    auto writeTraces = [&](const auto& traceBatch)
     {
-        try
-        {
-            return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
-        } catch (const std::exception&)
-        {
-            throw PBException("TraceSaver currently only supports int16_t trace data");
-        }
-    }();
-    if (writer_)
-    {
+        using T = typename std::remove_reference_t<decltype(traceBatch)>::DataType;
+
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();
         const auto frameOffset = traceBatch.Metadata().FirstFrame();
         const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
@@ -90,14 +82,14 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
         {
             PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
             const auto blockIdx = laneIdx - laneBegin;
-            Mongo::Data::BlockView<const int16_t> blockView = traceBatch.GetBlockView(blockIdx);
+            Mongo::Data::BlockView<const T> blockView = traceBatch.GetBlockView(blockIdx);
 
             // The TraceFile::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
             // work with the API.  TODO: perform this transpose inside the TraceFile::Traces() class.
-            boost::const_multi_array_ref<int16_t, 2> data {
+            boost::const_multi_array_ref<T, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
-            typedef boost::multi_array<int16_t, 2> array_ref;
+            typedef boost::multi_array<T, 2> array_ref;
             array_ref transpose {boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
             for (uint32_t iframe = 0; iframe < blockView.NumFrames(); iframe++)
             {
@@ -117,10 +109,16 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
             const int64_t traceFileLane = position - laneSelector_.begin();
 
             const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
-            boost::array<array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
+            boost::array<typename array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
             transpose.reindex(bases);
-            writer_->Traces().WriteTraceBlock<int16_t>(transpose);
+            writer_->Traces().WriteTraceBlock<T>(transpose);
+
         }
+    };
+
+    if (writer_)
+    {
+        std::visit(writeTraces, traceVariant);
     }
     else
     {
