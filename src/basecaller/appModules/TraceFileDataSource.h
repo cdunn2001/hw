@@ -51,6 +51,8 @@ public:
         // required info from the tracefile
         PBLOG_WARN << "TraceFile Re-Analysis not yet fully supported. "
                    << "Original ZMW poolIDs are not yet preserved";
+
+        reanalysis_ = true;
     }
 
     // Performance testing ctor.  Data dimensions are specified and data
@@ -76,6 +78,8 @@ public:
     {
         return layouts_;
     }
+
+    LaneSelector SelectedLanesWithinROI(const std::vector<std::vector<int>>& /* rectangles */) const override;
 
     size_t BlockWidth() const { return GetConfig().requestedLayout.BlockWidth(); }
     size_t BlockLen() const { return GetConfig().requestedLayout.NumFrames(); }
@@ -144,6 +148,13 @@ private:
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
+
+    // Reanalysis isn't really supported yet, this is
+    // potentially a temporary flag.  Just used as a guard
+    // so that features that require special reanalysis handling
+    // can warn/error if they are turned on before reanalysis
+    // support is formally added.
+    bool reanalysis_ = false;
 
     std::map<uint32_t, DataSource::PacketLayout> layouts_;
 };

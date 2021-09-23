@@ -330,4 +330,45 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
     }
 }
 
+TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(const std::vector<std::vector<int>>& vec) const
+{
+    if (vec.empty())
+    {
+        std::vector<LaneIndex> dummy(0);
+        return LaneSelector(dummy);
+    }
+
+    if (reanalysis_)
+        throw PBException("Trace ReAnalysis does not currently support selecting an ROI for trace saving");
+
+    std::set<LaneIndex> selected;
+    for (const auto& range : vec)
+    {
+        if (range.size() == 0 || range.size() > 2)
+            throw PBException("Unexpected format for TraceFileDataSource ROI.  "
+                              "The inner most vector should be a single element "
+                              "representing a ZMW, or two values representing a start ZMW and count");
+
+        // always going to enter at least one lane, corresponding to the first element.
+        // This first ZMW may be in the middle of a lane, but we'll add the whole lane
+        // anyway
+        selected.insert(range[0]/laneSize);
+        if (range.size() == 2)
+        {
+            // We've already addd the first lane, now we use some intentional
+            // integer arithmetic to get the rest of the lanes, even if the ROI
+            // specified doesn't line up with lane boundaries.
+            int laneStart = (range[0] + laneSize) / laneSize;
+            int laneEnd = (range[1] - 1) / laneSize;
+            for (int i = laneStart; i <= laneEnd; ++i)
+            {
+                selected.insert(i);
+            }
+        }
+    }
+    std::vector<LaneIndex> retValues(selected.begin(), selected.end());
+    return LaneSelector(retValues);
+}
+
+
 }}
