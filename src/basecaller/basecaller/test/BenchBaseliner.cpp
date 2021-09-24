@@ -86,8 +86,7 @@ static TraceBatch<int16_t> GenerateBatch(uint32_t lanesPerPool, uint32_t framesP
     auto batchIdx = 0; auto startFrame = 0; auto endFrame = framesPerBlock; auto startZmw = 0;
     BatchMetadata meta(batchIdx, startFrame, endFrame, startZmw);
     BatchDimensions dims {(uint32_t)layout.NumBlocks(), (uint32_t)layout.NumFrames(), (uint32_t)layout.BlockWidth()};
-    TraceBatch<int16_t> batch(meta, dims, 
-                        SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+    TraceBatch<int16_t> batch(meta, dims, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto li = 0 /* laneIdx */;
     std::memcpy(batch.GetBlockView(li).Data(), dataBuf[li].origin(), dataBuf.num_elements()*sizeof(int16_t));

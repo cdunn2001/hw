@@ -128,8 +128,9 @@ TEST(TestHostNoOpBaseliner, Run)
             for (auto& packet : currChunk)
             {
                 auto batchIdx = packet.PacketID();
-                BatchMetadata meta(packet.PacketID(), packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
-                                   packet.StartZmw());
+                BatchMetadata meta(packet.PacketID(), 
+                                    packet.StartFrame(), packet.StartFrame() + packet.NumFrames(),
+                                    packet.StartZmw());
                 TraceBatch<int16_t> in(std::move(packet),
                                        meta,
                                        Layout2Dims(packet.Layout()),
@@ -181,7 +182,7 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 16;
 
-    float scaler_ = 3.46410f; // sqrt(12)
+    float scaler = 3.46410f; // sqrt(12)
 
     Data::BatchLayoutConfig batchConfig;
     std::vector<HostMultiScaleBaseliner> baseliners;
@@ -196,20 +197,25 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
     {
         auto params = GetParam();
         pfConfig.generatePoisson = false;
-        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? params.pfg_pulseIpd          : pfConfig.pulseIpd); 
-        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? params.pfg_pulseWidth        : pfConfig.pulseWidth);
-        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
-        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
+        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? 
+                            params.pfg_pulseIpd          : pfConfig.pulseIpd);
+        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? 
+                            params.pfg_pulseWidth        : pfConfig.pulseWidth);
+        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? 
+                            params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
+        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? 
+                            params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
 
         Data::MovieConfig movConfig;
-        const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+        const auto baselinerConfig = TestConfig::BaselinerConfig(
+                            BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
         batchConfig.lanesPerPool = lanesPerPool;
 
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
-            baseliners.emplace_back(HostMultiScaleBaseliner(poolId, Scale(),
+            baseliners.emplace_back(HostMultiScaleBaseliner(poolId, scaler,
                                                             FilterParamsLookup(baselinerConfig.Filter),
                                                             lanesPerPool));
         }
@@ -230,9 +236,6 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
                 std::move(sourceConfig),
                 std::move(generator));
     }
-
-    // Conversion between DN and e-
-    float Scale() const { return scaler_; }
 
     void TearDown() override
     {
@@ -286,15 +289,15 @@ TEST_P(HostMultiScaleBaselinerChunk, Chunk)
                                 20)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(mean/Scale(), 0, 
+                    EXPECT_NEAR(mean/scaler, 0, 
                                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(var/Scale()/Scale(), pfConfig.baselineSigma * pfConfig.baselineSigma,
+                    EXPECT_NEAR(var/scaler/scaler, pfConfig.baselineSigma * pfConfig.baselineSigma,
                                 6 * pfConfig.baselineSigma)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(rawMean/Scale(), pfConfig.baselineSignalLevel,
+                    EXPECT_NEAR(rawMean/scaler, pfConfig.baselineSignalLevel,
                                 6 * (pfConfig.baselineSigma / std::sqrt(count)))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
@@ -314,7 +317,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     BaselinerParams blp({2, 8}, {5, 5}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
     uint32_t lanesPerPool_ = 1;
-    HostMultiScaleBaseliner baseliner(0, Scale(), blp, lanesPerPool_);
+    HostMultiScaleBaseliner baseliner(0, scaler, blp, lanesPerPool_);
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                             //      blocks                      frames     width
@@ -323,7 +326,6 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
 
     size_t signalIdx = 0;
     PicketFenceGenerator generator(pfConfig);
-
     boost::multi_array<int16_t, 2> dataBuf(boost::extents[framesPerBlock][zmwPerBlock]);
 
     for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx)
@@ -337,9 +339,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
         }
     }
 
-    auto batchIdx = 0; auto startFrame = 0; auto endFrame = framesPerBlock; auto startZmw = 0;
-    BatchMetadata meta(batchIdx, startFrame, endFrame, startZmw);
-
+    BatchMetadata meta(0, 0, framesPerBlock, 0);
     TraceBatch<int16_t> in(meta, Layout2Dims(layout),
                         SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
@@ -353,16 +353,14 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     cameraOutput.push_back(baseliner(in));
 
     std::vector<BlockView<int16_t>> traces; std::vector<StatAccumState> blStats;
-    for (auto &e : cameraOutput) 
+    for (auto& e : cameraOutput)
     {
         traces.push_back(e.first.GetBlockView(li));
         blStats.push_back(e.second.baselinerStats.GetHostView()[li].baselineStats);
     }
 
     // Assert statistics
-    auto rnd_ = time(NULL);
-    auto zi = rnd_ % zmwPerBlock;   // random zmwIdx
-    auto fi = rnd_ % 128;           // random frameIdx
+    auto zi = 0, fi = 0;
     std::vector<float> trCount; std::vector<float> mfMean; std::vector<float> trVar;
     for (auto &stat : blStats) {
         trCount.push_back(stat.moment0[zi]);
@@ -378,19 +376,19 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
                 64)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-    EXPECT_NEAR(mean/Scale(),
+    EXPECT_NEAR(mean/scaler,
                 0, 
                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-    EXPECT_NEAR(var/Scale()/Scale(),
+    EXPECT_NEAR(var/scaler/scaler,
                 pfConfig.baselineSigma * pfConfig.baselineSigma,
                 6 * pfConfig.baselineSigma)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
 
     // Assert baseline converted from DN to e-
-    EXPECT_NEAR(traces[0][fi*laneSize+zi], dataBuf[fi][zi] * Scale(), 1);   // Within a rounding error
+    EXPECT_NEAR(traces[0][fi*laneSize+zi], dataBuf[fi][zi] * scaler, 1);   // Within a rounding error
     // Assert baseline filtered
     EXPECT_LE(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
     // Assert next window value produces same results
@@ -408,8 +406,8 @@ INSTANTIATE_TEST_SUITE_P(HostMultiScaleBaselinerGroup1,
                                 0,    /* pulseWidth        */  // no pulses
                             },
                             TestingParams{
-                                22,     /* pulseIpd          */
-                                25,     /* pulseWidth        */  // pulse period doesn't fit 512
+                                20,     /* pulseIpd          */
+                                24,     /* pulseWidth        */
                                 200,    /* baseSignalLevel   */
                                 { 600 } /* pulseSignalLevels */
                             }

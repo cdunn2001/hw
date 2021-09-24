@@ -90,9 +90,9 @@ struct DeviceMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPa
     const uint32_t lanesPerPool = numZmwLanes / numPools;
     const size_t numBlocks = 16;
 
-    float scaler_ =  1.732f;  // sqrt(3) : var = std*std*3
-    // float scaler_ =  2.236f;  // sqrt(5)
-    // float scaler_ = 3.46410f; // sqrt(12) -> overflows
+    float scaler =  1.732f;  // sqrt(3) : var = std*std*3
+    // float scaler =  2.236f;  // sqrt(5)
+    // float scaler = 3.46410f; // sqrt(12) -> overflows
 
     Data::BatchLayoutConfig batchConfig;
     std::vector<std::unique_ptr<DeviceMultiScaleBaseliner>> baseliners;
@@ -107,20 +107,25 @@ struct DeviceMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPa
     {
         auto params = GetParam();
         pfConfig.generatePoisson = false;
-        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? params.pfg_pulseIpd          : pfConfig.pulseIpd);
-        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? params.pfg_pulseWidth        : pfConfig.pulseWidth);
-        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
-        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
+        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? 
+                            params.pfg_pulseIpd          : pfConfig.pulseIpd);
+        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? 
+                            params.pfg_pulseWidth        : pfConfig.pulseWidth);
+        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? 
+                            params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
+        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? 
+                            params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
 
         Data::MovieConfig movConfig;
-        const auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+        const auto baselinerConfig = TestConfig::BaselinerConfig(
+                            BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
         batchConfig.lanesPerPool = lanesPerPool;
 
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
-            baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, scaler_,
+            baseliners.emplace_back(std::make_unique<DeviceMultiScaleBaseliner>(poolId, scaler,
                                                             FilterParamsLookup(baselinerConfig.Filter),
                                                             lanesPerPool));
         }
@@ -141,9 +146,6 @@ struct DeviceMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPa
                 std::move(sourceConfig),
                 std::move(generator));
     }
-
-    // Conversion between DN and e-
-    float Scale() const { return scaler_; }
 
     void TearDown() override
     {
@@ -197,15 +199,15 @@ TEST_P(DeviceMultiScaleBaselinerChunk, Chunk)
                                 20)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(mean/Scale(), 0, 
+                    EXPECT_NEAR(mean/scaler, 0, 
                                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(var/Scale()/Scale(), pfConfig.baselineSigma * pfConfig.baselineSigma,
+                    EXPECT_NEAR(var/scaler/scaler, pfConfig.baselineSigma * pfConfig.baselineSigma,
                                 6 * pfConfig.baselineSigma)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(rawMean/Scale(), pfConfig.baselineSignalLevel,
+                    EXPECT_NEAR(rawMean/scaler, pfConfig.baselineSignalLevel,
                                 6 * (pfConfig.baselineSigma / std::sqrt(count)))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
@@ -226,7 +228,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
     uint32_t lanesPerPool_ = 1;
-    DeviceMultiScaleBaseliner baseliner(0, Scale(), blp, lanesPerPool_);
+    DeviceMultiScaleBaseliner baseliner(0, scaler, blp, lanesPerPool_);
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                             //      blocks                      frames     width
@@ -235,7 +237,6 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
 
     size_t signalIdx = 0;
     PicketFenceGenerator generator(pfConfig);
-
     boost::multi_array<int16_t, 2> dataBuf(boost::extents[framesPerBlock][zmwPerBlock]);
 
     for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx)
@@ -249,9 +250,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
         }
     }
 
-    auto batchIdx = 0; auto startFrame = 0; auto endFrame = framesPerBlock; auto startZmw = 0;
-    BatchMetadata meta(batchIdx, startFrame, endFrame, startZmw);
-
+    BatchMetadata meta(0, 0, framesPerBlock, 0);
     TraceBatch<int16_t> in(meta, Layout2Dims(layout),
                         SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
@@ -265,16 +264,14 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
 
 
     std::vector<BlockView<int16_t>> traces; std::vector<StatAccumState> blStats;
-    for (auto &e : cameraOutput) 
+    for (auto& e : cameraOutput)
     {
         traces.push_back(e.first.GetBlockView(li));
         blStats.push_back(e.second.baselinerStats.GetHostView()[li].baselineStats);
     }
 
     // Assert statistics
-    auto rnd_ = time(NULL);
-    auto zi = rnd_ % zmwPerBlock;   // random zmwIdx
-    auto fi = rnd_ % 128;           // random frameIdx
+    auto zi = 0, fi = 0;
     std::vector<float> trCount; std::vector<float> mfMean; std::vector<float> trVar;
     for (auto &stat : blStats) {
         trCount.push_back(stat.moment0[zi]);
@@ -290,19 +287,19 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
                 64)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-    EXPECT_NEAR(mean/Scale(),
+    EXPECT_NEAR(mean/scaler,
                 0, 
                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-    EXPECT_NEAR(var/Scale()/Scale(),
+    EXPECT_NEAR(var/scaler/scaler,
                 pfConfig.baselineSigma * pfConfig.baselineSigma,
                 6 * pfConfig.baselineSigma)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
 
     // Assert baseline converted from DN to e-
-    EXPECT_NEAR(traces[0][fi*laneSize+zi], dataBuf[fi][zi] * Scale(), 1);   // Within a rounding error
+    EXPECT_NEAR(traces[0][fi*laneSize+zi], dataBuf[fi][zi] * scaler, 1);   // Within a rounding error
     // Assert baseline filtered
     EXPECT_LE(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
 }
@@ -319,7 +316,7 @@ INSTANTIATE_TEST_SUITE_P(DeviceMultiScaleBaselinerGroup1,
                             },
                             TestingParams{
                                 20,     /* pulseIpd          */
-                                24,     /* pulseWidth        */  // pulse period doesn't fit 512
+                                24,     /* pulseWidth        */
                                 200,    /* baseSignalLevel   */
                                 { 600 } /* pulseSignalLevels */
                             }
@@ -333,5 +330,4 @@ INSTANTIATE_TEST_SUITE_P(DeviceMultiScaleBaselinerGroup2,
                                 0,    /* pulseWidth        */  // no pulses
                             }
                             ));
-
 }}} // PacBio::Mongo::Basecaller
