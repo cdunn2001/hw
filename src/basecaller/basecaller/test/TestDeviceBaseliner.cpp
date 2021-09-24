@@ -35,9 +35,9 @@
 
 #include <common/cuda/memory/ManagedAllocations.h>
 
-#include <dataTypes/configs/BasecallerBaselinerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
+#include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
 #include <gtest/gtest.h>
 
@@ -236,7 +236,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
     size_t signalIdx = 0;
     PicketFenceGenerator generator(pfConfig);
 
-    boost::multi_array<int16_t, 2> data_(boost::extents[framesPerBlock][zmwPerBlock]);
+    boost::multi_array<int16_t, 2> dataBuf(boost::extents[framesPerBlock][zmwPerBlock]);
 
     for(size_t zmwIdx = 0; zmwIdx < zmwPerBlock; ++zmwIdx)
     {
@@ -245,7 +245,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
 
         for (size_t frameIdx = 0; frameIdx < framesPerBlock; ++frameIdx, ++frame)
         {
-            data_[frameIdx][zmwIdx] = signal[frame];
+            dataBuf[frameIdx][zmwIdx] = signal[frame];
         }
     }
 
@@ -256,12 +256,13 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
                         SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto li = 0 /* laneIdx */;
-    std::memcpy(in.GetBlockView(li).Data(), data_[li].origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
+    std::memcpy(in.GetBlockView(li).Data(), dataBuf.origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
 
-    // ACTION !!!!! baselineStats is new for each call !!!!!
+    // ACTION
     std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;
     cameraOutput.push_back(baseliner(in));
     cameraOutput.push_back(baseliner(in));
+
 
     std::vector<BlockView<int16_t>> traces; std::vector<StatAccumState> blStats;
     for (auto &e : cameraOutput) 
@@ -301,7 +302,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
 
     // Assert baseline converted from DN to e-
-    EXPECT_NEAR(traces[0][fi*laneSize+zi], data_[fi][zi] * Scale(), 1.0f);
+    EXPECT_NEAR(traces[0][fi*laneSize+zi], dataBuf[fi][zi] * Scale(), 1);   // Within a rounding error
     // Assert baseline filtered
     EXPECT_LE(traces[1][fi*laneSize+zi], traces[0][fi*laneSize+zi]);
 }

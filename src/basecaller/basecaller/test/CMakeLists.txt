@@ -2,6 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 include(pacbio-gtest)
+include(pacbio-gbench)
 
 # Define "object library" to support top-level unit test target.
 add_library(libMongoBasecallerTest OBJECT
@@ -18,9 +19,9 @@ add_library(libMongoBasecallerTest OBJECT
 target_link_libraries(libMongoBasecallerTest
     libMongoBasecallerAnalyzer
     libProtoCommon
+    libAppModules
     libTbb
     libGtest
-    libAppModules
 )
 
 # Define the test executable specific to mongo basecaller analyzer.
@@ -32,7 +33,18 @@ add_executable(${EXEC}
 
 target_link_libraries(${EXEC}
     libMongoBasecallerTest
-    libGtest
 )
 
 add_test(${EXEC} ${EXEC} --gtest_output=xml:${EXEC}.xml)
+
+# Define benchmark project
+add_executable(benchMongoBasecaller
+    BenchBaseliner.cpp
+)
+
+target_link_libraries(benchMongoBasecaller
+    libMongoBasecallerAnalyzer
+    libProtoCommon
+    libTbb
+    libGbenchWithMain
+)
