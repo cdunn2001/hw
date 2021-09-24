@@ -23,6 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <limits>
+
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/TemporaryDirectory.h>
@@ -48,8 +50,24 @@ using namespace PacBio::Mongo::Data;
 using namespace PacBio::DataSource;
 
 
-TEST(TestTraceSaver, TestA)
+template <typename T>
+struct TestTraceSaver : public ::testing::Test {};
+
+// First type in the pair is the in-memory representation for the
+// trace data, and the second type is the on-disk representation.
+// We obviously want to support when the two types are the same,
+// but I also added a test for saving to a wider type on disk,
+// becuase why not?
+using MyTypes = ::testing::Types<std::pair<int16_t, int16_t>,
+                                 std::pair<uint8_t, uint8_t>,
+                                 std::pair<uint8_t, int16_t>>;
+TYPED_TEST_SUITE(TestTraceSaver, MyTypes);
+
+TYPED_TEST(TestTraceSaver, TestA)
 {
+    using TIn = typename TypeParam::first_type;
+    using TOut = typename TypeParam::second_type;
+
     // The plan of this test is to create a fake sensor of 256 ZMWs (2 rows, 2 lanes = 128 columns), have a trace ROI
     // that only selects the first two columns, and simulate running the smrt-basecaller until completion. Each
     // TraceBatch spans the entire chip and 128 frames. We want to simulate a movie of 1024 frames, so there will need
@@ -62,9 +80,12 @@ TEST(TestTraceSaver, TestA)
     const uint64_t numSelectedZmws = 128;
 
     const uint32_t numCols = sensorROI.PhysicalCols();
+    // standard alpha pattern, with the caveat that if we are generating
+    // 8 bit traces, we'll modulo the original alpha pattern by 256 to
+    // avoid overflow
     auto alpha = [](uint32_t row, uint32_t col, uint64_t frame) {
-        const int16_t value = (col + row * 10 + frame * 100) % 2048;
-        return value;
+        const int16_t val = (col + row * 10 + frame * 100) % 2048;
+        return static_cast<TIn>(val % std::numeric_limits<TIn>::max());
     };
     auto alphaPrime = [&numCols, &alpha](uint64_t zmwOffset, uint64_t frame) {
         const uint32_t col = zmwOffset % numCols;
@@ -78,7 +99,10 @@ TEST(TestTraceSaver, TestA)
         std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
         ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
 
-        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, TraceFile::TraceDataType::INT16, numSelectedZmws, numFrames);
+        auto writeType = std::is_same_v<TOut, int16_t>
+            ? TraceFile::TraceDataType::INT16
+            : TraceFile::TraceDataType::UINT8;
+        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, writeType, numSelectedZmws, numFrames);
 
         std::vector<DataSourceBase::LaneIndex> lanes;
         lanes.push_back(0);  // starting at (0,0)
@@ -106,10 +130,11 @@ TEST(TestTraceSaver, TestA)
         dims.laneWidth = laneWidth;
 
         // fill each batch with the "alpha" test pattern, which is based on row and column
+        // The pattern will be tweaked as necessary to not overflow when using 8 bit data
         auto FillTraceBatch = [&](uint64_t zmwOffset,
                                   uint64_t frameOffset,
-                                  TraceBatch<int16_t>& batch,
-                                  std::function<int16_t(uint64_t zmw, uint64_t frame)> pattern) {
+                                  TraceBatch<TIn>& batch,
+                                  std::function<TIn(uint64_t zmw, uint64_t frame)> pattern) {
             for (uint32_t iblock = 0; iblock < batch.LanesPerBatch(); iblock++)
             {
                 auto blockView = batch.GetBlockView(iblock);
@@ -136,7 +161,7 @@ TEST(TestTraceSaver, TestA)
                                          izmw /* firstZmw */
                 );
 
-                Mongo::Data::TraceBatch<int16_t> traceBatch(
+                Mongo::Data::TraceBatch<TIn> traceBatch(
                     meta, dims,
                     Cuda::Memory::SyncDirection::Symmetric,
                     SOURCE_MARKER());
@@ -147,7 +172,7 @@ TEST(TestTraceSaver, TestA)
                 auto dataView = traceBatch.GetBlockView(0);
                 std::stringstream ss;
                 ss << "batch for zmw:" << izmw << " frame:" << iframe << "\n";
-                const int16_t* pixel = dataView.Data();
+                const TIn* pixel = dataView.Data();
                 for (uint64_t iframe2 = 0; iframe2 < dims.framesPerBatch; iframe2++)
                 {
                     ss << "[" << iframe2 << "]";
@@ -168,7 +193,7 @@ TEST(TestTraceSaver, TestA)
     {
         PacBio::TraceFile::TraceFile reader(traceFile);
 
-        boost::multi_array<int16_t, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
+        boost::multi_array<TOut, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
         ASSERT_EQ(numFrames, zmwTrace.num_elements());
 
         const auto holexy = reader.Traces().HoleXY();
@@ -189,7 +214,7 @@ TEST(TestTraceSaver, TestA)
             reader.Traces().ReadZmw(zmwTrace, izmw);
             for (uint64_t iframe = 0; iframe < numFrames; iframe++)
             {
-                int16_t expectedPixel = alpha(row, col, iframe);
+                TIn expectedPixel = alpha(row, col, iframe);
                 EXPECT_EQ(expectedPixel, zmwTrace[iframe])
                     << "zmw:" << izmw << " frame:" << iframe << " row:" << row << " col:" << col;
                 if (expectedPixel != zmwTrace[iframe])
