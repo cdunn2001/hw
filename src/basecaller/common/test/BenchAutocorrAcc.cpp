@@ -1,5 +1,4 @@
 
-#if 1
 #include "common/AutocorrAccumulator.h"
 
 #include <chrono>
@@ -102,5 +101,3 @@ BENCHMARK(BM_AutoCorrVarEigenViewAxis1)->Unit(benchmark::kMicrosecond)
 
 // Run the benchmark
 BENCHMARK_MAIN();
-
-#endif // 0

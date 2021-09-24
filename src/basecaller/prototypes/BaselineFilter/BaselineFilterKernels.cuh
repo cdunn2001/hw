@@ -453,7 +453,7 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
         auto end = (i+1)*stride;
         for (int j = start; j < end; ++j)
         {
-            auto rawSignal = inZmw[j] * sParams.scale + 0.5;
+            auto rawSignal = inZmw[j] * sParams.scale;
             auto blSubtractedFrame = rawSignal - baselineEstimate;
             localLatent.ProcessFrame(rawSignal, blSubtractedFrame, sParams.scale, stats);
             outZmw[j] = ToShort(blSubtractedFrame);
