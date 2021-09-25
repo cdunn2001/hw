@@ -68,8 +68,6 @@ struct DeviceTestConfig : public Configuration::PBConfig<DeviceTestConfig>
     }
 };
 
-
-
 static TraceBatch<int16_t> GenerateBatch(uint32_t lanesPerPool, uint32_t framesPerChunk)
 {
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
@@ -98,17 +96,22 @@ static TraceBatch<int16_t> GenerateBatch(uint32_t lanesPerPool, uint32_t framesP
 
 class BenchBaseliner : public benchmark::Fixture {
 protected:
-    uint32_t numZmwLanes = 4;
-    uint32_t numPools = 2;
+    uint32_t numZmwLanes = 64;
+    uint32_t numPools = 8;
     uint32_t lanesPerPool = numZmwLanes / numPools;
     uint32_t framesPerChunk = 512;
 
 public:
     void SetUp(const ::benchmark::State& state) {
-        framesPerChunk *= state.range(0); // mul by blocks
+        numZmwLanes = state.range(0); // mul by blocks
+        lanesPerPool = numZmwLanes / numPools;
+        framesPerChunk = state.range(1);
+
+        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::MALLOC);
     }
 
     void TearDown(const ::benchmark::State& state) {
+        DisableAllCaching();
     }
 };
 
@@ -122,6 +125,7 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
     HostMultiScaleBaseliner baseliner(0, 1.1f, blp, lanesPerPool);
 
     TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
+    benchmark::DoNotOptimize(baseliner(batch)); // warm-up
     
     for (auto _ : st) {
         // This code gets timed
@@ -144,6 +148,7 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Device)(benchmark::State& st)
     DeviceMultiScaleBaseliner baseliner(0, 1.1f, blp, lanesPerPool);
 
     TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
+    benchmark::DoNotOptimize(baseliner(batch)); // warm-up call
     
     for (auto _ : st) {
         // This code gets timed
@@ -158,10 +163,10 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Device)(benchmark::State& st)
 
 
 BENCHMARK_REGISTER_F(BenchBaseliner, Host)->Unit(benchmark::kMicrosecond)
-                                        ->RangeMultiplier(4)->Range(1, 16);
+                                        ->RangeMultiplier(8)->Ranges({{64, 4096}, {512, 4096}});
 
 BENCHMARK_REGISTER_F(BenchBaseliner, Device)->Unit(benchmark::kMicrosecond)
-                                        ->RangeMultiplier(4)->Range(1, 16);
+                                        ->RangeMultiplier(8)->Ranges({{64, 4096}, {512, 4096}});
 
 // Benchmark entry point
 BENCHMARK_MAIN();
