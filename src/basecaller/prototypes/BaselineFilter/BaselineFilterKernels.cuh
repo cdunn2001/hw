@@ -229,6 +229,7 @@ public:
                                     PBBool2 baselineMask)
     {
         PBHalf2 zero(0.0f), one(1.0f);
+        PBFloat2 bsf(bs);
 
         minB_[threadIdx.x] = min(bs, minB_[threadIdx.x]);
         maxB_[threadIdx.x] = max(bs, maxB_[threadIdx.x]);
@@ -236,21 +237,22 @@ public:
 
         m0B_[threadIdx.x] += Blend(baselineMask, one, zero);
         m1B_[threadIdx.x] += Blend(baselineMask, bs, zero);
-        m2B_[threadIdx.x] += Blend(baselineMask, bs*bs, zero);  // bs*bs overflows half if scale > 4 and bs > 65
+        m2B_[threadIdx.x] += Blend(baselineMask, bsf*bsf, zero);
     }
 
     __device__ void AddAutoCorrData(PBHalf2 bs,
                                     PBHalf2 lagVal)
     {
         PBHalf2 one(1.0f);
+        PBFloat2 bsf(bs);
 
         m0_[threadIdx.x] += one;
         m1_[threadIdx.x] += bs;
-        m2_[threadIdx.x] += bs*bs;
+        m2_[threadIdx.x] += bsf*bsf;
 
         m1LagFirst_[threadIdx.x] += lagVal;
         m1LagLast_[threadIdx.x] += bs;
-        m2Lag_[threadIdx.x] += bs * lagVal;
+        m2Lag_[threadIdx.x] += bsf * lagVal;
     }
 
     __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
