@@ -64,8 +64,11 @@ TEST_P(TestTraceFileDataSource, Read8And16)
     trcConfig.numFrames = framesPerBlock;
     trcConfig.numZmwLanes = lanesPerPool;
     trcConfig.cache = GetParam().cacheInput;
+    trcConfig.inputType = Data::TraceInputType::INT16;
 
     TraceFileDataSource source16(std::move(cfg16), trcConfig);
+
+    trcConfig.inputType = Data::TraceInputType::UINT8;
     TraceFileDataSource source8(std::move(cfg8), trcConfig);
 
     while (!source16.ChunksReady()) source16.ContinueProcessing();

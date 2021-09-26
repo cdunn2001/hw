@@ -67,6 +67,7 @@ struct TraceReanalysis : public Configuration::PBConfig<TraceReanalysis>
     PB_CONFIG_PARAM(std::string, traceFile, "");
 };
 
+SMART_ENUM(TraceInputType, Natural, INT16, UINT8);
 struct TraceReplication : public Configuration::PBConfig<TraceReplication>
 {
     PB_CONFIG(TraceReplication)
@@ -86,6 +87,7 @@ struct TraceReplication : public Configuration::PBConfig<TraceReplication>
     // the actual analysis without self throttling
     PB_CONFIG_PARAM(size_t, mazQueueSize, 0);
 
+    PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
 };
 
 }     // namespace PacBio::Mongo::Data

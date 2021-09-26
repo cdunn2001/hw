@@ -64,7 +64,8 @@ public:
                         const Mongo::Data::TraceReplication& trcCfg)
         : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
                               trcCfg.numZmwLanes, trcCfg.cache,
-                              trcCfg.preloadChunks, trcCfg.mazQueueSize)
+                              trcCfg.preloadChunks, trcCfg.mazQueueSize,
+                              trcCfg.inputType)
     {}
 
     // Low level Ctor that actually does the work.  The other ctors
@@ -75,7 +76,8 @@ public:
                         uint32_t numZmwLanes,
                         bool cache,
                         size_t preloadChunks = 0,
-                        size_t maxQueueSize = 0);
+                        size_t maxQueueSize = 0,
+                        Mongo::Data::TraceInputType type = Mongo::Data::TraceInputType::Natural);
 
 public:
 

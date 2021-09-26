@@ -396,11 +396,6 @@ private:
                 sameBlockWidth = false;
         }
 
-        if (encoding != PacketLayout::INT16)
-        {
-            throw PBException("Only 16 bit input is supported so far");
-        }
-
         if (type == PacketLayout::FRAME_LAYOUT)
         {
             throw PBException("Frame Layouts not supported");
