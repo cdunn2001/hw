@@ -1,7 +1,7 @@
 #ifndef mongo_dataTypes_BatchData_H_
 #define mongo_dataTypes_BatchData_H_
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -380,7 +380,7 @@ class BatchData : private Cuda::Memory::detail::DataManager
     const BatchDimensions& ValidateDims(const BatchDimensions& dims,
                                         const DataSource::PacketLayout& layout)
     {
-        if (layout.Encoding() != DataSource::PacketLayout::INT16)
+        if (layout.Encoding() == DataSource::PacketLayout::INT12)
             throw PBException("Cannot create batch from 12 bit SensorPacket");
         if (layout.Type() == DataSource::PacketLayout::FRAME_LAYOUT)
             throw PBException("Cannot create batch from SensorPacket with frame data");

@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -40,7 +40,8 @@ namespace Application {
 
 // A Moderately general block repacker, intended to handle a number of situations:
 // - inbound SensorPackets: are BLOCK_LAYOUT_DENSE.
-// - inbound SensorPackets: have a block width that is a multiple of 32 16-bit pixels
+// - inbound SensorPackets: have a block width that is a multiple of a cache line,
+//                          which has pixels that are either int16_t or uint8_t
 // - inbound SensorPackets: have a uniform frame count
 // - inbound SensorPackets: have a frame count that is equal to, or an even divisor of,
 //                          the output TraceBatch frame count
@@ -56,6 +57,8 @@ namespace Application {
 //   possibly do better for more limited scenarios.  The implementation file
 //   provides a mechanism for re-writing the low-level implementation for specific
 //   target cases, without having to re-write the higher level multi-threading logic
+// - The implementation will not convert between 16 and 8 bit data types.  The output
+//   type will be the same as the input, we're merely shuffling data around.
 class BlockRepacker final : public RepackerBody
 {
 public:

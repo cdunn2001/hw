@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -67,8 +67,18 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
 }
 
 
-void TraceSaverBody::Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch)
+void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
+    const auto& traceBatch = [&]() ->decltype(auto)
+    {
+        try
+        {
+            return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
+        } catch (const std::exception&)
+        {
+            throw PBException("TraceSaver currently only supports int16_t trace data");
+        }
+    }();
     if (writer_)
     {
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();

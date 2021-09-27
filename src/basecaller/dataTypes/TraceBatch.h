@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -28,6 +28,7 @@
 #define PACBIO_MONGO_DATA_TRACE_BATCH_H
 
 #include <cstdint>
+#include <variant>
 
 #include <pacbio/datasource/SensorPacket.h>
 
@@ -84,6 +85,10 @@ public:
 private:
     BatchMetadata meta_;
 };
+
+// Variant that can hold the supported types for raw trace inputs
+// into the compute graph
+using TraceBatchVariant = std::variant<TraceBatch<int16_t>, TraceBatch<uint8_t>>;
 
 // Define overloads for this function, so that we can track kernel invocations, and
 // so that we can be converted to our gpu specific representation

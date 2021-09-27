@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -45,19 +45,19 @@
 namespace PacBio {
 namespace Application {
 
-class NoopTraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatch<int16_t>>
+class NoopTraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatchVariant>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(const Mongo::Data::TraceBatch<int16_t>&) override
+    void Process(const Mongo::Data::TraceBatchVariant&) override
     {
 
     }
 };
 
-class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatch<int16_t>>
+class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatchVariant>
 {
 public:
     TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
@@ -72,7 +72,7 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(const Mongo::Data::TraceBatch<int16_t>& traceBatch) override;
+    void Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
 private:
     std::unique_ptr<PacBio::TraceFile::TraceFile> writer_;
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;

@@ -1,5 +1,5 @@
 
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -69,13 +69,17 @@ TEST(TestBasecaller, CheckMetadata)
 
     auto basecaller = Application::BasecallerBody(dimMap, algoConfig, movConfig, config.system);
 
-    vector<Data::TraceBatch<int16_t>> chunk;
+    vector<Data::TraceBatchVariant> chunk;
     vector<Data::BatchMetadata> bmdVec;
     for (const auto pid : poolIds)
     {
         const Data::BatchMetadata bmd(pid, 0, bDims.framesPerBatch, pid*bDims.ZmwsPerBatch());
         bmdVec.push_back(bmd);
-        chunk.emplace_back(bmd, bDims, Cuda::Memory::SyncDirection::Symmetric, SOURCE_MARKER());
+        Data::TraceBatch<int16_t> batch(bmd,
+                                        bDims,
+                                        Cuda::Memory::SyncDirection::Symmetric,
+                                        SOURCE_MARKER());
+        chunk.push_back(std::move(batch));
     }
 
     for (unsigned int i = 0; i < chunk.size(); ++i)
