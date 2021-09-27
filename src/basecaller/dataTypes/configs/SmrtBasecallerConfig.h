@@ -36,7 +36,7 @@
 #include <dataTypes/configs/PrelimHQConfig.h>
 #include <dataTypes/configs/SourceConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
-#include <dataTypes/configs/ROIConfig.h>
+#include <dataTypes/configs/TraceSaverConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -50,7 +50,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_OBJECT(BasecallerAlgorithmConfig, algorithm);
     PB_CONFIG_OBJECT(BatchLayoutConfig, layout);
     PB_CONFIG_OBJECT(SourceConfig, source);
-    PB_CONFIG_OBJECT(ROIConfig, traceROI);
+    PB_CONFIG_OBJECT(TraceSaverConfig, traceSaver);
     PB_CONFIG_OBJECT(PrelimHQConfig, prelimHQ);
     PB_CONFIG_OBJECT(Primary::BazIOConfig, bazIO);
 

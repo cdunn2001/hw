@@ -34,7 +34,7 @@
 
 #include <common/graphs/GraphNodeBody.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/configs/ROIConfig.h>
+#include <dataTypes/configs/TraceSaverConfig.h>
 #include <appModules/DataFileWriter.h>
 #include <pacbio/tracefile/TraceFile.h>
 

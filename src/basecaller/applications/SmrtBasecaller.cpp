@@ -486,8 +486,8 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const auto& sampleLayout = dataSource.PacketLayouts().begin()->second;
+            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceSaver.roi);
+            const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
             const auto sourceLaneWidth = sampleLayout.BlockWidth();
             const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
 
@@ -523,17 +523,17 @@ private:
             }
             if (destLanes.size() != numZmws / laneSize)
             {
-                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size() 
+                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size()
                     << " numZmws/laneSize:" << numZmws/laneSize;
                 PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
             }
             DataSourceBase::LaneSelector blocks(destLanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
             TraceDataType outputType = TraceDataType::INT16;
-            if (config_.traceROI.outFormat == ROIConfig::OutFormat::UINT8)
+            if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
             {
                 outputType = TraceDataType::UINT8;
-            } else if (config_.traceROI.outFormat == ROIConfig::OutFormat::Natural)
+            } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
             {
                 if (sampleLayout.Encoding() == PacketLayout::UINT8)
                 {
