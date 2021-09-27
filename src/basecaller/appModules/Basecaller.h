@@ -49,7 +49,7 @@
 namespace PacBio {
 namespace Application {
 
-class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceVariant, Mongo::Data::BatchResult>
+class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatchVariant, Mongo::Data::BatchResult>
 {
     using BatchAnalyzer = Mongo::Basecaller::BatchAnalyzer;
 public:
@@ -171,7 +171,7 @@ public:
     //               5 total active streams without reusing priority values.  The main reason
     //               this wasn't done this round is that approach does make the timelines a bit
     //               harder to parse in the cuda profilers.
-    Mongo::Data::BatchResult Process(const Mongo::Data::TraceVariant& traceVariant) override
+    Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatchVariant& traceVariant) override
     {
         const auto& in = [&]() ->decltype(auto)
         {

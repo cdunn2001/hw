@@ -38,7 +38,7 @@ namespace Application {
 
 // Repacker implementation that does nothing but repackage a SensorPacket into a
 // trace batch.  Requires the SensorPacket to have the correct dimensions
-class RepackerBody : public Graphs::MultiTransformBody<DataSource::SensorPacket, const Mongo::Data::TraceVariant>
+class RepackerBody : public Graphs::MultiTransformBody<DataSource::SensorPacket, const Mongo::Data::TraceBatchVariant>
 {
 public:
     virtual std::map<uint32_t, Mongo::Data::BatchDimensions> BatchLayouts() const = 0;

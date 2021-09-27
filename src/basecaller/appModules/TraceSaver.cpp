@@ -67,7 +67,7 @@ TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& w
 }
 
 
-void TraceSaverBody::Process(const Mongo::Data::TraceVariant& traceVariant)
+void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
     const auto& traceBatch = [&]() ->decltype(auto)
     {

@@ -687,8 +687,9 @@ BlockRepacker::BlockRepacker(const std::map<uint32_t, DataSource::PacketLayout>&
     if (numZmw % Mongo::laneSize != 0)
         throw PBException("Number of zmw must be a multiple of the lane size");
 
-    const auto expectedFrames = expectedInputLayouts.begin()->second.NumFrames();
-    const auto encoding = expectedInputLayouts.begin()->second.Encoding();
+    const auto& sampleLayout = expectedInputLayouts.begin()->second;
+    const auto expectedFrames = sampleLayout.NumFrames();
+    const auto encoding = sampleLayout.Encoding();
     const auto minBlockWidth = [&](){
         switch(encoding)
         {

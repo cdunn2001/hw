@@ -69,7 +69,7 @@ TEST(TestBasecaller, CheckMetadata)
 
     auto basecaller = Application::BasecallerBody(dimMap, algoConfig, movConfig, config.system);
 
-    vector<Data::TraceVariant> chunk;
+    vector<Data::TraceBatchVariant> chunk;
     vector<Data::BatchMetadata> bmdVec;
     for (const auto pid : poolIds)
     {

@@ -482,7 +482,7 @@ private:
     }
 
 
-    std::unique_ptr <LeafBody<const TraceVariant>> CreateTraceSaver(const DataSourceBase& dataSource)
+    std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceBase& dataSource)
     {
         if (outputTrcFileName_ != "")
         {
@@ -541,7 +541,7 @@ private:
         }
     }
 
-    std::unique_ptr <TransformBody<const TraceVariant, BatchResult>>
+    std::unique_ptr <TransformBody<const TraceBatchVariant, BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims) const
     {
         return std::make_unique<BasecallerBody>(poolDims,

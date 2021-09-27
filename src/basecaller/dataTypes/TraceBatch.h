@@ -88,7 +88,7 @@ private:
 
 // Variant that can hold the supported types for raw trace inputs
 // into the compute graph
-using TraceVariant = std::variant<TraceBatch<int16_t>, TraceBatch<uint8_t>>;
+using TraceBatchVariant = std::variant<TraceBatch<int16_t>, TraceBatch<uint8_t>>;
 
 // Define overloads for this function, so that we can track kernel invocations, and
 // so that we can be converted to our gpu specific representation

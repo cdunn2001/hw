@@ -104,7 +104,7 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
                                         size_t numFrames,
                                         size_t numZmw)
 {
-    const auto minZmw = [&](){
+    const auto zmwPerCacheLine = [&](){
         switch (defaultLayout.Encoding())
         {
         case PacBio::DataSource::PacketLayout::INT16:
@@ -115,8 +115,8 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
             throw PBException("Misconfigured test");
         }
     }();
-    if (numZmw % minZmw != 0) throw PBException("numZmw must be a multiple of a cache line");
-    if (defaultLayout.BlockWidth() % minZmw != 0) throw PBException("block width must be a multiple of a cache line");
+    if (numZmw % zmwPerCacheLine != 0) throw PBException("numZmw must be a multiple of a cache line");
+    if (defaultLayout.BlockWidth() % zmwPerCacheLine != 0) throw PBException("block width must be a multiple of a cache line");
     if (startFrame % defaultLayout.NumFrames()) throw PBException("startFrame must be evenly divisible by the layout frames");
     if (numFrames % defaultLayout.NumFrames() != 0) throw PBException("numFrames must be evenly divisible by the layout frames");
     if (irregular.frequency != 0 && irregular.numBlocks == 0) throw PBException("Invalid specification for irregular");
@@ -148,25 +148,26 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
             PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, defaultLayout.Encoding(),
                                 {numBlocks, defaultLayout.NumFrames(), defaultLayout.BlockWidth()});
 
-            auto packet = [&](){
-                switch (defaultLayout.Encoding())
-                {
-                case PacBio::DataSource::PacketLayout::INT16:
-                    return GeneratePacket<int16_t>(layout,
-                                                   packetID,
-                                                   currZmw,
-                                                   startFrame + i*defaultLayout.NumFrames(),
-                                                   alloc);
-                case PacBio::DataSource::PacketLayout::UINT8:
-                    return GeneratePacket<uint8_t>(layout,
-                                                   packetID,
-                                                   currZmw,
-                                                   startFrame + i*defaultLayout.NumFrames(),
-                                                   alloc);
-                default:
-                    throw PBException("Unexpected layout in TestBlockRepacker");
-                }
-            }();
+            SensorPacket packet;
+            switch (defaultLayout.Encoding())
+            {
+            case PacBio::DataSource::PacketLayout::INT16:
+                packet = GeneratePacket<int16_t>(layout,
+                                                 packetID,
+                                                 currZmw,
+                                                 startFrame + i*defaultLayout.NumFrames(),
+                                                 alloc);
+                break;
+            case PacBio::DataSource::PacketLayout::UINT8:
+                packet = GeneratePacket<uint8_t>(layout,
+                                                 packetID,
+                                                 currZmw,
+                                                 startFrame + i*defaultLayout.NumFrames(),
+                                                 alloc);
+                break;
+            default:
+                throw PBException("Unexpected layout in TestBlockRepacker");
+            }
             packetID++;
 
             ret.AddPacket(std::move(packet));
@@ -177,7 +178,7 @@ SensorPacketsChunk GeneratePacketsChunk(PacketLayout defaultLayout,
     // Re-order the packets, just for the fun of it. Don't want
     // the order to change between runs, nor do we really care
     // if the shuffle is all that random.  We just want to
-    // present data that isn't already sorted
+    // present data that aren't already sorted
     std::mt19937 g(12345);
     std::shuffle(ret.begin(), ret.end(), g);
 
@@ -305,7 +306,7 @@ private:
 };
 
 // Small class, to plug the above validator into a compute graph
-class ValidatorBody final : public LeafBody<const TraceVariant>
+class ValidatorBody final : public LeafBody<const TraceBatchVariant>
 {
 public:
     ValidatorBody(Validator* validator)
@@ -315,7 +316,7 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 1.0f; }
 
-    void Process(const TraceVariant& in) override
+    void Process(const TraceBatchVariant& in) override
     {
         std::visit([&](const auto& batch) { validator_->Validate(batch);},
                    in);

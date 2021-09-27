@@ -80,6 +80,11 @@ public:
     {
         const auto& dims = expectedDims_[packet.PacketID()];
         // Make sure packet is valid
+        if (packet.Layout().Encoding() != DataSource::PacketLayout::INT16
+            && packet.Layout().Encoding() != DataSource::PacketLayout::UINT8)
+        {
+            throw PBException("TrivialRepacker only supports INT16 or INT8 encoding");
+        }
         if (packet.Layout().Type() != DataSource::PacketLayout::BLOCK_LAYOUT_DENSE)
             throw PBException("TrivialRepacker only supports BLOCK_LAYOUT_DENSE");
         if (dims.lanesPerBatch != packet.Layout().NumBlocks())
