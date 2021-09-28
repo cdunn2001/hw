@@ -81,12 +81,14 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, {lanesPerPool, blockLen, laneSize});
     DataSourceBase::Configuration cfg(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
 
+    TraceReplication trcConfig;
+    trcConfig.traceFile = traceFile;
+    trcConfig.numFrames = numBlocks * blockLen;
+    trcConfig.numZmwLanes = layout.NumBlocks() * poolsPerChip;
+    trcConfig.cache = true;
     auto source = std::make_unique<TraceFileDataSource>(
             std::move(cfg),
-            traceFile,
-            numBlocks * blockLen,
-            layout.NumBlocks()*poolsPerChip,
-            true);
+            trcConfig);
 
     // Hard code our models to match this specific trace file
     // Beware that we're ignoring some values like relAmp in our

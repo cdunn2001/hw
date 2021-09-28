@@ -78,8 +78,10 @@ TraceFileDataSource::TraceFileDataSource(
         {
             if (storageType == TraceFile::TraceDataType::INT16)
                 return PacketLayout::INT16;
-            else
+            else if (storageType == TraceFile::TraceDataType::UINT8)
                 return PacketLayout::UINT8;
+            else
+                throw PBException("Unexpected request for trace data type");
         }
         case PacBio::Mongo::Data::TraceInputType::INT16:
             return PacketLayout::INT16;
@@ -93,7 +95,8 @@ TraceFileDataSource::TraceFileDataSource(
     if (storageType == TraceFile::TraceDataType::INT16
         && encoding == PacketLayout::UINT8)
     {
-        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  Values may potentially be truncated/saturated";
+        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  "
+                   << "Values will be saturated to [0,255]";
     }
 
     bytesPerValue_ = [&]()

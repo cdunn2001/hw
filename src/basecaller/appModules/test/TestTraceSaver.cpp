@@ -57,7 +57,7 @@ struct TestTraceSaver : public ::testing::Test {};
 // trace data, and the second type is the on-disk representation.
 // We obviously want to support when the two types are the same,
 // but I also added a test for saving to a wider type on disk,
-// becuase why not?
+// because why not?
 using MyTypes = ::testing::Types<std::pair<int16_t, int16_t>,
                                  std::pair<uint8_t, uint8_t>,
                                  std::pair<uint8_t, int16_t>>;
@@ -84,8 +84,8 @@ TYPED_TEST(TestTraceSaver, TestA)
     // 8 bit traces, we'll modulo the original alpha pattern by 256 to
     // avoid overflow
     auto alpha = [](uint32_t row, uint32_t col, uint64_t frame) {
-        const int16_t val = (col + row * 10 + frame * 100) % 2048;
-        return static_cast<TIn>(val % std::numeric_limits<TIn>::max());
+        const int16_t value = (col + row * 10 + frame * 100) % 2048;
+        return static_cast<TIn>(value % std::numeric_limits<TIn>::max());
     };
     auto alphaPrime = [&numCols, &alpha](uint64_t zmwOffset, uint64_t frame) {
         const uint32_t col = zmwOffset % numCols;
@@ -99,6 +99,9 @@ TYPED_TEST(TestTraceSaver, TestA)
         std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
         ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
 
+        static_assert(std::is_same_v<TOut, int16_t>
+                      || std::is_same_v<TOut, uint8_t>,
+                      "Testing code needs an update to handle additional types");
         auto writeType = std::is_same_v<TOut, int16_t>
             ? TraceFile::TraceDataType::INT16
             : TraceFile::TraceDataType::UINT8;

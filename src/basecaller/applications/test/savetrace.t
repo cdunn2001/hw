@@ -13,7 +13,7 @@
   $ h5dump -d TraceData/Traces -s "0,0,0" -c "1,1,8192" ${TRCOUT} > Zmw0.out
   $ h5dump -d TraceData/Traces -s "0,0,0" -c "1,1,8192" ${TRCIN} > Zmw0.in
 
-# ZMW 0 should look identical in the two trace files, minus the overal
+# ZMW 0 should look identical in the two trace files, minus the overall
 # dataset size
   $ diff -u Zmw0.in Zmw0.out
   --- Zmw0.in* (glob)
@@ -87,7 +87,7 @@
   $ h5dump -d TraceData/Traces -s "0,0,0" -c "1,1,8192" ${TRCOUT} | head -n 20 > Zmw0Trunc.out
   $ h5dump -d TraceData/Traces -s "0,0,0" -c "1,1,8192" ${TRCIN} | head -n 20 > Zmw0NoTrunc.in
 
-# All aparent difference below are from the saturation, i.e. they are less than 0
+# All apparent difference below are from the saturation, i.e. they are less than 0
 # or greater than 255 in the input file
   $ diff -u Zmw0Trunc.out Zmw0NoTrunc.in
   --- Zmw0Trunc.out* (glob)

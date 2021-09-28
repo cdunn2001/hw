@@ -85,7 +85,7 @@ struct TraceReplication : public Configuration::PBConfig<TraceReplication>
     PB_CONFIG_PARAM(size_t, preloadChunks, 0);
     // The max number of chunks the data source will get ahead of
     // the actual analysis without self throttling
-    PB_CONFIG_PARAM(size_t, mazQueueSize, 0);
+    PB_CONFIG_PARAM(size_t, maxQueueSize, 0);
 
     PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
 };

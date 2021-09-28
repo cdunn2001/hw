@@ -64,10 +64,11 @@ public:
                         const Mongo::Data::TraceReplication& trcCfg)
         : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
                               trcCfg.numZmwLanes, trcCfg.cache,
-                              trcCfg.preloadChunks, trcCfg.mazQueueSize,
+                              trcCfg.preloadChunks, trcCfg.maxQueueSize,
                               trcCfg.inputType)
     {}
 
+private:
     // Low level Ctor that actually does the work.  The other ctors
     // provide a simpler interface but delegate to this
     TraceFileDataSource(DataSourceBase::Configuration cfg,
