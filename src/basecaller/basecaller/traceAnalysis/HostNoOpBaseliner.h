@@ -28,7 +28,7 @@ public:
 
 public:
     HostNoOpBaseliner(uint32_t poolId)
-        : Baseliner(poolId, 1.0f)
+        : Baseliner(poolId)
     { }
 
     HostNoOpBaseliner(const HostNoOpBaseliner&) = delete;
@@ -39,7 +39,7 @@ public:
 
 private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

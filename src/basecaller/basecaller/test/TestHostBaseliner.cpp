@@ -207,6 +207,7 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
                             params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
 
         Data::MovieConfig movConfig;
+        movConfig.photoelectronSensitivity = scaler;
         const auto baselinerConfig = TestConfig::BaselinerConfig(
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
@@ -215,7 +216,7 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
 
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
-            baseliners.emplace_back(HostMultiScaleBaseliner(poolId, scaler,
+            baseliners.emplace_back(HostMultiScaleBaseliner(poolId,
                                                             FilterParamsLookup(baselinerConfig.Filter),
                                                             lanesPerPool));
         }
@@ -317,7 +318,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     BaselinerParams blp({2, 8}, {5, 5}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
     uint32_t lanesPerPool_ = 1;
-    HostMultiScaleBaseliner baseliner(0, scaler, blp, lanesPerPool_);
+    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool_);
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                             //      blocks                      frames     width
@@ -360,7 +361,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     }
 
     // Assert statistics
-    auto zi = 0, fi = 0;
+    auto zi = 22, fi = 0;
     std::vector<float> trCount; std::vector<float> mfMean; std::vector<float> trVar;
     for (auto &stat : blStats) {
         trCount.push_back(stat.moment0[zi]);
@@ -373,7 +374,7 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     auto count = trCount[pi]; auto mean = mfMean[pi]; auto var = trVar[pi];
     EXPECT_NEAR(count,
                 (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd,
-                64)
+                20)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
     EXPECT_NEAR(mean/scaler,

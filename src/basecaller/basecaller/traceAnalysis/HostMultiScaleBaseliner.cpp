@@ -32,6 +32,7 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 
 namespace PacBio {
@@ -39,17 +40,17 @@ namespace Mongo {
 namespace Basecaller {
 
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                        const Data::MovieConfig&)
+                                        const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = true;
-    Baseliner::InitFactory(hostExecution);
+    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
 }
 
 void HostMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
-HostMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
 
@@ -94,9 +95,9 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto blsIt = baselineSubtractedData.Begin();
     auto loIt = lower->CBegin(), upIt = upper->CBegin();
 
-    auto sbInv = 1.0f / cSigmaBias_;
+    const auto sbInv = 1.0f / cSigmaBias_;
+    const size_t inputCount = traceData.NumFrames() / Stride();
 
-    size_t inputCount = traceData.NumFrames() / Stride();
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     for (size_t i = 0; i < inputCount; i++, upIt++, loIt++)
     {

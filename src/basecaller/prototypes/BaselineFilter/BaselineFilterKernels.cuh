@@ -228,7 +228,8 @@ public:
                                     PBHalf2 bs, //baseline subtracted
                                     PBBool2 baselineMask)
     {
-        PBHalf2 zero(0.0f), one(1.0f);
+        PBHalf2 zero(0.0f);
+        PBHalf2 one(1.0f);
         PBFloat2 bsf(bs);
 
         minB_[threadIdx.x] = min(bs, minB_[threadIdx.x]);

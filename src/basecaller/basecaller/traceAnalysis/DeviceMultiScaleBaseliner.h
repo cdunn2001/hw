@@ -77,7 +77,7 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& params, uint32_t lanesPerPool,
+    DeviceMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool,
                               Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     DeviceMultiScaleBaseliner(const DeviceMultiScaleBaseliner&) = delete;
@@ -88,7 +88,7 @@ public:
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
-    FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, lag>;
     std::unique_ptr<Filter> filter_;

@@ -283,7 +283,6 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     }
 }
 
-
 unique_ptr<Baseliner>
 AlgoFactory::CreateBaseliner(unsigned int poolId,
                              const Data::BatchDimensions& dims,
@@ -301,7 +300,6 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             return std::make_unique<DeviceMultiScaleBaseliner>(poolId,
-                                                                1.0f,
                                                                 params,
                                                                 dims.lanesPerBatch,
                                                                 &registrar);
@@ -309,9 +307,8 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
         case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
             // TODO: scaler currently set to default 1.0f
             return std::make_unique<HostMultiScaleBaseliner>(poolId,
-                                                             1.0f,
-                                                             params,
-                                                             dims.lanesPerBatch);
+                                                                params,
+                                                                dims.lanesPerBatch);
             break;
         default:
             ostringstream msg;

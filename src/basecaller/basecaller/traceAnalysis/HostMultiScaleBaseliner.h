@@ -31,14 +31,14 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& params, uint32_t lanesPerPool)
-        : Baseliner(poolId, scaler)
+    HostMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool)
+        : Baseliner(poolId)
         , latency_(params.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
-           baselinerByLane_.emplace_back(params, scaler);
+           baselinerByLane_.emplace_back(params, Scale());
        }
     }
 
@@ -51,7 +51,7 @@ public:
 private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 
 private:
 

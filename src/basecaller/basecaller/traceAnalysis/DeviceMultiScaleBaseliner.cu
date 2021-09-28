@@ -28,6 +28,7 @@
 
 #include "DeviceMultiScaleBaseliner.h"
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
 
@@ -40,17 +41,17 @@ using namespace PacBio::Cuda::Memory;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                          const Data::MovieConfig&)
+                                          const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = false;
-    Baseliner::InitFactory(hostExecution);
+    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
@@ -63,15 +64,15 @@ DeviceMultiScaleBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>
     return out;
 }
 
-DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId, float scaler, 
+DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                         const BaselinerParams& params, uint32_t lanesPerPool,
                                                         StashableAllocRegistrar* registrar)
-    : Baseliner(poolId, scaler)
+    : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
     filter_ = std::make_unique<Filter>(
         params,
-        scaler,
+        Scale(),
         lanesPerPool,
         initVal,
         SOURCE_MARKER(),

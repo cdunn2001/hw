@@ -12,14 +12,14 @@ void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
                                   const Data::MovieConfig&)
 {
     const auto hostExecution = true;
-    Baseliner::InitFactory(hostExecution);
+    Baseliner::InitFactory(hostExecution, 1.0f);
 }
 
 void HostNoOpBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-HostNoOpBaseliner::FilterBaseline_(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+HostNoOpBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
