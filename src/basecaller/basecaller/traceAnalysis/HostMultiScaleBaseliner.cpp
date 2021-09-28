@@ -1,32 +1,36 @@
-//  Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
-//  All rights reserved.
+// All rights reserved.
 //
-//  Redistribution and use in source and binary forms, with or without
-//  modification, are permitted provided that the following conditions are met:
-//  * Redistributions of source code must retain the above copyright
-//    notice, this list of conditions and the following disclaimer.
-//  * Redistributions in binary form must reproduce the above copyright
-//    notice, this list of conditions and the following disclaimer in the
-//    documentation and/or other materials provided with the distribution.
-//  * Neither the name of Pacific Biosciences nor the names of its
-//    contributors may be used to endorse or promote products derived from
-//    this software without specific prior written permission.
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
 //
-//  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
-//  THIS LICENSE.  THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS
-//  CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
-//  PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR
-//  ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-//  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-//  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
-//  BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-//  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-//  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-//  POSSIBILITY OF SUCH DAMAGE.
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+//  Defines members of class HostMultiScaleBaseliner.
 
 #include "HostMultiScaleBaseliner.h"
+
+#include <cmath>
+#include <sstream>
+
 #include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
@@ -39,11 +43,31 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+// static
+float HostMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
+
+void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
                                         const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = true;
     InitFactory(hostExecution, movConfig.photoelectronSensitivity);
+
+    {
+        const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
+        std::ostringstream msg;
+        msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
+        if (std::isnan(sigmaEmaScale) || std::signbit(sigmaEmaScale))
+        {
+            std::ostringstream exMsg;
+            exMsg << "Bad value. " << msg.str() 
+                  << ". May not be negative, -0, or NaN.";
+            throw PBException(msg.str());
+        }
+        // TODO: Use a scoped logger.
+        PBLOG_INFO << msg.str();
+        sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
+        assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
+    }
 }
 
 void HostMultiScaleBaseliner::Finalize() {}

@@ -56,6 +56,13 @@ public:
                         },
                         {"analyzerHardware"}
     ));
+    
+    // The "half-life" for the exponential moving average used to smooth
+    // the lower-upper-gap-based estimate of baseline sigma.
+    // SigmaEmaScaleStrides must be >= +0.
+    // Used by the HostMultiScale implementation.
+    // TODO: Use it in a similar way in DeviceMultiScale implementation.
+    PB_CONFIG_PARAM(float, SigmaEmaScaleStrides, 512);
 };
 
 }}}     // namespace PacBio::Mongo::Data

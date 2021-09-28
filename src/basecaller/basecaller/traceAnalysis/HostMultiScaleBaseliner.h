@@ -30,6 +30,9 @@ public:     // Static functions
 
     static void Finalize();
 
+    static float SigmaEmaAlpha()
+    { return sigmaEmaAlpha_; }
+
 public:
     HostMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool)
         : Baseliner(poolId)
@@ -52,6 +55,9 @@ private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
     FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+
+private:     // Static data
+    static float sigmaEmaAlpha_;
 
 private:
 
