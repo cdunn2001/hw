@@ -69,7 +69,6 @@ private:    // Customizable implementation
 
 private:    // Data
     uint32_t poolId_;
-    float scaler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

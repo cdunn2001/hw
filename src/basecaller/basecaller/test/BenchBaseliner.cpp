@@ -122,7 +122,7 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
     HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
-    HostMultiScaleBaseliner baseliner(0, 1.1f, blp, lanesPerPool);
+    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
 
     TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
     benchmark::DoNotOptimize(baseliner(batch)); // warm-up
@@ -145,7 +145,7 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Device)(benchmark::State& st)
     DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
-    DeviceMultiScaleBaseliner baseliner(0, 1.1f, blp, lanesPerPool);
+    DeviceMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
 
     TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
     benchmark::DoNotOptimize(baseliner(batch)); // warm-up call
