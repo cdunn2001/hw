@@ -70,8 +70,19 @@ void HostMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
-HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 {
+    const auto& rawTrace = [&]() ->decltype(auto)
+    {
+        try
+        {
+            return std::get<Mongo::Data::TraceBatch<int16_t>>(batch);
+        } catch (const std::exception&)
+        {
+            throw PBException("Basecaller currently only supports int16_t trace data");
+        }
+    }();
+
     assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
 
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());

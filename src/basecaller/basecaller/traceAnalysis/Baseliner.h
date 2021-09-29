@@ -17,6 +17,7 @@ namespace Basecaller {
 class Baseliner
 {
 public:     // Types
+    // BENTODO what to do with this ElementTypeIn?
     using ElementTypeIn = Data::RawTraceElement;
     using ElementTypeOut = Data::BaselinedTraceElement;
 
@@ -48,11 +49,12 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
-                      Data::BaselinerMetrics>
-    operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+              Data::BaselinerMetrics>
+    operator()(const Data::TraceBatchVariant& rawTrace)
     {
-        assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return FilterBaseline(rawTrace);
+        assert(std::visit([](const auto& batch) { return batch.GetMeta().PoolId(); }, rawTrace)
+               == poolId_);
+        return FilterBaseline(std::move(rawTrace));
     }
 
     float Scale() const { return movieScaler_; }
@@ -65,7 +67,7 @@ public:
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;

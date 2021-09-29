@@ -51,8 +51,18 @@ void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 {
+    const auto& rawTrace = [&]() ->decltype(auto)
+    {
+        try
+        {
+            return std::get<Mongo::Data::TraceBatch<int16_t>>(batch);
+        } catch (const std::exception&)
+        {
+            throw PBException("Basecaller currently only supports int16_t trace data");
+        }
+    }();
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
     Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());

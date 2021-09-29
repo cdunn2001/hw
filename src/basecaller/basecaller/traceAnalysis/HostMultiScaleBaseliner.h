@@ -54,7 +54,7 @@ public:
 private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
 private:     // Static data
     static float sigmaEmaAlpha_;

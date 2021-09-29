@@ -140,7 +140,7 @@ TEST(TestHostNoOpBaseliner, Run)
                                        SyncDirection::HostWriteDeviceRead,
                                        SOURCE_MARKER());
 
-                auto cameraBatch = baseliners[batchIdx](in);
+                auto cameraBatch = baseliners[batchIdx](std::move(in));
                 auto traces = std::move(cameraBatch.first);
                 auto stats = std::move(cameraBatch.second);
                 for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
@@ -230,13 +230,13 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
     {
         auto params = GetParam();
         pfConfig.generatePoisson = false;
-        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ? 
+        pfConfig.pulseIpd            = (params.pfg_pulseIpd         != -1 ?
                             params.pfg_pulseIpd          : pfConfig.pulseIpd);
-        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ? 
+        pfConfig.pulseWidth          = (params.pfg_pulseWidth       != -1 ?
                             params.pfg_pulseWidth        : pfConfig.pulseWidth);
-        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ? 
+        pfConfig.baselineSignalLevel = (params.pfg_baseSignalLevel  != -1 ?
                             params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
-        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ? 
+        pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ?
                             params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
 
         Data::MovieConfig movConfig;
@@ -300,7 +300,7 @@ TEST_P(HostMultiScaleBaselinerChunk, Chunk)
                                        SOURCE_MARKER());
 
                 // ACTION
-                auto cameraBatch = baseliners[batchIdx](in);
+                auto cameraBatch = baseliners[batchIdx](std::move(in));
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 
@@ -323,7 +323,7 @@ TEST_P(HostMultiScaleBaselinerChunk, Chunk)
                                 20)
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
-                    EXPECT_NEAR(mean/scaler, 0, 
+                    EXPECT_NEAR(mean/scaler, 0,
                                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
@@ -374,11 +374,12 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     }
 
     BatchMetadata meta(0, 0, framesPerBlock, 0);
-    TraceBatch<int16_t> in(meta, Layout2Dims(layout),
+    TraceBatch<int16_t> inRaw(meta, Layout2Dims(layout),
                         SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto li = 0 /* laneIdx */;
-    std::memcpy(in.GetBlockView(li).Data(), dataBuf.origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
+    std::memcpy(inRaw.GetBlockView(li).Data(), dataBuf.origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
+    TraceBatchVariant in{std::move(inRaw)};
 
     // ACTION
     std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;

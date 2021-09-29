@@ -175,7 +175,7 @@ TEST_P(DeviceMultiScaleBaselinerChunk, Chunk)
                                        SOURCE_MARKER());
 
                 // ACTION
-                auto cameraBatch = (*baseliners[batchIdx])(in);
+                auto cameraBatch = (*baseliners[batchIdx])(std::move(in));
 
                 if (currChunk.StartFrame() < burnInFrames) continue;
 
@@ -222,7 +222,7 @@ class DeviceMultiScaleBaselinerSmallBatch : public DeviceMultiScaleBaselinerTest
 
 TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
 {
-    // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for 
+    // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for
     // BasecallerBaselinerConfig::MethodName::TwoScaleMedium
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
@@ -250,14 +250,15 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
     }
 
     BatchMetadata meta(0, 0, framesPerBlock, 0);
-    TraceBatch<int16_t> in(meta, Layout2Dims(layout),
+    TraceBatch<int16_t> inRaw(meta, Layout2Dims(layout),
                         SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto li = 0 /* laneIdx */;
-    std::memcpy(in.GetBlockView(li).Data(), dataBuf.origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
+    std::memcpy(inRaw.GetBlockView(li).Data(), dataBuf.origin(), framesPerBlock*zmwPerBlock*sizeof(int16_t));
 
     // ACTION
     std::vector<std::pair<TraceBatch<int16_t>, BaselinerMetrics>> cameraOutput;
+    TraceBatchVariant in{std::move(inRaw)};
     cameraOutput.push_back(baseliner(in));
     cameraOutput.push_back(baseliner(in));
 
@@ -287,7 +288,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
     EXPECT_NEAR(mean/scaler,
-                0, 
+                0,
                 6 * (pfConfig.baselineSigma / std::sqrt(count)) + ((0.5f) * pfConfig.baselineSigma))
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;

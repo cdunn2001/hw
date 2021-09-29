@@ -88,7 +88,7 @@ public:
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, lag>;
     std::unique_ptr<Filter> filter_;

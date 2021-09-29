@@ -173,17 +173,6 @@ public:
     //               harder to parse in the cuda profilers.
     Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatchVariant& traceVariant) override
     {
-        const auto& in = [&]() ->decltype(auto)
-        {
-            try
-            {
-                return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
-            } catch (const std::exception&)
-            {
-                throw PBException("Basecaller currently only supports int16_t trace data");
-            }
-        }();
-
         using IOProfiler = Mongo::Basecaller::IOProfiler;
         using IOStages = Mongo::Basecaller::IOStages;
         IOProfiler profiler(IOProfiler::Mode::OBSERVE, 100, 100);
@@ -193,13 +182,16 @@ public:
         auto lockProfiler = profiler.CreateScopedProfiler(IOStages::Locks);
         (void) lockProfiler;
 
+        const auto batchMeta = std::visit([](const auto& batch) { return batch.Metadata(); },
+                                          traceVariant);
+
         {
             static std::mutex reportMutex;
             std::lock_guard<std::mutex> lm(reportMutex);
 
-            if (in.Metadata().FirstFrame() < currFrame_)
+            if (batchMeta.FirstFrame() < currFrame_)
                 throw PBException("Received an out-of-order batch");
-            if (in.Metadata().FirstFrame() > currFrame_ && measurePCIeBandwidth_)
+            if (batchMeta.FirstFrame() > currFrame_ && measurePCIeBandwidth_)
             {
                 // These shouldn't be able to trigger unless there is an outright bug
                 // in the timing code. These variables are in units of miliseconds, but
@@ -218,7 +210,7 @@ public:
                 PBLOG_INFO << "Downloaded " << gbDownload
                            << "GiB from GPU in " << secDownload << "s (" << gbDownload/secDownload << "GiB/s)";
 
-                currFrame_ = in.Metadata().FirstFrame();
+                currFrame_ = batchMeta.FirstFrame();
                 bytesUploaded_ = 0;
                 bytesDownloaded_ = 0;
                 msUpload = 0.0;
@@ -236,7 +228,7 @@ public:
             streams_->Push(std::move(threadStream));
         });
         auto finally2 = threadStream->SetAsDefaultStream();
-        auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
+        auto& analyzer = *bAnalyzer_.at(batchMeta.PoolId());
 
         {
             static std::mutex uploadMutex;
@@ -254,17 +246,18 @@ public:
             //      can break this.
             if (measurePCIeBandwidth_)
             {
-                bytesUploaded_ += in.CopyToDevice();
+                bytesUploaded_ += std::visit([](const auto& batch) { return batch.CopyToDevice();},
+                                             traceVariant);
                 Cuda::CudaSynchronizeDefaultStream();
             }
-            bytesUploaded_ += gpuStash->RetrievePool(in.GetMeta().PoolId());
+            bytesUploaded_ += gpuStash->RetrievePool(batchMeta.PoolId());
             msUpload += timer.GetElapsedMilliseconds();
         }
 
         auto ret = [&](){
             auto computeProfiler = profiler.CreateScopedProfiler(IOStages::Compute);
             (void) computeProfiler;
-            return analyzer(std::move(in));
+            return analyzer(traceVariant);
         }();
 
         {
@@ -276,7 +269,7 @@ public:
 
             PacBio::Dev::Profile::FastTimer timer;
             bytesDownloaded_ += ret.DeactivateGpuMem();
-            bytesDownloaded_ += gpuStash->StashPool(in.GetMeta().PoolId());
+            bytesDownloaded_ += gpuStash->StashPool(batchMeta.PoolId());
             msDownload += timer.GetElapsedMilliseconds();
         }
         return ret;

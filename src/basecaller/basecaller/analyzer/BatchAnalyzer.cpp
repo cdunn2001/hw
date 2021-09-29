@@ -147,10 +147,14 @@ FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
 }
 
 
-BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(const InputType& batchVariant)
 {
-    PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
-    PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
+    const auto lastFrame = std::visit([&](const auto& batch)
+    {
+        PBAssert(batch.Metadata().PoolId() == poolId_, "Bad pool ID.");
+        PBAssert(batch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
+        return batch.Metadata().LastFrame();
+    }, batchVariant);
 
     if (Cuda::StreamErrorCount() > 0)
     {
@@ -158,28 +162,30 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& t
             + std::to_string(Cuda::StreamErrorCount()));
     }
 
-    auto ret = AnalyzeImpl(tbatch);
+    auto ret = AnalyzeImpl(batchVariant);
 
     if (Cuda::StreamErrorCount() > 0)
     {
         throw PBException("Unexpected stream synchronization issue(s) was detected after TraceBatch analysis. StreamErrorCount="
             + std::to_string(Cuda::StreamErrorCount()));
     }
-    nextFrameId_ = tbatch.Metadata().LastFrame();
+    nextFrameId_ = lastFrame;
 
     return ret;
 }
 
-BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const InputType& batchVariant)
 {
-    auto mode = AnalysisProfiler::Mode::REPORT;
-    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*10+1) mode = AnalysisProfiler::Mode::OBSERVE;
-    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*2+1)  mode = AnalysisProfiler::Mode::IGNORE;
-    AnalysisProfiler profiler(mode, 3.0, 100.0);
+    AnalysisProfiler profiler = std::visit([](const auto& batch) {
+        auto mode = AnalysisProfiler::Mode::REPORT;
+        if (batch.Metadata().FirstFrame() < batch.NumFrames()*10+1) mode = AnalysisProfiler::Mode::OBSERVE;
+        if (batch.Metadata().FirstFrame() < batch.NumFrames()*2+1)  mode = AnalysisProfiler::Mode::IGNORE;
+        return AnalysisProfiler(mode, 3.0, 100.0);
+    }, batchVariant);
 
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
+    auto baselinedTracesAndMetrics = (*baseliner_)(batchVariant);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
@@ -204,27 +210,31 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
-BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const InputType& batchVariant)
 {
-    auto mode = AnalysisProfiler::Mode::IGNORE;
-    if (isModelInitialized_)
-    {
-        auto framesSince = tbatch.Metadata().FirstFrame() - firstFrameWithEstimates_;
-        if (framesSince > tbatch.NumFrames()*2)  mode = AnalysisProfiler::Mode::OBSERVE;
-        if (framesSince > tbatch.NumFrames()*10) mode = AnalysisProfiler::Mode::REPORT;
-    }
-    AnalysisProfiler profiler(mode, 3.0, 100.0);
+    AnalysisProfiler profiler = std::visit([&](const auto& batch) {
+        auto mode = AnalysisProfiler::Mode::IGNORE;
+        if (isModelInitialized_)
+        {
+            auto framesSince = batch.Metadata().FirstFrame() - firstFrameWithEstimates_;
+            if (framesSince > batch.NumFrames()*2)  mode = AnalysisProfiler::Mode::OBSERVE;
+            if (framesSince > batch.NumFrames()*10) mode = AnalysisProfiler::Mode::REPORT;
+        }
+       return AnalysisProfiler(mode, 3.0, 100.0);
+    }, batchVariant);
 
     // Baseline estimation and subtraction.
     // Includes computing baseline moments.
     assert(baseliner_);
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
+    auto baselinedTracesAndMetrics = (*baseliner_)(batchVariant);
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
-    if (!isModelInitialized_ && tbatch.GetMeta().FirstFrame() > baseliner_->StartupLatency())
+    const auto firstFrame = std::visit([](const auto& batch) { return batch.GetMeta().FirstFrame(); },
+                                       batchVariant);
+    if (!isModelInitialized_ && firstFrame > baseliner_->StartupLatency())
     {
         // Run data through the DME until we get our first real estimate, at which point we
         // stop using the DME and just keep that model forever.
@@ -286,7 +296,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
 // WiP: Prototype for analysis that supports slowly varying detection
 // model parameters.
 BatchAnalyzer::OutputType
-DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
+DynamicEstimateBatchAnalyzer::AnalyzeImpl(const InputType& tbatch)
 {
     assert(baseliner_);
     static const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();
@@ -295,9 +305,10 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // Minimum number of frames needed for estimating the detection model.
     static const auto minFramesForDme = DetectionModelEstimator::MinFramesForEstimate();
 
+    const auto numFrames = std::visit([](const auto& batch) { return batch.NumFrames();},
+                                      tbatch);
     auto roundToChunkMultiple = [&](size_t val)
     {
-        auto numFrames = tbatch.NumFrames();
         return (val + numFrames - 1) / numFrames * numFrames;
     };
     // We want to avoid intial transient phases before profiling.
@@ -309,9 +320,11 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
           roundToChunkMultiple(nFramesBaselinerStartUp)
         + roundToChunkMultiple(nFramesDmeStartUp);
     auto mode = AnalysisProfiler::Mode::IGNORE;
-    if (tbatch.Metadata().FirstFrame() > startupLatency)
+    const auto& meta = std::visit([](const auto& batch) { return batch.GetMeta(); },
+                                  tbatch);
+    if (meta.FirstFrame() > startupLatency)
     {
-        auto framesSince = tbatch.Metadata().FirstFrame() - startupLatency;
+        auto framesSince = meta.FirstFrame() - startupLatency;
         if (framesSince > 2*minFramesForDme)  mode = AnalysisProfiler::Mode::OBSERVE;
         if (framesSince > 10*minFramesForDme) mode = AnalysisProfiler::Mode::REPORT;
     }
