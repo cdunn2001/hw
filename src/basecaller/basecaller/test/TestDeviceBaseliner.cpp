@@ -283,7 +283,7 @@ TEST_P(DeviceMultiScaleBaselinerSmallBatch, OneBatch)
     auto count = trCount[pi]; auto mean = mfMean[pi]; auto var = trVar[pi];
     EXPECT_NEAR(count,
                 (batchConfig.framesPerChunk / (pfConfig.pulseIpd + pfConfig.pulseWidth)) * pfConfig.pulseIpd,
-                20)
+                40)
                 << "poolId=" << meta.PoolId() << " zmw=" << meta.FirstZmw()
                 << " laneIdx=" << laneIdx << " startframe=" << meta.FirstFrame() << std::endl;
     EXPECT_NEAR(mean/scaler,
