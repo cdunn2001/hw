@@ -126,7 +126,7 @@ public:
         // correctly if not using trace file input
         config_.source.Visit(
             [&](const auto& traceConfig) {
-                const std::string& traceFile= traceConfig.traceFile;
+                const std::string& traceFile = traceConfig.traceFile;
                 PBLOG_INFO << "Input Target: " << traceFile;
                 MetaDataFromTraceFileSource(traceFile);
                 GroundTruthFromTraceFileSource(traceFile);
@@ -744,8 +744,8 @@ int main(int argc, char* argv[])
         parser.epilog("");
 
         parser.add_option("--config").action_append().help("Loads JSON configuration file, JSON string or Boost ptree value");
-        parser.add_option("--strict").action_store_true().help("Strictly check all configuration options. Do not allow unrecognized configuration options");
-        parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace and exits");
+        parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace and exits (before validation)");
+        parser.add_option("--validateconfig").action_store_true().help("Validates the supplied configuration settings and exits.");
 
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
@@ -763,16 +763,20 @@ int main(int argc, char* argv[])
         Json::Value json = MergeConfigs(options.all("config"));
         PBLOG_DEBUG << json; // this does NOT work with --showconfig
         SmrtBasecallerConfig configs(json);
+        if (options.get("showconfig"))
+        {
+            std::cout << configs.Serialize() << std::endl;
+            return 0;
+        }
+
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
         {
             validation.PrintErrors();
             throw PBException("Json validation failed");
         }
-
-        if (options.get("showconfig"))
+        if (options.get("validateconfig"))
         {
-            std::cout << configs.Serialize() << std::endl;
             return 0;
         }
 
