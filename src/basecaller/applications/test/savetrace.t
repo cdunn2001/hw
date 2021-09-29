@@ -1,7 +1,7 @@
   $ TRCOUT=${CRAMTMP}/out.trc.h5
   $ TRCIN=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'"}' \
-  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192,64]] > /dev/null
+  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192,64]] > /dev/null 2>&1
 
 # The original trace had 256 ZMW, but we only selected 192 via the ROI
   $ h5ls ${TRCOUT}/TraceData
@@ -76,7 +76,7 @@
 # Read the input trace file as 8 bit even though it really is 16.
 # This will force saturation for values out of bounds
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'", "inputType":"UINT8"}' \
-  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192]] > /dev/null
+  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192]] > /dev/null 2>&1
 
   $ h5ls ${TRCOUT}/TraceData
   HoleNumber               Dataset {192}
@@ -133,7 +133,7 @@
 # should now look identical to the last, save for the data type specified in
 # the output trace file
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'", "inputType":"UINT8"}' \
-  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver='{ "roi" : [[0,127],[192]], "outFormat":"INT16"}' > /dev/null
+  > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver='{ "roi" : [[0,127],[192]], "outFormat":"INT16"}' > /dev/null 2>&1
 
   $ h5ls ${TRCOUT}/TraceData
   HoleNumber               Dataset {192}
