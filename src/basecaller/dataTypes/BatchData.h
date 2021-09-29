@@ -31,6 +31,7 @@
 
 #include <pacbio/datasource/SensorPacket.h>
 
+#include "common/cuda/utility/CudaArray.h"
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray_fwd.h>
@@ -156,11 +157,26 @@ public:
             return ret-=v;
         }
 
-        LaneArray<T, laneSize> Extract() const
+        // Need to put in a special hook to handle 8 bit data.
+        // If that happens we'll automagically fall back to
+        // expanding the data and producing int16_t.  The
+        // alternative is expanding the LaneArray code to handle
+        // 8 bit data, which is not an easy proposition
+        template <typename U = T, typename F = int16_t>
+        auto Extract() const
         {
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
-            return LaneArray<T, laneSize>(MemoryRange<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            if constexpr(std::is_same_v<U, uint8_t>)
+            {
+                Cuda::Utility::CudaArray<F, laneSize> tmp;
+                std::copy(ptr_ + curFrame_ * laneWidth_,
+                          ptr_ + curFrame_ * laneWidth_ + laneSize,
+                          tmp.data());
+                return LaneArray<F, laneSize>{tmp};
+            } else {
+                return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            }
         }
 
         void Store(const LaneArray<T, laneSize>& lane)
@@ -262,11 +278,26 @@ public:
             return ret-=v;
         }
 
-        ValueType Extract() const
+        // Need to put in a special hook to handle 8 bit data.
+        // If that happens we'll automagically fall back to
+        // expanding the data and producing int16_t.  The
+        // alternative is expanding the LaneArray code to handle
+        // 8 bit data, which is not an easy proposition
+        template <typename U = std::remove_const_t<T>, typename F = int16_t>
+        auto Extract() const
         {
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
-            return ValueType(MemoryRange<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            if constexpr(std::is_same_v<U, uint8_t>)
+            {
+                Cuda::Utility::CudaArray<F, laneSize> tmp;
+                std::copy(ptr_ + curFrame_ * laneWidth_,
+                          ptr_ + curFrame_ * laneWidth_ + laneSize,
+                          tmp.data());
+                return LaneArray<F, laneSize>{tmp};
+            } else {
+                return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            }
         }
 
     private:

@@ -80,7 +80,8 @@ private:
     public:
         size_t Stride() const { return stride_; }
 
-        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
+        template <typename T>
+        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const T>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,
                                                                         Data::BlockView<ElementTypeIn> upperBuffer,
                                                                         Data::BlockView<ElementTypeOut> baselineSubtractedData);
