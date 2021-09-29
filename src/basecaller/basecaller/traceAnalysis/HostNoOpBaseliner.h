@@ -39,7 +39,7 @@ public:
 
 private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

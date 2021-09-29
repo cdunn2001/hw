@@ -4,7 +4,6 @@
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/GeneratorBase.h>
-#include <common/cuda/memory/UnifiedCudaArray.h>
 
 #include <vector_types.h>
 

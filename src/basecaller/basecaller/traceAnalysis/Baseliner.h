@@ -30,17 +30,17 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
-    static void InitFactory(bool hostExecution);
+    static void InitFactory(bool hostExecution, float movieScaler);
 
     static void Finalize();
 
 protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
+    static float movieScaler_;
 
 public:
-    Baseliner(uint32_t poolId, float scaler = 1.0f)
+    Baseliner(uint32_t poolId)
         : poolId_(poolId)
-        , scaler_(scaler)
     { }
     virtual ~Baseliner() = default;
 
@@ -48,14 +48,14 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
-              Data::BaselinerMetrics>
+                      Data::BaselinerMetrics>
     operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
     {
         assert(rawTrace.GetMeta().PoolId() == poolId_);
-        return Process(std::move(rawTrace));
+        return FilterBaseline(rawTrace);
     }
 
-    float Scale() const { return scaler_; }
+    float Scale() const { return movieScaler_; }
 
     // Will indicate the number of frames that are input
     // before all startup transients are flushed.  Data
@@ -65,11 +65,10 @@ public:
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;
-    float scaler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

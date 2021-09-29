@@ -23,7 +23,7 @@ public:
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
     using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
 
-public:
+public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig&,
                           const Data::MovieConfig&);
 
@@ -31,14 +31,14 @@ public:
     static void Finalize();
 
 public:
-    HostMultiScaleBaseliner(uint32_t poolId, float scaler, const BaselinerParams& config, uint32_t lanesPerPool)
-        : Baseliner(poolId, scaler)
-        , latency_(config.LatentSize())
+    HostMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool)
+        : Baseliner(poolId)
+        , latency_(params.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
-           baselinerByLane_.emplace_back(config, scaler);
+           baselinerByLane_.emplace_back(params, Scale());
        }
     }
 
@@ -51,19 +51,19 @@ public:
 private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 
 private:
 
     class MultiScaleBaseliner
     {
     public:
-        MultiScaleBaseliner(const BaselinerParams& config, float scaler)
-            : msLowerOpen_(config.Strides(), config.Widths())
-            , msUpperOpen_(config.Strides(), config.Widths())
-            , stride_(config.AggregateStride())
-            , cSigmaBias_{config.SigmaBias()}
-            , cMeanBias_{config.MeanBias()}
+        MultiScaleBaseliner(const BaselinerParams& params, float scaler)
+            : msLowerOpen_(params.Strides(), params.Widths())
+            , msUpperOpen_(params.Strides(), params.Widths())
+            , stride_(params.AggregateStride())
+            , cSigmaBias_{params.SigmaBias()}
+            , cMeanBias_{params.MeanBias()}
             , scaler_(scaler)
         { }
 
@@ -73,8 +73,6 @@ private:
 
     public:
         size_t Stride() const { return stride_; }
-
-        float Scale() const { return scaler_; }
 
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
                                                                         Data::BlockView<ElementTypeIn> lowerBuffer,
@@ -158,7 +156,7 @@ private:
         const size_t stride_;
         const FloatArray cSigmaBias_;
         const FloatArray cMeanBias_;
-        float scaler_;
+        float scaler_;  // Converts DN quantization to e- values
 
         FloatArray bgSigma_{0};
         LaneArray latData_{0};

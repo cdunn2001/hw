@@ -41,10 +41,18 @@ __device__ T Blend(bool tf, const T& a, const T& b)
 
 inline __device__ PBHalf2 Blend(PBBool2 cond, PBHalf2 l, PBHalf2 r)
 {
-    half zero = __float2half(0.0f);
-    half low =  (__low2half(cond.data())  == zero) ? __low2half(r.data())  : __low2half(l.data());
-    half high = (__high2half(cond.data()) == zero) ? __high2half(r.data()) : __high2half(l.data());
+    half zero  = __float2half(0.0f);
+    half low   = (__low2half(cond.data())  == zero) ? __low2half(r.data())  : __low2half(l.data());
+    half high  = (__high2half(cond.data()) == zero) ? __high2half(r.data()) : __high2half(l.data());
     return PBHalf2(__halves2half2(low, high));
+}
+
+inline __device__ PBFloat2 Blend(PBBool2 cond, PBFloat2 l, PBFloat2 r)
+{
+    half zero  = __float2half(0.0f);
+    float low  = (__low2half(cond.data())  == zero) ? r.X() : l.X();
+    float high = (__high2half(cond.data()) == zero) ? r.Y() : l.Y();
+    return PBFloat2(low, high);
 }
 
 inline __device__ PBFloat2 Blend(PBShort2 cond, PBFloat2 l, PBFloat2 r)

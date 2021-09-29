@@ -165,6 +165,7 @@ void RunMultipleBaselineFilter(
     dims.framesPerBatch = dataParams.blockLength;
     dims.lanesPerBatch = dataParams.kernelLanes;
 
+    float scale = 1.0f;
     std::vector<BatchData<int16_t>> work1;
     std::vector<BatchData<int16_t>> work2;
     std::vector<Filter2> filters;
@@ -176,9 +177,10 @@ void RunMultipleBaselineFilter(
         using namespace PacBio::Mongo::Basecaller;
         using namespace PacBio::Mongo::Data;
         filters.emplace_back(FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium),
-                             SOURCE_MARKER(),
+                             scale,
                              dataParams.kernelLanes,
-                             0);
+                             0,
+                             SOURCE_MARKER());
     }
 
     auto tmp = [dataParams, &work1, &work2, &filters, &full]

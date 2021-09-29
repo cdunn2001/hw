@@ -176,8 +176,8 @@ public:
         float pulseWidthRate = 0.2f;
         float pulseIpdRate = 0.1f;
         // Mean/sigma of the baseline noise
-        short baselineSignalLevel = 200;
-        short baselineSigma = 20;
+        int16_t baselineSignalLevel = 200;
+        int16_t baselineSigma = 20;
         // Pulse amplitudes, should be 1 or 4 elements long
         std::vector<short> pulseSignalLevels = { 200 };
         // Optional function controlling rng seed.  Input will be the

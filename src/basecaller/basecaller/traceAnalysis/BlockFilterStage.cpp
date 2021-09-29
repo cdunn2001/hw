@@ -12,10 +12,10 @@ Data::BlockView<T>* BlockFilterStage<T, Filter>::operator()(Data::BlockView<T>* 
     Data::BlockView<T>& input = *pInput;
     Data::BlockView<T>& output = input;
 
-    auto filterRangeStart = input.CBegin();
-    auto filterRangeEnd = input.CBegin();
     assert (pInput->NumFrames() > 0);
-    filterRangeEnd += pInput->NumFrames() / nf_;
+
+    auto filterRangeStart = input.CBegin();
+    auto filterRangeEnd   = input.CBegin() + pInput->NumFrames() / nf_; 
 
     // Run the filter on the available range of input data.
     // The filter runs in-place, and the buffer stays in use.

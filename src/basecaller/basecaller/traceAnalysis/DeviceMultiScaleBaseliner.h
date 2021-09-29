@@ -74,22 +74,21 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig&,
                           const Data::MovieConfig&);
 
-
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId, uint32_t lanesPerPool,
-                              const BaselinerParams& params,
+    DeviceMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool,
                               Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
+    DeviceMultiScaleBaseliner(const DeviceMultiScaleBaseliner&) = delete;
+    DeviceMultiScaleBaseliner(DeviceMultiScaleBaseliner&&) = default;
     ~DeviceMultiScaleBaseliner() override;
 
     size_t StartupLatency() const override { return startupLatency_; }
 
 private:    // Customizable implementation
-    std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
-              Data::BaselinerMetrics>
-    Process(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
+    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
 
     using Filter = Cuda::ComposedFilter<laneSize/2, lag>;
     std::unique_ptr<Filter> filter_;

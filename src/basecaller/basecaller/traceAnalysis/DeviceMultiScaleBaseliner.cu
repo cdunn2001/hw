@@ -26,8 +26,9 @@
 //  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 //  POSSIBILITY OF SUCH DAMAGE.
 
-#include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
+#include "DeviceMultiScaleBaseliner.h"
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
+#include <dataTypes/configs/MovieConfig.h>
 
 #include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
 
@@ -40,17 +41,17 @@ using namespace PacBio::Cuda::Memory;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                          const Data::MovieConfig&)
+                                          const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = false;
-    Baseliner::InitFactory(hostExecution);
+    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
 {
     auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
@@ -64,20 +65,20 @@ DeviceMultiScaleBaseliner::Process(const Data::TraceBatch<ElementTypeIn>& rawTra
 }
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
-                                                     uint32_t lanesPerPool,
-                                                     const BaselinerParams& params,
-                                                     StashableAllocRegistrar* registrar)
+                                                        const BaselinerParams& params, uint32_t lanesPerPool,
+                                                        StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
     filter_ = std::make_unique<Filter>(
         params,
-        SOURCE_MARKER(),
+        Scale(),
         lanesPerPool,
         initVal,
+        SOURCE_MARKER(),
         registrar);
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;
 
-}}}
+}}}      // namespace PacBio::Mongo::Basecaller

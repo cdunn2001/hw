@@ -262,12 +262,10 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
     {
         std::uniform_int_distribution<> rng(0, config_.pulseSignalLevels.size() - 1);
         auto pulseLevel = config_.pulseSignalLevels[rng(gen)] - config_.baselineSignalLevel;
-        std::vector<short> baselineSignal = GetBaselineSignal(frames);
-
-        std::vector<short> pulseSignal;
+        auto pulseSignal = GetBaselineSignal(frames);
         for (size_t f = 0; f < frames; ++f)
         {
-            pulseSignal.push_back(baselineSignal[f] + pulseLevel + config_.pedestal);
+            pulseSignal[f] += pulseLevel + config_.pedestal;
         }
         return pulseSignal;
     };
@@ -298,24 +296,19 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
         }
     };
 
-    std::vector<int16_t> signal;
-
     size_t frame = 0;
+    std::vector<int16_t> signal; signal.reserve(numFrames);
     while (frame < numFrames)
     {
-        // Generate IPD followed by PW.
-        uint16_t pulseIpd = GetPulseIpd();
-        uint16_t nIpdFrames = std::min(numFrames - frame, static_cast<size_t>(pulseIpd));
-        std::vector<short> baselineSignal = GetBaselineSignal(pulseIpd);
-        signal.insert(std::end(signal), std::begin(baselineSignal),
-                      std::begin(baselineSignal) + nIpdFrames);
+        // Generate IPD followed by PW
+        uint16_t nIpdFrames = std::min<size_t>(numFrames - frame, GetPulseIpd());
+        std::vector<short> baselineSignal = GetBaselineSignal(nIpdFrames);
+        signal.insert(signal.end(), baselineSignal.begin(), baselineSignal.end());
         frame += nIpdFrames;
 
-        uint16_t pulseWidth = GetPulseWidth();
-        uint16_t nPwFrames = std::min(numFrames - frame, static_cast<size_t>(pulseWidth));
-        std::vector<short> pulseSignal = GetPulseSignal(pulseWidth);
-        signal.insert(std::end(signal), std::begin(pulseSignal),
-                           std::begin(pulseSignal) + nPwFrames);
+        uint16_t nPwFrames = std::min<size_t>(numFrames - frame, GetPulseWidth());
+        std::vector<short> pulseSignal = GetPulseSignal(nPwFrames);
+        signal.insert(signal.end(), pulseSignal.begin(), pulseSignal.end());
         frame += nPwFrames;
     }
     assert(signal.size() == numFrames);
