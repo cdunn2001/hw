@@ -224,6 +224,8 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
     const size_t burnIn = 10;
     size_t burnInFrames;
 
+    PacBio::Logging::LogSeverityContext logLevelRaii {PacBio::Logging::LogLevel::NOTICE};
+
     void SetUp() override
     {
         auto params = GetParam();
