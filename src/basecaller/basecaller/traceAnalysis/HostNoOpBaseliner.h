@@ -13,7 +13,6 @@ class HostNoOpBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeIn = Parent::ElementTypeIn;
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;

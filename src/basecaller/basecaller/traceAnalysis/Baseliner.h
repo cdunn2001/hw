@@ -17,8 +17,6 @@ namespace Basecaller {
 class Baseliner
 {
 public:     // Types
-    // BENTODO what to do with this ElementTypeIn?
-    using ElementTypeIn = Data::RawTraceElement;
     using ElementTypeOut = Data::BaselinedTraceElement;
 
 public:     // Static functions

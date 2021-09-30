@@ -45,9 +45,6 @@ template <typename T>
 class TraceBatch : public BatchData<T>
 {
 public:
-    // BENTODO cleanup
-    using DataType = T;
-public:
     TraceBatch(DataSource::SensorPacket packet,
                const BatchMetadata& meta,
                const BatchDimensions& dims,

@@ -178,14 +178,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
                                 batch.StorageDims(),
                                 SyncDirection::HostReadDeviceWrite,
                                 SOURCE_MARKER());
-        BatchData<int16_t> work1(batch.StorageDims(),
-                                 SyncDirection::HostReadDeviceWrite,
-                                 SOURCE_MARKER());
-        BatchData<int16_t> work2(batch.StorageDims(),
-                                 SyncDirection::HostReadDeviceWrite,
-                                 SOURCE_MARKER());
 
-        // BENTODO clean
         const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
                                         batch.LanesPerBatch(),
                                         gpuBlockThreads);
@@ -193,7 +186,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
                filterRefData[batchIdx],
                truth);
 
-        filterData[batchIdx].RunComposedFilter(std::move(batch), out, work1, work2);
+        filterData[batchIdx].RunComposedFilter(std::move(batch), out);
 
         for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
         {

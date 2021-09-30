@@ -55,29 +55,42 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrac
 {
     auto out = batchFactory_->NewBatch(rawTrace.Metadata(), rawTrace.StorageDims());
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats);
 
-    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
-
-    Cuda::CudaSynchronizeDefaultStream();
     return out;
 }
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      const BaselinerParams& params,
                                                      uint32_t lanesPerPool,
+                                                     EncodingFormat expectedEncoding,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
-    filter_ = std::make_unique<Filter>(
-        params,
-        Scale(),
-        lanesPerPool,
-        initVal,
-        SOURCE_MARKER(),
-        registrar);
+    switch (expectedEncoding)
+    {
+    case DataSource::PacketLayout::EncodingFormat::UINT8:
+        filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, uint8_t>>(
+            params,
+            Scale(),
+            lanesPerPool,
+            initVal,
+            SOURCE_MARKER(),
+            registrar);
+        break;
+    case DataSource::PacketLayout::EncodingFormat::INT16:
+        filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, int16_t>>(
+            params,
+            Scale(),
+            lanesPerPool,
+            initVal,
+            SOURCE_MARKER(),
+            registrar);
+        break;
+    default:
+        throw PBException("Unexpected data encoding in device baseline filter");
+    }
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;

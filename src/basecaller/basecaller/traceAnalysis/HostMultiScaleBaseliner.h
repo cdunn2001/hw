@@ -17,7 +17,6 @@ class HostMultiScaleBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeIn = Parent::ElementTypeIn;
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
@@ -82,8 +81,8 @@ private:
 
         template <typename T>
         Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const T>& traceData,
-                                                                        Data::BlockView<ElementTypeIn> lowerBuffer,
-                                                                        Data::BlockView<ElementTypeIn> upperBuffer,
+                                                                        Data::BlockView<ElementTypeOut> lowerBuffer,
+                                                                        Data::BlockView<ElementTypeOut> upperBuffer,
                                                                         Data::BlockView<ElementTypeOut> baselineSubtractedData);
 
         void AddToBaselineStats(const LaneArray& traceData,
@@ -157,8 +156,8 @@ private:
         };  // MultiStageFilter
 
     private:
-        MultiStageFilter<ElementTypeIn, FilterType::Lower> msLowerOpen_;
-        MultiStageFilter<ElementTypeIn, FilterType::Upper> msUpperOpen_;
+        MultiStageFilter<ElementTypeOut, FilterType::Lower> msLowerOpen_;
+        MultiStageFilter<ElementTypeOut, FilterType::Upper> msUpperOpen_;
 
         const size_t stride_;
         const FloatArray cSigmaBias_;

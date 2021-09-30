@@ -44,7 +44,8 @@ public:     // Static functions
 
 public:     // Structors and assignment
     // TODO: Should constructor handling configuration?
-    AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig);
+    AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig,
+                DataSource::PacketLayout::EncodingFormat expectedEncoding);
 
     ~AlgoFactory();
 
@@ -95,6 +96,8 @@ private:
     Data::BasecallerDmeConfig::MethodName dmeOpt_;
     Data::BasecallerPulseAccumConfig::MethodName pulseAccumOpt_;
     Data::BasecallerMetricsConfig::MethodName hfMetricsOpt_;
+
+    DataSource::PacketLayout::EncodingFormat expectedEncoding_;
 
     // TODO: Add enums for other strategy options as needed.
 };

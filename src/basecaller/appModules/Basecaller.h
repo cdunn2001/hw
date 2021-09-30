@@ -56,9 +56,10 @@ public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
                    const Mongo::Data::MovieConfig& movConfig,
-                   const Mongo::Data::SystemsConfig& sysConfig)
+                   const Mongo::Data::SystemsConfig& sysConfig,
+                   DataSource::PacketLayout::EncodingFormat expectedEncoding)
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
-        , algoFactory_(algoConfig)
+        , algoFactory_(algoConfig, expectedEncoding)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
         , measurePCIeBandwidth_(sysConfig.analyzerHardware != Mongo::Basecaller::ComputeDevices::Host)
         , numStreams_(sysConfig.basecallerConcurrency)

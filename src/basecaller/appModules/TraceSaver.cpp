@@ -71,7 +71,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
     auto writeTraces = [&](const auto& traceBatch)
     {
-        using T = typename std::remove_reference_t<decltype(traceBatch)>::DataType;
+        using T = typename std::remove_reference_t<decltype(traceBatch)>::HostType;
 
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();
         const auto frameOffset = traceBatch.Metadata().FirstFrame();

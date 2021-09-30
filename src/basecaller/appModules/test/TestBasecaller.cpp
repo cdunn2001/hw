@@ -67,7 +67,9 @@ TEST(TestBasecaller, CheckMetadata)
 
     Data::MovieConfig movConfig = Data::MockMovieConfig();
 
-    auto basecaller = Application::BasecallerBody(dimMap, algoConfig, movConfig, config.system);
+    auto basecaller = Application::BasecallerBody(dimMap, algoConfig,
+                                                  movConfig, config.system,
+                                                  DataSource::PacketLayout::INT16);
 
     vector<Data::TraceBatchVariant> chunk;
     vector<Data::BatchMetadata> bmdVec;

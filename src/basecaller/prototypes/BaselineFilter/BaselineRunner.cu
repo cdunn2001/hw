@@ -166,14 +166,10 @@ void RunMultipleBaselineFilter(
     dims.lanesPerBatch = dataParams.kernelLanes;
 
     float scale = 1.0f;
-    std::vector<BatchData<int16_t>> work1;
-    std::vector<BatchData<int16_t>> work2;
     std::vector<Filter2> filters;
     filters.reserve(dataParams.numZmwLanes / dataParams.kernelLanes);
     for (size_t i = 0; i < dataParams.numZmwLanes / dataParams.kernelLanes; ++i)
     {
-        work1.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-        work2.emplace_back(dims, SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
         using namespace PacBio::Mongo::Basecaller;
         using namespace PacBio::Mongo::Data;
         filters.emplace_back(FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium),
@@ -183,11 +179,10 @@ void RunMultipleBaselineFilter(
                              SOURCE_MARKER());
     }
 
-    // BENTODO cleanup
-    auto tmp = [dataParams, &work1, &work2, &filters, &full]
+    auto tmp = [dataParams, &filters, &full]
         (TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
 
-        filters[batchIdx].RunComposedFilter(std::move(batch), ret, work1[batchIdx], work2[batchIdx]);
+        filters[batchIdx].RunComposedFilter(std::move(batch), ret);
         ret.DeactivateGpuMem();
     };
 

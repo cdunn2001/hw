@@ -79,9 +79,9 @@ HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
         auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
         // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
-        Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
+        Data::BatchData<ElementTypeOut> lowerBuffer(rawTrace.StorageDims(),
                                                    Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
-        Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
+        Data::BatchData<ElementTypeOut> upperBuffer(rawTrace.StorageDims(),
                                                    Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
         auto statsView = out.second.baselinerStats.GetHostView();
@@ -104,8 +104,8 @@ HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 template <typename T>
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
 HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<const T>& traceData,
-                                                               Data::BlockView<ElementTypeIn> lowerBuffer,
-                                                               Data::BlockView<ElementTypeIn> upperBuffer,
+                                                               Data::BlockView<ElementTypeOut> lowerBuffer,
+                                                               Data::BlockView<ElementTypeOut> upperBuffer,
                                                                Data::BlockView<ElementTypeOut> baselineSubtractedData)
 {
     assert(traceData.NumFrames() == lowerBuffer.NumFrames());

@@ -205,6 +205,15 @@ inline __device__ PBShort2 max(PBShort2 l, PBShort2 r)
     return PBShort2::FromRaw(__vmaxs2(l.data(), r.data()));
 }
 
+inline __device__ PBUChar4 min(PBUChar4 l, PBUChar4 r)
+{
+    return PBUChar4::FromRaw(__vminu4(l.data(), r.data()));
+}
+inline __device__ PBUChar4 max(PBUChar4 l, PBUChar4 r)
+{
+    return PBUChar4::FromRaw(__vmaxu4(l.data(), r.data()));
+}
+
 }}
 
 #endif //PACBIO_CUDA_SIMD_CUH

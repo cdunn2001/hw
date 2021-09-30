@@ -42,7 +42,6 @@ namespace Cuda {
 // have a proper wrapper type like PBHalf2, or need to stub in third
 // part half precision float for the host.
 using PBHalf = half;
-using PBUint8 = uchar2;
 
 class PBShort2
 {
@@ -61,7 +60,6 @@ public:
         // after the promotion to full width.
         : data_{ (static_cast<uint32_t>(s1) & xmask ) | (static_cast<uint32_t>(s2) << yshift) }
     {}
-    CUDA_ENABLED PBShort2(PBUint8 u) : PBShort2(u.x, u.y) {};
 
 private:
     // We need to be able to construct from a raw uint32_t, to capture the return from various
@@ -101,6 +99,65 @@ private:
     uint32_t data_;
 };
 
+// This class currently is only meant for the baseline filter
+// min/max operations, so this type has very limited
+// functionality.  Don't be shy to add a more complete set
+// of functions if this class gains broader usage
+class PBUChar4
+{
+    static constexpr uint32_t highmask = 0xFFFF0000;
+    static constexpr uint32_t lowmask = 0x0000FFFF;
+    static constexpr uint32_t mask1 = 0x000000FF;
+    static constexpr uint32_t mask2 = 0x0000FF00;
+    static constexpr uint32_t mask3 = 0x00FF0000;
+    static constexpr uint32_t mask4 = 0xFF000000;
+
+    static constexpr uint32_t highshift = 0x10;
+    static constexpr uint32_t shift2 = 0x8;
+    static constexpr uint32_t shift3 = 0x10;
+    static constexpr uint32_t shift4 = 0x18;
+
+public:
+    PBUChar4() = default;
+private:
+    // We need to be able to construct from a raw uint32_t, to capture the return from various
+    // cuda intrinsics.  However adding a constructor that just takes that introduces confusion,
+    // whenever handing something like an integer literal in.  PBShort2(12) could potentially
+    // mean cast the 12 to a short, and construct a PBShort2 with both slots set to 12, or cast
+    // 12 to a uint32_t, which is effectively y=0,x=12.
+    // Making this ctor private and adding a Dummy type to disambiguate the signature.  Construction
+    // from a raw uint32_t must be done through the `FromRaw` static named constructor, though
+    // probably no one outside PBCudaSimd.cuh needs do this.
+    struct Dummy {};
+    CUDA_ENABLED PBUChar4(uint32_t data, Dummy)
+        : data_{data}
+    {}
+
+public:
+    CUDA_ENABLED static PBUChar4 FromRaw(uint32_t raw) { return PBUChar4(raw, Dummy{}); }
+
+    CUDA_ENABLED PBUChar4(uint8_t v) {
+        uint32_t tmp = v | (v << shift2);
+        data_ = tmp | (tmp << highshift);
+    }
+
+#if defined(__CUDA_ARCH__)
+    CUDA_ENABLED PBShort2 Low()  const
+    {
+        return PBShort2::FromRaw(__byte_perm(data_, 0, 0x4140));
+    }
+    CUDA_ENABLED PBShort2 High() const
+    {
+        return PBShort2::FromRaw(__byte_perm(data_, 0, 0x4342));
+    }
+#endif
+
+    uint32_t CUDA_ENABLED data() const { return data_; }
+    uint32_t& CUDA_ENABLED data() { return data_; }
+private:
+    uint32_t data_;
+};
+
 class PBHalf2
 {
 public:
@@ -109,7 +166,6 @@ public:
     CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
     CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
     CUDA_ENABLED PBHalf2(PBShort2 f) : PBHalf2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
-    CUDA_ENABLED PBHalf2(PBUint8 u) : PBHalf2(static_cast<float>(u.x), static_cast<float>(u.y)) {}
     CUDA_ENABLED PBHalf2(uint2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
