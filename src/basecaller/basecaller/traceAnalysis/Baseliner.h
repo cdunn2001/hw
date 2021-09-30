@@ -52,7 +52,7 @@ public:
               Data::BaselinerMetrics>
     operator()(const Data::TraceBatchVariant& rawTrace)
     {
-        assert(std::visit([](const auto& batch) { return batch.GetMeta().PoolId(); }, rawTrace)
+        assert(std::visit([](const auto& batch) { return batch.GetMeta().PoolId(); }, rawTrace.Data())
                == poolId_);
         return FilterBaseline(std::move(rawTrace));
     }

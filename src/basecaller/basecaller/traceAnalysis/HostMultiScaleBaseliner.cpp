@@ -98,7 +98,7 @@ HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
         });
 
         return out;
-    }, batch);
+    }, batch.Data());
 }
 
 template <typename T>

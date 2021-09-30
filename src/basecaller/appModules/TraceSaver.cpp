@@ -118,7 +118,7 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 
     if (writer_)
     {
-        std::visit(writeTraces, traceVariant);
+        std::visit(writeTraces, traceVariant.Data());
     }
     else
     {

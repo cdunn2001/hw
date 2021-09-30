@@ -48,7 +48,7 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
         }
 
         return out;
-    }, batch);
+    }, batch.Data());
 }
 
 HostNoOpBaseliner::~HostNoOpBaseliner() = default;

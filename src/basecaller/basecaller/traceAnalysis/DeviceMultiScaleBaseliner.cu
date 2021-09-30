@@ -57,7 +57,7 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
     {
         try
         {
-            return std::get<Mongo::Data::TraceBatch<int16_t>>(batch);
+            return std::get<Mongo::Data::TraceBatch<int16_t>>(batch.Data());
         } catch (const std::exception&)
         {
             throw PBException("Basecaller currently only supports int16_t trace data");
