@@ -136,8 +136,8 @@ __global__ void CompressedBaselineFilter(const Mongo::Data::GpuBatchData<const P
 
 // Runs a filter over the input data, but only outputs 1/stride of the
 // results.
-template <size_t blockThreads, size_t stride, typename Filter>
-__global__ void StridedFilter(const Mongo::Data::GpuBatchData<const PBShort2> in,
+template <typename T, size_t blockThreads, size_t stride, typename Filter>
+__global__ void StridedFilter(const Mongo::Data::GpuBatchData<const T> in,
                               Memory::DeviceView<Filter> filters,
                               int numFrames,
                               Mongo::Data::GpuBatchData<PBShort2> out)
@@ -418,8 +418,8 @@ struct SubtractParams
     PBHalf2 cMeanBias;
     PBHalf2 scale;
 };
-template <size_t blockThreads, size_t lag>
-__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2> input,
+template <typename T, size_t blockThreads, size_t lag>
+__global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
                                  size_t stride,
                                  SubtractParams sParams,
                                  Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
@@ -476,6 +476,9 @@ public:
     virtual void RunFilter(const Mongo::Data::BatchData<int16_t>& in,
                            int numFrames,
                            Mongo::Data::BatchData<int16_t>& out) = 0;
+    virtual void RunFilter(const Mongo::Data::BatchData<uint8_t>& in,
+                           int numFrames,
+                           Mongo::Data::BatchData<int16_t>& out) = 0;
     virtual size_t Stride() const = 0;
 
     virtual ~FilterStage() = default;
@@ -497,7 +500,17 @@ public:
                    int numFrames,
                    Mongo::Data::BatchData<int16_t>& out) override
     {
-        const auto& launcher = PBLauncher(StridedFilter<blockThreads, stride, Filter>,
+        const auto& launcher = PBLauncher(StridedFilter<PBShort2, blockThreads, stride, Filter>,
+                                          filterData_.Size(),
+                                          blockThreads);
+        launcher(in, filterData_, numFrames, out);
+    }
+
+    void RunFilter(const Mongo::Data::BatchData<uint8_t>& in,
+                   int numFrames,
+                   Mongo::Data::BatchData<int16_t>& out) override
+    {
+        const auto& launcher = PBLauncher(StridedFilter<PBUint8, blockThreads, stride, Filter>,
                                           filterData_.Size(),
                                           blockThreads);
         launcher(in, filterData_, numFrames, out);
@@ -580,7 +593,7 @@ public:
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
     // not do the actual baseline subtraction, nor does it do any bias corrections
-    __host__ void RunComposedFilter(const TraceBatch& input,
+    __host__ void RunComposedFilter(const Mongo::Data::TraceBatchVariant& input,
                                     TraceBatch& output,
                                     BatchData& workspace1,
                                     BatchData& workspace2)
@@ -591,7 +604,7 @@ public:
         average(workspace1, workspace2, output, fullStride_);
     }
 
-    __host__ void RunBaselineFilter(const Mongo::Data::TraceBatch<int16_t>& input,
+    __host__ void RunBaselineFilter(const Mongo::Data::TraceBatchVariant& input,
                                     Mongo::Data::TraceBatch<int16_t>& output,
                                     Memory::UnifiedCudaArray<Mongo::Data::BaselinerStatAccumState>& stats,
                                     Mongo::Data::BatchData<int16_t>& workspace1,
@@ -599,21 +612,25 @@ public:
     {
         RunLowerUpper(input, output, workspace1, workspace2);
 
-        const auto& Subtract = PBLauncher(SubtractBaseline<blockThreads, lag>,
-                                          numLanes_,
-                                          blockThreads);
-        Subtract(input,
-                 fullStride_,
-                 sParams_,
-                 latent,
-                 workspace1,
-                 workspace2,
-                 output,
-                 stats);
+        std::visit([&](const auto& in)
+        {
+            using type = typename std::decay_t<decltype(in)>::GpuType;
+            const auto& Subtract = PBLauncher(SubtractBaseline<type, blockThreads, lag>,
+                                              numLanes_,
+                                              blockThreads);
+            Subtract(in,
+                     fullStride_,
+                     sParams_,
+                     latent,
+                     workspace1,
+                     workspace2,
+                     output,
+                     stats);
+        }, input.Data());
     }
 
 private:
-    __host__ void RunLowerUpper(const TraceBatch& input,
+    __host__ void RunLowerUpper(const Mongo::Data::TraceBatchVariant& input,
                                 TraceBatch& output,
                                 BatchData& workspace1,
                                 BatchData& workspace2)
@@ -623,14 +640,19 @@ private:
         assert(input.LaneWidth() == 2 * blockThreads);
         assert(input.LanesPerBatch() == numLanes_);
 
-        for (size_t i = 0; i < lower_.size(); ++i)
+        std::visit([&](const auto& batch)
         {
-            auto* lowerIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace1;
-            auto* upperIn = i == 0 ? static_cast<const BatchData*>(&input) : &workspace2;
-            lower_[i]->RunFilter(*lowerIn, numFrames, workspace1);
-            upper_[i]->RunFilter(*upperIn, numFrames, workspace2);
-            numFrames /= lower_[i]->Stride();
-            assert(upper_[i]->Stride() == lower_[i]->Stride());
+            lower_[0]->RunFilter(batch, numFrames, workspace1);
+            upper_[0]->RunFilter(batch, numFrames, workspace2);
+        }, input.Data());
+
+        for (size_t i = 1; i < lower_.size(); ++i)
+        {
+            numFrames /= lower_[i-1]->Stride();
+            assert(upper_[i-1]->Stride() == lower_[i-1]->Stride());
+
+            lower_[i]->RunFilter(workspace1, numFrames, workspace1);
+            upper_[i]->RunFilter(workspace2, numFrames, workspace2);
         }
     }
 

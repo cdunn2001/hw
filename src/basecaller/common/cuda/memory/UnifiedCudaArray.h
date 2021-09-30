@@ -53,6 +53,7 @@ enum class SyncDirection
 };
 
 template <typename T> struct gpu_type { using type = T; };
+template <> struct gpu_type<uint8_t> { using type = PBUint8; };
 template <> struct gpu_type<int16_t> { using type = PBShort2; };
 template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
 

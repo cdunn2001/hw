@@ -402,9 +402,6 @@ protected:
 template <typename T>
 class BatchData : private Cuda::Memory::detail::DataManager
 {
-    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
-    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
-
 
     // Helper validation function, to make sure if we are constructing using
     // data from a SensorPacket, that packet's dimensions are consistent
@@ -429,6 +426,10 @@ class BatchData : private Cuda::Memory::detail::DataManager
         return dims;
     }
 public:
+    // BENTODO clean up
+    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
+    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
+
     BatchData(DataSource::SensorPacket packet,
               const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,

@@ -42,6 +42,7 @@ namespace Cuda {
 // have a proper wrapper type like PBHalf2, or need to stub in third
 // part half precision float for the host.
 using PBHalf = half;
+using PBUint8 = uchar2;
 
 class PBShort2
 {
@@ -60,6 +61,7 @@ public:
         // after the promotion to full width.
         : data_{ (static_cast<uint32_t>(s1) & xmask ) | (static_cast<uint32_t>(s2) << yshift) }
     {}
+    CUDA_ENABLED PBShort2(PBUint8 u) : PBShort2(u.x, u.y) {};
 
 private:
     // We need to be able to construct from a raw uint32_t, to capture the return from various
@@ -107,6 +109,7 @@ public:
     CUDA_ENABLED PBHalf2(float f) : data_{__float2half2_rn(f)} {}
     CUDA_ENABLED PBHalf2(float f1, float f2) : data_{__floats2half2_rn(f1, f2)} {}
     CUDA_ENABLED PBHalf2(PBShort2 f) : PBHalf2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
+    CUDA_ENABLED PBHalf2(PBUint8 u) : PBHalf2(static_cast<float>(u.x), static_cast<float>(u.y)) {}
     CUDA_ENABLED PBHalf2(uint2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}

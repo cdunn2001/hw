@@ -183,10 +183,11 @@ void RunMultipleBaselineFilter(
                              SOURCE_MARKER());
     }
 
+    // BENTODO cleanup
     auto tmp = [dataParams, &work1, &work2, &filters, &full]
-        (const TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
+        (TraceBatch<int16_t>& batch, size_t batchIdx, TraceBatch<int16_t>& ret) {
 
-        filters[batchIdx].RunComposedFilter(batch, ret, work1[batchIdx], work2[batchIdx]);
+        filters[batchIdx].RunComposedFilter(std::move(batch), ret, work1[batchIdx], work2[batchIdx]);
         ret.DeactivateGpuMem();
     };
 

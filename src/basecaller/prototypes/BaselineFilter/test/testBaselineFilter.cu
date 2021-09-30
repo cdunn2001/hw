@@ -168,7 +168,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (auto& batch : source.AllBatches())
     {
         auto batchIdx = batch.GetMeta().PoolId();
         BatchData<int16_t> truth(batch.StorageDims(),
@@ -185,14 +185,15 @@ TEST(BaselineFilterTest, MultiKernelFilter)
                                  SyncDirection::HostReadDeviceWrite,
                                  SOURCE_MARKER());
 
-        filterData[batchIdx].RunComposedFilter(batch, out, work1, work2);
-
+        // BENTODO clean
         const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
                                         batch.LanesPerBatch(),
                                         gpuBlockThreads);
         global(batch,
                filterRefData[batchIdx],
                truth);
+
+        filterData[batchIdx].RunComposedFilter(std::move(batch), out, work1, work2);
 
         for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
         {

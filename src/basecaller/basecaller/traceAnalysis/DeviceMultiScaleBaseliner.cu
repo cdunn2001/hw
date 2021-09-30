@@ -51,19 +51,9 @@ void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
+DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrace)
 {
-    const auto& rawTrace = [&]() ->decltype(auto)
-    {
-        try
-        {
-            return std::get<Mongo::Data::TraceBatch<int16_t>>(batch.Data());
-        } catch (const std::exception&)
-        {
-            throw PBException("Basecaller currently only supports int16_t trace data");
-        }
-    }();
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
+    auto out = batchFactory_->NewBatch(rawTrace.Metadata(), rawTrace.StorageDims());
 
     Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
     Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
@@ -75,8 +65,9 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 }
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
-                                                        const BaselinerParams& params, uint32_t lanesPerPool,
-                                                        StashableAllocRegistrar* registrar)
+                                                     const BaselinerParams& params,
+                                                     uint32_t lanesPerPool,
+                                                     StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {

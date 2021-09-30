@@ -148,6 +148,10 @@ class BatchDataSource : public DataSource::DataSourceBase
         {
             return data;
         }
+        std::vector<Data::TraceBatch<int16_t>>& operator*()
+        {
+            return data;
+        }
         ChunkIterator& operator++()
         {
             data = source_->NextChunk();
@@ -201,6 +205,10 @@ class BatchDataSource : public DataSource::DataSourceBase
         {}
 
         const Data::TraceBatch<int16_t>& operator*() const
+        {
+            return data[idx];
+        }
+        Data::TraceBatch<int16_t>& operator*()
         {
             return data[idx];
         }
