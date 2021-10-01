@@ -53,16 +53,12 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
     InitFactory(hostExecution, movConfig.photoelectronSensitivity);
 
     {
+        // Validation has already been handled in the configuration framework.
+        // This just asserts that the configuration is indeed valid.
+        assert(bbc.Validate());
         const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
         std::ostringstream msg;
         msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
-        if (std::isnan(sigmaEmaScale) || std::signbit(sigmaEmaScale))
-        {
-            std::ostringstream exMsg;
-            exMsg << "Bad value. " << msg.str() 
-                  << ". May not be negative, -0, or NaN.";
-            throw PBException(msg.str());
-        }
         // TODO: Use a scoped logger.
         PBLOG_INFO << msg.str();
         sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);

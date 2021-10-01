@@ -183,6 +183,7 @@ TEST(TestHostMultiScaleBaseliner, Configure)
     for (const auto sess : {0.0f, 0.5f, 1.618f, 42.0f, 512.0f, 1.0e+6f, INFINITY})
     {
         bbcConfig.SigmaEmaScaleStrides = sess;
+        ASSERT_TRUE(bbcConfig.Validate()) << "  SigmaEmaScaleStrides = " << sess << '.';
         HostMultiScaleBaseliner::Configure(bbcConfig, movConfig);
         EXPECT_FLOAT_EQ(std::pow(0.5f, 1.0f / sess), HostMultiScaleBaseliner::SigmaEmaAlpha())
             << "  SigmaEmaScaleStrides = " << sess << '.';
@@ -192,8 +193,7 @@ TEST(TestHostMultiScaleBaseliner, Configure)
     for (const auto sess : {-0.0f, -1.0f, -INFINITY, NAN})
     {
         bbcConfig.SigmaEmaScaleStrides = sess;
-        EXPECT_THROW(HostMultiScaleBaseliner::Configure(bbcConfig, movConfig),
-                     PacBio::PBExceptionEx<std::runtime_error>);
+        EXPECT_FALSE(bbcConfig.Validate()) << "  SigmaEmaScaleStrides = " << sess << '.';
     }
 }
 
