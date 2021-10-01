@@ -45,6 +45,8 @@ template <typename T>
 class TraceBatch : public BatchData<T>
 {
 public:
+    using DataType = T;
+public:
     TraceBatch(DataSource::SensorPacket packet,
                const BatchMetadata& meta,
                const BatchDimensions& dims,

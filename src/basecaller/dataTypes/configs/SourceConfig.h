@@ -30,19 +30,11 @@
 #include <array>
 
 #include <pacbio/configuration/PBConfig.h>
+#include <pacbio/configuration/Validation.h>
 #include <pacbio/utilities/SmartEnum.h>
 #include <pacbio/sensor/Platform.h>
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-SMART_ENUM(Source_t,
-        UNKNOWN,
-        TRACE_FILE,
-        WX2,
-        OTHER_TBD // could add USB3, FRAME_GRABBER, PCIE
-);
+namespace PacBio::Mongo::Data {
 
 struct WX2LayoutConfig  : public Configuration::PBConfig<WX2LayoutConfig>
 {
@@ -59,6 +51,7 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
 {
     PB_CONFIG(WX2SourceConfig);
     PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
+    PB_CONFIG_PARAM(std::string, simulatedInputFile, "");
     PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::Sequel2Lvl1);
     PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
     PB_CONFIG_PARAM(double, sleepDebug, 0.0);
@@ -67,14 +60,52 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
     PB_CONFIG_OBJECT(WX2LayoutConfig, wxlayout);
 };
 
-struct SourceConfig  : public Configuration::PBConfig<SourceConfig>
+struct TraceReanalysis : public Configuration::PBConfig<TraceReanalysis>
 {
-    PB_CONFIG(SourceConfig);
+    PB_CONFIG(TraceReanalysis);
 
-    PB_CONFIG_PARAM(Source_t, sourceType, Source_t::TRACE_FILE);
-    PB_CONFIG_OBJECT(WX2SourceConfig,wx2SourceConfig);
+    PB_CONFIG_PARAM(std::string, traceFile, "");
 };
 
-}}}     // namespace PacBio::Mongo::Data
+SMART_ENUM(TraceInputType, Natural, INT16, UINT8);
+struct TraceReplication : public Configuration::PBConfig<TraceReplication>
+{
+    PB_CONFIG(TraceReplication)
+
+    PB_CONFIG_PARAM(std::string, traceFile, "");
+
+    PB_CONFIG_PARAM(size_t, numFrames, 10000);
+    PB_CONFIG_PARAM(size_t, numZmwLanes, 131072);
+    // Cache the full trace file in memory before producing traces
+    PB_CONFIG_PARAM(bool, cache, false);
+    // Generates some number of chunks before producing traces.
+    // Potentially useful if the trace file is too large to cache,
+    // but you still want to have some data to measure throughput
+    // without being limited by disk read space
+    PB_CONFIG_PARAM(size_t, preloadChunks, 0);
+    // The max number of chunks the data source will get ahead of
+    // the actual analysis without self throttling
+    PB_CONFIG_PARAM(size_t, maxQueueSize, 0);
+
+    PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
+};
+
+}     // namespace PacBio::Mongo::Data
+
+namespace PacBio::Configuration {
+
+template <>
+inline void ValidateConfig(const Mongo::Data::TraceReplication& cfg, ValidationResults* results)
+{
+    if (cfg.traceFile.empty()) results->AddError("Must Specify a trace file");
+}
+
+template <>
+inline void ValidateConfig(const Mongo::Data::TraceReanalysis& cfg, ValidationResults* results)
+{
+    if (cfg.traceFile.empty()) results->AddError("Must Specify a trace file");
+}
+
+}
 
 #endif //mongo_dataTypes_configs_sourceConfig_H

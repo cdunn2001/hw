@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_roiConfig_H
-#define mongo_dataTypes_configs_roiConfig_H
+#ifndef mongo_dataTypes_configs_traceSaverConfig_H
+#define mongo_dataTypes_configs_traceSaverConfig_H
 
 #include <array>
 
@@ -35,13 +35,18 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-struct ROIConfig  : public Configuration::PBConfig<ROIConfig>
+struct TraceSaverConfig  : public Configuration::PBConfig<TraceSaverConfig>
 {
-    PB_CONFIG(ROIConfig);
+    PB_CONFIG(TraceSaverConfig);
 
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
+
+    // "Natural" means just match whatever data type the rest
+    // of the pipeline is configured to produce.
+    SMART_ENUM(OutFormat, Natural, INT16, UINT8);
+    PB_CONFIG_PARAM(OutFormat, outFormat, OutFormat::Natural);
 };
 
 }}}     // namespace PacBio::Mongo::Data
 
-#endif //mongo_dataTypes_configs_roiConfig_H
+#endif //mongo_dataTypes_configs_traceSaverConfig_H

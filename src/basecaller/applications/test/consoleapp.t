@@ -1,6 +1,9 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
-  $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 1 --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":1,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1   \
+  > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
+  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +1 | wc -l
   65
@@ -10,7 +13,10 @@
   $ bazviewer --silent -d -n 63 ${CRAMTMP}/test.baz  | grep Label | cut -d':' -f 2 | sed 's/ "//' | sed 's/"//' | xargs | sed 's/[ ,]//g'
   ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTA
 
-  $ smrt-basecaller --inputfile ${TRCFILE} --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config=prelimHQ.zmwOutputStride=4 --numZmwLanes 1 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":1,"traceFile":"'$TRCFILE'" }'    \
+  > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config=prelimHQ.zmwOutputStride=4 \
+  > --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations                                    \
+  > --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --outputbazfile ${CRAMTMP}/test.baz > /dev/null
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +1 | wc -l
   65

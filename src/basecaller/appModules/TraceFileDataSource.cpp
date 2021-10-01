@@ -41,11 +41,13 @@ TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
         std::string file,
         uint32_t frames,
-        uint32_t numZmw,
+        uint32_t numZmwLanes,
         bool cache,
         size_t preloadChunks,
-        size_t maxQueueSize)
+        size_t maxQueueSize,
+        Mongo::Data::TraceInputType type)
     : BatchDataSource(std::move(cfg))
+    , numZmwLanes_(numZmwLanes)
     , chunkIndex_{0}
     , batchIndex_{0}
     , currZmw_{0}
@@ -68,15 +70,38 @@ TraceFileDataSource::TraceFileDataSource(
         throw PBException("Trace file source currently only supports dense block layout");
 
     auto storageType = traceFile_.Traces().StorageType();
+
+    const auto encoding = [&](){
+        switch (type)
+        {
+        case PacBio::Mongo::Data::TraceInputType::Natural:
+        {
+            if (storageType == TraceFile::TraceDataType::INT16)
+                return PacketLayout::INT16;
+            else if (storageType == TraceFile::TraceDataType::UINT8)
+                return PacketLayout::UINT8;
+            else
+                throw PBException("Unexpected request for trace data type");
+        }
+        case PacBio::Mongo::Data::TraceInputType::INT16:
+            return PacketLayout::INT16;
+        case PacBio::Mongo::Data::TraceInputType::UINT8:
+            return PacketLayout::UINT8;
+        default:
+            throw PBException("Unexpected request for trace data type");
+        }
+    }();
+
     if (storageType == TraceFile::TraceDataType::INT16
-        && config.requestedLayout.Encoding() == PacketLayout::UINT8)
+        && encoding == PacketLayout::UINT8)
     {
-        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  Values may potentially be truncated/saturated";
+        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  "
+                   << "Values will be saturated to [0,255]";
     }
 
     bytesPerValue_ = [&]()
     {
-        switch(config.requestedLayout.Encoding())
+        switch(encoding)
         {
         case PacBio::DataSource::PacketLayout::INT16:
             return 2;
@@ -94,30 +119,25 @@ TraceFileDataSource::TraceFileDataSource(
 
     // TODO should be able to handle all types eventually
     assert(config.requestedLayout.Type() == PacketLayout::BLOCK_LAYOUT_DENSE);
-    assert(config.requestedLayout.Encoding() == PacketLayout::INT16);
     assert(config.requestedLayout.BlockWidth() == laneSize);
 
-    // Could potentially round up to the nearest lane size, but no matter
-    // what we require 64 zmw lanes, both in the trace file and in our
-    // analysis pipeline
-    if (numZmw % config.requestedLayout.BlockWidth() != 0)
-    {
-        throw PBException("Requested numZmw must be an even multiple of laneSize (64)");
-    }
-
-    numZmwLanes_ = numZmw / (config.requestedLayout.BlockWidth());
     numChunks_ = (frames + BlockLen() - 1) / BlockLen();
 
     const auto numFullPools = numZmwLanes_ / config.requestedLayout.NumBlocks();
+    PacketLayout regLayout(config.requestedLayout.Type(),
+                           encoding,
+                           {config.requestedLayout.NumBlocks(),
+                            config.requestedLayout.NumFrames(),
+                            config.requestedLayout.BlockWidth()});
     for (size_t i = 0; i < numFullPools; ++i)
     {
-        layouts_[i] = config.requestedLayout;
+        layouts_[i] = regLayout;
     }
     size_t stubBlocks = numZmwLanes_ % config.requestedLayout.NumBlocks();
     if (stubBlocks != 0)
     {
         PacketLayout stub(config.requestedLayout.Type(),
-                          config.requestedLayout.Encoding(),
+                          encoding,
                           {stubBlocks,
                            config.requestedLayout.NumFrames(),
                            config.requestedLayout.BlockWidth()});
@@ -150,7 +170,7 @@ TraceFileDataSource::TraceFileDataSource(
             {
                 auto* ptr = lanePtr +
                             traceChunk * BlockWidth() * BlockLen() * bytesPerValue_;
-                switch(GetConfig().requestedLayout.Encoding())
+                switch(encoding)
                 {
                 case PacBio::DataSource::PacketLayout::INT16:
                     ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
@@ -281,7 +301,7 @@ void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, uin
         {
             auto* ptr = traceDataCache_.data()
                       + traceLane * BlockWidth() * BlockLen() * bytesPerValue_;
-            switch(GetConfig().requestedLayout.Encoding())
+            switch(layouts_.begin()->second.Encoding())
             {
             case PacBio::DataSource::PacketLayout::INT16:
                 ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
@@ -329,5 +349,46 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
         }
     }
 }
+
+TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(const std::vector<std::vector<int>>& vec) const
+{
+    if (vec.empty())
+    {
+        std::vector<LaneIndex> dummy(0);
+        return LaneSelector(dummy);
+    }
+
+    if (reanalysis_)
+        throw PBException("Trace ReAnalysis does not currently support selecting an ROI for trace saving");
+
+    std::set<LaneIndex> selected;
+    for (const auto& range : vec)
+    {
+        if (range.size() == 0 || range.size() > 2)
+            throw PBException("Unexpected format for TraceFileDataSource ROI.  "
+                              "The inner most vector should be a single element "
+                              "representing a ZMW, or two values representing a start ZMW and count");
+
+        // always going to enter at least one lane, corresponding to the first element.
+        // This first ZMW may be in the middle of a lane, but we'll add the whole lane
+        // anyway
+        selected.insert(range[0]/laneSize);
+        if (range.size() == 2)
+        {
+            // We've already addd the first lane, now we use some intentional
+            // integer arithmetic to get the rest of the lanes, even if the ROI
+            // specified doesn't line up with lane boundaries.
+            int laneStart = (range[0] + laneSize) / laneSize;
+            int laneEnd = (range[1] - 1) / laneSize;
+            for (int i = laneStart; i <= laneEnd; ++i)
+            {
+                selected.insert(i);
+            }
+        }
+    }
+    std::vector<LaneIndex> retValues(selected.begin(), selected.end());
+    return LaneSelector(retValues);
+}
+
 
 }}

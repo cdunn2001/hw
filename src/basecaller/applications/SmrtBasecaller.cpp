@@ -106,48 +106,39 @@ public:
     {
         ThreadedProcessBase::HandleProcessOptions(options);
 
-        numChunksPreloadInputQueue_ = options.get("numChunksPreload");
-
-        // TODO validate.  File must be specified
-        inputTargetFile_ = options["inputfile"];
-
-        numZmwLanes_ = options.get("numZmwLanes");
-        frames_ = options.get("frames");
+        frames_ = options.get("maxFrames");
         // TODO need validation or something, as this is probably a trace file input specific option
-        cache_ = options.get("cache");
         nop_ = options.get("nop");
 
-        if (nop_ == 1 && inputTargetFile_ != "constant/123")
+        if (nop_ == 1)
         {
-            throw PBException("--nop=1 must be used with --inputfile=constant/123 to get correct validation pattern.");
+            try {
+                const auto& wxDataSource = boost::get<WX2SourceConfig>(config_.source.data());
+                if (wxDataSource.simulatedInputFile!= "constant/123")
+                    throw PBException("Dummy Exception");
+            } catch (...) {
+                throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
+            }
+
         }
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
         // correctly if not using trace file input
-        switch (config_.source.sourceType)
-        {
-            case Source_t::TRACE_FILE:
-                if (inputTargetFile_.empty())
-                {
-                    throw PBException("TRACE_FILE requires an --inputfile argument");
-                }
-                PBLOG_INFO << "Input Target: " << inputTargetFile_;
-                MetaDataFromTraceFileSource(inputTargetFile_);
-                GroundTruthFromTraceFileSource(inputTargetFile_);
-                break;
-
-            case Source_t::WX2:
+        config_.source.Visit(
+            [&](const auto& traceConfig) {
+                const std::string& traceFile = traceConfig.traceFile;
+                PBLOG_INFO << "Input Target: " << traceFile;
+                MetaDataFromTraceFileSource(traceFile);
+                GroundTruthFromTraceFileSource(traceFile);
+            },
+            [&](const WX2SourceConfig& wxConfig) {
                 // FIXME An API to load metadata from ICS configuration is not finalized yet.
                 // FIXME In the interest of rapid development, we are just loading a precanned metadata snippet.
                 // TODO replace this call with the official command line API for loading metadata (JSON) from ICS.
                 // for example, LoadMetaDataFromSequelFormat(json value of metadata);
                 movieConfig_ = PacBio::Mongo::Data::MockMovieConfig();
-                break;
-
-            default:
-                PBLOG_INFO << "Meta data not initialized from source " << config_.source.sourceType;
-                break;
-        }
+            }
+        );
 
         if (options.is_set_by_user("outputbazfile"))
         {
@@ -160,10 +151,6 @@ public:
         {
             outputTrcFileName_ = options["outputtrcfile"];
         }
-
-        PBLOG_INFO << "Number of analysis zmwLanes = " << numZmwLanes_;
-        PBLOG_INFO << "Number of analysis chunks = " << static_cast<size_t>(options.get("frames")) /
-                                                        config_.layout.framesPerChunk;
 
         auto devices = PacBio::Cuda::CudaAllGpuDevices();
         if(devices.size() == 0)
@@ -340,54 +327,45 @@ private:
                             PacketLayout::INT16,
                             layoutDims);
 
-        // TODO need a way to let trace file specify numZmw and num frames
-        const auto numZmw = numZmwLanes_ * laneSize;
-
-        auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.sourceType.toString()));
+        auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.GetEnum().toString()));
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
-        std::unique_ptr<DataSourceBase> dataSource;
-        switch(config_.source.sourceType)
-        {
-            case Source_t::TRACE_FILE:
-                dataSource = std::make_unique<TraceFileDataSource>(std::move(datasourceConfig),
-                                                              inputTargetFile_,
-                                                              frames_,
-                                                              numZmw,
-                                                              cache_,
-                                                              numChunksPreloadInputQueue_);
-                break;
-            case Source_t::WX2:
+        auto dataSource = config_.source.Visit(
+            [&](const TraceReanalysis& config) -> std::unique_ptr<DataSourceBase>
             {
-
+                return std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
+            },
+            [&](const TraceReplication& config) -> std::unique_ptr<DataSourceBase>
+            {
+                return std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
+            },
+            [&](const WX2SourceConfig& wx2SourceConfig) -> std::unique_ptr<DataSourceBase>
+            {
                 // TODO this glue code is messy. It is gluing untyped strings to the strongly typed
                 // enums of WX2, but this was on purpose to avoid entangling the config with configs from WX2.
                 // I am not sure what the best next step is.  This is getting me going, so I am
                 // going to leave it. MTL
                 WXDataSourceConfig wxconfig;
-                wxconfig.dataPath = DataPath_t(config_.source.wx2SourceConfig.dataPath);
-                wxconfig.platform = Platform(config_.source.wx2SourceConfig.platform);
-                wxconfig.sleepDebug = config_.source.wx2SourceConfig.sleepDebug;
-                wxconfig.simulatedFrameRate = config_.source.wx2SourceConfig.simulatedFrameRate;
-                wxconfig.simulatedInputFile = inputTargetFile_;
-                wxconfig.maxPopLoops = config_.source.wx2SourceConfig.maxPopLoops;
-                wxconfig.tilePoolFactor = config_.source.wx2SourceConfig.tilePoolFactor;
+                wxconfig.dataPath = DataPath_t(wx2SourceConfig.dataPath);
+                wxconfig.platform = Platform(wx2SourceConfig.platform);
+                wxconfig.sleepDebug = wx2SourceConfig.sleepDebug;
+                wxconfig.simulatedFrameRate = wx2SourceConfig.simulatedFrameRate;
+                wxconfig.simulatedInputFile = wx2SourceConfig.simulatedInputFile;
+                wxconfig.maxPopLoops = wx2SourceConfig.maxPopLoops;
+                wxconfig.tilePoolFactor = wx2SourceConfig.tilePoolFactor;
                 wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
-                wxconfig.layoutDims[0] = config_.source.wx2SourceConfig.wxlayout.lanesPerPacket;
-                wxconfig.layoutDims[1] = config_.source.wx2SourceConfig.wxlayout.framesPerPacket;
-                wxconfig.layoutDims[2] = config_.source.wx2SourceConfig.wxlayout.zmwsPerLane;
-                dataSource = std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
+                wxconfig.layoutDims[0] = wx2SourceConfig.wxlayout.lanesPerPacket;
+                wxconfig.layoutDims[1] = wx2SourceConfig.wxlayout.framesPerPacket;
+                wxconfig.layoutDims[2] = wx2SourceConfig.wxlayout.zmwsPerLane;
+                return std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
             }
-                break;
-            default:
-                throw PBException("Data source " + config_.source.sourceType.toString() + " not supported");
-        }
+        );
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
     }
 
     std::unique_ptr<RepackerBody>
-    CreateRepacker(const std::map<uint32_t, PacketLayout>& inputLayouts) const
+    CreateRepacker(const std::map<uint32_t, PacketLayout>& inputLayouts, size_t numZmw) const
     {
         BatchDimensions requiredDims;
         requiredDims.lanesPerBatch = config_.layout.lanesPerPool;
@@ -416,11 +394,6 @@ private:
                 throw PBException("Found packets with different frame counts");
             if (layout.BlockWidth() != blockWidth)
                 sameBlockWidth = false;
-        }
-
-        if (encoding != PacketLayout::INT16)
-        {
-            throw PBException("Only 16 bit input is supported so far");
         }
 
         if (type == PacketLayout::FRAME_LAYOUT)
@@ -472,7 +445,6 @@ private:
             if (valid)
             {
                 PBLOG_INFO << "Instantiating BlockRepacker";
-                const size_t numZmw = numZmwLanes_ * laneSize;
                 const size_t numThreads = 6;
                 return std::make_unique<BlockRepacker>(inputLayouts, requiredDims, numZmw, numThreads);
             }
@@ -486,8 +458,9 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceROI.roi);
-            const auto sourceLaneWidth = dataSource.PacketLayouts().begin()->second.BlockWidth();
+            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceSaver.roi);
+            const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
+            const auto sourceLaneWidth = sampleLayout.BlockWidth();
             const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
@@ -522,16 +495,28 @@ private:
             }
             if (destLanes.size() != numZmws / laneSize)
             {
-                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size() 
+                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size()
                     << " numZmws/laneSize:" << numZmws/laneSize;
                 PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
             }
             DataSourceBase::LaneSelector blocks(destLanes);
             PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
+            TraceDataType outputType = TraceDataType::INT16;
+            if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
+            {
+                outputType = TraceDataType::UINT8;
+            } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
+            {
+                if (sampleLayout.Encoding() == PacketLayout::UINT8)
+                {
+                    outputType = TraceDataType::UINT8;
+                }
+            }
             outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
-                                                         TraceDataType::INT16,
+                                                         outputType,
                                                          numZmws,
-                                                         frames_);
+                                                         dataSource.NumFrames());
+            outputTrcFile_->Traces().Pedestal(dataSource.Pedestal());
 
             return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), roiFeatures, std::move(blocks));
         }
@@ -585,12 +570,17 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
         auto source = CreateSource();
+
+        PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
+        PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
+                                                        config_.layout.framesPerChunk;
+
         try
         {
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
             // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
-            auto repacker = CreateRepacker(source->PacketLayouts());
+            auto repacker = CreateRepacker(source->PacketLayouts(), source->NumZmw());
             auto poolDims = repacker->BatchLayouts();
 
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
@@ -721,13 +711,9 @@ private:
     SmrtBasecallerConfig config_;
     MovieConfig movieConfig_;
 
-    std::string inputTargetFile_;
     std::string outputBazFile_;
     bool hasBazFile_ = false;
-    size_t numChunksPreloadInputQueue_ = 0;
-    size_t numZmwLanes_ = 0;
     size_t frames_ = 0;
-    bool cache_ = false;
     int nop_ = 0; ///< 0 = normal. 1 = don't process any SensorPackets at all. 2 =dont instantiate the basecaller, but allow repacker and tracesaver
     std::string outputTrcFileName_;
     std::unique_ptr<TraceFile> outputTrcFile_;
@@ -758,26 +744,18 @@ int main(int argc, char* argv[])
         parser.epilog("");
 
         parser.add_option("--config").action_append().help("Loads JSON configuration file, JSON string or Boost ptree value");
-        parser.add_option("--strict").action_store_true().help("Strictly check all configuration options. Do not allow unrecognized configuration options");
-        parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace and exits");
+        parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace and exits (before validation)");
+        parser.add_option("--validateconfig").action_store_true().help("Validates the supplied configuration settings and exits.");
 
-        parser.add_option("--inputfile").set_default("").help("input file (can be *.h5 or name of a test pattern)");
         parser.add_option("--outputbazfile").set_default("").help("BAZ output file");
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
-        parser.add_option("--numChunksPreload").type_int().set_default(0).help("Number of chunks to preload (Default: %default)");
-        parser.add_option("--cache").action_store_true().help("Cache trace file to avoid disk I/O");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
+        parser.add_option("--maxFrames").type_int().set_default(0).help("Specifies maximum number of frames to run. 0 means unlimited");
 
-        auto group1 = OptionGroup(parser, "Data Selection/Tiling Options",
-                                  "Controls data selection/tiling options for simulation and testing");
-        group1.add_option("--numZmwLanes").type_int().set_default(131072).help("Specifies number of zmw lanes to analyze");
-        group1.add_option("--frames").type_int().set_default(10000).help("Specifies number of frames to run");
-        parser.add_option_group(group1);
-
-        auto group3 = OptionGroup(parser, "Developer options",
+        auto group1 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");
-        group3.add_option("--nop").type_int().set_default(0).help("Ways of making the analyzer do less");
-        parser.add_option_group(group3);
+        group1.add_option("--nop").type_int().set_default(0).help("Ways of making the analyzer do less");
+        parser.add_option_group(group1);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
         ThreadedProcessBase::HandleGlobalOptions(options);
@@ -785,16 +763,20 @@ int main(int argc, char* argv[])
         Json::Value json = MergeConfigs(options.all("config"));
         PBLOG_DEBUG << json; // this does NOT work with --showconfig
         SmrtBasecallerConfig configs(json);
+        if (options.get("showconfig"))
+        {
+            std::cout << configs.Serialize() << std::endl;
+            return 0;
+        }
+
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
         {
             validation.PrintErrors();
             throw PBException("Json validation failed");
         }
-
-        if (options.get("showconfig"))
+        if (options.get("validateconfig"))
         {
-            std::cout << configs.Serialize() << std::endl;
             return 0;
         }
 

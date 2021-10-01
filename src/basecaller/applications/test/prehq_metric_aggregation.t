@@ -8,7 +8,9 @@ maintenance becomes annoying, as long as something else is dropped in its place
 # metric blocks should be aggregated into one as the activity labels are all the same.
   $ BAZFILE=tmp.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
-  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=57344 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":57344, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations  \
+  > --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
 
   $ bazviewer --silent -m -f ${BAZFILE}
   {
@@ -107,7 +109,9 @@ maintenance becomes annoying, as long as something else is dropped in its place
   }
 
 # Run again but set the hqThrottleFraction=0.25 so start of HQ-region is different resulting in a preHQ metric block with data.
-  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=57344 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=0.25 > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":57344, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations  \
+  > --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=0.25 > /dev/null
 
   $ bazviewer --silent -m -i0 ${BAZFILE} 
   {
@@ -400,7 +404,9 @@ maintenance becomes annoying, as long as something else is dropped in its place
 
 
 # Generate complete metrics by disabling preHQ algorithm.
-  $ smrt-basecaller --numZmwLanes 4 --config multipleBazFiles=false --config layout.lanesPerPool=1 --frames=16384 --config=algorithm.modelEstimationMode=FixedEstimations --inputfile ${TRCFILE} --outputbazfile ${BAZFILE} > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":16384, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations  \
+  > --outputbazfile ${BAZFILE} > /dev/null
 
   $ bazviewer --silent -m -f ${BAZFILE}
   {
