@@ -27,7 +27,10 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
+#include <cmath>
+
 #include <pacbio/datasource/DataSourceRunner.h>
+#include <pacbio/PBException.h>
 
 #include <appModules/SimulatedDataSource.h>
 
@@ -167,6 +170,34 @@ TEST(TestHostNoOpBaseliner, Run)
     HostNoOpBaseliner::Finalize();
 }
 
+
+TEST(TestHostMultiScaleBaseliner, Configure)
+{
+    PacBio::Logging::LogSeverityContext logLevelRaii {PacBio::Logging::LogLevel::NOTICE};
+
+    BasecallerBaselinerConfig bbcConfig
+        = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    const auto movConfig = MockMovieConfig();
+
+    // Test a few valid settings for SigmaEmaScaleStrides.
+    for (const auto sess : {0.0f, 0.5f, 1.618f, 42.0f, 512.0f, 1.0e+6f, INFINITY})
+    {
+        bbcConfig.SigmaEmaScaleStrides = sess;
+        ASSERT_TRUE(bbcConfig.Validate()) << "  SigmaEmaScaleStrides = " << sess << '.';
+        HostMultiScaleBaseliner::Configure(bbcConfig, movConfig);
+        EXPECT_FLOAT_EQ(std::pow(0.5f, 1.0f / sess), HostMultiScaleBaseliner::SigmaEmaAlpha())
+            << "  SigmaEmaScaleStrides = " << sess << '.';
+    }
+
+    // Test a few invalid settings.
+    for (const auto sess : {-0.0f, -1.0f, -INFINITY, NAN})
+    {
+        bbcConfig.SigmaEmaScaleStrides = sess;
+        EXPECT_FALSE(bbcConfig.Validate()) << "  SigmaEmaScaleStrides = " << sess << '.';
+    }
+}
+
+
 struct TestingParams
 {
     uint16_t pfg_pulseIpd   = -1;
@@ -192,6 +223,8 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
 
     const size_t burnIn = 10;
     size_t burnInFrames;
+
+    PacBio::Logging::LogSeverityContext logLevelRaii {PacBio::Logging::LogLevel::NOTICE};
 
     void SetUp() override
     {

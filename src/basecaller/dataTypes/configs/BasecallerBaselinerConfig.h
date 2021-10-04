@@ -27,6 +27,8 @@
 #ifndef mongo_dataTypes_configs_BasecallerBaselinerConfig_H_
 #define mongo_dataTypes_configs_BasecallerBaselinerConfig_H_
 
+#include <sstream>
+
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/utilities/SmartEnum.h>
 #include <basecaller/traceAnalysis/ComputeDevices.h>
@@ -56,9 +58,36 @@ public:
                         },
                         {"analyzerHardware"}
     ));
+    
+    // The "half-life" for the exponential moving average used to smooth
+    // the lower-upper-gap-based estimate of baseline sigma.
+    // SigmaEmaScaleStrides must be >= +0.
+    // Used by the HostMultiScale implementation.
+    // TODO: Use it in a similar way in DeviceMultiScale implementation.
+    PB_CONFIG_PARAM(float, SigmaEmaScaleStrides, 512);
 };
 
 }}}     // namespace PacBio::Mongo::Data
+
+
+namespace PacBio::Configuration {
+
+template <>
+inline void ValidateConfig<Mongo::Data::BasecallerBaselinerConfig>(
+        const Mongo::Data::BasecallerBaselinerConfig& config,
+        ValidationResults* results)
+{
+    const float sess = config.SigmaEmaScaleStrides;
+    if (std::isnan(sess) || std::signbit(sess))
+    {
+        std::ostringstream msg;
+        msg << "Bad value.  SigmaEmaScaleStrides = " << sess
+            << ".  May not be negative, -0, or NaN.";
+        results->AddError(msg.str());
+    }
+}
+
+}   // namespace PacBio::Configuration
 
 
 #endif //mongo_dataTypes_configs_BasecallerBaselinerConfig_H_
