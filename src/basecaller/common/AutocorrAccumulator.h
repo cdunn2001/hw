@@ -68,29 +68,42 @@ public:     // Structors
 
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
-        , m1First_ {state.moment1First}
-        , m1Last_ {state.moment1Last}
+        , m1L_ {state.moment1First}
+        , m1R_ {state.moment1Last}
         , m2_ {state.moment2}
-        , canAddSample_ {false}
-    { }
+        , lbi_ {state.meta[0]}
+        , rbi_ {state.meta[1]}
+        , canAddSample_ {state.meta[2] == 1}
+    {
+        // Deserialize both buffers
+        auto i=lag_; while (i--) { lBuf_[i] = state.lBuf[i]; rBuf_[i] = state.rBuf[i]; }
+    }
 
 public:     // Const methods
     AutocorrAccumState GetState() const
     {
-        return AutocorrAccumState
+        AutocorrAccumState ret
         {
             stats_.GetState(),
-            m1First_,
-            m1Last_,
+            m1L_,
+            m1R_,
             m2_
         };
+
+        // Serialize both buffers
+        auto i=lag_; while (i--) { ret.lBuf[i] = lBuf_[i]; ret.rBuf[i] = rBuf_[i]; }
+        ret.meta[0] = lbi_;
+        ret.meta[1] = rbi_;
+        ret.meta[2] = canAddSample_;
+
+        return ret;
     }
 
     const T& M1First() const
-    { return m1First_; }
+    { return m1L_; }
 
     const T& M1Last() const
-    { return m1Last_; }
+    { return m1R_; }
 
     const T& M2() const
     { return m2_; }
@@ -166,23 +179,28 @@ public:     // Mutating methods
     void Reset()
     {
         stats_.Reset();
-        backBuf_.clear();
-        frontBuf_.clear();
-        m1First_ = m1Last_ = m2_ = T(0);
+        auto i=lag_; while (i--) { lBuf_[i] = rBuf_[i] = T(0); }
+        m1L_ = T(0);
+        m1R_ = T(0);
+        m2_  = T(0);
+        lbi_ = 0;
+        rbi_ = 0;
         canAddSample_ = true;
     }
 
 private:    // Data
+    static constexpr uint16_t lag_ = AutocorrAccumState::lag;
     StatAccumulator<T> stats_;
 
-    // TODO: Pretty sure that AlignedCircularBuffer uses heap allocation.
-    // Replace with something based on something like boost::static_vector.
-    AlignedCircularBuffer<T> backBuf_;
-    AlignedVector<T> frontBuf_;
+    T m1L_;    // Sum of the first Count() - lag samples.
+    T m1R_;    // Sum of the  last Count() - lag samples.
+    T m2_;     // Generalized second moment. Sum of x_{i} * x_{i+lag_}
 
-    T m1First_;    // First moment of the first Count() - AutocorrAccumState::lag samples.
-    T m1Last_;     // First moment of the last Count() - AutocorrAccumState::lag samples.
-    T m2_;         // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
+    std::array<T, lag_> rBuf_; // right buffer (circular)
+    std::array<T, lag_> lBuf_; //  left buffer
+    uint16_t lbi_;         // lBuf_ index, same type as lag_
+    uint16_t rbi_;         // rBuf_ circular index, same type as lag_
+
     bool canAddSample_;
 };
 

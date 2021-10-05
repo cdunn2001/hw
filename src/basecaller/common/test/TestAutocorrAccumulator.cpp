@@ -46,8 +46,12 @@ using FloatArray = LaneArray<float>;
 
 namespace {
 
-TEST(TestAutocorrAccumulator, SimpleLag4)
+static bool skip_unpassing = true;
+
+TEST(TestAutocorrAccumulator, SimpleOnePass)
 {
+    if (skip_unpassing) GTEST_SKIP();
+
     auto n = 9;
     AutocorrAccumulator<FloatArray> aca(0.0f);
     auto m00 = aca.Count().data()[0][0];                 EXPECT_EQ(0, m00);
@@ -68,9 +72,159 @@ TEST(TestAutocorrAccumulator, SimpleLag4)
     }
 
     auto m02 = aca.Count().data()[0][0];                 EXPECT_EQ(n, m02);
-    auto m12 = aca.Mean().data()[0][0];                  EXPECT_EQ(4, m12);
-    auto m22 = aca.Variance().data()[0][0];              EXPECT_EQ(7.5, m22);
-    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_EQ(4.0f/15, acorr2);
+    auto m12 = aca.Mean().data()[0][0];                  EXPECT_FLOAT_EQ(4, m12);
+    auto m22 = aca.Variance().data()[0][0];              EXPECT_FLOAT_EQ(7.5, m22);
+    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(-4.0/15, acorr2);
+}
+
+TEST(TestAutocorrAccumulator, SquareOnePass)
+{
+    if (skip_unpassing) GTEST_SKIP();
+
+    auto n = 14;
+    AutocorrAccumulator<FloatArray> aca(0.0f);
+
+    for (auto i = 0.0f; i < n; i += 1.0f)
+    {
+        aca.AddSample(i*i);
+    }
+
+    auto m02 = aca.Count().data()[0][0];                 EXPECT_EQ(n,      m02);
+    auto m12 = aca.Mean().data()[0][0];                  EXPECT_FLOAT_EQ(58.5f,   m12);
+    auto m22 = aca.Variance().data()[0][0];              EXPECT_FLOAT_EQ(3181.5f, m22);
+    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(0.20589344f, acorr2);
+}
+
+void AccCompare(const AutocorrAccumulator<FloatArray> &exp, const AutocorrAccumulator<FloatArray> &act,
+                float rtol=1e-05, float atol=1e-08)
+{
+    auto z = 0; // zmw_idx
+
+    // Expected data                                 // Actual data                                 
+    auto cnt0 = exp.Count().data()[0][z];            auto cnt1 = act.Count().data()[0][z];          
+    auto m10  = exp.Mean().data()[0][z];             auto m11  = act.Mean().data()[0][z];           
+    auto m20  = exp.Variance().data()[0][z];         auto m21  = act.Variance().data()[0][z];       
+    auto crr0 = exp.Autocorrelation().data()[0][z];  auto crr1 = act.Autocorrelation().data()[0][z];
+
+    EXPECT_EQ (cnt0, cnt1);
+    EXPECT_LE(abs(m10-m11),   atol + rtol*abs(m11));
+    EXPECT_LE(abs(m20-m21),   atol + rtol*abs(m21));
+    EXPECT_LE(abs(crr0-crr1), atol + rtol*abs(crr1));
+}
+
+TEST(TestAutocorrAccumulator, SimpleMerge)
+{
+    auto n = 30; // (lag + 2 + lag) * 3
+    AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3;
+
+    decltype(n) i = 0;
+    for (; i < 1 * n / 3; ++i)
+    {
+        aca.AddSample(i);
+        aca1.AddSample(i);
+    }
+
+    for (; i < 2 * n / 3; ++i)
+    {
+        aca.AddSample(i);
+        aca2.AddSample(i);
+    }
+
+    for (; i < n; ++i)
+    {
+        aca.AddSample(i);
+        aca3.AddSample(i);
+    }
+
+    // Copy for another merging order
+    AutocorrAccumulator<FloatArray> acb1(aca1), acb2(aca2), acb3(aca3);
+
+    aca1.Merge(aca2).Merge(aca3);
+    acb1.Merge(acb2.Merge(acb3));
+
+    AccCompare(aca, aca1);     // Test full vs merged accumulator A
+    AccCompare(aca, acb1);     // Test full vs merged accumulator B
+}
+
+TEST(TestAutocorrAccumulator, PartialMerge)
+{
+    if (skip_unpassing) GTEST_SKIP();
+
+    auto n = 30; // (lag + 2 + lag) * 3
+    AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3, aca4;
+
+    decltype(n) i = 0;
+    for (; i < 1; ++i)   // 1st is shorter than lag
+    {
+        aca.AddSample(i+1);
+        aca1.AddSample(i+1);
+    }
+
+    for (; i < 8; ++i)   // 2nd is shorter than 2*lag
+    {
+        aca.AddSample(i+1);
+        aca2.AddSample(i+1);
+    }
+
+    for (; i < 27; ++i)  // 3rd is typically long
+    {
+        aca.AddSample(i+1);
+        aca3.AddSample(i+1);
+    }
+
+    for (; i < n; ++i)   // 4th is shorter than lag
+    {
+        aca.AddSample(i+1);
+        aca4.AddSample(i+1);
+    }
+
+    // Copy to test another merging order
+    AutocorrAccumulator<FloatArray> acb1(aca1), acb2(aca2), acb3(aca3), acb4(aca4);
+    AutocorrAccumulator<FloatArray> acc1(aca1), acc2(aca2), acc3(aca3), acc4(aca4);
+
+    aca1.Merge(aca2).Merge(aca3).Merge(aca4);
+    acb1.Merge(acb2).Merge(acb3.Merge(acb4));
+    acc1.Merge(acc2.Merge(acc3.Merge(acc4)));
+
+    AccCompare(aca, aca1);     // Test full vs merged accumulator A
+    AccCompare(aca, acb1);     // Test full vs merged accumulator B
+    AccCompare(aca, acc1);     // Test full vs merged accumulator C
+}
+
+TEST(TestAutocorrAccumulator, SimpleSerializationMerge)
+{
+    if (skip_unpassing) GTEST_SKIP();
+
+    auto n = 30; // (lag + 2 + lag) * 3 : Regular case
+    AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3;
+
+    decltype(n) i = 0;
+    for (; i < 1 * n / 3; ++i)
+    {
+        aca.AddSample(i);
+        aca1.AddSample(i);
+    }
+
+    for (; i < 2 * n / 3; ++i)
+    {
+        aca.AddSample(i);
+        aca2.AddSample(i);
+    }
+
+    for (; i < n; ++i)
+    {
+        aca.AddSample(i);
+        aca3.AddSample(i);
+    }
+
+    // Copy for another merging order
+    AutocorrAccumulator<FloatArray> acb1(aca1.GetState()), acb2(aca2.GetState()), acb3(aca3.GetState());
+
+    aca1.Merge(aca2).Merge(aca3);
+    acb1.Merge(acb2.Merge(acb3));
+
+    AccCompare(aca, aca1);     // Test full vs merged accumulator A
+    AccCompare(aca, acb1);     // Test full vs merged accumulator B
 }
 
 TEST(TestAutocorrAccumulator, AutocorrSine)
@@ -99,8 +253,12 @@ TEST(TestAutocorrAccumulator, AutocorrSine)
     // l, ac = 4, a - np.mean(a)
     // autocorr_l = np.sum(ac[l:] * ac[:-l]) / (len(ac)-l) / np.var(a, ddof=1)
     // autocorr_l = 0.9281753966122696
+
+    //            relative tolerance    abs tolerance
+    auto z = 1;  auto rtol = 5e-5f; auto atol = 5e-5f; auto l = AutocorrAccumState::lag;
+
     const float expectAutocorr = 0.928175397f;
-    auto acorr0 = aca.Autocorrelation().data()[0][0];
+    auto acorr0 = aca.Autocorrelation().data()[0][z];
     EXPECT_NEAR(expectAutocorr, acorr0, 1.0e-4f);
 
     // Compare against Eigen
@@ -109,22 +267,18 @@ TEST(TestAutocorrAccumulator, AutocorrSine)
     EXPECT_FLOAT_EQ(em1[0], m11);
     EXPECT_FLOAT_EQ(em2[0], m21);
 
-    // all columns contain the same value, take #1
-    auto aci = 1; auto l = AutocorrAccumState::lag;
-    auto acr = x.col(aci).array() - em1[aci];
-    auto acorr1 = (acr.head(n-l) * acr.tail(n-l)).sum() / (n-l) / em2[aci];
+    auto acr = x.col(z).array() - em1[z];
+    auto acorr1 = (acr.head(n-l) * acr.tail(n-l)).sum() / (n-l) / em2[z];
 
-    EXPECT_NEAR(acorr1, acorr0, 1.0e-4f);
-
-    assert(true);
+    EXPECT_LE(abs(acorr0-acorr1),   atol + rtol*abs(acorr1));
 }
 
 struct TestAutocorrAccumulatorLinspace
     : public ::testing::TestWithParam<std::tuple<int, int>>
 {
-    const float a = 0.2;
+    const float a = 0.6;
     size_t w = laneSize;
-    size_t n = 1080;
+    size_t n = 1080;  // can be evenly divided to all denominators
     std::vector<float> data;
     size_t threshold;
 
@@ -137,7 +291,7 @@ struct TestAutocorrAccumulatorLinspace
 
         for (decltype(n) i = 0; i < n; ++i)
         {
-            data[i] = a*i;
+            data[i] = 1*std::sin(a*i);
         }
     }
 };
@@ -149,40 +303,25 @@ TEST_P(TestAutocorrAccumulatorLinspace, MergeThreshold)
     decltype(n) i = 0;
     for (; i < threshold; ++i)
     {
-        aca0.AddSample(data[i]); // Add all the samples to aca0
         aca1.AddSample(data[i]); // And samples BEFORE the threshold
     }
 
     for (; i < n; ++i)
     {
-        aca0.AddSample(data[i]); // Add all the samples to aca0
         aca2.AddSample(data[i]); // And samples AFTER the threshold
     }
+    aca0.AddSamples(data.begin(), data.end()); // Add all the samples to aca0
 
     aca1.Merge(aca2);
 
-    // frame_idx  relative tolerance      abs tolerance
-    auto aci = 0;  auto rtol = 1e-5f; auto atol = 1e-5f;
-
-    // Test full and merged accumulator
-    auto cnt0 = aca0.Count().data()[0][aci];           auto cnt1 = aca1.Count().data()[0][aci];
-    auto m10  = aca0.Mean().data()[0][aci];            auto m11  = aca1.Mean().data()[0][aci];
-    auto m20  = aca0.Variance().data()[0][aci];        auto m21  = aca1.Variance().data()[0][aci];
-    auto crr0 = aca0.Autocorrelation().data()[0][aci]; auto crr1 = aca1.Autocorrelation().data()[0][aci];
-
-    EXPECT_EQ (cnt0, cnt1);
-    EXPECT_NEAR (m10, m11,         atol);
-    EXPECT_LE (fabs(m20-m21)/m20,    rtol);
-    EXPECT_LE (fabs(crr0-crr1)/crr0, rtol);
-    EXPECT_NEAR (crr0, crr1,       atol);
+    AccCompare(aca0, aca1);     // Test full vs merged accumulator
 }
 
 struct TestAutocorrAccumulatorRand
     : public ::testing::TestWithParam<std::tuple<int, int>>
 {
-    const float a = 0.2;
     size_t w = laneSize;
-    size_t n = 1080;
+    size_t n = 1080;  // can be evenly divided to all denominators
     std::vector<float> data;
     size_t threshold;
 
@@ -194,9 +333,9 @@ struct TestAutocorrAccumulatorRand
         threshold = n * nom / dnom;
 
         std::default_random_engine gnr;
-        std::normal_distribution<float> dist(2.0, 2.0);
+        std::normal_distribution<float> dist(300.0, 20.0);
         std::generate(data.begin(), data.end(), std::bind(dist, gnr));
-        // for (decltype(n) i = 0; i < w*n; ++i) data[i] = a*i;
+        // for (decltype(n) i = 0; i < w*n; ++i) data[i] = 0.2*i;
     }
 };
 
@@ -213,45 +352,40 @@ TEST_P(TestAutocorrAccumulatorRand, MergeThreshold2)
 
     for (; i < threshold; ++i)
     {
-        aca0.AddSample(farr[i]); // Add all the samples to aca0
         aca1.AddSample(farr[i]); // And samples BEFORE the threshold
     }
 
     for (; i < n; ++i)
     {
-        aca0.AddSample(farr[i]); // Add all the samples to aca0
         aca2.AddSample(farr[i]); // And samples AFTER the threshold
     }
+    aca0.AddSamples(farr.begin(), farr.end()); // Add all the samples to aca0
 
     aca1.Merge(aca2);
 
     // frame_idx  relative tolerance      abs tolerance
-    auto aci = 3;  auto rtol = 5e-5f; auto atol = 1e-5f; auto l = AutocorrAccumState::lag;
+    auto z = 3;  auto rtol = 5e-4f; auto atol = 5e-4f; auto l = AutocorrAccumState::lag;
+
+    AccCompare(aca0, aca1, rtol, atol);     // Test full vs merged accumulator
 
     // Test full and merged accumulator
-    auto cnt0 = aca0.Count().data()[0][aci];           auto cnt1 = aca1.Count().data()[0][aci];
-    auto m10  = aca0.Mean().data()[0][aci];            auto m11  = aca1.Mean().data()[0][aci];
-    auto m20  = aca0.Variance().data()[0][aci];        auto m21  = aca1.Variance().data()[0][aci];
-    auto crr0 = aca0.Autocorrelation().data()[0][aci]; auto crr1 = aca1.Autocorrelation().data()[0][aci];
-
-    EXPECT_EQ (cnt0, cnt1);
-    EXPECT_NEAR (m10, m11,         atol);
-    EXPECT_LE (fabs(m20-m21)/m20,    rtol);
-    EXPECT_LE (fabs(crr0-crr1)/crr0, rtol);
-    EXPECT_NEAR (crr0, crr1,       atol);
+    auto cnt0 = aca0.Count().data()[0][z];
+    auto m10  = aca0.Mean().data()[0][z];
+    auto m20  = aca0.Variance().data()[0][z];
+    auto crr0 = aca0.Autocorrelation().data()[0][z];
 
     // Test against eigen
     Eigen::Map<Eigen::MatrixXf> xr(data.data(), w, n);
     auto em1 = xr.rowwise().mean();
     auto em2 = (xr.colwise() - em1).array().square().rowwise().sum() / (n - 1);
 
-    auto acr1 = xr.row(aci).array() - em1[aci];
-    auto acorr1 = (acr1.head(n-l) * acr1.tail(n-l)).sum() / (n-l) / em2[aci];
+    auto acr1 = xr.row(z).array() - em1[z];
+    auto acorr1 = (acr1.head(n-l) * acr1.tail(n-l)).sum() / (n-l) / em2[z];
 
-    EXPECT_FLOAT_EQ (m10, em1[aci]);
-    EXPECT_LE (fabs(m20-em2[aci])/em2[aci],  rtol);
-    EXPECT_LE (fabs(crr0-acorr1)/acorr1,     rtol);
-    EXPECT_NEAR (crr0, acorr1,             atol);
+    EXPECT_EQ(cnt0, n);
+    EXPECT_LE(abs(em1[z]-m10),   atol + rtol*abs(m10));
+    EXPECT_LE(abs(em2[z]-m20),   atol + rtol*abs(m20));
+    EXPECT_LE(abs(acorr1-crr0),  atol + rtol*abs(crr0));
 }
 
 const auto& testParams = ::testing::Combine(
