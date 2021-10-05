@@ -112,17 +112,11 @@ class BaselineStatsAggregatorDevice::Impl
 public:
     Impl(unsigned int poolSize,
          StashableAllocRegistrar* registrar)
-        : data_(registrar, SOURCE_MARKER(), poolSize, [](){
-            // Set up the initial value for all array entries.  We
-            // just want most things zero filled, but the two min/max
-            // values need special handling
-            Data::BaselinerStatAccumState ret{};
-            ret.traceMax = std::numeric_limits<int16_t>::lowest();
-            ret.traceMin = std::numeric_limits<int16_t>::max();
-            return ret;
-        }())
+        : data_(registrar, SOURCE_MARKER(), poolSize)
         , poolSize_(poolSize)
-    {}
+    {
+        ResetImpl();
+    }
 
     void AddMetricsImpl(const BaselinerMetrics& metrics)
     {
