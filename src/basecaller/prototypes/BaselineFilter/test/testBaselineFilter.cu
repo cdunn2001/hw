@@ -164,7 +164,12 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     auto params = FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(params, 1.0f, source.PacketLayouts()[i].NumBlocks(), 0, SOURCE_MARKER());
+        ComposedConstructArgs args;
+        args.scale = 1.0f;
+        args.numLanes = source.PacketLayouts()[i].NumBlocks();
+        args.pedestal = source.Pedestal();
+        args.val = 0;
+        filterData.emplace_back(params, args, SOURCE_MARKER());
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 

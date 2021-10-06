@@ -68,8 +68,8 @@ namespace Mongo {
 namespace Basecaller {
 
 AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig,
-                         DataSource::PacketLayout::EncodingFormat expectedEncoding)
-    : expectedEncoding_(expectedEncoding)
+                         const TraceInputProperties& expectedTraceInfo)
+    : expectedTraceInfo_(expectedTraceInfo)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
@@ -298,20 +298,21 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            return std::make_unique<HostNoOpBaseliner>(poolId);
+            return std::make_unique<HostNoOpBaseliner>(poolId, expectedTraceInfo_);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             return std::make_unique<DeviceMultiScaleBaseliner>(poolId,
                                                                params,
                                                                dims.lanesPerBatch,
-                                                               expectedEncoding_,
+                                                               expectedTraceInfo_,
                                                                &registrar);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
             // TODO: scaler currently set to default 1.0f
             return std::make_unique<HostMultiScaleBaseliner>(poolId,
-                                                                params,
-                                                                dims.lanesPerBatch);
+                                                             params,
+                                                             dims.lanesPerBatch,
+                                                             expectedTraceInfo_);
             break;
         default:
             ostringstream msg;

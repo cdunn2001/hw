@@ -4,7 +4,7 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1   \
   > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
-  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null 2>&1
 
   $ ls ${CRAMTMP}/test.baz
   /tmp/cramtests-*/test.baz (glob)
@@ -13,7 +13,8 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=true --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1    \
   > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
-  > --outputbazfile ${CRAMTMP}/multi.baz > /dev/null
+  > --outputbazfile ${CRAMTMP}/multi.baz > /dev/null 2>&1
+
   $ ls ${CRAMTMP}/multi*baz
   /tmp/cramtests-*/multi.0.baz (glob)
   /tmp/cramtests-*/multi.1.baz (glob)

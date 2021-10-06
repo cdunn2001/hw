@@ -39,6 +39,7 @@
 #include <basecaller/analyzer/BatchAnalyzer.h>
 #include <basecaller/traceAnalysis/AnalysisProfiler.h>
 #include <basecaller/traceAnalysis/ComputeDevices.h>
+#include <basecaller/traceAnalysis/TraceInputProperties.h>
 
 #include <dataTypes/BatchResult.h>
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
@@ -57,9 +58,9 @@ public:
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
                    const Mongo::Data::MovieConfig& movConfig,
                    const Mongo::Data::SystemsConfig& sysConfig,
-                   DataSource::PacketLayout::EncodingFormat expectedEncoding)
+                   const Mongo::Basecaller::TraceInputProperties& expectedTraceInfo)
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
-        , algoFactory_(algoConfig, expectedEncoding)
+        , algoFactory_(algoConfig, expectedTraceInfo)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
         , measurePCIeBandwidth_(sysConfig.analyzerHardware != Mongo::Basecaller::ComputeDevices::Host)
         , numStreams_(sysConfig.basecallerConcurrency)

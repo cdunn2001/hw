@@ -9,6 +9,8 @@
 #include <common/AlignedCircularBuffer.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
+#include <basecaller/traceAnalysis/TraceInputProperties.h>
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -33,14 +35,17 @@ public:     // Static functions
     { return sigmaEmaAlpha_; }
 
 public:
-    HostMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool)
+    HostMultiScaleBaseliner(uint32_t poolId,
+                            const BaselinerParams& params,
+                            uint32_t lanesPerPool,
+                            const TraceInputProperties& traceInfo)
         : Baseliner(poolId)
         , latency_(params.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
-           baselinerByLane_.emplace_back(params, Scale());
+           baselinerByLane_.emplace_back(params, Scale(), traceInfo.pedestal);
        }
     }
 
@@ -63,13 +68,14 @@ private:
     class MultiScaleBaseliner
     {
     public:
-        MultiScaleBaseliner(const BaselinerParams& params, float scaler)
+        MultiScaleBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
             : msLowerOpen_(params.Strides(), params.Widths())
             , msUpperOpen_(params.Strides(), params.Widths())
             , stride_(params.AggregateStride())
             , cSigmaBias_{params.SigmaBias()}
             , cMeanBias_{params.MeanBias()}
             , scaler_(scaler)
+            , pedestal_(pedestal)
         { }
 
         MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
@@ -163,6 +169,7 @@ private:
         const FloatArray cSigmaBias_;
         const FloatArray cMeanBias_;
         float scaler_;  // Converts DN quantization to e- values
+        int16_t pedestal_;
 
         FloatArray bgSigma_{0};
         LaneArray latData_{0};

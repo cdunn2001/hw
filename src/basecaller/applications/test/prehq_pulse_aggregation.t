@@ -7,7 +7,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations \
   > --outputbazfile ${BAZFILE} --config=prelimHQ.lookbackSize=1 --config=prelimHQ.enablePreHQ=true                         \
-  > --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
+  > --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null 2>&1
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
@@ -42,7 +42,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
 Test again with fewer frames, so that nothing is expected to be marked as an hq region yet
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":4096, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations \
-  > --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null
+  > --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null 2>&1
 
   $ bazviewer --silent --summary ${BAZFILE}
   events:0

@@ -21,7 +21,7 @@ std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
 HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 {
-    return std::visit([](const auto& rawTrace)
+    return std::visit([&](const auto& rawTrace)
     {
         auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
@@ -38,7 +38,7 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
             auto outItr = cameraTraceData.Begin();
             for (auto inItr = traceData.CBegin(); inItr != traceData.CEnd(); inItr++, outItr++)
             {
-                auto copy = inItr.Extract();
+                auto copy = inItr.Extract() - pedestal_;
                 outItr.Store(copy);
                 Mask isBaseline { false };
                 baselinerStats.AddSample(copy, copy, isBaseline);

@@ -31,6 +31,7 @@
 #include <common/cuda/memory/DeviceAllocationStash.h>
 
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
+#include <basecaller/traceAnalysis/TraceInputProperties.h>
 #include <dataTypes/BatchData.h>
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 
@@ -45,7 +46,7 @@ public:     // Static functions
 public:     // Structors and assignment
     // TODO: Should constructor handling configuration?
     AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig,
-                DataSource::PacketLayout::EncodingFormat expectedEncoding);
+                const TraceInputProperties& expectedTraceInfo);
 
     ~AlgoFactory();
 
@@ -97,7 +98,7 @@ private:
     Data::BasecallerPulseAccumConfig::MethodName pulseAccumOpt_;
     Data::BasecallerMetricsConfig::MethodName hfMetricsOpt_;
 
-    DataSource::PacketLayout::EncodingFormat expectedEncoding_;
+    TraceInputProperties expectedTraceInfo_;
 
     // TODO: Add enums for other strategy options as needed.
 };

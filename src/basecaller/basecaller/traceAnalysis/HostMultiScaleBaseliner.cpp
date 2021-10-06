@@ -134,7 +134,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     for (size_t i = 0; i < inputCount; i++, upIt++, loIt++)
     {
-        auto upperVal = upIt.Extract(), lowerVal = loIt.Extract();
+        auto upperVal = upIt.Extract() - pedestal_;
+        auto lowerVal = loIt.Extract() - pedestal_;
         const auto& bias = (upperVal + lowerVal) * 0.5f;
         const auto& framebkgndSigma = (upperVal - lowerVal) * sbInv;
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma);
@@ -144,7 +145,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
             // Data scaled first
-            auto rawSignal = trIt.Extract() * scaler_;
+            auto rawSignal = (trIt.Extract() - pedestal_) * scaler_;
             LaneArray blSubtractedFrame(rawSignal - baselineEstimate);
             // ... then added to statistics
             blsIt.Store(blSubtractedFrame);

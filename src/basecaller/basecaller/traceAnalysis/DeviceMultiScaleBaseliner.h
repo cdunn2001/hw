@@ -38,6 +38,7 @@
 #include <dataTypes/TraceBatch.h>
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
+#include <basecaller/traceAnalysis/TraceInputProperties.h>
 
 namespace PacBio {
 namespace Cuda {
@@ -78,7 +79,7 @@ public:
     DeviceMultiScaleBaseliner(uint32_t poolId,
                               const BaselinerParams& params,
                               uint32_t lanesPerPool,
-                              EncodingFormat expectedEncoding = EncodingFormat::INT16,
+                              const TraceInputProperties& traceInfo = {0, EncodingFormat::INT16},
                               Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     DeviceMultiScaleBaseliner(const DeviceMultiScaleBaseliner&) = delete;

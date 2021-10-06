@@ -3,7 +3,7 @@
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":64,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=16   \
-  > --config=algorithm.modelEstimationMode=FixedEstimations --outputbazfile ${BAZFILE} > /dev/null
+  > --config=algorithm.modelEstimationMode=FixedEstimations --outputbazfile ${BAZFILE} > /dev/null 2>&1 
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   4097
@@ -28,7 +28,7 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations \
-  > --outputbazfile ${BAZFILE} > /dev/null
+  > --outputbazfile ${BAZFILE} > /dev/null 2>&1
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
@@ -52,7 +52,7 @@
   $ BAZFILE=${CRAMTMP}/test4_hfmetrics.baz
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.Method=Host --config layout.lanesPerPool=1                  \
-  > --config=algorithm.modelEstimationMode=FixedEstimations --outputbazfile ${BAZFILE} > /dev/null
+  > --config=algorithm.modelEstimationMode=FixedEstimations --outputbazfile ${BAZFILE} > /dev/null 2>&1
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 4 ${CRAMTMP}/align_zmw_4.txt ${CRAMTMP}/expected_align_zmw_4.txt
   -CGGTAGAAGTGTACGGCTCTGACATAATGAGCCAGGCCGGTAGGCCGTCTTACACCCCTAGACGAGGTAGGTGTGACAAATAACGTGCCTCACAAGTCCGCTTTGTGTCGAGGTAAGAAGCTAAATAGGCCTGGTCTGTAGAGGCAGACGTTCGGTGCAACGGGACA-TCA

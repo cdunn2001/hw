@@ -3,7 +3,7 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":1,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1   \
   > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
-  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null 2>&1
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +1 | wc -l
   65
@@ -16,7 +16,7 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":1,"traceFile":"'$TRCFILE'" }'    \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config=prelimHQ.zmwOutputStride=4 \
   > --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations                                    \
-  > --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  > --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --outputbazfile ${CRAMTMP}/test.baz > /dev/null 2>&1
 
   $ bazviewer --silent -l ${CRAMTMP}/test.baz | tail -n +1 | wc -l
   65

@@ -172,10 +172,13 @@ void RunMultipleBaselineFilter(
     {
         using namespace PacBio::Mongo::Basecaller;
         using namespace PacBio::Mongo::Data;
+        ComposedConstructArgs args;
+        args.scale = scale;
+        args.numLanes = dataParams.kernelLanes;
+        args.pedestal = 0;
+        args.val = 0;
         filters.emplace_back(FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium),
-                             scale,
-                             dataParams.kernelLanes,
-                             0,
+                             args,
                              SOURCE_MARKER());
     }
 

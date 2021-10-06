@@ -63,28 +63,29 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrac
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      const BaselinerParams& params,
                                                      uint32_t lanesPerPool,
-                                                     EncodingFormat expectedEncoding,
+                                                     const TraceInputProperties& traceInfo,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
-    switch (expectedEncoding)
+    Cuda::ComposedConstructArgs args;
+    args.pedestal = traceInfo.pedestal;
+    args.scale = Scale();
+    args.numLanes = lanesPerPool;
+    args.val = initVal;
+    switch (traceInfo.encoding)
     {
     case DataSource::PacketLayout::EncodingFormat::UINT8:
         filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, uint8_t>>(
             params,
-            Scale(),
-            lanesPerPool,
-            initVal,
+            args,
             SOURCE_MARKER(),
             registrar);
         break;
     case DataSource::PacketLayout::EncodingFormat::INT16:
         filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, int16_t>>(
             params,
-            Scale(),
-            lanesPerPool,
-            initVal,
+            args,
             SOURCE_MARKER(),
             registrar);
         break;

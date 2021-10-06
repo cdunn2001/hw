@@ -431,6 +431,7 @@ struct SubtractParams
     PBHalf2 cSigmaBias;
     PBHalf2 cMeanBias;
     PBHalf2 scale;
+    int16_t pedestal;
 };
 
 template <typename T, size_t blockThreads, size_t lag>
@@ -457,19 +458,21 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
     // then each thread is only going to handle either the low or high
     // half of the data (i.e. 2 values instead of 4) so that it can align
     // more easily to the output.
-    auto GenerateAccessors = [](const auto& batch)
+    auto GenerateAccessors = [&](const auto& batch)
     {
         if constexpr (std::is_same_v<T, PBShort2>)
         {
-            return [accessor = batch.ZmwData(blockIdx.x, threadIdx.x)](size_t idx)
+            return [&, accessor = batch.ZmwData(blockIdx.x, threadIdx.x)](size_t idx)
             {
-                return accessor[idx];
+                return accessor[idx] - sParams.pedestal;
             };
         } else {
-            return [accessor = batch.ZmwData(blockIdx.x, threadIdx.x/2)](size_t idx)
+            return [&, accessor = batch.ZmwData(blockIdx.x, threadIdx.x/2)](size_t idx)
             {
-                if (threadIdx.x % 2 == 0) return accessor[idx].Low();
-                else return accessor[idx].High();
+                if (threadIdx.x % 2 == 0)
+                    return accessor[idx].Low() - sParams.pedestal;
+                else
+                    return accessor[idx].High() - sParams.pedestal;
             };
         }
         __builtin_unreachable();
@@ -583,6 +586,16 @@ public:
 
 };
 
+// Helper struct for constructing a ComposedFilter.  There
+// were too many loose parameters that were too easy to
+// accidentally swap
+struct ComposedConstructArgs
+{
+    int16_t pedestal;
+    float scale;
+    size_t numLanes;
+    short val;
+};
 template <size_t blockThreads, size_t lag, typename T = int16_t>
 class ComposedFilter : public ComposedFilterBase
 {
@@ -632,29 +645,28 @@ public:
     using BatchData = Mongo::Data::BatchData<T>;
 
     __host__ ComposedFilter(const Mongo::Basecaller::BaselinerParams& params,
-                            float scale,
-                            size_t numLanes,
-                            short val,
+                            const ComposedConstructArgs& args,
                             const Memory::AllocationMarker& marker,
                             Memory::StashableAllocRegistrar* registrar = nullptr)
-        : numLanes_(numLanes)
-        , latent(registrar, marker, numLanes, 0.0f)
+        : numLanes_(args.numLanes)
+        , latent(registrar, marker, args.numLanes, 0.0f)
     {
         const auto& widths = params.Widths();
         const auto& strides = params.Strides();
 
         sParams_.cMeanBias = params.MeanBias();
         sParams_.cSigmaBias = params.SigmaBias();
-        sParams_.scale = scale;
+        sParams_.scale = args.scale;
+        sParams_.pedestal = args.pedestal;
 
         fullStride_ = std::accumulate(strides.begin(), strides.end(), 1, std::multiplies{});
 
-        lower_.push_back(CreateFilter<ErodeDilate>(widths[0], strides[0], marker, numLanes, val, registrar));
-        upper_.push_back(CreateFilter<DilateErode>(widths[0], strides[0], marker, numLanes, val, registrar));
+        lower_.push_back(CreateFilter<ErodeDilate>(widths[0], strides[0], marker, numLanes_, args.val, registrar));
+        upper_.push_back(CreateFilter<DilateErode>(widths[0], strides[0], marker, numLanes_, args.val, registrar));
         for (size_t i = 1; i < widths.size(); ++i)
         {
-            lower_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
-            upper_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes, val, registrar));
+            lower_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes_, args.val, registrar));
+            upper_.push_back(CreateFilter<ErodeDilate>(widths[i], strides[i], marker, numLanes_, args.val, registrar));
         }
     }
 

@@ -4,6 +4,7 @@
 #include "Baseliner.h"
 
 #include <dataTypes/BaselinerStatAccumulator.h>
+#include <basecaller/traceAnalysis/TraceInputProperties.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -26,8 +27,9 @@ public:
     static void Finalize();
 
 public:
-    HostNoOpBaseliner(uint32_t poolId)
+    HostNoOpBaseliner(uint32_t poolId, const TraceInputProperties& traceInfo)
         : Baseliner(poolId)
+        , pedestal_(traceInfo.pedestal)
     { }
 
     HostNoOpBaseliner(const HostNoOpBaseliner&) = delete;
@@ -39,6 +41,8 @@ public:
 private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
     FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
+
+    int16_t pedestal_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -9,7 +9,7 @@
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768, "numZmwLanes":64,"traceFile":"'$TRCFILE'","cache":true }' \
   > --config multipleBazFiles=false --config=system.analyzerHardware=Host --config layout.lanesPerPool=16 \
-  > --outputbazfile ${BAZFILE} > ${CRAMTMP}/designer_out.txt
+  > --outputbazfile ${BAZFILE} > /dev/null 2>&1
 
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   4097
@@ -36,7 +36,7 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768, "numZmwLanes":4,"traceFile":"'$TRCFILE'","cache":true }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=system.analyzerHardware=Host  \
-  > --outputbazfile ${BAZFILE} > ${CRAMTMP}/test4_out.txt
+  > --outputbazfile ${BAZFILE} > /dev/null 2>&1
   $ bazviewer --silent -l ${BAZFILE} | tail -n +1 | wc -l
   257
 

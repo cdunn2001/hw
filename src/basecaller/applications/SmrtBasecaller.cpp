@@ -528,13 +528,13 @@ private:
 
     std::unique_ptr <TransformBody<const TraceBatchVariant, BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                     PacketLayout::EncodingFormat expectedEncoding) const
+                     const Basecaller::TraceInputProperties& expectedTraceInfo) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
                                                 movieConfig_,
                                                 config_.system,
-                                                expectedEncoding);
+                                                expectedTraceInfo);
     }
 
     std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
@@ -590,8 +590,10 @@ private:
             inputNode->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
-                auto expectedEncoding = source->PacketLayouts().begin()->second.Encoding();
-                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, expectedEncoding), GraphProfiler::ANALYSIS);
+                Basecaller::TraceInputProperties expectedTraceInfo;
+                expectedTraceInfo.encoding = source->PacketLayouts().begin()->second.Encoding();
+                expectedTraceInfo.pedestal = source->Pedestal();
+                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, expectedTraceInfo), GraphProfiler::ANALYSIS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
                 preHQ->AddNode(CreateBazSaver(*source, poolDims), GraphProfiler::BAZWRITER);
             }

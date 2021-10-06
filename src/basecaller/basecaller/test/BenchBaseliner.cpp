@@ -122,7 +122,9 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
     HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
 
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
-    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
+    TraceInputProperties traceInfo;
+    traceInfo.pedestal = 0;
+    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool, traceInfo);
 
     TraceBatchVariant batch = GenerateBatch(lanesPerPool, framesPerChunk);
     benchmark::DoNotOptimize(baseliner(batch)); // warm-up

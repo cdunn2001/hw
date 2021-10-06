@@ -102,9 +102,11 @@ TEST(TestHostNoOpBaseliner, Run)
     batchConfig.lanesPerPool = lanesPerPool;
     std::vector<HostNoOpBaseliner> baseliners;
 
+    TraceInputProperties traceInfo;
+    traceInfo.pedestal = 0;
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
-        baseliners.emplace_back(HostNoOpBaseliner(poolId));
+        baseliners.emplace_back(HostNoOpBaseliner(poolId, traceInfo));
     }
 
     auto generator = std::make_unique<ConstantGenerator>();
@@ -247,11 +249,14 @@ struct HostMultiScaleBaselinerTest : public ::testing::TestWithParam<TestingPara
 
         batchConfig.lanesPerPool = lanesPerPool;
 
+        TraceInputProperties traceInfo;
+        traceInfo.pedestal = 0;
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
             baseliners.emplace_back(HostMultiScaleBaseliner(poolId,
                                                             FilterParamsLookup(baselinerConfig.Filter),
-                                                            lanesPerPool));
+                                                            lanesPerPool,
+                                                            traceInfo));
         }
 
         burnInFrames = burnIn * batchConfig.framesPerChunk;
@@ -351,7 +356,9 @@ TEST_P(HostMultiScaleBaselinerSmallBatch, OneBatch)
     BaselinerParams blp({2, 8}, {5, 5}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
     uint32_t lanesPerPool_ = 1;
-    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool_);
+    TraceInputProperties traceInfo;
+    traceInfo.pedestal = 0;
+    HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool_, traceInfo);
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                             //      blocks                      frames     width
