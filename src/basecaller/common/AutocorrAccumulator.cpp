@@ -32,16 +32,15 @@ template <typename T>
 void AutocorrAccumulator<T>::AddSample(const T& value)
 {
     assert (canAddSample_);
-    const auto offlessVal = value - Offset();
+    auto offlessVal = value - Offset();
+    auto m1RTerm = offlessVal;
     if (lbi_ < lag_)
     {
         lBuf_[lbi_++] = offlessVal;
-    }
-    else
-    {
-        m1R_ += offlessVal;
+        m1RTerm = 0;
     }
     m1L_ += rBuf_[rbi_%lag_];
+    m1R_ += m1RTerm;
     m2_  += rBuf_[rbi_%lag_] * offlessVal;
     rBuf_[rbi_++%lag_] = offlessVal; rbi_ %= lag_;
     stats_.AddSample(value);   // StatAccumulator subtracts the offset itself.
@@ -104,7 +103,7 @@ AutocorrAccumulator<T>& AutocorrAccumulator<T>::operator*=(float s)
     m1L_   *= s;
     m1R_   *= s;
     m2_    *= s;
-    canAddSample_ = false;
+    canAddSample_ = false; // the only case when it gets false
     return *this;
 }
 
@@ -124,29 +123,27 @@ AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
     m2_  += that.m2_;
 
     auto n1 = lag_ - that.lbi_;  // that.lBuf may be not filled up
-    for (uint16_t i = 0; i < lag_ - n1; i++)
+    for (uint16_t k = 0; k < lag_ - n1; k++)
     {
-        m1L_ += rBuf_[(rbi_+i)%lag_];
-        m1R_ += that.lBuf_[i];
+        m1L_ += rBuf_[(rbi_+k)%lag_];
+        m1R_ += that.lBuf_[k];
         // Sum of muls of overlapping elements
-        m2_  += that.lBuf_[i] * rBuf_[(rbi_+i)%lag_];
+        m2_  += that.lBuf_[k] * rBuf_[(rbi_+k)%lag_];
         // Accept the whole right buffer
-        rBuf_[(rbi_+i)%lag_] = that.rBuf_[(that.rbi_+n1+i)%lag_];
+        rBuf_[(rbi_+k)%lag_] = that.rBuf_[(that.rbi_+n1+k)%lag_];
     }
 
     auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
-    for (uint16_t i = 0; i < n2; ++i)
+    for (uint16_t k = 0; k < n2; ++k)
     {
-        m1R_ -= that.lBuf_[i]; // Remove excessively overlapped values
+        m1R_ -= that.lBuf_[k]; // Remove excessively overlapped values
         // No need to adjust m2_ as excessive values were mul by 0
-        lBuf_[lbi_+i] = that.lBuf_[i];
+        lBuf_[lbi_+k] = that.lBuf_[k];
     }
 
     // Advance buffer indices
     lbi_ += n2;
     rbi_ += (lag_-n1); rbi_ %= lag_;
-
-    canAddSample_ &= that.CanAddSample();
 
     return *this;
 }

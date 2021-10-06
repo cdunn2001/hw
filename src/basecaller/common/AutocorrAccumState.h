@@ -43,7 +43,8 @@ namespace Mongo {
 struct AutocorrAccumState
 {
     static constexpr unsigned int lag = 4u;
-    using FloatArray = Cuda::Utility::CudaArray<float, laneSize>;
+    using FloatArray  = Cuda::Utility::CudaArray<float, laneSize>;
+    using UShortArray = Cuda::Utility::CudaArray<uint16_t, laneSize>;
 
     StatAccumState basicStats;
 
@@ -53,7 +54,7 @@ struct AutocorrAccumState
 
     FloatArray lBuf[4u];
     FloatArray rBuf[4u];
-    uint16_t meta[laneSize]; // lbi, rbi and canAddSample
+    UShortArray bIdx[2u]; // lbi, rbi
 };
 
 }}      // namespace PacBio::Mongo

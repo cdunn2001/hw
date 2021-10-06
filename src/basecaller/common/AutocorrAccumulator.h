@@ -71,9 +71,9 @@ public:     // Structors
         , m1L_ {state.moment1First}
         , m1R_ {state.moment1Last}
         , m2_ {state.moment2}
-        , lbi_ {state.meta[0]}
-        , rbi_ {state.meta[1]}
-        , canAddSample_ {state.meta[2] == 1}
+        , lbi_ {state.bIdx[0][0]}
+        , rbi_ {state.bIdx[1][0]}
+        , canAddSample_ {true}
     {
         // Deserialize both buffers
         auto i=lag_; while (i--) { lBuf_[i] = state.lBuf[i]; rBuf_[i] = state.rBuf[i]; }
@@ -92,9 +92,8 @@ public:     // Const methods
 
         // Serialize both buffers
         auto i=lag_; while (i--) { ret.lBuf[i] = lBuf_[i]; ret.rBuf[i] = rBuf_[i]; }
-        ret.meta[0] = lbi_;
-        ret.meta[1] = rbi_;
-        ret.meta[2] = canAddSample_;
+        ret.bIdx[0] = lbi_;
+        ret.bIdx[1] = rbi_;
 
         return ret;
     }
