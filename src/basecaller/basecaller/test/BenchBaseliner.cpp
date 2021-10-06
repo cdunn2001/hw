@@ -129,7 +129,7 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
 
     for (auto _ : st) {
         // This code gets timed
-        auto res = baseliner(std::move(batch));
+        auto res = baseliner(batch);
 
         benchmark::DoNotOptimize(res);  // Allow res to be clobbered.
         benchmark::ClobberMemory();     // and written to memory.

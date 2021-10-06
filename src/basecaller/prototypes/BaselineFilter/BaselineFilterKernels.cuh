@@ -625,8 +625,11 @@ class ComposedFilter : public ComposedFilterBase
         throw PBException("Unsupported and unexpected baseline filter stide/width combo");
     }
 public:
-    using TraceBatch = Mongo::Data::TraceBatch<int16_t>;
-    using BatchData = Mongo::Data::BatchData<int16_t>;
+    using TraceBatchVariant = Mongo::Data::TraceBatchVariant;
+    template <typename U>
+    using TraceBatch = Mongo::Data::TraceBatch<T>;
+    template <typename U>
+    using BatchData = Mongo::Data::BatchData<T>;
 
     __host__ ComposedFilter(const Mongo::Basecaller::BaselinerParams& params,
                             float scale,
@@ -657,15 +660,15 @@ public:
 
     // TODO should probably rename or remove.  Computes a naive baseline, but does
     // not do the actual baseline subtraction, nor does it do any bias corrections
-    __host__ void RunComposedFilter(const Mongo::Data::TraceBatch<T>& input,
-                                    TraceBatch& output)
+    __host__ void RunComposedFilter(const TraceBatch<T>& input,
+                                    TraceBatch<int16_t>& output)
     {
-        Mongo::Data::BatchData<T> lower(input.StorageDims(),
-                                        Cuda::Memory::SyncDirection::HostReadDeviceWrite,
-                                        SOURCE_MARKER());
-        Mongo::Data::BatchData<T> upper(input.StorageDims(),
-                                        Cuda::Memory::SyncDirection::HostReadDeviceWrite,
-                                        SOURCE_MARKER());
+        BatchData<T> lower(input.StorageDims(),
+                           Cuda::Memory::SyncDirection::HostReadDeviceWrite,
+                           SOURCE_MARKER());
+        BatchData<T> upper(input.StorageDims(),
+                           Cuda::Memory::SyncDirection::HostReadDeviceWrite,
+                           SOURCE_MARKER());
         RunLowerUpper(input, lower, upper);
 
         const auto& average = PBLauncher(AverageAndExpand<blockThreads>, numLanes_, blockThreads);
@@ -674,18 +677,18 @@ public:
 
     __host__ void RunBaselineFilter(const Mongo::Data::TraceBatchVariant& rawTrc,
                                     Mongo::Data::TraceBatch<int16_t>& output,
-                                    Memory::UnifiedCudaArray<Mongo::Data::BaselinerStatAccumState>& stats)
+                                    Memory::UnifiedCudaArray<Mongo::Data::BaselinerStatAccumState>& stats) override
     {
         try
         {
-            const auto& input = std::get<Mongo::Data::TraceBatch<T>>(rawTrc.Data());
+            const auto& input = std::get<TraceBatch<T>>(rawTrc.Data());
 
-            Mongo::Data::BatchData<T> lower(input.StorageDims(),
-                                            Cuda::Memory::SyncDirection::HostReadDeviceWrite,
-                                            SOURCE_MARKER());
-            Mongo::Data::BatchData<T> upper(input.StorageDims(),
-                                            Cuda::Memory::SyncDirection::HostReadDeviceWrite,
-                                            SOURCE_MARKER());
+            BatchData<T> lower(input.StorageDims(),
+                               Cuda::Memory::SyncDirection::HostReadDeviceWrite,
+                               SOURCE_MARKER());
+            BatchData<T> upper(input.StorageDims(),
+                               Cuda::Memory::SyncDirection::HostReadDeviceWrite,
+                               SOURCE_MARKER());
             RunLowerUpper(input, lower, upper);
 
             using GpuType = Memory::gpu_type_t<T>;
@@ -709,9 +712,9 @@ public:
     }
 
 private:
-    __host__ void RunLowerUpper(const Mongo::Data::TraceBatch<T>& input,
-                                Mongo::Data::BatchData<T>& workspace1,
-                                Mongo::Data::BatchData<T>& workspace2)
+    __host__ void RunLowerUpper(const TraceBatch<T>& input,
+                                BatchData<T>& workspace1,
+                                BatchData<T>& workspace2)
     {
         uint64_t numFrames = input.NumFrames();
 

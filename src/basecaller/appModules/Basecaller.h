@@ -244,8 +244,10 @@ public:
             //      can break this.
             if (measurePCIeBandwidth_)
             {
-                bytesUploaded_ += std::visit([](const auto& batch) { return batch.CopyToDevice();},
-                                             in.Data());
+                bytesUploaded_ += std::visit([](const auto& batch)
+                {
+                    return batch.CopyToDevice();
+                }, in.Data());
                 Cuda::CudaSynchronizeDefaultStream();
             }
             bytesUploaded_ += gpuStash->RetrievePool(in.Metadata().PoolId());

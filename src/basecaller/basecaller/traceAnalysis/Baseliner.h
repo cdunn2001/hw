@@ -50,9 +50,8 @@ public:
               Data::BaselinerMetrics>
     operator()(const Data::TraceBatchVariant& rawTrace)
     {
-        assert(std::visit([](const auto& batch) { return batch.GetMeta().PoolId(); }, rawTrace.Data())
-               == poolId_);
-        return FilterBaseline(std::move(rawTrace));
+        assert(rawTrace.Metadata().PoolId() == poolId_);
+        return FilterBaseline(rawTrace);
     }
 
     float Scale() const { return movieScaler_; }
