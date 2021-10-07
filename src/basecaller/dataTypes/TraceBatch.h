@@ -114,6 +114,7 @@ public:
     size_t LaneWidth() const { return storageDims_.laneWidth; }
 
     const auto& Data() const {return data_; }
+    auto& Data() {return data_; }
 private:
     BatchMetadata meta_;
     // Note, these are explicitly the extents of the underlying memory

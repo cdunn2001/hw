@@ -56,7 +56,7 @@ TEST(BaselineFilterTest, GlobalMemory)
         filterData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (const auto& batch : source.AllBatches<int16_t>())
     {
         auto firstFrame = batch.GetMeta().FirstFrame();
         auto batchIdx = batch.GetMeta().PoolId();
@@ -114,7 +114,7 @@ TEST(BaselineFilterTest, SharedMemory)
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (const auto& batch : source.AllBatches<int16_t>())
     {
         auto batchIdx = batch.GetMeta().PoolId();
         BatchData<int16_t> truth(batch.StorageDims(),
@@ -173,7 +173,7 @@ TEST(BaselineFilterTest, MultiKernelFilter)
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (auto& batch : source.AllBatches())
+    for (auto& batch : source.AllBatches<int16_t>())
     {
         auto batchIdx = batch.GetMeta().PoolId();
         BatchData<int16_t> truth(batch.StorageDims(),
