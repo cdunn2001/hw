@@ -162,7 +162,7 @@ public:
         // expanding the data and producing int16_t.  The
         // alternative is expanding the LaneArray code to handle
         // 8 bit data, which is not an easy proposition
-        template <typename U = T, typename F = int16_t>
+        template <typename U = std::remove_const_t<T>, typename F = int16_t>
         auto Extract() const
         {
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
