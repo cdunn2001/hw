@@ -142,8 +142,12 @@ TEST(TestAutocorrAccumulator, SimpleMerge)
     aca1.Merge(aca2).Merge(aca3);
     acb1.Merge(acb2.Merge(acb3));
 
-    AccCompare(aca, aca1);     // Test full vs merged accumulator A
-    AccCompare(aca, acb1);     // Test full vs merged accumulator B
+    AutocorrAccumulator<FloatArray> aca_empty;
+    aca_empty.Merge(aca1);
+
+    AccCompare(aca, aca1);       // Test full vs merged accumulator A
+    AccCompare(aca, acb1);       // Test full vs merged accumulator B
+    AccCompare(aca, aca_empty);  // Test full vs initially empty accumulator
 }
 
 TEST(TestAutocorrAccumulator, PartialMerge)
