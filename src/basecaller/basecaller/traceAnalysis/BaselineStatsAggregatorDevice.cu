@@ -48,12 +48,45 @@ __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
     l.moment2[threadIdx.x] += r.moment2[threadIdx.x];
     l.offset[threadIdx.x] += r.offset[threadIdx.x];
 }
-__device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r)
+
+__device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& that)
 {
-    MergeStat(l.basicStats, r.basicStats);
-    l.moment1First[threadIdx.x] += r.moment1First[threadIdx.x];
-    l.moment1Last[threadIdx.x] += r.moment1Last[threadIdx.x];
-    l.moment2[threadIdx.x] += r.moment2[threadIdx.x];
+    auto i = threadIdx.x;
+    auto lag_ = AutocorrAccumState::lag;
+
+    auto lbi_ = l.bIdx[0][i];
+    auto rbi_ = l.bIdx[1][i];
+    auto that_lbi_ = that.bIdx[0][i];
+    auto that_rbi_ = that.bIdx[1][i];
+
+    // Merge common statistics before processing tails
+    MergeStat(l.basicStats, that.basicStats);
+    l.moment1First[i] += that.moment1First[i];
+    l.moment1Last[i]  += that.moment1Last[i];
+    l.moment2[i]      += that.moment2[i];
+
+    auto n1 = lag_ - that_lbi_;  // that.lBuf may be not filled up
+    for (uint16_t k = 0; k < lag_ - n1; k++)
+    {
+        l.moment1First[i] += l.rBuf[(rbi_+k)%lag_][i];
+        l.moment1Last[i]  += that.lBuf[k][i];
+        // Sum of muls of overlapping elements
+        l.moment2[i]      += that.lBuf[k][i] * l.rBuf[(rbi_+k)%lag_][i];
+        // Accept the whole right buffer
+        l.rBuf[(rbi_+k)%lag_][i] = that.rBuf[(that_rbi_+n1+k)%lag_][i];
+    }
+
+    auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
+    for (uint16_t k = 0; k < n2; ++k)
+    {
+        l.moment1Last[i] -= that.lBuf[k][i]; // Remove excessively overlapped values
+        // No need to adjust m2_ as excessive values were mul by 0
+        l.lBuf[lbi_+k][i] = that.lBuf[k][i];
+    }
+
+    // Advance buffer indices
+    l.bIdx[0][i] += n2;
+    l.bIdx[1][i] += (lag_-n1); l.bIdx[1][i] %= lag_;
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
@@ -90,6 +123,11 @@ __device__ void ResetAutoCorr(AutocorrAccumState& accum)
     ResetArray(accum.moment1First);
     ResetArray(accum.moment1Last);
     ResetArray(accum.moment2);
+    auto i = AutocorrAccumState::lag;
+    i = AutocorrAccumState::lag; while (i--) ResetArray(accum.lBuf[i]);
+    i = AutocorrAccumState::lag; while (i--) ResetArray(accum.rBuf[i]);
+    ResetArray(accum.bIdx[0]);
+    ResetArray(accum.bIdx[1]);
 }
 __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)
 {

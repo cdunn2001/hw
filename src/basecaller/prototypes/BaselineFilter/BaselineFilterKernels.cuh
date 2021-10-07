@@ -200,6 +200,9 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2>
     }
 }
 
+// BLAS macro to traverse 2D array with C memory order
+#define IDX2C(i,j,ld) (((j)*(ld))+(i))
+
 template <size_t blockThreads, size_t lag>
 class StatAccumulator
 {
@@ -219,9 +222,18 @@ public:
         m0_[threadIdx.x] = 0.0f;
         m1_[threadIdx.x] = 0.0f;
         m2_[threadIdx.x] = 0.0f;
-        m1LagFirst_[threadIdx.x] = 0.0f;
-        m1LagLast_[threadIdx.x] = 0.0f;
+        m1L_[threadIdx.x] = 0.0f;
+        m1R_[threadIdx.x] = 0.0f;
         m2Lag_[threadIdx.x] = 0.0f;
+
+        lbi_[threadIdx.x] = 0;
+        rbi_[threadIdx.x] = 0;
+        int i = lag;
+        while (i--)
+        {
+            lBuf_[IDX2C(i, threadIdx.x, lag)] = 0.0f;
+            rBuf_[IDX2C(i, threadIdx.x, lag)] = 0.0f;
+        }
     }
 
     __device__ void AddBaselineData(PBHalf2 raw,
@@ -241,52 +253,81 @@ public:
         m2B_[threadIdx.x] += Blend(baselineMask, bsf*bsf, zero);
     }
 
-    __device__ void AddAutoCorrData(PBHalf2 bs,
-                                    PBHalf2 lagVal)
+    __device__ void AddAutoCorrData(PBHalf2 value)
     {
         PBHalf2 one(1.0f);
-        PBFloat2 bsf(bs);
+        PBFloat2 valf(value);
 
-        m0_[threadIdx.x] += one;
-        m1_[threadIdx.x] += bs;
-        m2_[threadIdx.x] += bsf*bsf;
+        auto i = threadIdx.x;
+        PBHalf2 offlessVal = value; // "offlessVal" for host name compatibility
+        PBHalf2 m1RTerm = offlessVal;
+        if (lbi_[i] < lag)
+        {
+            lBuf_[IDX2C(lbi_[i]++, i, lag)] = offlessVal;
+            m1RTerm = 0;
+        }
 
-        m1LagFirst_[threadIdx.x] += lagVal;
-        m1LagLast_[threadIdx.x] += bs;
-        m2Lag_[threadIdx.x] += bsf * lagVal;
+        PBHalf2 lagVal = rBuf_[IDX2C(rbi_[i]%lag, i, lag)];
+        m1L_[i]   += lagVal;
+        m1R_[i]   += m1RTerm;
+        m2Lag_[i] += valf * lagVal;
+        rBuf_[IDX2C(rbi_[i]++%lag, i, lag)] = offlessVal; rbi_[i] %= lag;
+
+        // stats_.AddSample
+        m0_[i] += one;
+        m1_[i] += value;
+        m2_[i] += valf*valf;
     }
 
     __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
     {
         // Baseline stats
-        stats.baselineStats.moment0[2*threadIdx.x] = m0B_[threadIdx.x].FloatX();
+        stats.baselineStats.moment0[2*threadIdx.x]   = m0B_[threadIdx.x].FloatX();
         stats.baselineStats.moment0[2*threadIdx.x+1] = m0B_[threadIdx.x].FloatY();
-        stats.baselineStats.moment1[2*threadIdx.x] = m1B_[threadIdx.x].FloatX();
+        stats.baselineStats.moment1[2*threadIdx.x]   = m1B_[threadIdx.x].FloatX();
         stats.baselineStats.moment1[2*threadIdx.x+1] = m1B_[threadIdx.x].FloatY();
-        stats.baselineStats.moment2[2*threadIdx.x] = m2B_[threadIdx.x].X();
+        stats.baselineStats.moment2[2*threadIdx.x]   = m2B_[threadIdx.x].X();
         stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].Y();
 
         // TODO weird float/short conversions going on.  Should make these consistently shorts probably
-        stats.rawBaselineSum[2*threadIdx.x] = rawSumB_[threadIdx.x].X();
+        stats.rawBaselineSum[2*threadIdx.x]   = rawSumB_[threadIdx.x].X();
         stats.rawBaselineSum[2*threadIdx.x+1] = rawSumB_[threadIdx.x].Y();
-        stats.traceMin[2*threadIdx.x] = minB_[threadIdx.x].FloatX();
-        stats.traceMin[2*threadIdx.x+1] = minB_[threadIdx.x].FloatY();
-        stats.traceMax[2*threadIdx.x] = maxB_[threadIdx.x].FloatX();
-        stats.traceMax[2*threadIdx.x+1] = maxB_[threadIdx.x].FloatY();
+        stats.traceMin[2*threadIdx.x]         = minB_[threadIdx.x].FloatX();
+        stats.traceMin[2*threadIdx.x+1]       = minB_[threadIdx.x].FloatY();
+        stats.traceMax[2*threadIdx.x]         = maxB_[threadIdx.x].FloatX();
+        stats.traceMax[2*threadIdx.x+1]       = maxB_[threadIdx.x].FloatY();
 
         // Auto-correlation stats
-        stats.fullAutocorrState.moment1First[2*threadIdx.x] = m1LagFirst_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.moment1First[2*threadIdx.x+1] = m1LagFirst_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.moment1Last[2*threadIdx.x] = m1LagLast_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.moment1Last[2*threadIdx.x+1] = m1LagLast_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.moment2[2*threadIdx.x] = m2Lag_[threadIdx.x].X();
-        stats.fullAutocorrState.moment2[2*threadIdx.x+1] = m2Lag_[threadIdx.x].Y();
+        stats.fullAutocorrState.moment1First[2*threadIdx.x]   = m1L_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.moment1First[2*threadIdx.x+1] = m1L_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.moment1Last[2*threadIdx.x]    = m1R_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.moment1Last[2*threadIdx.x+1]  = m1R_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag_[threadIdx.x].X();
+        stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag_[threadIdx.x].Y();
 
-        stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
+        int j = lag;
+        while (j--)
+        {
+            stats.fullAutocorrState.lBuf[j][2*threadIdx.x]    = lBuf_[IDX2C(j, threadIdx.x, lag)].X();
+            stats.fullAutocorrState.lBuf[j][2*threadIdx.x+1]  = lBuf_[IDX2C(j, threadIdx.x, lag)].Y();
+            stats.fullAutocorrState.rBuf[j][2*threadIdx.x]    = rBuf_[IDX2C(j, threadIdx.x, lag)].X();
+            stats.fullAutocorrState.rBuf[j][2*threadIdx.x+1]  = rBuf_[IDX2C(j, threadIdx.x, lag)].Y();
+        }
+
+        // TODO: leave two indices for a block
+        // lbi and rbi should be stored pairwise as the pipeline processing is split to each zmw
+        // Two indices is enough for the block, but I want to make sure there is no race condition
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x]          = lbi_[threadIdx.x];
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x+1]        = lbi_[threadIdx.x];
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x]          = rbi_[threadIdx.x];
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x+1]        = rbi_[threadIdx.x];
+
+        // Regular stats
+        stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x]   = m0_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
+        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x]   = m1_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
+        stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x]   = m2_[threadIdx.x].X();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
 
@@ -304,9 +345,14 @@ private:
     Utility::CudaArray<PBHalf2,  blockThreads> m0_;
     Utility::CudaArray<PBHalf2,  blockThreads> m1_;
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1LagFirst_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1LagLast_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1L_;
+    Utility::CudaArray<PBHalf2,  blockThreads> m1R_;
     Utility::CudaArray<PBFloat2, blockThreads> m2Lag_;
+
+    Utility::CudaArray<unsigned short, blockThreads> lbi_;
+    Utility::CudaArray<unsigned short, blockThreads> rbi_;
+    Utility::CudaArray<PBHalf2,  blockThreads*lag> lBuf_;
+    Utility::CudaArray<PBHalf2,  blockThreads*lag> rBuf_;
 };
 
 template <size_t blockThreads, size_t lag>
@@ -333,8 +379,6 @@ struct LatentBaselineData
         PBHalf2 thrHigh;
         PBHalf2 thrLow;
 
-        LocalCircularBuffer<blockThreads, lag> circularBuffer;
-
         // TODO unify these somehow with the host multiscale implementation
         static constexpr float sigmaThrL = 4.5f;
         static constexpr float sigmaThrH = 4.5f;
@@ -352,27 +396,25 @@ struct LatentBaselineData
             return bgSigma;
         }
 
-        __device__ void ProcessFrame(PBHalf2 raw,
-                                     PBHalf2 subtracted,
-                                     PBHalf2 scale,
-                                     StatAccumulator<blockThreads, lag>& stats)
+        __device__ void AddToBaselineStats(PBHalf2 rawTrace,
+                                        PBHalf2 blSubtracted,
+                                        PBHalf2 scale,
+                                        StatAccumulator<blockThreads, lag>& stats)
         {
-            auto maskHp1 = subtracted < thrHigh * scale;
+            auto maskHp1 = blSubtracted < thrHigh * scale;
 
             auto mask = latHMask1 && latLMask && maskHp1;
 
-            latLMask = subtracted < thrLow * scale;
+            latLMask = blSubtracted < thrLow * scale;
             latHMask2 = latHMask1;
             latHMask1 = maskHp1;
 
+            stats.AddAutoCorrData(latData);
+
             stats.AddBaselineData(latRawData, latData, mask);
 
-            latRawData = raw;
-            latData = subtracted;
-
-            auto lagVal = circularBuffer.Front();
-            circularBuffer.PushBack(subtracted);
-            stats.AddAutoCorrData(subtracted, lagVal);
+            latRawData = rawTrace;
+            latData = blSubtracted;
         }
     };
 
@@ -380,13 +422,12 @@ struct LatentBaselineData
     {
         LocalLatent local;
 
-        local.bgSigma        = bgSigma[threadIdx.x];
-        local.latData        = latData[threadIdx.x];
-        local.latRawData     = latRawData[threadIdx.x];
-        local.latLMask       = latLMask[threadIdx.x];
-        local.latHMask1      = latHMask1[threadIdx.x];
-        local.latHMask2      = latHMask2[threadIdx.x];
-        local.circularBuffer.Init(circularBuffer);
+        local.bgSigma      = bgSigma[threadIdx.x];
+        local.latData      = latData[threadIdx.x];
+        local.latRawData   = latRawData[threadIdx.x];
+        local.latLMask     = latLMask[threadIdx.x];
+        local.latHMask1    = latHMask1[threadIdx.x];
+        local.latHMask2    = latHMask2[threadIdx.x];
 
         return local;
     }
@@ -399,7 +440,6 @@ struct LatentBaselineData
         latLMask[threadIdx.x]       = local.latLMask;
         latHMask1[threadIdx.x]      = local.latHMask1;
         latHMask2[threadIdx.x]      = local.latHMask2;
-        local.circularBuffer.ReplaceShared(circularBuffer);
     }
 private:
     // TODO init
@@ -409,7 +449,6 @@ private:
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
     Utility::CudaArray<PBBool2, blockThreads> latHMask1;
     Utility::CudaArray<PBBool2, blockThreads> latHMask2;
-    BlockCircularBuffer<blockThreads, lag> circularBuffer;
 };
 
 struct SubtractParams
@@ -452,14 +491,15 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
         auto smoothedBkgndSigma = localLatent.SmoothedSigma(framebkgndSigma);
         auto baselineEstimate = (bias + sParams.cMeanBias * smoothedBkgndSigma) * sParams.scale;
 
-        auto start = i*stride;
-        auto end = (i+1)*stride;
-        for (int j = start; j < end; ++j)
+        for (int j = i*stride; j < (i+1)*stride; ++j)
         {
+            // Data scaled first
             auto rawSignal = inZmw[j] * sParams.scale;
             auto blSubtractedFrame = rawSignal - baselineEstimate;
-            localLatent.ProcessFrame(rawSignal, blSubtractedFrame, sParams.scale, stats);
+            // ... stored as output traces
             outZmw[j] = ToShort(blSubtractedFrame);
+            // ... and added to statistics
+            localLatent.AddToBaselineStats(rawSignal, blSubtractedFrame, sParams.scale, stats);
         }
     }
 
