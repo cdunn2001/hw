@@ -259,9 +259,9 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
         else
         {
             auto frameLabelerMetrics = frameLabeler_->EmptyMetrics(baselinedTraces.StorageDims());
-
-            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                       baselinedTraces.StorageDims());
+            auto labels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(labels.Metadata(),
+                                                                       labels.StorageDims());
             auto pulses = std::move(pulsesAndMetrics.first);
             auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
             return std::make_tuple(std::move(pulses),
@@ -332,8 +332,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // data to the DME
     if (baselinedTraces.GetMeta().FirstFrame() < nFramesBaselinerStartUp + poolDmeDelayFrames_)
     {
-        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                   baselinedTraces.StorageDims());
+        auto emptyLabels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(emptyLabels.Metadata(),
+                                                                        emptyLabels.StorageDims());
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     }
     bool fullEstimation = dme_->AddBatch(baselinedTraces, baselinerMetrics, &models_, profiler);
@@ -362,8 +363,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // TODO: When metrics are produced, use them to update detection models.
     if (!fullEstimationOccured_)
     {
-        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                   baselinedTraces.StorageDims());
+        auto emptyLabels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(emptyLabels.Metadata(),
+                                                                        emptyLabels.StorageDims());
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     } else
     {
