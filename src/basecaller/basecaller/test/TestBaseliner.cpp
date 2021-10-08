@@ -181,6 +181,8 @@ struct TestingParams
     // to make sure this value is set when constructing a test suite
     BasecallerBaselinerConfig::MethodName method =
         BasecallerBaselinerConfig::MethodName::NoOp;
+    PacketLayout::EncodingFormat encoding = PacketLayout::INT16;
+    int16_t pedestalValue = 0;
     uint16_t pfg_pulseIpd   = -1;
     uint16_t pfg_pulseWidth = -1;
     int16_t  pfg_baseSignalLevel = -1;
@@ -219,6 +221,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
                             params.pfg_baseSignalLevel   : pfConfig.baselineSignalLevel);
         pfConfig.pulseSignalLevels   = (!params.pfg_pulseSignalLevels.empty() ?
                             params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
+        pfConfig.pedestal = params.pedestalValue;
 
         Data::MovieConfig movConfig;
         movConfig.photoelectronSensitivity = scaler;
@@ -235,7 +238,8 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         batchConfig.lanesPerPool = lanesPerPool;
 
         TraceInputProperties traceInfo;
-        traceInfo.pedestal = 0;
+        traceInfo.pedestal = params.pedestalValue;
+        traceInfo.encoding = params.encoding;
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
             if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
@@ -259,7 +263,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         burnInFrames = burnIn * batchConfig.framesPerChunk;
 
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                            PacketLayout::INT16,
+                            params.encoding,
                             {lanesPerPool, batchConfig.framesPerChunk, laneSize});
         size_t numFrames = numBlocks * batchConfig.framesPerChunk;
         SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
@@ -331,7 +335,7 @@ TEST_P(MultiScaleBaseliner, StatsAndSubtraction)
                  auto itrOut = outBlock.Begin();
                  for ( ; itrIn != inBlock.End(); ++itrIn, ++itrOut)
                  {
-                     auto diff = itrIn.Extract() * scaler - itrOut.Extract();
+                     auto diff = (itrIn.Extract() - GetParam().pedestalValue) * scaler - itrOut.Extract();
                      diffSum += MakeUnion(diff)[0];
                  }
                  auto observedBaseline = diffSum / traces.NumFrames();
@@ -356,12 +360,15 @@ INSTANTIATE_TEST_SUITE_P(,
                          testing::Values(
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::HostMultiScale,
+                                 PacketLayout::INT16,
+                                 0,   /* pedestal          */
                                  512, /* pulseIpd          */
-                                 0,
-                                 /* pulseWidth        */  // no pulses
+                                 0,   /* pulseWidth        */  // no pulses
                              },
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::HostMultiScale,
+                                 PacketLayout::INT16,
+                                 0,    /* pedestal          */
                                  20,   /* pulseIpd          */
                                  24,   /* pulseWidth        */
                                  200,  /* baseSignalLevel   */
@@ -369,16 +376,55 @@ INSTANTIATE_TEST_SUITE_P(,
                              },
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::DeviceMultiScale,
+                                 PacketLayout::INT16,
+                                 0,   /* pedestal          */
                                  512, /* pulseIpd          */
-                                 0,
-                                 /* pulseWidth        */  // no pulses
+                                 0,   /* pulseWidth        */  // no pulses
                              },
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::DeviceMultiScale,
+                                 PacketLayout::INT16,
+                                 0,    /* pedestal          */
                                  20,   /* pulseIpd          */
                                  24,   /* pulseWidth        */
                                  200,  /* baseSignalLevel   */
                                  {600} /* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::HostMultiScale,
+                                 PacketLayout::INT16,
+                                 -150, /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::HostMultiScale,
+                                 PacketLayout::UINT8,
+                                 -150, /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::DeviceMultiScale,
+                                 PacketLayout::INT16,
+                                 -150, /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::DeviceMultiScale,
+                                 PacketLayout::UINT8,
+                                 -150, /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
                              }),
                          [](const testing::TestParamInfo<TestingParams>& info)
                          {
@@ -387,10 +433,20 @@ INSTANTIATE_TEST_SUITE_P(,
                                  name << "HostMultiScale";
                              else
                                  name << "DeviceMultiScale";
+
+                             if (info.param.encoding == PacketLayout::INT16)
+                                 name << "_INT16";
+                             else
+                                 name << "_UINT8";
+
                              if (info.param.pfg_pulseIpd == 512)
                                  name << "_AllBaseline";
                              else
                                  name << "_WithPulses";
+
+                             if (info.param.pedestalValue != 0)
+                                 name << "AndPedestal";
+
                              return name.str();
                          });
 template <typename T>
