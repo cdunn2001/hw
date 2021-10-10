@@ -85,12 +85,13 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             // Model autocor values too
             // bls.fullAutocorrState.moment1First = n0 * meanVec - varVec * lag_;
             // bls.fullAutocorrState.moment1Last  = n0 * meanVec + varVec * lag_;
-            bls.fullAutocorrState.moment2      = lag_ * meanVec * (meanVec - varVec)  // left part
-                                               + (n0 - 3*lag_)  * pow2(meanVec)       // main part
+            bls.fullAutocorrState.moment2      = lag_ * meanVec * 0.0f                // left part
+                                               + (n0 - 2*lag_)  * pow2(meanVec)       // main part
                                                + lag_ * (meanVec + varVec) * meanVec; // right part
             auto i = lag_;
             i = lag_; while (i--) bls.fullAutocorrState.lBuf[i] = meanVec - varVec;   // left values
             i = lag_; while (i--) bls.fullAutocorrState.rBuf[i] = meanVec + varVec;   // right values
+
             bls.fullAutocorrState.bIdx[0] = min(LaneArray<float>(lag_), n0);
             bls.fullAutocorrState.bIdx[1] = uint16_t(n0.ToArray()[0]) % lag_;
 
@@ -313,16 +314,13 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
 {
     auto bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
 
-    // const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f, 300.0f};
-    // const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f, 30.0f};
-    const std::vector<float> mPar {5.0f};
-    const std::vector<float> s2Par {3.0f};
-    const uint32_t nChunks = mPar.size();
-    ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
+    const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
+    const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
+    ASSERT_EQ(mPar.size(), s2Par.size()) << "Number of means and variance should be equal";
 
     // Feed mock data to BaselineStatsAggregator under test.
     std::vector<Data::BaselinerMetrics> simulatedStats;
-    for (unsigned int i = 0; i < nChunks; ++i)
+    for (unsigned int i = 0; i < mPar.size(); ++i)
     {
         // couple parameters to force non-constant data across pool/lane
         int laneMultiplier = 2;
@@ -361,9 +359,15 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
                 // expected.fullAutocorrState.moment1First[zmw] += laneStat.fullAutocorrState.moment1First[zmw];
                 // expected.fullAutocorrState.moment1Last[zmw] += laneStat.fullAutocorrState.moment1Last[zmw];
                 expected.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
-                auto i = lag_;
-                i = lag_; while (i--) expected.fullAutocorrState.moment2[zmw] +=
-                                        expected.fullAutocorrState.rBuf[i][zmw] * laneStat.fullAutocorrState.lBuf[i][zmw];
+
+                auto k = lag_;
+                while (k--)
+                {
+                    expected.fullAutocorrState.moment2[zmw] +=
+                        expected.fullAutocorrState.rBuf[k][zmw] * laneStat.fullAutocorrState.lBuf[k][zmw];
+
+                    expected.fullAutocorrState.rBuf[k][zmw] = laneStat.fullAutocorrState.rBuf[k][zmw];
+                }
             }
         }
 
