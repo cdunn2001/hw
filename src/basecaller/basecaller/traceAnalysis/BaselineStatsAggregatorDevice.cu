@@ -85,8 +85,8 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& t
     }
 
     // Advance buffer indices
-    l.bIdx[0][i] += n2;
-    l.bIdx[1][i] += (lag_-n1); l.bIdx[1][i] %= lag_;
+    l.bIdx[0][i] += n2;                                // lbi
+    l.bIdx[1][i] += (lag_-n1); l.bIdx[1][i] %= lag_;   // rbi
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,

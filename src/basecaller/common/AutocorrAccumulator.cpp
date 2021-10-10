@@ -63,8 +63,8 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     auto mu = stats_.Mean();
 
     // m1L_ and m1R_ can be obtained without storing them
-    // T fb_m1(0); T bb_m1(0); 
-    // auto i=lag_; while (i--) { fb_m1 += lBuf_[i]; bb_m1 += rBuf_[i];}
+    // T fb_m1(0); T bb_m1(0);
+    // auto i=lag_; while (i--) { fb_m1 += lBuf_[i]; bb_m1 += rBuf_[i]; }
     // T m1L_ = stats_.M1() - bb_m1; // Sum of first n-l elements
     // T m1R_ = stats_.M1() - fb_m1; // Sum of  last n-l elements
     // T ac = mu*((m1L_+m1R_) - nmk*mu);
@@ -73,7 +73,6 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     T m1x2 = 2*stats_.M1();
     T tail_m1(0); i=lag_; while (i--) { tail_m1 += lBuf_[i] + rBuf_[i]; }
     T ac = mu*((m1x2 - tail_m1) - nmk*mu);
-
 #else
     T ac = m1L_ * m1R_ / nmk;   // TODO: change this low degree formula to the one above
 #endif
@@ -128,7 +127,7 @@ AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
         m1L_ += rBuf_[(rbi_+k)%lag_];
         m1R_ += that.lBuf_[k];
         // Sum of muls of overlapping elements
-        m2_  += that.lBuf_[k] * rBuf_[(rbi_+k)%lag_];
+        m2_  += rBuf_[(rbi_+k)%lag_] * that.lBuf_[k];
         // Accept the whole right buffer
         rBuf_[(rbi_+k)%lag_] = that.rBuf_[(that.rbi_+n1+k)%lag_];
     }
