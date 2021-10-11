@@ -258,11 +258,9 @@ public:
 
         auto i = threadIdx.x;
         PBHalf2 offlessVal = value; // "offlessVal" for host name compatibility
-        PBHalf2 m1RTerm = offlessVal;
         if (lbi_[i] < lag)
         {
             lBuf_[IDX2C(lbi_[i]++, i, lag)] = offlessVal;
-            m1RTerm = 0;
         }
 
         PBHalf2 lagVal = rBuf_[IDX2C(rbi_[i]%lag, i, lag)];

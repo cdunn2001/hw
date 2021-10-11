@@ -31,11 +31,9 @@ void AutocorrAccumulator<T>::AddSample(const T& value)
 {
     assert (canAddSample_);
     auto offlessVal = value - Offset();
-    auto m1RTerm = offlessVal;
     if (lbi_ < lag_)
     {
         lBuf_[lbi_++] = offlessVal;
-        m1RTerm = 0;
     }
     m2_  += rBuf_[rbi_%lag_] * offlessVal;
     rBuf_[rbi_++%lag_] = offlessVal; rbi_ %= lag_;

@@ -191,7 +191,7 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
         // lane = np.random.normal(0, 5, 512).astype(np.float32)
         // lane += np.roll(lane, 4)  # add correlation
         // lane /= 2
-        // lane[:l], lane[-l:] = [-3, -1, 1, 3], [2, 3, 4, 5]
+        // lane[:l], lane[-l:] = [-9, -7, -5, -3], [6, 7, 8, 9]
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
             baselinerStats.rawBaselineSum[zmw] = 100;

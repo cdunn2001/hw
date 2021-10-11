@@ -46,12 +46,8 @@ using FloatArray = LaneArray<float>;
 
 namespace {
 
-static bool skip_unpassing = true;
-
 TEST(TestAutocorrAccumulator, SimpleOnePass)
 {
-    if (skip_unpassing) GTEST_SKIP();
-
     auto n = 9;
     AutocorrAccumulator<FloatArray> aca(0.0f);
     auto m00 = aca.Count().data()[0][0];                 EXPECT_EQ(0, m00);
@@ -79,8 +75,6 @@ TEST(TestAutocorrAccumulator, SimpleOnePass)
 
 TEST(TestAutocorrAccumulator, SquareOnePass)
 {
-    if (skip_unpassing) GTEST_SKIP();
-
     auto n = 14;
     AutocorrAccumulator<FloatArray> aca(0.0f);
 
@@ -152,8 +146,6 @@ TEST(TestAutocorrAccumulator, SimpleMerge)
 
 TEST(TestAutocorrAccumulator, PartialMerge)
 {
-    if (skip_unpassing) GTEST_SKIP();
-
     auto n = 30; // (lag + 2 + lag) * 3
     AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3, aca4;
 
@@ -197,8 +189,6 @@ TEST(TestAutocorrAccumulator, PartialMerge)
 
 TEST(TestAutocorrAccumulator, SimpleSerializationMerge)
 {
-    if (skip_unpassing) GTEST_SKIP();
-
     auto n = 30; // (lag + 2 + lag) * 3 : Regular case
     AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3;
 
