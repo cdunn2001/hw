@@ -307,6 +307,7 @@ public:
         // TODO: leave two indices for a block
         // lbi and rbi should be stored pairwise as the pipeline processing is split to each zmw
         // Two indices is enough for the block, but I want to make sure there is no race condition
+        // and alignment is correct.
         stats.fullAutocorrState.bIdx[0][2*threadIdx.x]          = lbi_[threadIdx.x];
         stats.fullAutocorrState.bIdx[0][2*threadIdx.x+1]        = lbi_[threadIdx.x];
         stats.fullAutocorrState.bIdx[1][2*threadIdx.x]          = rbi_[threadIdx.x];
