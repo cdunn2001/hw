@@ -168,6 +168,8 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
 
 Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
 {
+    static constexpr uint32_t lag_ = AutocorrAccumState::lag;
+    auto n0 = config.config.layout.framesPerChunk;
     Data::BaselinerMetrics ret(
             config.dims.lanesPerBatch,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
@@ -177,18 +179,31 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
     {
         ret.baselinerStats.GetHostView()[lane] = bsa.GetState();
         auto& baselinerStats = ret.baselinerStats.GetHostView()[lane];
+
+        auto i = lag_;
+        // Fill in left and right buffers
+        i = lag_; while (i--) baselinerStats.fullAutocorrState.lBuf[i] = (-9.0f + 2*i);
+        i = lag_; while (i--) baselinerStats.fullAutocorrState.rBuf[i] = (6.0f + i);
+        baselinerStats.fullAutocorrState.bIdx[0] = std::min(lag_, n0);
+        baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag_;
+
+        // Python code to create the reference block stat metrics
+        // lane = np.random.normal(0, 5, 512).astype(np.float32)
+        // lane += np.roll(lane, 4)  # add correlation
+        // lane /= 2
+        // lane[:l], lane[-l:] = [-3, -1, 1, 3], [2, 3, 4, 5]
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
             baselinerStats.rawBaselineSum[zmw] = 100;
             baselinerStats.baselineStats.moment0[zmw] = 98;
             baselinerStats.baselineStats.moment1[zmw] = 10;
             baselinerStats.baselineStats.moment2[zmw] = 100;
-            baselinerStats.fullAutocorrState.moment1First[zmw] = 10;
-            baselinerStats.fullAutocorrState.moment1Last[zmw] = 20;
-            baselinerStats.fullAutocorrState.moment2[zmw] = 120;
-            baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
-            baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
-            baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
+            baselinerStats.fullAutocorrState.moment1First[zmw] = 90;
+            baselinerStats.fullAutocorrState.moment1Last[zmw] = 100;
+            baselinerStats.fullAutocorrState.moment2[zmw] = 2510;
+            baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = n0;
+            baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 110;
+            baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 5650;
         }
     }
     return ret;
@@ -269,7 +284,6 @@ GenerateModels(BaseSimConfig sim)
 template <typename HFT>
 void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
 {
-
     // TODO: test that the last block is finalized regardless of condition?
 
     size_t numFramesPerBatch = sim.config.layout.framesPerChunk;
@@ -284,7 +298,6 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
     const auto& pdMetrics = GeneratePulseDetectorMetrics(sim);
 
     int blocks_tested = 0;
-
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(sim, batchIdx);
@@ -293,12 +306,12 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx);
-            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
+            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l += 131)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
                 const auto& bs = pdMetrics.baselineStats.GetHostView()[l];
                 ASSERT_EQ(sizeof(mb), 8768);
-                for (uint32_t z = 0; z < laneSize; ++z)
+                for (uint32_t z = 0; z < laneSize; z += 23)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
                                 * sim.numBases
@@ -387,7 +400,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
-                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
+                    EXPECT_NEAR(0.4167899, mb.autocorrelation[z], 0.0001);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
                     EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);
