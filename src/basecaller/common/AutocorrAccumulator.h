@@ -68,15 +68,13 @@ public:     // Structors
 
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
-        , m1L_ {state.moment1First}
-        , m1R_ {state.moment1Last}
         , m2_ {state.moment2}
         , lbi_ {state.bIdx[0][0]}
         , rbi_ {state.bIdx[1][0]}
         , canAddSample_ {true}
     {
         // Deserialize both buffers
-        auto i=lag_; while (i--) { lBuf_[i] = state.lBuf[i]; rBuf_[i] = state.rBuf[i]; }
+        auto k=lag_; while (k--) { lBuf_[k] = state.lBuf[k]; rBuf_[k] = state.rBuf[k]; }
     }
 
 public:     // Const methods
@@ -85,24 +83,16 @@ public:     // Const methods
         AutocorrAccumState ret
         {
             stats_.GetState(),
-            m1L_,
-            m1R_,
             m2_
         };
 
         // Serialize both buffers
-        auto i=lag_; while (i--) { ret.lBuf[i] = lBuf_[i]; ret.rBuf[i] = rBuf_[i]; }
+        auto k=lag_; while (k--) { ret.lBuf[k] = lBuf_[k]; ret.rBuf[k] = rBuf_[k]; }
         ret.bIdx[0] = lbi_;
         ret.bIdx[1] = rbi_;
 
         return ret;
     }
-
-    const T& M1First() const
-    { return m1L_; }
-
-    const T& M1Last() const
-    { return m1R_; }
 
     const T& M2() const
     { return m2_; }
@@ -178,10 +168,8 @@ public:     // Mutating methods
     void Reset()
     {
         stats_.Reset();
-        auto i=lag_; while (i--) { lBuf_[i] = rBuf_[i] = T(0); }
-        m1L_ = T(0);
-        m1R_ = T(0);
         m2_  = T(0);
+        auto k=lag_; while (k--) { lBuf_[k] = rBuf_[k] = T(0); }
         lbi_ = 0;
         rbi_ = 0;
         canAddSample_ = true;
@@ -191,8 +179,6 @@ private:    // Data
     static constexpr uint16_t lag_ = AutocorrAccumState::lag;
     StatAccumulator<T> stats_;
 
-    T m1L_;    // Sum of the first Count() - lag samples.
-    T m1R_;    // Sum of the  last Count() - lag samples.
     T m2_;     // Generalized second moment. Sum of x_{i} * x_{i+lag_}
 
     std::array<T, lag_> rBuf_; // right buffer (circular)

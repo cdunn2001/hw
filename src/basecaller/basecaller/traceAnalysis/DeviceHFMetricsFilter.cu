@@ -104,8 +104,6 @@ public: // metrics
     SingleMetric<PBHalf2> traceM0;
     SingleMetric<PBHalf2> traceM1;
     SingleMetric<float2>  traceM2;
-    SingleMetric<PBHalf2> autocorrM1First;
-    SingleMetric<PBHalf2> autocorrM1Last;
     SingleMetric<float2>  autocorrM2;
     Cuda::Utility::CudaArray<SingleMetric<PBHalf2>, AutocorrAccumState::lag> lBuf;
     Cuda::Utility::CudaArray<SingleMetric<PBHalf2>, AutocorrAccumState::lag> rBuf;
@@ -192,21 +190,24 @@ __device__ PBShort2 blendShort0(const uint16_t val)
 __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& blockMetrics)
 {
     const uint32_t lag = AutocorrAccumState::lag;
-    PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
+    auto i = threadIdx.x;
     // math in float2 for additional range
-    const auto nmk = asFloat2(blockMetrics.traceM0[threadIdx.x] - PBHalf2(lag));
-    PBHalf2 ac = [&blockMetrics](float2 nmk)
+    const auto nmk = asFloat2(blockMetrics.traceM0[i] - PBHalf2(lag));
+    PBHalf2 ac = [&blockMetrics, i](float2 nmk)
     {
-        auto ac = asFloat2(blockMetrics.autocorrM1First[threadIdx.x])
-                  * asFloat2(blockMetrics.autocorrM1Last[threadIdx.x])
-                  / nmk;
-        ac = (blockMetrics.autocorrM2[threadIdx.x] - ac)
-             / (nmk * asFloat2(variance(blockMetrics.traceM0[threadIdx.x],
-                                        blockMetrics.traceM1[threadIdx.x],
-                                        blockMetrics.traceM2[threadIdx.x])));
+        float2 mu = asFloat2(blockMetrics.traceM1[i] / blockMetrics.traceM0[i]);
+        float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[i]);
+        auto k=lag; while (k--) { m1x2 = m1x2 - asFloat2(blockMetrics.lBuf[k][i] + blockMetrics.rBuf[k][i]); }
+        float2 ac = mu*(m1x2 - nmk*mu);
+
+        ac = (blockMetrics.autocorrM2[i] - ac)
+             / (nmk * asFloat2(variance(blockMetrics.traceM0[i],
+                                        blockMetrics.traceM1[i],
+                                        blockMetrics.traceM2[i])));
         return ac;
     }(nmk);
     const PBBool2 nanMask = !(ac == ac);
+    const PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
     ac = min(max(ac, -1.0f), 1.0f);  // clamp ac in [-1..1]
     return Blend(nmk < 1.0f || nanMask, nans, ac);
 }
@@ -277,13 +278,11 @@ __global__ void InitializeMetrics(
     blockMetrics.traceM1[threadIdx.x] = 0.0f;
     blockMetrics.traceM2[threadIdx.x] = zero;
 
-    blockMetrics.autocorrM1First[threadIdx.x] = 0.0f;
-    blockMetrics.autocorrM1Last[threadIdx.x] = 0.0f;
     blockMetrics.autocorrM2[threadIdx.x] = zero;
 
-    auto i = AutocorrAccumState::lag;
-    i = AutocorrAccumState::lag; while (i--) blockMetrics.lBuf[i][threadIdx.x] = 0.0f;
-    i = AutocorrAccumState::lag; while (i--) blockMetrics.rBuf[i][threadIdx.x] = 0.0f;
+    auto k = AutocorrAccumState::lag;
+    k = AutocorrAccumState::lag; while (k--) blockMetrics.lBuf[k][threadIdx.x] = 0.0f;
+    k = AutocorrAccumState::lag; while (k--) blockMetrics.rBuf[k][threadIdx.x] = 0.0f;
     blockMetrics.lbi[threadIdx.x] = 0;
     blockMetrics.lbi[threadIdx.x] = 0;
 
@@ -461,18 +460,11 @@ __global__ void ProcessChunk(
         auto that_lbi_ = that.bIdx[0][i];
         auto that_rbi_ = that.bIdx[1][i];
 
-        blockMetrics.autocorrM1First[i] += getWideLoad(
-            that.moment1First);
-        blockMetrics.autocorrM1Last[i] += getWideLoad(
-            that.moment1Last);
-        blockMetrics.autocorrM2[i] += getWideLoad(
-            that.moment2);
+        blockMetrics.autocorrM2[i] += getWideLoad(that.moment2);
 
         auto n1 = lag_ - that_lbi_;  // that.lBuf may be not filled up
         for (uint16_t k = 0; k < lag_ - n1; k++)
         {
-            blockMetrics.autocorrM1First[i] += blockMetrics.rBuf[(rbi_+k)%lag_][i];
-            blockMetrics.autocorrM1Last[i]  += getWideLoad(that.lBuf[k]);
             // Sum of muls of overlapping elements
             blockMetrics.autocorrM2[i]      +=
                 getWideLoad(that.lBuf[k]) * 
@@ -485,8 +477,6 @@ __global__ void ProcessChunk(
         auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
         for (uint16_t k = 0; k < n2; ++k)
         {
-            blockMetrics.autocorrM1Last[i] -=  // Remove excessively overlapped values
-                getWideLoad(that.lBuf[k]);
             // No need to adjust m2_ as excessive values were mul by 0
             blockMetrics.lBuf[lbi_+k][i] =
                 getWideLoad(that.lBuf[k]);

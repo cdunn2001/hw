@@ -61,15 +61,11 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& t
 
     // Merge common statistics before processing tails
     MergeStat(l.basicStats, that.basicStats);
-    l.moment1First[i] += that.moment1First[i];
-    l.moment1Last[i]  += that.moment1Last[i];
     l.moment2[i]      += that.moment2[i];
 
     auto n1 = lag_ - that_lbi_;  // that.lBuf may be not filled up
     for (uint16_t k = 0; k < lag_ - n1; k++)
     {
-        l.moment1First[i] += l.rBuf[(rbi_+k)%lag_][i];
-        l.moment1Last[i]  += that.lBuf[k][i];
         // Sum of muls of overlapping elements
         l.moment2[i]      += that.lBuf[k][i] * l.rBuf[(rbi_+k)%lag_][i];
         // Accept the whole right buffer
@@ -79,7 +75,6 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& t
     auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
-        l.moment1Last[i] -= that.lBuf[k][i]; // Remove excessively overlapped values
         // No need to adjust m2_ as excessive values were mul by 0
         l.lBuf[lbi_+k][i] = that.lBuf[k][i];
     }
@@ -120,12 +115,10 @@ __device__ void ResetStat(StatAccumState& stat)
 __device__ void ResetAutoCorr(AutocorrAccumState& accum)
 {
     ResetStat(accum.basicStats);
-    ResetArray(accum.moment1First);
-    ResetArray(accum.moment1Last);
     ResetArray(accum.moment2);
-    auto i = AutocorrAccumState::lag;
-    i = AutocorrAccumState::lag; while (i--) ResetArray(accum.lBuf[i]);
-    i = AutocorrAccumState::lag; while (i--) ResetArray(accum.rBuf[i]);
+    auto k = AutocorrAccumState::lag;
+    k = AutocorrAccumState::lag; while (k--) ResetArray(accum.lBuf[k]);
+    k = AutocorrAccumState::lag; while (k--) ResetArray(accum.rBuf[k]);
     ResetArray(accum.bIdx[0]);
     ResetArray(accum.bIdx[1]);
 }

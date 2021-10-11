@@ -83,8 +83,6 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             bls.baselineStats.moment2 = (n0 - 1)*varVec + n0*pow2(meanVec);
 
             // Model autocor values too
-            // bls.fullAutocorrState.moment1First = n0 * meanVec - varVec * lag_;
-            // bls.fullAutocorrState.moment1Last  = n0 * meanVec + varVec * lag_;
             bls.fullAutocorrState.moment2      = lag_ * meanVec * 0.0f                // left part
                                                + (n0 - 2*lag_)  * pow2(meanVec)       // main part
                                                + lag_ * (meanVec + varVec) * meanVec; // right part
@@ -157,8 +155,6 @@ TYPED_TEST(TestBaselineStatsAggregator, EmptyAggregator)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == 0));
 
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == 0));
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == 0));
     }
 }
@@ -191,8 +187,6 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expected.fullAutocorrState.moment1First)));
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expected.fullAutocorrState.moment1Last)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 
@@ -215,8 +209,6 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expected.fullAutocorrState.moment1First)));
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expected.fullAutocorrState.moment1Last)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 
@@ -239,8 +231,6 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == 0));
 
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == 0));
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == 0));
 
         auto i = AutocorrAccumState::lag;
@@ -355,9 +345,6 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
                 expected.fullAutocorrState.basicStats.moment2[zmw] += laneStat.fullAutocorrState.basicStats.moment2[zmw];
                 expected.fullAutocorrState.basicStats.offset[zmw] += laneStat.fullAutocorrState.basicStats.offset[zmw];
 
-                // moment1First and moment1Last should be calculated differently for the merge
-                // expected.fullAutocorrState.moment1First[zmw] += laneStat.fullAutocorrState.moment1First[zmw];
-                // expected.fullAutocorrState.moment1Last[zmw] += laneStat.fullAutocorrState.moment1Last[zmw];
                 expected.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
 
                 auto k = lag_;
@@ -386,9 +373,6 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        // moment1First and moment1Last are not correctly calculated for expected case
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expected.fullAutocorrState.moment1First)));
-        // EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expected.fullAutocorrState.moment1Last)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 }

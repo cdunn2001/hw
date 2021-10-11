@@ -222,17 +222,15 @@ public:
         m0_[threadIdx.x] = 0.0f;
         m1_[threadIdx.x] = 0.0f;
         m2_[threadIdx.x] = 0.0f;
-        m1L_[threadIdx.x] = 0.0f;
-        m1R_[threadIdx.x] = 0.0f;
         m2Lag_[threadIdx.x] = 0.0f;
 
         lbi_[threadIdx.x] = 0;
         rbi_[threadIdx.x] = 0;
-        int i = lag;
-        while (i--)
+        int k = lag;
+        while (k--)
         {
-            lBuf_[IDX2C(i, threadIdx.x, lag)] = 0.0f;
-            rBuf_[IDX2C(i, threadIdx.x, lag)] = 0.0f;
+            lBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
+            rBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
         }
     }
 
@@ -268,8 +266,6 @@ public:
         }
 
         PBHalf2 lagVal = rBuf_[IDX2C(rbi_[i]%lag, i, lag)];
-        m1L_[i]   += lagVal;
-        m1R_[i]   += m1RTerm;
         m2Lag_[i] += valf * lagVal;
         rBuf_[IDX2C(rbi_[i]++%lag, i, lag)] = offlessVal; rbi_[i] %= lag;
 
@@ -298,10 +294,6 @@ public:
         stats.traceMax[2*threadIdx.x+1]       = maxB_[threadIdx.x].FloatY();
 
         // Auto-correlation stats
-        stats.fullAutocorrState.moment1First[2*threadIdx.x]   = m1L_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.moment1First[2*threadIdx.x+1] = m1L_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.moment1Last[2*threadIdx.x]    = m1R_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.moment1Last[2*threadIdx.x+1]  = m1R_[threadIdx.x].FloatY();
         stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag_[threadIdx.x].X();
         stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag_[threadIdx.x].Y();
 
@@ -345,8 +337,6 @@ private:
     Utility::CudaArray<PBHalf2,  blockThreads> m0_;
     Utility::CudaArray<PBHalf2,  blockThreads> m1_;
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1L_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1R_;
     Utility::CudaArray<PBFloat2, blockThreads> m2Lag_;
 
     Utility::CudaArray<unsigned short, blockThreads> lbi_;

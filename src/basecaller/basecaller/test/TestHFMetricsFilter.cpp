@@ -198,8 +198,6 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
             baselinerStats.baselineStats.moment0[zmw] = 98;
             baselinerStats.baselineStats.moment1[zmw] = 10;
             baselinerStats.baselineStats.moment2[zmw] = 100;
-            baselinerStats.fullAutocorrState.moment1First[zmw] = 90;
-            baselinerStats.fullAutocorrState.moment1Last[zmw] = 100;
             baselinerStats.fullAutocorrState.moment2[zmw] = 2510;
             baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = n0;
             baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 110;
@@ -400,7 +398,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
-                    EXPECT_NEAR(0.4167899, mb.autocorrelation[z], 0.0001);
+                    EXPECT_NEAR(0.415805, mb.autocorrelation[z], 0.0001);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
                     EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);

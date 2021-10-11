@@ -48,8 +48,6 @@ struct AutocorrAccumState
 
     StatAccumState basicStats;
 
-    FloatArray moment1First;
-    FloatArray moment1Last;
     FloatArray moment2;
 
     FloatArray lBuf[4u];
