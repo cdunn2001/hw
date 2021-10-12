@@ -41,6 +41,9 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
+// TODO: Move MergeAutocorr and MergeStat in a common functionality so that
+// it would be shared among BaselineStatsAggregatorDevice, 
+// BasecallingMetricsAccumulatorDevice and AutocorrAccumulator
 __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
 {
     l.moment0[threadIdx.x] += r.moment0[threadIdx.x];
@@ -49,39 +52,39 @@ __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
     l.offset[threadIdx.x] += r.offset[threadIdx.x];
 }
 
-__device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& that)
+__device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r)
 {
     auto i = threadIdx.x;
-    auto lag_ = AutocorrAccumState::lag;
+    auto lag = AutocorrAccumState::lag;
 
     auto lbi_ = l.bIdx[0][i];
     auto rbi_ = l.bIdx[1][i];
-    auto that_lbi_ = that.bIdx[0][i];
-    auto that_rbi_ = that.bIdx[1][i];
+    auto that_lbi_ = r.bIdx[0][i];
+    auto that_rbi_ = r.bIdx[1][i];
 
     // Merge common statistics before processing tails
-    MergeStat(l.basicStats, that.basicStats);
-    l.moment2[i]      += that.moment2[i];
+    MergeStat(l.basicStats, r.basicStats);
+    l.moment2[i]      += r.moment2[i];
 
-    auto n1 = lag_ - that_lbi_;  // that.lBuf may be not filled up
-    for (uint16_t k = 0; k < lag_ - n1; k++)
+    auto n1 = lag - that_lbi_;  // that lBuf may be not filled up
+    for (uint16_t k = 0; k < lag - n1; k++)
     {
         // Sum of muls of overlapping elements
-        l.moment2[i]      += that.lBuf[k][i] * l.rBuf[(rbi_+k)%lag_][i];
+        l.moment2[i]      += r.lBuf[k][i] * l.rBuf[(rbi_+k)%lag][i];
         // Accept the whole right buffer
-        l.rBuf[(rbi_+k)%lag_][i] = that.rBuf[(that_rbi_+n1+k)%lag_][i];
+        l.rBuf[(rbi_+k)%lag][i] = r.rBuf[(that_rbi_+n1+k)%lag][i];
     }
 
-    auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
+    auto n2 = lag - lbi_;      // this lBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
         // No need to adjust m2_ as excessive values were mul by 0
-        l.lBuf[lbi_+k][i] = that.lBuf[k][i];
+        l.lBuf[lbi_+k][i] = r.lBuf[k][i];
     }
 
     // Advance buffer indices
-    l.bIdx[0][i] += n2;                                // lbi
-    l.bIdx[1][i] += (lag_-n1); l.bIdx[1][i] %= lag_;   // rbi
+    l.bIdx[0][i] += n2;                              // lbi
+    l.bIdx[1][i] += (lag-n1); l.bIdx[1][i] %= lag;   // rbi
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,

@@ -61,7 +61,7 @@ struct TestBaselineStatsAggregator : public ::testing::Test
     {
         Data::BaselinerMetrics stats(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         ArrayUnion<LaneArray<float>> addVec;
-        auto lag_ = AutocorrAccumState::lag;
+        const auto lag = AutocorrAccumState::lag;
         for (uint32_t i = 0; i < laneSize; ++i)
         {
             addVec[i] = static_cast<float>(i*zmwAddition);
@@ -83,15 +83,15 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             bls.baselineStats.moment2 = (n0 - 1)*varVec + n0*pow2(meanVec);
 
             // Model autocor values too
-            bls.fullAutocorrState.moment2      = lag_ * meanVec * 0.0f                // left part
-                                               + (n0 - 2*lag_)  * pow2(meanVec)       // main part
-                                               + lag_ * (meanVec + varVec) * meanVec; // right part
-            auto i = lag_;
-            i = lag_; while (i--) bls.fullAutocorrState.lBuf[i] = meanVec - varVec;   // left values
-            i = lag_; while (i--) bls.fullAutocorrState.rBuf[i] = meanVec + varVec;   // right values
+            bls.fullAutocorrState.moment2      = lag * meanVec * 0.0f                // left part
+                                               + (n0 - 2*lag)  * pow2(meanVec)       // main part
+                                               + lag * (meanVec + varVec) * meanVec; // right part
+            auto i = lag;
+            i = lag; while (i--) bls.fullAutocorrState.lBuf[i] = meanVec - varVec;   // left values
+            i = lag; while (i--) bls.fullAutocorrState.rBuf[i] = meanVec + varVec;   // right values
 
-            bls.fullAutocorrState.bIdx[0] = min(LaneArray<float>(lag_), n0);
-            bls.fullAutocorrState.bIdx[1] = uint16_t(n0.ToArray()[0]) % lag_;
+            bls.fullAutocorrState.bIdx[0] = min(LaneArray<float>(lag), n0);
+            bls.fullAutocorrState.bIdx[1] = uint16_t(n0.ToArray()[0]) % lag;
 
             // Cheat a bit and duplicate the baseline stats into the autocorr stats
             bls.fullAutocorrState.basicStats = bls.baselineStats;
@@ -321,7 +321,7 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
     }
 
     using LaneArr = LaneArray<float>;
-    auto lag_ = AutocorrAccumState::lag;
+    auto lag = AutocorrAccumState::lag;
     Data::BaselinerMetrics metrics = bsa->TraceStats();
     for(size_t lane = 0; lane < metrics.baselinerStats.Size(); ++lane)
     {
@@ -347,7 +347,7 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
 
                 expected.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
 
-                auto k = lag_;
+                auto k = lag;
                 while (k--)
                 {
                     expected.fullAutocorrState.moment2[zmw] +=

@@ -183,8 +183,8 @@ private:    // Data
 
     std::array<T, lag_> rBuf_; // right buffer (circular)
     std::array<T, lag_> lBuf_; //  left buffer
-    uint16_t lbi_;         // lBuf_ index, same type as lag_
-    uint16_t rbi_;         // rBuf_ circular index, same type as lag_
+    uint16_t lbi_;         // left buffer index
+    uint16_t rbi_;         // right buffer circular index
 
     bool canAddSample_;
 };

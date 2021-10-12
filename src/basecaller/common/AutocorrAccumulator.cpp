@@ -98,7 +98,7 @@ AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
     stats_.Merge(that.stats_);
     m2_  += that.m2_;
 
-    auto n1 = lag_ - that.lbi_;  // that.lBuf may be not filled up
+    auto n1 = lag_ - that.lbi_;  // that lBuf may be not filled up
     for (uint16_t k = 0; k < lag_ - n1; k++)
     {
         // Sum of muls of overlapping elements
@@ -107,7 +107,7 @@ AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
         rBuf_[(rbi_+k)%lag_] = that.rBuf_[(that.rbi_+n1+k)%lag_];
     }
 
-    auto n2 = lag_ - lbi_;      // this->lBuf may be not filled up
+    auto n2 = lag_ - lbi_;      // this lBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
         // No need to adjust m2_ as excessive values were mul by 0

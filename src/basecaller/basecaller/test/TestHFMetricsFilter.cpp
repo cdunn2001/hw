@@ -168,7 +168,7 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
 
 Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
 {
-    static constexpr uint32_t lag_ = AutocorrAccumState::lag;
+    static constexpr uint32_t lag = AutocorrAccumState::lag;
     auto n0 = config.config.layout.framesPerChunk;
     Data::BaselinerMetrics ret(
             config.dims.lanesPerBatch,
@@ -180,12 +180,12 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
         ret.baselinerStats.GetHostView()[lane] = bsa.GetState();
         auto& baselinerStats = ret.baselinerStats.GetHostView()[lane];
 
-        auto i = lag_;
+        auto i = lag;
         // Fill in left and right buffers
-        i = lag_; while (i--) baselinerStats.fullAutocorrState.lBuf[i] = (-9.0f + 2*i);
-        i = lag_; while (i--) baselinerStats.fullAutocorrState.rBuf[i] = (6.0f + i);
-        baselinerStats.fullAutocorrState.bIdx[0] = std::min(lag_, n0);
-        baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag_;
+        i = lag; while (i--) baselinerStats.fullAutocorrState.lBuf[i] = (-9.0f + 2*i);
+        i = lag; while (i--) baselinerStats.fullAutocorrState.rBuf[i] = (6.0f + i);
+        baselinerStats.fullAutocorrState.bIdx[0] = std::min(lag, n0);
+        baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag;
 
         // Python code to create the reference block stat metrics
         // lane = np.random.normal(0, 5, 512).astype(np.float32)
