@@ -117,11 +117,11 @@ __device__ void ResetStat(StatAccumState& stat)
 }
 __device__ void ResetAutoCorr(AutocorrAccumState& accum)
 {
+    auto lag = AutocorrAccumState::lag;
     ResetStat(accum.basicStats);
     ResetArray(accum.moment2);
-    auto k = AutocorrAccumState::lag;
-    k = AutocorrAccumState::lag; while (k--) ResetArray(accum.lBuf[k]);
-    k = AutocorrAccumState::lag; while (k--) ResetArray(accum.rBuf[k]);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.lBuf[k]);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.rBuf[k]);
     ResetArray(accum.bIdx[0]);
     ResetArray(accum.bIdx[1]);
 }

@@ -23,7 +23,7 @@ AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
 {
     static_assert(lag_ > 0, "Invalid lag value");
 
-    auto k=lag_; while (k--) { lBuf_[k] = rBuf_[k] = T(0); }
+    for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = rBuf_[k] = T(0); }
 }
 
 template <typename T>
@@ -55,7 +55,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     // autocorr_l4 # 0.8617625800897488
     auto mu = stats_.Mean();
     auto m1x2 = 2*stats_.M1();
-    auto k=lag_; while (k--) { m1x2 -= lBuf_[k] + rBuf_[k]; }
+    for (auto k = 0u; k < lag_; ++k) { m1x2 -= lBuf_[k] + rBuf_[k]; }
     auto ac = mu*(m1x2 - nmk*mu);
     ac = (m2_ - ac) / (nmk * stats_.Variance());
     

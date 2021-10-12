@@ -180,10 +180,9 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
         ret.baselinerStats.GetHostView()[lane] = bsa.GetState();
         auto& baselinerStats = ret.baselinerStats.GetHostView()[lane];
 
-        auto i = lag;
         // Fill in left and right buffers
-        i = lag; while (i--) baselinerStats.fullAutocorrState.lBuf[i] = (-9.0f + 2*i);
-        i = lag; while (i--) baselinerStats.fullAutocorrState.rBuf[i] = (6.0f + i);
+        for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.lBuf[k] = (-9.0f + 2*k);
+        for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.rBuf[k] = (6.0f + k);
         baselinerStats.fullAutocorrState.bIdx[0] = std::min(lag, n0);
         baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag;
 

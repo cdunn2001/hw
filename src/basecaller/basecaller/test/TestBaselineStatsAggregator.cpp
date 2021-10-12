@@ -86,9 +86,8 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             bls.fullAutocorrState.moment2      = lag * meanVec * 0.0f                // left part
                                                + (n0 - 2*lag)  * pow2(meanVec)       // main part
                                                + lag * (meanVec + varVec) * meanVec; // right part
-            auto i = lag;
-            i = lag; while (i--) bls.fullAutocorrState.lBuf[i] = meanVec - varVec;   // left values
-            i = lag; while (i--) bls.fullAutocorrState.rBuf[i] = meanVec + varVec;   // right values
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.lBuf[k] = meanVec - varVec;   // left values
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.rBuf[k] = meanVec + varVec;   // right values
 
             bls.fullAutocorrState.bIdx[0] = min(LaneArray<float>(lag), n0);
             bls.fullAutocorrState.bIdx[1] = uint16_t(n0.ToArray()[0]) % lag;
@@ -164,6 +163,7 @@ TYPED_TEST(TestBaselineStatsAggregator, EmptyAggregator)
 // pristine "empty" state
 TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
 {
+    auto lag = AutocorrAccumState::lag;
     auto bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
     auto generatedStats = TestFixture::GenerateStats(4, 8);
     bsa->AddMetrics(generatedStats);
@@ -233,11 +233,10 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
 
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == 0));
 
-        auto i = AutocorrAccumState::lag;
-        while (i--) 
+        for (auto k = 0u; k < lag; ++k)
         { 
-            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.lBuf[i]) == 0));
-            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.rBuf[i]) == 0));
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.lBuf[k]) == 0));
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.rBuf[k]) == 0));
         }
 
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx[0]) == 0));
@@ -347,8 +346,7 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
 
                 expected.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
 
-                auto k = lag;
-                while (k--)
+                for (auto k = 0u; k < lag; ++k)
                 {
                     expected.fullAutocorrState.moment2[zmw] +=
                         expected.fullAutocorrState.rBuf[k][zmw] * laneStat.fullAutocorrState.lBuf[k][zmw];

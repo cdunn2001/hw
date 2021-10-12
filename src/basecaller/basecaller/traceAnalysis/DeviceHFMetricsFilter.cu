@@ -197,7 +197,10 @@ __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& bl
     {
         float2 mu = asFloat2(blockMetrics.traceM1[i] / blockMetrics.traceM0[i]);
         float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[i]);
-        auto k=lag; while (k--) { m1x2 = m1x2 - asFloat2(blockMetrics.lBuf[k][i] + blockMetrics.rBuf[k][i]); }
+        for (auto k = 0u; k < lag; ++k)
+        {
+            m1x2 = m1x2 - asFloat2(blockMetrics.lBuf[k][i] + blockMetrics.rBuf[k][i]);
+        }
         float2 ac = mu*(m1x2 - nmk*mu);
 
         ac = (blockMetrics.autocorrM2[i] - ac)
@@ -280,9 +283,9 @@ __global__ void InitializeMetrics(
 
     blockMetrics.autocorrM2[threadIdx.x] = zero;
 
-    auto k = AutocorrAccumState::lag;
-    k = AutocorrAccumState::lag; while (k--) blockMetrics.lBuf[k][threadIdx.x] = 0.0f;
-    k = AutocorrAccumState::lag; while (k--) blockMetrics.rBuf[k][threadIdx.x] = 0.0f;
+    auto lag = AutocorrAccumState::lag;
+    for (auto k = 0u; k < lag; ++k) blockMetrics.lBuf[k][threadIdx.x] = 0.0f;
+    for (auto k = 0u; k < lag; ++k) blockMetrics.rBuf[k][threadIdx.x] = 0.0f;
     blockMetrics.lbi[threadIdx.x] = 0;
     blockMetrics.lbi[threadIdx.x] = 0;
 

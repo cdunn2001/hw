@@ -74,7 +74,7 @@ public:     // Structors
         , canAddSample_ {true}
     {
         // Deserialize both buffers
-        auto k=lag_; while (k--) { lBuf_[k] = state.lBuf[k]; rBuf_[k] = state.rBuf[k]; }
+        for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = state.lBuf[k]; rBuf_[k] = state.rBuf[k]; }
     }
 
 public:     // Const methods
@@ -87,7 +87,7 @@ public:     // Const methods
         };
 
         // Serialize both buffers
-        auto k=lag_; while (k--) { ret.lBuf[k] = lBuf_[k]; ret.rBuf[k] = rBuf_[k]; }
+        for (auto k = 0u; k < lag_; ++k)  { ret.lBuf[k] = lBuf_[k]; ret.rBuf[k] = rBuf_[k]; }
         ret.bIdx[0] = lbi_;
         ret.bIdx[1] = rbi_;
 
@@ -169,7 +169,7 @@ public:     // Mutating methods
     {
         stats_.Reset();
         m2_  = T(0);
-        auto k=lag_; while (k--) { lBuf_[k] = rBuf_[k] = T(0); }
+        for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = rBuf_[k] = T(0); }
         lbi_ = 0;
         rbi_ = 0;
         canAddSample_ = true;

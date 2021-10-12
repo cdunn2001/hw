@@ -226,8 +226,7 @@ public:
 
         lbi_[threadIdx.x] = 0;
         rbi_[threadIdx.x] = 0;
-        int k = lag;
-        while (k--)
+        for (auto k = 0u; k < lag; ++k) 
         {
             lBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
             rBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
@@ -295,13 +294,12 @@ public:
         stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag_[threadIdx.x].X();
         stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag_[threadIdx.x].Y();
 
-        int j = lag;
-        while (j--)
+        for (auto k = 0u; k < lag; ++k) 
         {
-            stats.fullAutocorrState.lBuf[j][2*threadIdx.x]    = lBuf_[IDX2C(j, threadIdx.x, lag)].X();
-            stats.fullAutocorrState.lBuf[j][2*threadIdx.x+1]  = lBuf_[IDX2C(j, threadIdx.x, lag)].Y();
-            stats.fullAutocorrState.rBuf[j][2*threadIdx.x]    = rBuf_[IDX2C(j, threadIdx.x, lag)].X();
-            stats.fullAutocorrState.rBuf[j][2*threadIdx.x+1]  = rBuf_[IDX2C(j, threadIdx.x, lag)].Y();
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = lBuf_[IDX2C(k, threadIdx.x, lag)].X();
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = lBuf_[IDX2C(k, threadIdx.x, lag)].Y();
+            stats.fullAutocorrState.rBuf[k][2*threadIdx.x]    = rBuf_[IDX2C(k, threadIdx.x, lag)].X();
+            stats.fullAutocorrState.rBuf[k][2*threadIdx.x+1]  = rBuf_[IDX2C(k, threadIdx.x, lag)].Y();
         }
 
         // TODO: leave two indices for a block
