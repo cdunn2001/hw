@@ -200,9 +200,6 @@ __global__ void AverageAndExpand(const Mongo::Data::GpuBatchData<const PBShort2>
     }
 }
 
-// BLAS macro to traverse 2D array with C memory order
-#define IDX2C(i,j,ld) (((j)*(ld))+(i))
-
 template <size_t blockThreads, size_t lag>
 class StatAccumulator
 {
@@ -222,15 +219,6 @@ public:
         m0_[threadIdx.x] = 0.0f;
         m1_[threadIdx.x] = 0.0f;
         m2_[threadIdx.x] = 0.0f;
-        m2Lag_[threadIdx.x] = 0.0f;
-
-        lbi_[threadIdx.x] = 0;
-        rbi_[threadIdx.x] = 0;
-        for (auto k = 0u; k < lag; ++k) 
-        {
-            lBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
-            rBuf_[IDX2C(k, threadIdx.x, lag)] = 0.0f;
-        }
     }
 
     __device__ void AddBaselineData(PBHalf2 raw,
@@ -250,26 +238,14 @@ public:
         m2B_[threadIdx.x] += Blend(baselineMask, bsf*bsf, zero);
     }
 
-    __device__ void AddAutoCorrData(PBHalf2 value)
+    __device__ void AddSample(PBHalf2 value)
     {
         PBHalf2 one(1.0f);
         PBFloat2 valf(value);
 
-        auto i = threadIdx.x;
-        PBHalf2 offlessVal = value; // "offlessVal" for host name compatibility
-        if (lbi_[i] < lag)
-        {
-            lBuf_[IDX2C(lbi_[i]++, i, lag)] = offlessVal;
-        }
-
-        PBHalf2 lagVal = rBuf_[IDX2C(rbi_[i]%lag, i, lag)];
-        m2Lag_[i] += valf * lagVal;
-        rBuf_[IDX2C(rbi_[i]++%lag, i, lag)] = offlessVal; rbi_[i] %= lag;
-
-        // stats_.AddSample
-        m0_[i] += one;
-        m1_[i] += value;
-        m2_[i] += valf*valf;
+        m0_[threadIdx.x] += one;
+        m1_[threadIdx.x] += value;
+        m2_[threadIdx.x] += valf*valf;
     }
 
     __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
@@ -289,27 +265,6 @@ public:
         stats.traceMin[2*threadIdx.x+1]       = minB_[threadIdx.x].FloatY();
         stats.traceMax[2*threadIdx.x]         = maxB_[threadIdx.x].FloatX();
         stats.traceMax[2*threadIdx.x+1]       = maxB_[threadIdx.x].FloatY();
-
-        // Auto-correlation stats
-        stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag_[threadIdx.x].X();
-        stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag_[threadIdx.x].Y();
-
-        for (auto k = 0u; k < lag; ++k) 
-        {
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = lBuf_[IDX2C(k, threadIdx.x, lag)].X();
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = lBuf_[IDX2C(k, threadIdx.x, lag)].Y();
-            stats.fullAutocorrState.rBuf[k][2*threadIdx.x]    = rBuf_[IDX2C(k, threadIdx.x, lag)].X();
-            stats.fullAutocorrState.rBuf[k][2*threadIdx.x+1]  = rBuf_[IDX2C(k, threadIdx.x, lag)].Y();
-        }
-
-        // TODO: leave two indices for a block
-        // lbi and rbi should be stored pairwise as the pipeline processing is split to each zmw
-        // Two indices is enough for the block, but I want to make sure there is no race condition
-        // and alignment is correct.
-        stats.fullAutocorrState.bIdx[0][2*threadIdx.x]          = lbi_[threadIdx.x];
-        stats.fullAutocorrState.bIdx[0][2*threadIdx.x+1]        = lbi_[threadIdx.x];
-        stats.fullAutocorrState.bIdx[1][2*threadIdx.x]          = rbi_[threadIdx.x];
-        stats.fullAutocorrState.bIdx[1][2*threadIdx.x+1]        = rbi_[threadIdx.x];
 
         // Regular stats
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x]   = m0_[threadIdx.x].FloatX();
@@ -334,12 +289,6 @@ private:
     Utility::CudaArray<PBHalf2,  blockThreads> m0_;
     Utility::CudaArray<PBHalf2,  blockThreads> m1_;
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
-    Utility::CudaArray<PBFloat2, blockThreads> m2Lag_;
-
-    Utility::CudaArray<unsigned short, blockThreads> lbi_;
-    Utility::CudaArray<unsigned short, blockThreads> rbi_;
-    Utility::CudaArray<PBHalf2,  blockThreads*lag> lBuf_;
-    Utility::CudaArray<PBHalf2,  blockThreads*lag> rBuf_;
 };
 
 template <size_t blockThreads, size_t lag>
@@ -371,6 +320,13 @@ struct LatentBaselineData
         static constexpr float sigmaThrH = 4.5f;
         static constexpr float alphaFactor = 0.7f;
 
+        // Auto-correlation stats
+        PBFloat2 m2Lag;
+
+        PBHalf2 lBufVal;    // left buffer contains mean of the first lag values
+        PBHalf2 rBuf[lag];  // right circular buffer
+        PBShort2 bIdx;      // left (X) and right (Y) buffer indices
+
     public:
         __device__ PBHalf2 SmoothedSigma(PBHalf2 frameSigma)
         {
@@ -396,7 +352,22 @@ struct LatentBaselineData
             latHMask2 = latHMask1;
             latHMask1 = maskHp1;
 
-            stats.AddAutoCorrData(latData);
+            auto lbi = bIdx.X();
+            auto rbi = bIdx.Y();
+            PBHalf2 offlessVal = latData; // "offlessVal" for host name compatibility
+
+            if (lbi < lag)
+            {
+                lBufVal += offlessVal;
+                lbi++;
+            }
+
+            m2Lag += PBFloat2(offlessVal) * rBuf[rbi%lag];
+            rBuf[rbi++%lag] = offlessVal; rbi %= lag;
+
+            bIdx = PBShort2(lbi, rbi);
+
+            stats.AddSample(latData);
 
             stats.AddBaselineData(latRawData, latData, mask);
 
@@ -415,6 +386,14 @@ struct LatentBaselineData
         local.latLMask     = latLMask[threadIdx.x];
         local.latHMask1    = latHMask1[threadIdx.x];
         local.latHMask2    = latHMask2[threadIdx.x];
+        local.m2Lag        = m2Lag[threadIdx.x];
+
+        local.bIdx = PBShort2(0);
+        local.lBufVal = PBHalf2(0.0f);
+        for (auto k = 0u; k < lag; ++k)
+        {
+            local.rBuf[k] = 0.0f;
+        }
 
         return local;
     }
@@ -427,7 +406,33 @@ struct LatentBaselineData
         latLMask[threadIdx.x]       = local.latLMask;
         latHMask1[threadIdx.x]      = local.latHMask1;
         latHMask2[threadIdx.x]      = local.latHMask2;
+        m2Lag[threadIdx.x]          = local.m2Lag;
     }
+
+    __device__ void FillOutputCorr(LocalLatent& local, Mongo::Data::BaselinerStatAccumState& stats)
+    {
+        stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag[threadIdx.x].X();
+        stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag[threadIdx.x].Y();
+
+        PBHalf2 bIdx(local.bIdx);
+        for (auto k = 0u; k < lag; ++k)
+        {
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = local.lBufVal.X() / bIdx.X();
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = local.lBufVal.Y() / bIdx.Y();
+            stats.fullAutocorrState.rBuf[k][2*threadIdx.x]    = local.rBuf[k].X();
+            stats.fullAutocorrState.rBuf[k][2*threadIdx.x+1]  = local.rBuf[k].Y();
+        }
+
+        // TODO: leave two indices for a block
+        // lbi and rbi should be stored pairwise as the pipeline processing is split to each zmw
+        // Two indices is enough for the block, but let's be sure there is no race condition
+        // and alignment is correct
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x]          = local.bIdx.X();
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x+1]        = local.bIdx.X();
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x]          = local.bIdx.Y();
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x+1]        = local.bIdx.Y();
+    }
+
 private:
     // TODO init
     Utility::CudaArray<PBHalf2, blockThreads> bgSigma;
@@ -436,6 +441,7 @@ private:
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
     Utility::CudaArray<PBBool2, blockThreads> latHMask1;
     Utility::CudaArray<PBBool2, blockThreads> latHMask2;
+    Utility::CudaArray<PBFloat2, blockThreads> m2Lag;
 };
 
 struct SubtractParams
@@ -491,6 +497,7 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const PBShort2>
     }
 
     stats.FillOutputStats(outputStats[blockIdx.x]);
+    latent[blockIdx.x].FillOutputCorr(localLatent, outputStats[blockIdx.x]);
     latent[blockIdx.x].StoreLocal(localLatent);
 }
 

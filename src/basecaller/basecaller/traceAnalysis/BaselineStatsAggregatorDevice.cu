@@ -41,9 +41,6 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
-// TODO: Move MergeAutocorr and MergeStat in a common functionality so that
-// it would be shared among BaselineStatsAggregatorDevice, 
-// BasecallingMetricsAccumulatorDevice and AutocorrAccumulator
 __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
 {
     l.moment0[threadIdx.x] += r.moment0[threadIdx.x];
