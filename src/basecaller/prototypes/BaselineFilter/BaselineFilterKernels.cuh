@@ -162,10 +162,15 @@ __global__ void StridedFilter(const Mongo::Data::GpuBatchData<const T> in,
         laneIdx = blockIdx.x;
         zmwIdx = threadIdx.x;
     } else {
-        laneIdx = blockIdx.x * 2 + (threadIdx.x > 15 ? 1 : 0);
+        laneIdx = blockIdx.x * 2 + threadIdx.x / 16;
         zmwIdx = threadIdx.x % 16;
     }
+
+    // One cuda block is handling two lanes, so we need to be careful in
+    // the event we have an odd number of lanes.  This return exits any
+    // threads that would walk out of bounds of the data
     if (laneIdx >= in.NumLanes()) return;
+
     const auto& inZmw = in.ZmwData(laneIdx, zmwIdx);
     auto outZmw = out.ZmwData(laneIdx, zmwIdx);
 
@@ -685,6 +690,8 @@ public:
 
         const auto& average = PBLauncher(AverageAndExpand<blockThreads>, numLanes_, blockThreads);
         average(lower, upper, output, fullStride_);
+
+        Cuda::CudaSynchronizeDefaultStream();
     }
 
     __host__ void RunBaselineFilter(const Mongo::Data::TraceBatchVariant& rawTrc,

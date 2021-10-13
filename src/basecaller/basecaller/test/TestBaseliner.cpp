@@ -389,6 +389,24 @@ INSTANTIATE_TEST_SUITE_P(,
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::HostMultiScale,
                                  PacketLayout::INT16,
+                                 150,  /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::DeviceMultiScale,
+                                 PacketLayout::INT16,
+                                 150,  /* pedestal          */
+                                 20,   /* pulseIpd          */
+                                 24,   /* pulseWidth        */
+                                 200,  /* baseSignalLevel   */
+                                 {325},/* pulseSignalLevels */
+                             },
+                             TestingParams {
+                                 BasecallerBaselinerConfig::MethodName::HostMultiScale,
+                                 PacketLayout::INT16,
                                  -150, /* pedestal          */
                                  20,   /* pulseIpd          */
                                  24,   /* pulseWidth        */
@@ -440,8 +458,10 @@ INSTANTIATE_TEST_SUITE_P(,
                              else
                                  name << "_WithPulses";
 
-                             if (info.param.pedestalValue != 0)
-                                 name << "AndPedestal";
+                             if (info.param.pedestalValue < 0)
+                                 name << "AndNegativePedestal";
+                             else if (info.param.pedestalValue > 0)
+                                 name << "AndPositivePedestal";
 
                              return name.str();
                          });

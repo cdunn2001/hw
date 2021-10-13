@@ -157,23 +157,26 @@ public:
             return ret-=v;
         }
 
-        // Need to put in a special hook to handle 8 bit data.
-        // If that happens we'll automagically fall back to
-        // expanding the data and producing int16_t.  The
-        // alternative is expanding the LaneArray code to handle
-        // 8 bit data, which is not an easy proposition
-        template <typename U = std::remove_const_t<T>, typename F = int16_t>
+        // Returns a copy of the data for the current frame, possibly after type conversion.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<F>.
+        // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
+        template <typename FallbackType = int16_t>
         auto Extract() const
         {
+            using U = std::remove_const_t<T>;
+            // FallbackType needs to be a dependant type otherwise plugging it into
+            // LaneArray below will yell about a uint8_t specialization not existing.
+            // Regardless, it's required to be int16_t.
+            static_assert(std::is_same_v<FallbackType, int16_t>);
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
             if constexpr(std::is_same_v<U, uint8_t>)
             {
-                Cuda::Utility::CudaArray<F, laneSize> tmp;
+                Cuda::Utility::CudaArray<FallbackType, laneSize> tmp;
                 std::copy(ptr_ + curFrame_ * laneWidth_,
                           ptr_ + curFrame_ * laneWidth_ + laneSize,
                           tmp.data());
-                return LaneArray<F, laneSize>{tmp};
+                return LaneArray<FallbackType, laneSize>{tmp};
             } else {
                 return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
             }
@@ -278,23 +281,26 @@ public:
             return ret-=v;
         }
 
-        // Need to put in a special hook to handle 8 bit data.
-        // If that happens we'll automagically fall back to
-        // expanding the data and producing int16_t.  The
-        // alternative is expanding the LaneArray code to handle
-        // 8 bit data, which is not an easy proposition
-        template <typename U = std::remove_const_t<T>, typename F = int16_t>
+        // Returns a copy of the data for the current frame, possibly after type conversion.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<F>.
+        // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
+        template <typename FallbackType = int16_t>
         auto Extract() const
         {
+            using U = std::remove_const_t<T>;
+            // FallbackType needs to be a dependant type otherwise plugging it into
+            // LaneArray below will yell about a uint8_t specialization not existing.
+            // Regardless, it's required to be int16_t.
+            static_assert(std::is_same_v<FallbackType, int16_t>);
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
             if constexpr(std::is_same_v<U, uint8_t>)
             {
-                Cuda::Utility::CudaArray<F, laneSize> tmp;
+                Cuda::Utility::CudaArray<FallbackType, laneSize> tmp;
                 std::copy(ptr_ + curFrame_ * laneWidth_,
                           ptr_ + curFrame_ * laneWidth_ + laneSize,
                           tmp.data());
-                return LaneArray<F, laneSize>{tmp};
+                return LaneArray<FallbackType, laneSize>{tmp};
             } else {
                 return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
             }
