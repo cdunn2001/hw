@@ -50,7 +50,7 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
                                         const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = true;
-    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
+    InitFactory(hostExecution, movConfig);
 
     {
         // Validation has already been handled in the configuration framework.

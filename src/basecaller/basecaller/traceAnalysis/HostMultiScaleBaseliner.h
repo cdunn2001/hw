@@ -9,8 +9,6 @@
 #include <common/AlignedCircularBuffer.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
-#include <basecaller/traceAnalysis/TraceInputProperties.h>
-
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -37,15 +35,14 @@ public:     // Static functions
 public:
     HostMultiScaleBaseliner(uint32_t poolId,
                             const BaselinerParams& params,
-                            uint32_t lanesPerPool,
-                            const TraceInputProperties& traceInfo)
+                            uint32_t lanesPerPool)
         : Baseliner(poolId)
         , latency_(params.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
-           baselinerByLane_.emplace_back(params, Scale(), traceInfo.pedestal);
+           baselinerByLane_.emplace_back(params, Scale(), pedestal_);
        }
     }
 

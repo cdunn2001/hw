@@ -44,7 +44,7 @@ void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&
                                           const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = false;
-    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
+    InitFactory(hostExecution, movConfig);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
@@ -63,17 +63,16 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrac
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      const BaselinerParams& params,
                                                      uint32_t lanesPerPool,
-                                                     const TraceInputProperties& traceInfo,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
     Cuda::ComposedConstructArgs args;
-    args.pedestal = traceInfo.pedestal;
+    args.pedestal = pedestal_;
     args.scale = Scale();
     args.numLanes = lanesPerPool;
     args.val = initVal;
-    switch (traceInfo.encoding)
+    switch (expectedEncoding_)
     {
     case DataSource::PacketLayout::EncodingFormat::UINT8:
         filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, uint8_t>>(

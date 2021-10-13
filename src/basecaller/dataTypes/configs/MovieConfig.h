@@ -30,6 +30,9 @@
 //  Defines class MovieConfig.
 
 #include <array>
+
+#include <pacbio/datasource/PacketLayout.h>
+
 #include <common/MongoConstants.h>
 #include <dataTypes/AnalogMode.h>
 
@@ -39,6 +42,10 @@ namespace Data {
 
 /// Represents configuration of the instrument, chemistry, and data collection
 /// for a particular movie.
+//
+// TODO this structure is currently in flux.  There are tentative plans
+// to alter things so that it is generated directly by the DataSource
+// instance.
 struct MovieConfig
 {
 public:
@@ -48,6 +55,19 @@ public:
 
     /// Convention is to order analogs by decreasing relative amplitude.
     std::array<AnalogMode, numAnalogs> analogs;
+
+    // The pedestal value applied upstream before any
+    // batch is generated.  This must be subtracted off
+    // all batches that come through, in order to get the
+    // true trace value
+    int16_t pedestal = 0;
+    // Batches come through as a variant because it's not
+    // known until rumtime what the format ultimately will
+    // be.  This field gives us a sneak peak though at what
+    // to expect, in case that matters to any particular
+    // implementation
+    using EncodingFormat = DataSource::PacketLayout::EncodingFormat;
+    EncodingFormat encoding = EncodingFormat::INT16;
 
     // TODO: Will likely need additional members.
 };

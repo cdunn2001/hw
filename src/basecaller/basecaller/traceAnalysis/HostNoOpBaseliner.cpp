@@ -9,10 +9,10 @@ namespace Mongo {
 namespace Basecaller {
 
 void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                  const Data::MovieConfig&)
+                                  const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = true;
-    Baseliner::InitFactory(hostExecution, 1.0f);
+    Baseliner::InitFactory(hostExecution, movConfig);
 }
 
 void HostNoOpBaseliner::Finalize() {}
@@ -38,7 +38,7 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
             auto outItr = cameraTraceData.Begin();
             for (auto inItr = traceData.CBegin(); inItr != traceData.CEnd(); inItr++, outItr++)
             {
-                auto copy = inItr.Extract() - pedestal_;
+                auto copy = (inItr.Extract() - pedestal_) * movieScaler_;
                 outItr.Store(copy);
                 Mask isBaseline { false };
                 baselinerStats.AddSample(copy, copy, isBaseline);

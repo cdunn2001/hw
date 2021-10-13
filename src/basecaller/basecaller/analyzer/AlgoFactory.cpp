@@ -67,9 +67,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig,
-                         const TraceInputProperties& expectedTraceInfo)
-    : expectedTraceInfo_(expectedTraceInfo)
+AlgoFactory::AlgoFactory(const Data::BasecallerAlgorithmConfig& bcConfig)
 {
     // Baseliner
     baselinerOpt_ = bcConfig.baselinerConfig.Method;
@@ -298,21 +296,19 @@ AlgoFactory::CreateBaseliner(unsigned int poolId,
     switch (baselinerOpt_)
     {
         case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-            return std::make_unique<HostNoOpBaseliner>(poolId, expectedTraceInfo_);
+            return std::make_unique<HostNoOpBaseliner>(poolId);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
             return std::make_unique<DeviceMultiScaleBaseliner>(poolId,
                                                                params,
                                                                dims.lanesPerBatch,
-                                                               expectedTraceInfo_,
                                                                &registrar);
             break;
         case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
             // TODO: scaler currently set to default 1.0f
             return std::make_unique<HostMultiScaleBaseliner>(poolId,
                                                              params,
-                                                             dims.lanesPerBatch,
-                                                             expectedTraceInfo_);
+                                                             dims.lanesPerBatch);
             break;
         default:
             ostringstream msg;

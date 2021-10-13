@@ -81,7 +81,8 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 
 TEST(TestHostNoOpBaseliner, Run)
 {
-    Data::MovieConfig movConfig;
+    auto movConfig = Data::MockMovieConfig();
+    movConfig.photoelectronSensitivity = 1;
     auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp,
                                                        BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
@@ -95,11 +96,9 @@ TEST(TestHostNoOpBaseliner, Run)
     batchConfig.lanesPerPool = lanesPerPool;
     std::vector<HostNoOpBaseliner> baseliners;
 
-    TraceInputProperties traceInfo;
-    traceInfo.pedestal = 0;
     for (size_t poolId = 0; poolId < numPools; poolId++)
     {
-        baseliners.emplace_back(HostNoOpBaseliner(poolId, traceInfo));
+        baseliners.emplace_back(HostNoOpBaseliner(poolId));
     }
 
     auto generator = std::make_unique<ConstantGenerator>();
@@ -225,6 +224,8 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
 
         Data::MovieConfig movConfig;
         movConfig.photoelectronSensitivity = scaler;
+        movConfig.pedestal = params.pedestalValue;
+        movConfig.encoding = params.encoding;
         const auto baselinerConfig = TestConfig::BaselinerConfig(
                             params.method,
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
@@ -237,25 +238,20 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
 
         batchConfig.lanesPerPool = lanesPerPool;
 
-        TraceInputProperties traceInfo;
-        traceInfo.pedestal = params.pedestalValue;
-        traceInfo.encoding = params.encoding;
         for (size_t poolId = 0; poolId < numPools; poolId++)
         {
             if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
             {
                 auto ptr = std::make_unique<HostMultiScaleBaseliner>(poolId,
                                                                      FilterParamsLookup(baselinerConfig.Filter),
-                                                                     lanesPerPool,
-                                                                     traceInfo);
+                                                                     lanesPerPool);
                 baseliners.push_back(std::move(ptr));
             }
             else if (params.method == BasecallerBaselinerConfig::MethodName::DeviceMultiScale)
             {
                 auto ptr = std::make_unique<DeviceMultiScaleBaseliner>(poolId,
                                                                        FilterParamsLookup(baselinerConfig.Filter),
-                                                                       lanesPerPool,
-                                                                       traceInfo);
+                                                                       lanesPerPool);
                 baseliners.push_back(std::move(ptr));
             }
         }
@@ -472,9 +468,7 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
 
     uint32_t lanesPerPool_ = 1;
-    TraceInputProperties traceInfo;
-    traceInfo.pedestal = 0;
-    Baseliner baseliner(0, blp, lanesPerPool_, traceInfo);
+    Baseliner baseliner(0, blp, lanesPerPool_);
 
     uint32_t framesPerBlock = 512;
 

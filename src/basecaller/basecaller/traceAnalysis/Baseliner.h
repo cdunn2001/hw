@@ -29,13 +29,15 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
-    static void InitFactory(bool hostExecution, float movieScaler);
+    static void InitFactory(bool hostExecution, const Data::MovieConfig& movConfig);
 
     static void Finalize();
 
 protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
     static float movieScaler_;
+    static int16_t pedestal_;
+    static DataSource::PacketLayout::EncodingFormat expectedEncoding_;
 
 public:
     Baseliner(uint32_t poolId)
