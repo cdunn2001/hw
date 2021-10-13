@@ -158,7 +158,7 @@ public:
         }
 
         // Returns a copy of the data for the current frame, possibly after type conversion.
-        // When T == uint8_t, returns the current frame data converted to a LaneArray<F>.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<FallbackType>.
         // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
         template <typename FallbackType = int16_t>
         auto Extract() const
@@ -282,7 +282,7 @@ public:
         }
 
         // Returns a copy of the data for the current frame, possibly after type conversion.
-        // When T == uint8_t, returns the current frame data converted to a LaneArray<F>.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<FallbackType>.
         // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
         template <typename FallbackType = int16_t>
         auto Extract() const
