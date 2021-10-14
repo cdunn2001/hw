@@ -12,14 +12,16 @@ namespace Cuda {
 
 struct MaxOp
 {
-    __device__ static PBShort2 op(PBShort2 v1, PBShort2 v2)
+    template <typename T>
+    __device__ static T op(T v1, T v2)
     {
         return max(v1, v2);
     }
 };
 struct MinOp
 {
-    __device__ static PBShort2 op(PBShort2 v1, PBShort2 v2)
+    template <typename T>
+    __device__ static T op(T v1, T v2)
     {
         return min(v1, v2);
     }
@@ -27,7 +29,7 @@ struct MinOp
 
 // Baseline filter for one (cuda) block of threads.  Meant to
 // be allocated in global memory.
-template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp>
+template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp, typename T = PBShort2>
 struct __align__(128) ExtremaFilter
 {
     // default ctor leaves things unitialized!  Intended to facilitate use of this
@@ -46,7 +48,7 @@ struct __align__(128) ExtremaFilter
         {
             for (size_t j = 0; j < blockThreads; ++j)
             {
-                data[i][j] = PBShort2(0);
+                data[i][j] = T(0);
             }
         }
     }
@@ -64,7 +66,7 @@ struct __align__(128) ExtremaFilter
         return *this;
     }
 
-    __device__ PBShort2 operator()(PBShort2 val)
+    __device__ T operator()(T val)
     {
         assert(blockDim.x == blockThreads);
 
@@ -82,7 +84,7 @@ struct __align__(128) ExtremaFilter
             s[threadIdx.x] = Op::op(s[threadIdx.x], data[myIdx-1][threadIdx.x]);
         }
 
-        PBShort2 tmp = data[myIdx][threadIdx.x];
+        T tmp = data[myIdx][threadIdx.x];
         data[myIdx][threadIdx.x] = val;
 
         myIdx++;
@@ -92,7 +94,7 @@ struct __align__(128) ExtremaFilter
         return Op::op(s[threadIdx.x], tmp);
     }
 
-    using row = PBShort2[blockThreads];
+    using row = T[blockThreads];
     // TODO create cuda version of std::array
     row data[filterWidth];
     row s;
@@ -101,7 +103,7 @@ struct __align__(128) ExtremaFilter
 
 // Experimental version that tries to push the extrema filter into registers.  Did not really
 // pan out, but leaving here for educational reasons
-template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp>
+template <size_t blockThreads, size_t filterWidth, typename Op = MaxOp, typename T = PBShort2>
 struct LocalExtremaFilter
 {
     // Does a rolling swap of `data`, to keep the active element in data[0]
@@ -117,7 +119,7 @@ struct LocalExtremaFilter
         data[filterWidth-1] = tmp;
     }
 
-    __device__ LocalExtremaFilter(const ExtremaFilter<blockThreads, filterWidth, Op>& f)
+    __device__ LocalExtremaFilter(const ExtremaFilter<blockThreads, filterWidth, Op, T>& f)
         : idx(0)
     {
         // All loops over `data` *must* be unrolled to allow storage in register
@@ -131,7 +133,7 @@ struct LocalExtremaFilter
         __syncthreads();
     }
 
-    __device__ void ReplaceShared(ExtremaFilter<blockThreads, filterWidth, Op> & f)
+    __device__ void ReplaceShared(ExtremaFilter<blockThreads, filterWidth, Op, T> & f)
     {
         // All loops over `data` *must* be unrolled to allow storage in register
         #pragma unroll(filterWidth)
@@ -144,7 +146,7 @@ struct LocalExtremaFilter
         __syncthreads();
     }
 
-    __device__ PBShort2 operator()(PBShort2 val)
+    __device__ T operator()(T val)
     {
         if (idx == 0)
         {
@@ -166,8 +168,8 @@ struct LocalExtremaFilter
         return Op::op(s, tmp);
     }
 
-    PBShort2 data[filterWidth];
-    PBShort2 s;
+    T data[filterWidth];
+    T s;
     int idx;
 };
 
