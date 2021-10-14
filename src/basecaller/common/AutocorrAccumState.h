@@ -52,7 +52,7 @@ struct AutocorrAccumState
 
     FloatArray lBuf[lag]; // left region buffer
     FloatArray rBuf[lag]; // right buffer circular index
-    UShortArray bIdx[2u]; // buffer indices for left and right positions
+    UShortArray bIdx;     // buffer indices for right (MSB) and left (LSB) positions
 };
 
 }}      // namespace PacBio::Mongo

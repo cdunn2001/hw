@@ -183,8 +183,7 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
         // Fill in left and right buffers
         for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.lBuf[k] = (-9.0f + 2*k);
         for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.rBuf[k] = (6.0f + k);
-        baselinerStats.fullAutocorrState.bIdx[0] = std::min(lag, n0);
-        baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag;
+        baselinerStats.fullAutocorrState.bIdx = uint16_t(((n0 % lag) << 8) | std::min(n0, lag));
 
         // Python code to create the reference block stat metrics
         // lane = np.random.normal(0, 5, 512).astype(np.float32)

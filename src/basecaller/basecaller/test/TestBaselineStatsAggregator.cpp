@@ -89,8 +89,8 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.lBuf[k] = meanVec - varVec;   // left values
             for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.rBuf[k] = meanVec + varVec;   // right values
 
-            bls.fullAutocorrState.bIdx[0] = min(LaneArray<float>(lag), n0);
-            bls.fullAutocorrState.bIdx[1] = uint16_t(n0.ToArray()[0]) % lag;
+            auto cnt = uint32_t(n0.ToArray()[0]);
+            bls.fullAutocorrState.bIdx = uint16_t(((cnt % lag) << 8) | std::min(cnt, lag));
 
             // Cheat a bit and duplicate the baseline stats into the autocorr stats
             bls.fullAutocorrState.basicStats = bls.baselineStats;
@@ -239,8 +239,7 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
             EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.rBuf[k]) == 0));
         }
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx[0]) == 0));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx[1]) == 0));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx) == 0));
     }
 }
 

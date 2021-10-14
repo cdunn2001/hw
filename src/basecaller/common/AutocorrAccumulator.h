@@ -69,8 +69,8 @@ public:     // Structors
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
         , m2_ {state.moment2}
-        , lbi_ {state.bIdx[0][0]}
-        , rbi_ {state.bIdx[1][0]}
+        , lbi_ {uint16_t(state.bIdx[0] & 0xFF)}
+        , rbi_ {uint16_t(state.bIdx[0] >> 8)}
         , canAddSample_ {true}
     {
         // Deserialize both buffers
@@ -88,8 +88,7 @@ public:     // Const methods
 
         // Serialize both buffers
         for (auto k = 0u; k < lag_; ++k)  { ret.lBuf[k] = lBuf_[k]; ret.rBuf[k] = rBuf_[k]; }
-        ret.bIdx[0] = lbi_;
-        ret.bIdx[1] = rbi_;
+        ret.bIdx = (rbi_ << 8) | (lbi_ & 0xFF);
 
         return ret;
     }
@@ -181,10 +180,10 @@ private:    // Data
 
     T m2_;     // Generalized second moment. Sum of x_{i} * x_{i+lag_}
 
-    std::array<T, lag_> rBuf_; // right buffer (circular)
     std::array<T, lag_> lBuf_; //  left buffer
-    uint16_t lbi_;         // left buffer index
-    uint16_t rbi_;         // right buffer circular index
+    std::array<T, lag_> rBuf_; // right buffer (circular)
+    uint16_t lbi_;             // left buffer index
+    uint16_t rbi_;             // right buffer circular index
 
     bool canAddSample_;
 };
