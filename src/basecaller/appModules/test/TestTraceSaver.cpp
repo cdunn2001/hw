@@ -105,13 +105,16 @@ TYPED_TEST(TestTraceSaver, TestA)
         auto writeType = std::is_same_v<TOut, int16_t>
             ? TraceFile::TraceDataType::INT16
             : TraceFile::TraceDataType::UINT8;
-        auto writer = std::make_unique<PacBio::TraceFile::TraceFile>(traceFile, writeType, numSelectedZmws, numFrames);
 
         std::vector<DataSourceBase::LaneIndex> lanes;
         lanes.push_back(0);  // starting at (0,0)
         lanes.push_back(2);  // starting at (1,0)
 
         std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numSelectedZmws);
+        std::vector<uint32_t> holeNumbers(numSelectedZmws);
+        // Nothing special about the value 6, just inserting something
+        // nonzero to verify the data makes it round trip.
+        std::vector<uint32_t> batchIds(numSelectedZmws, 6);
         size_t k=0;
         for(const DataSourceBase::LaneIndex lane : lanes)
         {
@@ -120,12 +123,20 @@ TYPED_TEST(TestTraceSaver, TestA)
                 roiFeatures[k].flags = 0;
                 roiFeatures[k].x = (lane ==0) ? 0 : 1;
                 roiFeatures[k].y = (lane ==0) ? j : j;
+                holeNumbers[k] = k;
                 k++;
             }
         }
         // which skip (0,64) and (1,64)
         DataSourceBase::LaneSelector laneSelector(lanes);
-        TraceSaverBody traceSaver(std::move(writer), roiFeatures, std::move(laneSelector));
+        TraceSaverBody traceSaver(traceFile,
+                                  numFrames,
+                                  std::move(laneSelector),
+                                  writeType,
+                                  holeNumbers,
+                                  roiFeatures,
+                                  batchIds,
+                                  MockMovieConfig());
 
         BatchDimensions dims;
         dims.lanesPerBatch = 1;
@@ -199,10 +210,15 @@ TYPED_TEST(TestTraceSaver, TestA)
         boost::multi_array<TOut, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
         ASSERT_EQ(numFrames, zmwTrace.num_elements());
 
-        const auto holexy = reader.Traces().HoleXY();
+        const auto& holexy = reader.Traces().HoleXY();
         ASSERT_EQ(holexy.shape()[0], numSelectedZmws);
         ASSERT_EQ(holexy.shape()[1], 2);
 
+        const auto& holeNumber = reader.Traces().HoleNumber();
+        ASSERT_EQ(holeNumber.size(), numSelectedZmws);
+
+        const auto& batchIds = reader.Traces().AnalysisBatch();
+        ASSERT_EQ(batchIds.size(), numSelectedZmws);
         int failures = 0;
         for (uint64_t izmw = 0; izmw < numSelectedZmws; izmw++)
         {
@@ -213,6 +229,8 @@ TYPED_TEST(TestTraceSaver, TestA)
             const uint32_t expectedCol = (izmw % 64);
             ASSERT_EQ(row, expectedRow);
             ASSERT_EQ(col, expectedCol);
+            ASSERT_EQ(holeNumber[izmw], izmw);
+            ASSERT_EQ(batchIds[izmw], 6);
 
             reader.Traces().ReadZmw(zmwTrace, izmw);
             for (uint64_t iframe = 0; iframe < numFrames; iframe++)
@@ -251,6 +269,10 @@ TEST(Sanity,ROI)
     const size_t numZmws = blocks.size() * laneSize;
 
     std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
+    std::vector<uint32_t> holeNumbers(numZmws);
+    // Nothing special about the value 6, just inserting something
+    // nonzero to verify the data makes it round trip.
+    std::vector<uint32_t> batchIds(numZmws, 6);
     size_t k=0;
     for(const DataSourceBase::LaneIndex lane : blocks)
     {
@@ -259,6 +281,7 @@ TEST(Sanity,ROI)
             roiFeatures[k].flags = 0;;
             roiFeatures[k].x = (lane == 0) ? 0 : 2;
             roiFeatures[k].y = (lane == 0) ? j : j;
+            holeNumbers[k] = k;
             k++;
         }
     }
@@ -268,17 +291,27 @@ TEST(Sanity,ROI)
     const uint64_t frames=1024;
     PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
-        auto outputTrcFile = std::make_unique<PacBio::TraceFile::TraceFile>(traceFileName, TraceFile::TraceDataType::INT16, numZmws, frames);
-        TraceSaverBody body(std::move(outputTrcFile), roiFeatures, std::move(blocks));
+        TraceSaverBody traceSaver(traceFileName,
+                                  frames,
+                                  std::move(blocks),
+                                  TraceFile::TraceDataType::INT16,
+                                  holeNumbers,
+                                  roiFeatures,
+                                  batchIds,
+                                  MockMovieConfig());
     }
     {
         PacBio::TraceFile::TraceFile reader(traceFileName);
         EXPECT_EQ(frames, reader.Traces().NumFrames());
-        auto holexy = reader.Traces().HoleXY();
+        const auto& holexy = reader.Traces().HoleXY();
+        const auto& holeNumbers = reader.Traces().HoleNumber();
+        const auto& batchIds = reader.Traces().AnalysisBatch();
         for(uint32_t i=0;i<numZmws;i++)
         {
             EXPECT_EQ(holexy[i][0],i<64 ? 0 : 2);
             EXPECT_EQ(holexy[i][1],i%64);
+            EXPECT_EQ(holeNumbers[i], i);
+            EXPECT_EQ(batchIds[i], 6);
         }
     }
 }
