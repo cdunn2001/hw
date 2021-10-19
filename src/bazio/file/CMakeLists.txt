@@ -5,6 +5,8 @@ add_library(libBazioFile STATIC
     FileHeader.cpp
     FileHeaderBuilder.h
     FileHeaderBuilder.cpp
+    ZmwInfo.h
+    ZmwInfo.cpp
 )
 
 include(pacbio-cplusplus-api)
