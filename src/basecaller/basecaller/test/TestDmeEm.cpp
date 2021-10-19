@@ -288,7 +288,7 @@ private:
 
         // Construct camera trace block and trace histogram.
         Data::BatchDimensions bd{poolSize, static_cast<uint32_t>(totalFrames)};
-        Data::BatchMetadata batchMeta{poolId, 0, static_cast<uint32_t>(totalFrames), poolId};
+        Data::BatchMetadata batchMeta{poolId, 0, static_cast<int32_t>(totalFrames), poolId};
         ctbFactory = std::make_unique<Data::CameraBatchFactory>(Cuda::Memory::SyncDirection::Symmetric);
         auto ctb = ctbFactory->NewBatch(batchMeta, bd);
 

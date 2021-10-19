@@ -112,8 +112,8 @@ public:
 
         // Adjust metadata to account for latent frames.
         BatchMetadata labelsMeta(traceMeta.PoolId(),
-                                 std::max(static_cast<size_t>(traceMeta.FirstFrame()), latentFrames_) - latentFrames_,
-                                 std::max(static_cast<size_t>(traceMeta.LastFrame()), latentFrames_) - latentFrames_,
+                                 traceMeta.FirstFrame() - latentFrames_,
+                                 traceMeta.LastFrame() - latentFrames_,
                                  traceMeta.FirstZmw());
 
         return LabelsBatch(labelsMeta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER());
