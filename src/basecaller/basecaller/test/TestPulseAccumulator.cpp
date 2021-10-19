@@ -307,13 +307,13 @@ void TestPulseAccumulator()
             EXPECT_NEAR(baselineMean, mean[zmwIdx], 2*baselineStd);
             // Variance of sample variance for normally distributed random variable should be (2*sigma^4)/(n-1)
             EXPECT_NEAR(baselineStd*baselineStd, var[zmwIdx],2*std::sqrt((2*pow(baselineStd,4))/(baselineFrames-1)));
-            for (uint32_t pulseNum = 0; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
+            for (uint32_t pulseNum = 1; pulseNum < lanePulses.size(zmwIdx); ++pulseNum)
             {
                 const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
                 EXPECT_EQ(labels[pulseNum % 4], pulse.Label());
-                EXPECT_EQ(pulseNum * (ipd + pw) + ipd, pulse.Start());
+                EXPECT_EQ(pulseNum * (ipd + pw) + ipd, pulse.Start() + 16u);
                 EXPECT_EQ(pw, pulse.Width());
-                if (pulse.Start() < 16u)
+                if (pulse.Start() + 16u < 16u)
                 {
                     EXPECT_EQ(latTraceVal, pulse.MidSignal());
                     EXPECT_EQ(latTraceVal, pulse.MeanSignal());
