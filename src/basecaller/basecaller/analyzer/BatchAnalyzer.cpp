@@ -147,7 +147,7 @@ FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
 }
 
 
-BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatchVariant& tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -170,7 +170,7 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& t
     return ret;
 }
 
-BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatchVariant& tbatch)
 {
     auto mode = AnalysisProfiler::Mode::REPORT;
     if (tbatch.Metadata().FirstFrame() < static_cast<int32_t>(tbatch.NumFrames())*10+1) mode = AnalysisProfiler::Mode::OBSERVE;
@@ -204,7 +204,7 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
-BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatchVariant& tbatch)
 {
     auto mode = AnalysisProfiler::Mode::IGNORE;
     if (isModelInitialized_)
@@ -286,7 +286,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
 // WiP: Prototype for analysis that supports slowly varying detection
 // model parameters.
 BatchAnalyzer::OutputType
-DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
+DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
 {
     assert(baseliner_);
     static const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();

@@ -61,22 +61,17 @@ public:
         : data_{ (static_cast<uint32_t>(s1) & xmask ) | (static_cast<uint32_t>(s2) << yshift) }
     {}
 
-private:
     // We need to be able to construct from a raw uint32_t, to capture the return from various
     // cuda intrinsics.  However adding a constructor that just takes that introduces confusion,
-    // whenever handing something like an integer literal in.  PBShort2(12) could potentially
+    // whenever handing in something like an integer literal.  PBShort2(12) could potentially
     // mean cast the 12 to a short, and construct a PBShort2 with both slots set to 12, or cast
     // 12 to a uint32_t, which is effectively y=0,x=12.
-    // Making this ctor private and adding a Dummy type to disambiguate the signature.  Construction
-    // from a raw uint32_t must be done through the `FromRaw` static named constructor, though
-    // probably no one outside PBCudaSimd.cuh needs do this.
-    struct Dummy {};
-    CUDA_ENABLED PBShort2(uint32_t data, Dummy)
-        : data_{data}
-    {}
-
-public:
-    CUDA_ENABLED static PBShort2 FromRaw(uint32_t raw) { return PBShort2(raw, Dummy{}); }
+    CUDA_ENABLED static PBShort2 FromRaw(uint32_t raw)
+    {
+        PBShort2 ret;
+        ret.data() = raw;
+        return ret;
+    }
 
     // Set/get individual elements
     CUDA_ENABLED void X(short s) { data_ = (data_ & ymask) | (static_cast<uint32_t>(s) & xmask); }
@@ -95,6 +90,52 @@ public:
     uint32_t CUDA_ENABLED data() const { return data_; }
     uint32_t& CUDA_ENABLED data() { return data_; }
 
+private:
+    uint32_t data_;
+};
+
+// This class currently is only meant for the baseline filter
+// min/max operations, so this type has very limited
+// functionality.  Don't be shy to add a more complete set
+// of functions if this class gains broader usage
+class PBUChar4
+{
+    static constexpr uint32_t shift2Bytes = 0x10;
+    static constexpr uint32_t shiftByte = 0x8;
+
+public:
+    PBUChar4() = default;
+
+    // We need to be able to construct from a raw uint32_t, to capture the return from various
+    // cuda intrinsics.  However adding a constructor that just takes that introduces confusion,
+    // whenever handing something in like an integer literal.  PBUChar4(12) could potentially
+    // mean cast the 12 to a uchar, and construct a PBUChar with all slots set to 12, or cast
+    // 12 to a uint32_t, which is effectively a 12 in the lowest slow and 0 otherwise
+    CUDA_ENABLED static PBUChar4 FromRaw(uint32_t raw)
+    {
+        PBUChar4 ret;
+        ret.data() = raw;
+        return ret;
+    }
+
+    CUDA_ENABLED PBUChar4(uint8_t v) {
+        uint32_t tmp = v | (v << shiftByte);
+        data_ = tmp | (tmp << shift2Bytes);
+    }
+
+#if defined(__CUDA_ARCH__)
+    CUDA_ENABLED PBShort2 Low()  const
+    {
+        return PBShort2::FromRaw(__byte_perm(data_, 0, 0x4140));
+    }
+    CUDA_ENABLED PBShort2 High() const
+    {
+        return PBShort2::FromRaw(__byte_perm(data_, 0, 0x4342));
+    }
+#endif
+
+    uint32_t CUDA_ENABLED data() const { return data_; }
+    uint32_t& CUDA_ENABLED data() { return data_; }
 private:
     uint32_t data_;
 };

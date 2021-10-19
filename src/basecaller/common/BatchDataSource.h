@@ -96,11 +96,8 @@ class BatchDataSource : public DataSource::DataSourceBase
     /// \return vector of trace batches to span the chunk.  Once
     ///         the child DataSource is finished, this function
     ///         will return an empty vector;
-    std::vector<Data::TraceBatch<int16_t>> NextChunk()
+    std::vector<Data::TraceBatchVariant> NextChunk()
     {
-        if (GetConfig().requestedLayout.Encoding() != DataSource::PacketLayout::INT16)
-            throw PBException("The BatchDataSource functionality currently only supports 16 bit data");
-
         while (IsRunning() && !ChunksReady())
         {
             ContinueProcessing();
@@ -109,7 +106,7 @@ class BatchDataSource : public DataSource::DataSourceBase
 
         DataSource::SensorPacketsChunk chunk;
         PopChunk(chunk, std::chrono::milliseconds{10});
-        std::vector<Data::TraceBatch<int16_t>> ret;
+        std::vector<Data::TraceBatchVariant> ret;
         for (auto& packet : chunk)
         {
             auto meta = Data::BatchMetadata(
@@ -124,11 +121,31 @@ class BatchDataSource : public DataSource::DataSourceBase
             dims.laneWidth = packet.Layout().BlockWidth();
             assert(dims.laneWidth == laneSize);
 
-            ret.emplace_back(std::move(packet),
-                             meta,
-                             dims,
-                             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
-                             SOURCE_MARKER());
+            switch (packet.Layout().Encoding())
+            {
+                case PacBio::DataSource::PacketLayout::INT16:
+                {
+                    Data::TraceBatch<int16_t> trc(std::move(packet),
+                                                  meta,
+                                                  dims,
+                                                  Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                                  SOURCE_MARKER());
+                    ret.emplace_back(std::move(trc));
+                    break;
+                }
+                case PacBio::DataSource::PacketLayout::UINT8:
+                {
+                    Data::TraceBatch<uint8_t> trc(std::move(packet),
+                                                  meta,
+                                                  dims,
+                                                  Cuda::Memory::SyncDirection::HostWriteDeviceRead,
+                                                  SOURCE_MARKER());
+                    ret.emplace_back(std::move(trc));
+                    break;
+                }
+                default:
+                    throw PBException("Unexpected trace encoding");
+            }
         }
 
         return ret;
@@ -137,6 +154,7 @@ class BatchDataSource : public DataSource::DataSourceBase
     /// Pseudo-Iterator type for iterating over all the chunks produced by
     /// a DataSource.  This type is *only* suitable for implicit use
     /// during range based for loops.  See class comments for more details
+    template <typename T>
     class ChunkIterator
     {
     public:
@@ -144,13 +162,25 @@ class BatchDataSource : public DataSource::DataSourceBase
             : source_(source)
         {}
 
-        const std::vector<Data::TraceBatch<int16_t>>& operator*() const
+        const std::vector<T>& operator*() const
+        {
+            return data;
+        }
+        std::vector<T>& operator*()
         {
             return data;
         }
         ChunkIterator& operator++()
         {
-            data = source_->NextChunk();
+            if constexpr (std::is_same_v<T, Data::TraceBatchVariant>)
+            {
+                data = source_->NextChunk();
+            } else {
+                auto tmp = source_->NextChunk();
+                data.clear();
+                for (auto& v : tmp)
+                    data.push_back(std::move(std::get<T>(v.Data())));
+            }
             return *this;
         }
         bool operator!=(ChunkIterator& o)
@@ -159,21 +189,28 @@ class BatchDataSource : public DataSource::DataSourceBase
         }
     private:
         BatchDataSource* source_;
-        std::vector<Data::TraceBatch<int16_t>> data;
+        std::vector<T> data;
     };
 
     /// Helper class, whos only purpose is to be fed
     /// into a range based for loop.  Explicit capture
     /// and/or other more advanced usage of this class
     /// is strongly discouraged.
+    template <typename T>
     class ChunkContainer
     {
+        static_assert(std::is_same_v<T, int16_t>
+                      || std::is_same_v<T, uint8_t>
+                      || std::is_same_v<T, void>);
+        using Batch_t = std::conditional_t<std::is_same_v<T, void>,
+                                           Data::TraceBatchVariant,
+                                           Data::TraceBatch<T>>;
     public:
         ChunkContainer(BatchDataSource* ptr)
             : source(ptr)
         {}
 
-        ChunkIterator begin() const
+        ChunkIterator<Batch_t> begin() const
         {
             // Note the weirdness! `end` just creates an
             // "empty" iterator, but incrementing that
@@ -183,9 +220,9 @@ class BatchDataSource : public DataSource::DataSourceBase
             ++ret;
             return ret;
         }
-        ChunkIterator end() const
+        ChunkIterator<Batch_t> end() const
         {
-            return ChunkIterator(source);
+            return ChunkIterator<Batch_t>(source);
         }
     private:
         BatchDataSource* source;
@@ -194,15 +231,28 @@ class BatchDataSource : public DataSource::DataSourceBase
     /// Pseudo-Iterator type for iterating over all the chunks produced by
     /// a DataSource.  This type is *only* suitable for implicit use
     /// during range based for loops.  See class comments for more details
+    template <typename T>
     struct BatchIterator
     {
         BatchIterator(BatchDataSource* source)
             : source_(source)
         {}
 
-        const Data::TraceBatch<int16_t>& operator*() const
+        const T& operator*() const
         {
-            return data[idx];
+            if constexpr(std::is_same_v<T, Data::TraceBatchVariant>)
+                return data[idx];
+            else
+                return std::get<T>(data[idx].Data());
+            __builtin_unreachable();
+        }
+        T& operator*()
+        {
+            if constexpr(std::is_same_v<T, Data::TraceBatchVariant>)
+                return data[idx];
+            else
+                return std::get<T>(data[idx].Data());
+            __builtin_unreachable();
         }
         BatchIterator& operator++()
         {
@@ -220,7 +270,7 @@ class BatchDataSource : public DataSource::DataSourceBase
         }
     private:
         BatchDataSource* source_;
-        std::vector<Data::TraceBatch<int16_t>> data;
+        std::vector<Data::TraceBatchVariant> data;
         size_t idx = 0;
     };
 
@@ -228,8 +278,15 @@ class BatchDataSource : public DataSource::DataSourceBase
     /// into a range based for loop.  Explicit capture
     /// and/or other more advanced usage of this class
     /// is strongly discouraged.
+    template <typename T>
     class BatchContainer
     {
+        static_assert(std::is_same_v<T, int16_t>
+                      || std::is_same_v<T, uint8_t>
+                      || std::is_same_v<T, void>);
+        using Batch_t = std::conditional_t<std::is_same_v<T, void>,
+                                           Data::TraceBatchVariant,
+                                           Data::TraceBatch<T>>;
     public:
         BatchContainer(BatchDataSource* ptr)
             : source(ptr)
@@ -237,7 +294,7 @@ class BatchDataSource : public DataSource::DataSourceBase
 
         BatchDataSource* source;
 
-        BatchIterator begin() const
+        BatchIterator<Batch_t> begin() const
         {
             // Note the weirdness! `end` just creates an
             // "empty" iterator, but incrementing that
@@ -247,9 +304,9 @@ class BatchDataSource : public DataSource::DataSourceBase
             ++ret;
             return ret;
         }
-        BatchIterator end() const
+        BatchIterator<Batch_t> end() const
         {
-            return BatchIterator(source);
+            return BatchIterator<Batch_t>(source);
         }
     };
 
@@ -268,7 +325,14 @@ public:
     // * Do not mix calls to these functions with the usage of a
     //   DataSourceRunner.  Doing so will cause an exception to be
     //   thrown.
-    ChunkContainer AllChunks()
+    //
+    // Beyond that, these functions will default to providing
+    // TraceBatchVariants.  You can however specify int16_t or
+    // uint8_t as the template parameter and get a specific type
+    // of batch directly.  However an exception will be thrown
+    // if the requested type does not match the data generated
+    template <typename T = void>
+    ChunkContainer<T> AllChunks()
     {
         if (this->IsStarted() || startedSelf_)
             throw PBException("Unexpected usage\n");
@@ -276,10 +340,11 @@ public:
         Start();
         startedSelf_ = true;
 
-        return ChunkContainer(this);
+        return ChunkContainer<T>(this);
     }
 
-    BatchContainer AllBatches()
+    template <typename T = void>
+    BatchContainer<T> AllBatches()
     {
         if (this->IsStarted() || startedSelf_)
             throw PBException("Unexpected usage\n");
@@ -287,7 +352,7 @@ public:
         Start();
         startedSelf_ = true;
 
-        return BatchContainer(this);
+        return BatchContainer<T>(this);
     }
 
 private:

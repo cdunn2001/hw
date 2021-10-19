@@ -13,7 +13,6 @@ class HostNoOpBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeIn = Parent::ElementTypeIn;
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
@@ -39,7 +38,7 @@ public:
 
 private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

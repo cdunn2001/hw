@@ -27,6 +27,7 @@
 //  Defines unit tests for detection model estimation performed on the host
 //  compute system.
 
+#include <algorithm>
 #include <memory>
 #include <random>
 #include <gtest/gtest.h>
@@ -389,12 +390,21 @@ private:
             detectionModels.push_back(std::move(detModelCD));
         }
 
+        // Set up the detection models for the pool.
+        TraceHistogramAccumulator::PoolDetModel pdm {poolSize,
+                                                     Cuda::Memory::SyncDirection::Symmetric,
+                                                     SOURCE_MARKER()};
+        {
+            const auto laneDetModel = MakeInitialModel();
+            auto pdmv = pdm.GetHostView();
+            std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
+        }
+
         // Configure and fill the histogram.
         TraceHistogramAccumHost::Configure(testConfig.traceConfig);
         TraceHistogramAccumHost tha{poolId, poolSize};
         tha.Reset(ctb.second);
-        tha.AddBatch(ctb.first);
-
+        tha.AddBatch(traces, pdm);
         return CompleteData{std::move(tha), std::move(detectionModels), std::move(frameMode)};
     }
 

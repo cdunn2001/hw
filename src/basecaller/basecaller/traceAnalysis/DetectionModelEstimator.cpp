@@ -95,6 +95,8 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
                                        PoolDetModel* models,
                                        AnalysisProfiler& profiler)
 {
+    assert(models);
+    
     auto aggProf = profiler.CreateScopedProfiler(AnalysisStages::AggregateStats);
     (void)aggProf;
     baselineAggregator_->AddMetrics(metrics);
@@ -103,7 +105,7 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
     (void)histProf;
     if (poolStatus_ != PoolStatus::STARTUP_HIST_INIT)
     {
-        traceAccumulator_->AddBatch(traces);
+        traceAccumulator_->AddBatch(traces, *models);
     }
 
     if (poolStatus_ != PoolStatus::SEQUENCING)

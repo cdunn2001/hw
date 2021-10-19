@@ -50,7 +50,7 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
                                         const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = true;
-    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
+    InitFactory(hostExecution, movConfig);
 
     {
         // Validation has already been handled in the configuration framework.
@@ -70,43 +70,56 @@ void HostMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<HostMultiScaleBaseliner::ElementTypeOut>,
           Data::BaselinerMetrics>
-HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 {
-    assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
+    return std::visit([&](const auto& rawTrace)
+    {
+        assert(rawTrace.LanesPerBatch() <= baselinerByLane_.size());
 
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
+        auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
 
-    // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
-    Data::BatchData<ElementTypeIn> lowerBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
-    Data::BatchData<ElementTypeIn> upperBuffer(rawTrace.StorageDims(),
-                                               Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+        // TODO: We don't need to allocate these large buffers, we only need 2 BlockView<T> buffers which can be reused.
+        Data::BatchData<ElementTypeOut> lowerBuffer(rawTrace.StorageDims(),
+                                                   Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+        Data::BatchData<ElementTypeOut> upperBuffer(rawTrace.StorageDims(),
+                                                   Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
-    auto statsView = out.second.baselinerStats.GetHostView();
-    tbb::task_arena().execute([&] {
-        tbb::parallel_for(size_t{0}, rawTrace.LanesPerBatch(), [&](size_t laneIdx) {
-            auto baselinerStats = baselinerByLane_[laneIdx].EstimateBaseline(   
-                                                                rawTrace.GetBlockView(laneIdx),
-                                                             lowerBuffer.GetBlockView(laneIdx),
-                                                             upperBuffer.GetBlockView(laneIdx),
-                                                               out.first.GetBlockView(laneIdx));
+        auto statsView = out.second.baselinerStats.GetHostView();
+        tbb::task_arena().execute([&] {
+            tbb::parallel_for(size_t{0}, rawTrace.LanesPerBatch(), [&](size_t laneIdx) {
+                auto baselinerStats = baselinerByLane_[laneIdx].EstimateBaseline(
+                        rawTrace.GetBlockView(laneIdx),
+                        lowerBuffer.GetBlockView(laneIdx),
+                        upperBuffer.GetBlockView(laneIdx),
+                        out.first.GetBlockView(laneIdx));
 
-            statsView[laneIdx] = baselinerStats.GetState();
+                statsView[laneIdx] = baselinerStats.GetState();
+            });
         });
-    });
 
-    return out;
+        return out;
+    }, batch.Data());
 }
 
+template <typename T>
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
-HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
-                                                               Data::BlockView<ElementTypeIn> lowerBuffer,
-                                                               Data::BlockView<ElementTypeIn> upperBuffer,
+HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<const T>& traceData,
+                                                               Data::BlockView<ElementTypeOut> lowerBuffer,
+                                                               Data::BlockView<ElementTypeOut> upperBuffer,
                                                                Data::BlockView<ElementTypeOut> baselineSubtractedData)
 {
+    assert(traceData.NumFrames() == lowerBuffer.NumFrames());
+    assert(traceData.NumFrames() == upperBuffer.NumFrames());
+    auto inItr = traceData.CBegin();
+    auto lowItr = lowerBuffer.Begin();
+    auto upItr = upperBuffer.Begin();
+    for ( ; inItr != traceData.CEnd(); ++inItr, ++lowItr, ++upItr)
+    {
+        auto dat = inItr.Extract();
+        lowItr.Store(dat);
+        upItr.Store(dat);
+    }
     // Run lower and upper filters, results are strided out.
-    std::memcpy(lowerBuffer.Data(), traceData.Data(), traceData.Size()*sizeof(ElementTypeIn));
-    std::memcpy(upperBuffer.Data(), traceData.Data(), traceData.Size()*sizeof(ElementTypeIn));
     const auto& lower = msLowerOpen_(&lowerBuffer);
     const auto& upper = msUpperOpen_(&upperBuffer);
 
@@ -121,7 +134,8 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     for (size_t i = 0; i < inputCount; i++, upIt++, loIt++)
     {
-        auto upperVal = upIt.Extract(), lowerVal = loIt.Extract();
+        auto upperVal = upIt.Extract() - pedestal_;
+        auto lowerVal = loIt.Extract() - pedestal_;
         const auto& bias = (upperVal + lowerVal) * 0.5f;
         const auto& framebkgndSigma = (upperVal - lowerVal) * sbInv;
         const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma);
@@ -131,7 +145,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
             // Data scaled first
-            auto rawSignal = trIt.Extract() * scaler_;
+            auto rawSignal = (trIt.Extract() - pedestal_) * scaler_;
             LaneArray blSubtractedFrame(rawSignal - baselineEstimate);
             // ... then added to statistics
             blsIt.Store(blSubtractedFrame);

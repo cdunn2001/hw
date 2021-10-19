@@ -55,11 +55,26 @@ inline __device__ PBFloat2 Blend(PBBool2 cond, PBFloat2 l, PBFloat2 r)
     return PBFloat2(low, high);
 }
 
+inline __device__ float2 Blend(PBBool2 cond, float2 l, float2 r)
+{
+    half zero  = __float2half(0.0f);
+    float x  = (__low2half(cond.data())  == zero) ? r.x : l.x;
+    float y = (__high2half(cond.data()) == zero) ? r.y : l.y;
+    return make_float2(x,y);
+}
+
 inline __device__ PBFloat2 Blend(PBShort2 cond, PBFloat2 l, PBFloat2 r)
 {
     float low  = cond.X() ? l.X() : r.X();
     float high = cond.Y() ? l.Y() : r.Y();
     return PBFloat2(low, high);
+}
+
+inline __device__ float2 Blend(PBShort2 cond, float2 l, float2 r)
+{
+    float x  = cond.X() ? l.x : r.x;
+    float y = cond.Y() ? l.y : r.y;
+    return make_float2(x,y);
 }
 
 inline __device__ PBHalf2 Blend(PBShort2 cond, PBHalf2 l, PBHalf2 r)
@@ -198,13 +213,20 @@ inline __device__ PBShort2 operator != (PBShort2 l, PBShort2 r) { return PBShort
 
 inline __device__ PBShort2 min(PBShort2 l, PBShort2 r)
 {
-    auto cond = l < r;
-    return Blend(cond, l, r);
+    return PBShort2::FromRaw(__vmins2(l.data(), r.data()));
 }
 inline __device__ PBShort2 max(PBShort2 l, PBShort2 r)
 {
-    auto cond = l > r;
-    return Blend(cond, l, r);
+    return PBShort2::FromRaw(__vmaxs2(l.data(), r.data()));
+}
+
+inline __device__ PBUChar4 min(PBUChar4 l, PBUChar4 r)
+{
+    return PBUChar4::FromRaw(__vminu4(l.data(), r.data()));
+}
+inline __device__ PBUChar4 max(PBUChar4 l, PBUChar4 r)
+{
+    return PBUChar4::FromRaw(__vmaxu4(l.data(), r.data()));
 }
 
 }}

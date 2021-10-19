@@ -17,7 +17,6 @@ namespace Basecaller {
 class Baseliner
 {
 public:     // Types
-    using ElementTypeIn = Data::RawTraceElement;
     using ElementTypeOut = Data::BaselinedTraceElement;
 
 public:     // Static functions
@@ -30,13 +29,15 @@ public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
                           const Data::MovieConfig& movConfig);
 
-    static void InitFactory(bool hostExecution, float movieScaler);
+    static void InitFactory(bool hostExecution, const Data::MovieConfig& movConfig);
 
     static void Finalize();
 
 protected: // static members
     static std::unique_ptr<Data::CameraBatchFactory> batchFactory_;
     static float movieScaler_;
+    static int16_t pedestal_;
+    static DataSource::PacketLayout::EncodingFormat expectedEncoding_;
 
 public:
     Baseliner(uint32_t poolId)
@@ -48,10 +49,10 @@ public:
     /// Estimate and subtract baseline from rawTrace.
     /// \returns Baseline-subtracted traces with certain trace statistics.
     std::pair<Data::TraceBatch<ElementTypeOut>,
-                      Data::BaselinerMetrics>
-    operator()(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+              Data::BaselinerMetrics>
+    operator()(const Data::TraceBatchVariant& rawTrace)
     {
-        assert(rawTrace.GetMeta().PoolId() == poolId_);
+        assert(rawTrace.Metadata().PoolId() == poolId_);
         return FilterBaseline(rawTrace);
     }
 
@@ -65,7 +66,7 @@ public:
 private:    // Customizable implementation
     virtual std::pair<Data::TraceBatch<ElementTypeOut>,
                       Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) = 0;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) = 0;
 
 private:    // Data
     uint32_t poolId_;

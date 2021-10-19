@@ -454,71 +454,105 @@ private:
     }
 
 
-    std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceBase& dataSource)
+    std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
+                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         if (outputTrcFileName_ != "")
         {
             auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceSaver.roi);
             const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
             const auto sourceLaneWidth = sampleLayout.BlockWidth();
-            const size_t numZmws = sourceLaneOffsets.size() * sourceLaneWidth;
+
+            if (!(sourceLaneWidth % laneSize == 0
+                  || laneSize % sourceLaneWidth == 0))
+            {
+                throw PBException("Cannot handle incoming sensor lane width of " + std::to_string(sourceLaneWidth) + ". "
+                                  "It is neither a multiple nor a even divisor of the analysis lane width of "
+                                  + std::to_string(laneSize));
+            }
+
+            std::vector<uint32_t> fullBatchIds;
+            fullBatchIds.reserve(dataSource.NumZmw());
+            for (const auto& kv : poolDims)
+            {
+                fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
+            }
+            assert(fullBatchIds.size() == dataSource.NumZmw());
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
-            // The lane widths may be different.
-            std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
-            std::unordered_set<DataSourceBase::LaneIndex> destLaneSeen;
-            std::vector<DataSourceBase::LaneIndex> destLanes;
+            // The lane widths may be different.  Depending on the incoming lane width, the
+            // resulting ROI may have more ZMW, as selecting one ZMW from a lane gives you the
+            // entire 64 ZMW lane.
+            std::set<DataSourceBase::LaneIndex> destLaneSeen;
             {
-                // currate the features of the ROI ZMWs
-                const auto allFeatures = dataSource.GetUnitCellProperties();
-                size_t k=0;
+                // curate the features of the ROI ZMWs
                 for(const auto laneOffset : sourceLaneOffsets)
                 {
                     const uint64_t zmwIndex = laneOffset * sourceLaneWidth;
-                    for(uint32_t j =0; j < sourceLaneWidth; j++)
+                    for (size_t i = zmwIndex; i < zmwIndex + sourceLaneWidth; i += laneSize)
                     {
-                        roiFeatures[k] = allFeatures[zmwIndex+j];
-                        k++;
+                        destLaneSeen.insert(i / laneSize);
                     }
-
-                    const DataSourceBase::LaneIndex destLaneIndex = zmwIndex / laneSize;
-                    if (destLaneSeen.find(destLaneIndex) == destLaneSeen.end())
-                    {
-                        destLanes.push_back(destLaneIndex);
-                        destLaneSeen.insert(destLaneIndex);
-                    }
-                }
-                if (k != numZmws)
-                {
-                    throw PBException("ROI selection algorithm is buggy");
                 }
             }
-            if (destLanes.size() != numZmws / laneSize)
+
+            const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
+            const auto actualZmw = destLaneSeen.size() * laneSize;
+            if (actualZmw < requestedZmw)
+                throw PBException("Error handling the trace roi lane selection");
+            else if (actualZmw > requestedZmw)
             {
-                PBLOG_WARN << "The lane calcuations are not as predicted: lanes:" << destLanes.size()
-                    << " numZmws/laneSize:" << numZmws/laneSize;
+                PBLOG_WARN << "Saving " << actualZmw << " ZMW when only " << requestedZmw << " were requested.";
                 PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
             }
-            DataSourceBase::LaneSelector blocks(destLanes);
-            PBLOG_INFO << "Opening TraceSaver with output file " << outputTrcFileName_ << ", " << numZmws << " ZMWS.";
-            TraceDataType outputType = TraceDataType::INT16;
-            if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
+
+            std::vector<DataSourceBase::LaneIndex> destLanes(destLaneSeen.begin(), destLaneSeen.end());
+            DataSourceBase::LaneSelector selection(std::move(destLanes));
+
+            const auto& fullHoleIds = dataSource.UnitCellIds();
+            const auto& fullProperties = dataSource.GetUnitCellProperties();
+
+            std::vector<uint32_t> holeNumbers(actualZmw);
+            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
+            std::vector<uint32_t> batchIds(actualZmw);
+
+            size_t idx = 0;
+            for (const auto& lane : selection)
             {
-                outputType = TraceDataType::UINT8;
-            } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
-            {
-                if (sampleLayout.Encoding() == PacketLayout::UINT8)
+                size_t currZmw = lane*laneSize;
+                for (size_t i = 0; i < laneSize; ++i)
                 {
-                    outputType = TraceDataType::UINT8;
+                    holeNumbers[idx] = fullHoleIds[currZmw];
+                    properties[idx] = fullProperties[currZmw];
+                    batchIds[idx] = fullBatchIds[currZmw];
+
+                    currZmw++;
+                    idx++;
+                    assert(idx < actualZmw);
                 }
             }
-            outputTrcFile_ = std::make_unique<TraceFile>(outputTrcFileName_,
-                                                         outputType,
-                                                         numZmws,
-                                                         dataSource.NumFrames());
-            outputTrcFile_->Traces().Pedestal(dataSource.Pedestal());
+            assert(idx == actualZmw);
 
-            return std::make_unique<TraceSaverBody>(std::move(outputTrcFile_), roiFeatures, std::move(blocks));
+            auto dataType = TraceDataType::INT16;
+            if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
+            {
+                dataType = TraceDataType::UINT8;
+            } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
+            {
+                if (dataSource.PacketLayouts().begin()->second.Encoding() == PacketLayout::UINT8)
+                {
+                    dataType = TraceDataType::UINT8;
+                }
+            }
+
+            return std::make_unique<TraceSaverBody>(outputTrcFileName_,
+                                                    dataSource.NumFrames(),
+                                                    std::move(selection),
+                                                    dataType,
+                                                    holeNumbers,
+                                                    properties,
+                                                    batchIds,
+                                                    movieConfig_);
         }
         else
         {
@@ -570,6 +604,12 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
         auto source = CreateSource();
+        // TODO: This is ugly, modifying the movieConfig after it was ostensibly already
+        //       initialized. This is expected to be cleaned up in the near-term, and this
+        //       config will to be re-worked.  The tentative plan is to have the whole thing
+        //       generated by the DataSource, though I'd not call that set in stone yet.
+        movieConfig_.encoding = source->PacketLayouts().begin()->second.Encoding();
+        movieConfig_.pedestal = source->Pedestal();
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
@@ -585,7 +625,7 @@ private:
 
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
-            inputNode->AddNode(CreateTraceSaver(source->GetDataSource()), GraphProfiler::SAVE_TRACE);
+            inputNode->AddNode(CreateTraceSaver(*source, poolDims), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);

@@ -71,7 +71,8 @@ public:     // Const access (extensions to TraceHistogramAccumulator interface)
     { return hist_; }
 
 private:    // TraceHistogramAccumulator implementation.
-    void AddBatchImpl(const Data::TraceBatch<TraceElementType>& ctb) override;
+    void AddBatchImpl(const Data::TraceBatch<TraceElementType>& ctb,
+                      const PoolDetModel& detModel) override;
 
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
 

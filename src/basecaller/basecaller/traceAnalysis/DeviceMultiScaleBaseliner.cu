@@ -44,39 +44,53 @@ void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&
                                           const Data::MovieConfig& movConfig)
 {
     const auto hostExecution = false;
-    InitFactory(hostExecution, movConfig.photoelectronSensitivity);
+    InitFactory(hostExecution, movConfig);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
 
 std::pair<Data::TraceBatch<Data::BaselinedTraceElement>,
           Data::BaselinerMetrics>
-DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace)
+DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrace)
 {
-    auto out = batchFactory_->NewBatch(rawTrace.GetMeta(), rawTrace.StorageDims());
+    auto out = batchFactory_->NewBatch(rawTrace.Metadata(), rawTrace.StorageDims());
 
-    Data::BatchData<ElementTypeIn> work1(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
-    Data::BatchData<ElementTypeIn> work2(rawTrace.StorageDims(), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats);
 
-    filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats, work1, work2);
-
-    Cuda::CudaSynchronizeDefaultStream();
     return out;
 }
 
 DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
-                                                        const BaselinerParams& params, uint32_t lanesPerPool,
-                                                        StashableAllocRegistrar* registrar)
+                                                     const BaselinerParams& params,
+                                                     uint32_t lanesPerPool,
+                                                     StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
     , startupLatency_(params.LatentSize())
 {
-    filter_ = std::make_unique<Filter>(
-        params,
-        Scale(),
-        lanesPerPool,
-        initVal,
-        SOURCE_MARKER(),
-        registrar);
+    Cuda::ComposedConstructArgs args;
+    args.pedestal = pedestal_;
+    args.scale = Scale();
+    args.numLanes = lanesPerPool;
+    args.val = initVal;
+    switch (expectedEncoding_)
+    {
+    case DataSource::PacketLayout::EncodingFormat::UINT8:
+        filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, uint8_t>>(
+            params,
+            args,
+            SOURCE_MARKER(),
+            registrar);
+        break;
+    case DataSource::PacketLayout::EncodingFormat::INT16:
+        filter_ = std::make_unique<Cuda::ComposedFilter<laneSize/2, lag, int16_t>>(
+            params,
+            args,
+            SOURCE_MARKER(),
+            registrar);
+        break;
+    default:
+        throw PBException("Unexpected data encoding in device baseline filter");
+    }
 }
 
 DeviceMultiScaleBaseliner::~DeviceMultiScaleBaseliner() = default;

@@ -23,6 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <algorithm>
+
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
@@ -205,6 +207,16 @@ private:
 
         ASSERT_EQ(source.PacketLayouts().size(), hists.size());
 
+        // Set up detection models for the pool.
+        TraceHistogramAccumulator::PoolDetModel pdm {dims.lanesPerBatch,
+                                                     SyncDirection::Symmetric,
+                                                     SOURCE_MARKER()};
+        {
+            const auto laneDetModel = MockLaneDetectionModel<PBHalf>();
+            auto pdmv = pdm.GetHostView();
+            std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
+        }
+
         SensorPacketsChunk chunk;
         while (source.IsRunning())
         {
@@ -239,7 +251,7 @@ private:
 
                     auto binning = profiler.CreateScopedProfiler(Profiles::BINNING);
                     (void)binning;
-                    hists[poolId]->AddBatch(batch);
+                    hists[poolId]->AddBatch(batch, pdm);
                     CudaSynchronizeDefaultStream();
 
                     auto download = profiler.CreateScopedProfiler(Profiles::HIST_DOWNLOAD);
