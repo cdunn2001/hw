@@ -27,6 +27,7 @@
 #ifndef mongo_dataTypes_LaneDetectionModel_H_
 #define mongo_dataTypes_LaneDetectionModel_H_
 
+#include <array>
 
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
@@ -118,7 +119,7 @@ struct __align__(128) LaneModelParameters
         return analogs_[i];
     }
 
- private:
+private:
     Cuda::Utility::CudaArray<LaneAnalogMode<T, laneWidth>, numAnalogs> analogs_;
     LaneAnalogMode<T, laneWidth> baseline_;
 };
@@ -131,6 +132,35 @@ static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*(5*3), "Unex
 /// \tparam T is the elemental data type (e.g., float).
 template <typename T>
 using LaneDetectionModel = LaneModelParameters<T, laneSize>;
+
+
+/// Creates a mostly arbitrary instance of LaneDetectionModel<T>.
+/// Primarily useful for unit tests.
+template <typename T>
+LaneDetectionModel<T> MockLaneDetectionModel()
+{
+    LaneDetectionModel<T> ldm;
+
+    {
+        auto& bm = ldm.BaselineMode();
+        bm.SetAllWeights(0.40f);
+        bm.SetAllMeans(0.0f);
+        bm.SetAllVars(1.0f);
+    }
+
+    using AnalogArray = std::array<float, LaneDetectionModel<T>::numAnalogs>;
+    const AnalogArray mean {4.0f, 6.0f, 9.0f, 13.0f};
+    const AnalogArray var {1.1f, 1.2f, 1.3f, 1.4f};
+    for (unsigned int i = 0; i < ldm.numAnalogs; ++i)
+    {
+        auto& am = ldm.AnalogMode(i);
+        am.SetAllWeights(0.15f);
+        am.SetAllMeans(mean.at(i));
+        am.SetAllVars(var.at(i));
+    }
+
+    return ldm;
+}
 
 }}}     // namespace PacBio::Mongo::Data
 

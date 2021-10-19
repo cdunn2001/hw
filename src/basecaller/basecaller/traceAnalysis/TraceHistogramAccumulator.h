@@ -32,6 +32,7 @@
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
+#include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
 
@@ -56,6 +57,8 @@ public:     // Types
     using HistCountType = unsigned short;
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
+    using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
+    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
@@ -83,13 +86,14 @@ public:     // Const functions
 public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
-    void AddBatch(const Data::TraceBatch<DataType>& traces)
+    void AddBatch(const Data::TraceBatch<DataType>& traces,
+                  const PoolDetModel& detModel)
     {
         if (!initialized_)
             throw PBException("Cannot aggregate trace data into histograms "
                               "before calling Reset with the desired histogram bounds");
         assert (traces.GetMeta().PoolId() == poolId_);
-        AddBatchImpl(traces);
+        AddBatchImpl(traces, detModel);
         frameCount_ += traces.NumFrames();
     }
 
@@ -118,7 +122,8 @@ private:    // Data
 
 private:    // Customizable implementation.
     // Bins frames in traces and updates poolHist_.
-    virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces) = 0;
+  virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
+                            const PoolDetModel& detModel) = 0;
 
     // Clears out current histogram data and resets histogram with given bounds
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
