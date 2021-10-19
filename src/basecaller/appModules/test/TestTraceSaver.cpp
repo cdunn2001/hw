@@ -112,6 +112,8 @@ TYPED_TEST(TestTraceSaver, TestA)
 
         std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numSelectedZmws);
         std::vector<uint32_t> holeNumbers(numSelectedZmws);
+        // Nothing special about the value 6, just inserting something
+        // nonzero to verify the data makes it round trip.
         std::vector<uint32_t> batchIds(numSelectedZmws, 6);
         size_t k=0;
         for(const DataSourceBase::LaneIndex lane : lanes)
@@ -268,6 +270,8 @@ TEST(Sanity,ROI)
 
     std::vector<DataSourceBase::UnitCellProperties> roiFeatures(numZmws);
     std::vector<uint32_t> holeNumbers(numZmws);
+    // Nothing special about the value 6, just inserting something
+    // nonzero to verify the data makes it round trip.
     std::vector<uint32_t> batchIds(numZmws, 6);
     size_t k=0;
     for(const DataSourceBase::LaneIndex lane : blocks)
