@@ -224,7 +224,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
-    if (!isModelInitialized_ && tbatch.GetMeta().FirstFrame() > static_cast<int32_t>(baseliner_->StartupLatency()))
+    if (!isModelInitialized_ && tbatch.Metadata().FirstFrame() > static_cast<int32_t>(baseliner_->StartupLatency()))
     {
         // Run data through the DME until we get our first real estimate, at which point we
         // stop using the DME and just keep that model forever.
