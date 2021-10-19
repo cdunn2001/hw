@@ -322,8 +322,7 @@ struct LatentBaselineData
 
         // Auto-correlation stats
         PBFloat2 m2Lag;
-
-        PBHalf2 lBuf[lag];  // left buffer
+        LocalCircularBuffer<blockThreads, lag> lBuf; // left buffer
         LocalCircularBuffer<blockThreads, lag> rBuf; // right circular buffer
         uint8_t lbi;        // left buffer index
         uint8_t rbi;        // left buffer index
@@ -357,11 +356,14 @@ struct LatentBaselineData
 
             if (lbi < lag)
             {
-                lBuf[lbi++] += offlessVal;
+                lBuf.PushBack(offlessVal);
+                lbi++;
             }
 
             m2Lag += PBFloat2(offlessVal) * rBuf.Front();
-            rBuf.PushBack(offlessVal); rbi++; rbi %= lag;
+            rBuf.PushBack(offlessVal); 
+            rbi++; 
+            rbi %= lag;
 
             stats.AddSample(latData);
 
@@ -388,7 +390,7 @@ struct LatentBaselineData
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
         {
-            local.lBuf[k] = 0;
+            local.lBuf.PushBack(0);
             local.rBuf.PushBack(0);
         }
 
@@ -414,10 +416,11 @@ struct LatentBaselineData
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
         {
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = local.lBuf[k].X();
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = local.lBuf[k].Y();
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = local.lBuf.Front().X();
+            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = local.lBuf.Front().Y();
             stats.fullAutocorrState.rBuf[k][2*threadIdx.x]    = local.rBuf.Front().X();
             stats.fullAutocorrState.rBuf[k][2*threadIdx.x+1]  = local.rBuf.Front().Y();
+            local.lBuf.PushBack(0);
             local.rBuf.PushBack(0);
         }
 
