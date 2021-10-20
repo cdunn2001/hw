@@ -58,6 +58,8 @@ public:
     BazWriterBody(const std::string& bazName,
                   size_t expectedFrames,
                   const std::vector<uint32_t>& zmwNumbers,
+                  const std::vector<uint16_t>& zmwX,
+                  const std::vector<uint16_t>& zmwY,
                   const std::vector<uint32_t>& zmwFeatures,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,

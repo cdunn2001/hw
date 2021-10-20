@@ -75,6 +75,8 @@ BazWriterBody::BazWriterBody(
         const std::string& bazName,
         size_t expectedFrames,
         const std::vector<uint32_t>& zmwNumbers,
+        const std::vector<uint16_t>& zmwX,
+        const std::vector<uint16_t>& zmwY,
         const std::vector<uint32_t>& zmwFeatures,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
@@ -91,6 +93,14 @@ BazWriterBody::BazWriterBody(
         ? Mongo::Data::InternalPulses::Params()
         : Mongo::Data::ProductionPulses::Params();
 
+    // TODO: These are manually created here but should be provided.
+    // Hole types are also currently all set to Sequencing as this information
+    // is not currently provided.
+    std::map<std::string,uint32_t> holeTypesMap{ { "Sequencing", 1 } };
+    std::map<std::string,uint32_t> holeFeaturesMap{ {"StandardZMW", 0},
+                                                    {"NonStandardZMW", 1UL << 0},
+                                                    {"NonSequencing", 1UL << 1 },
+                                                    {"Sequencing", 0 | 1UL << 0 } };
     if (multipleBazFiles_)
     {
         auto ioStatsAggregator = std::make_shared<BazIO::IOStatsAggregator>(numBatches_);
@@ -120,9 +130,22 @@ BazWriterBody::BazWriterBody(
         tbb::parallel_for((uint32_t) {0}, numBatches_, [&](uint32_t b)
         {
             const auto poolZmwNumbersStart = zmwNumbers.begin() + batchStartZmw[b];
+            const auto poolZmwXStart = zmwX.begin() + batchNumZmw[b];
+            const auto poolZmwYStart = zmwY.begin() + batchNumZmw[b];
             const auto poolZmwFeaturesStart = zmwFeatures.begin() + batchStartZmw[b];
+
             using FileHeaderBuilder = BazIO::FileHeaderBuilder;
             const std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
+            using ZmwInfo = BazIO::ZmwInfo;
+            ZmwInfo zmwInfo(ZmwInfo::Data
+                                { std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + batchNumZmw[b]),
+                                  std::vector<uint8_t>(batchNumZmw[b], 1),
+                                  std::vector<uint16_t>(poolZmwXStart, poolZmwXStart + batchNumZmw[b]),
+                                  std::vector<uint16_t>(poolZmwYStart, poolZmwYStart + batchNumZmw[b]),
+                                  std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b])
+                                },
+                             holeTypesMap,
+                             holeFeaturesMap);
             FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,
@@ -130,8 +153,7 @@ BazWriterBody::BazWriterBody(
                                  SmrtData::MetricsVerbosity::MINIMAL,
                                  metadata,
                                  basecallerConfig.Serialize().toStyledString(),
-                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + batchNumZmw[b]),
-                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b]),
+                                 zmwInfo,
                                  // Hack, until metrics handling can be rewritten
                                  metricFrames,
                                  metricFrames,
@@ -151,6 +173,17 @@ BazWriterBody::BazWriterBody(
         PBLOG_INFO << "Opening BAZ file for writing: " << bazName << " zmws: " << zmwNumbers.size();
 
         using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+        using ZmwInfo = BazIO::ZmwInfo;
+        ZmwInfo zmwInfo(ZmwInfo::Data
+                        {
+                            zmwNumbers,
+                            std::vector<uint8_t>(zmwNumbers.size(), 1),
+                            zmwX,
+                            zmwY,
+                            zmwFeatures
+                        },
+                        holeTypesMap,
+                        holeFeaturesMap);
         FileHeaderBuilder fh(bazName,
                              100.0f,
                              expectedFrames,
@@ -158,8 +191,7 @@ BazWriterBody::BazWriterBody(
                              SmrtData::MetricsVerbosity::MINIMAL,
                              metadata,
                              basecallerConfig.Serialize().toStyledString(),
-                             zmwNumbers,
-                             zmwFeatures,
+                             zmwInfo,
                              // Hack, until metrics handling can be rewritten
                              metricFrames,
                              metricFrames,

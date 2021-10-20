@@ -34,6 +34,7 @@
 #include <pacbio/logging/Logger.h>
 
 #include "FileHeaderBuilder.h"
+#include "RunLength.h"
 
 #include <bazio/SmartMemory.h>
 #include <bazio/FileHeaderValidator.h>
@@ -55,8 +56,7 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
                                      const MetricsVerbosity metricsVerbosity,
                                      const std::string& experimentMetadata,
                                      const std::string& basecallerConfig,
-                                     const std::vector<uint32_t> zmwNumbers,
-                                     const std::vector<uint32_t> zmwUnitFeatures,
+                                     const ZmwInfo& zmwInfo,
                                      const uint32_t hFMetricFrames,
                                      const uint32_t mFMetricFrames,
                                      const uint32_t sliceLengthFrames,
@@ -65,8 +65,7 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
     , metricsVerbosity_(metricsVerbosity)
     , experimentMetadata_(experimentMetadata)
     , basecallerConfig_(basecallerConfig)
-    , zmwNumbers_(zmwNumbers)
-    , zmwUnitFeatures_(zmwUnitFeatures)
+    , zmwInfo_(zmwInfo)
     , sliceLengthFrames_(sliceLengthFrames)
     , frameRateHz_(frameRateHz)
     , hFMetricFrames_(hFMetricFrames)
@@ -143,16 +142,10 @@ std::string FileHeaderBuilder::CreateJSON()
     AddMetricsToJson(header, hFMetricFields_, hFMetricFrames_, MetricFrequency::HIGH);
     AddPacketsToJson(header);
 
-    if (!zmwNumbers_.empty())
-        header["ZMW_NUMBER_LUT"] = RunLengthEncLUTHexJson(RunLengthEncLUT(zmwNumbers_));
+    header["ZMW_INFO"] = zmwInfo_.ToJson();
 
     if (!zmwNumberRejects_.empty())
         header["ZMW_NUMBER_REJECTS_LUT"] = RunLengthEncLUTHexJson(RunLengthEncLUT(zmwNumberRejects_));
-
-    if (zmwUnitFeatures_.empty())
-        for (size_t i = 0; i < zmwNumbers_.size(); ++i)
-            zmwUnitFeatures_.push_back(i);
-    header["ZMW_UNIT_FEATURES_LUT"] = RunLengthEncLUTJson(RunLengthEncLUT(zmwUnitFeatures_));
 
     std::stringstream ss;
     ss << file;
@@ -163,65 +156,6 @@ std::vector<char> FileHeaderBuilder::CreateJSONCharVector()
 {
     std::string jsonStream = CreateJSON();
     return std::vector<char>(jsonStream.begin(), jsonStream.end());
-}
-
-Json::Value FileHeaderBuilder::RunLengthEncLUTJson(
-        const std::vector<std::pair<uint32_t, uint32_t>>& input)
-{
-    Json::Value lut;
-    for (const auto& p : input)
-    {
-        Json::Value singleLut;
-        singleLut.append(p.first);
-        singleLut.append(p.second);
-        lut.append(std::move(singleLut));
-    }
-    return lut;
-}
-
-Json::Value FileHeaderBuilder::RunLengthEncLUTHexJson(
-        const std::vector<std::pair<uint32_t, uint32_t>>& input)
-{
-    Json::Value lut;
-    for (const auto& p : input)
-    {
-        Json::Value singleLut;
-        std::stringstream ss;
-        ss << "0x" << std::hex << p.first << std::dec;
-        singleLut.append(ss.str());
-        singleLut.append(p.second);
-        lut.append(std::move(singleLut));
-    }
-    return lut;
-}
-
-std::vector<std::pair<uint32_t, uint32_t>> FileHeaderBuilder::RunLengthEncLUT(const std::vector<uint32_t>& input)
-{
-    std::vector<std::pair<uint32_t, uint32_t>> rleLut;
-    if (!input.empty())
-    {
-        uint32_t startNumber = input[0];
-        uint32_t currentNumber = input[0];
-        uint32_t currentCount = 1;
-        for (size_t i = 1; i < input.size(); ++i)
-        {
-            if (input[i] == currentNumber + 1)
-            {
-                currentNumber = input[i];
-                ++currentCount;
-            }
-            else
-            {
-                rleLut.emplace_back(startNumber, currentCount);
-                startNumber = input[i];
-                currentNumber = input[i];
-                currentCount = 1;
-            }
-        }
-        rleLut.emplace_back(startNumber, currentCount);
-    }
-
-    return rleLut;
 }
 
 void FileHeaderBuilder::ClearMetricFields(const MetricFrequency& frequency)

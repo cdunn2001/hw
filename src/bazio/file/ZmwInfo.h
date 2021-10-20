@@ -31,6 +31,8 @@
 
 #include <json/json.h>
 
+#include "RunLength.h"
+
 namespace PacBio::BazIO
 {
 
@@ -46,53 +48,70 @@ class ZmwInfo
 {
 public:
 
-    static Json::Value RunLengthEncLUTJson(const std::vector<std::pair<uint32_t, uint32_t>>& input);
-    static Json::Value RunLengthEncLUTHexJson(const std::vector<std::pair<uint32_t, uint32_t>>& input);
-    static std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(const std::vector<uint32_t>& input);
-
-public:
+    // Simple struct to package up the various vectors of data
     struct Data
     {
-        uint32_t    holeNumber;
-        uint8_t     holeType;
-        uint16_t    holeX;
-        uint16_t    holeY;
-        uint32_t    holeFeature;
+        std::vector<uint32_t>   holeNumbers;
+        std::vector<uint8_t>    holeTypes;
+        std::vector<uint16_t>   holeX;
+        std::vector<uint16_t>   holeY;
+        std::vector<uint32_t>   holeFeatures;
     };
 
 public:
-    ZmwInfo(const std::vector<Data>& zmwData,
+
+    ZmwInfo(const Data& zmwData,
             const std::map<std::string, uint32_t>& holeTypesMap,
-            const std::map<std::string, uint32_t>& holeFeaturesMap)
-        : zmwData_(zmwData)
-        , holeTypesMap_(holeTypesMap)
-        , holeFeaturesMap_(holeFeaturesMap)
+            const std::map<std::string, uint32_t>& holeFeaturesMap);
+
+    ZmwInfo(const Data& zmwData)
+        : ZmwInfo(zmwData, {}, {})
     { }
 
-    ZmwInfo(const Json::Value& zmwInfo)
-    {
-        std::vector<uint32_t> holeNumbers = ParseJsonRLEHexArray(zmwInfo, "ZMW_NUMBER_LUT");
-        std::vector<uint32_t> holeType = ParseJsonRLEHexArray(zmwInfo, "ZMW_TYPE_LUT");
-        std::vector<uint32_t> holeX = ParseJsonRLEHexArray(zmwInfo["ZMW_XY_LUT"], "X");
-        std::vector<uint32_t> holeY = ParseJsonRLEHexArray(zmwInfo["ZMW_XY_LUT"], "Y");
-        std::vector<uint32_t> holeFeatures = ParseJsonRLEHexArray(zmwInfo, "ZMW_UNIT_FEATURE_LUT");
-
-        for (size_t i = 0; i < holeNumbers.size(); i++)
-        {
-            zmwData_.emplace_back(Data{ holeNumbers[i],
-                                        static_cast<uint8_t>(holeType[i]),
-                                        static_cast<uint16_t>(holeX[i]), static_cast<uint16_t>(holeY[i]),
-                                        holeFeatures[i] });
-            zmwNumbersToId_[holeNumbers[i]] = i;
-        }
-
-        holeTypesMap_ = ParseJsonMap(zmwInfo, "ZMW_TYPE_MAP");
-        holeFeaturesMap_ = ParseJsonMap(zmwInfo, "ZMW_UNIT_FEATURE_MAP");
-    }
+    ZmwInfo() = default;
+    ZmwInfo(ZmwInfo&&) = default;
+    ZmwInfo(const ZmwInfo&) = default;
+    ZmwInfo& operator=(ZmwInfo&&) = default;
+    ZmwInfo& operator=(const ZmwInfo&) = delete;
+    ~ZmwInfo() = default;
 
 public:
-    const std::vector<Data>& ZmwData() const
+
+    void FromJson(const Json::Value& zmwInfo);
+
+public:
+    const Data& ZmwData() const
     { return zmwData_; }
+
+    Data ZmwData(const uint32_t index) const
+    {
+        return Data { { zmwData_.holeNumbers[index] },
+                      { zmwData_.holeTypes[index] },
+                      { zmwData_.holeX[index] },
+                      { zmwData_.holeY[index] },
+                      { zmwData_.holeFeatures[index] }
+                    };
+    }
+
+    const std::vector<uint32_t>& HoleNumbers() const
+    { return zmwData_.holeNumbers; }
+
+    const std::vector<uint8_t>& HoleTypes() const
+    { return zmwData_.holeTypes; }
+
+    const std::vector<std::pair<uint16_t,uint16_t>> HoleXY() const
+    {
+        std::vector<std::pair<uint16_t,uint16_t>> holeXY;
+        holeXY.resize(NumZmws());
+        for (size_t i = 0; i < NumZmws(); i++)
+        {
+            holeXY[i] = std::make_pair(zmwData_.holeX[i], zmwData_.holeY[i]);
+        }
+        return holeXY;
+    }
+
+    const std::vector<uint32_t>& UnitFeatures() const
+    { return zmwData_.holeFeatures; }
 
     const std::map<std::string,uint32_t>& HoleTypesMap() const
     { return holeTypesMap_; }
@@ -100,111 +119,35 @@ public:
     const std::map<std::string,uint32_t>& HoleFeatureMap() const
     { return holeFeaturesMap_; }
 
-    uint32_t ZmwIdToNumber(const uint32_t id) const
-    { return zmwData_.at(id).holeNumber; }
+    uint32_t ZmwIndexToNumber(const uint32_t index) const
+    { return zmwData_.holeNumbers.at(index); }
+
+    uint32_t ZmwNumberToIndex(const uint32_t holeNumber) const
+    { return zmwNumbersToIndex_.at(holeNumber); }
+
+    size_t NumZmws() const
+    { return zmwData_.holeNumbers.size(); }
 
 public:
-    Json::Value ToJson() const
-    {
-        Json::Value zmwInfo;
-        zmwInfo["ZMW_NUMBER_LUT"] = ZmwNumberLut();
-        zmwInfo["ZMW_TYPE_LUT"] = ZmwTypeLut();
-        zmwInfo["ZMW_XY_LUT"] = ZmwXYLut();
-        zmwInfo["ZMW_UNIT_FEATURE_LUT"] = ZmwUnitFeatureLut();
-        zmwInfo["ZMW_TYPE_MAP"] = ZmwHoleTypeMap();
-        zmwInfo["ZMW_UNIT_FEATURE_MAP"] = ZmwFeatureTypeMap();
-        return zmwInfo;
-    }
 
-    Json::Value ZmwNumberLut() const
-    {
-        return EncodeJson([](const Data& d) { return static_cast<uint32_t>(d.holeNumber); });
-    }
-
-    Json::Value ZmwTypeLut() const
-    {
-        return EncodeJson([](const Data& d) { return static_cast<uint32_t>(d.holeType); });
-    }
-
-    Json::Value ZmwXYLut() const
-    {
-        Json::Value holeXY;
-        holeXY["X"] = EncodeJson([](const Data& d) { return static_cast<uint32_t>(d.holeX); });
-        holeXY["Y"] = EncodeJson([](const Data& d) { return static_cast<uint32_t>(d.holeY); });
-        return holeXY;
-    }
-
-    Json::Value ZmwUnitFeatureLut() const
-    {
-        return EncodeJson([](const Data& d) { return static_cast<uint32_t>(d.holeFeature); });
-    }
-
-    Json::Value ZmwHoleTypeMap() const
-    {
-        return EncodeMapJson(holeTypesMap_);
-    }
-
-    Json::Value ZmwFeatureTypeMap() const
-    {
-        return EncodeMapJson(holeFeaturesMap_);
-    }
+    // Encoding to JSON methods
+    Json::Value ToJson() const;
+    Json::Value ZmwNumberLut() const;
+    Json::Value ZmwTypeLut() const;
+    Json::Value ZmwXYLut() const;
+    Json::Value ZmwUnitFeatureLut() const;
+    Json::Value ZmwHoleTypeMap() const;
+    Json::Value ZmwFeatureTypeMap() const;
 
 private:
 
-    std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const
-    {
-        std::vector<uint32_t> data;
-        if (node.isMember(field) && node[field].isArray())
-        {
-            Json::Value vals = node[field];
-            for (size_t i = 0; i < vals.size(); ++i)
-            {
-                Json::Value singleZmw = vals[static_cast<int>(i)];
-                uint32_t start = std::stoul(singleZmw[0].asString(), nullptr, 16);
-                uint32_t runLength = singleZmw[1].asUInt();
-                for (uint32_t j = 0; j < runLength; ++j)
-                {
-                    data.emplace_back(start + j);
-                }
-            }
-        }
-        return data;
-    }
+    std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const;
+    std::map<std::string, uint32_t> ParseJsonMap(const Json::Value& node, const std::string& field) const;
+    Json::Value EncodeMapJson(const std::map<std::string, uint32_t>& map) const;
 
-    std::map<std::string, uint32_t> ParseJsonMap(const Json::Value& node, const std::string& field) const
-    {
-        std::map<std::string,uint32_t> data;
-        if (node.isMember(field) && node[field].isObject())
-        {
-            for (const auto& id : node[field].getMemberNames())
-            {
-                data[id] = node[field][id].asUInt();
-            }
-        }
-        return data;
-    }
-
-    Json::Value EncodeJson(const std::function<uint32_t(const Data& d)>& extract) const
-    {
-        std::vector<uint32_t> holeInfo;
-        holeInfo.resize(zmwData_.size());
-        std::transform(zmwData_.begin(), zmwData_.end(), std::back_inserter(holeInfo),
-                       [&extract](const Data& d) { return extract(d); });
-        return RunLengthEncLUTHexJson(RunLengthEncLUT(holeInfo));
-    }
-
-    Json::Value EncodeMapJson(const std::map<std::string, uint32_t>& map) const
-    {
-        Json::Value jsonMap;
-        for (const auto& [k,v] : map)
-        {
-            jsonMap[k] = v;
-        }
-        return jsonMap;
-    }
-
-    std::vector<Data>      zmwData_;
-    std::map<uint32_t,uint32_t>     zmwNumbersToId_;
+private:
+    Data                            zmwData_;
+    std::map<uint32_t,uint32_t>     zmwNumbersToIndex_;
     std::map<std::string, uint32_t> holeTypesMap_;
     std::map<std::string, uint32_t> holeFeaturesMap_;
 };

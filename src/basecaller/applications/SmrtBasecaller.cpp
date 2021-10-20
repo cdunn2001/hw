@@ -580,14 +580,26 @@ private:
     {
         if (hasBazFile_)
         {
-            auto features1 = source.GetUnitCellProperties();
-            std::vector<uint32_t> features2;
-            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
+            auto props = source.GetUnitCellProperties();
+
+            std::vector<uint32_t> unitFeatures;
+            transform(props.begin(), props.end(), back_inserter(unitFeatures),
+                      [](DataSourceBase::UnitCellProperties x) { return x.flags; });
+
+            // NOTE: UnitCellProperties currently defines x,y as int32_t.
+            std::vector<uint16_t> unitX;
+            std::vector<uint16_t> unitY;
+            transform(props.begin(), props.end(), back_inserter(unitX),
+                      [](DataSourceBase::UnitCellProperties x){ return static_cast<uint16_t>(x.x); });
+            transform(props.begin(), props.end(), back_inserter(unitY),
+                      [](DataSourceBase::UnitCellProperties x){ return static_cast<uint16_t>(x.y); });
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
                                                    source.UnitCellIds(),
-                                                   features2,
+                                                   unitX,
+                                                   unitY,
+                                                   unitFeatures,
                                                    poolDims,
                                                    config_,
                                                    movieConfig_);

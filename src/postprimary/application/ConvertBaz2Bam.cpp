@@ -1179,7 +1179,7 @@ void ConvertBaz2Bam::CreateWhiteList()
     if (filterNumber)
     {
         const auto& fh = bazReader_->Fileheader();
-        for (auto& w : whiteListZmwIds_) w = fh.ZmwNumberToId(w);
+        for (auto& w : whiteListZmwIds_) w = fh.ZmwNumberToIndex(w);
         std::sort(whiteListZmwIds_.begin(), whiteListZmwIds_.end());
     }
 }

@@ -5,6 +5,8 @@ add_library(libBazioFile STATIC
     FileHeader.cpp
     FileHeaderBuilder.h
     FileHeaderBuilder.cpp
+    RunLength.h
+    RunLength.cpp
     ZmwInfo.h
     ZmwInfo.cpp
 )
@@ -25,4 +27,4 @@ ${BAZIO_PROJECT_DIR}/basecaller
         ${BAZIO_PROJECT_DIR}
 )
 
-#add_subdirectory(test)
+add_subdirectory(test)

@@ -182,22 +182,11 @@ void FileHeader::Init(const char* header, const size_t length)
         hFbyLFRatio_ = lFMetricFrames_ / hFMetricFrames_;
     }
 
-    // Parse ZMW ID to NUMBER LUT
-    if (headerValue.isMember("ZMW_NUMBER_LUT")
-        && headerValue["ZMW_NUMBER_LUT"].isArray())
+    // Parse ZMW INFO
+    if (headerValue.isMember("ZMW_INFO")
+        && headerValue["ZMW_INFO"].isObject())
     {
-        Json::Value zmwNumbersJson = headerValue["ZMW_NUMBER_LUT"];
-        for (size_t i = 0; i < zmwNumbersJson.size(); ++i)
-        {
-            Json::Value singleZmw = zmwNumbersJson[static_cast<int>(i)];
-            uint32_t start = std::stoul(singleZmw[0].asString(), nullptr, 16);
-            uint32_t runLength = singleZmw[1].asUInt();
-            for (uint32_t j = 0; j < runLength; ++j)
-            {
-                zmwIdToNumber_.emplace_back(start + j);
-                zmwNumbersToId_.insert(std::make_pair(start + j, zmwIdToNumber_.size() - 1));
-            }
-        }
+        zmwInfo_.FromJson(headerValue["ZMW_INFO"]);
     }
 
     // Parse masked ZMW NUMBERs
@@ -212,21 +201,6 @@ void FileHeader::Init(const char* header, const size_t length)
             uint32_t runLength = singleZmw[1].asUInt();
             for (uint32_t j = 0; j < runLength; ++j)
                 zmwNumberRejects_.emplace_back(start + j);
-        }
-    }
-
-    // Parse masked ZMW NUMBERs
-    if (headerValue.isMember("ZMW_UNIT_FEATURES_LUT")
-        && headerValue["ZMW_UNIT_FEATURES_LUT"].isArray())
-    {
-        Json::Value zmwUnitFeaturesJson = headerValue["ZMW_UNIT_FEATURES_LUT"];
-        for (size_t i = 0; i < zmwUnitFeaturesJson.size(); ++i)
-        {
-            Json::Value singleZmw = zmwUnitFeaturesJson[static_cast<int>(i)];
-            uint32_t code = std::stoul(singleZmw[0].asString(), nullptr, 10);
-            uint32_t runLength = singleZmw[1].asUInt();
-            for (uint32_t j = 0; j < runLength; ++j)
-                zmwUnitFeatures_.emplace_back(code);
         }
     }
 }
