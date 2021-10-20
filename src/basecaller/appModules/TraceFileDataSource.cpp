@@ -37,6 +37,78 @@ using namespace PacBio::Mongo;
 namespace PacBio {
 namespace Application {
 
+namespace {
+
+size_t DivideWithCeil(size_t numerator, size_t denominator)
+{
+    return (numerator + denominator - 1) / denominator;
+}
+
+// 0 lanes requested is a special value meaning use exactly as many lanes as
+// the tracefile contains (rounding up to an even lane width)
+size_t ComputeTraceLanes(size_t numTraceZmw, size_t laneWidth, size_t lanesRequested)
+{
+    auto defaultVal = DivideWithCeil(numTraceZmw, laneWidth);
+    if (lanesRequested != 0 && lanesRequested < defaultVal)
+        return lanesRequested;
+    else
+        return defaultVal;
+}
+
+// 0 frames requested is a special value meaning use exactly as many frames as
+// the tracefile contains (rounding up to an even chunk size)
+size_t ComputeTraceChunks(size_t numTraceFrames, size_t blockLen, size_t framesRequested)
+{
+    auto defaultVal = DivideWithCeil(numTraceFrames, blockLen);
+    auto chunksRequested = DivideWithCeil(framesRequested, blockLen);
+    if (chunksRequested != 0 && chunksRequested < defaultVal)
+        return chunksRequested;
+    else
+        return defaultVal;
+}
+
+PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType requestedType,
+                                             TraceFile::TraceDataType storageType)
+{
+    PacketLayout::EncodingFormat ret;
+    switch (requestedType)
+    {
+    case PacBio::Mongo::Data::TraceInputType::Natural:
+    {
+        if (storageType == TraceFile::TraceDataType::INT16)
+            ret = PacketLayout::INT16;
+        else if (storageType == TraceFile::TraceDataType::UINT8)
+            ret = PacketLayout::UINT8;
+        else
+            throw PBException("Unexpected request for trace data type");
+        break;
+    }
+    case PacBio::Mongo::Data::TraceInputType::INT16:
+    {
+        ret = PacketLayout::INT16;
+        break;
+    }
+    case PacBio::Mongo::Data::TraceInputType::UINT8:
+    {
+        ret = PacketLayout::UINT8;
+        break;
+    }
+    default:
+        throw PBException("Unexpected request for trace data type");
+    }
+
+    if (storageType == TraceFile::TraceDataType::INT16
+        && ret == PacketLayout::UINT8)
+    {
+        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  "
+                   << "Values will be saturated to [0,255]";
+    }
+
+    return ret;
+}
+
+}
+
 TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
         std::string file,
@@ -47,15 +119,18 @@ TraceFileDataSource::TraceFileDataSource(
         size_t maxQueueSize,
         Mongo::Data::TraceInputType type)
     : BatchDataSource(std::move(cfg))
-    , numZmwLanes_(numZmwLanes)
-    , chunkIndex_{0}
-    , batchIndex_{0}
-    , currZmw_{0}
-    , maxQueueSize_(maxQueueSize)
     , filename_(file)
     , traceFile_(filename_)
+    , numTraceZmws_(traceFile_.Traces().NumZmws())
+    , numTraceFrames_(traceFile_.Traces().NumFrames())
+    , numTraceLanes_(ComputeTraceLanes(numTraceZmws_, BlockWidth(), numZmwLanes))
+    , numTraceChunks_(ComputeTraceChunks(numTraceFrames_, BlockLen(), frames))
+    , frameRate_(traceFile_.Scan().AcqParams().frameRate)
+    , numZmwLanes_(numZmwLanes == 0 ? numTraceLanes_ : numZmwLanes)
+    , numChunks_(frames == 0 ? numTraceChunks_ : DivideWithCeil(frames, BlockLen()))
+    , maxQueueSize_(maxQueueSize == 0 ? preloadChunks + 1 : maxQueueSize)
     , cache_(cache)
-    , currChunk_(0, GetConfig().requestedLayout.NumFrames())
+    , currChunk_(0, BlockLen())
 {
     const auto& config = GetConfig();
     if (config.darkFrame != nullptr)
@@ -65,39 +140,11 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.decimationMask != nullptr)
         throw PBException("Decimation mask not currently supported for trace files");
 
-    // SPARSE will be appropriate to allow once we fully support TraceFile Re-Analysis
-    if (config.requestedLayout.Type() != PacketLayout::BLOCK_LAYOUT_DENSE)
-        throw PBException("Trace file source currently only supports dense block layout");
-
     auto storageType = traceFile_.Traces().StorageType();
 
-    const auto encoding = [&](){
-        switch (type)
-        {
-        case PacBio::Mongo::Data::TraceInputType::Natural:
-        {
-            if (storageType == TraceFile::TraceDataType::INT16)
-                return PacketLayout::INT16;
-            else if (storageType == TraceFile::TraceDataType::UINT8)
-                return PacketLayout::UINT8;
-            else
-                throw PBException("Unexpected request for trace data type");
-        }
-        case PacBio::Mongo::Data::TraceInputType::INT16:
-            return PacketLayout::INT16;
-        case PacBio::Mongo::Data::TraceInputType::UINT8:
-            return PacketLayout::UINT8;
-        default:
-            throw PBException("Unexpected request for trace data type");
-        }
-    }();
-
-    if (storageType == TraceFile::TraceDataType::INT16
-        && encoding == PacketLayout::UINT8)
-    {
-        PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  "
-                   << "Values will be saturated to [0,255]";
-    }
+    // BENTODO tweak this for re-analysis
+    const auto layoutType = PacketLayout::BLOCK_LAYOUT_DENSE;
+    const auto encoding = ComputeEncoding(type, storageType);
 
     bytesPerValue_ = [&]()
     {
@@ -115,16 +162,8 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.requestedLayout.BlockWidth() != laneSize)
         throw PBException("Unexpected lane width requested");
 
-    if (maxQueueSize_ == 0) maxQueueSize_ = preloadChunks + 1;
-
-    // TODO should be able to handle all types eventually
-    assert(config.requestedLayout.Type() == PacketLayout::BLOCK_LAYOUT_DENSE);
-    assert(config.requestedLayout.BlockWidth() == laneSize);
-
-    numChunks_ = (frames + BlockLen() - 1) / BlockLen();
-
     const auto numFullPools = numZmwLanes_ / config.requestedLayout.NumBlocks();
-    PacketLayout regLayout(config.requestedLayout.Type(),
+    PacketLayout regLayout(layoutType,
                            encoding,
                            {config.requestedLayout.NumBlocks(),
                             config.requestedLayout.NumFrames(),
@@ -136,27 +175,13 @@ TraceFileDataSource::TraceFileDataSource(
     size_t stubBlocks = numZmwLanes_ % config.requestedLayout.NumBlocks();
     if (stubBlocks != 0)
     {
-        PacketLayout stub(config.requestedLayout.Type(),
+        PacketLayout stub(layoutType,
                           encoding,
                           {stubBlocks,
                            config.requestedLayout.NumFrames(),
                            config.requestedLayout.BlockWidth()});
         layouts_[numFullPools] = stub;
     }
-
-    frameRate_ = traceFile_.Scan().AcqParams().frameRate;
-    numTraceZmws_ = traceFile_.Traces().NumZmws();
-    numTraceFrames_ = traceFile_.Traces().NumFrames();
-    numTraceLanes_ = (numTraceZmws_ + BlockWidth() - 1) / BlockWidth();
-    numTraceChunks_ = (numTraceFrames_ + BlockLen() - 1) / BlockLen();
-
-    if (numZmwLanes_ == 0) numZmwLanes_ = numTraceLanes_;
-    if (numChunks_ == 0) numChunks_ = numTraceChunks_;
-
-    // Adjust number of lanes and chunks we read from the trace file
-    // if requested lanes and chunks is less to only cache what we need.
-    numTraceLanes_ = std::min(numZmwLanes_, numTraceLanes_);
-    numTraceChunks_ = std::min(numChunks_, numTraceChunks_);
 
     if (cache_)
     {

@@ -100,10 +100,12 @@ public:
 
     size_t NumChunks() const { return numChunks_; }
     size_t NumZmwLanes() const { return numZmwLanes_; }
+private:
     size_t NumTraceChunks() const { return numTraceChunks_ ; }
     size_t NumTraceLanes() const { return numTraceLanes_; }
     size_t NumTraceZmws() const { return numTraceZmws_; }
     size_t NumTraceFrames() const { return numTraceFrames_; }
+public:
 
     size_t NumFrames() const override { return numChunks_ * BlockLen(); }
     size_t NumZmw() const override { return numZmwLanes_ * BlockWidth(); }
@@ -141,23 +143,24 @@ private:
     template <typename T>
     void ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, T* data);
 
-    size_t numZmwLanes_;
-    size_t numChunks_;
+private:
+    std::string filename_;
+    TraceFile::TraceFile traceFile_;
     size_t numTraceZmws_;
     size_t numTraceFrames_;
     size_t numTraceLanes_;
     size_t numTraceChunks_;
-    size_t chunkIndex_;
-    size_t batchIndex_;
-    size_t currZmw_;
-    size_t maxQueueSize_;
-
     float frameRate_;
+
+    size_t numZmwLanes_;
+    size_t numChunks_;
+    size_t maxQueueSize_;
     uint32_t bytesPerValue_;
 
-    std::string filename_;
+    size_t chunkIndex_ = 0;
+    size_t batchIndex_ = 0;
+    size_t currZmw_ = 0;
 
-    TraceFile::TraceFile traceFile_;
     boost::multi_array<uint8_t, 3> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
