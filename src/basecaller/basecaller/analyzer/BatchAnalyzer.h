@@ -94,7 +94,7 @@ private:
     virtual OutputType AnalyzeImpl(const InputType& tbatch) = 0;
 
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
-    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+    int32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
 };
 
 // Does a single dme estimate upfront, once we've gathered enough

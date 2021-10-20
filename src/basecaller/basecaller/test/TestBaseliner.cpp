@@ -288,7 +288,7 @@ TEST_P(MultiScaleBaseliner, StatsAndSubtraction)
          auto& baseliner = *baseliners[meta.PoolId()];
          auto cameraBatch = baseliner(batch);
 
-         if (batch.Metadata().FirstFrame() < burnInFrames) continue;
+         if (batch.Metadata().FirstFrame() < static_cast<int32_t>(burnInFrames)) continue;
 
          auto traces = std::move(cameraBatch.first);
          auto stats = std::move(cameraBatch.second);

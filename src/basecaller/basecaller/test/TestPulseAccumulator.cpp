@@ -190,15 +190,19 @@ void TestPulseAccumulator()
     movieConfig.analogs[3].baseLabel = 'T';
     PulseAccumulatorToTest::Configure(movieConfig, config.pulses);
 
+
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
+    uint32_t latentFrames = 16; // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
     auto labelsBatchFactory = std::make_unique<Data::LabelsBatchFactory>(
-            16u,    // NOTE: Viterbi frame latency lookback, eventually this should not be hard-coded.
+            latentFrames,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
     uint32_t poolId = 0;
-    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, 0, framesPerChunk, 0), config.Dims());
+    // NOTE: We start the test at frames [512, 1024) so that the start frames of the pulses remain unsigned.
+    int32_t firstFrame = 512;
+    auto cameraBatch = cameraBatchFactory->NewBatch(Data::BatchMetadata(0, firstFrame, firstFrame + framesPerChunk, 0), config.Dims());
     // Discard metrics:
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first)).first;
 
@@ -222,9 +226,10 @@ void TestPulseAccumulator()
     // Count the very first baseline frame.
     size_t baselineFrames = 1;
     {
-        size_t frameNum = 0;
+        // We adjust the starting frame number and the frame count by the latent number of frames.
+        int32_t frameNum = firstFrame - latentFrames;
         size_t base = 0;
-        while (frameNum < framesPerChunk)
+        while (frameNum < static_cast<int32_t>(firstFrame + framesPerChunk - latentFrames))
         {
             for (size_t b = 0; b < ipd; b++)
             {
@@ -243,7 +248,7 @@ void TestPulseAccumulator()
             simLabels.insert(simLabels.end(), 1, (base % 4 ) + 9);
 
             // Hardcode latency for now.
-            simTrc.insert(simTrc.end(), pw, frameNum < 16u ? latTraceVal : curTraceVal);
+            simTrc.insert(simTrc.end(), pw, frameNum < firstFrame ? latTraceVal : curTraceVal);
 
             base++;
             frameNum += pw;
@@ -311,9 +316,11 @@ void TestPulseAccumulator()
             {
                 const auto& pulse = lanePulses.ZmwData(zmwIdx)[pulseNum];
                 EXPECT_EQ(labels[pulseNum % 4], pulse.Label());
-                EXPECT_EQ(pulseNum * (ipd + pw) + ipd, pulse.Start());
+                // Pulses now start at the first frame adjusted by the latent frames.
+                EXPECT_EQ((firstFrame - latentFrames) + pulseNum * (ipd + pw) + ipd, pulse.Start());
                 EXPECT_EQ(pw, pulse.Width());
-                if (pulse.Start() < 16u)
+                // Pulses before the first starting frame are in the latent section.
+                if (static_cast<int32_t>(pulse.Start()) < firstFrame)
                 {
                     EXPECT_EQ(latTraceVal, pulse.MidSignal());
                     EXPECT_EQ(latTraceVal, pulse.MeanSignal());

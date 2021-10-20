@@ -285,7 +285,7 @@ private:
 
     bool measurePCIeBandwidth_;
 
-    uint32_t currFrame_ = 0;
+    int32_t currFrame_ = 0;
     uint32_t numStreams_;
     size_t bytesUploaded_ = 0;
     size_t bytesDownloaded_ = 0;
