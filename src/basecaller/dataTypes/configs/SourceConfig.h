@@ -64,6 +64,9 @@ struct TraceReanalysis : public Configuration::PBConfig<TraceReanalysis>
     PB_CONFIG(TraceReanalysis);
 
     PB_CONFIG_PARAM(std::string, traceFile, "");
+
+    // An empty whitelist means read in the whole tracefile
+    PB_CONFIG_PARAM(std::vector<uint32_t>, whitelist, std::vector<uint32_t>{});
 };
 
 SMART_ENUM(TraceInputType, Natural, INT16, UINT8);

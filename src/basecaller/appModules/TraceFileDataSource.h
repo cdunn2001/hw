@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -47,7 +47,10 @@ public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
     TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
                         const Mongo::Data::TraceReanalysis& trcCfg)
-        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, 0, 0, false, 0, 0)
+        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile,
+                              0, 0, false, 0, 0,
+                              trcCfg.whitelist,
+                              Mongo::Data::TraceInputType::Natural)
     {
         // Need to update the layouts_ member to know how to extract the
         // required info from the tracefile
@@ -65,6 +68,7 @@ public:
         : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
                               trcCfg.numZmwLanes, trcCfg.cache,
                               trcCfg.preloadChunks, trcCfg.maxQueueSize,
+                              {},  //empty whitelist, all ZMW are valid to be read
                               trcCfg.inputType)
     {}
 
@@ -76,9 +80,10 @@ private:
                         uint32_t frames,
                         uint32_t numZmwLanes,
                         bool cache,
-                        size_t preloadChunks = 0,
-                        size_t maxQueueSize = 0,
-                        Mongo::Data::TraceInputType type = Mongo::Data::TraceInputType::Natural);
+                        size_t preloadChunks,
+                        size_t maxQueueSize,
+                        std::vector<uint32_t> zmwWhitelist,
+                        Mongo::Data::TraceInputType type);
 
 public:
 
@@ -102,7 +107,6 @@ public:
     size_t NumZmwLanes() const { return numZmwLanes_; }
 private:
     size_t NumTraceChunks() const { return numTraceChunks_ ; }
-    size_t NumTraceLanes() const { return numTraceLanes_; }
     size_t NumTraceZmws() const { return numTraceZmws_; }
     size_t NumTraceFrames() const { return numTraceFrames_; }
 public:
@@ -148,7 +152,7 @@ private:
     TraceFile::TraceFile traceFile_;
     size_t numTraceZmws_;
     size_t numTraceFrames_;
-    size_t numTraceLanes_;
+    std::vector<uint32_t> selectedTraceLanes_;
     size_t numTraceChunks_;
     float frameRate_;
 

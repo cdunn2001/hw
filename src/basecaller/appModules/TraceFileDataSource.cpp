@@ -44,17 +44,6 @@ size_t DivideWithCeil(size_t numerator, size_t denominator)
     return (numerator + denominator - 1) / denominator;
 }
 
-// 0 lanes requested is a special value meaning use exactly as many lanes as
-// the tracefile contains (rounding up to an even lane width)
-size_t ComputeTraceLanes(size_t numTraceZmw, size_t laneWidth, size_t lanesRequested)
-{
-    auto defaultVal = DivideWithCeil(numTraceZmw, laneWidth);
-    if (lanesRequested != 0 && lanesRequested < defaultVal)
-        return lanesRequested;
-    else
-        return defaultVal;
-}
-
 // 0 frames requested is a special value meaning use exactly as many frames as
 // the tracefile contains (rounding up to an even chunk size)
 size_t ComputeTraceChunks(size_t numTraceFrames, size_t blockLen, size_t framesRequested)
@@ -107,6 +96,49 @@ PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType
     return ret;
 }
 
+/// Generates a list of trace lanes that we will read from the trace file.
+/// \param traceFile  The TraceFile we intend to load data from
+/// \param whitelist  A list of lanes we explicitly want to load.  If this is empty
+///                   then we will load all lanes
+/// \param maxLanes   The max number of lanes we intend the data source to produce.
+///                   This is to prevent loading and caching more data than we'll
+///                   actually use.  A value of 0 indicates that we will load all
+///                   lanes present in the traceFile, modulo any whitelist specification
+std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
+                                         const std::vector<uint32_t>& whitelist,
+                                         size_t maxLanes)
+{
+    if (whitelist.empty())
+    {
+        const auto numZmw = traceFile.Traces().HoleNumber().size();
+        if (numZmw % laneSize != 0)
+            throw PBException("Invalid tracefile, does not contain an integral number of lanes");
+
+        const auto numLanes = numZmw / laneSize;
+        if (maxLanes == 0) maxLanes = numLanes;
+
+        std::vector<uint32_t> ret(std::min(numLanes, maxLanes));
+        std::iota(ret.begin(), ret.end(), 0);
+        return ret;
+    }
+
+    std::set<uint32_t> requestedLanes;
+    const auto& holeNumbers = traceFile.Traces().HoleNumber();
+    for (const auto& w : whitelist)
+    {
+        auto itr = std::find(holeNumbers.begin(), holeNumbers.end(), w);
+        if (itr == holeNumbers.end())
+            PBLOG_WARN << "Requested hole number " + std::to_string(w) + " not present in trace file";
+        else
+            requestedLanes.insert((itr - holeNumbers.begin()) / laneSize);
+    }
+
+    std::vector<uint32_t> ret(requestedLanes.begin(), requestedLanes.end());
+    if (maxLanes > 0 && maxLanes > ret.size())
+        ret.resize(maxLanes);
+    return ret;
+}
+
 }
 
 TraceFileDataSource::TraceFileDataSource(
@@ -117,16 +149,17 @@ TraceFileDataSource::TraceFileDataSource(
         bool cache,
         size_t preloadChunks,
         size_t maxQueueSize,
+        std::vector<uint32_t> zmwWhitelist,
         Mongo::Data::TraceInputType type)
     : BatchDataSource(std::move(cfg))
     , filename_(file)
     , traceFile_(filename_)
     , numTraceZmws_(traceFile_.Traces().NumZmws())
     , numTraceFrames_(traceFile_.Traces().NumFrames())
-    , numTraceLanes_(ComputeTraceLanes(numTraceZmws_, BlockWidth(), numZmwLanes))
+    , selectedTraceLanes_(SelectedTraceLanes(traceFile_, zmwWhitelist, numZmwLanes))
     , numTraceChunks_(ComputeTraceChunks(numTraceFrames_, BlockLen(), frames))
     , frameRate_(traceFile_.Scan().AcqParams().frameRate)
-    , numZmwLanes_(numZmwLanes == 0 ? numTraceLanes_ : numZmwLanes)
+    , numZmwLanes_(numZmwLanes == 0 ? selectedTraceLanes_.size() : numZmwLanes)
     , numChunks_(frames == 0 ? numTraceChunks_ : DivideWithCeil(frames, BlockLen()))
     , maxQueueSize_(maxQueueSize == 0 ? preloadChunks + 1 : maxQueueSize)
     , cache_(cache)
@@ -186,19 +219,19 @@ TraceFileDataSource::TraceFileDataSource(
     if (cache_)
     {
         // Cache requested portion of trace file into memory.
-        traceDataCache_.resize(boost::extents[NumTraceChunks()][NumTraceLanes()][BlockWidth() * BlockLen() * bytesPerValue_]);
-        for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
+        traceDataCache_.resize(boost::extents[NumTraceChunks()][selectedTraceLanes_.size()][BlockWidth() * BlockLen() * bytesPerValue_]);
+        for (size_t cacheIdx = 0; cacheIdx < selectedTraceLanes_.size(); ++cacheIdx)
         {
             for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
-                auto* ptr = traceDataCache_[traceChunk][traceLane].origin();
+                auto* ptr = traceDataCache_[traceChunk][cacheIdx].origin();
                 switch(encoding)
                 {
                 case PacBio::DataSource::PacketLayout::INT16:
-                    ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
+                    ReadBlockFromTraceFile(selectedTraceLanes_[cacheIdx], traceChunk, reinterpret_cast<int16_t*>(ptr));
                     break;
                 case PacBio::DataSource::PacketLayout::UINT8:
-                    ReadBlockFromTraceFile(traceLane, traceChunk, ptr);
+                    ReadBlockFromTraceFile(selectedTraceLanes_[cacheIdx], traceChunk, ptr);
                     break;
                 default:
                     throw PBException("Unsupported Encoding");
@@ -209,8 +242,8 @@ TraceFileDataSource::TraceFileDataSource(
     else
     {
         // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
-        traceDataCache_.resize(boost::extents[1][NumTraceLanes()][BlockWidth()*BlockLen()*bytesPerValue_]);
-        laneCurrentChunk_.resize(NumTraceLanes(), std::numeric_limits<size_t>::max());
+        traceDataCache_.resize(boost::extents[1][selectedTraceLanes_.size()][BlockWidth()*BlockLen()*bytesPerValue_]);
+        laneCurrentChunk_.resize(selectedTraceLanes_.size(), std::numeric_limits<size_t>::max());
     }
 
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
@@ -232,7 +265,7 @@ void TraceFileDataSource::ContinueProcessing()
         auto block = batchData.BlockData(lane);
         assert(block.Count() == BlockWidth()*BlockLen()*bytesPerValue_);
 
-        uint32_t wrappedLane = (traceStartZmwLane + lane) % NumTraceLanes();
+        uint32_t wrappedLane = (traceStartZmwLane + lane) % selectedTraceLanes_.size();
         PopulateBlock(wrappedLane, wrappedChunkIndex, block.Data());
     }
 
@@ -264,19 +297,19 @@ std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
 std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCellProperties() const
 {
     std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
-    boost::multi_array<int16_t,2> holexy = traceFile_.Traces().HoleXY(); 
+    boost::multi_array<int16_t,2> holexy = traceFile_.Traces().HoleXY();
     for(uint32_t i=0; i < features.size(); i++)
     {
         // i is ZMW position in chunk.
-        // The chunk is filled with lanes from the tracefile, modulo the size of the trace file. It is 
+        // The chunk is filled with lanes from the tracefile, modulo the size of the trace file. It is
         // possible that the trace file ZMW count is not modulo the BlockWidth. In other words, the final
         // ZMWs could be ragged in the last trace file lane. So to calculate the ZMW position in the trace file,
         // we have to down convert to chunk lanes, then modulo that with the number of tracelanes, then scale back up.
         // Thankfully the blocks are the same size in the chunk as in the trace file.
         const auto chunkLane = i / BlockWidth();
         const auto offset = i % BlockWidth();
-        const auto traceLane = chunkLane % NumTraceLanes();
-        const auto traceZmw = traceLane * BlockWidth() + offset; // position in trace file
+        const auto traceLane = chunkLane % selectedTraceLanes_.size();
+        const auto traceZmw = selectedTraceLanes_[traceLane] * BlockWidth() + offset; // position in trace file
 
         if (traceZmw >= holexy.shape()[0])
         {
@@ -307,33 +340,33 @@ void TraceFileDataSource::PreloadInputQueue(size_t chunks)
     }
 }
 
-void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, uint8_t* data)
+void TraceFileDataSource::PopulateBlock(size_t cacheIdx, size_t traceChunk, uint8_t* data)
 {
     if (cache_)
     {
         std::memcpy(data,
-                    traceDataCache_[traceChunk][traceLane].origin(),
+                    traceDataCache_[traceChunk][cacheIdx].origin(),
                     BlockLen()*BlockWidth()*bytesPerValue_);
     }
     else
     {
-        if (laneCurrentChunk_[traceLane] != traceChunk)
+        if (laneCurrentChunk_[cacheIdx] != traceChunk)
         {
-            auto* ptr = traceDataCache_[0][traceLane].origin();
+            auto* ptr = traceDataCache_[0][cacheIdx].origin();
             switch(layouts_.begin()->second.Encoding())
             {
             case PacBio::DataSource::PacketLayout::INT16:
-                ReadBlockFromTraceFile(traceLane, traceChunk, reinterpret_cast<int16_t*>(ptr));
+                ReadBlockFromTraceFile(selectedTraceLanes_[cacheIdx], traceChunk, reinterpret_cast<int16_t*>(ptr));
                 break;
             case PacBio::DataSource::PacketLayout::UINT8:
-                ReadBlockFromTraceFile(traceLane, traceChunk, ptr);
+                ReadBlockFromTraceFile(selectedTraceLanes_[cacheIdx], traceChunk, ptr);
                 break;
             default:
                 throw PBException("Unsupported Encoding");
             }
-            laneCurrentChunk_[traceLane] = traceChunk;
+            laneCurrentChunk_[cacheIdx] = traceChunk;
         }
-        std::memcpy(data, traceDataCache_.data()+(traceLane*BlockWidth()*BlockLen())*bytesPerValue_,
+        std::memcpy(data, traceDataCache_[0][cacheIdx].origin(),
                     BlockWidth()*BlockLen()*bytesPerValue_);
     }
 }
