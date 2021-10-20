@@ -158,7 +158,7 @@ private:
     std::string filename_;
 
     TraceFile::TraceFile traceFile_;
-    std::vector<uint8_t> traceDataCache_;
+    boost::multi_array<uint8_t, 3> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;

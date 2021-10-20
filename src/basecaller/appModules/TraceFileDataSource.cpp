@@ -161,15 +161,12 @@ TraceFileDataSource::TraceFileDataSource(
     if (cache_)
     {
         // Cache requested portion of trace file into memory.
-        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*NumTraceChunks()*BlockLen()*bytesPerValue_);
+        traceDataCache_.resize(boost::extents[NumTraceChunks()][NumTraceLanes()][BlockWidth() * BlockLen() * bytesPerValue_]);
         for (size_t traceLane = 0; traceLane < NumTraceLanes(); traceLane++)
         {
-            auto* lanePtr = traceDataCache_.data() +
-                traceLane * BlockWidth() * BlockLen() * NumTraceChunks() * bytesPerValue_;
             for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
             {
-                auto* ptr = lanePtr +
-                            traceChunk * BlockWidth() * BlockLen() * bytesPerValue_;
+                auto* ptr = traceDataCache_[traceChunk][traceLane].origin();
                 switch(encoding)
                 {
                 case PacBio::DataSource::PacketLayout::INT16:
@@ -187,7 +184,7 @@ TraceFileDataSource::TraceFileDataSource(
     else
     {
         // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
-        traceDataCache_.resize(NumTraceLanes()*BlockWidth()*BlockLen()*bytesPerValue_);
+        traceDataCache_.resize(boost::extents[1][NumTraceLanes()][BlockWidth()*BlockLen()*bytesPerValue_]);
         laneCurrentChunk_.resize(NumTraceLanes(), std::numeric_limits<size_t>::max());
     }
 
@@ -290,17 +287,14 @@ void TraceFileDataSource::PopulateBlock(size_t traceLane, size_t traceChunk, uin
     if (cache_)
     {
         std::memcpy(data,
-                    traceDataCache_.data() +
-                    (traceLane*BlockWidth()*BlockLen()*NumTraceChunks())*bytesPerValue_ +
-                    (traceChunk*BlockWidth()*BlockLen())*bytesPerValue_,
+                    traceDataCache_[traceChunk][traceLane].origin(),
                     BlockLen()*BlockWidth()*bytesPerValue_);
     }
     else
     {
         if (laneCurrentChunk_[traceLane] != traceChunk)
         {
-            auto* ptr = traceDataCache_.data()
-                      + traceLane * BlockWidth() * BlockLen() * bytesPerValue_;
+            auto* ptr = traceDataCache_[0][traceLane].origin();
             switch(layouts_.begin()->second.Encoding())
             {
             case PacBio::DataSource::PacketLayout::INT16:
