@@ -88,6 +88,12 @@ public:
 
     // Only has an effect if we are configured to use HostSimulatedPulses
     PB_CONFIG_OBJECT(SimulatedPulseConfig, simConfig);
+
+    // Valid range is [0, 1]
+    PB_CONFIG_PARAM(double, XspAmpThresh, 0.60);
+
+    // Must be >= 0
+    PB_CONFIG_PARAM(float, XspWidthThresh, 3.5f);
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -68,7 +68,9 @@ class Segment
 public:
     Segment() = default;
 
-    __device__  Segment(short initialState)
+    __device__  Segment(short initialState, float ampThr, float widThr)
+        : ampThr_(ampThr)
+        , widThr_(widThr)
     {
         for (int i = 0; i < blockThreads; ++i)
         {
@@ -111,10 +113,10 @@ public:
         return LabelManager::BaselineLabel() != label_[threadIdx.x];
     }
 
-    // Pulse is an in/out reference to avoid memory churn.  We're going to populate it's
+    // Pulse is an in/out reference to avoid memory churn. We're going to populate it's
     // values directly in it's final destination.
     template <int id>
-    __device__ void ToPulse(uint32_t frameIndex, const LabelManager& manager, Data::Pulse& pulse)
+    __device__ void ToPulse(uint32_t frameIndex, PBHalf2 minMean, const LabelManager& manager, Data::Pulse& pulse)
     {
         static_assert(id < 2 && id >= 0, "Invalid index");
 
@@ -133,6 +135,9 @@ public:
 
         const auto maxSignal = Data::Pulse::SignalMax();
 
+        auto lowAmp = minMean.Get<id>();
+        auto keep = (width >= widThr_) || (raw_mean.Get<id>() * width >= ampThr_ * lowAmp);
+
         pulse.Start(start)
             .Width(width)
             .MeanSignal(min(maxSignal, max(0.0f, raw_mean.Get<id>())))
@@ -140,7 +145,7 @@ public:
             .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
             .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()))
-            .IsReject(false);
+            .IsReject(keep);
     }
 
     __device__ void ResetSegment(PBShort2 boundaryMask, uint32_t frameIndex,
@@ -203,6 +208,8 @@ private:
     CudaArray<PBHalf2,  blockThreads> m0_;
     CudaArray<PBHalf2,  blockThreads> m1_;
     CudaArray<PBFloat2, blockThreads> m2_;
+    float ampThr_;
+    float widThr_;
 };
 
 template <typename LabelManager, size_t blockThreads>
@@ -212,6 +219,7 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
                               GpuBatchData<const PBShort2> latSignal,
                               uint32_t firstFrameIdx,
                               DeviceView<Segment<LabelManager, blockThreads>> workingSegments,
+                              DeviceView<const Data::LaneModelParameters<Cuda::PBHalf2, blockThreads>> models,
                               DevicePtr<const LabelManager> manager,
                               GpuBatchVectors<Data::Pulse> pulsesOut,
                               DeviceView<Mongo::StatAccumState> stats)
@@ -229,23 +237,23 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     pulsesZmw1.Reset();
     pulsesZmw2.Reset();
 
-    auto labelZmw = labels.ZmwData(blockIdx.x, threadIdx.x);
-    auto signalZmw = latSignal.ZmwData(blockIdx.x, threadIdx.x);
-
     auto HandleFrame = [&](PBShort2 label, PBShort2 signal, uint32_t frame) {
         auto boundaryMask = segment.IsNewSegment(label);
         auto pulseMask = segment.IsPulse();
+
+        // Last analog channel is the darkest (lowest amplitude)
+        auto minMean = models[blockIdx.x].AnalogMode(numAnalogs-1).means[threadIdx.x];
 
         auto emit = boundaryMask && pulseMask;
         if (emit.X())
         {
             pulsesZmw1.emplace_back_default();
-            segment.ToPulse<0>(frame, *manager, pulsesZmw1.back());
+            segment.ToPulse<0>(frame, minMean, *manager, pulsesZmw1.back());
         }
         if (emit.Y())
         {
             pulsesZmw2.emplace_back_default();
-            segment.ToPulse<1>(frame, *manager, pulsesZmw2.back());
+            segment.ToPulse<1>(frame, minMean, *manager, pulsesZmw2.back());
         }
 
         segment.ResetSegment(boundaryMask, frame, label, signal);
@@ -260,6 +268,9 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     };
 
     const int latFrames = latSignal.NumFrames();
+    auto labelZmw  = labels.ZmwData(blockIdx.x, threadIdx.x);
+    auto signalZmw = latSignal.ZmwData(blockIdx.x, threadIdx.x);
+
     for (int i = 0; i < latFrames; i++)
     {
         HandleFrame(labelZmw[i], signalZmw[i], i + firstFrameIdx);
@@ -284,12 +295,12 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
 public:
     AccumImpl(size_t lanesPerPool, StashableAllocRegistrar* registrar)
         : workingSegments_(registrar, SOURCE_MARKER(),
-                           lanesPerPool, LabelManager::BaselineLabel())
+                           lanesPerPool, LabelManager::BaselineLabel(), ampThresh_, widthThresh_)
     {
     }
 
     std::pair<PulseBatch, PulseDetectorMetrics>
-    Process(const PulseBatchFactory& factory, LabelsBatch labels)
+    Process(const PulseBatchFactory& factory, LabelsBatch labels, const PoolModelParameters& models)
     {
         assert(blockThreads*2 == labels.LaneWidth());
         auto ret = factory.NewBatch(labels.Metadata(), labels.StorageDims());
@@ -303,6 +314,7 @@ public:
                  labels.LatentTrace(),
                  labels.Metadata().FirstFrame(),
                  workingSegments_,
+                 models,
                  *manager_,
                  ret.first.Pulses(),
                  ret.second.baselineStats);
@@ -371,9 +383,9 @@ DevicePulseAccumulator<LabelManager>::~DevicePulseAccumulator() = default;
 
 template <typename LabelManager>
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
+DevicePulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels, const PoolModelParameters& models)
 {
-    return impl_->Process(*batchFactory_, std::move(labels));
+    return impl_->Process(*batchFactory_, std::move(labels), models);
 }
 
 // explicit instantiations

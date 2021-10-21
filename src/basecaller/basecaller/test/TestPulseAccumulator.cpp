@@ -105,8 +105,12 @@ TEST(TestNoOpPulseAccumulator, Run)
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     PulseAccumulator pulseAccumulator(poolId);
+    PulseAccumulator::PoolModelParameters pmparams(
+            config.layout.lanesPerPool, 
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead, 
+            SOURCE_MARKER());
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first), pmparams).first;
 
     for (uint32_t laneIdx = 0; laneIdx < pulseBatch.Dims().lanesPerBatch; ++laneIdx)
     {
@@ -151,8 +155,12 @@ TEST(TestHostSimulatedPulseAccumulator, Run)
     auto labelsBatch = labelsBatchFactory->NewBatch(std::move(cameraBatch.first));
 
     HostSimulatedPulseAccumulator pulseAccumulator(poolId, config.layout.lanesPerPool);
+    PulseAccumulator::PoolModelParameters pmparams(
+            config.layout.lanesPerPool, 
+            Cuda::Memory::SyncDirection::HostWriteDeviceRead, 
+            SOURCE_MARKER());
 
-    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first)).first;
+    auto pulseBatch = pulseAccumulator(std::move(labelsBatch.first), pmparams).first;
 
     using NucleotideLabel = Data::Pulse::NucleotideLabel;
 
@@ -280,8 +288,12 @@ void TestPulseAccumulator()
     assert(labelsBatch.NumFrames() == labelsBatch.TraceData().NumFrames() + labelsBatch.LatentTrace().NumFrames());
 
     PulseAccumulatorToTest pulseAccumulator(poolId, config.Dims().lanesPerBatch);
+    PulseAccumulator::PoolModelParameters pmparams(
+            config.layout.lanesPerPool, 
+            Cuda::Memory::SyncDirection::Symmetric, 
+            SOURCE_MARKER());
 
-    const auto& pulseRet = pulseAccumulator(std::move(labelsBatch));
+    const auto& pulseRet = pulseAccumulator(std::move(labelsBatch), pmparams);
     const auto& pulseBatch = pulseRet.first;
     const auto& pulseMetrics = pulseRet.second;
 

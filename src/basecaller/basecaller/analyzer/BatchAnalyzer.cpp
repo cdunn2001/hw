@@ -38,7 +38,6 @@
 #include <basecaller/traceAnalysis/Baseliner.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
-#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
 
 #include <common/cuda/PBCudaRuntime.h>
@@ -191,7 +190,7 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
 
     auto pulseProfile = profiler.CreateScopedProfiler(AnalysisStages::PulseAccumulating);
     (void)pulseProfile;
-    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels), models_);
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
@@ -248,7 +247,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
             auto pulseProfile = profiler.CreateScopedProfiler(AnalysisStages::PulseAccumulating);
             (void)pulseProfile;
             assert(pulseAccumulator_);
-            auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+            auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels), models_);
             auto pulses = std::move(pulsesAndMetrics.first);
             auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
@@ -347,7 +346,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
 
     auto pulseProfile = profiler.CreateScopedProfiler(AnalysisStages::PulseAccumulating);
     (void)pulseProfile;
-    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels));
+    auto pulsesAndMetrics = (*pulseAccumulator_)(std::move(labels), models_);
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 

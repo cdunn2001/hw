@@ -34,7 +34,7 @@ HostSimulatedPulseAccumulator::HostSimulatedPulseAccumulator(uint32_t poolId, si
 HostSimulatedPulseAccumulator::~HostSimulatedPulseAccumulator() = default;
 
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
+HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels, const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
 

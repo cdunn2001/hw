@@ -48,9 +48,11 @@ HostPulseAccumulator<LabelManager>::~HostPulseAccumulator() = default;
 
 template <typename LabelManager>
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
+HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels, const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
+
+    auto modelView = models.GetHostView();
 
     tbb::task_arena().execute([&] {
         tbb::parallel_for(size_t{0}, labels.LanesPerBatch(), [&](size_t laneIdx) {
@@ -62,6 +64,8 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
             lanePulses.Reset();
 
             LabelsSegment& currSegment = startSegmentByLane[laneIdx];
+            // Last analog channel is the darkest (lowest amplitude)
+            FloatArray minMean(modelView[laneIdx].AnalogMode(numAnalogs-1).means);
 
             auto baselineStats = BaselineStats{};
             auto blIter = blockLabels.CBegin();
@@ -71,7 +75,7 @@ HostPulseAccumulator<LabelManager>::Process(Data::LabelsBatch labels)
                  ++relativeFrameIndex, ++blIter)
             {
                 EmitFrameLabels(currSegment, lanePulses, baselineStats,
-                                blIter.Extract(), blockLatTrace, currTrace,
+                                blIter.Extract(), blockLatTrace, currTrace, minMean,
                                 relativeFrameIndex, relativeFrameIndex + labels.GetMeta().FirstFrame());
             }
 
@@ -88,6 +92,7 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
                                                          const LabelArray& label,
                                                          const SignalBlockView& blockLatTrace,
                                                          const SignalBlockView& currTrace,
+                                                         const FloatArray& meanAmp,
                                                          size_t relativeFrameIndex,
                                                          uint32_t absFrameIndex)
 {
@@ -99,11 +104,11 @@ void HostPulseAccumulator<LabelManager>::EmitFrameLabels(LabelsSegment& currSegm
     const auto& emitPulse = boundaryMask & pulseMask;
     if (any(emitPulse))
     {
-        for (size_t i = 0; i < laneSize; ++i)
+        for (size_t z = 0; z < laneSize; ++z)
         {
-            if (emitPulse[i])
+            if (emitPulse[z])
             {
-                pulses.push_back(i, currSegment.ToPulse(absFrameIndex, i, *manager_));
+                pulses.push_back(z, currSegment.ToPulse(absFrameIndex, z, MakeUnion(meanAmp)[z], *manager_));
             }
         }
     }
