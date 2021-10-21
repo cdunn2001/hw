@@ -30,13 +30,13 @@ template <typename T>
 void AutocorrAccumulator<T>::AddSample(const T& value)
 {
     assert (canAddSample_);
-    auto offlessVal = value - Offset();
+    auto valLessOffset = value - Offset();
     if (lbi_ < lag_)
     {
-        lBuf_[lbi_++] = offlessVal;
+        lBuf_[lbi_++] = valLessOffset;
     }
-    m2_  += rBuf_[rbi_%lag_] * offlessVal;
-    rBuf_[rbi_++%lag_] = offlessVal; rbi_ %= lag_;
+    m2_  += rBuf_[rbi_%lag_] * valLessOffset;
+    rBuf_[rbi_++%lag_] = valLessOffset; rbi_ %= lag_;
     stats_.AddSample(value);   // StatAccumulator subtracts the offset itself.
 }
 

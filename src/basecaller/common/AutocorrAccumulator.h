@@ -74,7 +74,11 @@ public:     // Structors
         , canAddSample_ {true}
     {
         // Deserialize both buffers
-        for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = state.lBuf[k]; rBuf_[k] = state.rBuf[k]; }
+        for (auto k = 0u; k < lag_; ++k)
+        { 
+            lBuf_[k] = state.lBuf[k];
+            rBuf_[k] = state.rBuf[k];
+        }
     }
 
 public:     // Const methods
@@ -87,7 +91,11 @@ public:     // Const methods
         };
 
         // Serialize both buffers
-        for (auto k = 0u; k < lag_; ++k)  { ret.lBuf[k] = lBuf_[k]; ret.rBuf[k] = rBuf_[k]; }
+        for (auto k = 0u; k < lag_; ++k)
+        { 
+            ret.lBuf[k] = lBuf_[k];
+            ret.rBuf[k] = rBuf_[k]; 
+        }
         ret.bIdx = (rbi_ << 8) | (lbi_ & 0xFF);
 
         return ret;

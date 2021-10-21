@@ -40,7 +40,6 @@ void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
                                             const LaneArray& blSubtracted,
                                             const Mask& isBaseline)
 {
-    // Add frame to complete and flagged trace baseline statistics
     const FloatArray bs(blSubtracted);
 
     baselineSubtractedCorr_.AddSample(bs);
