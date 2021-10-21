@@ -12,15 +12,16 @@ namespace Cuda {
 // Manual grouping of 4 data entries.  Specifically not using a fixed
 // size array, because its very easy to accidentally push arrays
 // out of registers and into device memory.
+template <typename T>
 struct Bundle
 {
-    PBShort2 data0;
-    PBShort2 data1;
-    PBShort2 data2;
-    PBShort2 data3;
+    T data0;
+    T data1;
+    T data2;
+    T data3;
 };
 
-template <size_t laneWidth, size_t width>
+template <size_t laneWidth, size_t width, typename T = PBShort2>
 struct ErodeDilate
 {
     // default ctor leaves things unitialized!  Intended to facilitate use of this
@@ -33,11 +34,11 @@ struct ErodeDilate
         , f2(val)
     {}
 
-    __device__ PBShort2 operator()(PBShort2 in)
+    __device__ T operator()(T in)
     {
         return f2(f1(in));
     }
-    __device__ void operator()(Bundle& in)
+    __device__ void operator()(Bundle<T>& in)
     {
         in.data0 = f1(in.data0);
         in.data1 = f1(in.data1);
@@ -49,10 +50,10 @@ struct ErodeDilate
         in.data2 = f2(in.data2);
         in.data3 = f2(in.data3);
     }
-    ExtremaFilter<laneWidth, width, MinOp> f1;
-    ExtremaFilter<laneWidth, width, MaxOp> f2;
+    ExtremaFilter<laneWidth, width, MinOp, T> f1;
+    ExtremaFilter<laneWidth, width, MaxOp, T> f2;
 };
-template <size_t laneWidth, size_t width>
+template <size_t laneWidth, size_t width, typename T = PBShort2>
 struct DilateErode
 {
     // default ctor leaves things unitialized!  Intended to facilitate use of this
@@ -65,11 +66,11 @@ struct DilateErode
         , f2(val)
     {}
 
-    __device__ PBShort2 operator()(PBShort2 in)
+    __device__ T operator()(T in)
     {
         return f2(f1(in));
     }
-    __device__ void operator()(Bundle& in)
+    __device__ void operator()(Bundle<T>& in)
     {
         in.data0 = f1(in.data0);
         in.data1 = f1(in.data1);
@@ -81,8 +82,8 @@ struct DilateErode
         in.data2 = f2(in.data2);
         in.data3 = f2(in.data3);
     }
-    ExtremaFilter<laneWidth, width, MaxOp> f1;
-    ExtremaFilter<laneWidth, width, MinOp> f2;
+    ExtremaFilter<laneWidth, width, MaxOp, T> f1;
+    ExtremaFilter<laneWidth, width, MinOp, T> f2;
 };
 
 // Need this to help with some template futzing.  Helps keep

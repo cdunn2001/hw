@@ -119,7 +119,7 @@ TEST(TestDataSource, LoopOverBatches)
     uint32_t seenBatches = 0;
     for (const auto& batch : source.AllBatches())
     {
-        EXPECT_EQ(batch.GetMeta().PoolId(), seenBatches);
+        EXPECT_EQ(batch.Metadata().PoolId(), seenBatches);
         ++seenBatches;
         if (seenBatches == poolsPerChip)
         {

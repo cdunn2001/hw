@@ -124,9 +124,9 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
     HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
 
-    TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
+    TraceBatchVariant batch = GenerateBatch(lanesPerPool, framesPerChunk);
     benchmark::DoNotOptimize(baseliner(batch)); // warm-up
-    
+
     for (auto _ : st) {
         // This code gets timed
         auto res = baseliner(batch);
@@ -147,9 +147,9 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Device)(benchmark::State& st)
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
     DeviceMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
 
-    TraceBatch<int16_t> batch = GenerateBatch(lanesPerPool, framesPerChunk);
+    TraceBatchVariant batch = GenerateBatch(lanesPerPool, framesPerChunk);
     benchmark::DoNotOptimize(baseliner(batch)); // warm-up call
-    
+
     for (auto _ : st) {
         // This code gets timed
         auto res = baseliner(batch);

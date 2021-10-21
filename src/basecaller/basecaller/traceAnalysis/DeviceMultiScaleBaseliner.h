@@ -44,8 +44,7 @@ namespace Cuda {
 
 // Forward declaring this for now, but really it should eventually be cleaned up and pulled
 // out of prototypes
-template <size_t blockThreads, size_t lag>
-class ComposedFilter;
+class ComposedFilterBase;
 
 }}
 
@@ -61,8 +60,6 @@ class DeviceMultiScaleBaseliner : public Baseliner
     // out are garbage, but setting this value at least close to the expected baseline
     // means it will potentially not be horribly off base.
     static constexpr short initVal = 150;
-public:     // Types
-    using ElementTypeIn = Baseliner::ElementTypeIn;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -77,7 +74,10 @@ public:     // Static functions
     static void Finalize();
 
 public:
-    DeviceMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool,
+    using EncodingFormat = DataSource::PacketLayout::EncodingFormat;
+    DeviceMultiScaleBaseliner(uint32_t poolId,
+                              const BaselinerParams& params,
+                              uint32_t lanesPerPool,
                               Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
 
     DeviceMultiScaleBaseliner(const DeviceMultiScaleBaseliner&) = delete;
@@ -88,9 +88,9 @@ public:
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
-    using Filter = Cuda::ComposedFilter<laneSize/2, lag>;
+    using Filter = Cuda::ComposedFilterBase;
     std::unique_ptr<Filter> filter_;
     size_t startupLatency_;
 };

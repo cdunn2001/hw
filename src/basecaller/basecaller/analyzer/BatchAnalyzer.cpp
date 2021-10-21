@@ -146,7 +146,7 @@ FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
 }
 
 
-BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatchVariant& tbatch)
 {
     PBAssert(tbatch.Metadata().PoolId() == poolId_, "Bad pool ID.");
     PBAssert(tbatch.Metadata().FirstFrame() == nextFrameId_, "Bad frame ID.");
@@ -169,11 +169,11 @@ BatchAnalyzer::OutputType BatchAnalyzer::operator()(const TraceBatch<int16_t>& t
     return ret;
 }
 
-BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatchVariant& tbatch)
 {
     auto mode = AnalysisProfiler::Mode::REPORT;
-    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*10+1) mode = AnalysisProfiler::Mode::OBSERVE;
-    if (tbatch.Metadata().FirstFrame() < tbatch.NumFrames()*2+1)  mode = AnalysisProfiler::Mode::IGNORE;
+    if (tbatch.Metadata().FirstFrame() < static_cast<int32_t>(tbatch.NumFrames())*10+1) mode = AnalysisProfiler::Mode::OBSERVE;
+    if (tbatch.Metadata().FirstFrame() < static_cast<int32_t>(tbatch.NumFrames())*2+1)  mode = AnalysisProfiler::Mode::IGNORE;
     AnalysisProfiler profiler(mode, 3.0, 100.0);
 
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
@@ -203,7 +203,7 @@ BatchAnalyzer::OutputType FixedModelBatchAnalyzer::AnalyzeImpl(const TraceBatch<
     return BatchResult(std::move(pulses), std::move(basecallingMetrics));
 }
 
-BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatch<int16_t>& tbatch)
+BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBatchVariant& tbatch)
 {
     auto mode = AnalysisProfiler::Mode::IGNORE;
     if (isModelInitialized_)
@@ -223,7 +223,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
     auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
     auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
 
-    if (!isModelInitialized_ && tbatch.GetMeta().FirstFrame() > baseliner_->StartupLatency())
+    if (!isModelInitialized_ && tbatch.Metadata().FirstFrame() > static_cast<int32_t>(baseliner_->StartupLatency()))
     {
         // Run data through the DME until we get our first real estimate, at which point we
         // stop using the DME and just keep that model forever.
@@ -258,9 +258,9 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
         else
         {
             auto frameLabelerMetrics = frameLabeler_->EmptyMetrics(baselinedTraces.StorageDims());
-
-            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                       baselinedTraces.StorageDims());
+            auto labels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+            auto pulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(labels.Metadata(),
+                                                                       labels.StorageDims());
             auto pulses = std::move(pulsesAndMetrics.first);
             auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
             return std::make_tuple(std::move(pulses),
@@ -285,7 +285,7 @@ BatchAnalyzer::OutputType SingleEstimateBatchAnalyzer::AnalyzeImpl(const TraceBa
 // WiP: Prototype for analysis that supports slowly varying detection
 // model parameters.
 BatchAnalyzer::OutputType
-DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatch)
+DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
 {
     assert(baseliner_);
     static const unsigned int nFramesBaselinerStartUp = baseliner_->StartupLatency();
@@ -308,7 +308,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
           roundToChunkMultiple(nFramesBaselinerStartUp)
         + roundToChunkMultiple(nFramesDmeStartUp);
     auto mode = AnalysisProfiler::Mode::IGNORE;
-    if (tbatch.Metadata().FirstFrame() > startupLatency)
+    if (tbatch.Metadata().FirstFrame() > static_cast<int32_t>(startupLatency))
     {
         auto framesSince = tbatch.Metadata().FirstFrame() - startupLatency;
         if (framesSince > 2*minFramesForDme)  mode = AnalysisProfiler::Mode::OBSERVE;
@@ -329,10 +329,11 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // innacuracies, and we shouldn't run the downstream filters either because
     // the models aren't even sensibly initialized until the first time we hand
     // data to the DME
-    if (baselinedTraces.GetMeta().FirstFrame() < nFramesBaselinerStartUp + poolDmeDelayFrames_)
+    if (baselinedTraces.GetMeta().FirstFrame() < static_cast<int32_t>(nFramesBaselinerStartUp + poolDmeDelayFrames_))
     {
-        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                   baselinedTraces.StorageDims());
+        auto emptyLabels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(emptyLabels.Metadata(),
+                                                                        emptyLabels.StorageDims());
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     }
     bool fullEstimation = dme_->AddBatch(baselinedTraces, baselinerMetrics, &models_, profiler);
@@ -361,8 +362,9 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatch<int16_t>& tbatc
     // TODO: When metrics are produced, use them to update detection models.
     if (!fullEstimationOccured_)
     {
-        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(baselinedTraces.Metadata(),
-                                                                   baselinedTraces.StorageDims());
+        auto emptyLabels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
+        auto emptyPulsesAndMetrics = pulseAccumulator_->EmptyPulseBatch(emptyLabels.Metadata(),
+                                                                        emptyLabels.StorageDims());
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     } else
     {

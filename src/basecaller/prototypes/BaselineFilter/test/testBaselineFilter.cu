@@ -56,7 +56,7 @@ TEST(BaselineFilterTest, GlobalMemory)
         filterData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (const auto& batch : source.AllBatches<int16_t>())
     {
         auto firstFrame = batch.GetMeta().FirstFrame();
         auto batchIdx = batch.GetMeta().PoolId();
@@ -114,7 +114,7 @@ TEST(BaselineFilterTest, SharedMemory)
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (const auto& batch : source.AllBatches<int16_t>())
     {
         auto batchIdx = batch.GetMeta().PoolId();
         BatchData<int16_t> truth(batch.StorageDims(),
@@ -164,11 +164,16 @@ TEST(BaselineFilterTest, MultiKernelFilter)
     auto params = FilterParamsLookup(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     for (uint32_t i = 0; i < source.PacketLayouts().size(); ++i)
     {
-        filterData.emplace_back(params, 1.0f, source.PacketLayouts()[i].NumBlocks(), 0, SOURCE_MARKER());
+        ComposedConstructArgs args;
+        args.scale = 1.0f;
+        args.numLanes = source.PacketLayouts()[i].NumBlocks();
+        args.pedestal = source.Pedestal();
+        args.val = 0;
+        filterData.emplace_back(params, args, SOURCE_MARKER());
         filterRefData.emplace_back(SOURCE_MARKER(), source.PacketLayouts()[i].NumBlocks(), 0);
     }
 
-    for (const auto& batch : source.AllBatches())
+    for (auto& batch : source.AllBatches<int16_t>())
     {
         auto batchIdx = batch.GetMeta().PoolId();
         BatchData<int16_t> truth(batch.StorageDims(),
@@ -178,14 +183,6 @@ TEST(BaselineFilterTest, MultiKernelFilter)
                                 batch.StorageDims(),
                                 SyncDirection::HostReadDeviceWrite,
                                 SOURCE_MARKER());
-        BatchData<int16_t> work1(batch.StorageDims(),
-                                 SyncDirection::HostReadDeviceWrite,
-                                 SOURCE_MARKER());
-        BatchData<int16_t> work2(batch.StorageDims(),
-                                 SyncDirection::HostReadDeviceWrite,
-                                 SOURCE_MARKER());
-
-        filterData[batchIdx].RunComposedFilter(batch, out, work1, work2);
 
         const auto& global = PBLauncher(GlobalBaselineFilter<RefFilter>,
                                         batch.LanesPerBatch(),
@@ -193,6 +190,8 @@ TEST(BaselineFilterTest, MultiKernelFilter)
         global(batch,
                filterRefData[batchIdx],
                truth);
+
+        filterData[batchIdx].RunComposedFilter(std::move(batch), out);
 
         for (size_t i = 0; i < batch.LanesPerBatch(); ++i)
         {
