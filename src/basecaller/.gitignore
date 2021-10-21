@@ -1,11 +1,21 @@
-.gitmodules
+# Git, CMake and build
 depcache/
+**/build/
+cmake-build-*/
+.gitmodules
+
+# IDE and editors
+**/.vs/
+**/.vscode/
+.idea
+
+# Dependencies
 pa-third-party/
 pa-common/
 hw-mongo/
-**/build/
-.idea/
+
+# Logs
+*.log
+
 .run/
 .clang-format
-.vscode
-cmake-build-*/
