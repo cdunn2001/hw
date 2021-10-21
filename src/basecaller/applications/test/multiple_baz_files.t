@@ -1,12 +1,19 @@
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
 # Run in single BAZ file mode.
-  $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 4 --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1   \
+  > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
+  > --outputbazfile ${CRAMTMP}/test.baz > /dev/null
+
   $ ls ${CRAMTMP}/test.baz
   /tmp/cramtests-*/test.baz (glob)
 
 # Run in (default) multiple BAZ file mode.
-  $ smrt-basecaller --inputfile ${TRCFILE} --numZmwLanes 4 --config multipleBazFiles=true --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses --frames 1024 --outputbazfile ${CRAMTMP}/multi.baz > /dev/null
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
+  > --config multipleBazFiles=true --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1    \
+  > --config=algorithm.modelEstimationMode=FixedEstimations --config algorithm.pulseAccumConfig.Method=HostSimulatedPulses \
+  > --outputbazfile ${CRAMTMP}/multi.baz > /dev/null
   $ ls ${CRAMTMP}/multi*baz
   /tmp/cramtests-*/multi.0.baz (glob)
   /tmp/cramtests-*/multi.1.baz (glob)

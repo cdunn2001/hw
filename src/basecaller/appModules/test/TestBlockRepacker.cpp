@@ -319,7 +319,7 @@ public:
     void Process(const TraceBatchVariant& in) override
     {
         std::visit([&](const auto& batch) { validator_->Validate(batch);},
-                   in);
+                   in.Data());
     }
 private:
     Validator* validator_;

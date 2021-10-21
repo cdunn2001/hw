@@ -23,64 +23,67 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <pacbio/tracefile/TraceFile.h>
 #include <appModules/TraceSaver.h>
+
+#include <pacbio/tracefile/TraceFile.h>
+
+#include <dataTypes/configs/MovieConfig.h>
 
 namespace PacBio {
 namespace Application {
 
 using namespace PacBio::DataSource;
+using namespace Mongo;
+using namespace Mongo::Data;
 
-TraceSaverBody::TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
-                               const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
-                               PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector)
-    : writer_(std::move(writer))
-    , laneSelector_(std::move(laneSelector))
+TraceSaverBody::TraceSaverBody(const std::string& filename,
+                               size_t numFrames,
+                               DataSource::DataSourceBase::LaneSelector laneSelector,
+                               TraceFile::TraceDataType dataType,
+                               const std::vector<uint32_t>& holeNumbers,
+                               const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
+                               const std::vector<uint32_t>& batchIds,
+                               const Mongo::Data::MovieConfig& movCfg)
+    : laneSelector_(std::move(laneSelector))
+    , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
 {
-    if (writer_)
+    const size_t numZmw = laneSelector_.size() * laneSize;
+    if (holeNumbers.size() != numZmw)
+        throw PBException("Invalid number of hole numbers provided");
+    if (properties.size() != numZmw)
+        throw PBException("Invalid number of hole properties provided");
+    if (batchIds.size() != numZmw)
+        throw PBException("Invalid number of batchIds provided");
+
+    // Now we need to populate all the actual data in the tracefile outside of the actual
+    // traces
+    boost::multi_array<int16_t, 2> holexy(boost::extents[numZmw][2]);
+    std::vector<uint8_t> holeType(numZmw);
+    for (size_t i = 0; i < numZmw; ++i)
     {
-        const uint32_t numZMWs = writer_->Traces().NumZmws();
-        if (numZMWs != features.size())
-        {
-            PBLOG_ERROR << "ROI ZMWS is not equal to trace file ZMWs. Something is not right. "
-                        << "trace.NumZmws:" << numZMWs << " feature ZMWS:" <<  features.size();
-            throw PBException("ROI miscalculation");
-        }
-        boost::multi_array<int16_t, 2> holexy(boost::extents[numZMWs][2]);
-        std::vector<uint8_t> holeType(numZMWs);
-        // TODO: add holeNumber to the UnitCellProperties, then uncomment the related lines below.
-        // std::vector<uint32_t> holeNumber;
-        for(uint32_t i=0;i<numZMWs;i++)
-        {
-            holexy[i][0] = static_cast<int16_t>(features[i].x); // TODO change UnitCellProperties.x and y to be 16 bits to get rid of these casts
-            holexy[i][1] = static_cast<int16_t>(features[i].y);
-            // TODO: a conversion from "flags" to "holeType". The connection needs to be made here:
-            (void) features[i].flags;
-            holeType[i] = 0; 
-            // TODO: holeNumber[i] = features[i].holeNumber;
-        }
-        writer_->Traces().HoleXY(holexy);
-        writer_->Traces().HoleType(holeType);
-        // TODO: writer_->Traces().HoleNumber(holeNumber);
+        // TODO: a conversion from "flags" to "holeType". The connection needs to be made here:
+        //holetype[i] = properties[i].flags;
+        holeType[i] = 0;
+        // TODO change UnitCellProperties.x and y to be 16 bits to get rid of these casts
+        holexy[i][0] = static_cast<int16_t>(properties[i].x);
+        holexy[i][1] = static_cast<int16_t>(properties[i].y);
     }
+    file_.Traces().Pedestal(movCfg.pedestal);
+    file_.Traces().HoleXY(holexy);
+    file_.Traces().HoleType(holeType);
+    file_.Traces().HoleNumber(holeNumbers);
+    file_.Traces().AnalysisBatch(batchIds);
+
     PBLOG_INFO << "TraceSaverBody created";
 }
 
 
 void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
-    const auto& traceBatch = [&]() ->decltype(auto)
+    auto writeTraces = [&](const auto& traceBatch)
     {
-        try
-        {
-            return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
-        } catch (const std::exception&)
-        {
-            throw PBException("TraceSaver currently only supports int16_t trace data");
-        }
-    }();
-    if (writer_)
-    {
+        using T = typename std::remove_reference_t<decltype(traceBatch)>::HostType;
+
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();
         const auto frameOffset = traceBatch.Metadata().FirstFrame();
         const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
@@ -90,14 +93,14 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
         {
             PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
             const auto blockIdx = laneIdx - laneBegin;
-            Mongo::Data::BlockView<const int16_t> blockView = traceBatch.GetBlockView(blockIdx);
+            Mongo::Data::BlockView<const T> blockView = traceBatch.GetBlockView(blockIdx);
 
             // The TraceFile::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
             // work with the API.  TODO: perform this transpose inside the TraceFile::Traces() class.
-            boost::const_multi_array_ref<int16_t, 2> data {
+            boost::const_multi_array_ref<T, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
-            typedef boost::multi_array<int16_t, 2> array_ref;
+            typedef boost::multi_array<T, 2> array_ref;
             array_ref transpose {boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
             for (uint32_t iframe = 0; iframe < blockView.NumFrames(); iframe++)
             {
@@ -117,15 +120,14 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
             const int64_t traceFileLane = position - laneSelector_.begin();
 
             const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
-            boost::array<array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
+            boost::array<typename array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
             transpose.reindex(bases);
-            writer_->Traces().WriteTraceBlock<int16_t>(transpose);
+            file_.Traces().WriteTraceBlock<T>(transpose);
+
         }
-    }
-    else
-    {
-        throw PBException("fix me, the tracwriter was not constructed");
-    }
+    };
+
+    std::visit(writeTraces, traceVariant.Data());
 }
 
 

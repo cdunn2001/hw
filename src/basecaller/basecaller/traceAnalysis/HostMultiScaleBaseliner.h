@@ -17,7 +17,6 @@ class HostMultiScaleBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeIn = Parent::ElementTypeIn;
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
@@ -30,15 +29,20 @@ public:     // Static functions
 
     static void Finalize();
 
+    static float SigmaEmaAlpha()
+    { return sigmaEmaAlpha_; }
+
 public:
-    HostMultiScaleBaseliner(uint32_t poolId, const BaselinerParams& params, uint32_t lanesPerPool)
+    HostMultiScaleBaseliner(uint32_t poolId,
+                            const BaselinerParams& params,
+                            uint32_t lanesPerPool)
         : Baseliner(poolId)
         , latency_(params.LatentSize())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
-           baselinerByLane_.emplace_back(params, Scale());
+           baselinerByLane_.emplace_back(params, Scale(), pedestal_);
        }
     }
 
@@ -51,20 +55,24 @@ public:
 private:
 
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
-    FilterBaseline(const Data::TraceBatch<ElementTypeIn>& rawTrace) override;
+    FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
+
+private:     // Static data
+    static float sigmaEmaAlpha_;
 
 private:
 
     class MultiScaleBaseliner
     {
     public:
-        MultiScaleBaseliner(const BaselinerParams& params, float scaler)
+        MultiScaleBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
             : msLowerOpen_(params.Strides(), params.Widths())
             , msUpperOpen_(params.Strides(), params.Widths())
             , stride_(params.AggregateStride())
             , cSigmaBias_{params.SigmaBias()}
             , cMeanBias_{params.MeanBias()}
             , scaler_(scaler)
+            , pedestal_(pedestal)
         { }
 
         MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
@@ -74,9 +82,10 @@ private:
     public:
         size_t Stride() const { return stride_; }
 
-        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const ElementTypeIn>& traceData,
-                                                                        Data::BlockView<ElementTypeIn> lowerBuffer,
-                                                                        Data::BlockView<ElementTypeIn> upperBuffer,
+        template <typename T>
+        Data::BaselinerStatAccumulator<ElementTypeOut> EstimateBaseline(const Data::BlockView<const T>& traceData,
+                                                                        Data::BlockView<ElementTypeOut> lowerBuffer,
+                                                                        Data::BlockView<ElementTypeOut> upperBuffer,
                                                                         Data::BlockView<ElementTypeOut> baselineSubtractedData);
 
         void AddToBaselineStats(const LaneArray& traceData,
@@ -150,13 +159,14 @@ private:
         };  // MultiStageFilter
 
     private:
-        MultiStageFilter<ElementTypeIn, FilterType::Lower> msLowerOpen_;
-        MultiStageFilter<ElementTypeIn, FilterType::Upper> msUpperOpen_;
+        MultiStageFilter<ElementTypeOut, FilterType::Lower> msLowerOpen_;
+        MultiStageFilter<ElementTypeOut, FilterType::Upper> msUpperOpen_;
 
         const size_t stride_;
         const FloatArray cSigmaBias_;
         const FloatArray cMeanBias_;
         float scaler_;  // Converts DN quantization to e- values
+        int16_t pedestal_;
 
         FloatArray bgSigma_{0};
         LaneArray latData_{0};

@@ -155,7 +155,7 @@ public:
     }
 
 private:
-    size_t currFrame_ = 0;
+    int32_t currFrame_ = std::numeric_limits<int32_t>::min();
     size_t batchesSeen_ = 0;
     size_t metricBlocksSeen_ = 0;
     size_t numBatches_;

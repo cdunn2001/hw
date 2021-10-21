@@ -1,8 +1,10 @@
 # Git, CMake and build
 depcache/
-**/build/
 cmake-build-*/
 .gitmodules
+build/
+**/.cache/clangd/
+**/.clangd
 
 # IDE and editors
 **/.vs/
@@ -19,3 +21,5 @@ hw-mongo/
 
 .run/
 .clang-format
+/mongo/compile_commands.json
+

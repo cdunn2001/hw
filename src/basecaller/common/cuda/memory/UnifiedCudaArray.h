@@ -53,8 +53,10 @@ enum class SyncDirection
 };
 
 template <typename T> struct gpu_type { using type = T; };
+template <> struct gpu_type<uint8_t> { using type = PBUChar4; };
 template <> struct gpu_type<int16_t> { using type = PBShort2; };
 template <> struct gpu_type<PBHalf> { using type = PBHalf2; };
+template <typename T> using gpu_type_t = typename gpu_type<T>::type;
 
 // TODO handle pitched allocations for multidimensional data?
 template <typename T, bool allow_expensive_types = false>
@@ -161,8 +163,6 @@ public:
         // Preferrably we'd ensure GpuType is trivially copyable as well, but for whatever reason
         // the half2 type is not implemented as such, which casues problems.  Best we can do is
         // try and ensure binary compatability on our end as much as we can.
-        static_assert(sizeof(HostType) == sizeof(GpuType) || 2*sizeof(HostType) == sizeof(GpuType), "");
-
         static_assert(std::is_trivially_default_constructible<HostType>::value || allow_expensive_types,
                       "Must explicitly opt-in to use non-trivial construction types by setting the allow_expensive_types template parameter");
         static_assert(std::is_trivially_destructible<HostType>::value || allow_expensive_types,

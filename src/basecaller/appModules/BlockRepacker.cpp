@@ -219,7 +219,7 @@ public:
     // zmw until the batch is filled
     bool ReadyFor(const SensorPacket& packet) const
     {
-        if (packet.StartFrame() != currFrame_) return false;
+        if (static_cast<int32_t>(packet.StartFrame()) != currFrame_) return false;
         if (packet.StartZmw() <= currZmw_ && packet.StopZmw() > currZmw_) return true;
 
         return false;
@@ -346,7 +346,7 @@ public:
 private:
     TraceBatch<T> batch_;
     size_t currZmw_;
-    size_t currFrame_;
+    int32_t currFrame_;
 };
 
 // Mid-level implementation class, handling an "Arena" of pools.

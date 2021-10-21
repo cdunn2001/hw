@@ -42,6 +42,8 @@ MovieConfig MockMovieConfig()
     movConfig.frameRate = 100.0f;
     movConfig.photoelectronSensitivity = 2.0f;
     movConfig.refSnr = 20.0f;
+    movConfig.pedestal = 0;
+    movConfig.encoding = DataSource::PacketLayout::INT16;
     {
         auto& mca = movConfig.analogs[0];
         mca.baseLabel = 'C';

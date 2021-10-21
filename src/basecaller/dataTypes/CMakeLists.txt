@@ -37,6 +37,8 @@ set(CPP_LIST
     configs/StaticDetModelConfig.h
     configs/SystemsConfig.h
     configs/SystemsConfig.cpp
+    configs/TraceSaverConfig.h
+    configs/TraceSaverConfig.cpp
     AnalogMode.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp

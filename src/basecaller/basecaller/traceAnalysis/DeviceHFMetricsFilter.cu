@@ -78,7 +78,7 @@ public: // metrics
     SingleMetric<PBShort2> numHalfSandwiches;
     SingleMetric<PBShort2> numPulseLabelStutters;
     SingleMetric<PBShort2> activityLabel;
-    AnalogMetric<PBHalf2> pkMidSignal;
+    AnalogMetric<float2> pkMidSignal;
     AnalogMetric<PBHalf2> bpZvar;
     AnalogMetric<PBHalf2> pkZvar;
     AnalogMetric<PBHalf2> pkMax;
@@ -96,8 +96,8 @@ public: // metrics
     AnalogMetric<float2> pkZvarAcc;
 
     // The baseline stat accumulator:
-    SingleMetric<PBHalf2> baselineM0;
-    SingleMetric<PBHalf2> baselineM1;
+    SingleMetric<float2> baselineM0;
+    SingleMetric<float2>  baselineM1;
     SingleMetric<float2>  baselineM2;
 
     // The autocorrelation accumulator:
@@ -124,6 +124,11 @@ __device__ float variance(const float M0, const float M1, const float M2)
     var = (M2 - var) / (M0 - 1.0f);
     var = max(var , 0.0f);
     return var;
+}
+
+__device__ float2 variance(const float2 M0, const float2 M1, const float2 M2)
+{
+    return make_float2(variance(M0.x, M1.x, M2.x), variance(M0.y, M1.y, M2.y));
 }
 
 __device__ PBHalf2 variance(const PBHalf2 M0, const PBHalf2 M1, const float2 M2)
@@ -272,8 +277,8 @@ __global__ void InitializeMetrics(
     blockMetrics.numPulseLabelStutters[threadIdx.x] = 0;
     blockMetrics.pulseDetectionScore[threadIdx.x] = 0.0f;
 
-    blockMetrics.baselineM0[threadIdx.x] = 0.0f;
-    blockMetrics.baselineM1[threadIdx.x] = 0.0f;
+    blockMetrics.baselineM0[threadIdx.x] = zero;
+    blockMetrics.baselineM1[threadIdx.x] = zero;
     blockMetrics.baselineM2[threadIdx.x] = zero;
 
     blockMetrics.traceM0[threadIdx.x] = 0.0f;
@@ -289,7 +294,7 @@ __global__ void InitializeMetrics(
 
     for (size_t a = 0; a < numAnalogs; ++a)
     {
-        blockMetrics.pkMidSignal[a][threadIdx.x] = 0.0f;
+        blockMetrics.pkMidSignal[a][threadIdx.x] = zero;
         blockMetrics.bpZvarAcc[a][threadIdx.x] = zero;
         blockMetrics.pkZvarAcc[a][threadIdx.x] = zero;
         blockMetrics.pkMax[a][threadIdx.x] = 0.0f;
@@ -354,7 +359,7 @@ __device__ void goodBaseMetrics(
             const auto& midSignal = pulse->MidSignal();
             blockMetrics.numPkMidBasesByAnalog[label][threadIdx.x] += inc;
             blockMetrics.numPkMidFrames[label][threadIdx.x] += blendShort0<id>(midWidth);
-            blockMetrics.pkMidSignal[label][threadIdx.x] += blendHalf0<id>(midSignal * midWidth);
+            blockMetrics.pkMidSignal[label][threadIdx.x] += blendFloat0<id>(midSignal * midWidth);
             blockMetrics.bpZvarAcc[label][threadIdx.x] += blendFloat0<id>(midSignal * midSignal * midWidth);
             blockMetrics.pkZvarAcc[label][threadIdx.x] += blendFloat0<id>(pulse->SignalM2());
         }
@@ -617,6 +622,7 @@ __global__ void FinalizeMetrics(
 
     const PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
     const PBHalf2 zeros(0.0f);
+    const float2 nansf(std::numeric_limits<float2>::quiet_NaN());
 
     for (size_t pulseLabel = 0; pulseLabel < numAnalogs; pulseLabel++)
     {
@@ -625,7 +631,7 @@ __global__ void FinalizeMetrics(
         const PBHalf2 baselineVariance = variance(blockMetrics.baselineM0[threadIdx.x],
                                                   blockMetrics.baselineM1[threadIdx.x],
                                                   blockMetrics.baselineM2[threadIdx.x]);
-        const PBHalf2 pkMidSignal(blockMetrics.pkMidSignal[pulseLabel][threadIdx.x]);
+        const float2 pkMidSignal(blockMetrics.pkMidSignal[pulseLabel][threadIdx.x]);
         const float2 pkMidSignalSqr = asFloat2(pkMidSignal) * asFloat2(pkMidSignal);
 
         { // Convert moments to interpulse variance
@@ -671,7 +677,7 @@ __global__ void FinalizeMetrics(
         { // Set nans as appropriate
             auto emptyMask = (blockMetrics.numPkMidBasesByAnalog[pulseLabel][threadIdx.x] == 0);
             blockMetrics.pkMidSignal[pulseLabel][threadIdx.x] = Blend(
-                    emptyMask, nans, pkMidSignal);
+                    emptyMask, nansf, pkMidSignal);
             emptyMask = emptyMask || (blockMetrics.numPkMidBasesByAnalog[pulseLabel][threadIdx.x] < 2)
                                   || (blockMetrics.numPkMidFrames[pulseLabel][threadIdx.x] < 2);
             blockMetrics.bpZvar[pulseLabel][threadIdx.x] = Blend(
@@ -718,16 +724,16 @@ __global__ void FinalizeMetrics(
     outMetrics.pixelChecksum[indX] = blockMetrics.pixelChecksum[threadIdx.x].X();
     outMetrics.pixelChecksum[indY] = blockMetrics.pixelChecksum[threadIdx.x].Y();
 
-    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].X() / blockMetrics.baselineM0[threadIdx.x].X();
-    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].Y() / blockMetrics.baselineM0[threadIdx.x].Y();
+    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].x / blockMetrics.baselineM0[threadIdx.x].x;
+    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].y / blockMetrics.baselineM0[threadIdx.x].y;
     const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
                                blockMetrics.baselineM1[threadIdx.x],
                                blockMetrics.baselineM2[threadIdx.x]);
-    outMetrics.frameBaselineVarianceDWS[indX] = var.FloatX();
-    outMetrics.frameBaselineVarianceDWS[indY] = var.FloatY();
+    outMetrics.frameBaselineVarianceDWS[indX] = var.x;
+    outMetrics.frameBaselineVarianceDWS[indY] = var.y;
 
-    outMetrics.numFramesBaseline[indX] = blockMetrics.baselineM0[threadIdx.x].X();
-    outMetrics.numFramesBaseline[indY] = blockMetrics.baselineM0[threadIdx.x].Y();
+    outMetrics.numFramesBaseline[indX] = blockMetrics.baselineM0[threadIdx.x].x;
+    outMetrics.numFramesBaseline[indY] = blockMetrics.baselineM0[threadIdx.x].y;
 
     outMetrics.numPulses[indX] = 0;
     outMetrics.numPulses[indY] = 0;
@@ -745,8 +751,8 @@ __global__ void FinalizeMetrics(
         outMetrics.numBasesByAnalog[a][indX] = blockMetrics.numBasesByAnalog[a][threadIdx.x].X();
         outMetrics.numBasesByAnalog[a][indY] = blockMetrics.numBasesByAnalog[a][threadIdx.x].Y();
 
-        outMetrics.pkMidSignal[a][indX] = blockMetrics.pkMidSignal[a][threadIdx.x].X();
-        outMetrics.pkMidSignal[a][indY] = blockMetrics.pkMidSignal[a][threadIdx.x].Y();
+        outMetrics.pkMidSignal[a][indX] = blockMetrics.pkMidSignal[a][threadIdx.x].x;
+        outMetrics.pkMidSignal[a][indY] = blockMetrics.pkMidSignal[a][threadIdx.x].y;
         outMetrics.bpZvar[a][indX] = blockMetrics.bpZvar[a][threadIdx.x].X();
         outMetrics.bpZvar[a][indY] = blockMetrics.bpZvar[a][threadIdx.x].Y();
         outMetrics.pkZvar[a][indX] = blockMetrics.pkZvar[a][threadIdx.x].X();

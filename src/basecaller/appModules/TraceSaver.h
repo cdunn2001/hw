@@ -34,7 +34,7 @@
 
 #include <common/graphs/GraphNodeBody.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/configs/ROIConfig.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <appModules/DataFileWriter.h>
 #include <pacbio/tracefile/TraceFile.h>
 
@@ -60,9 +60,14 @@ public:
 class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatchVariant>
 {
 public:
-    TraceSaverBody(std::unique_ptr<PacBio::TraceFile::TraceFile>&& writer,
-                   const std::vector<PacBio::DataSource::DataSourceBase::UnitCellProperties>& features,
-                   PacBio::DataSource::DataSourceBase::LaneSelector&& laneSelector);
+    TraceSaverBody(const std::string& filename,
+                   size_t numFrames,
+                   DataSource::DataSourceBase::LaneSelector laneSelector,
+                   TraceFile::TraceDataType dataType,
+                   const std::vector<uint32_t>& holeNumbers,
+                   const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
+                   const std::vector<uint32_t>& batchIds,
+                   const Mongo::Data::MovieConfig& movCfg);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
     TraceSaverBody(TraceSaverBody&&) = delete;
@@ -74,8 +79,8 @@ public:
 
     void Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
 private:
-    std::unique_ptr<PacBio::TraceFile::TraceFile> writer_;
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
+    TraceFile::TraceFile file_;
 };
 
 }}

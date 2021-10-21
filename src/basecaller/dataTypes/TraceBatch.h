@@ -88,7 +88,43 @@ private:
 
 // Variant that can hold the supported types for raw trace inputs
 // into the compute graph
-using TraceBatchVariant = std::variant<TraceBatch<int16_t>, TraceBatch<uint8_t>>;
+// Type that holds a variant of the supported raw trace input
+// types.  It has convenience accessors to obtain the meta/dims
+// without repeatedly doing visitations.  This is currently for
+// read-only data, though that part of the API can be relaxed if
+// we find cause.
+class TraceBatchVariant
+{
+public:
+    template <typename T>
+    TraceBatchVariant(TraceBatch<T> batch)
+        : meta_(batch.GetMeta())
+        , storageDims_(batch.StorageDims())
+        , numFrames_(batch.NumFrames())
+        , data_(std::move(batch))
+    {
+        static_assert(std::is_same_v<T, int16_t>
+                      || std::is_same_v<T, uint8_t>);
+    }
+
+    const BatchMetadata& Metadata() const { return meta_; }
+    const BatchDimensions& StorageDims() const { return storageDims_; }
+    size_t NumFrames() const { return numFrames_; }
+    size_t LanesPerBatch() const { return storageDims_.lanesPerBatch; }
+    size_t LaneWidth() const { return storageDims_.laneWidth; }
+
+    const auto& Data() const {return data_; }
+    auto& Data() {return data_; }
+private:
+    BatchMetadata meta_;
+    // Note, these are explicitly the extents of the underlying memory
+    // allocation.  The NumFrames() function on the actual trace batch
+    // being stored is allowed to be smaller
+    BatchDimensions storageDims_;
+    // The actual value reported by NumFrames()
+    size_t numFrames_;
+    std::variant<TraceBatch<int16_t>, TraceBatch<uint8_t>> data_;
+};
 
 // Define overloads for this function, so that we can track kernel invocations, and
 // so that we can be converted to our gpu specific representation

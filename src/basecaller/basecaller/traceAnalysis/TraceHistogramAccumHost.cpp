@@ -105,10 +105,13 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
     }
 }
 
-void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces)
+void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces,
+                                           const PoolDetModel& /* detModel */)
 {
     const auto numLanes = traces.LanesPerBatch();
 
+    // TODO: Pass detection model along and use for edge-frame scrubbing.
+    
     tbb::task_arena().execute([&] {
         // For each lane/block in the batch ...
         tbb::parallel_for((size_t) {0}, numLanes, [&](size_t lane) {

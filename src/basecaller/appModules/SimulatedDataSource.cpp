@@ -265,7 +265,7 @@ std::vector<int16_t> PicketFenceGenerator::GenerateSignal(size_t numFrames, size
         auto pulseSignal = GetBaselineSignal(frames);
         for (size_t f = 0; f < frames; ++f)
         {
-            pulseSignal[f] += pulseLevel + config_.pedestal;
+            pulseSignal[f] += pulseLevel;
         }
         return pulseSignal;
     };

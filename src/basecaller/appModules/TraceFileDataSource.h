@@ -36,6 +36,8 @@
 
 #include <common/BatchDataSource.h>
 
+#include <dataTypes/configs/SourceConfig.h>
+
 namespace PacBio {
 namespace Application {
 
@@ -43,26 +45,40 @@ class TraceFileDataSource : public Mongo::BatchDataSource
 {
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
-    TraceFileDataSource(DataSourceBase::Configuration config,
-                        std::string file)
-        : TraceFileDataSource(std::move(config), file, 0, 0, false, 0, 0)
+    TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
+                        const Mongo::Data::TraceReanalysis& trcCfg)
+        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, 0, 0, false, 0, 0)
     {
         // Need to update the layouts_ member to know how to extract the
         // required info from the tracefile
         PBLOG_WARN << "TraceFile Re-Analysis not yet fully supported. "
                    << "Original ZMW poolIDs are not yet preserved";
+
+        reanalysis_ = true;
     }
 
     // Performance testing ctor.  Data dimensions are specified and data
     // will be replicated as necessary.  Caching and preloading options are
     // also provided, to help remove file IO as a bottleneck.
+    TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
+                        const Mongo::Data::TraceReplication& trcCfg)
+        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
+                              trcCfg.numZmwLanes, trcCfg.cache,
+                              trcCfg.preloadChunks, trcCfg.maxQueueSize,
+                              trcCfg.inputType)
+    {}
+
+private:
+    // Low level Ctor that actually does the work.  The other ctors
+    // provide a simpler interface but delegate to this
     TraceFileDataSource(DataSourceBase::Configuration cfg,
                         std::string file,
                         uint32_t frames,
-                        uint32_t numZmw,
+                        uint32_t numZmwLanes,
                         bool cache,
                         size_t preloadChunks = 0,
-                        size_t maxQueueSize = 0);
+                        size_t maxQueueSize = 0,
+                        Mongo::Data::TraceInputType type = Mongo::Data::TraceInputType::Natural);
 
 public:
 
@@ -76,6 +92,8 @@ public:
     {
         return layouts_;
     }
+
+    LaneSelector SelectedLanesWithinROI(const std::vector<std::vector<int>>& /* rectangles */) const override;
 
     size_t BlockWidth() const { return GetConfig().requestedLayout.BlockWidth(); }
     size_t BlockLen() const { return GetConfig().requestedLayout.NumFrames(); }
@@ -144,6 +162,13 @@ private:
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
+
+    // Reanalysis isn't really supported yet, this is
+    // potentially a temporary flag.  Just used as a guard
+    // so that features that require special reanalysis handling
+    // can warn/error if they are turned on before reanalysis
+    // support is formally added.
+    bool reanalysis_ = false;
 
     std::map<uint32_t, DataSource::PacketLayout> layouts_;
 };
