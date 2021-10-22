@@ -26,16 +26,21 @@
 #ifndef BAZIO_FILE_RUN_LENGTH_ENC_H
 #define BAZIO_FILE_RUN_LENGTH_ENC_H
 
+#include <functional>
+
 #include <json/json.h>
 
 namespace PacBio::BazIO
 {
 
-Json::Value RunLengthEncLUTJson(const std::vector<std::pair<uint32_t, uint32_t>>& input);
+// Converts the run length specified in the JSON to hex.
 Json::Value RunLengthEncLUTHexJson(const std::vector<std::pair<uint32_t, uint32_t>>& input);
 
+// Converts the sequence into a JSON array consisting of elements starting number and run length.
 template <typename TInput>
-std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(const std::vector<TInput>& input)
+std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(const std::vector<TInput>& input,
+                                                           const std::function<bool(uint32_t,uint32_t)>& cmp
+                                                           = [](uint32_t val1, uint32_t val2) { return val1 == val2 + 1; })
 {
     std::vector <std::pair<uint32_t, uint32_t>> rleLut;
     if (!input.empty())
@@ -45,7 +50,7 @@ std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(const std::vector<TIn
         uint32_t currentCount = 1;
         for (size_t i = 1; i < input.size(); ++i)
         {
-            if (input[i] == currentNumber + 1)
+            if (cmp(input[i], currentNumber))
             {
                 currentNumber = input[i];
                 ++currentCount;
@@ -64,7 +69,20 @@ std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(const std::vector<TIn
     return rleLut;
 }
 
-std::vector<uint32_t> RunLengthDecLUTHexJson(const Json::Value& node);
+// Encodes a run with the same value.
+template <typename TInput>
+std::vector<std::pair<uint32_t, uint32_t>> RunLengthSameEncLUT(const std::vector<TInput>& input)
+{
+    return RunLengthEncLUT(input, [](uint32_t val1, uint32_t val2) { return val1 == val2; });
+}
+
+// Decodes the RLE in JSON format with the start number specified in hex.
+std::vector<uint32_t> RunLengthDecLUTHexJson(const Json::Value& node,
+                                             const std::function<uint32_t(uint32_t,uint32_t)>& ins
+                                             = [](uint32_t val, uint32_t rl) { return val + rl; });
+
+// Decodes a run with the same value.
+std::vector<uint32_t> RunLengthSameDecLUTHexJson(const Json::Value& node);
 
 } // PacBio::BazIO
 

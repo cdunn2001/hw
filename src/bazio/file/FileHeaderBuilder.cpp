@@ -142,7 +142,7 @@ std::string FileHeaderBuilder::CreateJSON()
     AddMetricsToJson(header, hFMetricFields_, hFMetricFrames_, MetricFrequency::HIGH);
     AddPacketsToJson(header);
 
-    header["ZMW_INFO"] = zmwInfo_.ToJson();
+    header[ZmwInfo::JsonKey::ZmwInfo] = zmwInfo_.ToJson();
 
     if (!zmwNumberRejects_.empty())
         header["ZMW_NUMBER_REJECTS_LUT"] = RunLengthEncLUTHexJson(RunLengthEncLUT(zmwNumberRejects_));

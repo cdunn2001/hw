@@ -88,17 +88,16 @@ public:
         std::vector<uint16_t> zmwY;
         for (size_t i = 0; i < zmwNumbers.size(); i++)
         {
-            zmwX.push_back(zmwNumbers[i] & 0x0000FFFF);
-            zmwY.push_back(zmwNumbers[i] & 0xFFFF0000);
+            zmwX.push_back(zmwNumbers[i] & 0xFFFF0000);
+            zmwY.push_back(zmwNumbers[i] & 0x0000FFFF);
         }
         std::iota(zmwX.begin(), zmwX.end(), 0);
         BazIO::ZmwInfo zmwInfo(BazIO::ZmwInfo::Data
-                               {    zmwNumbers,
+                                (   zmwNumbers,
                                     std::vector<uint8_t>(zmwNumbers.size(), 1),
                                     zmwX,
                                     zmwY,
-                    std::vector<uint32_t>(zmwNumbers.size(), 0)
-                               });
+                                    std::vector<uint32_t>(zmwNumbers.size(), 0)));
         return zmwInfo;
     }
 

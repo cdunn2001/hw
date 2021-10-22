@@ -50,11 +50,11 @@ ZmwInfo::ZmwInfo(const Data& zmwData,
 
 void ZmwInfo::FromJson(const Json::Value& zmwInfo)
 {
-    zmwData_.holeNumbers = ParseJsonRLEHexArray(zmwInfo, "ZMW_NUMBER_LUT");
-    zmwData_.holeFeatures = ParseJsonRLEHexArray(zmwInfo, "ZMW_UNIT_FEATURE_LUT");
-    std::vector<uint32_t> holeTypes = ParseJsonRLEHexArray(zmwInfo, "ZMW_TYPE_LUT");
-    std::vector<uint32_t> holeX = ParseJsonRLEHexArray(zmwInfo["ZMW_XY_LUT"], "X");
-    std::vector<uint32_t> holeY = ParseJsonRLEHexArray(zmwInfo["ZMW_XY_LUT"], "Y");
+    zmwData_.holeNumbers = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwNumberLut);
+    zmwData_.holeFeatures = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwUnitFeatureLut);
+    std::vector<uint32_t> holeTypes = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwTypeLut);
+    std::vector<uint32_t> holeX = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwX);
+    std::vector<uint32_t> holeY = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwY);
 
     zmwData_.holeTypes.resize(NumZmws());
     zmwData_.holeX.resize(NumZmws());
@@ -67,19 +67,19 @@ void ZmwInfo::FromJson(const Json::Value& zmwInfo)
         zmwNumbersToIndex_[zmwData_.holeNumbers[i]] = i;
     }
 
-    holeTypesMap_ = ParseJsonMap(zmwInfo, "ZMW_TYPE_MAP");
-    holeFeaturesMap_ = ParseJsonMap(zmwInfo, "ZMW_UNIT_FEATURE_MAP");
+    holeTypesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwTypeMap);
+    holeFeaturesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwUnitFeatureMap);
 }
 
 Json::Value ZmwInfo::ToJson() const
 {
     Json::Value zmwInfo;
-    zmwInfo["ZMW_NUMBER_LUT"] = ZmwNumberLut();
-    zmwInfo["ZMW_TYPE_LUT"] = ZmwTypeLut();
-    zmwInfo["ZMW_XY_LUT"] = ZmwXYLut();
-    zmwInfo["ZMW_UNIT_FEATURE_LUT"] = ZmwUnitFeatureLut();
-    zmwInfo["ZMW_TYPE_MAP"] = ZmwHoleTypeMap();
-    zmwInfo["ZMW_UNIT_FEATURE_MAP"] = ZmwFeatureTypeMap();
+    zmwInfo[JsonKey::ZmwNumberLut] = ZmwNumberLut();
+    zmwInfo[JsonKey::ZmwTypeLut] = ZmwTypeLut();
+    zmwInfo[JsonKey::ZmwXYLut] = ZmwXYLut();
+    zmwInfo[JsonKey::ZmwUnitFeatureLut] = ZmwUnitFeatureLut();
+    zmwInfo[JsonKey::ZmwTypeMap] = ZmwHoleTypeMap();
+    zmwInfo[JsonKey::ZmwUnitFeatureMap] = ZmwFeatureTypeMap();
     return zmwInfo;
 }
 
@@ -96,6 +96,10 @@ Json::Value ZmwInfo::ZmwTypeLut() const
 Json::Value ZmwInfo::ZmwXYLut() const
 {
     Json::Value holeXY;
+    // TODO: Depending upon how the hole numbers are specified and if they are in
+    // readout order than run length encoding of the X-coordinate (major dimension)
+    // is wasteful since the Y-coordinate will be increasing and instead the X-coordinate
+    // should be encoded using runs consisting of the same value.
     holeXY["X"] = RunLengthEncLUTHexJson(RunLengthEncLUT(zmwData_.holeX));
     holeXY["Y"] = RunLengthEncLUTHexJson(RunLengthEncLUT(zmwData_.holeY));
     return holeXY;

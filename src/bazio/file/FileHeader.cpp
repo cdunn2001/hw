@@ -183,10 +183,10 @@ void FileHeader::Init(const char* header, const size_t length)
     }
 
     // Parse ZMW INFO
-    if (headerValue.isMember("ZMW_INFO")
-        && headerValue["ZMW_INFO"].isObject())
+    if (headerValue.isMember(ZmwInfo::JsonKey::ZmwInfo)
+        && headerValue[ZmwInfo::JsonKey::ZmwInfo].isObject())
     {
-        zmwInfo_.FromJson(headerValue["ZMW_INFO"]);
+        zmwInfo_.FromJson(headerValue[ZmwInfo::JsonKey::ZmwInfo]);
     }
 
     // Parse masked ZMW NUMBERs

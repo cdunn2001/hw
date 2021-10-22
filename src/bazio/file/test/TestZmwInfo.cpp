@@ -38,14 +38,12 @@ ZmwInfo MakeZmwInfo(size_t numZmws, uint8_t setHoleType, uint32_t setHoleFeature
     std::iota(zmwNumbers.begin(), zmwNumbers.end(), 0);
     std::iota(zmwX.begin(), zmwX.end(), 0);
 
-    ZmwInfo zi(ZmwInfo::Data{ zmwNumbers,
-                              std::vector<uint8_t>(zmwNumbers.size(), setHoleType),
-                              zmwX,
-                              zmwX,
-                              std::vector<uint32_t>(zmwNumbers.size(), setHoleFeature)
-    });
+    return ZmwInfo(ZmwInfo::Data(zmwNumbers,
+                                           std::vector<uint8_t>(zmwNumbers.size(), setHoleType),
+                                           zmwX,
+                                           zmwX,
+                                           std::vector<uint32_t>(zmwNumbers.size(), setHoleFeature)));
 
-    return zi;
 }
 
 TEST(ZmwInfo, Construct)
@@ -62,11 +60,13 @@ TEST(ZmwInfo, Construct)
     for (size_t i = 0; i < hns.size(); i++)
         EXPECT_EQ(i, hns[i]);
 
-   const auto& zmwXY = zi.HoleXY();
-   for (size_t i = 0; i < zmwXY.size(); i++)
+   const auto& zmwX = zi.HoleX();
+   const auto& zmwY = zi.HoleY();
+   EXPECT_TRUE(zmwX.size() == zmwY.size());
+   for (size_t i = 0; i < zmwX.size(); i++)
    {
-       EXPECT_EQ(i, zmwXY[i].first);
-       EXPECT_EQ(i, zmwXY[i].second);
+       EXPECT_EQ(i, zmwX[i]);
+       EXPECT_EQ(i, zmwY[i]);
    }
 
    const auto& zmwTypes = zi.HoleTypes();
@@ -86,6 +86,20 @@ TEST(ZmwInfo, Deserialize)
 
     ZmwInfo zi1 = MakeZmwInfo(numZmws, setHoleType, setHoleFeature);
 
+    const auto& json = zi1.ToJson();
+    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwNumberLut)
+                && json[ZmwInfo::JsonKey::ZmwNumberLut].isArray());
+    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwTypeLut)
+                && json[ZmwInfo::JsonKey::ZmwTypeLut].isArray());
+    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwXYLut)
+                && json[ZmwInfo::JsonKey::ZmwXYLut].isObject());
+    EXPECT_TRUE(json[ZmwInfo::JsonKey::ZmwXYLut].isMember(ZmwInfo::JsonKey::ZmwX)
+                && json[ZmwInfo::JsonKey::ZmwXYLut][ZmwInfo::JsonKey::ZmwX].isArray());
+    EXPECT_TRUE(json[ZmwInfo::JsonKey::ZmwXYLut].isMember(ZmwInfo::JsonKey::ZmwY)
+                && json[ZmwInfo::JsonKey::ZmwXYLut][ZmwInfo::JsonKey::ZmwY].isArray());
+    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwUnitFeatureLut)
+                && json[ZmwInfo::JsonKey::ZmwUnitFeatureLut].isArray());
+
     ZmwInfo zi2;
     zi2.FromJson(zi1.ToJson());
 
@@ -93,10 +107,12 @@ TEST(ZmwInfo, Deserialize)
     for (size_t i = 0; i < hns.size(); i++)
         EXPECT_EQ(i, hns[i]);
 
-    const auto& zmwXY = zi2.HoleXY();
-    for (size_t i = 0; i < zmwXY.size(); i++)
+    const auto& zmwX = zi2.HoleX();
+    const auto& zmwY = zi2.HoleY();
+    EXPECT_TRUE(zmwX.size() == zmwY.size());
+    for (size_t i = 0; i < zmwX.size(); i++)
     {
-        EXPECT_EQ(i, zmwXY[i].first);
-        EXPECT_EQ(i, zmwXY[i].second);
+        EXPECT_EQ(i, zmwX[i]);
+        EXPECT_EQ(i, zmwY[i]);
     }
 }

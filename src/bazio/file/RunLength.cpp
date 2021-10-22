@@ -30,19 +30,6 @@
 namespace PacBio::BazIO
 {
 
-Json::Value RunLengthEncLUTJson(const std::vector <std::pair<uint32_t, uint32_t>>& input)
-{
-    Json::Value lut;
-    for (const auto& p : input)
-    {
-        Json::Value singleLut;
-        singleLut.append(p.first);
-        singleLut.append(p.second);
-        lut.append(std::move(singleLut));
-    }
-    return lut;
-}
-
 Json::Value RunLengthEncLUTHexJson(const std::vector <std::pair<uint32_t, uint32_t>>& input)
 {
     Json::Value lut;
@@ -58,7 +45,7 @@ Json::Value RunLengthEncLUTHexJson(const std::vector <std::pair<uint32_t, uint32
     return lut;
 }
 
-std::vector<uint32_t> RunLengthDecLUTHexJson(const Json::Value& node)
+std::vector<uint32_t> RunLengthDecLUTHexJson(const Json::Value& node,  const std::function<uint32_t(uint32_t,uint32_t)>& ins)
 {
     std::vector<uint32_t> data;
     if (node.isArray())
@@ -70,11 +57,16 @@ std::vector<uint32_t> RunLengthDecLUTHexJson(const Json::Value& node)
             uint32_t runLength = singleZmw[1].asUInt();
             for (uint32_t j = 0; j < runLength; ++j)
             {
-                data.emplace_back(start + j);
+                data.emplace_back(ins(start,j));
             }
         }
     }
     return data;
+}
+
+std::vector<uint32_t> RunLengthSameDecLUTHexJson(const Json::Value& node)
+{
+    return RunLengthDecLUTHexJson(node, [](uint32_t val, uint32_t rl) { return val; });
 }
 
 } // PacBio::BazIO

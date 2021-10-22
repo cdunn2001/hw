@@ -31,6 +31,7 @@
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
 #include <basecaller/traceAnalysis/AnalysisProfiler.h>
+#include <bazio/file/ZmwInfo.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
@@ -62,6 +63,7 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Acquisition::DataSource;
 using namespace PacBio::Sensor;
+using namespace PacBio::BazIO;
 
 using namespace PacBio::Application;
 using namespace PacBio::Configuration;
@@ -594,12 +596,25 @@ private:
             transform(props.begin(), props.end(), back_inserter(unitY),
                       [](DataSourceBase::UnitCellProperties x){ return static_cast<uint16_t>(x.y); });
 
+            // NOTE: Hole type should eventually be a property returned by source.GetUnitCellProperties().
+            // For now, we mark all the holes as the canonical Sequencing=1 hole type.
+            constexpr uint8_t sequencingUnitType = 1;
+            std::vector<uint8_t> unitTypes(unitFeatures.size(), sequencingUnitType);
+
+            // NOTE: These are manually specified here but should be somehow returned from the
+            // DataSourceRunner.
+            std::map<std::string,uint32_t> unitTypesMap{ { "Sequencing", 1 } };
+            std::map<std::string,uint32_t> unitFeaturesMap{ {"StandardZMW", 0},
+                                                            {"NonStandardZMW", 1UL << 0},
+                                                            {"NonSequencing", 1UL << 1 },
+                                                            {"Sequencing", 0 | 1UL << 0 } };
+
+            ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures),
+                            unitTypesMap, unitFeaturesMap);
+
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
-                                                   source.UnitCellIds(),
-                                                   unitX,
-                                                   unitY,
-                                                   unitFeatures,
+                                                   zmwInfo,
                                                    poolDims,
                                                    config_,
                                                    movieConfig_);
