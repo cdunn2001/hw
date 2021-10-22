@@ -131,7 +131,7 @@ public:
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(MakeUnion(signalMax_)[zmw]))))
                 .SignalM2(MakeUnion(signalM2_)[zmw])
                 .Label(manager.Nucleotide(MakeUnion(label_)[zmw]))
-                .IsReject(keep);
+                .IsReject(!keep);
 
             return pls;
         }
