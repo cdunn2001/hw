@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2020-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -39,23 +39,44 @@ namespace Application {
 
 namespace {
 
+/// Helper function, as several times we'll need to do something
+/// like convert frames to chunks, while rouding up to the nearest
+/// integral chunk boundary
+///
+/// \param numerator
+/// \param denominator
+/// \return numerator/denominotor rounded up to the nearest integer
 size_t DivideWithCeil(size_t numerator, size_t denominator)
 {
     return (numerator + denominator - 1) / denominator;
 }
 
-// 0 frames requested is a special value meaning use exactly as many frames as
-// the tracefile contains (rounding up to an even chunk size)
+/// Computes the number of chunks we intend to read from the tracefile.
+/// Nominally this is just the minimum of the frames requested compared to the
+/// frames in the file, though this is rounded up to the nearest chunk boundary
+///
+/// \param numTraceFrames   The number of frames actually stored in the trace file
+/// \param blockLen         The number of frames per chunk
+/// \param framesRequested  The number of frames desired by external code.  A value
+///                         of 0 means all frames present in the tracefile
 size_t ComputeTraceChunks(size_t numTraceFrames, size_t blockLen, size_t framesRequested)
 {
     auto defaultVal = DivideWithCeil(numTraceFrames, blockLen);
     auto chunksRequested = DivideWithCeil(framesRequested, blockLen);
-    if (chunksRequested != 0 && chunksRequested < defaultVal)
+    if (framesRequested != 0 && chunksRequested < defaultVal)
         return chunksRequested;
     else
         return defaultVal;
 }
 
+/// \param requestedType  The data type requested by the application
+///                       (int16_t or uint8_t or don't care)
+/// \param storageType    The actual storage type used in the tracefile
+/// \return The actual layout encoding format to use.  This generally
+///         is just the requested type, with the caveat that the "Natural"
+///         request translates to "whatever is in the trace file", and
+///         if the settings may result in an int16_t to uint8_t data
+///         truncation, a warning is issued
 PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType requestedType,
                                              TraceFile::TraceDataType storageType)
 {
@@ -106,7 +127,7 @@ PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType
 ///                   lanes present in the traceFile, modulo any whitelist specification
 std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
                                          const std::vector<uint32_t>& whitelist,
-                                         size_t maxLanes)
+                                         size_t maxLanes = 0)
 {
     if (whitelist.empty())
     {
@@ -139,7 +160,58 @@ std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
     return ret;
 }
 
+/// Generates a packet layouts that preserve the original groupings stored
+/// in the tracefile.  This means that things will be "sparse", where most batches
+/// are small compared to the nominally requested lanesPerPook, or even not present
+/// entirely
+///
+/// \param selectedLanes The lane indexes we wish to read from the tracefile
+/// \param traceFile     A handle for the actual tracefile, which will be
+///                      examined for things like the batchIds
+std::map<uint32_t, size_t> ComputeSparsePools(const std::vector<uint32_t>& selectedLanes,
+                                              const TraceFile::TraceFile& traceFile)
+{
+    const auto& batchIds = traceFile.Traces().AnalysisBatch();
+    std::map<uint32_t, size_t> ret;
+    for (const auto lane : selectedLanes)
+    {
+        // There is a genuine programming bug if this is violated
+        assert((lane+1)*laneSize <= batchIds.size());
+        const auto zmw = lane * laneSize;
+        const auto batchId = batchIds.at(zmw);
+        if (!std::all_of(batchIds.begin() + zmw,
+                         batchIds.begin() + zmw + laneSize,
+                         [&](auto val) { return val == batchId; }))
+        {
+            throw PBException("Trace file has multiple batchIDs per lane");
+        }
+        ret[batchId]++;
+    }
+    return ret;
 }
+
+/// Generates a "dense" packet layout map, where all pools have
+/// the requested lanes per pool, save perhaps a runt at the end
+std::map<uint32_t, size_t> ComputeDensePools(size_t numLanes,
+                                             size_t requestedLanesPerPool)
+{
+    const auto numFullPools = numLanes / requestedLanesPerPool;
+    std::map<uint32_t, size_t> widths;
+
+    for (size_t i = 0; i < numFullPools; ++i)
+    {
+        widths[i] = requestedLanesPerPool;
+    }
+    size_t stubBlocks = numLanes % requestedLanesPerPool;
+    if (stubBlocks != 0)
+    {
+        widths[numFullPools] = stubBlocks;
+    }
+
+    return widths;
+}
+
+} // anonymous
 
 TraceFileDataSource::TraceFileDataSource(
         DataSourceBase::Configuration cfg,
@@ -149,6 +221,7 @@ TraceFileDataSource::TraceFileDataSource(
         bool cache,
         size_t preloadChunks,
         size_t maxQueueSize,
+        Mode mode,
         std::vector<uint32_t> zmwWhitelist,
         Mongo::Data::TraceInputType type)
     : BatchDataSource(std::move(cfg))
@@ -164,6 +237,7 @@ TraceFileDataSource::TraceFileDataSource(
     , maxQueueSize_(maxQueueSize == 0 ? preloadChunks + 1 : maxQueueSize)
     , cache_(cache)
     , currChunk_(0, BlockLen())
+    , mode_(mode)
 {
     const auto& config = GetConfig();
     if (config.darkFrame != nullptr)
@@ -173,12 +247,8 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.decimationMask != nullptr)
         throw PBException("Decimation mask not currently supported for trace files");
 
-    auto storageType = traceFile_.Traces().StorageType();
-
-    // BENTODO tweak this for re-analysis
-    const auto layoutType = PacketLayout::BLOCK_LAYOUT_DENSE;
+    const auto storageType = traceFile_.Traces().StorageType();
     const auto encoding = ComputeEncoding(type, storageType);
-
     bytesPerValue_ = [&]()
     {
         switch(encoding)
@@ -195,34 +265,38 @@ TraceFileDataSource::TraceFileDataSource(
     if (config.requestedLayout.BlockWidth() != laneSize)
         throw PBException("Unexpected lane width requested");
 
-    const auto numFullPools = numZmwLanes_ / config.requestedLayout.NumBlocks();
-    PacketLayout regLayout(layoutType,
-                           encoding,
-                           {config.requestedLayout.NumBlocks(),
-                            config.requestedLayout.NumFrames(),
-                            config.requestedLayout.BlockWidth()});
-    for (size_t i = 0; i < numFullPools; ++i)
+    bool sparse = mode_ == Mode::Reanalysis;
+    if (sparse &&!traceFile_.Traces().HasAnalysisBatch())
     {
-        layouts_[i] = regLayout;
+        PBLOG_WARN << "Running in ReAnalysis mode with a tracefile that does not "
+                   << "have an AnalysisBatch dataset, is this a Kestrel tracefile? ";
+        PBLOG_WARN << "Beware: results from this run will be dependant upon how many "
+                   << "ZMW are selected for analysis";
+        sparse = false;
     }
-    size_t stubBlocks = numZmwLanes_ % config.requestedLayout.NumBlocks();
-    if (stubBlocks != 0)
+
+    const auto layoutType = sparse
+        ? PacketLayout::BLOCK_LAYOUT_SPARSE
+        : PacketLayout::BLOCK_LAYOUT_DENSE;
+    const auto& widths = sparse
+        ? ComputeSparsePools(selectedTraceLanes_, traceFile_)
+        : ComputeDensePools(numZmwLanes_, config.requestedLayout.NumBlocks());
+    for (const auto& kv : widths)
     {
-        PacketLayout stub(layoutType,
-                          encoding,
-                          {stubBlocks,
-                           config.requestedLayout.NumFrames(),
-                           config.requestedLayout.BlockWidth()});
-        layouts_[numFullPools] = stub;
+        layouts_[kv.first] = PacketLayout(layoutType,
+                                          encoding,
+                                          {kv.second,
+                                           config.requestedLayout.NumFrames(),
+                                           config.requestedLayout.BlockWidth()});
     }
 
     if (cache_)
     {
         // Cache requested portion of trace file into memory.
-        traceDataCache_.resize(boost::extents[NumTraceChunks()][selectedTraceLanes_.size()][BlockWidth() * BlockLen() * bytesPerValue_]);
+        traceDataCache_.resize(boost::extents[numTraceChunks_][selectedTraceLanes_.size()][BlockWidth() * BlockLen() * bytesPerValue_]);
         for (size_t cacheIdx = 0; cacheIdx < selectedTraceLanes_.size(); ++cacheIdx)
         {
-            for (size_t traceChunk = 0; traceChunk < NumTraceChunks(); traceChunk++)
+            for (size_t traceChunk = 0; traceChunk < numTraceChunks_; traceChunk++)
             {
                 auto* ptr = traceDataCache_[traceChunk][cacheIdx].origin();
                 switch(encoding)
@@ -253,35 +327,35 @@ void TraceFileDataSource::ContinueProcessing()
 {
     if (ChunksReady() >= maxQueueSize_) return;
 
-    uint32_t traceStartZmwLane = currZmw_ / BlockWidth();
-    uint32_t wrappedChunkIndex = chunkIndex_ % NumTraceChunks();
 
-    const auto& currLayout = layouts_[batchIndex_];
-    const auto startFrame = chunkIndex_ * BlockLen();
-    SensorPacket batchData(currLayout, batchIndex_, currZmw_, startFrame, *GetConfig().allocator);
-
-    for (size_t lane = 0; lane < currLayout.NumBlocks(); lane++)
+    size_t currZmw = 0;
+    uint32_t wrappedChunkIndex = chunkIndex_ % numTraceChunks_;
+    for (const auto& kv : layouts_)
     {
-        auto block = batchData.BlockData(lane);
-        assert(block.Count() == BlockWidth()*BlockLen()*bytesPerValue_);
+        const auto batchId = kv.first;
+        const auto& currLayout = kv.second;
 
-        uint32_t wrappedLane = (traceStartZmwLane + lane) % selectedTraceLanes_.size();
-        PopulateBlock(wrappedLane, wrappedChunkIndex, block.Data());
+        uint32_t traceStartZmwLane = currZmw / BlockWidth();
+        const auto startFrame = chunkIndex_ * BlockLen();
+        SensorPacket batchData(currLayout, batchId, currZmw, startFrame, *GetConfig().allocator);
+
+        for (size_t lane = 0; lane < currLayout.NumBlocks(); lane++)
+        {
+            auto block = batchData.BlockData(lane);
+            assert(block.Count() == BlockWidth()*BlockLen()*bytesPerValue_);
+
+            uint32_t wrappedLane = (traceStartZmwLane + lane) % selectedTraceLanes_.size();
+            PopulateBlock(wrappedLane, wrappedChunkIndex, block.Data());
+        }
+
+        currChunk_.AddPacket(std::move(batchData));
+        currZmw += currLayout.NumZmw();
     }
 
-    currChunk_.AddPacket(std::move(batchData));
-
-    batchIndex_++;
-    currZmw_ += currLayout.NumZmw();
-    if (currZmw_ == NumZmw())
-    {
-        auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), layouts_.size());
-        std::swap(chunk, currChunk_);
-        this->PushChunk(std::move(chunk));
-        batchIndex_ = 0;
-        currZmw_ = 0;
-        chunkIndex_++;
-    }
+    auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), layouts_.size());
+    std::swap(chunk, currChunk_);
+    this->PushChunk(std::move(chunk));
+    chunkIndex_++;
 
     if (chunkIndex_ == NumChunks())
         this->SetDone();
@@ -289,15 +363,40 @@ void TraceFileDataSource::ContinueProcessing()
 
 std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
 {
-    std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * BlockWidth());
-    std::iota(unitCellNumbers.begin(), unitCellNumbers.end(), 0);
+
+    if (mode_ == Mode::Replication)
+    {
+        std::vector<uint32_t> unitCellNumbers(numZmwLanes_ * BlockWidth());
+        std::iota(unitCellNumbers.begin(), unitCellNumbers.end(), 0);
+        return unitCellNumbers;
+    }
+
+    assert(numZmwLanes_ == selectedTraceLanes_.size());
+    assert(mode_ == Mode::Reanalysis);
+
+    const auto& fullHoleNumbers = traceFile_.Traces().HoleNumber();
+    std::vector<uint32_t> unitCellNumbers;
+    unitCellNumbers.reserve(numZmwLanes_ * BlockWidth());
+
+    // For each selected lane from the tracefile, grab the corresponding
+    // hole numbers stored there
+    for (auto lane : selectedTraceLanes_)
+    {
+        assert((lane+1) * laneSize <= fullHoleNumbers.size());
+        auto startItr = fullHoleNumbers.begin() + lane*laneSize;
+        auto endItr = startItr + laneSize;
+        unitCellNumbers.insert(unitCellNumbers.end(), startItr, endItr);
+    }
+
+    assert(unitCellNumbers.size() == NumZmw());
     return unitCellNumbers;
 }
 
 std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCellProperties() const
 {
     std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
-    boost::multi_array<int16_t,2> holexy = traceFile_.Traces().HoleXY();
+    const auto& holexy = traceFile_.Traces().HoleXY();
+    const auto& holeType = traceFile_.Traces().HoleType();
     for(uint32_t i=0; i < features.size(); i++)
     {
         // i is ZMW position in chunk.
@@ -309,16 +408,23 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         const auto chunkLane = i / BlockWidth();
         const auto offset = i % BlockWidth();
         const auto traceLane = chunkLane % selectedTraceLanes_.size();
+        const auto wrapCount = chunkLane / selectedTraceLanes_.size();
         const auto traceZmw = selectedTraceLanes_[traceLane] * BlockWidth() + offset; // position in trace file
 
         if (traceZmw >= holexy.shape()[0])
         {
             throw PBException("internally calculated traceZmw position is larger than trace file dimension");
         }
-        features[i].flags = 0; // fixme
+        features[i].flags = holeType[traceZmw];
         features[i].x = holexy[traceZmw][0];
         features[i].y = holexy[traceZmw][1];
-        // features[i].holeNumber = holeNumber[traceZmw]; TODO
+
+        // Keep our x/y coordinates unique if we had to replicate the trace data
+        if (wrapCount > 0)
+        {
+            features[i].x += wrapCount*numTraceZmws_;
+            features[i].y += wrapCount*numTraceZmws_;
+        }
     }
     return features;
 }
@@ -332,8 +438,7 @@ void TraceFileDataSource::PreloadInputQueue(size_t chunks)
         PBLOG_INFO << "Preloading input data queue with " + std::to_string(numPreload) + " chunks";
         while (chunkIndex_ < numPreload)
         {
-            if (batchIndex_ == 0)
-                PBLOG_INFO << "Preloading chunk " << chunkIndex_;
+            PBLOG_INFO << "Preloading chunk " << chunkIndex_;
             ContinueProcessing();
         }
         PBLOG_INFO << "Done preloading input queue.";
@@ -374,8 +479,8 @@ void TraceFileDataSource::PopulateBlock(size_t cacheIdx, size_t traceChunk, uint
 template <typename T>
 void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceChunk, T* data)
 {
-    size_t nZmwsToRead = std::min(BlockWidth(), NumTraceZmws() - (traceLane*BlockWidth()));
-    size_t nFramesToRead = std::min(BlockLen(), NumTraceFrames() - (traceChunk*BlockLen()));
+    size_t nZmwsToRead = std::min(BlockWidth(), numTraceZmws_ - (traceLane*BlockWidth()));
+    size_t nFramesToRead = std::min(BlockLen(), numTraceFrames_ - (traceChunk*BlockLen()));
     using range = boost::multi_array_types::extent_range;
     const range zmwRange(traceLane*BlockWidth(), (traceLane*BlockWidth()) + nZmwsToRead);
     const range frameRange(traceChunk*BlockLen(), (traceChunk*BlockLen()) + nFramesToRead);
@@ -402,6 +507,17 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
     }
 }
 
+// I wouldn't be surprised if this gets overhauled in the future.  For a real sensor acquisition, the ROI
+// is generaly a list of rectangles, specified in the chips x/y coordinates.  That's very difficult
+// to imite here, since for trace replication the original x/y coordinates don't mean anything, and even
+// for re-analysis it would be hard to specify rectangles that are a subset of the original trace collection
+// roi.
+//
+// So for now:
+// * TraceReplication accepts a list of vectors with either one or two elements.  The first element is a ZMW *index*
+//   (that is 0-N), and the optional second index is a count to select.
+// * TraceReplication acceps a list of vectors only with a single element.  That single element is to be a ZMW
+//   hole number.  Asking for hole numbers not present in the tracefile will result in a warning.
 TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(const std::vector<std::vector<int>>& vec) const
 {
     if (vec.empty())
@@ -410,36 +526,52 @@ TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(co
         return LaneSelector(dummy);
     }
 
-    if (reanalysis_)
-        throw PBException("Trace ReAnalysis does not currently support selecting an ROI for trace saving");
-
-    std::set<LaneIndex> selected;
-    for (const auto& range : vec)
+    if (mode_ == Mode::Replication)
     {
-        if (range.size() == 0 || range.size() > 2)
-            throw PBException("Unexpected format for TraceFileDataSource ROI.  "
-                              "The inner most vector should be a single element "
-                              "representing a ZMW, or two values representing a start ZMW and count");
-
-        // always going to enter at least one lane, corresponding to the first element.
-        // This first ZMW may be in the middle of a lane, but we'll add the whole lane
-        // anyway
-        selected.insert(range[0]/laneSize);
-        if (range.size() == 2)
+        std::set<LaneIndex> selected;
+        for (const auto& range : vec)
         {
-            // We've already addd the first lane, now we use some intentional
-            // integer arithmetic to get the rest of the lanes, even if the ROI
-            // specified doesn't line up with lane boundaries.
-            int laneStart = (range[0] + laneSize) / laneSize;
-            int laneEnd = (range[1] - 1) / laneSize;
-            for (int i = laneStart; i <= laneEnd; ++i)
+            if (range.size() == 0 || range.size() > 2)
+                throw PBException("Unexpected format for TraceReplication ROI.  "
+                                  "The inner most vector should be a single element "
+                                  "representing a ZMW, or two values representing a start ZMW and count");
+
+            // always going to enter at least one lane, corresponding to the first element.
+            // This first ZMW may be in the middle of a lane, but we'll add the whole lane
+            // anyway
+            selected.insert(range[0]/laneSize);
+            if (range.size() == 2)
             {
-                selected.insert(i);
+                // We've already addd the first lane, now we use some intentional
+                // integer arithmetic to get the rest of the lanes, even if the ROI
+                // specified doesn't line up with lane boundaries.
+                int laneStart = (range[0] + laneSize) / laneSize;
+                int laneEnd = (range[0] + range[1] - 1) / laneSize;
+                for (int i = laneStart; i <= laneEnd; ++i)
+                {
+                    selected.insert(i);
+                }
             }
         }
+        std::vector<LaneIndex> retValues(selected.begin(), selected.end());
+        return LaneSelector(retValues);
     }
-    std::vector<LaneIndex> retValues(selected.begin(), selected.end());
-    return LaneSelector(retValues);
+    else if (mode_ == Mode::Reanalysis)
+    {
+        std::vector<uint32_t> whitelist;
+        whitelist.reserve(vec.size());
+        for (const auto& inner : vec)
+        {
+            if (inner.size() != 1)
+                throw PBException("Unexpected format for TraceReanalysis ROI.  "
+                                  "The inner most vector should be a single element "
+                                  "representing a ZMW hole number");
+            whitelist.push_back(inner[0]);
+        }
+        const auto& lanes = SelectedTraceLanes(traceFile_, whitelist);
+        return LaneSelector(lanes);
+    }
+    throw PBException("Unexpected TraceFileDataSource mode");
 }
 
 

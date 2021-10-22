@@ -43,22 +43,32 @@ namespace Application {
 
 class TraceFileDataSource : public Mongo::BatchDataSource
 {
+    // Keeps track of whether we are in re-analysis mode
+    // or not.  The main difference is that if we are
+    // in trace replication mode, some things like hole
+    // numbers need to be spoofed, because the tracefile
+    // itself contains fewer than we need, and they need
+    // to remain unique.  Also if we are in reanalysis
+    // mode, then our data layouts we provide will match
+    // the original analysis groupings that were saved in
+    // the tracefile
+    enum class Mode
+    {
+        Reanalysis,
+        Replication
+    };
+
 public:
     // Reanalysis ctor.  We'll pull data dimensions from the trace file
     TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
                         const Mongo::Data::TraceReanalysis& trcCfg)
-        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile,
+        : TraceFileDataSource(std::move(sourceCfg),
+                              trcCfg.traceFile,
                               0, 0, false, 0, 0,
+                              Mode::Reanalysis,
                               trcCfg.whitelist,
                               Mongo::Data::TraceInputType::Natural)
-    {
-        // Need to update the layouts_ member to know how to extract the
-        // required info from the tracefile
-        PBLOG_WARN << "TraceFile Re-Analysis not yet fully supported. "
-                   << "Original ZMW poolIDs are not yet preserved";
-
-        reanalysis_ = true;
-    }
+    {}
 
     // Performance testing ctor.  Data dimensions are specified and data
     // will be replicated as necessary.  Caching and preloading options are
@@ -68,7 +78,8 @@ public:
         : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
                               trcCfg.numZmwLanes, trcCfg.cache,
                               trcCfg.preloadChunks, trcCfg.maxQueueSize,
-                              {},  //empty whitelist, all ZMW are valid to be read
+                              Mode::Replication,
+                              {},  //empty whitelist, all ZMW are to be read
                               trcCfg.inputType)
     {}
 
@@ -82,6 +93,7 @@ private:
                         bool cache,
                         size_t preloadChunks,
                         size_t maxQueueSize,
+                        Mode mode,
                         std::vector<uint32_t> zmwWhitelist,
                         Mongo::Data::TraceInputType type);
 
@@ -105,11 +117,6 @@ public:
 
     size_t NumChunks() const { return numChunks_; }
     size_t NumZmwLanes() const { return numZmwLanes_; }
-private:
-    size_t NumTraceChunks() const { return numTraceChunks_ ; }
-    size_t NumTraceZmws() const { return numTraceZmws_; }
-    size_t NumTraceFrames() const { return numTraceFrames_; }
-public:
 
     size_t NumFrames() const override { return numChunks_ * BlockLen(); }
     size_t NumZmw() const override { return numZmwLanes_ * BlockWidth(); }
@@ -136,9 +143,7 @@ public:
         return info;
     }
 
-
 private:
-
     // throw a bunch of data into the queues during construction rather than after
     // a thread is spawned.  Can greatly increase both startup time and memory footprint,
     // but does allow data processing guaranteed to not have any IO bottlenecking
@@ -162,20 +167,13 @@ private:
     uint32_t bytesPerValue_;
 
     size_t chunkIndex_ = 0;
-    size_t batchIndex_ = 0;
-    size_t currZmw_ = 0;
 
     boost::multi_array<uint8_t, 3> traceDataCache_;
     std::vector<size_t> laneCurrentChunk_;
     bool cache_;
     DataSource::SensorPacketsChunk currChunk_;
 
-    // Reanalysis isn't really supported yet, this is
-    // potentially a temporary flag.  Just used as a guard
-    // so that features that require special reanalysis handling
-    // can warn/error if they are turned on before reanalysis
-    // support is formally added.
-    bool reanalysis_ = false;
+    Mode mode_;
 
     std::map<uint32_t, DataSource::PacketLayout> layouts_;
 };
