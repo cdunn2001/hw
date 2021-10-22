@@ -34,6 +34,8 @@
 
 #include "StatAccumState.h"
 
+using PacBio::Cuda::Utility::CudaArray;
+
 namespace PacBio {
 namespace Mongo {
 
@@ -43,16 +45,18 @@ namespace Mongo {
 struct AutocorrAccumState
 {
     static constexpr unsigned int lag = 4u;
-    using FloatArray  = Cuda::Utility::CudaArray<float, laneSize>;
-    using UShortArray = Cuda::Utility::CudaArray<uint16_t, laneSize>;
+    
+    using FloatArray  = CudaArray<float, laneSize>;
+    using FloatArray4 = CudaArray<CudaArray<float, laneSize>, lag>;
+    using UByteArray2 = CudaArray<CudaArray<uint8_t, laneSize>, 2>;
 
     StatAccumState basicStats;
 
     FloatArray moment2;
 
-    FloatArray fBuf[lag]; // front buffer
-    FloatArray bBuf[lag]; // back buffer
-    UShortArray bIdx;     // buf indices for right (MSB) and left (LSB) positions
+    FloatArray4 fBuf; // front buffer
+    FloatArray4 bBuf; // back buffer
+    UByteArray2 bIdx; // buffer indices for right and left positions
 };
 
 }}      // namespace PacBio::Mongo

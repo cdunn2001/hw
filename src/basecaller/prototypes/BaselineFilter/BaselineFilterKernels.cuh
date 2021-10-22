@@ -444,8 +444,10 @@ struct LatentBaselineData
         // fbi and bbi should be stored pairwise as the pipeline processing is split to each zmw
         // Two indices is enough for the block, but let's be sure there is no race condition
         // and alignment is correct
-        stats.fullAutocorrState.bIdx[2*threadIdx.x]           = uint16_t((local.bbi << 8) | local.fbi);
-        stats.fullAutocorrState.bIdx[2*threadIdx.x+1]         = uint16_t((local.bbi << 8) | local.fbi);
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x] = local.fbi;
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x] = local.bbi;
+        stats.fullAutocorrState.bIdx[0][2*threadIdx.x+1] = local.fbi;
+        stats.fullAutocorrState.bIdx[1][2*threadIdx.x+1] = local.bbi;
     }
 
 private:

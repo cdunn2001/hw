@@ -69,8 +69,8 @@ public:     // Structors
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
         , m2_ {state.moment2}
-        , fbi_ {uint16_t(state.bIdx[0] & 0xFF)}
-        , bbi_ {uint16_t(state.bIdx[0] >> 8)}
+        , fbi_ {state.bIdx[0][0]}
+        , bbi_ {state.bIdx[1][0]}
     {
         // Deserialize both buffers
         for (auto k = 0u; k < lag_; ++k)
@@ -95,7 +95,8 @@ public:     // Const methods
             ret.fBuf[k] = fBuf_[k];
             ret.bBuf[k] = bBuf_[k]; 
         }
-        ret.bIdx = (bbi_ << 8) | (fbi_ & 0xFF);
+        ret.bIdx[0] = fbi_;
+        ret.bIdx[1] = bbi_;
 
         return ret;
     }

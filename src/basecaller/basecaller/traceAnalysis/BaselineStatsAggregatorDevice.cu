@@ -53,8 +53,10 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r
 {
     auto lag = AutocorrAccumState::lag;
 
-    uint16_t fbi      = l.bIdx[threadIdx.x] & 0xFF,      bbi = l.bIdx[threadIdx.x] >> 8;
-    uint16_t that_fbi = r.bIdx[threadIdx.x] & 0xFF, that_bbi = r.bIdx[threadIdx.x] >> 8;
+    uint16_t fbi      = l.bIdx[0][threadIdx.x];
+    uint16_t bbi      = l.bIdx[1][threadIdx.x];
+    uint16_t that_fbi = r.bIdx[0][threadIdx.x];
+    uint16_t that_bbi = r.bIdx[1][threadIdx.x];
 
     // Merge common statistics before processing tails
     MergeStat(l.basicStats, r.basicStats);
@@ -77,7 +79,8 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r
     }
 
     // Advance buffer indices
-    l.bIdx[threadIdx.x] = (bbi + (lag-n1) % lag) << 8 | (fbi + n2);
+    l.bIdx[0][threadIdx.x] = fbi + n2;
+    l.bIdx[1][threadIdx.x] = bbi + (lag-n1) % lag;
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
@@ -115,7 +118,7 @@ __device__ void ResetAutoCorr(AutocorrAccumState& accum)
     ResetArray(accum.moment2);
     for (auto k = 0u; k < lag; ++k) ResetArray(accum.fBuf[k]);
     for (auto k = 0u; k < lag; ++k) ResetArray(accum.bBuf[k]);
-    ResetArray(accum.bIdx);
+    for (auto k = 0u; k < accum.bIdx.size(); ++k) ResetArray(accum.bIdx[k]);
 }
 __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)
 {

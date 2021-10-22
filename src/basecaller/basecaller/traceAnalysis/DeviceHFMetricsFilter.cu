@@ -194,24 +194,25 @@ __device__ PBShort2 blendShort0(const uint16_t val)
 __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& blockMetrics)
 {
     const uint32_t lag = AutocorrAccumState::lag;
-    auto i = threadIdx.x;
     // math in float2 for additional range
-    const auto nmk = asFloat2(blockMetrics.traceM0[i] - PBHalf2(lag));
-    PBHalf2 ac = [&blockMetrics, i](float2 nmk)
+    const auto nmk = asFloat2(blockMetrics.traceM0[threadIdx.x] - PBHalf2(lag));
+    PBHalf2 ac = [&blockMetrics](float2 nmk)
     {
-        float2 mu = asFloat2(blockMetrics.traceM1[i] / blockMetrics.traceM0[i]);
-        float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[i]);
+        float2 mu = asFloat2(blockMetrics.traceM1[threadIdx.x] / blockMetrics.traceM0[threadIdx.x]);
+        float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[threadIdx.x]);
         for (auto k = 0u; k < lag; ++k)
         {
-            m1x2 = m1x2 - asFloat2(blockMetrics.fBuf[k][i] + blockMetrics.bBuf[k][i]);
+            m1x2 = m1x2 
+                - asFloat2(blockMetrics.fBuf[k][threadIdx.x] 
+                + blockMetrics.bBuf[k][threadIdx.x]);
         }
         float2 ac = mu*(m1x2 - nmk*mu);
         nmk = nmk - asFloat2(PBHalf2(1.0f));
 
-        ac = (blockMetrics.autocorrM2[i] - ac)
-             / (nmk * asFloat2(variance(blockMetrics.traceM0[i],
-                                        blockMetrics.traceM1[i],
-                                        blockMetrics.traceM2[i])));
+        ac = (blockMetrics.autocorrM2[threadIdx.x] - ac)
+             / (nmk * asFloat2(variance(blockMetrics.traceM0[threadIdx.x],
+                                        blockMetrics.traceM1[threadIdx.x],
+                                        blockMetrics.traceM2[threadIdx.x])));
         return ac;
     }(nmk);
     const PBBool2 nanMask = !(ac == ac);
@@ -458,24 +459,25 @@ __global__ void ProcessChunk(
     }
 
     { // Autocorrelation lag metrics (correctly taken from baseliner)
-        auto i = threadIdx.x;
         auto lag = AutocorrAccumState::lag;
         auto& that = baselinerStats[blockIdx.x].fullAutocorrState;
 
-        uint16_t fbi = blockMetrics.bIdx[i].X(), bbi = blockMetrics.bIdx[i].Y();
-        uint16_t that_fbi = that.bIdx[i] & 0xFF, that_bbi = that.bIdx[i] >> 8;
+        uint16_t fbi = blockMetrics.bIdx[threadIdx.x].X();
+        uint16_t bbi = blockMetrics.bIdx[threadIdx.x].Y();
+        uint16_t that_fbi = that.bIdx[0][threadIdx.x];
+        uint16_t that_bbi = that.bIdx[1][threadIdx.x];
 
-        blockMetrics.autocorrM2[i] += getWideLoad(that.moment2);
+        blockMetrics.autocorrM2[threadIdx.x] += getWideLoad(that.moment2);
 
         auto n1 = lag - that_fbi;  // that fBuf may be not filled up
         for (uint16_t k = 0; k < lag - n1; k++)
         {
             // Sum of muls of overlapping elements
-            blockMetrics.autocorrM2[i]      +=
+            blockMetrics.autocorrM2[threadIdx.x]      +=
                 getWideLoad(that.fBuf[k]) * 
-                asFloat2(blockMetrics.bBuf[(bbi+k)%lag][i]);
+                asFloat2(blockMetrics.bBuf[(bbi+k)%lag][threadIdx.x]);
             // Accept the whole back buffer
-            blockMetrics.bBuf[(bbi+k)%lag][i] =
+            blockMetrics.bBuf[(bbi+k)%lag][threadIdx.x] =
                 getWideLoad(that.bBuf[(that_bbi+n1+k)%lag]);
         }
 
@@ -483,11 +485,11 @@ __global__ void ProcessChunk(
         for (uint16_t k = 0; k < n2; ++k)
         {
             // No need to adjust m2_ as excessive values were mul by 0
-            blockMetrics.fBuf[fbi+k][i] = getWideLoad(that.fBuf[k]);
+            blockMetrics.fBuf[fbi+k][threadIdx.x] = getWideLoad(that.fBuf[k]);
         }
 
         // Advance buffer indices
-        blockMetrics.bIdx[i] = PBShort2(fbi + n2, bbi + (lag-n1) % lag);
+        blockMetrics.bIdx[threadIdx.x] = PBShort2(fbi + n2, bbi + (lag-n1) % lag);
     }
 
     { // FrameLabeler metrics
