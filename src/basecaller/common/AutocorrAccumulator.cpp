@@ -19,7 +19,6 @@ AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     , m2_  {0}
     , fbi_ {0}
     , bbi_ {0}
-    , canAddSample_ {true}
 {
     static_assert(lag_ > 0, "Invalid lag value");
 
@@ -29,7 +28,6 @@ AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
 template <typename T>
 void AutocorrAccumulator<T>::AddSample(const T& value)
 {
-    assert (canAddSample_);
     auto valLessOffset = value - Offset();
     if (fbi_ < lag_)
     {
@@ -58,7 +56,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     for (auto k = 0u; k < lag_; ++k) { m1x2 -= fBuf_[k] + bBuf_[k]; }
     auto ac = mu*(m1x2 - nmk*mu);
     auto m2 = m2_ + Offset()*(m1x2 - nmk*Offset());
-    ac = (m2 - ac) / (nmk * stats_.Variance());
+    ac = (m2 - ac) / ((nmk - 1) * stats_.Variance());
 
     // Ensure range bounds and if insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
@@ -74,8 +72,6 @@ template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
 {
-    assert(canAddSample_ && that.CanAddSample());
-
     // !!! The operation is not commutative !!!
     // "this" is the left accumulator and "that" is the right one
 

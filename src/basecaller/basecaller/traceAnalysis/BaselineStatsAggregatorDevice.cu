@@ -51,34 +51,33 @@ __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
 
 __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r)
 {
-    auto i = threadIdx.x;
     auto lag = AutocorrAccumState::lag;
 
-    uint16_t fbi      = l.bIdx[i] & 0xFF,      bbi = l.bIdx[i] >> 8;
-    uint16_t that_fbi = r.bIdx[i] & 0xFF, that_bbi = r.bIdx[i] >> 8;
+    uint16_t fbi      = l.bIdx[threadIdx.x] & 0xFF,      bbi = l.bIdx[threadIdx.x] >> 8;
+    uint16_t that_fbi = r.bIdx[threadIdx.x] & 0xFF, that_bbi = r.bIdx[threadIdx.x] >> 8;
 
     // Merge common statistics before processing tails
     MergeStat(l.basicStats, r.basicStats);
-    l.moment2[i]      += r.moment2[i];
+    l.moment2[threadIdx.x]      += r.moment2[threadIdx.x];
 
     auto n1 = lag - that_fbi;  // that fBuf may be not filled up
     for (uint16_t k = 0; k < lag - n1; k++)
     {
         // Sum of muls of overlapping elements
-        l.moment2[i]          += r.fBuf[k][i] * l.bBuf[(bbi+k)%lag][i];
+        l.moment2[threadIdx.x]          += r.fBuf[k][threadIdx.x] * l.bBuf[(bbi+k)%lag][threadIdx.x];
         // Accept the whole back buffer
-        l.bBuf[(bbi+k)%lag][i] = r.bBuf[(that_bbi+n1+k)%lag][i];
+        l.bBuf[(bbi+k)%lag][threadIdx.x] = r.bBuf[(that_bbi+n1+k)%lag][threadIdx.x];
     }
 
     auto n2 = lag - fbi;      // this fBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
         // No need to adjust m2_ as excessive values were mul by 0
-        l.fBuf[fbi+k][i] = r.fBuf[k][i];
+        l.fBuf[fbi+k][threadIdx.x] = r.fBuf[k][threadIdx.x];
     }
 
     // Advance buffer indices
-    l.bIdx[i] = (bbi + (lag-n1) % lag) << 8 | (fbi + n2);
+    l.bIdx[threadIdx.x] = (bbi + (lag-n1) % lag) << 8 | (fbi + n2);
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,

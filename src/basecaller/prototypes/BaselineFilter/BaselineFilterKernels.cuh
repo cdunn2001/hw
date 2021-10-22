@@ -375,14 +375,11 @@ struct LatentBaselineData
 
             if (fbi < lag)
             {
-                fBuf.PushBack(offlessVal);
-                fbi++;
+                fBuf.PushBack(offlessVal); fbi++;
             }
 
             m2Lag += PBFloat2(offlessVal) * bBuf.Front();
-            bBuf.PushBack(offlessVal); 
-            bbi++; 
-            bbi %= lag;
+            bBuf.PushBack(offlessVal); bbi++; bbi %= lag;
 
             stats.AddSample(latData);
 

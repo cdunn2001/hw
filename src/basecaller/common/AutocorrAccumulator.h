@@ -71,7 +71,6 @@ public:     // Structors
         , m2_ {state.moment2}
         , fbi_ {uint16_t(state.bIdx[0] & 0xFF)}
         , bbi_ {uint16_t(state.bIdx[0] >> 8)}
-        , canAddSample_ {true}
     {
         // Deserialize both buffers
         for (auto k = 0u; k < lag_; ++k)
@@ -127,10 +126,6 @@ public:     // Const methods
     const T& Offset() const
     { return stats_.Offset(); }
 
-    /// Whether *this is in a state that allows addition of more sample data.
-    bool CanAddSample() const
-    { return canAddSample_; }
-
 public:     // Mutating methods
     /// Copy assignment.
     AutocorrAccumulator& operator=(const AutocorrAccumulator& that) = default;
@@ -172,7 +167,6 @@ public:     // Mutating methods
         for (auto k = 0u; k < lag_; ++k) { fBuf_[k] = bBuf_[k] = T(0); }
         fbi_ = 0;
         bbi_ = 0;
-        canAddSample_ = true;
     }
 
 private:    // Data
@@ -185,8 +179,6 @@ private:    // Data
     std::array<T, lag_> bBuf_; // back buffer (circular)
     uint16_t fbi_;             // front buffer index
     uint16_t bbi_;             // back buffer circular index
-
-    bool canAddSample_;
 };
 
 }} // PacBio::Mongo

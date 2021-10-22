@@ -206,6 +206,7 @@ __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& bl
             m1x2 = m1x2 - asFloat2(blockMetrics.fBuf[k][i] + blockMetrics.bBuf[k][i]);
         }
         float2 ac = mu*(m1x2 - nmk*mu);
+        nmk = nmk - asFloat2(PBHalf2(1.0f));
 
         ac = (blockMetrics.autocorrM2[i] - ac)
              / (nmk * asFloat2(variance(blockMetrics.traceM0[i],

@@ -302,12 +302,12 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx);
-            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l += 131)
+            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; ++l)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
                 const auto& bs = pdMetrics.baselineStats.GetHostView()[l];
                 ASSERT_EQ(sizeof(mb), 8768);
-                for (uint32_t z = 0; z < laneSize; z += 23)
+                for (uint32_t z = 0; z < laneSize; ++z)
                 {
                     ASSERT_EQ(numBatchesPerHFMB
                                 * sim.numBases
@@ -396,7 +396,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
-                    EXPECT_NEAR(0.415805, mb.autocorrelation[z], 0.0001);
+                    EXPECT_NEAR(0.415835, mb.autocorrelation[z], 0.0001);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
                     EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);

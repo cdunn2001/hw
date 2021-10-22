@@ -71,7 +71,7 @@ TEST(TestAutocorrAccumulator, SimpleOnePass)
     auto m02 = aca.Count().data()[0][0];                 EXPECT_EQ(n, m02);
     auto m12 = aca.Mean().data()[0][0];                  EXPECT_FLOAT_EQ(4, m12);
     auto m22 = aca.Variance().data()[0][0];              EXPECT_FLOAT_EQ(7.5, m22);
-    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(-4.0/15, acorr2);
+    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(-1.0/3, acorr2);
 }
 
 TEST(TestAutocorrAccumulator, SquareOnePass)
@@ -88,7 +88,7 @@ TEST(TestAutocorrAccumulator, SquareOnePass)
     auto m02 = aca.Count().data()[0][0];                 EXPECT_EQ(n,      m02);
     auto m12 = aca.Mean().data()[0][0];                  EXPECT_FLOAT_EQ(58.5f,   m12);
     auto m22 = aca.Variance().data()[0][0];              EXPECT_FLOAT_EQ(3181.5f, m22);
-    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(0.20589344f, acorr2);
+    auto acorr2 = aca.Autocorrelation().data()[0][0];    EXPECT_FLOAT_EQ(0.22877049f, acorr2);
 }
 
 void AccCompare(const AutocorrAccumulator<FloatArray> &exp, const AutocorrAccumulator<FloatArray> &act,
@@ -249,15 +249,15 @@ TEST(TestAutocorrAccumulator, AutocorrSine)
     // Python code:
     // a = np.sin(0.1 * np.arange(100))
     // l, ac = 4, a - np.mean(a)
-    // autocorr_l = np.sum(ac[l:] * ac[:-l]) / (len(ac)-l) / np.var(a, ddof=1)
+    // autocorr_l = np.sum(ac[l:] * ac[:-l]) / (len(ac)-l-1) / np.var(a, ddof=1)
     // autocorr_l = 0.9281753966122696
 
-    //            relative tolerance    abs tolerance
-    auto z = 1;  auto rtol = 5e-5f; auto atol = 5e-5f; auto l = AutocorrAccumState::lag;
+    //               abs tolerance
+    auto z = 1;  auto atol = 5e-5f; auto l = AutocorrAccumState::lag;
 
-    const float expectAutocorr = 0.928175397f;
+    const float expectAutocorr = 0.9379457f;
     auto acorr0 = aca.Autocorrelation().data()[0][z];
-    EXPECT_NEAR(expectAutocorr, acorr0, 1.0e-4f);
+    EXPECT_NEAR(expectAutocorr, acorr0, atol);
 
     // Compare against Eigen
     auto em1 = x.colwise().mean();
@@ -266,9 +266,10 @@ TEST(TestAutocorrAccumulator, AutocorrSine)
     EXPECT_FLOAT_EQ(em2[0], m21);
 
     auto acr = x.col(z).array() - em1[z];
-    auto acorr1 = (acr.head(n-l) * acr.tail(n-l)).sum() / (n-l) / em2[z];
+    auto acorr1 = (acr.head(n-l) * acr.tail(n-l)).sum() / (n-l-1) / em2[z];
 
-    EXPECT_LE(abs(acorr0-acorr1),   atol + rtol*abs(acorr1));
+    // EXPECT_LE(abs(acorr0-acorr1),   atol + rtol*abs(acorr1));
+    EXPECT_NEAR(acorr0, acorr1, atol);
 }
 
 struct TestAutocorrAccumulatorLinspace
