@@ -49,7 +49,8 @@ namespace {
 TEST(TestAutocorrAccumulator, SimpleOnePass)
 {
     auto n = 9;
-    AutocorrAccumulator<FloatArray> aca(0.0f);
+    auto offset = 1.0f;
+    AutocorrAccumulator<FloatArray> aca(offset);
     auto m00 = aca.Count().data()[0][0];                 EXPECT_EQ(0, m00);
     auto m10 = aca.Mean().data()[0][0];                  EXPECT_TRUE(isnan(m10));
     auto m20 = aca.Variance().data()[0][0];              EXPECT_TRUE(isnan(m20));
@@ -76,7 +77,8 @@ TEST(TestAutocorrAccumulator, SimpleOnePass)
 TEST(TestAutocorrAccumulator, SquareOnePass)
 {
     auto n = 14;
-    AutocorrAccumulator<FloatArray> aca(0.0f);
+    auto offset = -3.0f;
+    AutocorrAccumulator<FloatArray> aca(offset);
 
     for (auto i = 0.0f; i < n; i += 1.0f)
     {
@@ -109,7 +111,9 @@ void AccCompare(const AutocorrAccumulator<FloatArray> &exp, const AutocorrAccumu
 TEST(TestAutocorrAccumulator, SimpleMerge)
 {
     auto n = 30; // (lag + 2 + lag) * 3
-    AutocorrAccumulator<FloatArray> aca, aca1, aca2, aca3;
+    auto offset = 5.0f;
+    AutocorrAccumulator<FloatArray> aca(offset);
+    AutocorrAccumulator<FloatArray> aca1(offset), aca2(offset), aca3(offset);
 
     decltype(n) i = 0;
     for (; i < 1 * n / 3; ++i)
@@ -136,7 +140,7 @@ TEST(TestAutocorrAccumulator, SimpleMerge)
     aca1.Merge(aca2).Merge(aca3);
     acb1.Merge(acb2.Merge(acb3));
 
-    AutocorrAccumulator<FloatArray> aca_empty;
+    AutocorrAccumulator<FloatArray> aca_empty(offset);
     aca_empty.Merge(aca1);
 
     AccCompare(aca, aca1);       // Test full vs merged accumulator A

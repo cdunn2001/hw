@@ -44,21 +44,22 @@ template <typename T>
 T AutocorrAccumulator<T>::Autocorrelation() const
 {
     using U = Simd::ScalarType<T>;
-    const auto nmk = stats_.Count() - boost::numeric_cast<U>(lag_);
+    const auto nmk = Count() - boost::numeric_cast<U>(lag_);
 
     // Define R(k) = \frac{1}{[(n-k)*Variance()]}*\sum_{i=0}^{n-k-1} (x_i - \frac{m10_}{(n-k)}) (x_{i+k} - \frac{m1k_}{(n-k)})
-    // Reference python code:
+    // Reference python code (with offset = 0):
     // a, l = np.sin(1.7*np.arange(100)), 4
     // mu = np.mean(a)
     // ac = mu*(np.sum(a[:-l] + a[l:]) - len(a[l:])*mu)
     // autocorr_l4 = (np.sum(a[:-l]*a[l:]) - ac) / len(a[l:]) / np.var(a, ddof=1)
     // autocorr_l4 # 0.8617625800897488
-    auto mu = stats_.Mean();
-    auto m1x2 = 2*stats_.M1();
+    auto mu = Mean();
+    auto m1x2 = 2*(stats_.M1() + nmk*Offset());
     for (auto k = 0u; k < lag_; ++k) { m1x2 -= lBuf_[k] + rBuf_[k]; }
     auto ac = mu*(m1x2 - nmk*mu);
-    ac = (m2_ - ac) / (nmk * stats_.Variance());
-    
+    auto m2 = m2_ + Offset()*(m1x2 - nmk*Offset());
+    ac = (m2 - ac) / (nmk * stats_.Variance());
+
     // Ensure range bounds and if insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
     using Simd::Blend;
@@ -68,22 +69,6 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     return Blend((nmk < T(1.0f)) | isnan(ac), nan, ac);
 }
 
-template <typename T>
-AutocorrAccumulator<T> AutocorrAccumulator<T>::operator*(float s) const
-{
-    AutocorrAccumulator r {*this};
-    r *= s;
-    return r;
-}
-
-template <typename T>
-AutocorrAccumulator<T>& AutocorrAccumulator<T>::operator*=(float s)
-{
-    stats_ *= s;
-    m2_    *= s;
-    canAddSample_ = false; // the only case when it gets false
-    return *this;
-}
 
 template <typename T>
 AutocorrAccumulator<T>&

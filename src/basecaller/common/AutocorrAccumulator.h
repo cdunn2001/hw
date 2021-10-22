@@ -127,9 +127,6 @@ public:     // Const methods
     const T& Offset() const
     { return stats_.Offset(); }
 
-    /// Returns a copy of *this with all moments scaled by \a s.
-    AutocorrAccumulator operator*(float s) const;
-
     /// Whether *this is in a state that allows addition of more sample data.
     bool CanAddSample() const
     { return canAddSample_; }
@@ -146,10 +143,6 @@ public:     // Mutating methods
     /// is nonzero and lags are not equal.
     /// \returns *this.
     AutocorrAccumulator& operator+=(const AutocorrAccumulator& that);
-
-    /// Scales all moments by \a s, as if s * Count() samples had been accumulated.
-    /// \returns *this.
-    AutocorrAccumulator& operator*=(float s);
 
     /// Accumulate another data sample into the moments.
     void AddSample(const T& value);
