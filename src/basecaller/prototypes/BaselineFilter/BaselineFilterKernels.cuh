@@ -341,10 +341,10 @@ struct LatentBaselineData
 
         // Auto-correlation stats
         PBFloat2 m2Lag;
-        LocalCircularBuffer<blockThreads, lag> lBuf; // left buffer
-        LocalCircularBuffer<blockThreads, lag> rBuf; // right circular buffer
-        uint8_t lbi;        // left buffer index
-        uint8_t rbi;        // left buffer index
+        LocalCircularBuffer<blockThreads, lag> fBuf; // front buffer
+        LocalCircularBuffer<blockThreads, lag> bBuf; // back circular buffer
+        uint8_t fbi;        // front buffer index
+        uint8_t bbi;        // back buffer index
 
     public:
         __device__ PBHalf2 SmoothedSigma(PBHalf2 frameSigma)
@@ -373,16 +373,16 @@ struct LatentBaselineData
 
             PBHalf2 offlessVal = latData; // "offlessVal" for host name compatibility
 
-            if (lbi < lag)
+            if (fbi < lag)
             {
-                lBuf.PushBack(offlessVal);
-                lbi++;
+                fBuf.PushBack(offlessVal);
+                fbi++;
             }
 
-            m2Lag += PBFloat2(offlessVal) * rBuf.Front();
-            rBuf.PushBack(offlessVal); 
-            rbi++; 
-            rbi %= lag;
+            m2Lag += PBFloat2(offlessVal) * bBuf.Front();
+            bBuf.PushBack(offlessVal); 
+            bbi++; 
+            bbi %= lag;
 
             stats.AddSample(latData);
 
@@ -405,12 +405,12 @@ struct LatentBaselineData
         local.latHMask2    = latHMask2[threadIdx.x];
         local.m2Lag        = m2Lag[threadIdx.x];
 
-        local.lbi = local.rbi = 0;
+        local.fbi = local.bbi = 0;
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
         {
-            local.lBuf.PushBack(0);
-            local.rBuf.PushBack(0);
+            local.fBuf.PushBack(0);
+            local.bBuf.PushBack(0);
         }
 
         return local;
@@ -435,20 +435,20 @@ struct LatentBaselineData
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
         {
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x]    = local.lBuf.Front().X();
-            stats.fullAutocorrState.lBuf[k][2*threadIdx.x+1]  = local.lBuf.Front().Y();
-            stats.fullAutocorrState.rBuf[k][2*threadIdx.x]    = local.rBuf.Front().X();
-            stats.fullAutocorrState.rBuf[k][2*threadIdx.x+1]  = local.rBuf.Front().Y();
-            local.lBuf.PushBack(0);
-            local.rBuf.PushBack(0);
+            stats.fullAutocorrState.fBuf[k][2*threadIdx.x]    = local.fBuf.Front().X();
+            stats.fullAutocorrState.fBuf[k][2*threadIdx.x+1]  = local.fBuf.Front().Y();
+            stats.fullAutocorrState.bBuf[k][2*threadIdx.x]    = local.bBuf.Front().X();
+            stats.fullAutocorrState.bBuf[k][2*threadIdx.x+1]  = local.bBuf.Front().Y();
+            local.fBuf.PushBack(0);
+            local.bBuf.PushBack(0);
         }
 
         // TODO: leave two indices for a block
-        // lbi and rbi should be stored pairwise as the pipeline processing is split to each zmw
+        // fbi and bbi should be stored pairwise as the pipeline processing is split to each zmw
         // Two indices is enough for the block, but let's be sure there is no race condition
         // and alignment is correct
-        stats.fullAutocorrState.bIdx[2*threadIdx.x]           = uint16_t((local.rbi << 8) | local.lbi);
-        stats.fullAutocorrState.bIdx[2*threadIdx.x+1]         = uint16_t((local.rbi << 8) | local.lbi);
+        stats.fullAutocorrState.bIdx[2*threadIdx.x]           = uint16_t((local.bbi << 8) | local.fbi);
+        stats.fullAutocorrState.bIdx[2*threadIdx.x+1]         = uint16_t((local.bbi << 8) | local.fbi);
     }
 
 private:

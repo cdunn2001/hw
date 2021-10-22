@@ -86,8 +86,8 @@ struct TestBaselineStatsAggregator : public ::testing::Test
             bls.fullAutocorrState.moment2      = lag * meanVec * 0.0f                // left part
                                                + (n0 - 2*lag)  * pow2(meanVec)       // main part
                                                + lag * (meanVec + varVec) * meanVec; // right part
-            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.lBuf[k] = meanVec - varVec;   // left values
-            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.rBuf[k] = meanVec + varVec;   // right values
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.fBuf[k] = meanVec - varVec;   // left values
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.bBuf[k] = meanVec + varVec;   // right values
 
             auto cnt = uint32_t(n0.ToArray()[0]);
             bls.fullAutocorrState.bIdx = uint16_t(((cnt % lag) << 8) | std::min(cnt, lag));
@@ -235,8 +235,8 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
 
         for (auto k = 0u; k < lag; ++k)
         { 
-            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.lBuf[k]) == 0));
-            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.rBuf[k]) == 0));
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.fBuf[k]) == 0));
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bBuf[k]) == 0));
         }
 
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx) == 0));
@@ -348,9 +348,9 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
                 for (auto k = 0u; k < lag; ++k)
                 {
                     expected.fullAutocorrState.moment2[zmw] +=
-                        expected.fullAutocorrState.rBuf[k][zmw] * laneStat.fullAutocorrState.lBuf[k][zmw];
+                        expected.fullAutocorrState.bBuf[k][zmw] * laneStat.fullAutocorrState.fBuf[k][zmw];
 
-                    expected.fullAutocorrState.rBuf[k][zmw] = laneStat.fullAutocorrState.rBuf[k][zmw];
+                    expected.fullAutocorrState.bBuf[k][zmw] = laneStat.fullAutocorrState.bBuf[k][zmw];
                 }
             }
         }

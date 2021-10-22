@@ -69,15 +69,15 @@ public:     // Structors
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
         , m2_ {state.moment2}
-        , lbi_ {uint16_t(state.bIdx[0] & 0xFF)}
-        , rbi_ {uint16_t(state.bIdx[0] >> 8)}
+        , fbi_ {uint16_t(state.bIdx[0] & 0xFF)}
+        , bbi_ {uint16_t(state.bIdx[0] >> 8)}
         , canAddSample_ {true}
     {
         // Deserialize both buffers
         for (auto k = 0u; k < lag_; ++k)
         { 
-            lBuf_[k] = state.lBuf[k];
-            rBuf_[k] = state.rBuf[k];
+            fBuf_[k] = state.fBuf[k];
+            bBuf_[k] = state.bBuf[k];
         }
     }
 
@@ -93,10 +93,10 @@ public:     // Const methods
         // Serialize both buffers
         for (auto k = 0u; k < lag_; ++k)
         { 
-            ret.lBuf[k] = lBuf_[k];
-            ret.rBuf[k] = rBuf_[k]; 
+            ret.fBuf[k] = fBuf_[k];
+            ret.bBuf[k] = bBuf_[k]; 
         }
-        ret.bIdx = (rbi_ << 8) | (lbi_ & 0xFF);
+        ret.bIdx = (bbi_ << 8) | (fbi_ & 0xFF);
 
         return ret;
     }
@@ -169,9 +169,9 @@ public:     // Mutating methods
     {
         stats_.Reset();
         m2_  = T(0);
-        for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = rBuf_[k] = T(0); }
-        lbi_ = 0;
-        rbi_ = 0;
+        for (auto k = 0u; k < lag_; ++k) { fBuf_[k] = bBuf_[k] = T(0); }
+        fbi_ = 0;
+        bbi_ = 0;
         canAddSample_ = true;
     }
 
@@ -181,10 +181,10 @@ private:    // Data
 
     T m2_;     // Generalized second moment. Sum of x_{i} * x_{i+lag_}
 
-    std::array<T, lag_> lBuf_; //  left buffer
-    std::array<T, lag_> rBuf_; // right buffer (circular)
-    uint16_t lbi_;             // left buffer index
-    uint16_t rbi_;             // right buffer circular index
+    std::array<T, lag_> fBuf_; // front buffer
+    std::array<T, lag_> bBuf_; // back buffer (circular)
+    uint16_t fbi_;             // front buffer index
+    uint16_t bbi_;             // back buffer circular index
 
     bool canAddSample_;
 };

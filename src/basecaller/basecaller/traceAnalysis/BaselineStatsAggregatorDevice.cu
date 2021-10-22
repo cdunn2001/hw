@@ -54,31 +54,31 @@ __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r
     auto i = threadIdx.x;
     auto lag = AutocorrAccumState::lag;
 
-    uint16_t lbi      = l.bIdx[i] & 0xFF,      rbi = l.bIdx[i] >> 8;
-    uint16_t that_lbi = r.bIdx[i] & 0xFF, that_rbi = r.bIdx[i] >> 8;
+    uint16_t fbi      = l.bIdx[i] & 0xFF,      bbi = l.bIdx[i] >> 8;
+    uint16_t that_fbi = r.bIdx[i] & 0xFF, that_bbi = r.bIdx[i] >> 8;
 
     // Merge common statistics before processing tails
     MergeStat(l.basicStats, r.basicStats);
     l.moment2[i]      += r.moment2[i];
 
-    auto n1 = lag - that_lbi;  // that lBuf may be not filled up
+    auto n1 = lag - that_fbi;  // that fBuf may be not filled up
     for (uint16_t k = 0; k < lag - n1; k++)
     {
         // Sum of muls of overlapping elements
-        l.moment2[i]          += r.lBuf[k][i] * l.rBuf[(rbi+k)%lag][i];
-        // Accept the whole right buffer
-        l.rBuf[(rbi+k)%lag][i] = r.rBuf[(that_rbi+n1+k)%lag][i];
+        l.moment2[i]          += r.fBuf[k][i] * l.bBuf[(bbi+k)%lag][i];
+        // Accept the whole back buffer
+        l.bBuf[(bbi+k)%lag][i] = r.bBuf[(that_bbi+n1+k)%lag][i];
     }
 
-    auto n2 = lag - lbi;      // this lBuf may be not filled up
+    auto n2 = lag - fbi;      // this fBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
         // No need to adjust m2_ as excessive values were mul by 0
-        l.lBuf[lbi+k][i] = r.lBuf[k][i];
+        l.fBuf[fbi+k][i] = r.fBuf[k][i];
     }
 
     // Advance buffer indices
-    l.bIdx[i] = (rbi + (lag-n1) % lag) << 8 | (lbi + n2);
+    l.bIdx[i] = (bbi + (lag-n1) % lag) << 8 | (fbi + n2);
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
@@ -114,8 +114,8 @@ __device__ void ResetAutoCorr(AutocorrAccumState& accum)
     auto lag = AutocorrAccumState::lag;
     ResetStat(accum.basicStats);
     ResetArray(accum.moment2);
-    for (auto k = 0u; k < lag; ++k) ResetArray(accum.lBuf[k]);
-    for (auto k = 0u; k < lag; ++k) ResetArray(accum.rBuf[k]);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.fBuf[k]);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.bBuf[k]);
     ResetArray(accum.bIdx);
 }
 __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)

@@ -17,13 +17,13 @@ template <typename T>
 AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     : stats_ {offset}
     , m2_  {0}
-    , lbi_ {0}
-    , rbi_ {0}
+    , fbi_ {0}
+    , bbi_ {0}
     , canAddSample_ {true}
 {
     static_assert(lag_ > 0, "Invalid lag value");
 
-    for (auto k = 0u; k < lag_; ++k) { lBuf_[k] = rBuf_[k] = T(0); }
+    for (auto k = 0u; k < lag_; ++k) { fBuf_[k] = bBuf_[k] = T(0); }
 }
 
 template <typename T>
@@ -31,12 +31,12 @@ void AutocorrAccumulator<T>::AddSample(const T& value)
 {
     assert (canAddSample_);
     auto valLessOffset = value - Offset();
-    if (lbi_ < lag_)
+    if (fbi_ < lag_)
     {
-        lBuf_[lbi_++] = valLessOffset;
+        fBuf_[fbi_++] = valLessOffset;
     }
-    m2_  += rBuf_[rbi_%lag_] * valLessOffset;
-    rBuf_[rbi_++%lag_] = valLessOffset; rbi_ %= lag_;
+    m2_  += bBuf_[bbi_%lag_] * valLessOffset;
+    bBuf_[bbi_++%lag_] = valLessOffset; bbi_ %= lag_;
     stats_.AddSample(value);   // StatAccumulator subtracts the offset itself.
 }
 
@@ -55,7 +55,7 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     // autocorr_l4 # 0.8617625800897488
     auto mu = Mean();
     auto m1x2 = 2*(stats_.M1() + nmk*Offset());
-    for (auto k = 0u; k < lag_; ++k) { m1x2 -= lBuf_[k] + rBuf_[k]; }
+    for (auto k = 0u; k < lag_; ++k) { m1x2 -= fBuf_[k] + bBuf_[k]; }
     auto ac = mu*(m1x2 - nmk*mu);
     auto m2 = m2_ + Offset()*(m1x2 - nmk*Offset());
     ac = (m2 - ac) / (nmk * stats_.Variance());
@@ -83,25 +83,25 @@ AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
     stats_.Merge(that.stats_);
     m2_  += that.m2_;
 
-    auto n1 = lag_ - that.lbi_;  // that lBuf may be not filled up
+    auto n1 = lag_ - that.fbi_;  // that fBuf may be not filled up
     for (uint16_t k = 0; k < lag_ - n1; k++)
     {
         // Sum of muls of overlapping elements
-        m2_  += rBuf_[(rbi_+k)%lag_] * that.lBuf_[k];
-        // Accept the whole right buffer
-        rBuf_[(rbi_+k)%lag_] = that.rBuf_[(that.rbi_+n1+k)%lag_];
+        m2_  += bBuf_[(bbi_+k)%lag_] * that.fBuf_[k];
+        // Accept the whole back buffer
+        bBuf_[(bbi_+k)%lag_] = that.bBuf_[(that.bbi_+n1+k)%lag_];
     }
 
-    auto n2 = lag_ - lbi_;      // this lBuf may be not filled up
+    auto n2 = lag_ - fbi_;      // this fBuf may be not filled up
     for (uint16_t k = 0; k < n2; ++k)
     {
         // No need to adjust m2_ as excessive values were mul by 0
-        lBuf_[lbi_+k] = that.lBuf_[k];
+        fBuf_[fbi_+k] = that.fBuf_[k];
     }
 
     // Advance buffer indices
-    lbi_ += n2;
-    rbi_ += (lag_-n1); rbi_ %= lag_;
+    fbi_ += n2;
+    bbi_ += (lag_-n1); bbi_ %= lag_;
 
     return *this;
 }
