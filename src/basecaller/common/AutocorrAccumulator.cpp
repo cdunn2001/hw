@@ -51,12 +51,11 @@ T AutocorrAccumulator<T>::Autocorrelation() const
     // ac = mu*(np.sum(a[:-l] + a[l:]) - len(a[l:])*mu)
     // autocorr_l4 = (np.sum(a[:-l]*a[l:]) - ac) / len(a[l:]) / np.var(a, ddof=1)
     // autocorr_l4 # 0.8617625800897488
-    auto mu = Mean();
-    auto m1x2 = 2*(stats_.M1() + nmk*Offset());
+    auto mu = Mean() - Offset();
+    auto m1x2 = 2*stats_.M1();
     for (auto k = 0u; k < lag_; ++k) { m1x2 -= fBuf_[k] + bBuf_[k]; }
     auto ac = mu*(m1x2 - nmk*mu);
-    auto m2 = m2_ + Offset()*(m1x2 - nmk*Offset());
-    ac = (m2 - ac) / ((nmk - 1) * stats_.Variance());
+    ac = (m2_ - ac) / ((nmk - 1) * stats_.Variance());
 
     // Ensure range bounds and if insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
