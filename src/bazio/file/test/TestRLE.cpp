@@ -33,8 +33,8 @@ using namespace PacBio::BazIO;
 
 TEST(RunLength, Encode)
 {
-    std::vector<size_t> startNum{ 10, 100, 1000};
-    std::vector<uint32_t> vecSizes{10, 15, 25};
+    std::vector<size_t> startNum{10, 100, 150, 1000};
+    std::vector<uint32_t> vecSizes{10, 15, 1, 25};
 
     std::vector<uint32_t> l;
     for (size_t i = 0; i < vecSizes.size(); i++)
@@ -45,7 +45,7 @@ TEST(RunLength, Encode)
     }
 
     const auto& enc = RunLengthEncLUT(l);
-    EXPECT_TRUE(enc.size() == 3);
+    EXPECT_TRUE(enc.size() == vecSizes.size());
     for (size_t i = 0; i < enc.size(); i++)
     {
         EXPECT_TRUE(enc[static_cast<int>(i)].first == startNum[i] && enc[static_cast<int>(i)].second == vecSizes[i]);
@@ -53,7 +53,7 @@ TEST(RunLength, Encode)
 
     const auto& json = RunLengthEncLUTHexJson(enc);
     EXPECT_TRUE(json.isArray());
-    EXPECT_TRUE(json.size() == 3);
+    EXPECT_TRUE(json.size() == vecSizes.size());
 
     std::vector<uint32_t> s;
     for (size_t i = 0; i < vecSizes.size(); i++)
@@ -75,8 +75,8 @@ TEST(RunLength, Encode)
 
 TEST(RunLength, Decode)
 {
-    std::vector<size_t> startNum{ 10, 100, 1000};
-    std::vector<uint32_t> vecSizes{10, 15, 25};
+    std::vector<size_t> startNum{10, 100, 150, 1000};
+    std::vector<uint32_t> vecSizes{10, 15, 1, 25};
 
     Json::Value val;
     for (size_t i = 0; i < vecSizes.size(); i++)
@@ -93,11 +93,13 @@ TEST(RunLength, Decode)
     EXPECT_TRUE(l.size() == std::accumulate(vecSizes.begin(), vecSizes.end(), 0u));
     EXPECT_TRUE(l[0] == startNum[0]);
     EXPECT_TRUE(l[10] == startNum[1]);
-    EXPECT_TRUE( l[25] == startNum[2]);
+    EXPECT_TRUE(l[25] == startNum[2]);
+    EXPECT_TRUE(l[26] == startNum[3]);
 
     const auto& m = RunLengthSameDecLUTHexJson(val);
     EXPECT_TRUE(m.size() == std::accumulate(vecSizes.begin(), vecSizes.end(), 0u));
     EXPECT_TRUE(std::all_of(m.begin(), m.begin() + 10, [](const uint32_t v) { return v == 10; }));
-    EXPECT_TRUE(std::all_of(m.begin() + 10, m.begin() + 10 + 15, [](const uint32_t v) { return v == 100; }));
-    EXPECT_TRUE(std::all_of(m.begin() + 10 + 15, m.end(), [](const uint32_t v) { return v == 1000; }));
+    EXPECT_TRUE(std::all_of(m.begin() + 10, m.begin() + 10 + 15 - 1, [](const uint32_t v) { return v == 100; }));
+    EXPECT_TRUE(std::all_of(m.begin() + 10 + 15, m.begin() + 10 + 15, [](const uint32_t v) { return v == 150; }));
+    EXPECT_TRUE(std::all_of(m.begin() + 10 + 15 + 1, m.end(), [](const uint32_t v) { return v == 1000; }));
 }

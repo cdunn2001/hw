@@ -88,7 +88,7 @@ public:
         std::vector<uint16_t> zmwY;
         for (size_t i = 0; i < zmwNumbers.size(); i++)
         {
-            zmwX.push_back(zmwNumbers[i] & 0xFFFF0000);
+            zmwX.push_back((zmwNumbers[i] & 0xFFFF0000) >> 16);
             zmwY.push_back(zmwNumbers[i] & 0x0000FFFF);
         }
         std::iota(zmwX.begin(), zmwX.end(), 0);

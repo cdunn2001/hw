@@ -70,9 +70,9 @@ public:
     {
         Data() = default;
 
-        Data(const std::vector<uint32_t> hns, const std::vector<uint8_t> hts,
-             const std::vector<uint16_t> hxs, const std::vector<uint16_t> hys,
-             const std::vector<uint32_t> hfs)
+        Data(const std::vector<uint32_t>& hns, const std::vector<uint8_t>& hts,
+             const std::vector<uint16_t>& hxs, const std::vector<uint16_t>& hys,
+             const std::vector<uint32_t>& hfs)
             : holeNumbers(hns)
             , holeTypes(hts)
             , holeX(hxs)
