@@ -75,10 +75,11 @@ private:
                             BazAggregator<ProductionMetricsGroup::MetricT,
                                           ProductionMetricsGroup::MetricAggregatedT>>;
 public:
-    ImplChild(size_t numZmws, size_t numBatches, uint32_t bufferId,
+    ImplChild(size_t numZmws, size_t numBatches, uint32_t chunksPerMetric, uint32_t bufferId,
               bool multipleBazFiles, const PrelimHQConfig& config)
         : numBatches_(numBatches)
         , numZmw_(numZmws)
+        , chunksPerMetric_(chunksPerMetric)
         , bazMetricBlocksPerOutput_(config.bazBufferMetricBlocks)
         , zmwStride_(config.zmwOutputStride)
         , multipleBazFiles_(multipleBazFiles)
@@ -99,7 +100,7 @@ public:
 
         if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
         {
-            if (batchesSeen_ != 0)
+            if (batchesSeen_ % numBatches_ != 0)
                 throw PBException("Data out of order, new chunk seen before all batches of previous chunk");
             currFrame_ = pulseBatch.GetMeta().FirstFrame();
         } else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
@@ -108,7 +109,6 @@ public:
         }
 
         size_t currentZmwIndex = (multipleBazFiles_) ? 0 : pulseBatch.GetMeta().FirstZmw();
-        bool metricsSeen = false;
         for (uint32_t lane = 0; lane < pulseBatch.Dims().lanesPerBatch; ++lane)
         {
             const auto& lanePulses = pulseBatch.Pulses().LaneView(lane);
@@ -118,7 +118,6 @@ public:
                 {
                     const auto& metrics = metricsPtr->GetHostView()[lane];
                     aggregator_->AddMetrics(currentZmwIndex, { {metrics, zmw} });
-                    metricsSeen = true;
                 }
                 auto pulses = lanePulses.ZmwData(zmw);
                 aggregator_->AddPulses(currentZmwIndex,
@@ -129,24 +128,17 @@ public:
             }
         }
         batchesSeen_++;
-        std::unique_ptr<BazBuffer> ret;
-        if (batchesSeen_ == numBatches_)
+        if (batchesSeen_ % (numBatches_ * chunksPerMetric_) == 0)
+        {
+            dummyPreHQ_.DetectHQ(*aggregator_);
+            aggregator_->UpdateLookback();
+        }
+        if (batchesSeen_ == numBatches_ * chunksPerMetric_ * bazMetricBlocksPerOutput_)
         {
             batchesSeen_ = 0;
-            if (metricsSeen)
-            {
-                dummyPreHQ_.DetectHQ(*aggregator_);
-                aggregator_->UpdateLookback();
-                metricBlocksSeen_++;
-            }
-
-            if (metricBlocksSeen_ == bazMetricBlocksPerOutput_)
-            {
-                metricBlocksSeen_ = 0;
-                return aggregator_->ProduceBazBuffer();
-            }
+            return aggregator_->ProduceBazBuffer();
         }
-        return ret;
+        return std::unique_ptr<BazBuffer>{};
     }
 
     std::unique_ptr<BazBuffer> Flush() override
@@ -157,9 +149,9 @@ public:
 private:
     size_t currFrame_ = 0;
     size_t batchesSeen_ = 0;
-    size_t metricBlocksSeen_ = 0;
     size_t numBatches_;
     size_t numZmw_;
+    size_t chunksPerMetric_;
     size_t bazMetricBlocksPerOutput_;
     size_t zmwStride_;
     bool multipleBazFiles_;
@@ -235,16 +227,20 @@ PrelimHQFilterBody::PrelimHQFilterBody(
         const SmrtBasecallerConfig& config)
     : numThreads_(config.system.ioConcurrency)
 {
+    const uint32_t framesPerChunk = poolDims.begin()->second.framesPerBatch;
+    uint32_t chunksPerMetric = (config.algorithm.Metrics.framesPerHFMetricBlock + framesPerChunk - 1)/framesPerChunk;
     if (config.multipleBazFiles)
     {
         for (const auto& kv : poolDims)
         {
             if (config.internalMode)
-                impl_.push_back(std::make_unique<ImplChild<true>>(kv.second.ZmwsPerBatch(), 1, kv.first,
+                impl_.push_back(std::make_unique<ImplChild<true>>(kv.second.ZmwsPerBatch(), 1,
+                                                                  chunksPerMetric, kv.first,
                                                                   config.multipleBazFiles,
                                                                   config.prelimHQ));
             else
-                impl_.push_back(std::make_unique<ImplChild<false>>(kv.second.ZmwsPerBatch(), 1, kv.first,
+                impl_.push_back(std::make_unique<ImplChild<false>>(kv.second.ZmwsPerBatch(), 1,
+                                                                   chunksPerMetric, kv.first,
                                                                    config.multipleBazFiles,
                                                                    config.prelimHQ));
         }
@@ -252,10 +248,12 @@ PrelimHQFilterBody::PrelimHQFilterBody(
     else
     {
         if (config.internalMode)
-            impl_.push_back(std::make_unique<ImplChild<true>>(numZmws, poolDims.size(), 0,
+            impl_.push_back(std::make_unique<ImplChild<true>>(numZmws, poolDims.size(),
+                                                              chunksPerMetric, 0,
                                                               config.multipleBazFiles, config.prelimHQ));
         else
-            impl_.push_back(std::make_unique<ImplChild<false>>(numZmws, poolDims.size(), 0,
+            impl_.push_back(std::make_unique<ImplChild<false>>(numZmws, poolDims.size(),
+                                                               chunksPerMetric, 0,
                                                                config.multipleBazFiles, config.prelimHQ));
     }
 }
