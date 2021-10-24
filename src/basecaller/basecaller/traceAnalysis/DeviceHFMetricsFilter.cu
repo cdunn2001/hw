@@ -781,7 +781,7 @@ public:
                         metrics_);
         framesSeen_ += pulseBatch.Dims().framesPerBatch;
 
-        if (framesSeen_ >= framesPerHFMetricBlock_)
+        if (pulseBatch.GetMeta().LastFrame() % framesPerHFMetricBlock_ < pulseBatch.Dims().framesPerBatch)
         {
             auto ret = metricsFactory_->NewBatch(pulseBatch.Dims().lanesPerBatch);
             const auto& finalizeLauncher = Cuda::PBLauncher(
