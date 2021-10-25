@@ -170,7 +170,7 @@ public:
     void Fill(const ZmwByteData& data)
     {
         assert(data.ZmwIndex() == zmwNumbers_.size());
-        zmwNumbers_.push_back(fh_->ZmwIdToNumber(data.ZmwIndex()));
+        zmwNumbers_.push_back(fh_->ZmwIndexToNumber(data.ZmwIndex()));
 
         auto FillMetric = [this](const RawMetricData& rawData, const MetricField& metric,
                                  const ZmwByteData& data, DataFrame& df)
@@ -323,7 +323,7 @@ using Jval = Json::Value;
 static void FillMetrics(const BazIO::FileHeader* fh, const ZmwByteData& data, const bool internal, const size_t frameLimit, Json::Value& single)
 {
     single["ZMW_ID"]     = data.ZmwIndex();
-    single["ZMW_NUMBER"] = fh->ZmwIdToNumber(data.ZmwIndex());
+    single["ZMW_NUMBER"] = fh->ZmwIndexToNumber(data.ZmwIndex());
     single["INTERNAL"]   = internal;
 
     auto floatToJson = [](Jval& jVal, float v) {
@@ -504,7 +504,7 @@ int main(int argc, char* argv[])
 
                 if (filterNumber)
                 {
-                    for (auto& w : whiteList) w = fh.ZmwNumberToId(w);
+                    for (auto& w : whiteList) w = fh.ZmwNumberToIndex(w);
                     std::sort(whiteList.begin(), whiteList.end());
                 }
             }
@@ -589,7 +589,7 @@ int main(int argc, char* argv[])
                     if (filter && std::find(whiteList.begin(), whiteList.end(), zmw.zmwIndex) == whiteList.end())
                         continue;
                     jzmw["ZMW_ID"]     = zmw.zmwIndex;
-                    jzmw["ZMW_NUMBER"] = fh.ZmwIdToNumber(zmw.zmwIndex);
+                    jzmw["ZMW_NUMBER"] = fh.ZmwIndexToNumber(zmw.zmwIndex);
                     jzmw["NUM_EVENTS"] = zmw.numEvents;
                     jzmw["NUM_HFMBS"]  = zmw.numHFMBs;
                     jzmw["NUM_MFMBS"]  = zmw.numMFMBs;

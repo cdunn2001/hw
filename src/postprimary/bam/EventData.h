@@ -69,7 +69,7 @@ public:
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states)
         : EventData(zmwIdx,
-                    fh.ZmwIdToNumber(zmwIdx),
+                    fh.ZmwIndexToNumber(zmwIdx),
                     truncated,
                     std::move(events),
                     std::move(states))

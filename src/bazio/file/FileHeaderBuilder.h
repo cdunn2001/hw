@@ -37,6 +37,8 @@
 #include <bazio/MetricField.h>
 #include <bazio/MetricFrequency.h>
 
+#include "ZmwInfo.h"
+
 namespace PacBio {
 namespace BazIO {
 
@@ -48,15 +50,6 @@ public:
     using MetricField = PacBio::Primary::MetricField;
     using MetricFieldName = PacBio::Primary::MetricFieldName;
     using MetricFrequency = PacBio::Primary::MetricFrequency;
-public: // static
-    static Json::Value RunLengthEncLUTJson(
-        const std::vector<std::pair<uint32_t, uint32_t>>& input);
-    
-    static Json::Value RunLengthEncLUTHexJson(
-        const std::vector<std::pair<uint32_t, uint32_t>>& input);
-
-    static std::vector<std::pair<uint32_t, uint32_t>> RunLengthEncLUT(
-        const std::vector<uint32_t>& input);
 
 public:
     class Flags
@@ -95,8 +88,7 @@ public:
                       const SmrtData::MetricsVerbosity metricsVerbosity,
                       const std::string& experimentMetadata,
                       const std::string& basecallerConfig,
-                      const std::vector<uint32_t> zmwNumbers,
-                      const std::vector<uint32_t> zmwUnitFeatures,
+                      const ZmwInfo& zmwInfo,
                       const uint32_t hFMetricFrames,
                       const uint32_t mFMetricFrames,
                       const uint32_t sliceLengthFrames,
@@ -167,7 +159,7 @@ public:
     { return metricsVerbosity_; }
 
     inline uint32_t MaxNumZmws() const
-    { return zmwNumbers_.size(); }
+    { return zmwInfo_.NumZmws(); }
 
     inline bool Complete() const
     { return complete_; }
@@ -182,7 +174,7 @@ public:
     { return movieLengthFrames_; }
 
     inline const std::vector<uint32_t>& ZmwNumbers() const
-    { return zmwNumbers_; }
+    { return zmwInfo_.HoleNumbers(); }
 
     inline uint64_t FileFooterOffset() const
     { return fileFooterOffset_; }
@@ -194,15 +186,6 @@ public:
     std::string CreateJSON();
 
     std::vector<char> CreateJSONCharVector();
-
-    inline void AddZmwNumber(const uint32_t number)
-    { zmwNumbers_.emplace_back(number); }
-
-    inline void ZmwNumbers(const std::vector<uint32_t>& numbers)
-    { zmwNumbers_ = numbers; }
-
-    inline void ZmwUnitFeatures(const std::vector<uint32_t>& unitFeatures)
-    { zmwUnitFeatures_ = unitFeatures; }
 
     inline void ZmwNumberRejects(const std::vector<uint32_t>& rejects)
     { zmwNumberRejects_ = rejects; }
@@ -289,9 +272,8 @@ private:
     std::string experimentMetadata_;
     std::string basecallerConfig_;
 
-    std::vector<uint32_t> zmwNumbers_;
     std::vector<uint32_t> zmwNumberRejects_;
-    std::vector<uint32_t> zmwUnitFeatures_;
+    ZmwInfo zmwInfo_;
 
     uint32_t bazMajorVersion_;
     uint32_t bazMinorVersion_;

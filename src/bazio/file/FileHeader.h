@@ -39,6 +39,8 @@
 
 #include <json/json.h>
 
+#include "ZmwInfo.h"
+
 namespace PacBio {
 namespace BazIO {
 
@@ -227,17 +229,17 @@ public:
     uint32_t MovieLengthFrames() const
     { return movieLengthFrames_; }
 
-    uint32_t ZmwIdToNumber(const uint32_t id) const
-    { return zmwIdToNumber_.at(id); }
+    uint32_t ZmwIndexToNumber(const uint32_t index) const
+    { return zmwInfo_.ZmwIndexToNumber(index); }
 
-    uint32_t ZmwNumberToId(const uint32_t number) const
-    { return zmwNumbersToId_.at(number); }
+    uint32_t ZmwNumberToIndex(const uint32_t number) const
+    { return zmwInfo_.ZmwNumberToIndex(number); }
 
     const std::vector<uint32_t>& ZmwNumbers() const
-    { return zmwIdToNumber_; }
+    { return zmwInfo_.HoleNumbers(); }
 
     uint32_t MaxNumZMWs() const
-    { return zmwIdToNumber_.size(); }
+    { return zmwInfo_.NumZmws(); }
 
     bool Complete() const
     { return complete_; }
@@ -251,24 +253,27 @@ public:
     bool IsZmwNumberRejected(uint32_t zmwNumber) const
     { return std::find(zmwNumberRejects_.cbegin(), zmwNumberRejects_.cend(), zmwNumber) != zmwNumberRejects_.cend(); }
 
+    const ZmwInfo& ZmwInformation() const
+    { return zmwInfo_; }
+
     const std::vector<uint32_t>& ZmwNumberRejects() const
     { return zmwNumberRejects_; }
 
     uint32_t ZmwUnitFeatures(uint32_t zmwIndex) const
     { 
-        if (zmwIndex < zmwUnitFeatures_.size())
-            return zmwUnitFeatures_[zmwIndex];
-        else if (zmwUnitFeatures_.size() == 0)
+        if (zmwIndex < zmwInfo_.NumZmws())
+            return ZmwUnitFeatures()[zmwIndex];
+        else if (ZmwUnitFeatures().size() == 0)
             return 0; // if there are no features loaded, then send out a dummy 0.
         else
-            PBExceptionStream() << "zmwIndex out of range: " << zmwIndex <<" size:"  << zmwUnitFeatures_.size();
+            PBExceptionStream() << "zmwIndex out of range: " << zmwIndex <<" size:"  << zmwInfo_.NumZmws();
     }
 
     uint64_t FileFooterOffset() const
     { return offsetFileFooter_; }
 
     const std::vector<uint32_t>& ZmwUnitFeatures() const
-    { return zmwUnitFeatures_; }
+    { return zmwInfo_.UnitFeatures(); }
 
     uint32_t NumSuperChunks() const
     { return numSuperChunks_; }
@@ -322,12 +327,8 @@ private:
     std::vector<MetricField> mFMetricFields_;
     std::vector<MetricField> lFMetricFields_;
 
-    std::vector<uint32_t> zmwIdToNumber_;
-    std::map<uint32_t, uint32_t> zmwNumbersToId_;
-
+    ZmwInfo zmwInfo_;
     std::vector<uint32_t> zmwNumberRejects_;
-
-    std::vector<uint32_t> zmwUnitFeatures_;
 
     uint64_t offsetFirstChunk_ = 0;
     uint64_t offsetFileFooter_ = 0;

@@ -79,6 +79,28 @@ namespace PacBio::Primary::Postprimary
 /// Simulates a BASES readout BAZ
 class Simulation
 {
+public:
+    static BazIO::ZmwInfo SimulateZmwInfo(const std::vector<uint32_t>& zmwNumbers)
+    {
+        // Simulate out matching XY-coordinate to match the hole numbers,
+        // hole types all set to Sequencing and the unit features to be 0.
+        std::vector<uint16_t> zmwX;
+        std::vector<uint16_t> zmwY;
+        for (size_t i = 0; i < zmwNumbers.size(); i++)
+        {
+            zmwX.push_back((zmwNumbers[i] & 0xFFFF0000) >> 16);
+            zmwY.push_back(zmwNumbers[i] & 0x0000FFFF);
+        }
+        std::iota(zmwX.begin(), zmwX.end(), 0);
+        BazIO::ZmwInfo zmwInfo(BazIO::ZmwInfo::Data
+                                (   zmwNumbers,
+                                    std::vector<uint8_t>(zmwNumbers.size(), 1),
+                                    zmwX,
+                                    zmwY,
+                                    std::vector<uint32_t>(zmwNumbers.size(), 0)));
+        return zmwInfo;
+    }
+
 public: // structors
     Simulation(const std::string& fileName,
                const std::string& chipLayoutName,
@@ -139,8 +161,7 @@ public:
                               verbosity,
                               generateExperimentMetadata(relativeAmplitudes_, baseMap_),
                               generateBasecallerConfig("Spider"),
-                              zmwNumbers_,
-                              emptyList,
+                              SimulateZmwInfo(zmwNumbers_),
                               1024, // hFMetricFrames
                               4096, // mFMetricFrames
                               16384, // sliceLengthFrames

@@ -33,8 +33,8 @@ Compare hqregion
 
 Compare hqregion, doing real region finding on softball data
 
-  $ production_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/prod.baz
-  $ internal_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header/internal.baz
+  $ production_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header-zmw-info/prod.baz
+  $ internal_baz=/pbi/dept/primary/sim/spider/kestrel-test-new-header-zmw-info/internal.baz
 
   $ baz2bam ${production_baz} -o out_production --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
   $ baz2bam ${internal_baz} -o out_internal --hqregion -j 8 --fasta --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
