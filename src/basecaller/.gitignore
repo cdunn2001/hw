@@ -9,3 +9,4 @@ hw-mongo/
 .clang-format
 .vscode
 cmake-build-*/
+build_vsc/

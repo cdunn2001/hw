@@ -51,12 +51,11 @@ struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
 {
     PB_CONFIG(WX2SourceConfig);
     PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
-    PB_CONFIG_PARAM(std::string, simulatedInputFile, "");
-    PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::Sequel2Lvl1);
-    PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);
+    PB_CONFIG_PARAM(std::string, simulatedInputFile, ""); // TODO deprecate this
+    PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);  // TODO deprecate this
     PB_CONFIG_PARAM(double, sleepDebug, 0.0);
     PB_CONFIG_PARAM(uint32_t, maxPopLoops, 10);
-    PB_CONFIG_PARAM(double, tilePoolFactor, 3.0);
+    PB_CONFIG_PARAM(double, tilePoolFactor, 3.0);  // TODO deprecate this
     PB_CONFIG_OBJECT(WX2LayoutConfig, wxlayout);
 };
 
