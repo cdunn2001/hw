@@ -45,7 +45,7 @@ HostSimulatedPulseAccumulator::Process(Data::LabelsBatch labels)
         for (size_t zmwIdx = 0; zmwIdx < labels.LaneWidth(); ++zmwIdx)
         {
             size_t id = zmwIdx + laneIdx*laneSize;
-            while (nextPulse_[id].Stop() < labels.Metadata().LastFrame())
+            while (static_cast<int32_t>(nextPulse_[id].Stop()) < labels.Metadata().LastFrame())
             {
                 lanePulses.push_back(zmwIdx, nextPulse_[id]);
                 nextPulse_[id] = GeneratePulse(id);

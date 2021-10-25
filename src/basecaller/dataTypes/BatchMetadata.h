@@ -43,7 +43,7 @@ class BatchMetadata
 public:
     BatchMetadata() = default;
 
-    BatchMetadata(uint32_t poolId, uint32_t firstFrame, uint32_t lastFrame, uint32_t firstZmw)
+    BatchMetadata(uint32_t poolId, int32_t firstFrame, int32_t lastFrame, uint32_t firstZmw)
         : poolId_(poolId)
         , firstFrame_(firstFrame)
         , lastFrame_(lastFrame)
@@ -55,16 +55,16 @@ public:
     /// An identifier for a specific pool of ZMWs.
     uint32_t PoolId() const { return poolId_; }
 
-    uint32_t FirstFrame() const { return firstFrame_; }
-    uint32_t LastFrame() const { return lastFrame_; }
+    int32_t FirstFrame() const { return firstFrame_; }
+    int32_t LastFrame() const { return lastFrame_; }
 
     uint32_t FirstZmw() const { return firstZmw_; }
 
 private:
     // Not set in stone, just examples
     uint32_t poolId_;      // Identifier of pool of ZMWs.
-    uint32_t firstFrame_;
-    uint32_t lastFrame_;
+    int32_t firstFrame_;
+    int32_t lastFrame_;
     uint32_t firstZmw_;
 };
 

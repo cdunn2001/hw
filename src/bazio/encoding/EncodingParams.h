@@ -30,7 +30,7 @@
 
 #include <vector>
 
-#include <pacbio/configuration/implementation/ConfigVariant.hpp>
+#include <pacbio/configuration/types/Variant.h>
 #include <pacbio/configuration/PBConfig.h>
 
 #include <bazio/encoding/FieldNames.h>

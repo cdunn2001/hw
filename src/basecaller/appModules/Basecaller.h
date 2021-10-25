@@ -171,19 +171,8 @@ public:
     //               5 total active streams without reusing priority values.  The main reason
     //               this wasn't done this round is that approach does make the timelines a bit
     //               harder to parse in the cuda profilers.
-    Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatchVariant& traceVariant) override
+    Mongo::Data::BatchResult Process(const Mongo::Data::TraceBatchVariant& in) override
     {
-        const auto& in = [&]() ->decltype(auto)
-        {
-            try
-            {
-                return std::get<Mongo::Data::TraceBatch<int16_t>>(traceVariant);
-            } catch (const std::exception&)
-            {
-                throw PBException("Basecaller currently only supports int16_t trace data");
-            }
-        }();
-
         using IOProfiler = Mongo::Basecaller::IOProfiler;
         using IOStages = Mongo::Basecaller::IOStages;
         IOProfiler profiler(IOProfiler::Mode::OBSERVE, 100, 100);
@@ -236,7 +225,7 @@ public:
             streams_->Push(std::move(threadStream));
         });
         auto finally2 = threadStream->SetAsDefaultStream();
-        auto& analyzer = *bAnalyzer_.at(in.GetMeta().PoolId());
+        auto& analyzer = *bAnalyzer_.at(in.Metadata().PoolId());
 
         {
             static std::mutex uploadMutex;
@@ -254,17 +243,20 @@ public:
             //      can break this.
             if (measurePCIeBandwidth_)
             {
-                bytesUploaded_ += in.CopyToDevice();
+                bytesUploaded_ += std::visit([](const auto& batch)
+                {
+                    return batch.CopyToDevice();
+                }, in.Data());
                 Cuda::CudaSynchronizeDefaultStream();
             }
-            bytesUploaded_ += gpuStash->RetrievePool(in.GetMeta().PoolId());
+            bytesUploaded_ += gpuStash->RetrievePool(in.Metadata().PoolId());
             msUpload += timer.GetElapsedMilliseconds();
         }
 
         auto ret = [&](){
             auto computeProfiler = profiler.CreateScopedProfiler(IOStages::Compute);
             (void) computeProfiler;
-            return analyzer(std::move(in));
+            return analyzer(in);
         }();
 
         {
@@ -276,7 +268,7 @@ public:
 
             PacBio::Dev::Profile::FastTimer timer;
             bytesDownloaded_ += ret.DeactivateGpuMem();
-            bytesDownloaded_ += gpuStash->StashPool(in.GetMeta().PoolId());
+            bytesDownloaded_ += gpuStash->StashPool(in.Metadata().PoolId());
             msDownload += timer.GetElapsedMilliseconds();
         }
         return ret;
@@ -293,7 +285,7 @@ private:
 
     bool measurePCIeBandwidth_;
 
-    uint32_t currFrame_ = 0;
+    int32_t currFrame_ = 0;
     uint32_t numStreams_;
     size_t bytesUploaded_ = 0;
     size_t bytesDownloaded_ = 0;

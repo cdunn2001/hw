@@ -7,6 +7,9 @@ hw-mongo/
 .idea/
 .run/
 .clang-format
+/mongo/.cache/clangd/
+/mongo/.clangd
+/mongo/compile_commands.json
 .vscode
 cmake-build-*/
 build_vsc/

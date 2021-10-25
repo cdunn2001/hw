@@ -101,12 +101,22 @@ public:
     std::pair<LabelsBatch, FrameLabelerMetrics>
     NewBatch(TraceBatch<LabelsBatch::ElementType> trace)
     {
-        auto meta = trace.Metadata();
+        const auto dims = trace.StorageDims();
+        return std::make_pair(NewLabels(std::move(trace)), NewMetrics(dims));
+    }
+
+    LabelsBatch NewLabels(TraceBatch<LabelsBatch::ElementType> trace)
+    {
+        auto traceMeta = trace.Metadata();
         auto dims = trace.StorageDims();
-        return std::make_pair(
-            LabelsBatch(
-                meta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER()),
-            FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER()));
+
+        // Adjust metadata to account for latent frames.
+        BatchMetadata labelsMeta(traceMeta.PoolId(),
+                                 traceMeta.FirstFrame() - latentFrames_,
+                                 traceMeta.LastFrame() - latentFrames_,
+                                 traceMeta.FirstZmw());
+
+        return LabelsBatch(labelsMeta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER());
     }
 
     FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims)

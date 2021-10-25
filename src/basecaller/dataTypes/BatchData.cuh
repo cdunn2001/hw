@@ -122,6 +122,7 @@ public:
     }
 
     __device__ uint32_t NumFrames() const { return availableFrames_; }
+    __device__ uint32_t NumLanes() const { return dims_.lanesPerBatch; }
 
 private:
     template <typename U>

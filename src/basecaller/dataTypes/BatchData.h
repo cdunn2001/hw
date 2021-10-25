@@ -31,6 +31,7 @@
 
 #include <pacbio/datasource/SensorPacket.h>
 
+#include "common/cuda/utility/CudaArray.h"
 #include <common/cuda/memory/DataManagerKey.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray_fwd.h>
@@ -156,11 +157,29 @@ public:
             return ret-=v;
         }
 
-        LaneArray<T, laneSize> Extract() const
+        // Returns a copy of the data for the current frame, possibly after type conversion.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<FallbackType>.
+        // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
+        template <typename FallbackType = int16_t>
+        auto Extract() const
         {
+            using U = std::remove_const_t<T>;
+            // FallbackType needs to be a dependant type otherwise plugging it into
+            // LaneArray below will yell about a uint8_t specialization not existing.
+            // Regardless, it's required to be int16_t.
+            static_assert(std::is_same_v<FallbackType, int16_t>);
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
-            return LaneArray<T, laneSize>(MemoryRange<T, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            if constexpr(std::is_same_v<U, uint8_t>)
+            {
+                Cuda::Utility::CudaArray<FallbackType, laneSize> tmp;
+                std::copy(ptr_ + curFrame_ * laneWidth_,
+                          ptr_ + curFrame_ * laneWidth_ + laneSize,
+                          tmp.data());
+                return LaneArray<FallbackType, laneSize>{tmp};
+            } else {
+                return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            }
         }
 
         void Store(const LaneArray<T, laneSize>& lane)
@@ -262,11 +281,29 @@ public:
             return ret-=v;
         }
 
-        ValueType Extract() const
+        // Returns a copy of the data for the current frame, possibly after type conversion.
+        // When T == uint8_t, returns the current frame data converted to a LaneArray<FallbackType>.
+        // Otherwise, returns a direct copy of the current frame data as LaneArray<U>.
+        template <typename FallbackType = int16_t>
+        auto Extract() const
         {
+            using U = std::remove_const_t<T>;
+            // FallbackType needs to be a dependant type otherwise plugging it into
+            // LaneArray below will yell about a uint8_t specialization not existing.
+            // Regardless, it's required to be int16_t.
+            static_assert(std::is_same_v<FallbackType, int16_t>);
             if (curFrame_ >= numFrames_) throw PBException("Out of bounds: Past End");
             if (curFrame_ < 0) throw PBException("Out of bounds: Before Start");
-            return ValueType(MemoryRange<std::remove_const_t<T>, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            if constexpr(std::is_same_v<U, uint8_t>)
+            {
+                Cuda::Utility::CudaArray<FallbackType, laneSize> tmp;
+                std::copy(ptr_ + curFrame_ * laneWidth_,
+                          ptr_ + curFrame_ * laneWidth_ + laneSize,
+                          tmp.data());
+                return LaneArray<FallbackType, laneSize>{tmp};
+            } else {
+                return LaneArray<U, laneSize>(MemoryRange<U, laneSize>{ptr_ + (curFrame_ * laneWidth_)});
+            }
         }
 
     private:
@@ -371,10 +408,6 @@ protected:
 template <typename T>
 class BatchData : private Cuda::Memory::detail::DataManager
 {
-    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
-    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
-
-
     // Helper validation function, to make sure if we are constructing using
     // data from a SensorPacket, that packet's dimensions are consistent
     const BatchDimensions& ValidateDims(const BatchDimensions& dims,
@@ -398,6 +431,9 @@ class BatchData : private Cuda::Memory::detail::DataManager
         return dims;
     }
 public:
+    using GpuType = typename Cuda::Memory::UnifiedCudaArray<T>::GpuType;
+    using HostType = typename Cuda::Memory::UnifiedCudaArray<T>::HostType;
+
     BatchData(DataSource::SensorPacket packet,
               const BatchDimensions& dims,
               Cuda::Memory::SyncDirection syncDirection,

@@ -87,6 +87,17 @@ public:
         return ret;
     }
 
+    auto EmptyLabelsBatch(Data::TraceBatch<ElementType> trace)
+    {
+        auto ret = batchFactory_->NewLabels(std::move(trace));
+        for (size_t laneIdx = 0; laneIdx < ret.LanesPerBatch(); laneIdx++)
+        {
+            std::memset(ret.GetBlockView(laneIdx).Data(), 0,
+                        ret.GetBlockView(laneIdx).Size() * sizeof(Data::LabelsBatch::ElementType));
+        }
+        return ret;
+    }
+
 private:    // Data
     uint32_t poolId_;
 

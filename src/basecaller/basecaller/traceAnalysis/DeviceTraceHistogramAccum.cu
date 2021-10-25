@@ -752,8 +752,10 @@ void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramCo
 }
 
 
-void DeviceTraceHistogramAccum::AddBatchImpl(const Data::TraceBatch<DataType>& traces)
+void DeviceTraceHistogramAccum::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
+                                             const TraceHistogramAccumulator::PoolDetModel& /*detModel*/)
 {
+    // TODO: Pass detection model along and use for edge-frame scrubbing (PTSD-796).
     impl_->AddBatchImpl(traces);
     CudaSynchronizeDefaultStream();
 }

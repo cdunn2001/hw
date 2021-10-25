@@ -50,7 +50,7 @@ namespace Basecaller {
 class BatchAnalyzer
 {
 public:     // Types
-    using InputType = PacBio::Mongo::Data::TraceBatch<int16_t>;
+    using InputType = PacBio::Mongo::Data::TraceBatchVariant;
     using OutputType = PacBio::Mongo::Data::BatchResult;
 
 public:
@@ -74,7 +74,7 @@ public:
     /// Call operator is non-reentrant and will throw if a trace batch is
     /// received for the wrong ZMW batch or is out of chronological order.
     // TODO clean this change to reference
-    OutputType operator()(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch);
+    OutputType operator()(const InputType& tbatch);
 
     uint32_t PoolId() const { return poolId_; }
 
@@ -91,10 +91,10 @@ protected:
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
 
 private:
-    virtual OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) = 0;
+    virtual OutputType AnalyzeImpl(const InputType& tbatch) = 0;
 
     uint32_t poolId_;   // ZMW pool being processed by this analyzer.
-    uint32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
+    int32_t nextFrameId_ = 0;  // Start frame id expected by the next call.
 };
 
 // Does a single dme estimate upfront, once we've gathered enough
@@ -115,7 +115,7 @@ public:
 
     ~SingleEstimateBatchAnalyzer() = default;
 
-    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+    OutputType AnalyzeImpl(const InputType& tbatch) override;
 private:
     bool isModelInitialized_ {false};
     // Marks the first frame that get's a real model estimate and
@@ -145,7 +145,7 @@ public:
 
     ~FixedModelBatchAnalyzer() = default;
 
-    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+    OutputType AnalyzeImpl(const InputType& tbatch) override;
 };
 
 // Runs continuous (staggered) dme estimations that update as new data comes in.
@@ -169,7 +169,7 @@ public:
 
     ~DynamicEstimateBatchAnalyzer() = default;
 
-    OutputType AnalyzeImpl(const PacBio::Mongo::Data::TraceBatch<int16_t>& tbatch) override;
+    OutputType AnalyzeImpl(const InputType& tbatch) override;
 private:
     uint32_t poolDmeDelayFrames_;
     bool fullEstimationOccured_ {false};

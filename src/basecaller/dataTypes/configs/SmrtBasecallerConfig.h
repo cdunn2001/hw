@@ -28,7 +28,7 @@
 #define mongo_dataTypes_configs_SmrtBasecallerConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
-#include <pacbio/configuration/implementation/ConfigVariant.hpp>
+#include <pacbio/configuration/types/Variant.h>
 
 #include <bazio/BazIOConfig.h>
 
