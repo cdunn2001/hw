@@ -337,7 +337,7 @@ private:
             },
             [&](const WX2SourceConfig& wx2SourceConfig)
             {
-                return AllocatorMode::SHARED_MEMORY;
+                return AllocatorMode::SHARED_MEMORY_HUGE_CUDA;
             }
         );
 
@@ -509,6 +509,10 @@ private:
                     }
                 }
             }
+#if 0
+            // I need this to continue debugging MTL
+            destLaneSeen.insert(0);
+#endif            
 
             const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
             const auto actualZmw = destLaneSeen.size() * laneSize;
@@ -543,6 +547,10 @@ private:
                     currZmw++;
                     idx++;
                     assert(idx < actualZmw);
+#if 0
+                    // I need this to continue debugging MTL
+                    PBLOG_NOTICE << "select/lane: currZmw" << currZmw << " " << idx;
+#endif
                 }
             }
             assert(idx == actualZmw);

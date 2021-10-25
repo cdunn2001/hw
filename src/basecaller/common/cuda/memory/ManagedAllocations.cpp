@@ -172,7 +172,6 @@ private:
     // Singleton access.  We're already using a static and application
     // wide allocation cache, so it makes sense to similarly treat
     // the AllocationSlicer that backs it all
-// public:
     static AllocationSlicer<HugePinnedHelper, 64>& Allocator()
     {
         static AllocationSlicer<HugePinnedHelper, 64> alloc_(1<<30);
@@ -186,6 +185,7 @@ struct SharedHugeCudaPinnedAllocator
           IAllocator::CUDA_MEMORY
         | IAllocator::HUGEPAGES
         | IAllocator::ALIGN_64B
+        | IAllocator::ALIGN_256B
         | IAllocator::SHARED_MEMORY;
 
     static constexpr const char* description = "Shared Pinned HugePage Host Memory";
@@ -194,11 +194,18 @@ struct SharedHugeCudaPinnedAllocator
 
     static void* allocate(size_t size)
     {
-        return Allocator().Allocate(size);
+        void* ptr = Allocator().Allocate(size);
+#if 0
+        CudaHostRegister(ptr, size);
+#endif
+        return ptr;
     }
 
     static void deallocate(void* ptr)
     {
+#if 0
+        CudaHostUnregister(ptr);
+#endif
         Allocator().Deallocate(ptr);
     }
 
@@ -631,7 +638,7 @@ void VisitHostManager(AllocatorMode mode, F&& f)
             Invoke(AllocationManager<HugePinnedAllocator>::GetManager());
             return;
         }
-    case AllocatorMode::SHARED_MEMORY:
+    case AllocatorMode::SHARED_MEMORY_HUGE_CUDA:
         {
             Invoke(AllocationManager<SharedHugeCudaPinnedAllocator>::GetManager());
             return;
@@ -673,7 +680,7 @@ std::unique_ptr<IMongoCachedAllocator> CreateAllocator(AllocatorMode alloc, cons
         {
             return std::make_unique<MongoCachedAllocator<HugePinnedAllocator>>(marker);
         }
-    case AllocatorMode::SHARED_MEMORY:
+    case AllocatorMode::SHARED_MEMORY_HUGE_CUDA:
         {
             return std::make_unique<MongoCachedAllocator<SharedHugeCudaPinnedAllocator>>(marker);
         }
@@ -740,7 +747,7 @@ void DisableAllCaching()
     DisableHostCaching(AllocatorMode::MALLOC);
     DisableHostCaching(AllocatorMode::CUDA);
     DisableHostCaching(AllocatorMode::HUGE_CUDA);
-    DisableHostCaching(AllocatorMode::SHARED_MEMORY);
+    DisableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
     DisableGpuCaching();
 }
 

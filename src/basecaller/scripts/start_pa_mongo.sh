@@ -114,7 +114,8 @@ cat <<HERE > $tmpjson
   },
   "traceSaver": 
   {
-    "roi": [ [0,127],[192,64]]
+    "roi": [ [0,0,128,256 ]] // this is not working
+    //"roi": [ [0,127],[192,64]] // this is not working either
   }
 } 
 HERE
