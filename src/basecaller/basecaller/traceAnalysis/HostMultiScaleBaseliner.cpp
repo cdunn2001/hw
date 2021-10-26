@@ -147,8 +147,9 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
             // Data scaled first
             auto rawSignal = (trIt.Extract() - pedestal_) * scaler_;
             LaneArray blSubtractedFrame(rawSignal - baselineEstimate);
-            // ... then added to statistics
+            // ... stored as output traces
             blsIt.Store(blSubtractedFrame);
+            // ... and added to statistics
             AddToBaselineStats(rawSignal, blSubtractedFrame, baselinerStats);
         }
     }

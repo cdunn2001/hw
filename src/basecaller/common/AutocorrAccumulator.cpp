@@ -16,146 +16,87 @@ namespace Mongo {
 template <typename T>
 AutocorrAccumulator<T>::AutocorrAccumulator(const T& offset)
     : stats_ {offset}
-    , m1First_ {0}
-    , m1Last_ {0}
-    , m2_ {0}
-    , canAddSample_ {true}
+    , m2_  {0}
+    , fbi_ {0}
+    , bbi_ {0}
 {
-    static_assert(AutocorrAccumState::lag > 0, "Invalid lag value");
+    static_assert(lag_ > 0, "Invalid lag value");
 
-    frontBuf_.reserve(AutocorrAccumState::lag);
-    backBuf_.set_capacity(AutocorrAccumState::lag);
+    for (auto k = 0u; k < lag_; ++k) { fBuf_[k] = bBuf_[k] = T(0); }
 }
 
 template <typename T>
 void AutocorrAccumulator<T>::AddSample(const T& value)
 {
-    assert (canAddSample_);
-    const auto offsetVal = value - Offset();
-    // back buf
-    if (backBuf_.full())
+    auto valLessOffset = value - Offset();
+    if (fbi_ < lag_)
     {
-        m1First_ += backBuf_.front();
-        m1Last_ += offsetVal;
-        m2_ += backBuf_.front() * offsetVal;
-    } else {
-        frontBuf_.push_back(offsetVal);
+        fBuf_[fbi_++] = valLessOffset;
     }
-    backBuf_.push_back(offsetVal);
-    stats_.AddSample(value);   // StatAccumulator will subtract the offset itself.
+    m2_  += bBuf_[bbi_%lag_] * valLessOffset;
+    bBuf_[bbi_++%lag_] = valLessOffset; bbi_ %= lag_;
+    stats_.AddSample(value);   // StatAccumulator subtracts the offset itself.
 }
 
 template <typename T>
 T AutocorrAccumulator<T>::Autocorrelation() const
 {
     using U = Simd::ScalarType<T>;
-    static const T nan {std::numeric_limits<U>::quiet_NaN()};
-    const auto nmk = stats_.Count() - boost::numeric_cast<U>(AutocorrAccumState::lag);
-#if 1
-    // If we define R(k) = \sum_{i=0}^{n-k-1} (x_i - m10_/(n-k)) (x_{i+k} - m1k_/(n-k)) / [(n-k)*Variance()]
-    // As of 2017-09-12, this definition appears to be more accurate than the
-    // alternative below, based on preliminary testing.
-    T ac = m1First_ * m1Last_ / nmk;
-    ac = (m2_ - ac) / (nmk * stats_.Variance());
-#else
-    // Approximation: m10_ == m1k_ == nmk*Mean().
-    T ac = m2_ / nmk - pow2(sa_.Mean());
-    ac /= sa_.Variance();
-#endif
-    // Ensure range bounds.
-    using std::max;
-    using std::min;
-    const auto mnan = isnan(ac);
-    ac = max(ac, -1.0f);
-    ac = min(ac, 1.0f);
+    const auto nmk = Count() - boost::numeric_cast<U>(lag_);
 
-    // If insufficient data, return NaN.
+    // Define R(k) = \frac{1}{[(n-k)*Variance()]}*\sum_{i=0}^{n-k-1} (x_i - \frac{m10_}{(n-k)}) (x_{i+k} - \frac{m1k_}{(n-k)})
+    // Reference python code (with offset = 0):
+    // a, l = np.sin(1.7*np.arange(100)), 4
+    // mu = np.mean(a)
+    // ac = mu*(np.sum(a[:-l] + a[l:]) - len(a[l:])*mu)
+    // autocorr_l4 = (np.sum(a[:-l]*a[l:]) - ac) / len(a[l:]) / np.var(a, ddof=1)
+    // autocorr_l4 # 0.8617625800897488
+    auto mu = Mean() - Offset();
+    auto m1x2 = 2*stats_.M1();
+    for (auto k = 0u; k < lag_; ++k) { m1x2 -= fBuf_[k] + bBuf_[k]; }
+    auto ac = mu*(m1x2 - nmk*mu);
+    ac = (m2_ - ac) / ((nmk - 1) * stats_.Variance());
+
+    // Ensure range bounds and if insufficient data, return NaN.
     // Also, restore NaN that might have been dropped in max or min above.
     using Simd::Blend;
-    return Blend((nmk < T(1.0f)) | mnan, nan, ac);
+    static const T nan(std::numeric_limits<U>::quiet_NaN());
+
+    ac = min(max(ac, -1.0f), 1.0f);  // clamp ac in [-1..1]
+    return Blend((nmk < T(1.0f)) | isnan(ac), nan, ac);
 }
 
-template <typename T>
-AutocorrAccumulator<T> AutocorrAccumulator<T>::operator*(float s) const
-{
-    AutocorrAccumulator r {*this};
-    r *= s;
-    return r;
-}
-
-template <typename T>
-AutocorrAccumulator<T>& AutocorrAccumulator<T>::operator*=(float s)
-{
-    stats_ *= s;
-    m1First_ *= s;
-    m1Last_ *= s;
-    m2_ *= s;
-    canAddSample_ = false;
-    return *this;
-}
 
 template <typename T>
 AutocorrAccumulator<T>&
 AutocorrAccumulator<T>::Merge(const AutocorrAccumulator& that)
 {
-    auto lag_ = AutocorrAccumState::lag;
-    // The operation is now not commutative.  *this is the front and "that" is the back
-    if (that.backBuf_.full() || !canAddSample_ || !that.CanAddSample())
+    // !!! The operation is not commutative !!!
+    // "this" is the left accumulator and "that" is the right one
+
+    // Merge common statistics before processing tails
+    stats_.Merge(that.stats_);
+    m2_  += that.m2_;
+
+    auto n1 = lag_ - that.fbi_;  // that fBuf may be not filled up
+    for (uint16_t k = 0; k < lag_ - n1; k++)
     {
-        stats_.Merge(that.stats_);
-        m1First_ += that.m1First_;
-        m1Last_ += that.m1Last_;
-        m2_ += that.m2_;
-        // "that" has more than lag_ samples i.e. the typical case
-        if (canAddSample_ && that.CanAddSample())
-        {
-            auto backBufIter = backBuf_.begin();
-            auto thatFrontBufIter = that.frontBuf_.begin();
-            // skip (lag_ - backBuf_.size()) entries to preserve lag
-            thatFrontBufIter += (lag_ - backBuf_.size());
-            for (;
-                backBufIter != backBuf_.end() && thatFrontBufIter != that.frontBuf_.end();
-                ++backBufIter, ++thatFrontBufIter)
-            {
-                // add the front
-                m1Last_ += *thatFrontBufIter;
-                m1First_ += *backBufIter;
-                m2_ += (*backBufIter) * (*thatFrontBufIter);
-            }
-            // The "that" output back buffer is appended to the back buffer of "this"
-            for (auto thatBackBufVal : that.backBuf_)
-            {
-                backBuf_.push_back(thatBackBufVal);
-            }
-            // 0 <= nCopyStartBuf <= lag_; it is zero if frontBuf_ is full,
-            // and the loop below is not executed
-            // otherwise, copy the first nCopyStartBuf values from that.frontBuf
-            unsigned nCopyStartBuf = lag_ - frontBuf_.size();
-            // append nCopyStartBuf entries from that.frontBuf_ to this->frontBuf_
-            unsigned iCopy = 0;
-            for (thatFrontBufIter = that.frontBuf_.begin();
-                iCopy < nCopyStartBuf;
-                ++iCopy, ++thatFrontBufIter)
-            {
-                frontBuf_.push_back(*thatFrontBufIter);
-            }
-        } else
-        {
-            canAddSample_ = false;
-        }
-    } else
-    {
-        // "that" sequence is less than lag_ entries long so we can
-        // simply add the data from that to this using AddSample()
-      const auto offsetVal = Offset();
-      for (auto thatFrontBufVal : that.frontBuf_)
-        {
-            // add offset value before adding the sample, since the buffer contains
-            // offset adjusted values
-            AddSample(thatFrontBufVal+offsetVal);
-        }
+        // Sum of muls of overlapping elements
+        m2_  += bBuf_[(bbi_+k)%lag_] * that.fBuf_[k];
+        // Accept the whole back buffer
+        bBuf_[(bbi_+k)%lag_] = that.bBuf_[(that.bbi_+n1+k)%lag_];
     }
-    canAddSample_ &= that.CanAddSample();
+
+    auto n2 = lag_ - fbi_;      // this fBuf may be not filled up
+    for (uint16_t k = 0; k < n2; ++k)
+    {
+        // No need to adjust m2_ as excessive values were mul by 0
+        fBuf_[fbi_+k] = that.fBuf_[k];
+    }
+
+    // Advance buffer indices
+    fbi_ += n2;
+    bbi_ += (lag_-n1); bbi_ %= lag_;
 
     return *this;
 }
@@ -168,8 +109,10 @@ AutocorrAccumulator<T>::operator+=(const AutocorrAccumulator& that)
     // TODO: Handle the nonuniform SIMD case.
     using PacBio::Simd::all;
     assert(all(m));
-    if (all(m)) *this = that;
-    else Merge(that);
+    if (all(m)) 
+        *this = that;
+    else 
+        Merge(that);
     return *this;
 }
 

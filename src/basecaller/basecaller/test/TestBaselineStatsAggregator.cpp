@@ -47,7 +47,7 @@ struct TestBaselineStatsAggregator : public ::testing::Test
     using TraceElementType = Data::BaselinedTraceElement;
 
     static constexpr unsigned int chunkSize = 64;  // frames per chunk
-    static constexpr unsigned int poolSize = 6;    // lanes per pool
+    static constexpr unsigned int poolSize = 2;    // lanes per pool
 
     PacBio::Logging::LogSeverityContext logContext {PacBio::Logging::LogLevel::WARN};
 
@@ -61,6 +61,7 @@ struct TestBaselineStatsAggregator : public ::testing::Test
     {
         Data::BaselinerMetrics stats(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
         ArrayUnion<LaneArray<float>> addVec;
+        const auto lag = AutocorrAccumState::lag;
         for (uint32_t i = 0; i < laneSize; ++i)
         {
             addVec[i] = static_cast<float>(i*zmwAddition);
@@ -74,16 +75,23 @@ struct TestBaselineStatsAggregator : public ::testing::Test
 
             const auto n0 = chunkSize/2 + l * laneAddition + addVec;  // Number of mock baseline frames.
             const auto meanVec = blMean + l * laneAddition + addVec;
-            const auto varVec = blVar + l * laneAddition + addVec;
-            // Hack the baseline statistics.
+            const auto varVec  = blVar  + l * laneAddition + addVec;
+            
+            // Model the baseline statistics
             bls.baselineStats.moment0 = n0;
             bls.baselineStats.moment1 = n0 * meanVec;
             bls.baselineStats.moment2 = (n0 - 1)*varVec + n0*pow2(meanVec);
 
-            // Hack in autocor values too.  Really not trying to do anything real here...
-            bls.fullAutocorrState.moment1First = n0 * meanVec - varVec;
-            bls.fullAutocorrState.moment1Last = n0 * meanVec + varVec;
-            bls.fullAutocorrState.moment2 = pow2(n0 * meanVec);
+            // Model autocor values too
+            bls.fullAutocorrState.moment2      = lag * meanVec * 0.0f                // left part
+                                               + (n0 - 2*lag)  * pow2(meanVec)       // main part
+                                               + lag * (meanVec + varVec) * meanVec; // right part
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.fBuf[k] = meanVec - varVec;   // left values
+            for (auto k = 0u; k < lag; ++k) bls.fullAutocorrState.bBuf[k] = meanVec + varVec;   // right values
+
+            auto cnt = uint32_t(n0.ToArray()[0]);
+            bls.fullAutocorrState.bIdx[0] = std::min(cnt, lag);
+            bls.fullAutocorrState.bIdx[1] = cnt % lag;
 
             // Cheat a bit and duplicate the baseline stats into the autocorr stats
             bls.fullAutocorrState.basicStats = bls.baselineStats;
@@ -147,8 +155,6 @@ TYPED_TEST(TestBaselineStatsAggregator, EmptyAggregator)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == 0));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == 0));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == 0));
     }
 }
@@ -158,6 +164,7 @@ TYPED_TEST(TestBaselineStatsAggregator, EmptyAggregator)
 // pristine "empty" state
 TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
 {
+    auto lag = AutocorrAccumState::lag;
     auto bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
     auto generatedStats = TestFixture::GenerateStats(4, 8);
     bsa->AddMetrics(generatedStats);
@@ -181,15 +188,13 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expected.fullAutocorrState.moment1First)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expected.fullAutocorrState.moment1Last)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 
     Data::BaselinerMetrics metrics2 = bsa->TraceStats();
     for(size_t i = 0; i < metrics.baselinerStats.Size(); ++i)
     {
-        const auto& actual = metrics.baselinerStats.GetHostView()[i];
+        const auto& actual   =  metrics.baselinerStats.GetHostView()[i];
         const auto& expected = metrics2.baselinerStats.GetHostView()[i];
         EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment0) == LaneArr(expected.baselineStats.moment0)));
         EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment1) == LaneArr(expected.baselineStats.moment1)));
@@ -205,16 +210,14 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expected.fullAutocorrState.moment1First)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expected.fullAutocorrState.moment1Last)));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 
     bsa->Reset();
     Data::BaselinerMetrics metrics3 = bsa->TraceStats();
-    for(size_t i = 0; i < metrics.baselinerStats.Size(); ++i)
+    for(size_t j = 0; j < metrics.baselinerStats.Size(); ++j)
     {
-        const auto& actual = metrics3.baselinerStats.GetHostView()[i];
+        const auto& actual = metrics3.baselinerStats.GetHostView()[j];
         EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment0) == 0));
         EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment1) == 0));
         EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment2) == 0));
@@ -229,9 +232,18 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == 0));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == 0));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == 0));
         EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == 0));
+
+        for (auto k = 0u; k < lag; ++k)
+        { 
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.fBuf[k]) == 0));
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bBuf[k]) == 0));
+        }
+
+        for (auto k = 0u; k < actual.fullAutocorrState.bIdx.size(); ++k)
+        { 
+            EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.bIdx[k]) == 0));
+        }
     }
 }
 
@@ -296,12 +308,11 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
 
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
-    const uint32_t nChunks = mPar.size();
-    ASSERT_EQ(nChunks, s2Par.size()) << "Test is broken.";
+    ASSERT_EQ(mPar.size(), s2Par.size()) << "Number of means and variance should be equal";
 
     // Feed mock data to BaselineStatsAggregator under test.
     std::vector<Data::BaselinerMetrics> simulatedStats;
-    for (unsigned int i = 0; i < nChunks; ++i)
+    for (unsigned int i = 0; i < mPar.size(); ++i)
     {
         // couple parameters to force non-constant data across pool/lane
         int laneMultiplier = 2;
@@ -312,54 +323,58 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
     }
 
     using LaneArr = LaneArray<float>;
+    auto lag = AutocorrAccumState::lag;
     Data::BaselinerMetrics metrics = bsa->TraceStats();
     for(size_t lane = 0; lane < metrics.baselinerStats.Size(); ++lane)
     {
-
-        Data::BaselinerStatAccumState expectedState{};
+        Data::BaselinerStatAccumState expected{};
         for (const auto& stat : simulatedStats)
         {
             const auto& laneStat = stat.baselinerStats.GetHostView()[lane];
             for (size_t zmw = 0; zmw < laneSize; ++zmw)
             {
-                expectedState.baselineStats.moment0[zmw] += laneStat.baselineStats.moment0[zmw];
-                expectedState.baselineStats.moment1[zmw] += laneStat.baselineStats.moment1[zmw];
-                expectedState.baselineStats.moment2[zmw] += laneStat.baselineStats.moment2[zmw];
-                expectedState.baselineStats.offset[zmw] += laneStat.baselineStats.offset[zmw];
+                expected.baselineStats.moment0[zmw] += laneStat.baselineStats.moment0[zmw];
+                expected.baselineStats.moment1[zmw] += laneStat.baselineStats.moment1[zmw];
+                expected.baselineStats.moment2[zmw] += laneStat.baselineStats.moment2[zmw];
+                expected.baselineStats.offset[zmw] += laneStat.baselineStats.offset[zmw];
 
-                expectedState.rawBaselineSum[zmw] += laneStat.rawBaselineSum[zmw];
-                expectedState.traceMax[zmw] = std::max(expectedState.traceMax[zmw], laneStat.traceMax[zmw]);
-                expectedState.traceMin[zmw] = std::min(expectedState.traceMin[zmw], laneStat.traceMin[zmw]);
+                expected.rawBaselineSum[zmw] += laneStat.rawBaselineSum[zmw];
+                expected.traceMax[zmw] = std::max(expected.traceMax[zmw], laneStat.traceMax[zmw]);
+                expected.traceMin[zmw] = std::min(expected.traceMin[zmw], laneStat.traceMin[zmw]);
 
-                expectedState.fullAutocorrState.basicStats.moment0[zmw] += laneStat.fullAutocorrState.basicStats.moment0[zmw];
-                expectedState.fullAutocorrState.basicStats.moment1[zmw] += laneStat.fullAutocorrState.basicStats.moment1[zmw];
-                expectedState.fullAutocorrState.basicStats.moment2[zmw] += laneStat.fullAutocorrState.basicStats.moment2[zmw];
-                expectedState.fullAutocorrState.basicStats.offset[zmw] += laneStat.fullAutocorrState.basicStats.offset[zmw];
+                expected.fullAutocorrState.basicStats.moment0[zmw] += laneStat.fullAutocorrState.basicStats.moment0[zmw];
+                expected.fullAutocorrState.basicStats.moment1[zmw] += laneStat.fullAutocorrState.basicStats.moment1[zmw];
+                expected.fullAutocorrState.basicStats.moment2[zmw] += laneStat.fullAutocorrState.basicStats.moment2[zmw];
+                expected.fullAutocorrState.basicStats.offset[zmw] += laneStat.fullAutocorrState.basicStats.offset[zmw];
 
-                expectedState.fullAutocorrState.moment1First[zmw] += laneStat.fullAutocorrState.moment1First[zmw];
-                expectedState.fullAutocorrState.moment1Last[zmw] += laneStat.fullAutocorrState.moment1Last[zmw];
-                expectedState.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
+                expected.fullAutocorrState.moment2[zmw] += laneStat.fullAutocorrState.moment2[zmw];
+
+                for (auto k = 0u; k < lag; ++k)
+                {
+                    expected.fullAutocorrState.moment2[zmw] +=
+                        expected.fullAutocorrState.bBuf[k][zmw] * laneStat.fullAutocorrState.fBuf[k][zmw];
+
+                    expected.fullAutocorrState.bBuf[k][zmw] = laneStat.fullAutocorrState.bBuf[k][zmw];
+                }
             }
         }
 
         const auto& actual = metrics.baselinerStats.GetHostView()[lane];
-        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment0) == LaneArr(expectedState.baselineStats.moment0)));
-        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment1) == LaneArr(expectedState.baselineStats.moment1)));
-        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment2) == LaneArr(expectedState.baselineStats.moment2)));
-        EXPECT_TRUE(all(LaneArr(actual.baselineStats.offset) == LaneArr(expectedState.baselineStats.offset)));
+        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment0) == LaneArr(expected.baselineStats.moment0)));
+        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment1) == LaneArr(expected.baselineStats.moment1)));
+        EXPECT_TRUE(all(LaneArr(actual.baselineStats.moment2) == LaneArr(expected.baselineStats.moment2)));
+        EXPECT_TRUE(all(LaneArr(actual.baselineStats.offset) == LaneArr(expected.baselineStats.offset)));
 
-        EXPECT_TRUE(all(LaneArr(actual.traceMax) == LaneArr(expectedState.traceMax)));
-        EXPECT_TRUE(all(LaneArr(actual.traceMin) == LaneArr(expectedState.traceMin)));
-        EXPECT_TRUE(all(LaneArr(actual.rawBaselineSum) == LaneArr(expectedState.rawBaselineSum)));
+        EXPECT_TRUE(all(LaneArr(actual.traceMax) == LaneArr(expected.traceMax)));
+        EXPECT_TRUE(all(LaneArr(actual.traceMin) == LaneArr(expected.traceMin)));
+        EXPECT_TRUE(all(LaneArr(actual.rawBaselineSum) == LaneArr(expected.rawBaselineSum)));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment0) == LaneArr(expectedState.fullAutocorrState.basicStats.moment0)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment1) == LaneArr(expectedState.fullAutocorrState.basicStats.moment1)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expectedState.fullAutocorrState.basicStats.moment2)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expectedState.fullAutocorrState.basicStats.offset)));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment0) == LaneArr(expected.fullAutocorrState.basicStats.moment0)));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment1) == LaneArr(expected.fullAutocorrState.basicStats.moment1)));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.moment2) == LaneArr(expected.fullAutocorrState.basicStats.moment2)));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.basicStats.offset) == LaneArr(expected.fullAutocorrState.basicStats.offset)));
 
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1First) == LaneArr(expectedState.fullAutocorrState.moment1First)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment1Last) == LaneArr(expectedState.fullAutocorrState.moment1Last)));
-        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expectedState.fullAutocorrState.moment2)));
+        EXPECT_TRUE(all(LaneArr(actual.fullAutocorrState.moment2) == LaneArr(expected.fullAutocorrState.moment2)));
     }
 }
 

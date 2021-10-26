@@ -168,6 +168,8 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
 
 Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
 {
+    static constexpr uint32_t lag = AutocorrAccumState::lag;
+    auto n0 = config.config.layout.framesPerChunk;
     Data::BaselinerMetrics ret(
             config.dims.lanesPerBatch,
             Cuda::Memory::SyncDirection::HostWriteDeviceRead,
@@ -177,18 +179,28 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
     {
         ret.baselinerStats.GetHostView()[lane] = bsa.GetState();
         auto& baselinerStats = ret.baselinerStats.GetHostView()[lane];
+
+        // Fill in front and back buffers
+        for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.fBuf[k] = (-9.0f + 2*k);
+        for (auto k = 0u; k < lag; ++k) baselinerStats.fullAutocorrState.bBuf[k] = (6.0f + k);
+        baselinerStats.fullAutocorrState.bIdx[0] = std::min(n0, lag);
+        baselinerStats.fullAutocorrState.bIdx[1] = n0 % lag;
+
+        // Python code to create the reference block stat metrics
+        // lane = np.random.normal(0, 5, 512).astype(np.float32)
+        // lane += np.roll(lane, 4)  # add correlation
+        // lane /= 2
+        // lane[:l], lane[-l:] = [-9, -7, -5, -3], [6, 7, 8, 9]
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
             baselinerStats.rawBaselineSum[zmw] = 100;
             baselinerStats.baselineStats.moment0[zmw] = 98;
             baselinerStats.baselineStats.moment1[zmw] = 10;
             baselinerStats.baselineStats.moment2[zmw] = 100;
-            baselinerStats.fullAutocorrState.moment1First[zmw] = 10;
-            baselinerStats.fullAutocorrState.moment1Last[zmw] = 20;
-            baselinerStats.fullAutocorrState.moment2[zmw] = 120;
-            baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = 500;
-            baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 1000;
-            baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 10000;
+            baselinerStats.fullAutocorrState.moment2[zmw] = 2510;
+            baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = n0;
+            baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 110;
+            baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 5650;
         }
     }
     return ret;
@@ -269,7 +281,6 @@ GenerateModels(BaseSimConfig sim)
 template <typename HFT>
 void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
 {
-
     // TODO: test that the last block is finalized regardless of condition?
 
     size_t numFramesPerBatch = sim.config.layout.framesPerChunk;
@@ -284,7 +295,6 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
     const auto& pdMetrics = GeneratePulseDetectorMetrics(sim);
 
     int blocks_tested = 0;
-
     for (size_t batchIdx = 0; batchIdx < numBatchesPerHFMB; ++batchIdx)
     {
         auto pulses = GenerateBases(sim, batchIdx);
@@ -293,7 +303,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
         if (basecallingMetrics)
         {
             ASSERT_EQ(numBatchesPerHFMB - 1, batchIdx);
-            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; l++)
+            for (uint32_t l = 0; l < pulses.Dims().lanesPerBatch; ++l)
             {
                 const auto& mb = basecallingMetrics->GetHostView()[l];
                 const auto& bs = pdMetrics.baselineStats.GetHostView()[l];
@@ -387,7 +397,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
-                    EXPECT_NEAR(0.0150028, mb.autocorrelation[z], 0.001);
+                    EXPECT_NEAR(0.415835, mb.autocorrelation[z], 0.0001);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
                     EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);

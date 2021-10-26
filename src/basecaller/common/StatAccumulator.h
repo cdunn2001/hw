@@ -97,7 +97,6 @@ public:     // Const methods
     /// NaN if Count() < 2.
     VF Variance() const
     {
-        using std::max;
         static const VF nan {VF(std::numeric_limits<float>::quiet_NaN())};
         auto var = m1_ * m1_ / m0_;
         var = (m2_ - var) / (m0_ - 1.0f);
