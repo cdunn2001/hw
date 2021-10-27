@@ -125,6 +125,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 // Static constants
 constexpr unsigned short DmeEmDevice::nModelParams;
 constexpr unsigned int DmeEmDevice::nFramesMin;
+constexpr float DmeEmDevice::xtalkCovar;
 
 template <typename VF>
 __device__ VF ModelSignalCovar(
@@ -132,9 +133,10 @@ __device__ VF ModelSignalCovar(
         VF signalMean,
         VF baselineVar)
 {
-    baselineVar += signalMean;
-    auto tmp = analog.excessNoiseCV * signalMean;
-    baselineVar+= tmp*tmp;
+    auto tmp = signalMean * analog.excessNoiseCV;
+
+    baselineVar += signalMean * DmeEmDevice::xtalkCovar;
+    baselineVar += tmp*tmp;
     return baselineVar;
 }
 

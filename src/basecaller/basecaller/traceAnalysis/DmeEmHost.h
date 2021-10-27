@@ -72,6 +72,10 @@ public:     // Static constants
     /// Minimum number of frames required for parameter estimation.
     static constexpr unsigned int nFramesMin = 20 * nModelParams;
 
+    /// Cross-talk correction value. This value was pre-computed in
+    /// Matlab using data read from an arbitrary Spider trace file
+    static constexpr float xtalkCovar = 1.2171f;
+
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig);

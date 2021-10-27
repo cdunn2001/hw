@@ -65,6 +65,7 @@ namespace Basecaller {
 // Static constants
 constexpr unsigned short DmeEmHost::nModelParams;
 constexpr unsigned int DmeEmHost::nFramesMin;
+constexpr float DmeEmHost::xtalkCovar;
 
 // Static configuration parameters
 Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
@@ -702,7 +703,6 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     return cf;
 }
 
-
 // static
 void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
                               LaneDetModelHost* detModel)
@@ -737,7 +737,6 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     return pdm;
 }
 
-
 void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
                                  LaneDetModel& ldm) const
 {
@@ -770,7 +769,6 @@ void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
     }
 }
 
-
 // static
 LaneArray<float> DmeEmHost::ModelSignalCovar(
         const Data::AnalogMode& analog,
@@ -778,8 +776,8 @@ LaneArray<float> DmeEmHost::ModelSignalCovar(
         const LaneArray<float>& baselineVar)
 {
     LaneArray<float> r {baselineVar};
-    r += signalMean;
-    r += pow2(analog.excessNoiseCV * signalMean);
+    r += signalMean * xtalkCovar;
+    r += pow2(signalMean * analog.excessNoiseCV);
     return r;
 }
 
