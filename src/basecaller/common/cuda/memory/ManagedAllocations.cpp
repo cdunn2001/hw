@@ -213,10 +213,12 @@ private:
     static SharedMemoryAllocator& Allocator()
     {
         // FIXME This is just a proof of concept hack.
+        // This needs to be plumbed with the WXIPCDataSource which knows
+        // these values.
         static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
         config.baseAddress = 17179869184ULL;
         config.size = 25769803776ULL * 2;
-        config.numaBinding = 0xF;
+        config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
         config.removeSharedSegmentsOnDestruction = false;
 
         static SharedMemoryAllocator alloc_(config);
