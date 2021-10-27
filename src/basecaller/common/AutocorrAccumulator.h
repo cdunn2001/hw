@@ -68,29 +68,38 @@ public:     // Structors
 
     AutocorrAccumulator(const AutocorrAccumState& state)
         : stats_ {state.basicStats}
-        , m1First_ {state.moment1First}
-        , m1Last_ {state.moment1Last}
         , m2_ {state.moment2}
-        , canAddSample_ {false}
-    { }
+        , fbi_ {state.bIdx[0][0]}
+        , bbi_ {state.bIdx[1][0]}
+    {
+        // Deserialize both buffers
+        for (auto k = 0u; k < lag_; ++k)
+        { 
+            fBuf_[k] = state.fBuf[k];
+            bBuf_[k] = state.bBuf[k];
+        }
+    }
 
 public:     // Const methods
     AutocorrAccumState GetState() const
     {
-        return AutocorrAccumState
+        AutocorrAccumState ret
         {
             stats_.GetState(),
-            m1First_,
-            m1Last_,
             m2_
         };
+
+        // Serialize both buffers
+        for (auto k = 0u; k < lag_; ++k)
+        { 
+            ret.fBuf[k] = fBuf_[k];
+            ret.bBuf[k] = bBuf_[k]; 
+        }
+        ret.bIdx[0] = fbi_;
+        ret.bIdx[1] = bbi_;
+
+        return ret;
     }
-
-    const T& M1First() const
-    { return m1First_; }
-
-    const T& M1Last() const
-    { return m1Last_; }
 
     const T& M2() const
     { return m2_; }
@@ -118,13 +127,6 @@ public:     // Const methods
     const T& Offset() const
     { return stats_.Offset(); }
 
-    /// Returns a copy of *this with all moments scaled by \a s.
-    AutocorrAccumulator operator*(float s) const;
-
-    /// Whether *this is in a state that allows addition of more sample data.
-    bool CanAddSample() const
-    { return canAddSample_; }
-
 public:     // Mutating methods
     /// Copy assignment.
     AutocorrAccumulator& operator=(const AutocorrAccumulator& that) = default;
@@ -137,10 +139,6 @@ public:     // Mutating methods
     /// is nonzero and lags are not equal.
     /// \returns *this.
     AutocorrAccumulator& operator+=(const AutocorrAccumulator& that);
-
-    /// Scales all moments by \a s, as if s * Count() samples had been accumulated.
-    /// \returns *this.
-    AutocorrAccumulator& operator*=(float s);
 
     /// Accumulate another data sample into the moments.
     void AddSample(const T& value);
@@ -166,24 +164,22 @@ public:     // Mutating methods
     void Reset()
     {
         stats_.Reset();
-        backBuf_.clear();
-        frontBuf_.clear();
-        m1First_ = m1Last_ = m2_ = T(0);
-        canAddSample_ = true;
+        m2_  = T(0);
+        for (auto k = 0u; k < lag_; ++k) { fBuf_[k] = bBuf_[k] = T(0); }
+        fbi_ = 0;
+        bbi_ = 0;
     }
 
 private:    // Data
+    static constexpr uint16_t lag_ = AutocorrAccumState::lag;
     StatAccumulator<T> stats_;
 
-    // TODO: Pretty sure that AlignedCircularBuffer uses heap allocation.
-    // Replace with something based on something like boost::static_vector.
-    AlignedCircularBuffer<T> backBuf_;
-    AlignedVector<T> frontBuf_;
+    T m2_;     // Generalized second moment. Sum of x_{i} * x_{i+lag_}
 
-    T m1First_;    // First moment of the first Count() - AutocorrAccumState::lag samples.
-    T m1Last_;     // First moment of the last Count() - AutocorrAccumState::lag samples.
-    T m2_;         // Generalized second moment. Sum of x_i * x_i+AutocorrAccumState::lag.
-    bool canAddSample_;
+    std::array<T, lag_> fBuf_; // front buffer
+    std::array<T, lag_> bBuf_; // back buffer (circular)
+    uint16_t fbi_;             // front buffer index
+    uint16_t bbi_;             // back buffer circular index
 };
 
 }} // PacBio::Mongo

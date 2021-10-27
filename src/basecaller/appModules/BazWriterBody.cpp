@@ -74,8 +74,7 @@ namespace Application {
 BazWriterBody::BazWriterBody(
         const std::string& bazName,
         size_t expectedFrames,
-        const std::vector<uint32_t>& zmwNumbers,
-        const std::vector<uint32_t>& zmwFeatures,
+        const BazIO::ZmwInfo& zmwInfo,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
         const Mongo::Data::MovieConfig& movieConfig)
@@ -91,6 +90,9 @@ BazWriterBody::BazWriterBody(
         ? Mongo::Data::InternalPulses::Params()
         : Mongo::Data::ProductionPulses::Params();
 
+    using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+    using ZmwInfo = BazIO::ZmwInfo;
+
     if (multipleBazFiles_)
     {
         auto ioStatsAggregator = std::make_shared<BazIO::IOStatsAggregator>(numBatches_);
@@ -101,7 +103,7 @@ BazWriterBody::BazWriterBody(
         };
 
         PBLOG_INFO << "Opening " << numBatches_ << " BAZ files for writing with filename prefix: "
-                   << removeExtension(bazName) << " zmws: " << zmwNumbers.size();
+                   << removeExtension(bazName) << " zmws: " << zmwInfo.NumZmws();
 
         std::vector<size_t> batchStartZmw;
         std::vector<size_t> batchNumZmw;
@@ -115,14 +117,34 @@ BazWriterBody::BazWriterBody(
             startZmwNumber += batchNumZmw.back();
         }
 
+        const auto& zmwNumbers = zmwInfo.HoleNumbers();
+        const auto& zmwTypes = zmwInfo.HoleTypes();
+        const auto& zmwX = zmwInfo.HoleX();
+        const auto& zmwY = zmwInfo.HoleY();
+        const auto& zmwFeatures = zmwInfo.UnitFeatures();
+        const auto& zmwTypesMap = zmwInfo.HoleTypesMap();
+        const auto& zmwFeaturesMap = zmwInfo.HoleFeatureMap();
+
         bazWriters_.resize(numBatches_);
         std::atomic<uint32_t> openedFiles = 0;
         tbb::parallel_for((uint32_t) {0}, numBatches_, [&](uint32_t b)
         {
             const auto poolZmwNumbersStart = zmwNumbers.begin() + batchStartZmw[b];
+            const auto poolZmwTypesStart = zmwTypes.begin() + batchStartZmw[b];
+            const auto poolZmwXStart = zmwX.begin() + batchStartZmw[b];
+            const auto poolZmwYStart = zmwY.begin() + batchStartZmw[b];
             const auto poolZmwFeaturesStart = zmwFeatures.begin() + batchStartZmw[b];
-            using FileHeaderBuilder = BazIO::FileHeaderBuilder;
+
             const std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
+            ZmwInfo zmwInfo(ZmwInfo::Data
+                                ( std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + batchNumZmw[b]),
+                                  std::vector<uint8_t>(poolZmwTypesStart, poolZmwTypesStart + batchNumZmw[b]),
+                                  std::vector<uint16_t>(poolZmwXStart, poolZmwXStart + batchNumZmw[b]),
+                                  std::vector<uint16_t>(poolZmwYStart, poolZmwYStart + batchNumZmw[b]),
+                                  std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b])
+                                ),
+                             zmwTypesMap,
+                             zmwFeaturesMap);
             FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,
@@ -130,8 +152,7 @@ BazWriterBody::BazWriterBody(
                                  SmrtData::MetricsVerbosity::MINIMAL,
                                  metadata,
                                  basecallerConfig.Serialize().toStyledString(),
-                                 std::vector<uint32_t>(poolZmwNumbersStart, poolZmwNumbersStart + batchNumZmw[b]),
-                                 std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b]),
+                                 zmwInfo,
                                  // Hack, until metrics handling can be rewritten
                                  metricFrames,
                                  metricFrames,
@@ -148,9 +169,8 @@ BazWriterBody::BazWriterBody(
     }
     else
     {
-        PBLOG_INFO << "Opening BAZ file for writing: " << bazName << " zmws: " << zmwNumbers.size();
+        PBLOG_INFO << "Opening BAZ file for writing: " << bazName << " zmws: " << zmwInfo.NumZmws();
 
-        using FileHeaderBuilder = BazIO::FileHeaderBuilder;
         FileHeaderBuilder fh(bazName,
                              100.0f,
                              expectedFrames,
@@ -158,8 +178,7 @@ BazWriterBody::BazWriterBody(
                              SmrtData::MetricsVerbosity::MINIMAL,
                              metadata,
                              basecallerConfig.Serialize().toStyledString(),
-                             zmwNumbers,
-                             zmwFeatures,
+                             zmwInfo,
                              // Hack, until metrics handling can be rewritten
                              metricFrames,
                              metricFrames,

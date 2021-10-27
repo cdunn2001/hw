@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include <bazio/file/ZmwInfo.h>
 #include <bazio/writing/BazWriter.h>
 
 #include <common/graphs/GraphNodeBody.h>
@@ -57,8 +58,7 @@ class BazWriterBody final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBu
 public:
     BazWriterBody(const std::string& bazName,
                   size_t expectedFrames,
-                  const std::vector<uint32_t>& zmwNumbers,
-                  const std::vector<uint32_t>& zmwFeatures,
+                  const BazIO::ZmwInfo& zmwInfo,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
                   const Mongo::Data::MovieConfig& movieConfig);

@@ -96,8 +96,7 @@ struct ReadConfig
                 PacBio::SmrtData::MetricsVerbosity::HIGH,
                 generateExperimentMetadata(),
                 "{}", // basecaller config
-                std::vector<uint32_t>(1, 4194368),
-                {}, //const std::vector<uint32_t> zmwUnitFeatures,
+                Simulation::SimulateZmwInfo(std::vector<uint32_t>(1, 4194368)),
                 hfnf,
                 mfnf,
                 lfnf);

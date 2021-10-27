@@ -37,17 +37,17 @@ namespace Data {
 
 template <typename T>
 void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
-                                            const LaneArray& baselineSubtracted,
+                                            const LaneArray& blSubtracted,
                                             const Mask& isBaseline)
 {
-    const FloatArray bs(baselineSubtracted);
+    const FloatArray bs(blSubtracted);
 
-    // Add frame to complete trace statistics.
-    baselineSubtractedStats_.AddSample(bs);
-    traceMin = min(baselineSubtracted, traceMin);
-    traceMax = max(baselineSubtracted, traceMax);
+    // Add frame to complete trace statistics
+    baselineSubtractedCorr_.AddSample(bs);
+    traceMin = min(blSubtracted, traceMin);
+    traceMax = max(blSubtracted, traceMax);
 
-    // Add frame to baseline statistics if so flagged.
+    // Add frame to baseline statistics if so flagged
     baselineStats_.AddSample(bs, isBaseline);
     rawBaselineSum_ += Blend(isBaseline, rawTrace, LaneArray{0});
 }
@@ -56,7 +56,7 @@ template <typename T>
 BaselinerStatAccumulator<T>&
 BaselinerStatAccumulator<T>::Merge(const BaselinerStatAccumulator& other)
 {
-    baselineSubtractedStats_.Merge(other.BaselineSubtractedStats());
+    baselineSubtractedCorr_.Merge(other.BaselineSubtractedStats());
     traceMin = min(traceMin, other.traceMin);
     traceMax = max(traceMax, other.traceMax);
     baselineStats_.Merge(other.BaselineFramesStats());

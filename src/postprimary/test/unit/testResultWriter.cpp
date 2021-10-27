@@ -124,7 +124,7 @@ TEST(ResultWriter,Basics)
     FileHeaderBuilder fhb("FakeMovie", 80.0, 80.0*60*60*3,
             ProductionPulses::Params(), MetricsVerbosity::MINIMAL,
             generateExperimentMetadata(),
-            "{}", {0},{},1024,4096,16384);
+            "{}", Simulation::SimulateZmwInfo({0}),1024,4096,16384);
     std::string header = fhb.CreateJSON();
     FileHeader fileHeader(header.c_str(), header.size());
     const std::vector<PacBio::BAM::ProgramInfo> apps;
@@ -247,8 +247,7 @@ TEST(ResultWriter,LB_SM_tags)
                           MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(), //experimentMetadata,
                           "{}", //basecallerConfig,
-                          {0}, // zmqNumbers
-                          {} , //zmwUnitFeatures,
+                          Simulation::SimulateZmwInfo({0}),
                           1024, //hfMetricFrames
                           4096, //mfMetricFrames,
                           16384); //sliceLengthFrames
@@ -416,8 +415,7 @@ TEST(ResultWriter,StreamingToStdout)
                           MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(),
                           "{}",
-                          {0}, // just 1 ZMW in this virtual analysis
-                          {},
+                          Simulation::SimulateZmwInfo({0}),
                           1024,
                           4096,
                           16384);

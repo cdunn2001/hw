@@ -104,16 +104,16 @@ public: // metrics
     SingleMetric<PBHalf2> traceM0;
     SingleMetric<PBHalf2> traceM1;
     SingleMetric<float2>  traceM2;
-    SingleMetric<PBHalf2> autocorrM1First;
-    SingleMetric<PBHalf2> autocorrM1Last;
     SingleMetric<float2>  autocorrM2;
+    Cuda::Utility::CudaArray<SingleMetric<PBHalf2>, AutocorrAccumState::lag> fBuf; // left region buffer
+    Cuda::Utility::CudaArray<SingleMetric<PBHalf2>, AutocorrAccumState::lag> bBuf; // right region buffer
+    SingleMetric<PBShort2> bIdx;  // left (X) and right (Y) buffer indices
 
 public: // state trackers
     // These are the right size, but doesn't follow the <Pair, laneSize/2>
     // pattern above:
     Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevBasecallCache;
     Cuda::Utility::CudaArray<Data::Pulse, laneSize> prevprevBasecallCache;
-
 };
 
 __device__ float variance(const float M0, const float M1, const float M2)
@@ -191,26 +191,33 @@ __device__ PBShort2 blendShort0(const uint16_t val)
     else return PBShort2(0, val);
 }
 
-__device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& blockMetrics,
-                                   uint32_t lag)
+__device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& blockMetrics)
 {
-    PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
-    const auto& nmk = blockMetrics.traceM0[threadIdx.x] - PBHalf2(lag);
+    const uint32_t lag = AutocorrAccumState::lag;
     // math in float2 for additional range
+    const auto nmk = asFloat2(blockMetrics.traceM0[threadIdx.x] - PBHalf2(lag));
     PBHalf2 ac = [&blockMetrics](float2 nmk)
     {
-        auto ac = asFloat2(blockMetrics.autocorrM1First[threadIdx.x])
-                  * asFloat2(blockMetrics.autocorrM1Last[threadIdx.x])
-                  / nmk;
-        ac = (asFloat2(blockMetrics.autocorrM2[threadIdx.x]) - ac)
+        float2 mu = asFloat2(blockMetrics.traceM1[threadIdx.x] / blockMetrics.traceM0[threadIdx.x]);
+        float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[threadIdx.x]);
+        for (auto k = 0u; k < lag; ++k)
+        {
+            m1x2 = m1x2 
+                - asFloat2(blockMetrics.fBuf[k][threadIdx.x] 
+                + blockMetrics.bBuf[k][threadIdx.x]);
+        }
+        float2 ac = mu*(m1x2 - nmk*mu);
+        nmk = nmk - asFloat2(PBHalf2(1.0f));
+
+        ac = (blockMetrics.autocorrM2[threadIdx.x] - ac)
              / (nmk * asFloat2(variance(blockMetrics.traceM0[threadIdx.x],
                                         blockMetrics.traceM1[threadIdx.x],
                                         blockMetrics.traceM2[threadIdx.x])));
         return ac;
-    }(asFloat2(nmk));
+    }(nmk);
     const PBBool2 nanMask = !(ac == ac);
-    ac = max(ac, -1.0f);
-    ac = min(ac, 1.0f);
+    const PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
+    ac = min(max(ac, -1.0f), 1.0f);  // clamp ac in [-1..1]
     return Blend(nmk < 1.0f || nanMask, nans, ac);
 }
 
@@ -280,9 +287,12 @@ __global__ void InitializeMetrics(
     blockMetrics.traceM1[threadIdx.x] = 0.0f;
     blockMetrics.traceM2[threadIdx.x] = zero;
 
-    blockMetrics.autocorrM1First[threadIdx.x] = 0.0f;
-    blockMetrics.autocorrM1Last[threadIdx.x] = 0.0f;
     blockMetrics.autocorrM2[threadIdx.x] = zero;
+
+    auto lag = AutocorrAccumState::lag;
+    for (auto k = 0u; k < lag; ++k) blockMetrics.fBuf[k][threadIdx.x] = 0.0f;
+    for (auto k = 0u; k < lag; ++k) blockMetrics.bBuf[k][threadIdx.x] = 0.0f;
+    blockMetrics.bIdx[threadIdx.x] = 0;
 
     for (size_t a = 0; a < numAnalogs; ++a)
     {
@@ -432,7 +442,6 @@ __global__ void ProcessChunk(
         blockMetrics.modelMean[ai][threadIdx.x] = models[blockIdx.x].AnalogMode(ai).means[threadIdx.x];
     }
 
-
     // AddMetrics: accumulate metrics from other stages
     { // baseline metrics (correctly taken from pulse accumulator)
         blockMetrics.baselineM0[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment0);
@@ -450,12 +459,37 @@ __global__ void ProcessChunk(
     }
 
     { // Autocorrelation lag metrics (correctly taken from baseliner)
-        blockMetrics.autocorrM1First[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].fullAutocorrState.moment1First);
-        blockMetrics.autocorrM1Last[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].fullAutocorrState.moment1Last);
-        blockMetrics.autocorrM2[threadIdx.x] += getWideLoad(
-            baselinerStats[blockIdx.x].fullAutocorrState.moment2);
+        auto lag = AutocorrAccumState::lag;
+        auto& that = baselinerStats[blockIdx.x].fullAutocorrState;
+
+        uint16_t fbi = blockMetrics.bIdx[threadIdx.x].X();
+        uint16_t bbi = blockMetrics.bIdx[threadIdx.x].Y();
+        uint16_t that_fbi = that.bIdx[0][threadIdx.x];
+        uint16_t that_bbi = that.bIdx[1][threadIdx.x];
+
+        blockMetrics.autocorrM2[threadIdx.x] += getWideLoad(that.moment2);
+
+        auto n1 = lag - that_fbi;  // that fBuf may be not filled up
+        for (uint16_t k = 0; k < lag - n1; k++)
+        {
+            // Sum of muls of overlapping elements
+            blockMetrics.autocorrM2[threadIdx.x]      +=
+                getWideLoad(that.fBuf[k]) * 
+                asFloat2(blockMetrics.bBuf[(bbi+k)%lag][threadIdx.x]);
+            // Accept the whole back buffer
+            blockMetrics.bBuf[(bbi+k)%lag][threadIdx.x] =
+                getWideLoad(that.bBuf[(that_bbi+n1+k)%lag]);
+        }
+
+        auto n2 = lag - fbi;      // this fBuf may be not filled up
+        for (uint16_t k = 0; k < n2; ++k)
+        {
+            // No need to adjust m2_ as excessive values were mul by 0
+            blockMetrics.fBuf[fbi+k][threadIdx.x] = getWideLoad(that.fBuf[k]);
+        }
+
+        // Advance buffer indices
+        blockMetrics.bIdx[threadIdx.x] = PBShort2(fbi + n2, bbi + (lag-n1) % lag);
     }
 
     { // FrameLabeler metrics
@@ -582,7 +616,6 @@ __device__ PBShort2 labelBlock(
 }
 
 __global__ void FinalizeMetrics(
-        uint32_t autocorrAccumLag,
         bool realtimeActivityLabels,
         float frameRate,
         DeviceView<BasecallingMetricsAccumulatorDevice> metrics,
@@ -671,7 +704,7 @@ __global__ void FinalizeMetrics(
 
     const auto& indX = threadIdx.x * 2;
     const auto& indY = threadIdx.x * 2 + 1;
-    const auto& autocorr = autocorrelation(blockMetrics, autocorrAccumLag);
+    const auto& autocorr = autocorrelation(blockMetrics);
     // Populate the rest of the metrics that weren't populated during operations above
     outMetrics.numPulseFrames[indX] = blockMetrics.numPulseFrames[threadIdx.x].X();
     outMetrics.numPulseFrames[indY] = blockMetrics.numPulseFrames[threadIdx.x].Y();
@@ -788,8 +821,7 @@ public:
                     FinalizeMetrics,
                     lanesPerBatch_,
                     threadsPerBlock_);
-            finalizeLauncher(AutocorrAccumState::lag,
-                             realtimeActivityLabels_,
+            finalizeLauncher(realtimeActivityLabels_,
                              static_cast<float>(frameRate_),
                              metrics_,
                              *(ret.get()));
