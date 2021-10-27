@@ -112,14 +112,9 @@ Data::PulseBatch GenerateBases(BaseSimConfig sim, size_t batchNo = 0)
         pulseConfig.maxCallsPerZmw,
         Cuda::Memory::SyncDirection::HostWriteDeviceRead);
 
-    Data::BatchDimensions dims{layoutConfig.lanesPerPool,
-        layoutConfig.framesPerChunk,
-        layoutConfig.zmwsPerLane};
-    Data::BatchMetadata meta{0,
-        static_cast<uint32_t>(batchNo*layoutConfig.framesPerChunk),
-        static_cast<uint32_t>((batchNo+1)*layoutConfig.framesPerChunk),
-        0};
-    auto pulses = batchFactory.NewBatch(meta, dims).first;
+    auto pulses = batchFactory.NewBatch(
+            chunk.front().Metadata(),
+            chunk.front().StorageDims()).first;
 
     auto LabelConv = [&](size_t index) {
         switch (sim.pattern[index % sim.pattern.size()])

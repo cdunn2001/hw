@@ -168,7 +168,6 @@ public:
                 if (aggregatedMb.HasData())
                 {
                     auto& metricsOut = metrics_[zmw];
-                    assert(metricsOut.empty());
                     metricsOut = metricsBuffer_.Allocate(1);
                     aggregatedMb.Convert(metricsOut[0]);
                 }
@@ -192,7 +191,6 @@ public:
                     // Newly created HQ-region.
                     size_t numTransitions = NumTransitionsInLookbackWindow(zmw);
                     auto& metricsOut = metrics_[zmw];
-                    assert(metricsOut.empty());
                     metricsOut = metricsBuffer_.Allocate(numTransitions);
 
                     // Add preHQ aggregated metric block to output buffer.
@@ -240,7 +238,6 @@ private:
     void AddCompleteMetrics(size_t zmwIndex, const std::vector<MetricBlockT>& metrics)
     {
         auto& metricsOut = metrics_[zmwIndex];
-        assert(metricsOut.empty());
         metricsOut = metricsBuffer_.Allocate(metrics.size());
 
         for (size_t i = 0; i < metrics.size(); i++)
@@ -274,7 +271,6 @@ private:
                 {
                     // Add to output buffer.
                     auto& metricsOut = metrics_[zmwIndex];
-                    assert(metricsOut.empty());
                     metricsOut = metricsBuffer_.Allocate(1);
                     aggregatedMb.Convert(metricsOut[0]);
                 }

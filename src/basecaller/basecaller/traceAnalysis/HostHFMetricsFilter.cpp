@@ -100,7 +100,7 @@ HostHFMetricsFilter::Process(
     AddMetrics(baselinerMetrics, frameLabelerMetrics, pdMetrics);
     framesSeen_ += pulseBatch.Dims().framesPerBatch;
 
-    if (pulseBatch.GetMeta().LastFrame() % framesPerHFMetricBlock_ < pulseBatch.Dims().framesPerBatch)
+    if (framesSeen_ >= framesPerHFMetricBlock_)
     {
         FinalizeBlock();
         framesSeen_ = 0;
