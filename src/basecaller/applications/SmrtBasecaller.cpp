@@ -176,6 +176,7 @@ public:
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
 
         RunAnalyzer();
         Join();
@@ -325,7 +326,21 @@ private:
                             PacketLayout::INT16,
                             layoutDims);
 
-        const auto mode = AllocatorMode::SHARED_MEMORY;
+        const auto mode = config_.source.Visit(
+            [&](const TraceReanalysis& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const TraceReplication& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const WX2SourceConfig& wx2SourceConfig)
+            {
+                return AllocatorMode::SHARED_MEMORY;
+            }
+        );
+
         auto allo = CreateAllocator(mode, AllocationMarker(config_.source.GetEnum().toString()));
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
