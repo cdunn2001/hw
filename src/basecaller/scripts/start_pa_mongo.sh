@@ -32,6 +32,9 @@ elif [[ $GDB ]]
 then
     cmd="gdb --args"
     BUILD=Debug_gcc
+elif [[ $ECHO ]]
+then
+    cmd="echo "
 else
     cmd=""
 fi
