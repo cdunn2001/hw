@@ -35,7 +35,7 @@
 #include <pacbio/datasource/AllocationSlicer.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/HugePage.h>
-
+#include <pacbio/datasource/SharedMemoryAllocator.h>
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
 
 SMART_ENUM(ManagedAllocations, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
@@ -81,6 +81,8 @@ struct MallocAllocator
     static constexpr uint32_t supportedIAllocatorFlags = IAllocator::ALIGN_64B;
     static constexpr const char* description = "Standard Host Memory";
 
+    static std::string StaticName() { return "MallocAllocator";}
+
     static void* allocate(size_t size)
     {
         return aligned_alloc(64, size);
@@ -88,6 +90,10 @@ struct MallocAllocator
     static void deallocate(void* ptr)
     {
         free(ptr);
+    }
+    static std::string ReportStatus()
+    {
+        return "MallocAllocator::ReportStatus is not implemented";
     }
 };
 
@@ -98,6 +104,8 @@ struct PinnedAllocator
         | IAllocator::ALIGN_64B;
     static constexpr const char* description = "Pinned Host Memory";
 
+    static std::string StaticName() { return "HugePinnedPinnedAllocatorAllocator";}
+
     static void* allocate(size_t size)
     {
         return CudaRawMallocHost(size);
@@ -105,6 +113,10 @@ struct PinnedAllocator
     static void deallocate(void* ptr)
     {
         CudaFreeHost(ptr);
+    }
+    static std::string ReportStatus()
+    {
+        return "PinnedAllocator::ReportStatus is not implemented";
     }
 };
 
@@ -117,6 +129,8 @@ struct HugePinnedAllocator
 
     static constexpr const char* description = "Pinned HugePage Host Memory";
 
+    static std::string StaticName() { return "HugePinnedAllocator";}
+
     static void* allocate(size_t size)
     {
         return Allocator().Allocate(size);
@@ -125,6 +139,10 @@ struct HugePinnedAllocator
     static void deallocate(void* ptr)
     {
         Allocator().Deallocate(ptr);
+    }
+    static std::string ReportStatus() 
+    {
+        return "HugePinnedAllocator::ReportStatus is not implemented";
     }
 
 private:
@@ -154,12 +172,60 @@ private:
     // Singleton access.  We're already using a static and application
     // wide allocation cache, so it makes sense to similarly treat
     // the AllocationSlicer that backs it all
+// public:
     static AllocationSlicer<HugePinnedHelper, 64>& Allocator()
     {
         static AllocationSlicer<HugePinnedHelper, 64> alloc_(1<<30);
         return alloc_;
     }
 };
+
+struct SharedHugeCudaPinnedAllocator
+{
+    static constexpr uint32_t supportedIAllocatorFlags =
+          IAllocator::CUDA_MEMORY
+        | IAllocator::HUGEPAGES
+        | IAllocator::ALIGN_64B
+        | IAllocator::SHARED_MEMORY;
+
+    static constexpr const char* description = "Shared Pinned HugePage Host Memory";
+
+    static std::string StaticName() { return "SharedHugeCudaPinnedAllocator";}
+
+    static void* allocate(size_t size)
+    {
+        return Allocator().Allocate(size);
+    }
+
+    static void deallocate(void* ptr)
+    {
+        Allocator().Deallocate(ptr);
+    }
+
+    static std::string ReportStatus()
+    {
+        return Allocator().ReportStatus();
+    }
+private:
+    // Singleton access.  We're already using a static and application
+    // wide allocation cache, so it makes sense to similarly treat
+    // the AllocationSlicer that backs it all
+    static SharedMemoryAllocator& Allocator()
+    {
+        // FIXME This is just a proof of concept hack.
+        // This needs to be plumbed with the WXIPCDataSource which knows
+        // these values.
+        static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
+        config.baseAddress = 17179869184ULL;
+        config.size = 25769803776ULL * 2;
+        config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
+        config.removeSharedSegmentsOnDestruction = false;
+
+        static SharedMemoryAllocator alloc_(config);
+        return alloc_;
+    }
+};
+
 
 struct GpuAllocator
 {
@@ -395,6 +461,16 @@ public:
         : defaultMarker_(defaultMarker)
     {}
 
+    std::string Name() const override
+    {
+        return "MongoCachedAllocator<" + HostAllocator::StaticName() + ">";
+    }
+
+    std::string ReportStatus() const override
+    {
+        return HostAllocator::ReportStatus();
+    }
+
     PacBio::Memory::SmartAllocation GetAllocation(size_t size) override
     {
         return GetAllocation(size, defaultMarker_);
@@ -555,6 +631,11 @@ void VisitHostManager(AllocatorMode mode, F&& f)
             Invoke(AllocationManager<HugePinnedAllocator>::GetManager());
             return;
         }
+    case AllocatorMode::SHARED_MEMORY:
+        {
+            Invoke(AllocationManager<SharedHugeCudaPinnedAllocator>::GetManager());
+            return;
+        }
     }
     throw PBException("Unexpected AllocationMode");
 }
@@ -592,6 +673,10 @@ std::unique_ptr<IMongoCachedAllocator> CreateAllocator(AllocatorMode alloc, cons
         {
             return std::make_unique<MongoCachedAllocator<HugePinnedAllocator>>(marker);
         }
+    case AllocatorMode::SHARED_MEMORY:
+        {
+            return std::make_unique<MongoCachedAllocator<SharedHugeCudaPinnedAllocator>>(marker);
+        }
     }
     throw PBException("Unsupported AllocatorMode");
 }
@@ -611,6 +696,7 @@ void ReportAllMemoryStats()
     Report(AllocationManager<MallocAllocator>::GetManager());
     Report(AllocationManager<PinnedAllocator>::GetManager());
     Report(AllocationManager<HugePinnedAllocator>::GetManager());
+    Report(AllocationManager<SharedHugeCudaPinnedAllocator>::GetManager());
     Report(AllocationManager<GpuAllocator>::GetManager());
 }
 
@@ -654,6 +740,7 @@ void DisableAllCaching()
     DisableHostCaching(AllocatorMode::MALLOC);
     DisableHostCaching(AllocatorMode::CUDA);
     DisableHostCaching(AllocatorMode::HUGE_CUDA);
+    DisableHostCaching(AllocatorMode::SHARED_MEMORY);
     DisableGpuCaching();
 }
 

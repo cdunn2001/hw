@@ -53,7 +53,9 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 #include <pacbio/sensor/SparseROI.h>
-#include <acquisition/datasource/WXDataSource.h>
+#include <pacbio/text/String.h>
+#include <acquisition/wxipcdatasource/WXIPCDataSource.h>
+#include <pacbio/datasource/SharedMemoryAllocator.h>
 
 #include <git-rev.h>
 
@@ -114,14 +116,7 @@ public:
 
         if (nop_ == 1)
         {
-            try {
-                const auto& wxDataSource = boost::get<WX2SourceConfig>(config_.source.data());
-                if (wxDataSource.simulatedInputFile!= "constant/123")
-                    throw PBException("Dummy Exception");
-            } catch (...) {
-                throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
-            }
-
+            throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
         }
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
@@ -171,7 +166,8 @@ public:
             // PBLOG_INFO << "  Warp size:" << dd.warpSize;
             PBLOG_INFO << "  sharedMemPerBlock:" << dd.sharedMemPerBlock;
             PBLOG_INFO << "  major/minor:" << dd.major << "/" << dd.minor;
-            PBLOG_INFO << "  Error Message:" << d.errorMessage;
+            if (d.errorMessage != "") PBLOG_ERROR << "  Error Message:" << d.errorMessage;
+            else PBLOG_INFO << "  No message";
             idevice++;
         }
     }
@@ -180,6 +176,7 @@ public:
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
 
         RunAnalyzer();
         Join();
@@ -329,7 +326,22 @@ private:
                             PacketLayout::INT16,
                             layoutDims);
 
-        auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.GetEnum().toString()));
+        const auto mode = config_.source.Visit(
+            [&](const TraceReanalysis& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const TraceReplication& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const WX2SourceConfig& wx2SourceConfig)
+            {
+                return AllocatorMode::SHARED_MEMORY;
+            }
+        );
+
+        auto allo = CreateAllocator(mode, AllocationMarker(config_.source.GetEnum().toString()));
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
@@ -344,13 +356,12 @@ private:
             },
             [&](const WX2SourceConfig& wx2SourceConfig) -> std::unique_ptr<DataSourceBase>
             {
-                // TODO this glue code is messy. It is gluing untyped strings to the strongly typed
-                // enums of WX2, but this was on purpose to avoid entangling the config with configs from WX2.
-                // I am not sure what the best next step is.  This is getting me going, so I am
-                // going to leave it. MTL
-                WXDataSourceConfig wxconfig;
+                WXIPCDataSourceConfig wxconfig;
                 wxconfig.dataPath = DataPath_t(wx2SourceConfig.dataPath);
-                wxconfig.platform = Platform(wx2SourceConfig.platform);
+                if ( wxconfig.dataPath == DataPath_t::SimGen || wxconfig.dataPath == DataPath_t::SimLoop)
+                {
+                    throw PBException("wxconfig.simconfig needs to be set, not implemented yet.");
+                }
                 wxconfig.sleepDebug = wx2SourceConfig.sleepDebug;
                 wxconfig.simulatedFrameRate = wx2SourceConfig.simulatedFrameRate;
                 wxconfig.simulatedInputFile = wx2SourceConfig.simulatedInputFile;
@@ -360,7 +371,8 @@ private:
                 wxconfig.layoutDims[0] = wx2SourceConfig.wxlayout.lanesPerPacket;
                 wxconfig.layoutDims[1] = wx2SourceConfig.wxlayout.framesPerPacket;
                 wxconfig.layoutDims[2] = wx2SourceConfig.wxlayout.zmwsPerLane;
-                return std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
+                wxconfig.verbosity = 100;
+                return std::make_unique<WXIPCDataSource>(std::move(datasourceConfig), wxconfig);
             }
         );
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
@@ -825,6 +837,14 @@ int main(int argc, char* argv[])
         parser.add_option_group(group1);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
+        auto unusedArgs = parser.args();
+        if (unusedArgs.size() > 0)
+        {
+            throw PBException("There were unrecognized arguments on the command line: " 
+                + PacBio::Text::String::Join(unusedArgs.begin(), unusedArgs.end(), ' ')
+                + ". Did you forget '--' before an option?");
+        }
+
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));

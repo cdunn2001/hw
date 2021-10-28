@@ -22,4 +22,6 @@ hw-mongo/
 .run/
 .clang-format
 /mongo/compile_commands.json
-
+.vscode
+cmake-build-*/
+build_vsc/
