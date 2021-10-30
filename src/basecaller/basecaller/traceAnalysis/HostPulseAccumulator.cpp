@@ -4,7 +4,6 @@
 #include <tbb/parallel_for.h>
 
 #include <dataTypes/configs/MovieConfig.h>
-#include "SubframeLabelManager.h"
 
 namespace PacBio {
 namespace Mongo {

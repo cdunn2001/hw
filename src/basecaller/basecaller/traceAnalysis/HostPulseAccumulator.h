@@ -108,15 +108,15 @@ public:
             const float maxSignal = Data::Pulse::SignalMax();
             const float minSignal = 0.0f;
 
-            Data::Pulse pls{};
-
             endFrame_ = frameIndex;
-            auto startFrameZmw = MakeUnion(startFrame_)[zmw];
+            auto startFrameZmw  = MakeUnion(startFrame_)[zmw];
             auto signalTotalZmw = MakeUnion(signalTotal_)[zmw];
+            auto sigFrstFrame   = MakeUnion(signalLastFrame_)[zmw];
+            auto sigLastFrame   = MakeUnion(signalFrstFrame_)[zmw];
             int width = frameIndex - startFrameZmw;
 
-            float raw_mean = (signalTotalZmw + MakeUnion(signalLastFrame_)[zmw] + MakeUnion(signalFrstFrame_)[zmw]) / static_cast<float>(width);
-            float raw_mid = signalTotalZmw / static_cast<float>(width - 2);
+            float raw_mean = float(signalTotalZmw + sigFrstFrame + sigLastFrame) / width;
+            float raw_mid  = float(signalTotalZmw) / (width - 2);
 
             auto lowAmp = meanAmp;
             bool keep = (width >= widthThresh_) || (raw_mean * width >= ampThresh_ * lowAmp);
@@ -124,6 +124,7 @@ public:
             using std::min;
             using std::max;
 
+            Data::Pulse pls{};
             pls.Start(startFrameZmw)
                 .Width(width)
                 .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))

@@ -61,7 +61,7 @@ void PulseAccumulator::InitFactory(bool hostExecution,
     }
 
     widthThresh_ = w;
-    PBLOG_INFO << "XspWidthThresh: " << w << '.';
+    // PBLOG_INFO << "XspWidthThresh: " << w << '.';
 
     const double x = pulseConfig.XspAmpThresh;
     if (x < 0.0 || x > 1.0)
@@ -72,7 +72,7 @@ void PulseAccumulator::InitFactory(bool hostExecution,
     }
 
     ampThresh_ = static_cast<float>(x / (1.0 - x));
-    PBLOG_INFO << "XspAmpThresh: " << x << ".";
+    // PBLOG_INFO << "XspAmpThresh: " << x << ".";
 }
 
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>

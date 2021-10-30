@@ -69,8 +69,8 @@ public:
     Segment() = default;
 
     __device__  Segment(short initialState, float ampThr, float widThr)
-        : ampThr_(ampThr)
-        , widThr_(widThr)
+        : ampThr_(__float2half(ampThr))
+        , widThr_(__float2half(widThr))
     {
         for (int i = 0; i < blockThreads; ++i)
         {
@@ -90,6 +90,9 @@ public:
 
     __device__ void SharedCopy(const Segment& other)
     {
+        ampThr_ = other.ampThr_;
+        widThr_ = other.widThr_;
+
         startFrame_[threadIdx.x] = other.startFrame_[threadIdx.x];
         endFrame_[threadIdx.x] = other.endFrame_[threadIdx.x];
         signalFrstFrame_[threadIdx.x] = other.signalFrstFrame_[threadIdx.x];
@@ -126,23 +129,25 @@ public:
         // PBUint2 type, and I don't think this is enough motivation to add one
         auto Get = [](uint2& var) -> uint& { return id == 0 ? var.x : var.y; };
 
+        const float maxSignal = Data::Pulse::SignalMax();
+        const float minSignal = 0.0f;
+
         Get(endFrame_[threadIdx.x]) = frameIndex;
         auto start = Get(startFrame_[threadIdx.x]);
-        short width = frameIndex - start;
+        half width = frameIndex - start;
 
-        auto raw_mean = PBHalf2(signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x]) / width;
-        auto raw_mid = PBHalf2(signalTotal_[threadIdx.x]) / (width - 2);
+        PBShort2 raw_mean_short = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
+        half raw_mean = half(raw_mean_short.template Get<id>()) / width;
+        float raw_mid  = half(signalTotal_[threadIdx.x].template Get<id>()) / (width - half(2));
 
-        const auto maxSignal = Data::Pulse::SignalMax();
-
-        auto lowAmp = minMean.Get<id>();
-        auto keep = (width >= widThr_) || (raw_mean.Get<id>() * width >= ampThr_ * lowAmp);
+        half lowAmp = minMean.Get<id>();
+        auto keep = (width >= widThr_) || (raw_mean * width >= ampThr_ * lowAmp);
 
         pulse.Start(start)
             .Width(width)
-            .MeanSignal(min(maxSignal, max(0.0f, raw_mean.Get<id>())))
-            .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(0.0f, raw_mid.Get<id>())))
-            .MaxSignal(min(maxSignal, max(0.0f, signalMax_[threadIdx.x].template Get<id>())))
+            .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
+            .MidSignal(width < half(3) ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
+            .MaxSignal(min(maxSignal, max(minSignal, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
             .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()))
             .IsReject(!keep);
@@ -208,8 +213,8 @@ private:
     CudaArray<PBHalf2,  blockThreads> m0_;
     CudaArray<PBHalf2,  blockThreads> m1_;
     CudaArray<PBFloat2, blockThreads> m2_;
-    float ampThr_;
-    float widThr_;
+    half ampThr_;
+    half widThr_;
 };
 
 template <typename LabelManager, size_t blockThreads>
