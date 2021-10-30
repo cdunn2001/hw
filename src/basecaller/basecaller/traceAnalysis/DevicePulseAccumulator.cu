@@ -170,8 +170,9 @@ public:
         signalTotal_[threadIdx.x] = Blend(update,
                                           signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x],
                                           signalTotal_[threadIdx.x]);
+        PBFloat2 s{PBHalf2(signalLastFrame_[threadIdx.x])};
         signalM2_[threadIdx.x] = Blend(update,
-                                       signalM2_[threadIdx.x] + pow2(signalLastFrame_[threadIdx.x]),
+                                       signalM2_[threadIdx.x] + s*s,
                                        signalM2_[threadIdx.x]);
         signalLastFrame_[threadIdx.x] = Blend(update, signal, signalLastFrame_[threadIdx.x]);
         signalMax_[threadIdx.x] = Blend(update, max(signal, signalMax_[threadIdx.x]), signalMax_[threadIdx.x]);

@@ -44,6 +44,7 @@ then
        exit 1
     fi
     trc_output="--outputtrcfile $TRACE_OUTPUT"
+    rm -f $TRACE_OUTPUT
 fi
 nop_option="--nop=${NOP}"
 
@@ -58,6 +59,22 @@ then
     sourceType=TRACE_FILE
 else
     sourceType=WX2
+    threadClass=$(curl localhost:23602/sras/0/status/other/threadClassName.txt)
+    if [[ $threadClass = "SraMongoThread" ]]
+    then
+      # this is what the FPGA will generate
+      fpgaPacketLanes=2
+      fpgaFramesPerPacket=$(curl localhost:23602/status/tileDimensions/0)
+      fpgaZmwsPerLane=32
+      # this is what smrt-basecaller wants
+      packetLanes=1
+      # framesPerPacket=$(curl localhost:23602/status/tileDimensions/0)
+      framesPerPacket=512
+      zmwsPerLane=64
+    else
+      echo ThreadClass $threadClass is not supported yet.
+      exit 1
+    fi
 fi
 
 # maxCallsPerZmw should be increased because packet depth is 512 frames vs 128 frames
@@ -74,36 +91,36 @@ cat <<HERE > $tmpjson
   },
   "layout" :
   {
-      "framesPerChunk": 512,
-      "lanesPerPool" : 4096,
-      "zmwsPerLane": 64
+      "framesPerChunk": ${framesPerPacket},
+      "lanesPerPool" : ${packetLanes},
+      "zmwsPerLane": ${zmwsPerLane}
   },
   "source":
   {
-    "sourceType": "${sourceType}",
-    "wx2SourceConfig":
+    "WX2SourceConfig":
     {
          "dataPath": "HardLoop",
-         "platform": "Sequel2Lvl1",
+         "maxPopLoops": ${MAXPOPLOOPS},
          "simulatedFrameRate": $RATE,
+         "simulatedInputFile": "${INPUT}",
          "sleepDebug": 600,
+         "tilePoolFactor" : ${TILEPOOLFACTOR},
          "wxlayout": {
-           "lanesPerPacket" : 1024,
-           "framesPerPacket":  512,
-           "zmwsPerLane" : 32
-          },
-          "maxPopLoops": ${MAXPOPLOOPS},
-          "tilePoolFactor" : ${TILEPOOLFACTOR}
+           "framesPerPacket":  ${fpgaFramesPerPacket},
+           "lanesPerPacket" : ${fpgaPacketLanes},
+           "zmwsPerLane" : ${fpgaZmwsPerLane}
+          }
     }
   },
-  "traceROI": {
-    "roi": [ [ 0,0, 1, 64 ], [0,64,1,64], [2, 64, 1, 64] ]
+  "traceSaver": 
+  {
+    "roi": [ [0,127],[192,64]]
   }
 } 
 HERE
 
 
-cat $tmpjson
+cat -n $tmpjson
 
 
 if [[ $VSC == 0 ]]
@@ -113,7 +130,6 @@ else
   cd ../build
 fi
 
-# sudo $cmd ./applications/smrt-basecaller --outputbazfile=/data/pa/bogus.baz --frames=${FRAMES} --inputfile=constant/123 --logfilter=${LOGFILTER} --config ${tmpjson} ${nop_option} ${trc_output}
 set -x
 pwd
-$cmd ./applications/smrt-basecaller --frames=${FRAMES} --numZmwLanes=${numZmwLanes}  --inputfile=${INPUT} --logfilter=${LOGFILTER} --config $tmpjson ${nop_option} ${trc_output}
+$cmd ./applications/smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson ${nop_option} ${trc_output}

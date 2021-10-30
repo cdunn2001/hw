@@ -1,14 +1,27 @@
-.gitmodules
+# Git, CMake and build
 depcache/
+cmake-build-*/
+.gitmodules
+build/
+**/.cache/clangd/
+**/.clangd
+
+# IDE and editors
+**/.vs/
+**/.vscode/
+.idea
+
+# Dependencies
 pa-third-party/
 pa-common/
 hw-mongo/
-**/build/
-.idea/
+
+# Logs
+*.log
+
 .run/
 .clang-format
-/mongo/.cache/clangd/
-/mongo/.clangd
 /mongo/compile_commands.json
 .vscode
 cmake-build-*/
+build_vsc/

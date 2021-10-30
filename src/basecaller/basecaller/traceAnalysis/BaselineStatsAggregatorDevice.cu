@@ -48,12 +48,39 @@ __device__ void MergeStat(StatAccumState& l, const StatAccumState& r)
     l.moment2[threadIdx.x] += r.moment2[threadIdx.x];
     l.offset[threadIdx.x] += r.offset[threadIdx.x];
 }
+
 __device__ void MergeAutocorr(AutocorrAccumState& l, const AutocorrAccumState& r)
 {
+    auto lag = AutocorrAccumState::lag;
+
+    uint16_t fbi      = l.bIdx[0][threadIdx.x];
+    uint16_t bbi      = l.bIdx[1][threadIdx.x];
+    uint16_t that_fbi = r.bIdx[0][threadIdx.x];
+    uint16_t that_bbi = r.bIdx[1][threadIdx.x];
+
+    // Merge common statistics before processing tails
     MergeStat(l.basicStats, r.basicStats);
-    l.moment1First[threadIdx.x] += r.moment1First[threadIdx.x];
-    l.moment1Last[threadIdx.x] += r.moment1Last[threadIdx.x];
-    l.moment2[threadIdx.x] += r.moment2[threadIdx.x];
+    l.moment2[threadIdx.x]      += r.moment2[threadIdx.x];
+
+    auto n1 = lag - that_fbi;  // that fBuf may be not filled up
+    for (uint16_t k = 0; k < lag - n1; k++)
+    {
+        // Sum of muls of overlapping elements
+        l.moment2[threadIdx.x]          += r.fBuf[k][threadIdx.x] * l.bBuf[(bbi+k)%lag][threadIdx.x];
+        // Accept the whole back buffer
+        l.bBuf[(bbi+k)%lag][threadIdx.x] = r.bBuf[(that_bbi+n1+k)%lag][threadIdx.x];
+    }
+
+    auto n2 = lag - fbi;      // this fBuf may be not filled up
+    for (uint16_t k = 0; k < n2; ++k)
+    {
+        // No need to adjust m2_ as excessive values were mul by 0
+        l.fBuf[fbi+k][threadIdx.x] = r.fBuf[k][threadIdx.x];
+    }
+
+    // Advance buffer indices
+    l.bIdx[0][threadIdx.x] = fbi + n2;
+    l.bIdx[1][threadIdx.x] = bbi + (lag-n1) % lag;
 }
 
 __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
@@ -86,10 +113,12 @@ __device__ void ResetStat(StatAccumState& stat)
 }
 __device__ void ResetAutoCorr(AutocorrAccumState& accum)
 {
+    auto lag = AutocorrAccumState::lag;
     ResetStat(accum.basicStats);
-    ResetArray(accum.moment1First);
-    ResetArray(accum.moment1Last);
     ResetArray(accum.moment2);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.fBuf[k]);
+    for (auto k = 0u; k < lag; ++k) ResetArray(accum.bBuf[k]);
+    for (auto k = 0u; k < accum.bIdx.size(); ++k) ResetArray(accum.bIdx[k]);
 }
 __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)
 {
@@ -112,17 +141,11 @@ class BaselineStatsAggregatorDevice::Impl
 public:
     Impl(unsigned int poolSize,
          StashableAllocRegistrar* registrar)
-        : data_(registrar, SOURCE_MARKER(), poolSize, [](){
-            // Set up the initial value for all array entries.  We
-            // just want most things zero filled, but the two min/max
-            // values need special handling
-            Data::BaselinerStatAccumState ret{};
-            ret.traceMax = std::numeric_limits<int16_t>::lowest();
-            ret.traceMin = std::numeric_limits<int16_t>::max();
-            return ret;
-        }())
+        : data_(registrar, SOURCE_MARKER(), poolSize)
         , poolSize_(poolSize)
-    {}
+    {
+        ResetImpl();
+    }
 
     void AddMetricsImpl(const BaselinerMetrics& metrics)
     {

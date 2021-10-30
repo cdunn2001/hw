@@ -31,6 +31,7 @@
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
 #include <basecaller/traceAnalysis/AnalysisProfiler.h>
+#include <bazio/file/ZmwInfo.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
@@ -52,7 +53,9 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 #include <pacbio/sensor/SparseROI.h>
-#include <acquisition/datasource/WXDataSource.h>
+#include <pacbio/text/String.h>
+#include <acquisition/wxipcdatasource/WXIPCDataSource.h>
+#include <pacbio/datasource/SharedMemoryAllocator.h>
 
 #include <git-rev.h>
 
@@ -62,6 +65,7 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::Acquisition::DataSource;
 using namespace PacBio::Sensor;
+using namespace PacBio::BazIO;
 
 using namespace PacBio::Application;
 using namespace PacBio::Configuration;
@@ -112,14 +116,7 @@ public:
 
         if (nop_ == 1)
         {
-            try {
-                const auto& wxDataSource = boost::get<WX2SourceConfig>(config_.source.data());
-                if (wxDataSource.simulatedInputFile!= "constant/123")
-                    throw PBException("Dummy Exception");
-            } catch (...) {
-                throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
-            }
-
+            throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
         }
 
         // TODO these might need cleanup/moving?  At the least need to be able to set them
@@ -169,7 +166,8 @@ public:
             // PBLOG_INFO << "  Warp size:" << dd.warpSize;
             PBLOG_INFO << "  sharedMemPerBlock:" << dd.sharedMemPerBlock;
             PBLOG_INFO << "  major/minor:" << dd.major << "/" << dd.minor;
-            PBLOG_INFO << "  Error Message:" << d.errorMessage;
+            if (d.errorMessage != "") PBLOG_ERROR << "  Error Message:" << d.errorMessage;
+            else PBLOG_INFO << "  No message";
             idevice++;
         }
     }
@@ -178,6 +176,7 @@ public:
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
 
         RunAnalyzer();
         Join();
@@ -327,7 +326,22 @@ private:
                             PacketLayout::INT16,
                             layoutDims);
 
-        auto allo = CreateAllocator(AllocatorMode::CUDA, AllocationMarker(config_.source.GetEnum().toString()));
+        const auto mode = config_.source.Visit(
+            [&](const TraceReanalysis& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const TraceReplication& config)
+            {
+                return AllocatorMode::CUDA;
+            },
+            [&](const WX2SourceConfig& wx2SourceConfig)
+            {
+                return AllocatorMode::SHARED_MEMORY;
+            }
+        );
+
+        auto allo = CreateAllocator(mode, AllocationMarker(config_.source.GetEnum().toString()));
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
@@ -342,13 +356,12 @@ private:
             },
             [&](const WX2SourceConfig& wx2SourceConfig) -> std::unique_ptr<DataSourceBase>
             {
-                // TODO this glue code is messy. It is gluing untyped strings to the strongly typed
-                // enums of WX2, but this was on purpose to avoid entangling the config with configs from WX2.
-                // I am not sure what the best next step is.  This is getting me going, so I am
-                // going to leave it. MTL
-                WXDataSourceConfig wxconfig;
+                WXIPCDataSourceConfig wxconfig;
                 wxconfig.dataPath = DataPath_t(wx2SourceConfig.dataPath);
-                wxconfig.platform = Platform(wx2SourceConfig.platform);
+                if ( wxconfig.dataPath == DataPath_t::SimGen || wxconfig.dataPath == DataPath_t::SimLoop)
+                {
+                    throw PBException("wxconfig.simconfig needs to be set, not implemented yet.");
+                }
                 wxconfig.sleepDebug = wx2SourceConfig.sleepDebug;
                 wxconfig.simulatedFrameRate = wx2SourceConfig.simulatedFrameRate;
                 wxconfig.simulatedInputFile = wx2SourceConfig.simulatedInputFile;
@@ -358,7 +371,8 @@ private:
                 wxconfig.layoutDims[0] = wx2SourceConfig.wxlayout.lanesPerPacket;
                 wxconfig.layoutDims[1] = wx2SourceConfig.wxlayout.framesPerPacket;
                 wxconfig.layoutDims[2] = wx2SourceConfig.wxlayout.zmwsPerLane;
-                return std::make_unique<WXDataSource>(std::move(datasourceConfig), wxconfig);
+                wxconfig.verbosity = 100;
+                return std::make_unique<WXIPCDataSource>(std::move(datasourceConfig), wxconfig);
             }
         );
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
@@ -580,14 +594,39 @@ private:
     {
         if (hasBazFile_)
         {
-            auto features1 = source.GetUnitCellProperties();
-            std::vector<uint32_t> features2;
-            transform(features1.begin(), features1.end(), back_inserter(features2), [](DataSourceBase::UnitCellProperties x){return x.flags;});
+            auto props = source.GetUnitCellProperties();
+
+            std::vector<uint32_t> unitFeatures;
+            transform(props.begin(), props.end(), back_inserter(unitFeatures),
+                      [](DataSourceBase::UnitCellProperties x) { return x.flags; });
+
+            // NOTE: UnitCellProperties currently defines x,y as int32_t.
+            std::vector<uint16_t> unitX;
+            std::vector<uint16_t> unitY;
+            transform(props.begin(), props.end(), back_inserter(unitX),
+                      [](DataSourceBase::UnitCellProperties x){ return static_cast<uint16_t>(x.x); });
+            transform(props.begin(), props.end(), back_inserter(unitY),
+                      [](DataSourceBase::UnitCellProperties x){ return static_cast<uint16_t>(x.y); });
+
+            // NOTE: Hole type should eventually be a property returned by source.GetUnitCellProperties().
+            // For now, we mark all the holes as the canonical Sequencing=1 hole type.
+            constexpr uint8_t sequencingUnitType = 1;
+            std::vector<uint8_t> unitTypes(unitFeatures.size(), sequencingUnitType);
+
+            // NOTE: These are manually specified here but should be somehow returned from the
+            // DataSourceRunner.
+            std::map<std::string,uint32_t> unitTypesMap{ { "Sequencing", 1 } };
+            std::map<std::string,uint32_t> unitFeaturesMap{ {"StandardZMW", 0},
+                                                            {"NonStandardZMW", 1UL << 0},
+                                                            {"NonSequencing", 1UL << 1 },
+                                                            {"Sequencing", 0 | 1UL << 0 } };
+
+            ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures),
+                            unitTypesMap, unitFeaturesMap);
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
-                                                   source.UnitCellIds(),
-                                                   features2,
+                                                   zmwInfo,
                                                    poolDims,
                                                    config_,
                                                    movieConfig_);
@@ -798,6 +837,14 @@ int main(int argc, char* argv[])
         parser.add_option_group(group1);
 
         auto options = parser.parse_args(argc, (const char* const*) argv);
+        auto unusedArgs = parser.args();
+        if (unusedArgs.size() > 0)
+        {
+            throw PBException("There were unrecognized arguments on the command line: " 
+                + PacBio::Text::String::Join(unusedArgs.begin(), unusedArgs.end(), ' ')
+                + ". Did you forget '--' before an option?");
+        }
+
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));
