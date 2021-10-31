@@ -171,8 +171,23 @@ std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
 std::map<uint32_t, size_t> ComputeSparsePools(const std::vector<uint32_t>& selectedLanes,
                                               const TraceFile::TraceFile& traceFile)
 {
-    const auto& batchIds = traceFile.Traces().AnalysisBatch();
     std::map<uint32_t, size_t> ret;
+    if (!traceFile.Traces().HasAnalysisBatch())
+    {
+        PBLOG_WARN << "Running in ReAnalysis mode with a tracefile that does not "
+                   << "have an AnalysisBatch dataset, is this a Kestrel tracefile? "
+                   << "All ZMW will be placed in batch 0";
+
+        ret[0] = selectedLanes.size();
+        return ret;
+    }
+
+    const auto& batchIds = traceFile.Traces().AnalysisBatch();
+    // The re-analysis code currently relies implicitly on the assumption that
+    // data is stored in the tracefile in order of ascending batchID.  This is
+    // in fact how it's done right now, and it's even a natural enough things to
+    // do that I doubt it will change, but the code in this file shouldn't really
+    // rely on that.
     for (const auto lane : selectedLanes)
     {
         // There is a genuine programming bug if this is violated
@@ -195,17 +210,16 @@ std::map<uint32_t, size_t> ComputeSparsePools(const std::vector<uint32_t>& selec
 std::map<uint32_t, size_t> ComputeDensePools(size_t numLanes,
                                              size_t requestedLanesPerPool)
 {
-    const auto numFullPools = numLanes / requestedLanesPerPool;
-    std::map<uint32_t, size_t> widths;
+    assert(requestedLanesPerPool > 0);
 
-    for (size_t i = 0; i < numFullPools; ++i)
+    std::map<uint32_t, size_t> widths;
+    uint32_t poolIdx = 0;
+    while (numLanes > 0)
     {
-        widths[i] = requestedLanesPerPool;
-    }
-    size_t stubBlocks = numLanes % requestedLanesPerPool;
-    if (stubBlocks != 0)
-    {
-        widths[numFullPools] = stubBlocks;
+        auto poolWidth = std::min(requestedLanesPerPool, numLanes);
+        widths[poolIdx] = poolWidth;;
+        poolIdx++;
+        numLanes -= poolWidth;
     }
 
     return widths;
@@ -266,15 +280,6 @@ TraceFileDataSource::TraceFileDataSource(
         throw PBException("Unexpected lane width requested");
 
     bool sparse = mode_ == Mode::Reanalysis;
-    if (sparse &&!traceFile_.Traces().HasAnalysisBatch())
-    {
-        PBLOG_WARN << "Running in ReAnalysis mode with a tracefile that does not "
-                   << "have an AnalysisBatch dataset, is this a Kestrel tracefile? ";
-        PBLOG_WARN << "Beware: results from this run will be dependant upon how many "
-                   << "ZMW are selected for analysis";
-        sparse = false;
-    }
-
     const auto layoutType = sparse
         ? PacketLayout::BLOCK_LAYOUT_SPARSE
         : PacketLayout::BLOCK_LAYOUT_DENSE;
@@ -509,14 +514,14 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
 
 // I wouldn't be surprised if this gets overhauled in the future.  For a real sensor acquisition, the ROI
 // is generaly a list of rectangles, specified in the chips x/y coordinates.  That's very difficult
-// to imite here, since for trace replication the original x/y coordinates don't mean anything, and even
+// to imitate here, since for trace replication the original x/y coordinates don't mean anything, and even
 // for re-analysis it would be hard to specify rectangles that are a subset of the original trace collection
 // roi.
 //
 // So for now:
 // * TraceReplication accepts a list of vectors with either one or two elements.  The first element is a ZMW *index*
 //   (that is 0-N), and the optional second index is a count to select.
-// * TraceReplication acceps a list of vectors only with a single element.  That single element is to be a ZMW
+// * TraceReanalysis accepts a list of vectors only with a single element.  That single element is to be a ZMW
 //   hole number.  Asking for hole numbers not present in the tracefile will result in a warning.
 TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(const std::vector<std::vector<int>>& vec) const
 {

@@ -65,7 +65,7 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
         params.holeNumbers[i] = i*3;
         params.properties[i].flags = 0;
         params.properties[i].x = i;
-        params.properties[i].x = 2*i;
+        params.properties[i].y = 2*i;
     }
 
     // Set up a fairly arbitrary grouping of ZMW into batches.
@@ -116,7 +116,7 @@ TEST(TraceFileDataSourceMisc, Replication)
 
     PacBio::Dev::TemporaryDirectory tempDir;
     const std::string traceFileName = tempDir.DirName()+"/test.trc.h5";
-    auto params = GenerateTraceFile(traceFileName);
+    const auto params = GenerateTraceFile(traceFileName);
 
     // We specifically want to read in a trace file with fewer ZMW
     // than we want, to utilize the replication mechanisms.
@@ -174,6 +174,7 @@ TEST(TraceFileDataSourceMisc, Replication)
     // match the layouts we promised to deliver
     for (const auto& chunk : source.AllChunks<int16_t>())
     {
+        EXPECT_EQ(chunk.size(), layouts.size());
         for (const auto& batch : chunk)
         {
             EXPECT_EQ(batch.StorageDims().lanesPerBatch,
@@ -184,7 +185,7 @@ TEST(TraceFileDataSourceMisc, Replication)
     }
 
     // Intentionally odd roi.  Every selected ZMW gets us a full lane,
-    // which means the 13 gets us a lane, and 184-272 overlaps three lanes
+    // which means the 13 gets us a lane, and 184-271 overlaps three lanes
     auto selected = source.SelectedLanesWithinROI({{13},{184,88}});
     ASSERT_EQ(selected.size(), 4);
     auto itr = selected.begin();
@@ -204,7 +205,7 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
 {
     PacBio::Dev::TemporaryDirectory tempDir;
     const std::string traceFileName = tempDir.DirName()+"/test.trc.h5";
-    auto params = GenerateTraceFile(traceFileName);
+    const auto params = GenerateTraceFile(traceFileName);
 
     Data::TraceReanalysis trcConfig;
     trcConfig.traceFile = traceFileName;
@@ -225,6 +226,11 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
         const auto& ids = source.UnitCellIds();
         EXPECT_EQ(ids.size(), numZmw);
         EXPECT_TRUE(std::equal(ids.begin(), ids.end(), params.holeNumbers.begin()));
+        const auto& props = source.GetUnitCellProperties();
+        EXPECT_TRUE(std::equal(props.begin(), props.end(), params.properties.begin(),
+                               [](const auto& v1, const auto& v2) { return v1.x == v2.x; }));
+        EXPECT_TRUE(std::equal(props.begin(), props.end(), params.properties.begin(),
+                               [](const auto& v1, const auto& v2) { return v1.y == v2.y; }));
     }
 
     // Make sure the reported layouts span all ZMW
@@ -267,6 +273,7 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
     // that agree with the promised layouts.
     for (const auto& chunk : source.AllChunks<int16_t>())
     {
+        EXPECT_EQ(chunk.size(), layouts.size());
         for (const auto& batch : chunk)
         {
             EXPECT_EQ(batch.StorageDims().lanesPerBatch,
@@ -295,7 +302,7 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
 {
     PacBio::Dev::TemporaryDirectory tempDir;
     const std::string traceFileName = tempDir.DirName()+"/test.trc.h5";
-    auto params = GenerateTraceFile(traceFileName);
+    const auto params = GenerateTraceFile(traceFileName);
 
     Data::TraceReanalysis trcConfig;
     trcConfig.traceFile = traceFileName;
@@ -323,6 +330,17 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
         EXPECT_EQ(ids.size(), numZmw);
         EXPECT_TRUE(std::equal(ids.begin(), ids.begin() + laneSize, params.holeNumbers.begin()));
         EXPECT_TRUE(std::equal(ids.end() - laneSize, ids.end(), params.holeNumbers.end() - laneSize));
+
+        const auto& props = source.GetUnitCellProperties();
+        EXPECT_EQ(props.size(), numZmw);
+        EXPECT_TRUE(std::equal(props.begin(), props.begin() + laneSize, params.properties.begin(),
+                               [](const auto& v1, const auto& v2) {return v1.x == v2.x;}));
+        EXPECT_TRUE(std::equal(props.begin(), props.begin() + laneSize, params.properties.begin(),
+                               [](const auto& v1, const auto& v2) {return v1.y == v2.y;}));
+        EXPECT_TRUE(std::equal(props.end() - laneSize, props.end(), params.properties.end() - laneSize,
+                               [](const auto& v1, const auto& v2) {return v1.x == v2.x;}));
+        EXPECT_TRUE(std::equal(props.end() - laneSize, props.end(), params.properties.end() - laneSize,
+                               [](const auto& v1, const auto& v2) {return v1.y == v2.y;}));
     }
 
     const auto& layouts = source.PacketLayouts();
@@ -350,6 +368,7 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
 
     for (const auto& chunk : source.AllChunks<int16_t>())
     {
+        EXPECT_EQ(chunk.size(), layouts.size());
         for (const auto& batch : chunk)
         {
             EXPECT_EQ(batch.StorageDims().lanesPerBatch,

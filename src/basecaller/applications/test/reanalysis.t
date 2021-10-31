@@ -9,7 +9,6 @@
   $ smrt-basecaller --config source.TraceReanalysis='{"traceFile":"'$TRCFILE'", "whitelist":[111,222] }' \
   > --config multipleBazFiles=false --outputbazfile ${BAZFILE} | grep WARN | grep -E "ReAnalysis|Beware"
   * WARN     Running in ReAnalysis mode with a tracefile that does not have an AnalysisBatch dataset, is this a Kestrel tracefile* (glob)
-  * WARN     Beware: results from this run will be dependant upon how many ZMW are selected for analysis (glob)
 
   $ bazviewer --silent -l ${BAZFILE} | grep -v -e "^$" | wc -l
   128
