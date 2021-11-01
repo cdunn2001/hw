@@ -62,10 +62,6 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// Static constants
-constexpr unsigned short DmeEmHost::nModelParams;
-constexpr unsigned int DmeEmHost::nFramesMin;
-
 // Static configuration parameters
 Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
 DmeEmHost::analogs_;
@@ -99,13 +95,9 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
         analogs_[i] = movConfig.analogs[i];
     }
 
-    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed)
-        fixedModel_ = true;
-    else
-        fixedModel_ = false;
+    fixedModel_ = (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed);
 
-    if (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed &&
-        dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    if (fixedModel_ && dmeConfig.SimModel.useSimulatedBaselineParams)
     {
         fixedBaselineParams_ = true;
         fixedBaselineMean_ = dmeConfig.SimModel.baselineMean;
@@ -244,7 +236,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 
     // Initialize intra-lane failure codes.
     IntVec zStatus = OK;
-    SetBits(numFrames < nFramesMin, INSUF_DATA, &zStatus);
+    SetBits(numFrames < CoreDMEstimator::nFramesMin, INSUF_DATA, &zStatus);
 
     DmeDiagnostics<FloatVec> dmeDx {};
     dmeDx.fullEstimation = true;
@@ -254,7 +246,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
-    mldx.degOfFreedom = LaneArray<int>(numFrames - nModelParams);
+    mldx.degOfFreedom = LaneArray<int>(numFrames - CoreDMEstimator::nModelParams);
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]
@@ -606,8 +598,8 @@ DmeEmHost::Gtest(const UHistType& histogram, const LaneDetModelHost& model)
     g *= 2.0f;
 
     // Compute the p-value.
-    assert(nModelParams + 1 < static_cast<unsigned int>(histogram.NumBins()));
-    const auto dof = histogram.NumBins() - nModelParams - 1;
+    assert(CoreDMEstimator::nModelParams + 1 < static_cast<unsigned int>(histogram.NumBins()));
+    const auto dof = histogram.NumBins() - CoreDMEstimator::nModelParams - 1;
     const auto pval = chi2CdfComp(g * gTestFactor_, dof);
 
     return {g, static_cast<float>(dof), pval};
@@ -702,7 +694,6 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     return cf;
 }
 
-
 // static
 void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
                               LaneDetModelHost* detModel)
@@ -737,7 +728,6 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     return pdm;
 }
 
-
 void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
                                  LaneDetModel& ldm) const
 {
@@ -770,7 +760,6 @@ void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
     }
 }
 
-
 // static
 LaneArray<float> DmeEmHost::ModelSignalCovar(
         const Data::AnalogMode& analog,
@@ -778,8 +767,8 @@ LaneArray<float> DmeEmHost::ModelSignalCovar(
         const LaneArray<float>& baselineVar)
 {
     LaneArray<float> r {baselineVar};
-    r += signalMean;
-    r += pow2(analog.excessNoiseCV * signalMean);
+    r += signalMean * CoreDMEstimator::shotVarCoeff;
+    r += pow2(signalMean * analog.excessNoiseCV);
     return r;
 }
 

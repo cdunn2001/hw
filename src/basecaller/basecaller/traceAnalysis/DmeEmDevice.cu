@@ -122,19 +122,16 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
     //Confidence(confSum);
 }
 
-// Static constants
-constexpr unsigned short DmeEmDevice::nModelParams;
-constexpr unsigned int DmeEmDevice::nFramesMin;
-
 template <typename VF>
 __device__ VF ModelSignalCovar(
         const Data::AnalogMode& analog,
         VF signalMean,
         VF baselineVar)
 {
-    baselineVar += signalMean;
-    auto tmp = analog.excessNoiseCV * signalMean;
-    baselineVar+= tmp*tmp;
+    auto tmp = signalMean * analog.excessNoiseCV;
+
+    baselineVar += signalMean * CoreDMEstimator::shotVarCoeff;
+    baselineVar += tmp*tmp;
     return baselineVar;
 }
 
@@ -413,8 +410,8 @@ Gtest(const DmeEmDevice::LaneHist& histogram, const ZmwDetectionModel& model)
     g *= 2.0f;
 
     // Compute the p-value.
-    assert(DmeEmDevice::nModelParams + 1 < static_cast<unsigned int>(numBins));
-    const auto dof = numBins - DmeEmDevice::nModelParams - 1;
+    assert(CoreDMEstimator::nModelParams + 1 < static_cast<unsigned int>(numBins));
+    const auto dof = numBins - CoreDMEstimator::nModelParams - 1;
     // TODO disabled because I don't have access to a gpu chi2 distribution on the GPU.
     assert(false);
     const auto pval = 0.f;
@@ -650,7 +647,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
     // Initialize intra-lane failure codes.
     int32_t zStatus = DmeEmDevice::OK;
-    if (numFrames < DmeEmDevice::nFramesMin) zStatus |= DmeEmDevice::INSUF_DATA;
+    if (numFrames < CoreDMEstimator::nFramesMin) zStatus |= DmeEmDevice::INSUF_DATA;
 
     DmeDiagnostics<float> dmeDx {};
     dmeDx.fullEstimation = true;
@@ -660,7 +657,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<float>& mldx = dmeDx.mldx;
-    mldx.degOfFreedom = numFrames - DmeEmDevice::nModelParams;
+    mldx.degOfFreedom = numFrames - CoreDMEstimator::nModelParams;
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]

@@ -52,6 +52,27 @@ public:     // Types
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
 
+    enum ZmwStatus : uint16_t
+    {
+        OK = 0,
+        NO_CONVERGE     = 1u << 0,
+        INSUF_DATA      = 1u << 1,
+        VLOW_SIGNAL     = 1u << 2
+    };
+
+public:     // Static constants
+    /// Number of free model parameters.
+    /// Five mixture fractions, background mean, background variance, and
+    /// pulse amplitude scale.
+    static constexpr unsigned short nModelParams = 8;
+
+    /// Minimum number of frames required for parameter estimation.
+    static constexpr unsigned int nFramesMin = 20 * nModelParams;
+
+    /// Cross-talk correction value. This value was pre-computed in
+    /// Matlab using data read from an arbitrary Spider trace file
+    static constexpr float shotVarCoeff = 1.2171f;
+
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
 
