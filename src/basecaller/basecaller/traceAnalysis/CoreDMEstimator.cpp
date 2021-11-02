@@ -9,6 +9,11 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
+// Static constants
+constexpr unsigned short CoreDMEstimator::nModelParams;
+constexpr unsigned int CoreDMEstimator::nFramesMin;
+constexpr float CoreDMEstimator::shotVarCoeff;
+
 // static
 PacBio::Logging::PBLogger CoreDMEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
 

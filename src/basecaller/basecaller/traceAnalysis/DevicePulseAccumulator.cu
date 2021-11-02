@@ -134,19 +134,20 @@ public:
 
         Get(endFrame_[threadIdx.x]) = frameIndex;
         auto start = Get(startFrame_[threadIdx.x]);
-        half width = frameIndex - start;
+        short width = frameIndex - start;
+        half widthHalf(width);
 
-        PBShort2 raw_mean_short = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
-        half raw_mean = half(raw_mean_short.template Get<id>()) / width;
-        float raw_mid  = half(signalTotal_[threadIdx.x].template Get<id>()) / (width - half(2));
+        PBShort2 rawMeanShort = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
+        half raw_mean = half(rawMeanShort.template Get<id>()) / widthHalf;
+        float raw_mid = float(signalTotal_[threadIdx.x].template Get<id>()) / (width - 2);
 
         half lowAmp = minMean.Get<id>();
-        auto keep = (width >= widThr_) || (raw_mean * width >= ampThr_ * lowAmp);
+        auto keep = (widthHalf >= widThr_) || (raw_mean * widthHalf >= ampThr_ * lowAmp);
 
         pulse.Start(start)
             .Width(width)
-            .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
-            .MidSignal(width < half(3) ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
+            .MeanSignal(min(maxSignal, max(minSignal, __half2float(raw_mean))))
+            .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
             .MaxSignal(min(maxSignal, max(minSignal, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
             .Label(manager.Nucleotide(label_[threadIdx.x].template Get<id>()))

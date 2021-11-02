@@ -55,23 +55,6 @@ public:     // Types
     using UHistType = Data::UHistogramSimd<FloatVec, CountVec>;
     using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
 
-    enum ZmwStatus : uint16_t
-    {
-        OK = 0,
-        NO_CONVERGE     = 1u << 0,
-        INSUF_DATA      = 1u << 1,
-        VLOW_SIGNAL     = 1u << 2
-    };
-
-public:     // Static constants
-    /// Number of free model parameters.
-    /// Five mixture fractions, background mean, background variance, and
-    /// pulse amplitude scale.
-    static constexpr unsigned short nModelParams = 8;
-
-    /// Minimum number of frames required for parameter estimation.
-    static constexpr unsigned int nFramesMin = 20 * nModelParams;
-
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig);

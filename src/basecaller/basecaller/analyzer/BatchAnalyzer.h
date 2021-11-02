@@ -69,7 +69,7 @@ public:     // Structors & assignment operators
     BatchAnalyzer& operator=(const BatchAnalyzer&) = delete;
     BatchAnalyzer& operator=(BatchAnalyzer&&);
 
-    ~BatchAnalyzer();
+    virtual ~BatchAnalyzer();
 
 public:
     /// Call operator is non-reentrant and will throw if a trace batch is
