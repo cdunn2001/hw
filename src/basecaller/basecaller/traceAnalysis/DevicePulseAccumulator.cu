@@ -62,15 +62,24 @@ inline __device__ uint2 Blend(PBShort2 cond, uint l, uint2 r) {
     return ret;
 };
 
+// static/global data is annoying to get to the GPU.  Bundle it in a
+// struct so we can have a single transfer.
+struct StaticConfig
+{
+    float ampThr_;
+    float widThr_;
+};
+
+__constant__ StaticConfig staticConfig;
+
+
 template <typename LabelManager, size_t blockThreads>
 class Segment
 {
 public:
     Segment() = default;
 
-    __device__  Segment(short initialState, float ampThr, float widThr)
-        : ampThr_(__float2half(ampThr))
-        , widThr_(__float2half(widThr))
+    __device__  Segment(short initialState)
     {
         for (int i = 0; i < blockThreads; ++i)
         {
@@ -90,9 +99,6 @@ public:
 
     __device__ void SharedCopy(const Segment& other)
     {
-        ampThr_ = other.ampThr_;
-        widThr_ = other.widThr_;
-
         startFrame_[threadIdx.x] = other.startFrame_[threadIdx.x];
         endFrame_[threadIdx.x] = other.endFrame_[threadIdx.x];
         signalFrstFrame_[threadIdx.x] = other.signalFrstFrame_[threadIdx.x];
@@ -135,18 +141,17 @@ public:
         Get(endFrame_[threadIdx.x]) = frameIndex;
         auto start = Get(startFrame_[threadIdx.x]);
         short width = frameIndex - start;
-        half widthHalf(width);
 
         PBShort2 rawMeanShort = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
-        half raw_mean = half(rawMeanShort.template Get<id>()) / widthHalf;
-        float raw_mid = float(signalTotal_[threadIdx.x].template Get<id>()) / (width - 2);
+        float raw_mean = float(rawMeanShort.template Get<id>()) / width;
+        float raw_mid  = float(signalTotal_[threadIdx.x].template Get<id>()) / (width - 2);
 
-        half lowAmp = minMean.Get<id>();
-        auto keep = (widthHalf >= widThr_) || (raw_mean * widthHalf >= ampThr_ * lowAmp);
+        auto lowAmp = minMean.Get<id>();
+        auto keep = (width >= staticConfig.widThr_) || (raw_mean * width >= staticConfig.ampThr_ * lowAmp);
 
         pulse.Start(start)
             .Width(width)
-            .MeanSignal(min(maxSignal, max(minSignal, __half2float(raw_mean))))
+            .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
             .MidSignal(width < 3 ? 0.0f : min(maxSignal, max(minSignal, raw_mid)))
             .MaxSignal(min(maxSignal, max(minSignal, signalMax_[threadIdx.x].template Get<id>())))
             .SignalM2(signalM2_[threadIdx.x].template Get<id>())
@@ -215,8 +220,6 @@ private:
     CudaArray<PBHalf2,  blockThreads> m0_;
     CudaArray<PBHalf2,  blockThreads> m1_;
     CudaArray<PBFloat2, blockThreads> m2_;
-    half ampThr_;
-    half widThr_;
 };
 
 template <typename LabelManager, size_t blockThreads>
@@ -302,7 +305,7 @@ class DevicePulseAccumulator<LabelManager>::AccumImpl
 public:
     AccumImpl(size_t lanesPerPool, StashableAllocRegistrar* registrar)
         : workingSegments_(registrar, SOURCE_MARKER(),
-                           lanesPerPool, LabelManager::BaselineLabel(), ampThresh_, widthThresh_)
+                           lanesPerPool, LabelManager::BaselineLabel())
     {
     }
 
@@ -364,6 +367,11 @@ void DevicePulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& mo
     {
         analogMap[i] = Data::mapToNucleotideLabel(movieConfig.analogs[i].baseLabel);
     }
+
+    StaticConfig config;
+    config.ampThr_ = ampThresh_;
+    config.widThr_ = widthThresh_;
+    Cuda::CudaCopyToSymbol(staticConfig, &config);
 
     AccumImpl::Configure(analogMap);
 }
