@@ -63,7 +63,8 @@ struct StaticConfig{
     float snrThresh0_;
     float snrThresh1_;
     float successConfThresh_;
-    float refSnr_;
+    float refSnr_;       // Expected SNR for analog with relative amplitude of 1
+    float movieScaler_;  // photoelectronSensitivity scaling gain factor
 };
 
 __constant__ StaticConfig staticConfig;
@@ -160,6 +161,7 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.refSnr_ = movConfig.refSnr;
+    config.movieScaler_ = movConfig.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }
@@ -888,10 +890,10 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
         s = numer / denom;
 
         // The minimum bound for the pulse-amplitude scale parameter.
-        static const float minSnr = 0.1f;
-        auto rpaMin = rpa[0];
-        for (int i = 1; i < rpa.size(); ++i) rpaMin = min(rpaMin, rpa[i]);
-        const auto sMin = minSnr * sqrt(var[0]) / rpaMin;
+        static const float minSnr = 0.5f;
+        const float minPulseMean = max(1.0f, staticConfig.movieScaler_);
+        auto rpaMin = rpa[0]; for (int i = 1; i < rpa.size(); ++i) rpaMin = min(rpaMin, rpa[i]);
+        const auto sMin = max(minSnr * sqrt(var[0]), minPulseMean) / rpaMin;
 
         // Constrain s > sMin.
         const auto veryLowSignal = (s < sMin);
