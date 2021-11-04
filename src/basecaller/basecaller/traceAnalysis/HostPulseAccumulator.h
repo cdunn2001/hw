@@ -103,26 +103,28 @@ public:
             return label_ != LabelArray{LabelManager::BaselineLabel()};
         }
 
-        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw, const LabelManager& manager)
+        Data::Pulse ToPulse(uint32_t frameIndex, uint32_t zmw, float meanAmp, const LabelManager& manager)
         {
-            using NucleotideLabel = Data::Pulse::NucleotideLabel;
-
             const float maxSignal = Data::Pulse::SignalMax();
             const float minSignal = 0.0f;
 
-            Data::Pulse pls{};
-
             endFrame_ = frameIndex;
-            auto startFrameZmw = MakeUnion(startFrame_)[zmw];
+            auto startFrameZmw  = MakeUnion(startFrame_)[zmw];
             auto signalTotalZmw = MakeUnion(signalTotal_)[zmw];
+            auto sigFrstFrame   = MakeUnion(signalLastFrame_)[zmw];
+            auto sigLastFrame   = MakeUnion(signalFrstFrame_)[zmw];
             int width = frameIndex - startFrameZmw;
 
-            float raw_mean = (signalTotalZmw + MakeUnion(signalLastFrame_)[zmw] + MakeUnion(signalFrstFrame_)[zmw]) / static_cast<float>(width);
-            float raw_mid = signalTotalZmw / static_cast<float>(width - 2);
+            float raw_mean = float(signalTotalZmw + sigFrstFrame + sigLastFrame) / width;
+            float raw_mid  = float(signalTotalZmw) / (width - 2);
+
+            auto lowAmp = meanAmp;
+            bool keep = (width >= widthThresh_) || (raw_mean * width >= ampThresh_ * lowAmp);
 
             using std::min;
             using std::max;
 
+            Data::Pulse pls{};
             pls.Start(startFrameZmw)
                 .Width(width)
                 .MeanSignal(min(maxSignal, max(minSignal, raw_mean)))
@@ -130,7 +132,7 @@ public:
                 .MaxSignal(min(maxSignal, max(minSignal, static_cast<float>(MakeUnion(signalMax_)[zmw]))))
                 .SignalM2(MakeUnion(signalM2_)[zmw])
                 .Label(manager.Nucleotide(MakeUnion(label_)[zmw]))
-                .IsReject(false);
+                .IsReject(!keep);
 
             return pls;
         }
@@ -171,12 +173,13 @@ public:
 
 private:
     std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    Process(Data::LabelsBatch trace, const PoolModelParameters&) override;
 
     void EmitFrameLabels(LabelsSegment& currSegment, Data::LaneVectorView<Data::Pulse>& pulses,
                          BaselineStats& baselineStats,
                          const LabelArray& label, const SignalBlockView& blockLatTrace,
-                         const SignalBlockView& currTrace, size_t relativeFrameIndex, uint32_t absFrameIndex);
+                         const SignalBlockView& currTrace, const FloatArray& meanAmp,
+                         size_t relativeFrameIndex, uint32_t absFrameIndex);
 
     SignalArray Signal(size_t relativeFrameIndex, const SignalBlockView& latTrace,
                                const SignalBlockView& currTrace) const

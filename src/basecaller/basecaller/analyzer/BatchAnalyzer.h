@@ -32,6 +32,7 @@
 #include <memory>
 
 #include <basecaller/traceAnalysis/TraceAnalysisForward.h>
+#include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/MongoConstants.h>
@@ -88,7 +89,14 @@ protected:
     std::unique_ptr<DetectionModelEstimator> dme_;
     std::unique_ptr<HFMetricsFilter> hfMetrics_;
 
+    // Same as CoreDMEstimator::PoolDetModel
+    // Same as DetectionModelEstimator::PoolDetModel
+    // Same as PulseAccumulator::PoolModelParameters
+    // Same as FrameLabeler::PoolModelParameters
+    // Same as HFMetricsFilter::ModelsBatchT
+    // Same as HFMetricsFilter::Process(... UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>> ... )
     Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
+
 
 private:
     virtual OutputType AnalyzeImpl(const InputType& tbatch) = 0;

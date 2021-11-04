@@ -49,7 +49,7 @@ public:
 
 private:
     std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace) override;
+    Process(Data::LabelsBatch labels, const PoolModelParameters& models) override;
 
     Data::Pulse GeneratePulse(size_t zmw) const;
 
