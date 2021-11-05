@@ -54,7 +54,8 @@ using namespace PacBio::Mongo::Data;
 // as that will be easier to upload to the GPU.
 struct StaticConfig{
     CudaArray<AnalogMode, 4> analogs;
-    float analogMixFracThresh_;
+    float analogMixFracThresh0_;
+    float analogMixFracThresh1_;
     unsigned short emIterLimit_;
     float gTestFactor_;
     bool iterToLimit_;
@@ -150,16 +151,19 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     {
         config.analogs[i] = movConfig.analogs[i];
     }
-    config.analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
-    config.emIterLimit_ = dmeConfig.EmIterationLimit;
-    config.gTestFactor_ = dmeConfig.GTestStatFactor;
-    config.iterToLimit_ = dmeConfig.IterateToLimit;
-    config.pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
-    config.snrDropThresh_ = dmeConfig.SnrDropThresh;
-    config.snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
-    config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
+    config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold;
+    config.analogMixFracThresh0_ = isnan(dmeConfig.AnalogMixFractionThresh0) ?
+                                config.analogMixFracThresh1_ / 3 : dmeConfig.AnalogMixFractionThresh0;
+
+    config.emIterLimit_       = dmeConfig.EmIterationLimit;
+    config.gTestFactor_       = dmeConfig.GTestStatFactor;
+    config.iterToLimit_       = dmeConfig.IterateToLimit;
+    config.pulseAmpRegCoeff_  = dmeConfig.PulseAmpRegularization;
+    config.snrDropThresh_     = dmeConfig.SnrDropThresh;
+    config.snrThresh0_        = dmeConfig.MinAnalogSnrThresh0;
+    config.snrThresh1_        = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    config.refSnr_ = movConfig.refSnr;
+    config.refSnr_            = movConfig.refSnr;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }
@@ -466,20 +470,23 @@ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
     const auto& refBgVar = refModel.baseline.var;
     x = log2(bg.var / refBgVar);
     // TODO: Make this configurable.
-    static const float bgVarTol = 1.0f;
+    const float bgVarTol = 1.5f / (0.5f + refModel.confidence);
     x = exp(-x*x / (2*bgVarTol*bgVarTol));
     cf[ConfFactor::BL_VAR_STABLE] = x;
 
     // Check for missing pulse components.
     // Require that the first (brightest) and last (dimmest) are not absent.
-    // TODO: Make this configurable. Should this threshold be defined in terms
-    // of data count instead of fraction?
-    const float dmFracThresh1 = staticConfig.analogMixFracThresh_;
-    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
+    x = 1.0f;
     const auto& detModes = modelEst.analogs;
-    assert(detModes.size() == 4);
-    x = satlin(dmFracThresh0, dmFracThresh1, detModes.front().weight);
-    x *= satlin(dmFracThresh0, dmFracThresh1, detModes.back().weight);
+    const float analogMixFracThresh1_ = staticConfig.analogMixFracThresh1_;
+    const float analogMixFracThresh0_ = staticConfig.analogMixFracThresh0_;
+    if (analogMixFracThresh1_ > 0.0f)
+    {
+        assert(detModes.size() >= 1);
+        assert(analogMixFracThresh0_ < analogMixFracThresh1_);
+        x *= satlin(analogMixFracThresh0_, analogMixFracThresh1_, detModes.front().weight);
+        x *= satlin(analogMixFracThresh0_, analogMixFracThresh1_, detModes.back().weight);
+    }
     cf[ConfFactor::ANALOG_REP] = x;
 
     // Check for low SNR.

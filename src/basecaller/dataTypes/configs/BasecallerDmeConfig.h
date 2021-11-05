@@ -27,9 +27,14 @@
 #ifndef mongo_dataTypes_configs_BasecallerDmeConfig_H_
 #define mongo_dataTypes_configs_BasecallerDmeConfig_H_
 
+#include <limits>
+
 #include <pacbio/configuration/PBConfig.h>
 
 #include <basecaller/traceAnalysis/ComputeDevices.h>
+
+using std::numeric_limits;
+
 
 namespace PacBio {
 namespace Mongo {
@@ -67,8 +72,23 @@ public:
 
     // Threshold for mixing fractions of analog modes in detection model fit.
     // Associated confidence factor is defined using this threshold.
-    // Must be non-negative.
-    PB_CONFIG_PARAM(float, AnalogMixFractionThreshold, 0.039f);
+    // Must be <= 0.25. If <= 0, the threshold is disabled (i.e., the
+    // associated confidence factor will always be 1).
+    PB_CONFIG_PARAM(float, AnalogMixFractionThreshold, 0.02f);
+
+    // For DmeMonochrome, AnalogMixFractionThresh0 defines the lower end of
+    // a 0-1 ramp for the related confidence factor.
+    //
+    // AnalogMixFractionThresh0 < AnalogMixFractionThresh.
+    //
+    // AnalogMixFractionThresh0 may be < 0. Since mixing fractions cannot be
+    // negative, setting AnalogMixFractionThresh0 < 0 effectively sets a
+    // positive lower bound for the confidence factor that is attained when
+    // the mixing fraction is 0.
+    //
+    // If AnalogMixFractionThresh0 is not set (nan), legacy behavior is preserved,
+    // which effectively sets it to AnalogMixFractionThreshold / 3.
+    PB_CONFIG_PARAM(float, AnalogMixFractionThresh0, numeric_limits<float>::quiet_NaN());
 
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
