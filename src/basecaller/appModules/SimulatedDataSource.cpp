@@ -50,6 +50,7 @@ public:
               T* /*dummy to deduce T*/)
         : bytesPerVal_(sizeof(T))
         , pedestal_(generator->Pedestal())
+        , instrumentName_(generator->InstrumentName())
     {
         static_assert(std::is_same<T, int16_t>::value
                       || std::is_same<T, uint8_t>::value);
@@ -113,6 +114,8 @@ public:
 
     int16_t Pedestal() const { return pedestal_; }
 
+    std::string InstrumentName() const { return instrumentName_; }
+
 private:
     size_t bytesPerVal_ = 0;
     size_t numLanes_ = 0;
@@ -122,6 +125,7 @@ private:
     boost::multi_array<uint8_t, 4> data_;
 
     int16_t pedestal_ = 0;
+    std::string instrumentName_ = "SimulatedDataSource";
 };
 
 SimulatedDataSource::~SimulatedDataSource() = default;
@@ -191,6 +195,8 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
 }
 
 int16_t SimulatedDataSource::Pedestal() const { return cache_->Pedestal(); }
+
+std::string SimulatedDataSource::InstrumentName() const { return cache_->InstrumentName(); }
 
 void SimulatedDataSource::ContinueProcessing()
 {

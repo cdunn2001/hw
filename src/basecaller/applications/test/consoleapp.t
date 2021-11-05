@@ -1,4 +1,4 @@
-  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
+  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_new_designer_mongo_acgt_SNR-40.trc.h5
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":1,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=1   \

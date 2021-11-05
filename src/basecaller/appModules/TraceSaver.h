@@ -27,6 +27,7 @@
 #define PACBIO_APPLICATION_TRACE_SAVER_H
 
 #include <pacbio/datasource/DataSourceBase.h>
+#include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
 #include <pacbio/tracefile/TraceFile.h>
@@ -67,6 +68,10 @@ public:
                    const std::vector<uint32_t>& holeNumbers,
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                    const std::vector<uint32_t>& batchIds,
+                   const boost::multi_array<float,2>& imagePsf,
+                   const boost::multi_array<float,2>& crossTalk,
+                   const Sensor::Platform& platform,
+                   const std::string instrumentName,
                    const Mongo::Data::MovieConfig& movCfg);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
@@ -79,6 +84,19 @@ public:
 
     void Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
 private:
+
+    void PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
+                           const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
+                           const std::vector<uint32_t>& batchIds,
+                           const Mongo::Data::MovieConfig& movCfg);
+
+    void PopulateScanData(size_t numFrames,
+                          const boost::multi_array<float,2>& imagePsf,
+                          const boost::multi_array<float,2>& crossTalk,
+                          const Sensor::Platform& platform,
+                          const std::string instrumentName,
+                          const Mongo::Data::MovieConfig& movCfg);
+
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
     TraceFile::TraceFile file_;
 };

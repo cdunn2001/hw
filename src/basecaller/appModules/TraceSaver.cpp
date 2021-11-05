@@ -43,11 +43,33 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::vector<uint32_t>& holeNumbers,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                                const std::vector<uint32_t>& batchIds,
+                               const boost::multi_array<float,2>& imagePsf,
+                               const boost::multi_array<float,2>& crossTalk,
+                               const Sensor::Platform& platform,
+                               const std::string instrumentName,
                                const Mongo::Data::MovieConfig& movCfg)
     : laneSelector_(std::move(laneSelector))
     , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
 {
+    PopulateTraceData(holeNumbers, properties, batchIds, movCfg);
+    PopulateScanData(numFrames, imagePsf, crossTalk, platform, instrumentName, movCfg);
+
+    PBLOG_INFO << "TraceSaverBody created";
+}
+
+void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
+                                       const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
+                                       const std::vector<uint32_t>& batchIds,
+                                       const Mongo::Data::MovieConfig& movCfg)
+{
     const size_t numZmw = laneSelector_.size() * laneSize;
+    if (holeNumbers.size() != numZmw)
+        throw PBException("Invalid number of hole numbers provided");
+    if (properties.size() != numZmw)
+        throw PBException("Invalid number of hole properties provided");
+    if (batchIds.size() != numZmw)
+        throw PBException("Invalid number of batchIds provided");
+
     if (holeNumbers.size() != numZmw)
         throw PBException("Invalid number of hole numbers provided");
     if (properties.size() != numZmw)
@@ -73,10 +95,65 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
     file_.Traces().HoleType(holeType);
     file_.Traces().HoleNumber(holeNumbers);
     file_.Traces().AnalysisBatch(batchIds);
-
-    PBLOG_INFO << "TraceSaverBody created";
 }
 
+void TraceSaverBody::PopulateScanData(size_t numFrames,
+                                      const boost::multi_array<float,2>& imagePsf,
+                                      const boost::multi_array<float,2>& crossTalk,
+                                      const Sensor::Platform& platform,
+                                      const std::string instrumentName,
+                                      const Mongo::Data::MovieConfig& movCfg)
+{
+    using ScanData = TraceFile::ScanData;
+
+    ScanData::RunInfoData runInfo;
+    runInfo.platformName = platform.toString();
+    runInfo.platformId = platform;
+    runInfo.instrumentName = instrumentName;
+    runInfo.hqrfMethod = movCfg.hqrfMethod;
+    file_.Scan().RunInfo(runInfo);
+
+    ScanData::AcqParamsData acqParams;
+    acqParams.aduGain = movCfg.photoelectronSensitivity;
+    acqParams.frameRate = movCfg.frameRate;
+    acqParams.numFrames = numFrames;
+    file_.Scan().AcqParams(acqParams);
+
+    constexpr std::string_view defaultLayoutName = "KestrelDefaultChipLayout";
+
+    ScanData::ChipInfoData chipInfo;
+    chipInfo.layoutName = defaultLayoutName;
+    chipInfo.analogRefSnr = movCfg.refSnr;
+    chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
+    for (size_t i = 0; i < imagePsf.num_elements(); i++) chipInfo.imagePsf.data()[i] = imagePsf.data()[i];
+    chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
+    for (size_t i = 0; i < crossTalk.num_elements(); i++) chipInfo.xtalkCorrection.data()[i] = crossTalk.data()[i];
+    file_.Scan().ChipInfo(chipInfo);
+
+    ScanData::DyeSetData dyeSet;
+    const size_t numAnalogs = movCfg.analogs.size();
+    dyeSet.numAnalog = static_cast<uint16_t>(numAnalogs);
+    dyeSet.relativeAmp.resize(numAnalogs);
+    dyeSet.excessNoiseCV.resize(numAnalogs);
+    dyeSet.ipdMean.resize(numAnalogs);
+    dyeSet.pulseWidthMean.resize(numAnalogs);
+    dyeSet.pw2SlowStepRatio.resize(numAnalogs);
+    dyeSet.ipd2SlowStepRatio.resize(numAnalogs);
+    dyeSet.baseMap = "";
+    for (size_t i = 0; i < numAnalogs; i++)
+    {
+        const AnalogMode& am = movCfg.analogs[i];
+        dyeSet.relativeAmp[i] = am.relAmplitude;
+        dyeSet.excessNoiseCV[i] = am.excessNoiseCV;
+        dyeSet.ipdMean[i] = am.interPulseDistance;
+        dyeSet.pulseWidthMean[i] = am.pulseWidth;
+        dyeSet.pw2SlowStepRatio[i] = am.pw2SlowStepRatio;
+        dyeSet.ipd2SlowStepRatio[i] = am.ipd2SlowStepRatio;
+        dyeSet.baseMap += am.baseLabel;
+    }
+    file_.Scan().DyeSet(dyeSet);
+
+}
 
 void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {

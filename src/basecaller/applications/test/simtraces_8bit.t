@@ -5,7 +5,7 @@
 # will get better in the future
 
   $ BAZGPU16=${CRAMTMP}/gpu16.baz
-  $ TRCFILE=/pbi/dept/primary/jira/ptsd-686/Test8bit_Penguin_2p0pps_noleader_SNR-16.trc.h5
+  $ TRCFILE=/pbi/dept/primary/jira/ptsd-686/Test8bit_new_Penguin_2p0pps_noleader_SNR-16.trc.h5
 
 # Do some int16_t analysis to set our baseline.  We'll currently align poorly, but that's besides the point.
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768, "numZmwLanes":16,"traceFile":"'$TRCFILE'","cache":true,"inputType":"INT16" }' \

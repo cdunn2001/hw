@@ -1,4 +1,4 @@
-  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
+  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_new_designer_mongo_acgt_SNR-40.trc.h5
   $ BAZFILE=tmp.baz
 
 # First a sanity check, that trace re-analysis works on baz files without an AnalysisBatch dataset.

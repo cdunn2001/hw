@@ -1,5 +1,5 @@
   $ TRCOUT=${CRAMTMP}/out.trc.h5
-  $ TRCIN=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
+  $ TRCIN=/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'"}' \
   > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,127],[192,64]] > /dev/null 2>&1
 
@@ -64,7 +64,7 @@
   --- Zmw0.in* (glob)
   +++ Zmw0.out* (glob)
   @@ -1,7 +1,7 @@
-  -HDF5 "/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5" {
+  -HDF5 "/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5" {
   +HDF5 "*/out.trc.h5" { (glob)
    DATASET "TraceData/Traces" {
       DATATYPE  H5T_STD_I16LE
@@ -83,7 +83,7 @@
   --- Zmw64.in* (glob)
   +++ Zmw64.out* (glob)
   @@ -1,7 +1,7 @@
-  -HDF5 "/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5" {
+  -HDF5 "/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5" {
   +HDF5 "*/out.trc.h5" { (glob)
    DATASET "TraceData/Traces" {
       DATATYPE  H5T_STD_I16LE
@@ -104,7 +104,7 @@
   --- Zmw192.in* (glob)
   +++ Zmw128.out* (glob)
   @@ -1,9 +1,9 @@
-  -HDF5 "/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5" {
+  -HDF5 "/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5" {
   +HDF5 "*/out.trc.h5" { (glob)
    DATASET "TraceData/Traces" {
       DATATYPE  H5T_STD_I16LE
@@ -140,7 +140,7 @@
   +++ Zmw0NoTrunc.in* (glob)
   @@ -1,20 +1,20 @@
   -HDF5 "*/out.trc.h5" { (glob)
-  +HDF5 "/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5" {
+  +HDF5 "/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5" {
    DATASET "TraceData/Traces" {
   -   DATATYPE  H5T_STD_U8LE
   -   DATASPACE  SIMPLE { ( 192, 1, 8192 ) / ( 192, 1, 8192 ) }
