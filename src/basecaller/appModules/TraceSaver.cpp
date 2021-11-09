@@ -46,7 +46,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const boost::multi_array<float,2>& imagePsf,
                                const boost::multi_array<float,2>& crossTalk,
                                const Sensor::Platform& platform,
-                               const std::string instrumentName,
+                               const std::string& instrumentName,
                                const Mongo::Data::MovieConfig& movCfg)
     : laneSelector_(std::move(laneSelector))
     , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
@@ -63,13 +63,6 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
                                        const Mongo::Data::MovieConfig& movCfg)
 {
     const size_t numZmw = laneSelector_.size() * laneSize;
-    if (holeNumbers.size() != numZmw)
-        throw PBException("Invalid number of hole numbers provided");
-    if (properties.size() != numZmw)
-        throw PBException("Invalid number of hole properties provided");
-    if (batchIds.size() != numZmw)
-        throw PBException("Invalid number of batchIds provided");
-
     if (holeNumbers.size() != numZmw)
         throw PBException("Invalid number of hole numbers provided");
     if (properties.size() != numZmw)
@@ -101,7 +94,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
                                       const boost::multi_array<float,2>& imagePsf,
                                       const boost::multi_array<float,2>& crossTalk,
                                       const Sensor::Platform& platform,
-                                      const std::string instrumentName,
+                                      const std::string& instrumentName,
                                       const Mongo::Data::MovieConfig& movCfg)
 {
     using ScanData = TraceFile::ScanData;
@@ -125,9 +118,11 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     chipInfo.layoutName = defaultLayoutName;
     chipInfo.analogRefSnr = movCfg.refSnr;
     chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
-    for (size_t i = 0; i < imagePsf.num_elements(); i++) chipInfo.imagePsf.data()[i] = imagePsf.data()[i];
+    chipInfo.imagePsf = imagePsf;
+    //for (size_t i = 0; i < imagePsf.num_elements(); i++) chipInfo.imagePsf.data()[i] = imagePsf.data()[i];
     chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
-    for (size_t i = 0; i < crossTalk.num_elements(); i++) chipInfo.xtalkCorrection.data()[i] = crossTalk.data()[i];
+    chipInfo.xtalkCorrection = crossTalk;
+    //for (size_t i = 0; i < crossTalk.num_elements(); i++) chipInfo.xtalkCorrection.data()[i] = crossTalk.data()[i];
     file_.Scan().ChipInfo(chipInfo);
 
     ScanData::DyeSetData dyeSet;

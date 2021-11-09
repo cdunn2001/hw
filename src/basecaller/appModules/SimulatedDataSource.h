@@ -40,7 +40,7 @@ class SignalGenerator
 public:
     virtual std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) = 0;
     virtual int16_t Pedestal() const = 0;
-    virtual std::string InstrumentName() const = 0;
+    virtual std::string Name() const = 0;
     virtual ~SignalGenerator() = default;
 };
 
@@ -122,10 +122,10 @@ public:
 
     int16_t Pedestal() const override;
 
-    boost::multi_array<float,2> CrosstalkFilterMatrix() const override { throw PBException("Not implemented!"); }
-    boost::multi_array<float,2> ImagePsfMatrix() const override { throw PBException("Not implemented!"); }
+    boost::multi_array<float,2> CrosstalkFilterMatrix() const override;
+    boost::multi_array<float,2> ImagePsfMatrix() const override;
 
-    Sensor::Platform Platform() const override { throw PBException("Not implemented!"); }
+    Sensor::Platform Platform() const override { return Sensor::Platform::DONT_CARE; }
     std::string InstrumentName() const override;
 
     DataSource::HardwareInformation GetHardwareInformation() override
@@ -160,7 +160,7 @@ public:
     }
 
     int16_t Pedestal() const override { return 0; }
-    std::string InstrumentName() const override { return "ConstantGenerator"; }
+    std::string Name() const override { return "ConstantGenerator"; }
 };
 
 // Generates a crude sequence of baseline/pulses.
@@ -202,7 +202,7 @@ public:
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
     int16_t Pedestal() const override { return config_.pedestal; }
-    std::string InstrumentName() const override { return "PicketFenceGenerator"; }
+    std::string Name() const override { return "PicketFenceGenerator"; }
 
 private:
     Config config_;
@@ -232,7 +232,7 @@ public:
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
     int16_t Pedestal() const override { return 0; }
-    std::string InstrumentName() const override { return "SawToothGenerator"; }
+    std::string Name() const override { return "SawtoothGenerator"; }
 private:
     Config config_;
 };
@@ -256,7 +256,7 @@ public:
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
     int16_t Pedestal() const override { return gen_->Pedestal(); }
-    std::string InstrumentName() const override { return "SortedGenerator"; }
+    std::string Name() const override { return "SortedGenerator"; }
 private:
     std::unique_ptr<SignalGenerator> gen_;
 };
@@ -285,7 +285,7 @@ public:
     std::vector<int16_t> GenerateSignal(size_t numFrames, size_t idx) override;
 
     int16_t Pedestal() const override { return gen_->Pedestal(); }
-    std::string InstrumentName() const override { return "RandomizedGenerator"; }
+    std::string Name() const override { return "RandomizedGenerator"; }
 private:
     std::unique_ptr<SignalGenerator> gen_;
     Config config_;

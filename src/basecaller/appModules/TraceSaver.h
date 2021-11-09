@@ -27,7 +27,6 @@
 #define PACBIO_APPLICATION_TRACE_SAVER_H
 
 #include <pacbio/datasource/DataSourceBase.h>
-#include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
 #include <pacbio/tracefile/TraceFile.h>
@@ -71,7 +70,7 @@ public:
                    const boost::multi_array<float,2>& imagePsf,
                    const boost::multi_array<float,2>& crossTalk,
                    const Sensor::Platform& platform,
-                   const std::string instrumentName,
+                   const std::string& instrumentName,
                    const Mongo::Data::MovieConfig& movCfg);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
@@ -94,7 +93,7 @@ private:
                           const boost::multi_array<float,2>& imagePsf,
                           const boost::multi_array<float,2>& crossTalk,
                           const Sensor::Platform& platform,
-                          const std::string instrumentName,
+                          const std::string& instrumentName,
                           const Mongo::Data::MovieConfig& movCfg);
 
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;

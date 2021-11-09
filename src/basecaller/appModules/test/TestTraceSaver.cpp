@@ -49,6 +49,15 @@ using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::DataSource;
 
+const auto DefaultImagePsfSize = TraceFile::ScanData::DefaultImagePsfSize;
+const auto DefaultXtalkSize = TraceFile::ScanData::DefaultXtalkSize;
+
+boost::multi_array<float,2> MakeUnity(size_t dimSize)
+{
+    boost::multi_array<float,2> unity(boost::extents[dimSize][dimSize]);
+    unity[dimSize/2][dimSize/2] = 1.0f;
+    return unity;
+}
 
 template <typename T>
 struct TestTraceSaver : public ::testing::Test {};
@@ -78,14 +87,10 @@ TYPED_TEST(TestTraceSaver, TestA)
     SensorSize sensorROI(0, 0, 2, laneWidth * 2, 1, 1);
     const uint64_t numSensorZmws = sensorROI.NumUnitCells();
     const uint64_t numSelectedZmws = 128;
-    boost::multi_array<float,2> imagePsf(boost::extents[TraceFile::ScanData::DefaultImagePsfSize][TraceFile::ScanData::DefaultImagePsfSize]);
-    imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2] = 1.0f;
-    boost::multi_array<float,2> crossTalk(boost::extents[TraceFile::ScanData::DefaultXtalkSize][TraceFile::ScanData::DefaultXtalkSize]);
-    crossTalk[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2] = 1.0f;
-    //const Platform platform = Platform::DONT_CARE;
-    //const std::string instrumentName = "instrumentX";
-    const Platform platform = Platform::Kestrel;
-    const std::string instrumentName = "traceSimulator";
+    boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
+    boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
+    const Platform platform = Platform::DONT_CARE;
+    const std::string instrumentName = "instrumentX";
 
     const uint32_t numCols = sensorROI.PhysicalCols();
     // standard alpha pattern, with the caveat that if we are generating
@@ -221,11 +226,11 @@ TYPED_TEST(TestTraceSaver, TestA)
         PacBio::TraceFile::TraceFile reader(traceFile);
 
         EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), imagePsf.num_elements());
-        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2],
-                        imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2]);
+        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
+                        imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
-        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2],
-                        crossTalk[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2]);
+        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
+                        crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
         EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
@@ -308,10 +313,8 @@ TEST(Sanity,ROI)
             k++;
         }
     }
-    boost::multi_array<float,2> imagePsf(boost::extents[TraceFile::ScanData::DefaultImagePsfSize][TraceFile::ScanData::DefaultImagePsfSize]);
-    imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2] = 1.0f;
-    boost::multi_array<float,2> crossTalk(boost::extents[TraceFile::ScanData::DefaultXtalkSize][TraceFile::ScanData::DefaultXtalkSize]);
-    crossTalk[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2] = 1.0f;
+    boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
+    boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
     PacBio::Sensor::Platform platform = PacBio::Sensor::Platform::DONT_CARE;
     std::string instrumentName = "instrumentX";
 
@@ -336,11 +339,11 @@ TEST(Sanity,ROI)
     {
         PacBio::TraceFile::TraceFile reader(traceFileName);
         EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), imagePsf.num_elements());
-        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2],
-                        imagePsf[TraceFile::ScanData::DefaultImagePsfSize/2][TraceFile::ScanData::DefaultImagePsfSize/2]);
+        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
+                        imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
-        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2],
-                        crossTalk[TraceFile::ScanData::DefaultXtalkSize/2][TraceFile::ScanData::DefaultXtalkSize/2]);
+        EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
+                        crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
         EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);

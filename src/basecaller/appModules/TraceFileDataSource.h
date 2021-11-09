@@ -125,14 +125,22 @@ public:
     int16_t Pedestal() const override { return this->traceFile_.Traces().Pedestal(); }
 
     boost::multi_array<float,2> CrosstalkFilterMatrix() const override
-    { return this->traceFile_.Scan().ChipInfo().xtalkCorrection; }
-    virtual boost::multi_array<float,2> ImagePsfMatrix() const override
-    { return this->traceFile_.Scan().ChipInfo().imagePsf; }
+    {
+        return this->traceFile_.Scan().ChipInfo().xtalkCorrection;
+    }
+    boost::multi_array<float,2> ImagePsfMatrix() const override
+    {
+        return this->traceFile_.Scan().ChipInfo().imagePsf;
+    }
 
     Sensor::Platform Platform() const override
-    { return Sensor::Platform::fromString(this->traceFile_.Scan().RunInfo().platformName); }
+    {
+        return Sensor::Platform::fromString(this->traceFile_.Scan().RunInfo().platformName);
+    }
     std::string InstrumentName() const override
-    { return this->traceFile_.Scan().RunInfo().instrumentName; }
+    {
+        return this->traceFile_.Scan().RunInfo().instrumentName;
+    }
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {
