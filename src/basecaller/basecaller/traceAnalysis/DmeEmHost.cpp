@@ -66,6 +66,7 @@ namespace Basecaller {
 Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
 DmeEmHost::analogs_;
 float DmeEmHost::refSnr_;
+float DmeEmHost::movieScaler_ = 1.0f;
 bool DmeEmHost::fixedModel_ = false;
 bool DmeEmHost::fixedBaselineParams_ = false;
 float DmeEmHost::fixedBaselineMean_ = 0;
@@ -81,6 +82,7 @@ float DmeEmHost::snrThresh0_ = 0.0f;
 float DmeEmHost::snrThresh1_ = 0.0f;
 float DmeEmHost::successConfThresh_ = 0.0f;
 
+
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
     : CoreDMEstimator(poolId, poolSize)
 { }
@@ -90,6 +92,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::MovieConfig &movConfig)
 {
     refSnr_ = movConfig.refSnr;
+    movieScaler_ = movConfig.photoelectronSensitivity;
     for (size_t i = 0; i < movConfig.analogs.size(); i++)
     {
         analogs_[i] = movConfig.analogs[i];
@@ -416,8 +419,11 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
         s = numer / denom;
 
         // The minimum bound for the pulse-amplitude scale parameter.
-        static const float minSnr = 0.1f;
-        const auto sMin = minSnr * sqrt(var[0]) / rpa.minCoeff();
+        using std::min;  using std::max;
+
+        static const float minSnr = 0.5f;
+        const float minPulseMean = max(1.0f, movieScaler_);
+        const auto sMin = max(minSnr * sqrt(var[0]), minPulseMean) / rpa.minCoeff();
 
         // Constrain s > sMin.
         const auto veryLowSignal = (s < sMin);

@@ -99,7 +99,8 @@ private:    // Customized implementation
 
 private:    // Static data
     static Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs> analogs_;
-    static float refSnr_;   // Expected SNR for analog with relative amplitude of 1.
+    static float refSnr_;       // Expected SNR for analog with relative amplitude of 1.
+    static float movieScaler_;  // photoelectronSensitivity gain factor
     static bool fixedModel_;
     static bool fixedBaselineParams_;
     static float fixedBaselineMean_;
