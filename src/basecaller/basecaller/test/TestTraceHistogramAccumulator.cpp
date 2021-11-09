@@ -253,6 +253,10 @@ private:
                     TraceBatch<int16_t> batch(std::move(packet), meta, dims,
                                               SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
+                    auto workspace = std::make_shared<BatchData<int16_t>>(batch.StorageDims(),
+                                                                          SyncDirection::HostReadDeviceWrite,
+                                                                          SOURCE_MARKER());
+
                     // Profiler will only do something if we're configured to enable profiling.
                     typename Profiler::Mode mode = monitorPerf_ ? Profiler::Mode::OBSERVE : Profiler::Mode::IGNORE;
                     Profiler profiler(mode, 1000, 1000);
@@ -269,7 +273,7 @@ private:
 
                     auto binning = profiler.CreateScopedProfiler(Profiles::BINNING);
                     (void)binning;
-                    hists[poolId]->AddBatch(batch, pdm);
+                    hists[poolId]->AddBatch(batch, pdm, workspace);
                     CudaSynchronizeDefaultStream();
 
                     auto download = profiler.CreateScopedProfiler(Profiles::HIST_DOWNLOAD);

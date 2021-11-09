@@ -87,13 +87,19 @@ public:     // Non-const functions
     /// Adds data to histograms for a pool.
     /// May include filtering of edge frames.
     void AddBatch(const Data::TraceBatch<DataType>& traces,
-                  const PoolDetModel& detModel)
+                  const PoolDetModel& detModel,
+                  std::shared_ptr<Data::BatchData<DataType>> workspace = nullptr)
     {
         if (!initialized_)
             throw PBException("Cannot aggregate trace data into histograms "
                               "before calling Reset with the desired histogram bounds");
         assert (traces.GetMeta().PoolId() == poolId_);
-        AddBatchImpl(traces, detModel);
+        if (!workspace)
+        {
+            workspace = std::make_shared<Data::BatchData<DataType>>(
+                traces.StorageDims(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
+        }
+        AddBatchImpl(traces, detModel, *workspace);
         frameCount_ += traces.NumFrames();
     }
 
@@ -123,7 +129,8 @@ private:    // Data
 private:    // Customizable implementation.
     // Bins frames in traces and updates poolHist_.
   virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                            const PoolDetModel& detModel) = 0;
+                            const PoolDetModel& detModel,
+                            Data::BatchData<DataType>& workspace) = 0;
 
     // Clears out current histogram data and resets histogram with given bounds
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;

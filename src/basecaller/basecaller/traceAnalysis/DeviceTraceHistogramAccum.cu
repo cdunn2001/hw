@@ -60,6 +60,77 @@ struct StaticConfig
 
 __constant__ StaticConfig staticConfig;
 
+class EdgeScrubbingState
+{
+public:
+    __device__ EdgeScrubbingState()
+    {
+        for (uint32_t i = 0; i < laneSize/2; ++i)
+        {
+            prev[i] = PBShort2{0};
+            circular[i] = 0;
+        }
+    }
+    struct EdgeFinder
+    {
+        __device__ EdgeFinder(const EdgeScrubbingState& l,
+                              const Data::LaneModelParameters<PBHalf2, laneSize/2>& laneModel,
+                              uint32_t idx = threadIdx.x)
+            : prev_{l.prev[idx]}
+            , circular_{l.circular[idx]}
+        {
+            const auto& laneBg = laneModel.BaselineMode();
+            // TODO make configurable
+            static constexpr float threshSigma = 2.0f;
+            // TODO check rounding
+            threshold_ = ToShort(threshSigma * laneBg.vars[idx]);
+        }
+
+        __device__ EdgeFinder(PBShort2 frame1, PBShort2 frame2,
+                              const Data::LaneModelParameters<PBHalf2, laneSize/2>& laneModel,
+                              uint32_t idx = threadIdx.x)
+        {
+            // BENTODO deduplicate
+            const auto& laneBg = laneModel.BaselineMode();
+            // TODO make configurable
+            static constexpr float threshSigma = 2.0f;
+            // TODO check rounding
+            threshold_ = ToShort(threshSigma * laneBg.vars[idx]);
+
+            // Intentional discard of return values, we just want to prime
+            // the state data
+            IsEdgeFrame(frame1);
+            IsEdgeFrame(frame2);
+        }
+
+        __device__ void Store(EdgeScrubbingState& l, uint32_t idx = threadIdx.x)
+        {
+            l.prev[idx] = prev_;
+            l.circular[idx] = circular_;
+        }
+
+        __device__ std::pair<PBShort2, PBShort2> IsEdgeFrame(PBShort2 frame)
+        {
+            const auto isBaseline = (frame < threshold_);
+            uint32_t back = __byte_perm(circular_, 0, 0x3322);
+            auto edge = PBShort2::FromRaw(back ^ isBaseline.data());
+
+            circular_ = __byte_perm(circular_, isBaseline.data(), 0x1064);
+            auto candidate = prev_;
+            prev_ = frame;
+            return {edge, candidate};
+        }
+    private:
+        PBShort2 prev_;
+        uint32_t circular_;
+        PBShort2 threshold_;
+    };
+
+private:
+    Cuda::Utility::CudaArray<PBShort2, laneSize/2> prev;
+    Cuda::Utility::CudaArray<uint32_t, laneSize/2> circular;
+};
+
 }
 
 // This is essentially just a copy of LaneHistogram with the storage
@@ -102,6 +173,28 @@ struct LaneHistogramTrans
     /// The number of data in each bin.
     Array<CudaArray<CountT, numBins>> binCount;
 };
+
+__global__ void ScrubEdgeFrames(Data::GpuBatchData<const PBShort2> tracesIn,
+                                Data::GpuBatchData<PBShort2> tracesOut,
+                                DeviceView<EdgeScrubbingState> edgeState,
+                                DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
+{
+    EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x]);
+
+    auto in = tracesIn.ZmwData(blockIdx.x, threadIdx.x);
+    auto out = tracesOut.ZmwData(blockIdx.x, threadIdx.x);
+
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    assert(tracesIn.NumFrames() == tracesOut.NumFrames());
+    for (uint32_t i = 0; i < tracesIn.NumFrames(); ++i)
+    {
+        auto [isEdge, data] = edgeFinder.IsEdgeFrame(in[i]);
+        data = Blend(isEdge, scrubbed, data);
+        out[i] = data;
+    }
+
+    edgeFinder.Store(edgeState[blockIdx.x]);
+}
 
 // Simple initial attempt, with data kept in global memory and the histogram
 // laid out in the usual fashion where each bin has all zmw stored
@@ -593,7 +686,9 @@ public:
 
     virtual ~ImplBase() = default;
 
-    virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces) = 0;
+    virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
+                              const TraceHistogramAccumulator::PoolDetModel& detModel,
+                              Data::BatchData<DataType>& workspace) = 0;
 
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
 
@@ -621,20 +716,25 @@ public:
                        DeviceHistogramTypes type)
         : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
+        , edgeState_(registrar, SOURCE_MARKER(), poolSize)
     {}
 
-    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces,
+                      const TraceHistogramAccumulator::PoolDetModel& detModel,
+                      Data::BatchData<int16_t>& scrubbed) override
     {
         switch (Type())
         {
         case DeviceHistogramTypes::GlobalInterleaved:
             {
-                PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize)(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize)(scrubbed, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedInterleaved2DBlock:
             {
-                PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1})(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1})(scrubbed, data_);
                 break;
             }
         default:
@@ -663,6 +763,7 @@ public:
 private:
     using HistogramType = LaneHistogram<float, uint16_t>;
     DeviceOnlyArray<HistogramType> data_;
+    DeviceOnlyArray<EdgeScrubbingState> edgeState_;
 };
 
 // Handles trace histograms for strategies that have contiguous histograms
@@ -676,30 +777,38 @@ public:
                   DeviceHistogramTypes type)
         : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
+        , edgeState_(registrar, SOURCE_MARKER(), poolSize)
     {}
 
-    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces) override
+    void AddBatchImpl(const Data::TraceBatch<int16_t>& traces,
+                      const TraceHistogramAccumulator::PoolDetModel& detModel,
+                      Data::BatchData<int16_t>& scrubbed) override
     {
+
         switch (Type())
         {
         case DeviceHistogramTypes::GlobalContig:
             {
-                PBLauncher(BinningGlobalContig, PoolSize(), laneSize)(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningGlobalContig, PoolSize(), laneSize)(scrubbed, data_);
                 break;
             }
         case DeviceHistogramTypes::GlobalContigCoopWarps:
             {
-                PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2)(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2)(scrubbed, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedContigCoopWarps:
             {
-                PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2)(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2)(scrubbed, data_);
                 break;
             }
         case DeviceHistogramTypes::SharedContig2DBlock:
             {
-                PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1})(traces, data_);
+                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
+                PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1})(scrubbed, data_);
                 break;
             }
         default:
@@ -730,6 +839,7 @@ public:
 
 private:
     DeviceOnlyArray<LaneHistogramTrans> data_;
+    DeviceOnlyArray<EdgeScrubbingState> edgeState_;
 };
 
 void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
@@ -753,10 +863,10 @@ void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramCo
 
 
 void DeviceTraceHistogramAccum::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                                             const TraceHistogramAccumulator::PoolDetModel& /*detModel*/)
+                                             const TraceHistogramAccumulator::PoolDetModel& detModel,
+                                             Data::BatchData<DataType>& workspace)
 {
-    // TODO: Pass detection model along and use for edge-frame scrubbing (PTSD-796).
-    impl_->AddBatchImpl(traces);
+    impl_->AddBatchImpl(traces, detModel, workspace);
     CudaSynchronizeDefaultStream();
 }
 
