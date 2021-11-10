@@ -30,8 +30,21 @@
 #include <boost/multi_array.hpp>
 
 #include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/tracefile/ScanData.h>
 
 #include <common/MongoConstants.h>
+
+namespace
+{
+
+boost::multi_array<float,2> MakeUnity(size_t dim)
+{
+    boost::multi_array<float,2> unityMatrix(boost::extents[dim][dim]);
+    unityMatrix[dim/2][dim/2] = 1.0f;
+    return unityMatrix;
+}
+
+} // anonymous namespace
 
 namespace PacBio {
 namespace Application {
@@ -50,6 +63,7 @@ public:
               T* /*dummy to deduce T*/)
         : bytesPerVal_(sizeof(T))
         , pedestal_(generator->Pedestal())
+        , simulatorName_("SimulatedDataSource:" + generator->Name())
     {
         static_assert(std::is_same<T, int16_t>::value
                       || std::is_same<T, uint8_t>::value);
@@ -113,6 +127,8 @@ public:
 
     int16_t Pedestal() const { return pedestal_; }
 
+    std::string Name() const { return simulatorName_; }
+
 private:
     size_t bytesPerVal_ = 0;
     size_t numLanes_ = 0;
@@ -122,6 +138,7 @@ private:
     boost::multi_array<uint8_t, 4> data_;
 
     int16_t pedestal_ = 0;
+    std::string simulatorName_ = "SimulatedDataSource";
 };
 
 SimulatedDataSource::~SimulatedDataSource() = default;
@@ -191,6 +208,18 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
 }
 
 int16_t SimulatedDataSource::Pedestal() const { return cache_->Pedestal(); }
+
+boost::multi_array<float,2> SimulatedDataSource::CrosstalkFilterMatrix() const
+{
+    return MakeUnity(TraceFile::ScanData::DefaultXtalkSize);
+}
+
+boost::multi_array<float,2> SimulatedDataSource::ImagePsfMatrix() const
+{
+    return MakeUnity(TraceFile::ScanData::DefaultImagePsfSize);
+}
+
+std::string SimulatedDataSource::InstrumentName() const { return cache_->Name(); }
 
 void SimulatedDataSource::ContinueProcessing()
 {

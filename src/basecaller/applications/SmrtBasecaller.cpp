@@ -559,6 +559,8 @@ private:
                 }
             }
 
+
+
             return std::make_unique<TraceSaverBody>(outputTrcFileName_,
                                                     dataSource.NumFrames(),
                                                     std::move(selection),
@@ -566,6 +568,10 @@ private:
                                                     holeNumbers,
                                                     properties,
                                                     batchIds,
+                                                    dataSource.ImagePsfMatrix(),
+                                                    dataSource.CrosstalkFilterMatrix(),
+                                                    dataSource.Platform(),
+                                                    dataSource.InstrumentName(),
                                                     movieConfig_);
         }
         else

@@ -36,6 +36,7 @@ using namespace PacBio::Application;
 using namespace PacBio::DataSource;
 using namespace PacBio::Memory;
 using namespace PacBio::Mongo;
+using namespace PacBio::Sensor;
 
 // Validation routine to check the output of an individual SensorPacket
 //
@@ -164,6 +165,8 @@ TEST_P(SimDataSource, Constant)
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
     const auto expectedPools = params.numZmw / (params.lanesPerPool * laneSize);
     EXPECT_EQ(ValidateData(Expected, source), expectedChunks * expectedPools);
+    EXPECT_EQ("SimulatedDataSource:ConstantGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
 }
 
 TEST_P(SimDataSource, LongSawtooth)
@@ -205,6 +208,8 @@ TEST_P(SimDataSource, LongSawtooth)
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
     const auto expectedPools = params.numZmw / (params.lanesPerPool * laneSize);
     EXPECT_EQ(ValidateData(Expected, source), expectedChunks * expectedPools);
+    EXPECT_EQ("SimulatedDataSource:SawtoothGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
 }
 
 // Make sure that we can generate 8 bit data, but also that any
@@ -251,6 +256,8 @@ TEST_P(SimDataSource, 8BitWithSaturation)
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
     const auto expectedPools = params.numZmw / (params.lanesPerPool * laneSize);
     EXPECT_EQ(ValidateData(Expected, source), expectedChunks * expectedPools);
+    EXPECT_EQ("SimulatedDataSource:SawtoothGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
 }
 
 TEST_P(SimDataSource, ShortSawtooth)
@@ -292,6 +299,8 @@ TEST_P(SimDataSource, ShortSawtooth)
     const auto expectedChunks = params.totalFrames / params.framesPerBlock;
     const auto expectedPools = params.numZmw / (params.lanesPerPool * laneSize);
     EXPECT_EQ(ValidateData(Expected, source), expectedChunks * expectedPools);
+    EXPECT_EQ("SimulatedDataSource:SawtoothGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
 }
 
 //-----------------------------------------Testing parameters---------------------------//
@@ -436,6 +445,9 @@ TEST(SimDataSourceAPI, Layout)
     EXPECT_EQ(source.NumFrames(), totalFrames);
     EXPECT_EQ(source.NumZmw(), totalZmw);
 
+    EXPECT_EQ("SimulatedDataSource:ConstantGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
+
     // The current implementation rounds up the requested ZMW to fill an integral
     // number of lanes, but otherwise will have a "runt" batch at the end if necessary
     cfg = DataSourceBase::Configuration(layout, std::make_unique<MallocAllocator>());
@@ -467,6 +479,8 @@ TEST(SimDataSourceAPI, Layout)
     }
 
     EXPECT_EQ(source2.NumZmw(), totalZmw - 256);
+    EXPECT_EQ("SimulatedDataSource:ConstantGenerator", source2.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source2.Platform());
 }
 
 TEST(SimDataSourceAPI, ZmwInfo)
@@ -500,4 +514,7 @@ TEST(SimDataSourceAPI, ZmwInfo)
 
     EXPECT_EQ(ids.size(), totalZmw);
     EXPECT_EQ(uniqueIds.size(), totalZmw);
+
+    EXPECT_EQ("SimulatedDataSource:ConstantGenerator", source.InstrumentName());
+    EXPECT_EQ(Platform::DONT_CARE, source.Platform());
 }

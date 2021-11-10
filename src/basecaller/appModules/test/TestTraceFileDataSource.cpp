@@ -45,6 +45,10 @@ struct GeneratedTraceInfo
     std::vector<uint32_t> holeNumbers;
     std::vector<DataSourceBase::UnitCellProperties> properties;
     std::vector<uint32_t> batchIds;
+    boost::multi_array<float,2> imagePsf;
+    boost::multi_array<float,2> crossTalk;
+    PacBio::Sensor::Platform platform;
+    std::string instrumentName;
 };
 GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 {
@@ -88,6 +92,14 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 
     assert(params.batchIds.size() == numZmw);
 
+    params.imagePsf.resize(boost::extents[ScanData::DefaultImagePsfSize][ScanData::DefaultImagePsfSize]);
+    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2] = 1.0f;
+    params.crossTalk.resize(boost::extents[ScanData::DefaultXtalkSize][ScanData::DefaultXtalkSize]);
+    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2] = 1.0f;
+
+    params.platform = PacBio::Sensor::Platform::DONT_CARE;
+    params.instrumentName = "instrument1";
+
     // Instantiate this, to force the file's creation on disk
     // We don't really care that the trace data won't be
     // populated, we mostly just want something with batchIds
@@ -98,6 +110,10 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
                        params.holeNumbers,
                        params.properties,
                        params.batchIds,
+                       params.imagePsf,
+                       params.crossTalk,
+                       params.platform,
+                       params.instrumentName,
                        PacBio::Mongo::Data::MockMovieConfig());
     (void)tmp;
 
@@ -136,6 +152,14 @@ TEST(TraceFileDataSourceMisc, Replication)
 
     EXPECT_EQ(source.NumZmw(), numZmw);
     EXPECT_EQ(source.NumFrames(), numFrames);
+    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2], 
+                    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2], 
+                    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+    EXPECT_EQ(source.Platform(), params.platform);
+    EXPECT_EQ(source.InstrumentName(), params.instrumentName);
 
     {
         // TraceReplication ignores the incoming hole numbers and just
@@ -220,6 +244,14 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
 
     const auto numZmw = source.NumZmw();
     EXPECT_EQ(numZmw, params.batchIds.size());
+    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2], 
+                    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2], 
+                    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+    EXPECT_EQ(source.Platform(), params.platform);
+    EXPECT_EQ(source.InstrumentName(), params.instrumentName);
 
     {
         // Hole numbers should be preserved in reanalysis mode
@@ -322,6 +354,17 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
     const auto numZmw = source.NumZmw();
     EXPECT_NE(numZmw, params.batchIds.size());
     EXPECT_EQ(numZmw, laneSize*2);
+
+    {
+        EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
+        EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2],
+                        params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+        EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
+        EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2],
+                        params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+        EXPECT_EQ(source.Platform(), params.platform);
+        EXPECT_EQ(source.InstrumentName(), params.instrumentName);
+    }
 
     {
         // Make sure hole numbers are preserved, even though we are reading
