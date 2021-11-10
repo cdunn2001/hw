@@ -7,7 +7,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
 # a metrics aggregation standpoint. The test below has the HQ-region all starting at the same time so that the preHQ metric block should be empty and all the subsequent
 # metric blocks should be aggregated into one as the activity labels are all the same.
   $ BAZFILE=tmp.baz
-  $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5
+  $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":57344, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations  \
   > --outputbazfile ${BAZFILE} --config=prelimHQ.enablePreHQ=true --config=prelimHQ.hqThrottleFraction=1.0 > /dev/null

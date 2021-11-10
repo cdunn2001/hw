@@ -1,5 +1,5 @@
   $ BAZFILE=${CRAMTMP}/designer.baz
-  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_new_designer_mongo_acgt_SNR-40.trc.h5
+  $ TRCFILE=/pbi/dept/primary/sim/mongo/test_designer_mongo_acgt_SNR-40.trc.h5
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":1024, "numZmwLanes":64,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config algorithm.Metrics.framesPerHFMetricBlock=512 --config layout.lanesPerPool=16   \
@@ -25,7 +25,7 @@
   -AAAGGGTTTCCCGTACGTACGTACGAGTCGTC
 
   $ BAZFILE=${CRAMTMP}/test4.baz
-  $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_new_mongo_acgt_SNR-40.trc.h5
+  $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=1 --config=algorithm.modelEstimationMode=FixedEstimations \
   > --outputbazfile ${BAZFILE} > /dev/null
