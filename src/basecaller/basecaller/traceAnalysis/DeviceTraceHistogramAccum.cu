@@ -174,36 +174,22 @@ struct LaneHistogramTrans
     Array<CudaArray<CountT, numBins>> binCount;
 };
 
-__global__ void ScrubEdgeFrames(Data::GpuBatchData<const PBShort2> tracesIn,
-                                Data::GpuBatchData<PBShort2> tracesOut,
-                                DeviceView<EdgeScrubbingState> edgeState,
-                                DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
-{
-    EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x]);
-
-    auto in = tracesIn.ZmwData(blockIdx.x, threadIdx.x);
-    auto out = tracesOut.ZmwData(blockIdx.x, threadIdx.x);
-
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
-    assert(tracesIn.NumFrames() == tracesOut.NumFrames());
-    for (uint32_t i = 0; i < tracesIn.NumFrames(); ++i)
-    {
-        auto [isEdge, data] = edgeFinder.IsEdgeFrame(in[i]);
-        data = Blend(isEdge, scrubbed, data);
-        out[i] = data;
-    }
-
-    edgeFinder.Store(edgeState[blockIdx.x]);
-}
-
 // Simple initial attempt, with data kept in global memory and the histogram
 // laid out in the usual fashion where each bin has all zmw stored
 // contiguously (e.g. the histograms for each zmw are interleaved)
 __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> traces,
-                                         DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
+                                         DeviceView<Data::LaneHistogram<float, uint16_t>> hists,
+                                         DeviceView<EdgeScrubbingState> edgeState,
+                                         DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
     assert(blockDim.x == 64);
     auto& hist = hists[blockIdx.x];
+
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    // I'm going to be lazy and have two threads do the same edge finding.  Scrubbing is so cheap compared
+    // to the rest of this filter that I don't care
+    EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2);
 
     float lowBound = hist.lowBound[threadIdx.x];
     float binSize = hist.binSize[threadIdx.x];
@@ -215,19 +201,23 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     auto zmw = traces.ZmwData(blockIdx.x, threadIdx.x/2);
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
+        auto [isEdge, frame] = edgeFinder.IsEdgeFrame(zmw[i]);
+        frame = Blend(isEdge, scrubbed, frame);
+
         // We're doing one thread per zmw, which means we have to do
         // a little dance here since traces automatically come over as
         // a paired PBShort2
-        auto idx = threadIdx.x;
-        auto val = (threadIdx.x % 2 == 0) ? zmw[i].X() : zmw[i].Y();
+        auto val = (threadIdx.x % 2 == 0 ? frame.X() : frame.Y());
         int bin = (val - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
         else if (bin >= numBins) highOutlier++;
-        else hist.binCount[bin][idx]++;
+        else hist.binCount[bin][threadIdx.x]++;
     }
 
     hist.outlierCountLow[threadIdx.x] = lowOutlier;
     hist.outlierCountHigh[threadIdx.x] = highOutlier;
+    if (threadIdx.x % 2 == 0)
+        edgeFinder.Store(edgeState[blockIdx.x], threadIdx.x/2);
 }
 
 
@@ -247,9 +237,17 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
 //        Need to profile more and do some reasearch, to test the many assumptions in the original
 //        theory
 __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
-                                    DeviceView<LaneHistogramTrans> hists)
+                                    DeviceView<LaneHistogramTrans> hists,
+                                    DeviceView<EdgeScrubbingState> edgeState,
+                                    DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
     auto& hist = hists[blockIdx.x];
+
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    // I'm going to be lazy and have two threads do the same edge finding.  Scrubbing is so cheap compared
+    // to the rest of this filter that I don't care
+    EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2);
 
     float lowBound = hist.lowBound[threadIdx.x];
     float binSize = hist.binSize[threadIdx.x];
@@ -261,16 +259,20 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     auto zmw = traces.ZmwData(blockIdx.x, threadIdx.x/2);
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
-        auto idx = threadIdx.x;
-        auto val = (threadIdx.x % 2 == 0 ? zmw[i].X() : zmw[i].Y());
+        auto [isEdge, frame] = edgeFinder.IsEdgeFrame(zmw[i]);
+        frame = Blend(isEdge, scrubbed, frame);
+
+        auto val = (threadIdx.x % 2 == 0 ? frame.X() : frame.Y());
         int bin = (val - lowBound) / binSize;
         if (bin < 0) lowOutlier++;
         else if (bin >= numBins) highOutlier++;
-        else hist.binCount[idx][bin]++;
+        else hist.binCount[threadIdx.x][bin]++;
     }
 
     hist.outlierCountLow[threadIdx.x] = lowOutlier;
     hist.outlierCountHigh[threadIdx.x] = highOutlier;
+    if (threadIdx.x % 2 == 0)
+        edgeFinder.Store(edgeState[blockIdx.x], threadIdx.x/2);
 }
 
 // Still doing contiguous historgrams, but this time having the whole warp work on one ZMW at a time.
@@ -285,22 +287,37 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
 //        does hurt performance, presumably because we're back to having a large enough portion of the
 //        histogram being accessed, causing more cache trashing.
 __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> traces,
-                                             DeviceView<LaneHistogramTrans> hists)
+                                             DeviceView<LaneHistogramTrans> hists,
+                                             DeviceView<EdgeScrubbingState> edgeState,
+                                             DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+
     assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
-    auto traceItrs = traces.NumFrames() / blockDim.x;
+
+    // BENTODO there is another count variable below
+    auto count = (traces.NumFrames() + blockDim.x - 1) / blockDim.x;
+    auto start = threadIdx.x * count;
+    auto stop = min(start + count, traces.NumFrames());
+
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
         float2 lowBound = {hist.lowBound[2*zmw], hist.lowBound[2*zmw+1]};
         float2 binSize = {hist.binSize[2*zmw], hist.binSize[2*zmw+1]};
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
-        for (int i = threadIdx.x; i < traces.NumFrames(); i+=blockDim.x)
+        auto edgeFinder = threadIdx.x == 0
+            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
+            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
+        for (int i = start; i < stop; ++i)
         {
-            auto val = dat[i];
+            auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
+            val = Blend(isEdge, scrubbed, val);
+
             int bin = (val.X() - lowBound.x) / binSize.x;
             if (bin < 0) bin = -1;
             else if (bin > numBins) bin = numBins;
@@ -337,6 +354,9 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
                 else hist.binCount[2*zmw+1][bin] += count;
             }
         }
+
+        if (threadIdx.x == blockDim.x-1)
+            edgeFinder.Store(edgeState[blockIdx.x], zmw);
     }
 }
 
@@ -344,12 +364,22 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 // Same strategy as the last attempt, just moving the active histogram to shared memory
 // for the faster data access speeds
 __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> traces,
-                                             DeviceView<LaneHistogramTrans> hists)
+                                             DeviceView<LaneHistogramTrans> hists,
+                                             DeviceView<EdgeScrubbingState> edgeState,
+                                             DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
     __shared__ uint16_t localHist[numBins+2][2];
     assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
+
+    // BENTODO there is another count variable below
+    auto count = (traces.NumFrames() + blockDim.x - 1) / blockDim.x;
+    auto start = threadIdx.x * count;
+    auto stop = min(start + count, traces.NumFrames());
 
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -364,9 +394,15 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
         __syncwarp(0xFFFFFFFF);
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
-        for (int i = threadIdx.x; i < traces.NumFrames(); i+=blockDim.x)
+        auto edgeFinder = threadIdx.x == 0
+            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
+            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
+
+        for (int i = start; i < stop; ++i)
         {
-            auto val = dat[i];
+            auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
+            val = Blend(isEdge, scrubbed, val);
+
             int bin = (val.X() - lowBound.x) / binSize.x;
             if (bin >= numBins) bin = numBins+1;
             else if (bin < 0) bin = numBins;
@@ -416,6 +452,9 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             hist.outlierCountLow[2*zmw] += localHist[numBins][0];
             hist.outlierCountLow[2*zmw+1] += localHist[numBins][1];
         }
+
+        if (threadIdx.x == blockDim.x-1)
+            edgeFinder.Store(edgeState[blockIdx.x], zmw);
         __syncwarp(0xFFFFFFFF);
     }
 }
@@ -427,7 +466,9 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 // of zmw.  Finally once a warp has data from the same ZMW, we all back to the previous
 // strategy for cooperative binning.
 __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> traces,
-                                           DeviceView<LaneHistogramTrans> hists)
+                                           DeviceView<LaneHistogramTrans> hists,
+                                           DeviceView<EdgeScrubbingState> edgeState,
+                                           DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
 
@@ -458,13 +499,31 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
     }
     __syncwarp(0xFFFFFFFF);
 
+    // BENTODO there is another count variable below
+    auto count = (traces.NumFrames() + blockDim.y - 1) / blockDim.y;
+    auto start = threadIdx.y * count;
+    auto stop = min(start + count, traces.NumFrames());
+
+    assert(start > 1 || threadIdx.y == 0);
+    assert(stop == traces.NumFrames() || threadIdx.y != blockDim.y-1);
+
     auto dat = traces.ZmwData(blockIdx.x, threadIdx.x);
-    for (int i = threadIdx.y; i < traces.NumFrames(); i+=blockDim.y)
+
+    auto edgeFinder = threadIdx.y == 0
+        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x])
+        : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x]);
+
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    for (int i = start; i < stop; ++i)
     {
+        auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
+        val = Blend(isEdge, scrubbed, val);
+
         __syncthreads();
-        shared.trans[threadIdx.y][threadIdx.x] = dat[i];
+        shared.trans[threadIdx.y][threadIdx.x] = val;
         __syncthreads();
-        auto val = shared.trans[threadIdx.x][threadIdx.y];
+        val = shared.trans[threadIdx.x][threadIdx.y];
 
         int bin = (val.X() - lowBound.x) / binSize.x;
         if (bin >= numBins) bin = numBins+1;
@@ -514,6 +573,9 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         hist.outlierCountLow[2*zmw] += shared.localHist[zmw][numBins][0];
         hist.outlierCountLow[2*zmw+1] += shared.localHist[zmw][numBins][1];
     }
+
+    if (threadIdx.y == blockDim.y - 1)
+        edgeFinder.Store(edgeState[blockIdx.x]);
 }
 
 // The last attempt was good, but this one is better.  We still use the same 2D
@@ -522,7 +584,9 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
 // on explicit atomic operations to prevent different warps from stomping on each
 // other.  The use of atomics turns out to be a big win in this case.
 __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort2> traces,
-                                                DeviceView<Data::LaneHistogram<float, uint16_t>> hists)
+                                                DeviceView<Data::LaneHistogram<float, uint16_t>> hists,
+                                                DeviceView<EdgeScrubbingState> edgeState,
+                                                DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
     assert(blockDim.x == 32);
     auto& ghist = hists[blockIdx.x];
@@ -541,10 +605,26 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
 
     __syncthreads();
 
+    auto count = (traces.NumFrames() + blockDim.y - 1) / blockDim.y;
+    auto start = threadIdx.y * count;
+    auto stop = min(start + count, traces.NumFrames());
+
+    assert(start > 1 || threadIdx.y == 0);
+    assert(stop == traces.NumFrames() || threadIdx.y != blockDim.y-1);
+
     auto trace = traces.ZmwData(blockIdx.x, threadIdx.x);
-    for (int i = threadIdx.y; i < traces.NumFrames(); i+=blockDim.y)
+
+    auto edgeFinder = threadIdx.y == 0
+        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x])
+        : EdgeScrubbingState::EdgeFinder(trace[start-2], trace[start-1], models[blockIdx.x]);
+
+
+    // BENTODO remove
+    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    for (int i = start; i < stop; ++i)
     {
-        auto val = trace[i];
+        auto [isEdge, val] = edgeFinder.IsEdgeFrame(trace[i]);
+        val = Blend(isEdge, scrubbed, val);
 
         auto bin = (val - lowBound) / binSize;
         bin = Blend(bin >= numBins, numBins+1, bin);
@@ -572,6 +652,9 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
         ghist.outlierCountHigh[2*threadIdx.x] += lhist[numBins+1][threadIdx.x].X();
         ghist.outlierCountHigh[2*threadIdx.x+1] += lhist[numBins+1][threadIdx.x].Y();
     }
+
+    if (threadIdx.y == blockDim.y - 1)
+        edgeFinder.Store(edgeState[blockIdx.x]);
 }
 
 // Small kernel to un-transpose LaneHistogramTrans when sharing it out to the rest
@@ -687,8 +770,7 @@ public:
     virtual ~ImplBase() = default;
 
     virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                              const TraceHistogramAccumulator::PoolDetModel& detModel,
-                              Data::BatchData<DataType>& workspace) = 0;
+                              const TraceHistogramAccumulator::PoolDetModel& detModel) = 0;
 
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
 
@@ -720,21 +802,18 @@ public:
     {}
 
     void AddBatchImpl(const Data::TraceBatch<int16_t>& traces,
-                      const TraceHistogramAccumulator::PoolDetModel& detModel,
-                      Data::BatchData<int16_t>& scrubbed) override
+                      const TraceHistogramAccumulator::PoolDetModel& detModel) override
     {
         switch (Type())
         {
         case DeviceHistogramTypes::GlobalInterleaved:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize)(scrubbed, data_);
+                PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize)(traces, data_, edgeState_, detModel);
                 break;
             }
         case DeviceHistogramTypes::SharedInterleaved2DBlock:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1})(scrubbed, data_);
+                PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1})(traces, data_, edgeState_, detModel);
                 break;
             }
         default:
@@ -781,34 +860,29 @@ public:
     {}
 
     void AddBatchImpl(const Data::TraceBatch<int16_t>& traces,
-                      const TraceHistogramAccumulator::PoolDetModel& detModel,
-                      Data::BatchData<int16_t>& scrubbed) override
+                      const TraceHistogramAccumulator::PoolDetModel& detModel) override
     {
 
         switch (Type())
         {
         case DeviceHistogramTypes::GlobalContig:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningGlobalContig, PoolSize(), laneSize)(scrubbed, data_);
+                PBLauncher(BinningGlobalContig, PoolSize(), laneSize)(traces, data_, edgeState_, detModel);
                 break;
             }
         case DeviceHistogramTypes::GlobalContigCoopWarps:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2)(scrubbed, data_);
+                PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2)(traces, data_, edgeState_, detModel);
                 break;
             }
         case DeviceHistogramTypes::SharedContigCoopWarps:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2)(scrubbed, data_);
+                PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2)(traces, data_, edgeState_, detModel);
                 break;
             }
         case DeviceHistogramTypes::SharedContig2DBlock:
             {
-                PBLauncher(ScrubEdgeFrames, PoolSize(), laneSize/2)(traces, scrubbed, edgeState_, detModel);
-                PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1})(scrubbed, data_);
+                PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1})(traces, data_, edgeState_, detModel);
                 break;
             }
         default:
@@ -863,10 +937,9 @@ void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramCo
 
 
 void DeviceTraceHistogramAccum::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                                             const TraceHistogramAccumulator::PoolDetModel& detModel,
-                                             Data::BatchData<DataType>& workspace)
+                                             const TraceHistogramAccumulator::PoolDetModel& detModel)
 {
-    impl_->AddBatchImpl(traces, detModel, workspace);
+    impl_->AddBatchImpl(traces, detModel);
     CudaSynchronizeDefaultStream();
 }
 

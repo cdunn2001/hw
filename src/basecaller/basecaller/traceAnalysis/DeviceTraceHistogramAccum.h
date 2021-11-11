@@ -66,8 +66,7 @@ public:
     ~DeviceTraceHistogramAccum();
 
     void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                      const TraceHistogramAccumulator::PoolDetModel& detModel,
-                      Data::BatchData<DataType>& workspace) override;
+                      const TraceHistogramAccumulator::PoolDetModel& detModel) override;
 
     void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) override;
 

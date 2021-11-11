@@ -110,8 +110,7 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 }
 
 void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces,
-                                           const PoolDetModel& detModel,
-                                           Data::BatchData<TraceElementType>&)
+                                           const PoolDetModel& detModel)
 {
     const auto numLanes = traces.LanesPerBatch();
     tbb::task_arena().execute([&] {
