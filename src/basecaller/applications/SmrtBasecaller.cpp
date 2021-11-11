@@ -177,7 +177,7 @@ public:
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
-        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
 
         RunAnalyzer();
         Join();
@@ -854,7 +854,7 @@ int main(int argc, char* argv[])
            << "\n git commit date: " << cmakeGitCommitDate();
         parser.description(ss.str());
 
-        const std::string version = "0.1";
+        const std::string version = STRINGIFIED_SOFTWARE_VERSION;
         parser.version(version);
 
         parser.epilog("");

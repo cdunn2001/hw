@@ -1,0 +1,6 @@
+# To debug RPM installation, uncomment this line. $1 is the package count
+# echo "    INFO dollar 1 is $1"
+# if $1 == 1, this is a first installation.
+# if $1 == 2, this is an upgrade.
+
+
