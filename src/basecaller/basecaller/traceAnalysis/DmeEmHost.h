@@ -133,10 +133,15 @@ private:    // Static functions
                       const LaneDetModelHost& modelEst);
 
 private:    // Functions
+    void EstimateModel(const UHistType& hist,
+                              LaneDetModelHost* detModel) const;
+
+    LaneDetModelHost PrelimEstimate(PoolDetModel *detModelPool) const;
+
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateLaneDetModel(const UHistType& hist,
+    void EstimateFiniteMixture(const UHistType& hist,
                               LaneDetModelHost* detModel) const;
 
 
