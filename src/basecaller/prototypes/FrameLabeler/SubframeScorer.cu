@@ -34,7 +34,7 @@ namespace Subframe {
 
 
 template <typename T>
-TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<Mongo::Data::AnalogMode, numAnalogs> analogs,
+TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::DataSource::AnalogMode, numAnalogs> analogs,
                                       double frameRate)
 {
     // We only have access to single precision math on the host, so populate data as float for now,

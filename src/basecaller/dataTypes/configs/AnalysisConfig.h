@@ -1,7 +1,4 @@
-#ifndef mongo_dataTypes_configs_MovieConfig_H_
-#define mongo_dataTypes_configs_MovieConfig_H_
-
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -26,41 +23,29 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines class MovieConfig.
 
-#include <array>
+#ifndef mongo_dataTypes_configs_AnalysisConfig_H_
+#define mongo_dataTypes_configs_AnalysisConfig_H_
 
-#include <pacbio/datasource/PacketLayout.h>
+#include <pacbio/datasource/MovieConfig.h>
 
-#include <common/MongoConstants.h>
-#include <dataTypes/AnalogMode.h>
-
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-/// Represents configuration of the instrument, chemistry, and data collection
-/// for a particular movie.
-//
-// TODO this structure is currently in flux.  There are tentative plans
-// to alter things so that it is generated directly by the DataSource
-// instance.
-struct MovieConfig
+namespace PacBio::Mongo::Data
 {
-public:
-    float frameRate;
-    float photoelectronSensitivity;
-    float refSnr;
 
-    /// Convention is to order analogs by decreasing relative amplitude.
-    std::array<AnalogMode, numAnalogs> analogs;
+/// Represents the full analysis configuration for analyzing a
+/// particular movie and is used by the basecaller as the
+/// main structure for obtaining any configuration needed for
+/// analysis.
+struct AnalysisConfig
+{
+    PacBio::DataSource::MovieConfig mc;
 
     // The pedestal value applied upstream before any
     // batch is generated.  This must be subtracted off
     // all batches that come through, in order to get the
     // true trace value
     int16_t pedestal = 0;
+
     // Batches come through as a variant because it's not
     // known until rumtime what the format ultimately will
     // be.  This field gives us a sneak peak though at what
@@ -68,19 +53,11 @@ public:
     // implementation
     using EncodingFormat = DataSource::PacketLayout::EncodingFormat;
     EncodingFormat encoding = EncodingFormat::INT16;
-
-    // For now, use default HQRF method until this
-    // plumbing is complete. This method should determine
-    // the corresponding RT activity-labeler.
-    std::string hqrfMethod = "N2";
-
-    // TODO: Will likely need additional members.
 };
 
-/// Creates an instance with somewhat arbitrary value.
-/// Convenient for some unit tests.
-MovieConfig MockMovieConfig();
+// Creates arbitrary configuration mostly for testing purposes.
+AnalysisConfig MockAnalysisConfig();
 
-}}}     // namespace PacBio::Mongo::Data
+} // namespace PacBio::Mongo::Data
 
-#endif // mongo_dataTypes_configs_MovieConfig_H_
+#endif // mongo_dataTypes_configs_AnalysisConfig_H_

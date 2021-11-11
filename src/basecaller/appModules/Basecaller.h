@@ -42,7 +42,7 @@
 
 #include <dataTypes/BatchResult.h>
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
 #include <dataTypes/TraceBatch.h>
 
@@ -55,7 +55,7 @@ class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::Tra
 public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
-                   const Mongo::Data::MovieConfig& movConfig,
+                   const Mongo::Data::AnalysisConfig& analysisConfig,
                    const Mongo::Data::SystemsConfig& sysConfig)
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
@@ -76,7 +76,7 @@ public:
         }
         using namespace Mongo::Data;
 
-        algoFactory_.Configure(algoConfig, movConfig);
+        algoFactory_.Configure(algoConfig, analysisConfig);
 
         // TODO this computation will not be sufficient for sparse layouts
         uint32_t maxPoolId = std::accumulate(poolDims.begin(), poolDims.end(), 0u,
@@ -100,7 +100,7 @@ public:
                 case BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations:
                     return std::make_unique<FixedModelBatchAnalyzer>(poolId, dims,
                                                                      algoConfig.staticDetModelConfig,
-                                                                     movConfig, algoFactory_,
+                                                                     analysisConfig, algoFactory_,
                                                                      *gpuStash);
                 case BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations:
                     return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_,

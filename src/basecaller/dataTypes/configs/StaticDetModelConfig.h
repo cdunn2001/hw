@@ -27,7 +27,7 @@
 #define mongo_dataTypes_configs_StaticDetectionModel_h
 
 #include <common/MongoConstants.h>
-#include "MovieConfig.h"
+#include "AnalysisConfig.h"
 
 #include <pacbio/configuration/PBConfig.h>
 
@@ -50,9 +50,10 @@ public:
         float var;
     };
 
-    auto SetupAnalogs(const Data::MovieConfig& movieConfig) const
+    auto SetupAnalogs(const Data::AnalysisConfig& analysisConfig) const
     {
         std::array<AnalogMode, numAnalogs> analogs;
+        auto& movieConfig = analysisConfig.mc;
         const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
         for (size_t i = 0; i < analogs.size(); i++)
         {

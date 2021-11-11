@@ -30,7 +30,7 @@
 
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 using namespace PacBio::Application;
 using namespace PacBio::DataSource;
@@ -42,6 +42,8 @@ namespace {
 
 struct GeneratedTraceInfo
 {
+    size_t psfSize = 5;
+    size_t xtalkSize = 7;
     std::vector<uint32_t> holeNumbers;
     std::vector<DataSourceBase::UnitCellProperties> properties;
     std::vector<uint32_t> batchIds;
@@ -92,10 +94,10 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 
     assert(params.batchIds.size() == numZmw);
 
-    params.imagePsf.resize(boost::extents[ScanData::DefaultImagePsfSize][ScanData::DefaultImagePsfSize]);
-    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2] = 1.0f;
-    params.crossTalk.resize(boost::extents[ScanData::DefaultXtalkSize][ScanData::DefaultXtalkSize]);
-    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2] = 1.0f;
+    params.imagePsf.resize(boost::extents[params.psfSize][params.psfSize]);
+    params.imagePsf[params.psfSize/2][params.psfSize/2] = 1.0f;
+    params.crossTalk.resize(boost::extents[params.xtalkSize][params.xtalkSize]);
+    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2] = 1.0f;
 
     params.platform = PacBio::Sensor::Platform::DONT_CARE;
     params.instrumentName = "instrument1";
@@ -114,7 +116,7 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
                        params.crossTalk,
                        params.platform,
                        params.instrumentName,
-                       PacBio::Mongo::Data::MockMovieConfig());
+                       Data::MockAnalysisConfig());
     (void)tmp;
 
     return params;
@@ -153,11 +155,11 @@ TEST(TraceFileDataSourceMisc, Replication)
     EXPECT_EQ(source.NumZmw(), numZmw);
     EXPECT_EQ(source.NumFrames(), numFrames);
     EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2], 
-                    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
+                    params.imagePsf[params.psfSize/2][params.psfSize/2]);
     EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2], 
-                    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
+                    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
     EXPECT_EQ(source.Platform(), params.platform);
     EXPECT_EQ(source.InstrumentName(), params.instrumentName);
 
@@ -245,11 +247,11 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
     const auto numZmw = source.NumZmw();
     EXPECT_EQ(numZmw, params.batchIds.size());
     EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2], 
-                    params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
+                    params.imagePsf[params.psfSize/2][params.psfSize/2]);
     EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2], 
-                    params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
+                    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
     EXPECT_EQ(source.Platform(), params.platform);
     EXPECT_EQ(source.InstrumentName(), params.instrumentName);
 
@@ -357,11 +359,11 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
 
     {
         EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-        EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2],
-                        params.imagePsf[ScanData::DefaultImagePsfSize/2][ScanData::DefaultImagePsfSize/2]);
+        EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
+                        params.imagePsf[params.psfSize/2][params.psfSize/2]);
         EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-        EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2],
-                        params.crossTalk[ScanData::DefaultXtalkSize/2][ScanData::DefaultXtalkSize/2]);
+        EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
+                        params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
         EXPECT_EQ(source.Platform(), params.platform);
         EXPECT_EQ(source.InstrumentName(), params.instrumentName);
     }

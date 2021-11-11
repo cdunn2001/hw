@@ -434,6 +434,33 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     return features;
 }
 
+DataSource::MovieConfig TraceFileDataSource::MovieConfiguration() const
+{
+    DataSource::MovieConfig mc;
+
+    const auto& acqParams = traceFile_.Scan().AcqParams();
+    mc.frameRate = acqParams.frameRate;
+    mc.photoelectronSensitivity = acqParams.aduGain;
+
+    const auto& chipInfo = traceFile_.Scan().ChipInfo();
+    mc.refSnr = chipInfo.analogRefSnr;
+
+    const auto& dyeSet = traceFile_.Scan().DyeSet();
+    assert(dyeSet.numAnalog == mc.analogs.size());
+    for (size_t i = 0; i < mc.analogs.size(); i++)
+    {
+        mc.analogs[i].baseLabel = dyeSet.baseMap[i];
+        mc.analogs[i].ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio[i];
+        mc.analogs[i].pw2SlowStepRatio = dyeSet.pw2SlowStepRatio[i];
+        mc.analogs[i].excessNoiseCV = dyeSet.excessNoiseCV[i];
+        mc.analogs[i].interPulseDistance = dyeSet.ipdMean[i];
+        mc.analogs[i].pulseWidth = dyeSet.pulseWidthMean[i];
+        mc.analogs[i].relAmplitude = dyeSet.relativeAmp[i];
+    }
+
+    return mc;
+}
+
 void TraceFileDataSource::PreloadInputQueue(size_t chunks)
 {
     size_t numPreload = std::min(chunks, NumChunks());

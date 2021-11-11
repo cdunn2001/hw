@@ -27,7 +27,7 @@
 #include "FrameLabelerDevice.h"
 
 #include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -38,12 +38,12 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void FrameLabelerDevice::Configure(const Data::MovieConfig& movieConfig)
+void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Cuda::FrameLabeler::Configure(movieConfig.analogs, movieConfig.frameRate);
+    Cuda::FrameLabeler::Configure(analysisConfig.mc.analogs, analysisConfig.mc.frameRate);
 }
 
 void FrameLabelerDevice::Finalize()

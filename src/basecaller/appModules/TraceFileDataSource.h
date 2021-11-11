@@ -142,6 +142,8 @@ public:
         return this->traceFile_.Scan().RunInfo().instrumentName;
     }
 
+    DataSource::MovieConfig MovieConfiguration() const override;
+
     DataSource::HardwareInformation GetHardwareInformation() override
     {
         PacBio::DataSource::HardwareInformation info;

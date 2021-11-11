@@ -12,7 +12,7 @@
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 #include <basecaller/traceAnalysis/FrameLabelerDevice.h>
@@ -30,7 +30,7 @@ using namespace PacBio::Primary;
 namespace {
 
 template <typename Labeler>
-std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const MovieConfig& config,
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& config,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
@@ -44,7 +44,7 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const MovieConfig&
 }
 
 std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLabelerConfig::MethodName method,
-                                                              const MovieConfig& config,
+                                                              const AnalysisConfig& config,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
@@ -94,7 +94,8 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     // Beware that we're ignoring some values like relAmp in our
     // analogs, which FrameLabeler does not currently need to know
     LaneModelParameters<PacBio::Cuda::PBHalf, laneSize> refModel;
-    MovieConfig movieConfig;
+    AnalysisConfig analysisConfig;
+    auto& movieConfig = analysisConfig.mc;
     movieConfig.frameRate = 100;
 
     movieConfig.analogs[0].ipd2SlowStepRatio = 0;
@@ -132,7 +133,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 
     std::vector<UnifiedCudaArray<LaneModelParameters<PacBio::Cuda::PBHalf, laneSize>>> models;
     auto frameLabelers = CreateAndConfigure(GetParam(),
-                                            movieConfig,
+                                            analysisConfig,
                                             lanesPerPool,
                                             poolsPerChip);
 

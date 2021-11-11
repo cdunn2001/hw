@@ -45,7 +45,7 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/PoolHistogram.h>
 #include <dataTypes/TraceBatch.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/StaticDetModelConfig.h>
 
 #include "AlgoFactory.h"
@@ -120,7 +120,7 @@ DynamicEstimateBatchAnalyzer::DynamicEstimateBatchAnalyzer(uint32_t poolId,
 FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
                                                  const Data::BatchDimensions& dims,
                                                  const Data::StaticDetModelConfig& staticDetModelConfig,
-                                                 const Data::MovieConfig& movieConfig,
+                                                 const Data::AnalysisConfig& analysisConfig,
                                                  const AlgoFactory& algoFac,
                                                  DeviceAllocationStash& stash)
     : BatchAnalyzer(poolId, dims, algoFac, stash)
@@ -131,7 +131,7 @@ FixedModelBatchAnalyzer::FixedModelBatchAnalyzer(uint32_t poolId,
     model.BaselineMode().SetAllMeans(staticDetModelConfig.baselineMean);
     model.BaselineMode().SetAllVars(staticDetModelConfig.baselineVariance);
 
-    auto analogs = staticDetModelConfig.SetupAnalogs(movieConfig);
+    auto analogs = staticDetModelConfig.SetupAnalogs(analysisConfig);
     for (size_t i = 0; i < analogs.size(); i++)
     {
         model.AnalogMode(i).SetAllMeans(analogs[i].mean);

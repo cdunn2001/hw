@@ -3,10 +3,11 @@
 
 #include <cstddef>
 
+#include <pacbio/datasource/AnalogMode.h>
+
 #include <common/DataGenerators/PicketFenceGenerator.h>
 #include <common/DataGenerators/SignalGenerator.h>
 
-#include <dataTypes/AnalogMode.h>
 #include <dataTypes/LaneDetectionModel.h>
 
 namespace PacBio {
@@ -15,7 +16,7 @@ namespace Cuda {
 void run(const Data::DataManagerParams& dataParams,
          const Data::PicketFenceParams& picketParams,
          const Data::TraceFileParams& traceParams,
-         const std::array<Mongo::Data::AnalogMode, 4>& meta,
+         const std::array<DataSource::AnalogMode,4>& meta,
          const Data::LaneModelParameters<PBHalf, Mongo::laneSize>& referenceModel,
          size_t simulKernels);
 

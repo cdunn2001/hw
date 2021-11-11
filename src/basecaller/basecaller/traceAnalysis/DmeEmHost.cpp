@@ -30,7 +30,7 @@
 #include "DmeEmHost.h"
 
 #include <common/StatAccumulator.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 #include <limits>
 #include <boost/numeric/conversion/cast.hpp>
@@ -63,7 +63,7 @@ namespace Mongo {
 namespace Basecaller {
 
 // Static configuration parameters
-Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
+Cuda::Utility::CudaArray<PacBio::DataSource::AnalogMode, numAnalogs>
 DmeEmHost::analogs_;
 float DmeEmHost::refSnr_;
 float DmeEmHost::movieScaler_ = 1.0f;
@@ -89,13 +89,13 @@ DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
 
 // static
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
-                          const Data::MovieConfig &movConfig)
+                          const Data::AnalysisConfig &analysisConfig)
 {
-    refSnr_ = movConfig.refSnr;
-    movieScaler_ = movConfig.photoelectronSensitivity;
-    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    refSnr_ = analysisConfig.mc.refSnr;
+    movieScaler_ = analysisConfig.mc.photoelectronSensitivity;
+    for (size_t i = 0; i < analysisConfig.mc.analogs.size(); i++)
     {
-        analogs_[i] = movConfig.analogs[i];
+        analogs_[i] = analysisConfig.mc.analogs[i];
     }
 
     fixedModel_ = (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed);
@@ -768,7 +768,7 @@ void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
 
 // static
 LaneArray<float> DmeEmHost::ModelSignalCovar(
-        const Data::AnalogMode& analog,
+        const PacBio::DataSource::AnalogMode& analog,
         const LaneArray<float>& signalMean,
         const LaneArray<float>& baselineVar)
 {

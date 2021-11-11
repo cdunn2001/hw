@@ -28,7 +28,7 @@
 
 #include "DeviceMultiScaleBaseliner.h"
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 #include <prototypes/BaselineFilter/BaselineFilterKernels.cuh>
 
@@ -41,10 +41,10 @@ using namespace PacBio::Cuda::Memory;
 constexpr short  DeviceMultiScaleBaseliner::initVal;
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                          const Data::MovieConfig& movConfig)
+                                          const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = false;
-    InitFactory(hostExecution, movConfig);
+    InitFactory(hostExecution, analysisConfig);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}

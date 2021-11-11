@@ -27,6 +27,7 @@
 #ifndef PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 #define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
 
+#include <pacbio/datasource/AnalogMode.h>
 #include <pacbio/ipc/ThreadSafeQueue.h>
 
 #include <common/cuda/CudaLaneArray.cuh>
@@ -219,7 +220,7 @@ public:
     // Helpers to provide scratch space data.  Used to pool allocations so we
     // only need enough to satisfy the current active batches, not one for
     // each possible pool.
-    static void Configure(const std::array<Mongo::Data::AnalogMode, 4>& meta,
+    static void Configure(const std::array<PacBio::DataSource::AnalogMode, 4>& meta,
                           double frameRate);
 
 public:

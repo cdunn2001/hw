@@ -29,12 +29,13 @@
 
 #include <algorithm>
 
+#include <pacbio/datasource/AnalogMode.h>
+
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
 
 #include <dataTypes/LaneDetectionModel.h>
-#include <dataTypes/AnalogMode.h>
 
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
@@ -86,7 +87,7 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
     TransitionMatrix() = default;
 
     // Ctor for host construction
-    TransitionMatrix(Utility::CudaArray<Mongo::Data::AnalogMode, numAnalogs> analogs,
+    TransitionMatrix(Utility::CudaArray<DataSource::AnalogMode, numAnalogs> analogs,
                      double frameRate);
 };
 

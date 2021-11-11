@@ -30,12 +30,14 @@
 
 #include <limits>
 
+#include <pacbio/datasource/AnalogMode.h>
+
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
 #include <dataTypes/configs/BasecallerDmeConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <basecaller/traceAnalysis/DmeDiagnostics.h>
 
 ///////////////////////////////////////////////////////////////////
@@ -52,8 +54,9 @@ using namespace PacBio::Mongo::Data;
 
 // Wrapping all the static configurations into a single struct,
 // as that will be easier to upload to the GPU.
-struct StaticConfig{
-    CudaArray<AnalogMode, 4> analogs;
+struct StaticConfig
+{
+    CudaArray<PacBio::DataSource::AnalogMode, 4> analogs;
     float analogMixFracThresh_;
     unsigned short emIterLimit_;
     float gTestFactor_;
@@ -69,7 +72,7 @@ struct StaticConfig{
 
 __constant__ StaticConfig staticConfig;
 
-__device__ const AnalogMode& Analog(int i)
+__device__ const PacBio::DataSource::AnalogMode& Analog(int i)
 {
     return staticConfig.analogs[i];
 }
@@ -125,7 +128,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 
 template <typename VF>
 __device__ VF ModelSignalCovar(
-        const Data::AnalogMode& analog,
+        const PacBio::DataSource::AnalogMode& analog,
         VF signalMean,
         VF baselineVar)
 {
@@ -142,11 +145,12 @@ DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
 
 // static
 void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
-                          const Data::MovieConfig &movConfig)
+                            const Data::AnalysisConfig &analysisConfig)
 {
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
+    auto& movConfig = analysisConfig.mc;
     for (size_t i = 0; i < movConfig.analogs.size(); i++)
     {
         config.analogs[i] = movConfig.analogs[i];
