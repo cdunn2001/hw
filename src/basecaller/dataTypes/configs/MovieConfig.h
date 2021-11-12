@@ -69,6 +69,11 @@ public:
     using EncodingFormat = DataSource::PacketLayout::EncodingFormat;
     EncodingFormat encoding = EncodingFormat::INT16;
 
+    // For now, use default HQRF method until this
+    // plumbing is complete. This method should determine
+    // the corresponding RT activity-labeler.
+    std::string hqrfMethod = "N2";
+
     // TODO: Will likely need additional members.
 };
 

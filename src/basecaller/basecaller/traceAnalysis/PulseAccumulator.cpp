@@ -33,6 +33,8 @@ namespace Mongo {
 namespace Basecaller {
 
 std::unique_ptr<Data::PulseBatchFactory> PulseAccumulator::batchFactory_;
+float PulseAccumulator::widthThresh_;
+float PulseAccumulator::ampThresh_;
 
 // static
 
@@ -47,15 +49,34 @@ void PulseAccumulator::InitFactory(bool hostExecution,
                                    const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     using Cuda::Memory::SyncDirection;
-
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
-    batchFactory_ = std::make_unique<Data::PulseBatchFactory>(
-            pulseConfig.maxCallsPerZmw,
-            syncDir);
+    batchFactory_ = std::make_unique<Data::PulseBatchFactory>(pulseConfig.maxCallsPerZmw, syncDir);
+
+    const float w = pulseConfig.XspWidthThresh;
+    if (w < 0.0f)
+    {
+        std::stringstream msg;
+        msg << "Bad XspWidthThresh: " << w << ". Must be non-negative.";
+        throw PBException(msg.str());
+    }
+
+    widthThresh_ = w;
+    // PBLOG_INFO << "XspWidthThresh: " << w << '.';
+
+    const double x = pulseConfig.XspAmpThresh;
+    if (x < 0.0 || x > 1.0)
+    {
+        std::stringstream msg;
+        msg << "Bad XspAmpThresh: " << x << ".  Valid range is [0, 1].";
+        throw PBException(msg.str());
+    }
+
+    ampThresh_ = static_cast<float>(x / (1.0 - x));
+    // PBLOG_INFO << "XspAmpThresh: " << x << ".";
 }
 
 std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-PulseAccumulator::Process(Data::LabelsBatch labels)
+PulseAccumulator::Process(Data::LabelsBatch labels, const PoolModelParameters&)
 {
     auto ret = batchFactory_->NewBatch(labels.Metadata(), labels.StorageDims());
 

@@ -63,7 +63,8 @@ struct StaticConfig{
     float snrThresh0_;
     float snrThresh1_;
     float successConfThresh_;
-    float refSnr_;
+    float refSnr_;       // Expected SNR for analog with relative amplitude of 1
+    float movieScaler_;  // photoelectronSensitivity scaling gain factor
 };
 
 __constant__ StaticConfig staticConfig;
@@ -122,19 +123,16 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
     //Confidence(confSum);
 }
 
-// Static constants
-constexpr unsigned short DmeEmDevice::nModelParams;
-constexpr unsigned int DmeEmDevice::nFramesMin;
-
 template <typename VF>
 __device__ VF ModelSignalCovar(
         const Data::AnalogMode& analog,
         VF signalMean,
         VF baselineVar)
 {
-    baselineVar += signalMean;
-    auto tmp = analog.excessNoiseCV * signalMean;
-    baselineVar+= tmp*tmp;
+    auto tmp = signalMean * analog.excessNoiseCV;
+
+    baselineVar += signalMean * CoreDMEstimator::shotVarCoeff;
+    baselineVar += tmp*tmp;
     return baselineVar;
 }
 
@@ -163,6 +161,7 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.refSnr_ = movConfig.refSnr;
+    config.movieScaler_ = movConfig.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }
@@ -413,8 +412,8 @@ Gtest(const DmeEmDevice::LaneHist& histogram, const ZmwDetectionModel& model)
     g *= 2.0f;
 
     // Compute the p-value.
-    assert(DmeEmDevice::nModelParams + 1 < static_cast<unsigned int>(numBins));
-    const auto dof = numBins - DmeEmDevice::nModelParams - 1;
+    assert(CoreDMEstimator::nModelParams + 1 < static_cast<unsigned int>(numBins));
+    const auto dof = numBins - CoreDMEstimator::nModelParams - 1;
     // TODO disabled because I don't have access to a gpu chi2 distribution on the GPU.
     assert(false);
     const auto pval = 0.f;
@@ -650,7 +649,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
     // Initialize intra-lane failure codes.
     int32_t zStatus = DmeEmDevice::OK;
-    if (numFrames < DmeEmDevice::nFramesMin) zStatus |= DmeEmDevice::INSUF_DATA;
+    if (numFrames < CoreDMEstimator::nFramesMin) zStatus |= DmeEmDevice::INSUF_DATA;
 
     DmeDiagnostics<float> dmeDx {};
     dmeDx.fullEstimation = true;
@@ -660,7 +659,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 //    dmeDx.stopFrame = dtbs.back()->StopFrame();
 
     MaxLikelihoodDiagnostics<float>& mldx = dmeDx.mldx;
-    mldx.degOfFreedom = numFrames - DmeEmDevice::nModelParams;
+    mldx.degOfFreedom = numFrames - CoreDMEstimator::nModelParams;
 
     // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
     // Machine Learning 47:7 (2002). [CSMM2002]
@@ -891,10 +890,10 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
         s = numer / denom;
 
         // The minimum bound for the pulse-amplitude scale parameter.
-        static const float minSnr = 0.1f;
-        auto rpaMin = rpa[0];
-        for (int i = 1; i < rpa.size(); ++i) rpaMin = min(rpaMin, rpa[i]);
-        const auto sMin = minSnr * sqrt(var[0]) / rpaMin;
+        static const float minSnr = 0.5f;
+        const float minPulseMean = max(1.0f, staticConfig.movieScaler_);
+        auto rpaMin = rpa[0]; for (int i = 1; i < rpa.size(); ++i) rpaMin = min(rpaMin, rpa[i]);
+        const auto sMin = max(minSnr * sqrt(var[0]), minPulseMean) / rpaMin;
 
         // Constrain s > sMin.
         const auto veryLowSignal = (s < sMin);

@@ -55,7 +55,7 @@ public:
 
 private:    // Customizable implementation
     std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch labels) override;
+    Process(Data::LabelsBatch labels, const PoolModelParameters& models) override;
 
     std::unique_ptr<AccumImpl> impl_;
 };

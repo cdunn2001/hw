@@ -29,10 +29,11 @@
 
 #include <stdint.h>
 
-#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/PulseBatch.h>
+#include <dataTypes/LaneDetectionModel.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -40,7 +41,11 @@ namespace Basecaller {
 
 class PulseAccumulator
 {
-public:     // Static functions
+public:    // Types
+    using LaneModelParameters = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
+    using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
+
+public:    // Static functions
 
     static void Configure(const Data::BasecallerPulseAccumConfig& pulseConfig);
     static void Finalize();
@@ -48,9 +53,10 @@ public:     // Static functions
     static void InitFactory(bool hostExecution,
                             const Data::BasecallerPulseAccumConfig& pulseConfig);
 
-protected: // static members
+protected: // Static members
     static std::unique_ptr<Data::PulseBatchFactory> batchFactory_;
-
+    static float ampThresh_;
+    static float widthThresh_;
 
 public:
     PulseAccumulator(uint32_t poolId);
@@ -60,11 +66,11 @@ public:
     /// \returns LabelsBatch with estimated labels for each frame, along with the associated
     ///          baseline subtracted trace
     std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    operator()(Data::LabelsBatch labels)
+    operator()(Data::LabelsBatch labels, const PoolModelParameters& models)
     {
         // TODO
         assert(labels.GetMeta().PoolId() == poolId_);
-        return Process(std::move(labels));
+        return Process(std::move(labels), models);
     }
 
     auto EmptyPulseBatch(const Data::BatchMetadata& metadata, const Data::BatchDimensions& dims)
@@ -85,7 +91,7 @@ private:    // Data
 
 private:    // Customizable implementation
     virtual std::pair<Data::PulseBatch, Data::PulseDetectorMetrics>
-    Process(Data::LabelsBatch trace); // = 0;
+    Process(Data::LabelsBatch trace, const PoolModelParameters&);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
