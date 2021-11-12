@@ -18,14 +18,14 @@ function ReservePort {
     fi
 }
 
-ports="23610 23611 23612"
-for port in $ports
-do
-  ReservePort $port
-done
-sysctl net.ipv4.ip_local_reserved_ports > /etc/sysctl.d/98-pa-kestrel.conf
-echo -n "    INFO Reloading firewall :"
-firewall-cmd --reload
+#ports="23610 23611 23612"
+#for port in $ports
+#do
+#  ReservePort $port
+#done
+#sysctl net.ipv4.ip_local_reserved_ports > /etc/sysctl.d/98-pa-kestrel.conf
+#echo -n "    INFO Reloading firewall :"
+#firewall-cmd --reload
 
 
 if [ ! -d /var/log/pacbio ]

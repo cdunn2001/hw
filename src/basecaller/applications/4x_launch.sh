@@ -43,16 +43,16 @@ MAIN_ARGS="--cache --numZmwLanes ${LANES_PER_CHIP} --frames=${FRAMES}  --inputfi
            --config=system.basecallerConcurrency=${BASECALLER_CONCURRENCY} \
            $@"
 
-NUMA_NODE=0 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}0.baz > t2b0.log &
+NUMA_NODE=0 ${dir}/smrt-basecaller-launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}0.baz > t2b0.log &
 sleep ${DELAY}
 
-NUMA_NODE=0 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}1.baz > t2b1.log &
+NUMA_NODE=0 ${dir}/smrt-basecaller-launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}1.baz > t2b1.log &
 sleep ${DELAY}
 
-NUMA_NODE=1 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}2.baz > t2b2.log &
+NUMA_NODE=1 ${dir}/smrt-basecaller-launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}2.baz > t2b2.log &
 sleep ${DELAY}
 
-NUMA_NODE=1 ${dir}/numa_launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}3.baz > t2b3.log &
+NUMA_NODE=1 ${dir}/smrt-basecaller-launch.sh ${MAIN_ARGS}  --outputbazfile=${BAZ_ARG}3.baz > t2b3.log &
 
 wait
 

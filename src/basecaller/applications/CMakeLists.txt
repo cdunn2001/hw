@@ -12,7 +12,7 @@ add_executable(smrt-basecaller
         SmrtBasecaller.cpp
 )
 
-configure_file(numa_launch.sh numa_launch.sh COPYONLY)
+configure_file(smrt-basecaller-launch.sh smrt-basecaller-launch.sh COPYONLY)
 configure_file(4x_launch.sh 4x_launch.sh COPYONLY)
 
 target_compile_definitions(smrt-basecaller
@@ -61,7 +61,8 @@ configure_file(${PACKAGE_DIR}/preInstall.sh.in               ${CMAKE_CURRENT_BIN
 configure_file(${PACKAGE_DIR}/preUninstall.sh.in             ${CMAKE_CURRENT_BINARY_DIR}/preUninstall.sh        @ONLY)
 configure_file(${PACKAGE_DIR}/pacbio-pa-smrt-basecaller.modulefile.in  ${CMAKE_CURRENT_BINARY_DIR}/pacbio-pa-smrt-basecaller.modulefile  @ONLY)
 
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/smrt-basecaller          DESTINATION bin )
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/smrt-basecaller             DESTINATION bin )
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/smrt-basecaller-launch.sh   DESTINATION bin )
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pacbio-pa-smrt-basecaller.modulefile RENAME ${SOFTWARE_VERSION} DESTINATION etc/modulefiles/pacbio-pa-smrt-basecaller )
 
 #    set_target_properties(${UNBUNDLED_EXE} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
