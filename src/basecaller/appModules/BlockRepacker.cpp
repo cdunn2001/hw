@@ -592,11 +592,13 @@ public:
     {
         // Figure out number of batches required to span all the zmw, with care
         // taken for integer division.
+        // Create dimensions for all blocks, including the last block that might not be fully populated.
         const auto numBatches = (numZmw + batchDims.ZmwsPerBatch() - 1) / batchDims.ZmwsPerBatch();
         for (size_t i = 0; i < numBatches; ++i)
             dims_[i] = batchDims;
+        // check to see if the last block is a runt, then modify the dimensions of it.
         const auto runtBlocks = numZmw % batchDims.ZmwsPerBatch() / batchDims.laneWidth;
-        dims_[numBatches-1].lanesPerBatch = runtBlocks;
+        if (runtBlocks != 0) dims_[numBatches-1].lanesPerBatch = runtBlocks;
 
         // Statically chunk the batches into arenas.  Again take care for
         // integer division, and keep the arenas as close in size as possible

@@ -135,7 +135,7 @@ enum class AllocatorMode
     MALLOC,
     CUDA,
     HUGE_CUDA,
-    SHARED_MEMORY
+    SHARED_MEMORY_HUGE_CUDA
 };
 
 // Sets the global allocation mode.  This is controlled

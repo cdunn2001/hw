@@ -166,6 +166,13 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
             PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
             const auto blockIdx = laneIdx - laneBegin;
             Mongo::Data::BlockView<const T> blockView = traceBatch.GetBlockView(blockIdx);
+#if 0
+            PBLOG_NOTICE << "blockView data, zmwOffset:" << zmwOffset << "frameOffset:" << frameOffset;
+            for(uint32_t x=0;x<32;x++) 
+            {
+                PBLOG_NOTICE <<  std::hex << blockView.Data()[x];
+            }
+#endif
 
             // The TraceFile::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
             // work with the API.  TODO: perform this transpose inside the TraceFile::Traces() class.
