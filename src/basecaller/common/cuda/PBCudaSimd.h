@@ -50,6 +50,9 @@ class PBShort2
     static constexpr uint32_t yshift = 0x10;
     static constexpr uint32_t ymask = 0xFFFF0000;
     static constexpr uint32_t xmask = 0x0000FFFF;
+
+    static constexpr int16_t True = 0xFFFF;
+    static constexpr int16_t False = 0x0000;
 public:
     PBShort2() = default;
 
@@ -59,6 +62,34 @@ public:
         // operands to 32 bit.  So we have to make sure to mask out the unwanted bits in s1
         // after the promotion to full width.
         : data_{ (static_cast<uint32_t>(s1) & xmask ) | (static_cast<uint32_t>(s2) << yshift) }
+    {}
+
+    // PBShort2 values sometimes get used as boolean vectors, so a couple constructors to
+    // help make interactions with scalar logical expressions work
+    CUDA_ENABLED PBShort2(bool b) : PBShort2(b,b) {}
+    CUDA_ENABLED PBShort2(bool b1, bool b2)
+        : PBShort2(b1 ? True : False,
+                   b2 ? True : False)
+    {}
+
+    // And now some explicitly integer constructors, because otherwise it's
+    // ambiguous constructing from a literal value
+    CUDA_ENABLED PBShort2(size_t i)
+        : PBShort2(static_cast<int16_t>(i))
+    {}
+    CUDA_ENABLED PBShort2(int32_t i)
+        : PBShort2(static_cast<int16_t>(i))
+    {}
+    CUDA_ENABLED PBShort2(int32_t i1, int32_t i2)
+        : PBShort2(static_cast<int16_t>(i1),
+                   static_cast<int16_t>(i2))
+    {}
+    CUDA_ENABLED PBShort2(uint32_t i)
+        : PBShort2(static_cast<int16_t>(i))
+    {}
+    CUDA_ENABLED PBShort2(uint32_t i1, int32_t i2)
+        : PBShort2(static_cast<int16_t>(i1),
+                   static_cast<int16_t>(i2))
     {}
 
     // We need to be able to construct from a raw uint32_t, to capture the return from various
