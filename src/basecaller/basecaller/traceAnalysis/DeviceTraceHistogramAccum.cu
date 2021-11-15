@@ -60,42 +60,45 @@ struct StaticConfig
 
 __constant__ StaticConfig staticConfig;
 
+using LaneModel = Data::LaneModelParameters<PBHalf2, laneSize/2>;
+
 class EdgeScrubbingState
 {
 public:
-    __device__ EdgeScrubbingState()
+    // Inner class, mostly because I want private access to the state data,
+    // and it was too annoying to set up all the forward declarations and
+    // such that would be required if this was a standalone class
+    class EdgeFinder
     {
-        for (uint32_t i = 0; i < laneSize/2; ++i)
+        __device__ PBShort2 Computethreshold(const LaneModel& laneModel,
+                                             uint32_t idx)
         {
-            prev[i] = PBShort2{0};
-            circular[i] = 0;
+            // The threshold below which the sample is most likely full-frame baseline.
+            // TODO: This value should be configurable, depend on the SNR of
+            // the dimmest pulse component of the detection model, or both.
+            static constexpr float threshSigma = 2.0f;
+
+            const auto& laneBg = laneModel.BaselineMode();
+            return ToShort(threshSigma * sqrt(laneBg.vars[idx]) + laneBg.means[idx]);
         }
-    }
-    struct EdgeFinder
-    {
+    public:
+        // Constructs by loading data from an EdgeScrubbingState
         __device__ EdgeFinder(const EdgeScrubbingState& l,
-                              const Data::LaneModelParameters<PBHalf2, laneSize/2>& laneModel,
-                              uint32_t idx = threadIdx.x)
+                              const LaneModel& laneModel,
+                              uint32_t idx)
             : prev_{l.prev[idx]}
             , circular_{l.circular[idx]}
         {
-            const auto& laneBg = laneModel.BaselineMode();
-            // TODO make configurable
-            static constexpr float threshSigma = 2.0f;
-            // TODO check rounding
-            threshold_ = ToShort(threshSigma * laneBg.vars[idx]);
+            threshold_ = Computethreshold(laneModel, idx);
         }
 
+        // Constructs by using two explicit data inputs to prime
+        // the EdgeFinder
         __device__ EdgeFinder(PBShort2 frame1, PBShort2 frame2,
-                              const Data::LaneModelParameters<PBHalf2, laneSize/2>& laneModel,
+                              const LaneModel& laneModel,
                               uint32_t idx = threadIdx.x)
         {
-            // BENTODO deduplicate
-            const auto& laneBg = laneModel.BaselineMode();
-            // TODO make configurable
-            static constexpr float threshSigma = 2.0f;
-            // TODO check rounding
-            threshold_ = ToShort(threshSigma * laneBg.vars[idx]);
+            threshold_ = Computethreshold(laneModel, idx);
 
             // Intentional discard of return values, we just want to prime
             // the state data
@@ -103,18 +106,38 @@ public:
             IsEdgeFrame(frame2);
         }
 
-        __device__ void Store(EdgeScrubbingState& l, uint32_t idx = threadIdx.x)
+        // Stores the current data back into an EdgeScrubbingState
+        __device__ void Store(EdgeScrubbingState& l,
+                              uint32_t idx = threadIdx.x)
         {
             l.prev[idx] = prev_;
             l.circular[idx] = circular_;
         }
 
+        // Used to classify edge frames.  The return is the previously
+        // added frame, along with a PBShort2 incicating if that was an
+        // edge frame or not.
         __device__ std::pair<PBShort2, PBShort2> IsEdgeFrame(PBShort2 frame)
         {
             const auto isBaseline = (frame < threshold_);
+            // Grabs the back value of our "circular buffer".
+            // 0x3322 means that our low two bytes will be a replication
+            // of the third bytes of circular, and the high two bytes
+            // will be a replication of the fourth byte of circular.
+            // Since bytes in `circular_` are either 0xFF or 0x00,
+            // the replication turns things into the true and false values
+            // for PBShort2.
             uint32_t back = __byte_perm(circular_, 0, 0x3322);
             auto edge = PBShort2::FromRaw(back ^ isBaseline.data());
 
+            // Now do a "push front" to our "circular buffer".
+            // 0x1064 means that the low two bytes from `circular`
+            // are moved to the high two bytes, and the new low two
+            // bytes in `circular` are first and third bytes from
+            // `isBaseline`.  Again since true and false for PBShort2
+            // are 0xFFFF and 0x0000 respectively, grabbing the first
+            // and third bytes is the same as grabbing the second and
+            // fourth, and either gives us complete information.
             circular_ = __byte_perm(circular_, isBaseline.data(), 0x1064);
             auto candidate = prev_;
             prev_ = frame;
@@ -126,6 +149,14 @@ public:
         PBShort2 threshold_;
     };
 
+    __device__ EdgeScrubbingState()
+    {
+        for (uint32_t i = 0; i < laneSize/2; ++i)
+        {
+            prev[i] = PBShort2{0};
+            circular[i] = 0;
+        }
+    }
 private:
     Cuda::Utility::CudaArray<PBShort2, laneSize/2> prev;
     Cuda::Utility::CudaArray<uint32_t, laneSize/2> circular;
@@ -185,11 +216,10 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     assert(blockDim.x == 64);
     auto& hist = hists[blockIdx.x];
 
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
-    // I'm going to be lazy and have two threads do the same edge finding.  Scrubbing is so cheap compared
-    // to the rest of this filter that I don't care
     EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2);
+    // I'm going to be lazy and have two threads do the same edge finding.
+    // Scrubbing is so cheap compared to the rest of this filter
+    // that I don't care
 
     float lowBound = hist.lowBound[threadIdx.x];
     float binSize = hist.binSize[threadIdx.x];
@@ -202,7 +232,8 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto [isEdge, frame] = edgeFinder.IsEdgeFrame(zmw[i]);
-        frame = Blend(isEdge, scrubbed, frame);
+        bool zmwEdge = threadIdx.x % 2 == 0 ? isEdge.X() : isEdge.Y();
+        if (zmwEdge) continue;
 
         // We're doing one thread per zmw, which means we have to do
         // a little dance here since traces automatically come over as
@@ -243,10 +274,9 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
 {
     auto& hist = hists[blockIdx.x];
 
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
-    // I'm going to be lazy and have two threads do the same edge finding.  Scrubbing is so cheap compared
-    // to the rest of this filter that I don't care
+    // I'm going to be lazy and have two threads do the same edge finding.
+    // Scrubbing is so cheap compared to the rest of this filter
+    // that I don't care
     EdgeScrubbingState::EdgeFinder edgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2);
 
     float lowBound = hist.lowBound[threadIdx.x];
@@ -260,7 +290,8 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     for (int i = 0; i < traces.NumFrames(); ++i)
     {
         auto [isEdge, frame] = edgeFinder.IsEdgeFrame(zmw[i]);
-        frame = Blend(isEdge, scrubbed, frame);
+        bool zmwEdge = threadIdx.x % 2 == 0 ? isEdge.X() : isEdge.Y();
+        if (zmwEdge) continue;
 
         auto val = (threadIdx.x % 2 == 0 ? frame.X() : frame.Y());
         int bin = (val - lowBound) / binSize;
@@ -291,18 +322,19 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
                                              DeviceView<EdgeScrubbingState> edgeState,
                                              DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    // Some magic values for certain cases
+    constexpr int highOutlier = LaneHistogramTrans::numBins;
+    constexpr int lowOutlier = -1;
+    constexpr int scrubbedFrame = -2;
 
     assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
 
-    // BENTODO there is another count variable below
-    auto count = (traces.NumFrames() + blockDim.x - 1) / blockDim.x;
-    auto start = threadIdx.x * count;
-    auto stop = min(start + count, traces.NumFrames());
+    auto threadFrames = traces.NumFrames() / blockDim.x;
+    auto start = threadIdx.x * threadFrames;
+    auto stop = min(start + threadFrames, traces.NumFrames());
 
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -310,17 +342,21 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
         float2 binSize = {hist.binSize[2*zmw], hist.binSize[2*zmw+1]};
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
-        auto edgeFinder = threadIdx.x == 0
-            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
-            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
+        auto edgeFinder = (start == 0)
+            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
+                                             models[blockIdx.x],
+                                             zmw)
+            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
+                                             models[blockIdx.x],
+                                             zmw);
         for (int i = start; i < stop; ++i)
         {
             auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
-            val = Blend(isEdge, scrubbed, val);
 
             int bin = (val.X() - lowBound.x) / binSize.x;
-            if (bin < 0) bin = -1;
-            else if (bin > numBins) bin = numBins;
+            if (bin < 0) bin = lowOutlier;
+            else if (bin > numBins) bin = highOutlier;
+            if (isEdge.X()) bin = scrubbedFrame;
 
             // Get bit flag with each thread that has the same bin as us.
             auto same = __match_any_sync(0xFFFFFFFF, bin);
@@ -329,16 +365,18 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             // Thread with the most significant bit gets to own the update
             bool owner = (32 - __clz(same) -1 ) == threadIdx.x;
 
-            if (owner)
+            // Intentional skip over any edge frame counts
+            if (owner && bin != scrubbedFrame)
             {
-                if (bin < 0) hist.outlierCountLow[2*zmw] += count;
-                else if (bin == numBins) hist.outlierCountHigh[2*zmw] += count;
+                if (bin  == lowOutlier) hist.outlierCountLow[2*zmw] += count;
+                else if (bin == highOutlier) hist.outlierCountHigh[2*zmw] += count;
                 else hist.binCount[2*zmw][bin] += count;
             }
 
             bin = (val.Y() - lowBound.y) / binSize.y;
-            if (bin < 0) bin = -1;
-            else if (bin > numBins) bin = numBins;
+            if (bin < 0) bin = lowOutlier;
+            else if (bin > numBins) bin = highOutlier;
+            if (isEdge.Y()) bin = scrubbedFrame;
 
             // Get bit flag with each thread that has the same bin as us.
             same = __match_any_sync(0xFFFFFFFF, bin);
@@ -347,10 +385,11 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             // Thread with the most significant bit gets to own the update
             owner = (32 - __clz(same) -1 ) == threadIdx.x;
 
-            if (owner)
+            // Intentional skip over any edge frame counts
+            if (owner && bin != scrubbedFrame)
             {
-                if (bin < 0) hist.outlierCountLow[2*zmw+1] +=count;
-                else if (bin == numBins) hist.outlierCountHigh[2*zmw+1] += count;
+                if (bin == lowOutlier) hist.outlierCountLow[2*zmw+1] +=count;
+                else if (bin == highOutlier) hist.outlierCountHigh[2*zmw+1] += count;
                 else hist.binCount[2*zmw+1][bin] += count;
             }
         }
@@ -368,18 +407,18 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
                                              DeviceView<EdgeScrubbingState> edgeState,
                                              DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
-
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
-    __shared__ uint16_t localHist[numBins+2][2];
+    constexpr int16_t lowOutlier = numBins;
+    constexpr int16_t highOutlier = numBins+1;
+    constexpr int16_t scrubbedFrame = numBins+2;
+    __shared__ uint16_t localHist[numBins+3][2];
+
     assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
 
-    // BENTODO there is another count variable below
-    auto count = (traces.NumFrames() + blockDim.x - 1) / blockDim.x;
-    auto start = threadIdx.x * count;
-    auto stop = min(start + count, traces.NumFrames());
+    auto threadFrames = traces.NumFrames() / blockDim.x;
+    auto start = threadIdx.x * threadFrames;
+    auto stop = min(start + threadFrames, traces.NumFrames());
 
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -394,18 +433,22 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
         __syncwarp(0xFFFFFFFF);
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
-        auto edgeFinder = threadIdx.x == 0
-            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
-            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
+        auto edgeFinder = (start == 0)
+            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
+                                             models[blockIdx.x],
+                                             zmw)
+            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
+                                             models[blockIdx.x],
+                                             zmw);
 
         for (int i = start; i < stop; ++i)
         {
             auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
-            val = Blend(isEdge, scrubbed, val);
 
             int bin = (val.X() - lowBound.x) / binSize.x;
-            if (bin >= numBins) bin = numBins+1;
-            else if (bin < 0) bin = numBins;
+            if (bin >= numBins) bin = highOutlier;
+            else if (bin < 0) bin = lowOutlier;
+            if (isEdge.X()) bin = scrubbedFrame;
 
             // Get bit flag with each thread that has the same bin as us.
             auto same = __match_any_sync(0xFFFFFFFF, bin);
@@ -420,8 +463,9 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
             }
 
             bin = (val.Y() - lowBound.y) / binSize.y;
-            if (bin >= numBins) bin = numBins+1;
-            else if (bin < 0) bin = numBins;
+            if (bin >= numBins) bin = highOutlier;
+            else if (bin < 0) bin = lowOutlier;
+            if (isEdge.Y()) bin = scrubbedFrame;
 
             // Get bit flag with each thread that has the same bin as us.
             same = __match_any_sync(0xFFFFFFFF, bin);
@@ -444,13 +488,13 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
         }
         if (threadIdx.x == 0)
         {
-            hist.outlierCountHigh[2*zmw] += localHist[numBins+1][0];
-            hist.outlierCountHigh[2*zmw+1] += localHist[numBins+1][1];
+            hist.outlierCountHigh[2*zmw] += localHist[highOutlier][0];
+            hist.outlierCountHigh[2*zmw+1] += localHist[highOutlier][1];
         }
         else if (threadIdx.x == 1)
         {
-            hist.outlierCountLow[2*zmw] += localHist[numBins][0];
-            hist.outlierCountLow[2*zmw+1] += localHist[numBins][1];
+            hist.outlierCountLow[2*zmw] += localHist[lowOutlier][0];
+            hist.outlierCountLow[2*zmw+1] += localHist[lowOutlier][1];
         }
 
         if (threadIdx.x == blockDim.x-1)
@@ -471,20 +515,25 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
                                            DeviceView<const Data::LaneModelParameters<PBHalf2, laneSize/2>> models)
 {
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
+    constexpr int16_t lowOutlier = numBins;
+    constexpr int16_t highOutlier = numBins+1;
+    constexpr int16_t scrubbedFrame = numBins+2;
 
     struct SharedData
     {
-        uint16_t localHist[32][numBins+2][2];
+        uint16_t localHist[32][numBins+3][2];
+        // The 33 is intentional, to avoid bank conflicts during
+        // the transpose
         PBShort2 trans[32][33];
     };
 
     assert(traces.NumFrames() % blockDim.x == 0);
+    assert(traces.NumFrames() % blockDim.y == 0);
     assert(blockDim.x == 32);
     assert(blockDim.y == 32);
     assert(blockDim.z == 1);
 
     __shared__ SharedData shared;
-    assert(traces.NumFrames() % blockDim.x == 0);
     auto& hist = hists[blockIdx.x];
 
     const auto zmw = threadIdx.y;
@@ -499,22 +548,21 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
     }
     __syncwarp(0xFFFFFFFF);
 
-    // BENTODO there is another count variable below
-    auto count = (traces.NumFrames() + blockDim.y - 1) / blockDim.y;
-    auto start = threadIdx.y * count;
-    auto stop = min(start + count, traces.NumFrames());
-
-    assert(start > 1 || threadIdx.y == 0);
-    assert(stop == traces.NumFrames() || threadIdx.y != blockDim.y-1);
+    auto threadFrames = traces.NumFrames() / blockDim.y;
+    auto start = threadIdx.y * threadFrames;
+    auto stop = min(start + threadFrames, traces.NumFrames());
 
     auto dat = traces.ZmwData(blockIdx.x, threadIdx.x);
 
-    auto edgeFinder = threadIdx.y == 0
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x])
-        : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x]);
+    auto edgeFinder = (start == 0)
+        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
+                                         models[blockIdx.x],
+                                         threadIdx.x)
+        : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
+                                         models[blockIdx.x],
+                                         threadIdx.x);
 
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
+    auto scrubbed = std::numeric_limits<int16_t>::lowest();
     for (int i = start; i < stop; ++i)
     {
         auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
@@ -526,8 +574,9 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         val = shared.trans[threadIdx.x][threadIdx.y];
 
         int bin = (val.X() - lowBound.x) / binSize.x;
-        if (bin >= numBins) bin = numBins+1;
-        else if (bin < 0) bin = numBins;
+        if (bin >= numBins) bin = highOutlier;
+        else if (bin < 0) bin = lowOutlier;
+        if (val.X() == scrubbed) bin = scrubbedFrame;
 
         // Get bit flag with each thread that has the same bin as us.
         auto same = __match_any_sync(0xFFFFFFFF, bin);
@@ -542,8 +591,9 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         }
 
         bin = (val.Y() - lowBound.y) / binSize.y;
-        if (bin >= numBins) bin = numBins+1;
-        else if (bin < 0) bin = numBins;
+        if (bin >= numBins) bin = highOutlier;
+        else if (bin < 0) bin = lowOutlier;
+        if (val.Y() == scrubbed) bin = scrubbedFrame;
 
         // Get bit flag with each thread that has the same bin as us.
         same = __match_any_sync(0xFFFFFFFF, bin);
@@ -565,8 +615,8 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
     }
     if (threadIdx.x == 0)
     {
-        hist.outlierCountHigh[2*zmw] += shared.localHist[zmw][numBins+1][0];
-        hist.outlierCountHigh[2*zmw+1] += shared.localHist[zmw][numBins+1][1];
+        hist.outlierCountHigh[2*zmw] += shared.localHist[zmw][highOutlier][0];
+        hist.outlierCountHigh[2*zmw+1] += shared.localHist[zmw][highOutlier][1];
     }
     else if (threadIdx.x == 1)
     {
@@ -596,7 +646,10 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
     PBHalf2 binSize = {ghist.binSize[2*zmw], ghist.binSize[2*zmw+1]};
 
     constexpr int16_t numBins = LaneHistogramTrans::numBins;
-    __shared__ PBShort2 lhist[numBins+2][32];
+    constexpr int16_t lowOutlier = numBins;
+    constexpr int16_t highOutlier = numBins+1;
+    constexpr int16_t edgeFrame = numBins+2;
+    __shared__ PBShort2 lhist[numBins+3][32];
 
     for (int i = threadIdx.y; i < numBins+2; i+=blockDim.y)
     {
@@ -609,26 +662,25 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
     auto start = threadIdx.y * count;
     auto stop = min(start + count, traces.NumFrames());
 
-    assert(start > 1 || threadIdx.y == 0);
-    assert(stop == traces.NumFrames() || threadIdx.y != blockDim.y-1);
-
     auto trace = traces.ZmwData(blockIdx.x, threadIdx.x);
 
-    auto edgeFinder = threadIdx.y == 0
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x])
-        : EdgeScrubbingState::EdgeFinder(trace[start-2], trace[start-1], models[blockIdx.x]);
+    auto edgeFinder = (start == 0)
+        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
+                                         models[blockIdx.x],
+                                         threadIdx.x)
+        : EdgeScrubbingState::EdgeFinder(trace[start-2], trace[start-1],
+                                         models[blockIdx.x],
+                                         threadIdx.x);
 
 
-    // BENTODO remove
-    PBShort2 scrubbed(std::numeric_limits<int16_t>::lowest());
     for (int i = start; i < stop; ++i)
     {
         auto [isEdge, val] = edgeFinder.IsEdgeFrame(trace[i]);
-        val = Blend(isEdge, scrubbed, val);
 
         auto bin = (val - lowBound) / binSize;
-        bin = Blend(bin >= numBins, numBins+1, bin);
-        bin = Blend(bin < 0, numBins, bin);
+        bin = Blend(bin >= numBins, highOutlier, bin);
+        bin = Blend(bin < 0, lowOutlier, bin);
+        bin = Blend(isEdge, edgeFrame, bin);
 
         atomicAdd(&lhist[bin.IntX()][threadIdx.x].data(), 1);
         atomicAdd(&lhist[bin.IntY()][threadIdx.x].data(), 1<<16);
@@ -644,13 +696,13 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
 
     if (threadIdx.y == 0)
     {
-        ghist.outlierCountLow[2*threadIdx.x] += lhist[numBins][threadIdx.x].X();
-        ghist.outlierCountLow[2*threadIdx.x+1] += lhist[numBins][threadIdx.x].Y();
+        ghist.outlierCountLow[2*threadIdx.x] += lhist[lowOutlier][threadIdx.x].X();
+        ghist.outlierCountLow[2*threadIdx.x+1] += lhist[lowOutlier][threadIdx.x].Y();
     }
     else if (threadIdx.y == 1 % blockDim.y)
     {
-        ghist.outlierCountHigh[2*threadIdx.x] += lhist[numBins+1][threadIdx.x].X();
-        ghist.outlierCountHigh[2*threadIdx.x+1] += lhist[numBins+1][threadIdx.x].Y();
+        ghist.outlierCountHigh[2*threadIdx.x] += lhist[highOutlier][threadIdx.x].X();
+        ghist.outlierCountHigh[2*threadIdx.x+1] += lhist[highOutlier][threadIdx.x].Y();
     }
 
     if (threadIdx.y == blockDim.y - 1)
@@ -749,7 +801,7 @@ __global__ void ResetHistsBounds(DeviceView<Hist> hists,
 
 template <typename Hist>
 __global__ void ResetHistsStats(DeviceView<Hist> hists,
-                                           DeviceView<const Data::BaselinerStatAccumState> stats)
+                                DeviceView<const Data::BaselinerStatAccumState> stats)
 {
     const auto& binInfo = ComputeBounds(stats[blockIdx.x].baselineStats);
     ResetHist(&hists[blockIdx.x], binInfo);
