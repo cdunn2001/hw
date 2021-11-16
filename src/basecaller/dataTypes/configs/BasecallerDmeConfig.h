@@ -70,25 +70,23 @@ public:
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);
 
-    // Threshold for mixing fractions of analog modes in detection model fit.
-    // Associated confidence factor is defined using this threshold.
-    // Must be <= 0.25. If <= 0, the threshold is disabled (i.e., the
-    // associated confidence factor will always be 1).
-    PB_CONFIG_PARAM(float, AnalogMixFractionThreshold, 0.02f);
-
-    // For DmeMonochrome, AnalogMixFractionThresh0 defines the lower end of
+    // Thresholds for mixing fractions of analog modes in detection model fit.
+    //
+    // AnalogMixFractionThresh[0] < AnalogMixFractionThresh[1].
+    //
+    // Associated confidence factor is defined using AnalogMixFractionThresh[1]
+    // AnalogMixFractionThresh[1] must be <= 0.25. If <= 0, the threshold is
+    // disabled (i.e., the associated confidence factor will always be 1).
+    // AnalogMixFractionThresh[0] defines the lower end of
     // a 0-1 ramp for the related confidence factor.
-    //
-    // AnalogMixFractionThresh0 < AnalogMixFractionThresh.
-    //
-    // AnalogMixFractionThresh0 may be < 0. Since mixing fractions cannot be
-    // negative, setting AnalogMixFractionThresh0 < 0 effectively sets a
+    // AnalogMixFractionThresh[0] may be < 0. Since mixing fractions cannot be
+    // negative, setting AnalogMixFractionThresh[0] < 0 effectively sets a
     // positive lower bound for the confidence factor that is attained when
-    // the mixing fraction is 0.
-    //
-    // If AnalogMixFractionThresh0 is not set (nan), legacy behavior is preserved,
-    // which effectively sets it to AnalogMixFractionThreshold / 3.
-    PB_CONFIG_PARAM(float, AnalogMixFractionThresh0, numeric_limits<float>::quiet_NaN());
+    // the mixing fraction is 0. If AnalogMixFractionThresh[0] is not set (nan),
+    // legacy behavior is preserved, which effectively sets it to
+    // AnalogMixFractionThreshold / 3.
+    PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
+            std::vector<float>({ numeric_limits<float>::quiet_NaN(), 0.02f }));
 
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
