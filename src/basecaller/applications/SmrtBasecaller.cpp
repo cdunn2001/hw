@@ -215,7 +215,7 @@ private:
             [&](const TraceReanalysis& config) -> std::unique_ptr<DataSourceBase>
             {
                 auto ds = std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
-                ds->LoadGroundTruth(config_);
+                ds->LoadGroundTruth(config_.algorithm);
                 return ds;
             },
             [&](const TraceReplication& config) -> std::unique_ptr<DataSourceBase>

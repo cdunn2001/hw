@@ -30,6 +30,7 @@
 #include <pacbio/logging/Logger.h>
 
 #include <common/MongoConstants.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
@@ -461,7 +462,7 @@ DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
     return movieInfo;
 }
 
-void TraceFileDataSource::LoadGroundTruth(Mongo::Data::SmrtBasecallerConfig& config) const
+void TraceFileDataSource::LoadGroundTruth(Mongo::Data::BasecallerAlgorithmConfig& config) const
 {
     auto setBlMeanAndCovar = [&](float& blMean,
                                  float& blCovar,
@@ -478,17 +479,17 @@ void TraceFileDataSource::LoadGroundTruth(Mongo::Data::SmrtBasecallerConfig& con
         }
     };
 
-    if (config.algorithm.modelEstimationMode == Mongo::Data::BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
+    if (config.modelEstimationMode == Mongo::Data::BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
     {
-        setBlMeanAndCovar(config.algorithm.staticDetModelConfig.baselineMean,
-                          config.algorithm.staticDetModelConfig.baselineVariance,
+        setBlMeanAndCovar(config.staticDetModelConfig.baselineMean,
+                          config.staticDetModelConfig.baselineVariance,
                           "Requested static pipeline analysis but input trace file is not simulated!");
     }
-    else if (config.algorithm.dmeConfig.Method == Mongo::Data::BasecallerDmeConfig::MethodName::Fixed &&
-             config.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    else if (config.dmeConfig.Method == Mongo::Data::BasecallerDmeConfig::MethodName::Fixed &&
+             config.dmeConfig.SimModel.useSimulatedBaselineParams == true)
     {
-        setBlMeanAndCovar(config.algorithm.dmeConfig.SimModel.baselineMean,
-                          config.algorithm.dmeConfig.SimModel.baselineVar,
+        setBlMeanAndCovar(config.dmeConfig.SimModel.baselineMean,
+                          config.dmeConfig.SimModel.baselineVar,
                           "Requested fixed DME with baseline params but input trace file is not simulated!");
     }
 }

@@ -36,7 +36,7 @@
 
 #include <common/BatchDataSource.h>
 
-#include <dataTypes/configs/SmrtBasecallerConfig.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/configs/SourceConfig.h>
 
 
@@ -165,7 +165,7 @@ public:
         return info;
     }
 
-    void LoadGroundTruth(Mongo::Data::SmrtBasecallerConfig& config) const;
+    void LoadGroundTruth(Mongo::Data::BasecallerAlgorithmConfig& config) const;
 
 private:
     // throw a bunch of data into the queues during construction rather than after
