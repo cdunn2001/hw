@@ -29,7 +29,7 @@
 
 #include <algorithm>
 
-#include <pacbio/datasource/AnalogMode.h>
+#include <pacbio/auxdata/AnalogMode.h>
 
 #include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
@@ -87,7 +87,7 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
     TransitionMatrix() = default;
 
     // Ctor for host construction
-    TransitionMatrix(Utility::CudaArray<DataSource::AnalogMode, numAnalogs> analogs,
+    TransitionMatrix(Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
                      double frameRate);
 };
 

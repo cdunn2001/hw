@@ -27,7 +27,8 @@
 #ifndef mongo_dataTypes_configs_AnalysisConfig_H_
 #define mongo_dataTypes_configs_AnalysisConfig_H_
 
-#include <pacbio/datasource/MovieConfig.h>
+#include <pacbio/datasource/MovieInfo.h>
+#include <pacbio/datasource/PacketLayout.h>
 
 namespace PacBio::Mongo::Data
 {
@@ -38,7 +39,7 @@ namespace PacBio::Mongo::Data
 /// analysis.
 struct AnalysisConfig
 {
-    PacBio::DataSource::MovieConfig mc;
+    PacBio::DataSource::MovieInfo movieInfo;
 
     // The pedestal value applied upstream before any
     // batch is generated.  This must be subtracted off

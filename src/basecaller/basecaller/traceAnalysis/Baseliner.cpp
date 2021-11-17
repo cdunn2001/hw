@@ -27,7 +27,7 @@ void Baseliner::InitFactory(bool hostExecution, const Data::AnalysisConfig& anal
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::CameraBatchFactory>(syncDir);
 
-    movieScaler_ = analysisConfig.mc.photoelectronSensitivity;
+    movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
     pedestal_ = analysisConfig.pedestal;
     expectedEncoding_ = analysisConfig.encoding;
 }

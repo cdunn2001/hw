@@ -95,28 +95,28 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     // analogs, which FrameLabeler does not currently need to know
     LaneModelParameters<PacBio::Cuda::PBHalf, laneSize> refModel;
     AnalysisConfig analysisConfig;
-    auto& movieConfig = analysisConfig.mc;
-    movieConfig.frameRate = 100;
+    auto& movieInfo = analysisConfig.movieInfo;
+    movieInfo.frameRate = 100;
 
-    movieConfig.analogs[0].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[1].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[2].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[3].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[0].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[1].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[2].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[3].ipd2SlowStepRatio = 0;
 
-    movieConfig.analogs[0].interPulseDistance = .308f;
-    movieConfig.analogs[1].interPulseDistance = .234f;
-    movieConfig.analogs[2].interPulseDistance = .234f;
-    movieConfig.analogs[3].interPulseDistance = .188f;
+    movieInfo.analogs[0].interPulseDistance = .308f;
+    movieInfo.analogs[1].interPulseDistance = .234f;
+    movieInfo.analogs[2].interPulseDistance = .234f;
+    movieInfo.analogs[3].interPulseDistance = .188f;
 
-    movieConfig.analogs[0].pulseWidth = .232f;
-    movieConfig.analogs[1].pulseWidth = .185f;
-    movieConfig.analogs[2].pulseWidth = .181f;
-    movieConfig.analogs[3].pulseWidth = .214f;
+    movieInfo.analogs[0].pulseWidth = .232f;
+    movieInfo.analogs[1].pulseWidth = .185f;
+    movieInfo.analogs[2].pulseWidth = .181f;
+    movieInfo.analogs[3].pulseWidth = .214f;
 
-    movieConfig.analogs[0].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[1].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[2].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[3].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[0].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[1].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[2].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[3].pw2SlowStepRatio = 3.2f;
 
     refModel.AnalogMode(0).SetAllMeans(227.13f);
     refModel.AnalogMode(1).SetAllMeans(154.45f);

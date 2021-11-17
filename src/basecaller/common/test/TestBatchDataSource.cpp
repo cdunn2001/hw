@@ -65,7 +65,7 @@ public:
     boost::multi_array<float,2> ImagePsfMatrix() const override { throw PBException("Not implemented!"); }
     PacBio::Sensor::Platform Platform() const override { throw PBException("Not implemented!"); }
     std::string InstrumentName() const override { throw PBException("Not implemented!"); }
-    MovieConfig MovieConfiguration() const override { throw PBException("Not implemented!"); }
+    MovieInfo MovieInformation() const override { throw PBException("Not implemented!"); }
 private:
     void ContinueProcessing() override
     {

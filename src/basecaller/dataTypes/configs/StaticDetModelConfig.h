@@ -53,12 +53,12 @@ public:
     auto SetupAnalogs(const Data::AnalysisConfig& analysisConfig) const
     {
         std::array<AnalogMode, numAnalogs> analogs;
-        auto& movieConfig = analysisConfig.mc;
-        const auto refSignal = movieConfig.refSnr * std::sqrt(baselineVariance);
+        auto& movieInfo = analysisConfig.movieInfo;
+        const auto refSignal = movieInfo.refSnr * std::sqrt(baselineVariance);
         for (size_t i = 0; i < analogs.size(); i++)
         {
-            const auto mean = baselineMean + movieConfig.analogs[i].relAmplitude * refSignal;
-            const auto var = baselineVariance + mean + std::pow(movieConfig.analogs[i].excessNoiseCV * mean, 2.f);
+            const auto mean = baselineMean + movieInfo.analogs[i].relAmplitude * refSignal;
+            const auto var = baselineVariance + mean + std::pow(movieInfo.analogs[i].excessNoiseCV * mean, 2.f);
 
             analogs[i].mean = mean;
             analogs[i].var = var;

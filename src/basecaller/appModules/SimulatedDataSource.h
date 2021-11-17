@@ -128,7 +128,7 @@ public:
     Sensor::Platform Platform() const override { return Sensor::Platform::DONT_CARE; }
     std::string InstrumentName() const override;
 
-    DataSource::MovieConfig MovieConfiguration() const override { return DataSource::MockMovieConfig(); }
+    DataSource::MovieInfo MovieInformation() const override { return DataSource::MockMovieInfo(); }
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {

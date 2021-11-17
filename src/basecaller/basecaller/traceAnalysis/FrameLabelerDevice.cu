@@ -43,7 +43,7 @@ void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig)
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Cuda::FrameLabeler::Configure(analysisConfig.mc.analogs, analysisConfig.mc.frameRate);
+    Cuda::FrameLabeler::Configure(analysisConfig.movieInfo.analogs, analysisConfig.movieInfo.frameRate);
 }
 
 void FrameLabelerDevice::Finalize()

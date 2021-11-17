@@ -82,7 +82,7 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 TEST(TestHostNoOpBaseliner, Run)
 {
     auto analysisConfig = Data::MockAnalysisConfig();
-    analysisConfig.mc.photoelectronSensitivity = 1;
+    analysisConfig.movieInfo.photoelectronSensitivity = 1;
     auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp,
                                                        BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     HostNoOpBaseliner::Configure(baselinerConfig, analysisConfig);
@@ -223,7 +223,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         pfConfig.pedestal = params.pedestalValue;
 
         Data::AnalysisConfig analysisConfig;
-        analysisConfig.mc.photoelectronSensitivity = scaler;
+        analysisConfig.movieInfo.photoelectronSensitivity = scaler;
         analysisConfig.pedestal = params.pedestalValue;
         analysisConfig.encoding = params.encoding;
         const auto baselinerConfig = TestConfig::BaselinerConfig(
@@ -477,7 +477,7 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
     constexpr float scaler = 3.46410f; // sqrt(12)
 
     Data::AnalysisConfig analysisConfig;
-    analysisConfig.mc.photoelectronSensitivity = scaler;
+    analysisConfig.movieInfo.photoelectronSensitivity = scaler;
     const auto baselinerConfig = TestConfig::BaselinerConfig(
             BasecallerBaselinerConfig::MethodName::HostMultiScale, /*ignored*/
             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);

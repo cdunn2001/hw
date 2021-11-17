@@ -46,7 +46,7 @@ inline std::string generateExperimentMetadata(const AnalysisConfig& analysisConf
     PBLOG_WARN << "Implementation gap: Generating fake Metadata for baz files";
 
     std::string basemap;
-    for (const auto& analog : analysisConfig.mc.analogs)
+    for (const auto& analog : analysisConfig.movieInfo.analogs)
         basemap.push_back(analog.baseLabel);
     std::ostringstream metadata;
     metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
@@ -56,7 +56,7 @@ inline std::string generateExperimentMetadata(const AnalysisConfig& analysisConf
     metadata << "\",\"RelativeAmp\":";
     metadata << "[";
     std::string sep = "";
-    for (const auto& analog : analysisConfig.mc.analogs)
+    for (const auto& analog : analysisConfig.movieInfo.analogs)
     {
         metadata << sep << analog.relAmplitude;
         sep = ",";

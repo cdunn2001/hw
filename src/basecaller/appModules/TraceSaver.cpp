@@ -106,8 +106,8 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     file_.Scan().RunInfo(runInfo);
 
     ScanData::AcqParamsData acqParams;
-    acqParams.aduGain = analysisConfig.mc.photoelectronSensitivity;
-    acqParams.frameRate = analysisConfig.mc.frameRate;
+    acqParams.aduGain = analysisConfig.movieInfo.photoelectronSensitivity;
+    acqParams.frameRate = analysisConfig.movieInfo.frameRate;
     acqParams.numFrames = numFrames;
     file_.Scan().AcqParams(acqParams);
 
@@ -115,7 +115,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
 
     ScanData::ChipInfoData chipInfo;
     chipInfo.layoutName = defaultLayoutName;
-    chipInfo.analogRefSnr = analysisConfig.mc.refSnr;
+    chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
     chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
     chipInfo.imagePsf = imagePsf;
     chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
@@ -123,7 +123,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     file_.Scan().ChipInfo(chipInfo);
 
     ScanData::DyeSetData dyeSet;
-    const size_t numAnalogs = analysisConfig.mc.analogs.size();
+    const size_t numAnalogs = analysisConfig.movieInfo.analogs.size();
     dyeSet.numAnalog = static_cast<uint16_t>(numAnalogs);
     dyeSet.relativeAmp.resize(numAnalogs);
     dyeSet.excessNoiseCV.resize(numAnalogs);
@@ -134,7 +134,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     dyeSet.baseMap = "";
     for (size_t i = 0; i < numAnalogs; i++)
     {
-        const AnalogMode& am = analysisConfig.mc.analogs[i];
+        const auto& am = analysisConfig.movieInfo.analogs[i];
         dyeSet.relativeAmp[i] = am.relAmplitude;
         dyeSet.excessNoiseCV[i] = am.excessNoiseCV;
         dyeSet.ipdMean[i] = am.interPulseDistance;

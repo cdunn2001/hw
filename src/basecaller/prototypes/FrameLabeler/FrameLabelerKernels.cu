@@ -336,7 +336,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
 constexpr size_t FrameLabeler::BlockThreads;
 
-void FrameLabeler::Configure(const std::array<DataSource::AnalogMode,4>& analogs,
+void FrameLabeler::Configure(const std::array<PacBio::AuxData::AnalogMode,4>& analogs,
                              double frameRate)
 {
     Subframe::TransitionMatrix<half> transHost(analogs, frameRate);

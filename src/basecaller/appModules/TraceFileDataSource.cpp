@@ -434,31 +434,63 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     return features;
 }
 
-DataSource::MovieConfig TraceFileDataSource::MovieConfiguration() const
+DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
 {
-    DataSource::MovieConfig mc;
+    DataSource::MovieInfo movieInfo;
 
     const auto& acqParams = traceFile_.Scan().AcqParams();
-    mc.frameRate = acqParams.frameRate;
-    mc.photoelectronSensitivity = acqParams.aduGain;
+    movieInfo.frameRate = acqParams.frameRate;
+    movieInfo.photoelectronSensitivity = acqParams.aduGain;
 
     const auto& chipInfo = traceFile_.Scan().ChipInfo();
-    mc.refSnr = chipInfo.analogRefSnr;
+    movieInfo.refSnr = chipInfo.analogRefSnr;
 
     const auto& dyeSet = traceFile_.Scan().DyeSet();
-    assert(dyeSet.numAnalog == mc.analogs.size());
-    for (size_t i = 0; i < mc.analogs.size(); i++)
+    assert(dyeSet.numAnalog == movieInfo.analogs.size());
+    for (size_t i = 0; i < movieInfo.analogs.size(); i++)
     {
-        mc.analogs[i].baseLabel = dyeSet.baseMap[i];
-        mc.analogs[i].ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio[i];
-        mc.analogs[i].pw2SlowStepRatio = dyeSet.pw2SlowStepRatio[i];
-        mc.analogs[i].excessNoiseCV = dyeSet.excessNoiseCV[i];
-        mc.analogs[i].interPulseDistance = dyeSet.ipdMean[i];
-        mc.analogs[i].pulseWidth = dyeSet.pulseWidthMean[i];
-        mc.analogs[i].relAmplitude = dyeSet.relativeAmp[i];
+        movieInfo.analogs[i].baseLabel = dyeSet.baseMap[i];
+        movieInfo.analogs[i].ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio[i];
+        movieInfo.analogs[i].pw2SlowStepRatio = dyeSet.pw2SlowStepRatio[i];
+        movieInfo.analogs[i].excessNoiseCV = dyeSet.excessNoiseCV[i];
+        movieInfo.analogs[i].interPulseDistance = dyeSet.ipdMean[i];
+        movieInfo.analogs[i].pulseWidth = dyeSet.pulseWidthMean[i];
+        movieInfo.analogs[i].relAmplitude = dyeSet.relativeAmp[i];
     }
 
-    return mc;
+    return movieInfo;
+}
+
+void TraceFileDataSource::LoadGroundTruth(Mongo::Data::SmrtBasecallerConfig& config) const
+{
+    auto setBlMeanAndCovar = [&](float& blMean,
+                                 float& blCovar,
+                                 const std::string& exceptMsg)
+    {
+        if (traceFile_.IsSimulated())
+        {
+            const auto groundTruth = traceFile_.GroundTruth();
+            blMean = groundTruth.stateMean[0][0];
+            blCovar = groundTruth.stateCovariance[0][0];
+        } else
+        {
+            throw PBException(exceptMsg);
+        }
+    };
+
+    if (config.algorithm.modelEstimationMode == Mongo::Data::BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
+    {
+        setBlMeanAndCovar(config.algorithm.staticDetModelConfig.baselineMean,
+                          config.algorithm.staticDetModelConfig.baselineVariance,
+                          "Requested static pipeline analysis but input trace file is not simulated!");
+    }
+    else if (config.algorithm.dmeConfig.Method == Mongo::Data::BasecallerDmeConfig::MethodName::Fixed &&
+             config.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    {
+        setBlMeanAndCovar(config.algorithm.dmeConfig.SimModel.baselineMean,
+                          config.algorithm.dmeConfig.SimModel.baselineVar,
+                          "Requested fixed DME with baseline params but input trace file is not simulated!");
+    }
 }
 
 void TraceFileDataSource::PreloadInputQueue(size_t chunks)

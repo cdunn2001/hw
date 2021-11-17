@@ -29,7 +29,7 @@
 //  Description:
 //  Defines class DmeEmHost.
 
-#include <pacbio/datasource/AnalogMode.h>
+#include <pacbio/auxdata/AnalogMode.h>
 #include <common/LaneArray.h>
 #include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
@@ -60,7 +60,7 @@ public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::AnalysisConfig &analysisConfig);
 
-    static const PacBio::DataSource::AnalogMode& Analog(unsigned int i)
+    static const AuxData::AnalogMode& Analog(unsigned int i)
     { return analogs_[i]; }
 
     // If mask[i], a[i] |= bits.
@@ -81,7 +81,7 @@ public:     // Static functions
 
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const PacBio::DataSource::AnalogMode& analog,
+    static LaneArray<float> ModelSignalCovar(const AuxData::AnalogMode& analog,
                                              const LaneArray<float>& signalMean,
                                              const LaneArray<float>& baselineVar);
 
@@ -99,7 +99,7 @@ private:    // Customized implementation
                       PoolDetModel* detModel) const override;
 
 private:    // Static data
-    static Cuda::Utility::CudaArray<DataSource::AnalogMode, numAnalogs> analogs_;
+    static Cuda::Utility::CudaArray<AuxData::AnalogMode, numAnalogs> analogs_;
     static float refSnr_;       // Expected SNR for analog with relative amplitude of 1.
     static float movieScaler_;  // photoelectronSensitivity gain factor
     static bool fixedModel_;

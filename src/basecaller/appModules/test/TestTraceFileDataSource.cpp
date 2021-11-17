@@ -42,8 +42,8 @@ namespace {
 
 struct GeneratedTraceInfo
 {
-    size_t psfSize = 5;
-    size_t xtalkSize = 7;
+    static constexpr size_t psfSize = 5;
+    static constexpr size_t xtalkSize = 7;
     std::vector<uint32_t> holeNumbers;
     std::vector<DataSourceBase::UnitCellProperties> properties;
     std::vector<uint32_t> batchIds;

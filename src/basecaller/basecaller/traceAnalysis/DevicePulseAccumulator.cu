@@ -365,7 +365,7 @@ void DevicePulseAccumulator<LabelManager>::Configure(const Data::AnalysisConfig&
 
     for(size_t i = 0; i < analogMap.size(); i++)
     {
-        analogMap[i] = Data::mapToNucleotideLabel(analysisConfig.mc.analogs[i].baseLabel);
+        analogMap[i] = Data::mapToNucleotideLabel(analysisConfig.movieInfo.analogs[i].baseLabel);
     }
 
     StaticConfig config;

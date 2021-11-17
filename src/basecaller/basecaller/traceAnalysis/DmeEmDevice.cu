@@ -30,7 +30,7 @@
 
 #include <limits>
 
-#include <pacbio/datasource/AnalogMode.h>
+#include <pacbio/auxdata/AnalogMode.h>
 
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
@@ -51,12 +51,22 @@ using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo::Data;
 
+struct AnalogMode
+{
+    char baseLabel;
+    float relAmplitude;
+    float excessNoiseCV;
+    float interPulseDistance;   // seconds
+    float pulseWidth;           // seconds
+    float pw2SlowStepRatio;
+    float ipd2SlowStepRatio;
+};
 
 // Wrapping all the static configurations into a single struct,
 // as that will be easier to upload to the GPU.
 struct StaticConfig
 {
-    CudaArray<PacBio::DataSource::AnalogMode, 4> analogs;
+    CudaArray<AnalogMode, 4> analogs;
     float analogMixFracThresh_;
     unsigned short emIterLimit_;
     float gTestFactor_;
@@ -72,7 +82,7 @@ struct StaticConfig
 
 __constant__ StaticConfig staticConfig;
 
-__device__ const PacBio::DataSource::AnalogMode& Analog(int i)
+__device__ const AnalogMode& Analog(int i)
 {
     return staticConfig.analogs[i];
 }
@@ -128,7 +138,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 
 template <typename VF>
 __device__ VF ModelSignalCovar(
-        const PacBio::DataSource::AnalogMode& analog,
+        const AnalogMode& analog,
         VF signalMean,
         VF baselineVar)
 {
@@ -150,10 +160,16 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
-    auto& movConfig = analysisConfig.mc;
-    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    auto& movieInfo = analysisConfig.movieInfo;
+    for (size_t i = 0; i < movieInfo.analogs.size(); i++)
     {
-        config.analogs[i] = movConfig.analogs[i];
+        config.analogs[i].baseLabel = movieInfo.analogs[i].baseLabel;
+        config.analogs[i].relAmplitude = movieInfo.analogs[i].relAmplitude;
+        config.analogs[i].excessNoiseCV = movieInfo.analogs[i].excessNoiseCV;
+        config.analogs[i].interPulseDistance = movieInfo.analogs[i].interPulseDistance;
+        config.analogs[i].pulseWidth = movieInfo.analogs[i].pulseWidth;
+        config.analogs[i].pw2SlowStepRatio = movieInfo.analogs[i].pw2SlowStepRatio;
+        config.analogs[i].ipd2SlowStepRatio = movieInfo.analogs[i].ipd2SlowStepRatio;
     }
     config.analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
     config.emIterLimit_ = dmeConfig.EmIterationLimit;
@@ -164,8 +180,8 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
     config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    config.refSnr_ = movConfig.refSnr;
-    config.movieScaler_ = movConfig.photoelectronSensitivity;
+    config.refSnr_ = movieInfo.refSnr;
+    config.movieScaler_ = movieInfo.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }

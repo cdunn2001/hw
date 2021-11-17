@@ -257,7 +257,7 @@ private:
     // Constructs and initializes a fixed detection model used as an initial model for the DME.
     LaneDetectionModel MakeInitialModel(void)
     {
-        analysisConfig.mc = PacBio::DataSource::MockMovieConfig();
+        analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
         Data::StaticDetModelConfig staticDetModel;
         const auto& analogs = staticDetModel.SetupAnalogs(analysisConfig);
 
@@ -413,7 +413,7 @@ private:
         detModelStart = std::make_unique<LaneDetectionModelHost>(MakeInitialModel());
         detModelStart->Confidence(DmeEmHost::FloatVec(GetParam().initModelConf));
         const float simRefSnr = GetParam().simSnr;
-        const auto startRefSnr = analysisConfig.mc.refSnr;
+        const auto startRefSnr = analysisConfig.movieInfo.refSnr;
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
         DmeEmHost::ScaleModelSnr(DmeEmHost::FloatVec{simRefSnr/startRefSnr}, detModelSim.get());
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));

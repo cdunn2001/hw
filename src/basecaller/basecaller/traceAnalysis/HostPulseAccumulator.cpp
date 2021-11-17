@@ -23,7 +23,7 @@ void HostPulseAccumulator<LabelManager>::Configure(const Data::AnalysisConfig& a
 
     for(size_t i = 0; i < analogMap.size(); i++)
     {
-        analogMap[i] = Data::mapToNucleotideLabel(analysisConfig.mc.analogs[i].baseLabel);
+        analogMap[i] = Data::mapToNucleotideLabel(analysisConfig.movieInfo.analogs[i].baseLabel);
     }
 
     manager_ = std::make_unique<LabelManager>(analogMap);

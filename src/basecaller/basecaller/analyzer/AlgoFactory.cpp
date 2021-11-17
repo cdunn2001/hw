@@ -272,13 +272,13 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
         DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                          bcConfig.Metrics.framesPerHFMetricBlock,
-                                         analysisConfig.mc.frameRate,
+                                         analysisConfig.movieInfo.frameRate,
                                          bcConfig.Metrics.realtimeActivityLabels);
         break;
     default:
         HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                    bcConfig.Metrics.framesPerHFMetricBlock,
-                                   analysisConfig.mc.frameRate,
+                                   analysisConfig.movieInfo.frameRate,
                                    bcConfig.Metrics.realtimeActivityLabels);
     }
 }

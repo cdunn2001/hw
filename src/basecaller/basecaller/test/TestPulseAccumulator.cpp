@@ -198,11 +198,11 @@ void TestPulseAccumulator()
     const auto framesPerChunk = config.layout.framesPerChunk;
 
     Data::AnalysisConfig analysisConfig;
-    auto& movieConfig = analysisConfig.mc;
-    movieConfig.analogs[0].baseLabel = 'A';
-    movieConfig.analogs[1].baseLabel = 'C';
-    movieConfig.analogs[2].baseLabel = 'G';
-    movieConfig.analogs[3].baseLabel = 'T';
+    auto& movieInfo = analysisConfig.movieInfo;
+    movieInfo.analogs[0].baseLabel = 'A';
+    movieInfo.analogs[1].baseLabel = 'C';
+    movieInfo.analogs[2].baseLabel = 'G';
+    movieInfo.analogs[3].baseLabel = 'T';
     PulseAccumulatorToTest::Configure(analysisConfig, config.pulses);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
@@ -390,10 +390,10 @@ struct TestPulseAccumulatorRejection : public ::testing::TestWithParam<TestingPa
 
         assert(config.Dims().framesPerBatch % (ipd + pw) == 0);
 
-        analysisConfig.mc.analogs[0].baseLabel = 'A';
-        analysisConfig.mc.analogs[1].baseLabel = 'C';
-        analysisConfig.mc.analogs[2].baseLabel = 'G';
-        analysisConfig.mc.analogs[3].baseLabel = 'T';
+        analysisConfig.movieInfo.analogs[0].baseLabel = 'A';
+        analysisConfig.movieInfo.analogs[1].baseLabel = 'C';
+        analysisConfig.movieInfo.analogs[2].baseLabel = 'G';
+        analysisConfig.movieInfo.analogs[3].baseLabel = 'T';
 
         PAT::Configure(analysisConfig, config.pulses);
     }

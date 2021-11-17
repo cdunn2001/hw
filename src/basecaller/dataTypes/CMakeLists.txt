@@ -107,6 +107,7 @@ libBazio
         libMongoCommon
         libMongoCommonCuda
         libPacbioCplusplusApi
+        libPacbioHwAcquisition
         libHalf
 )
 

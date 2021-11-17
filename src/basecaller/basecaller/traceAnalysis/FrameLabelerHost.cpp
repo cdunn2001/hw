@@ -366,7 +366,7 @@ class FrameLabelerHost::Impl
 
 public:
 
-    static void Configure(const std::array<DataSource::AnalogMode,4>& analogs,
+    static void Configure(const std::array<AuxData::AnalogMode,4>& analogs,
                           double frameRate)
     {
         trans = Subframe::TransitionMatrix<float>(analogs, frameRate);
@@ -436,7 +436,7 @@ void FrameLabelerHost::Configure(const Data::AnalysisConfig& analysisConfig)
     const auto hostExecution = true;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Impl::Configure(analysisConfig.mc.analogs, analysisConfig.mc.frameRate);
+    Impl::Configure(analysisConfig.movieInfo.analogs, analysisConfig.movieInfo.frameRate);
 }
 
 void FrameLabelerHost::Finalize()

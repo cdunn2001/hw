@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
             .TraceFileName(traceFileName);
 
     // Defaults that match current mongo simulated trace file
-    std::array<PacBio::DataSource::AnalogMode, 4> analogs;
+    std::array<PacBio::AuxData::AnalogMode, 4> analogs;
     LaneModelParameters<PBHalf, laneSize> refModel;
 
     analogs[0].ipd2SlowStepRatio = 0;

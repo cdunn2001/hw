@@ -32,7 +32,7 @@ namespace PacBio::Mongo::Data
 AnalysisConfig MockAnalysisConfig()
 {
     AnalysisConfig ac;
-    ac.mc = DataSource::MockMovieConfig();
+    ac.movieInfo = DataSource::MockMovieInfo();
     return ac;
 }
 

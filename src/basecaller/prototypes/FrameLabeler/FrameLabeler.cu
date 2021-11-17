@@ -35,7 +35,7 @@ static std::unique_ptr<GeneratorBase<int16_t>> MakeDataGenerator(
 void run(const Data::DataManagerParams& dataParams,
          const Data::PicketFenceParams& picketParams,
          const Data::TraceFileParams& traceParams,
-         const std::array<PacBio::DataSource::AnalogMode, 4>& meta,
+         const std::array<PacBio::AuxData::AnalogMode, 4>& meta,
          const Data::LaneModelParameters<PBHalf, laneSize>& referenceModel,
          size_t simulKernels)
 {

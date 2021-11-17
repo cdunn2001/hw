@@ -36,7 +36,9 @@
 
 #include <common/BatchDataSource.h>
 
+#include <dataTypes/configs/SmrtBasecallerConfig.h>
 #include <dataTypes/configs/SourceConfig.h>
+
 
 namespace PacBio {
 namespace Application {
@@ -142,7 +144,7 @@ public:
         return this->traceFile_.Scan().RunInfo().instrumentName;
     }
 
-    DataSource::MovieConfig MovieConfiguration() const override;
+    DataSource::MovieInfo MovieInformation() const override;
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {
@@ -162,6 +164,8 @@ public:
         info.SetSummary( info.ShortName() + " " + info.hwVersion.ToString());
         return info;
     }
+
+    void LoadGroundTruth(Mongo::Data::SmrtBasecallerConfig& config) const;
 
 private:
     // throw a bunch of data into the queues during construction rather than after
