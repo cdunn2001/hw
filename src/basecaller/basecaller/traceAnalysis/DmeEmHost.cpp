@@ -110,9 +110,8 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 
     // TODO: Validate values.
     // TODO: Log settings.
+    analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
-    analogMixFracThresh0_ = isnan(dmeConfig.AnalogMixFractionThreshold[0]) ?
-                                analogMixFracThresh1_ / 3 : dmeConfig.AnalogMixFractionThreshold[0];
     emIterLimit_ = dmeConfig.EmIterationLimit;
     gTestFactor_ = dmeConfig.GTestStatFactor;
     iterToLimit_ = dmeConfig.IterateToLimit;

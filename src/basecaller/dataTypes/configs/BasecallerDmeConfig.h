@@ -72,21 +72,21 @@ public:
 
     // Thresholds for mixing fractions of analog modes in detection model fit.
     //
-    // AnalogMixFractionThresh[0] < AnalogMixFractionThresh[1].
+    // AnalogMixFractionThreshold[0] < AnalogMixFractionThreshold[1].
     //
-    // Associated confidence factor is defined using AnalogMixFractionThresh[1]
-    // AnalogMixFractionThresh[1] must be <= 0.25. If <= 0, the threshold is
+    // Associated confidence factor is defined using AnalogMixFractionThreshold[1]
+    // AnalogMixFractionThreshold[1] must be <= 0.25. If <= 0, the threshold is
     // disabled (i.e., the associated confidence factor will always be 1).
-    // AnalogMixFractionThresh[0] defines the lower end of
+    // AnalogMixFractionThreshold[0] defines the lower end of
     // a 0-1 ramp for the related confidence factor.
-    // AnalogMixFractionThresh[0] may be < 0. Since mixing fractions cannot be
-    // negative, setting AnalogMixFractionThresh[0] < 0 effectively sets a
+    // AnalogMixFractionThreshold[0] may be < 0. Since mixing fractions cannot be
+    // negative, setting AnalogMixFractionThreshold[0] < 0 effectively sets a
     // positive lower bound for the confidence factor that is attained when
-    // the mixing fraction is 0. If AnalogMixFractionThresh[0] is not set (nan),
+    // the mixing fraction is 0. If AnalogMixFractionThreshold[0] is not set (nan),
     // legacy behavior is preserved, which effectively sets it to
     // AnalogMixFractionThreshold / 3.
     PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
-            std::vector<float>({ numeric_limits<float>::quiet_NaN(), 0.02f }));
+            std::vector<float>({ 0.02f / 3, 0.02f }));
 
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
@@ -208,5 +208,29 @@ public:
 
 }}}     // namespace PacBio::Mongo::Data
 
+
+// Define validation specialization.  Specializations must happen in the
+// same namespace as the generic declaration.
+namespace PacBio {
+namespace Configuration {
+
+using PacBio::Mongo::Data::BasecallerDmeConfig;
+
+template <>
+inline void ValidateConfig<BasecallerDmeConfig>(const BasecallerDmeConfig& dmeConfig, ValidationResults* results)
+{
+    const auto amft = dmeConfig.AnalogMixFractionThreshold;
+    if (!(isfinite(amft[1]) && (amft[1] <= 0.25f)))  // 0.25 included
+    {
+        results->AddError("Incorrect upper bound: must be finite and <= 0.25");
+    }
+
+    if (!(isfinite(amft[0]) && (amft[0] <= amft[1])))
+    {
+        results->AddError("Incorrect lower bound: must be finite and <= upper one");
+    }
+}
+
+}}
 
 #endif //mongo_dataTypes_configs_BasecallerDmeConfig_H_

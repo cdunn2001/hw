@@ -152,9 +152,8 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     {
         config.analogs[i] = movConfig.analogs[i];
     }
+    config.analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
-    config.analogMixFracThresh0_ = isnan(dmeConfig.AnalogMixFractionThreshold[0]) ?
-                                config.analogMixFracThresh1_ / 3 : dmeConfig.AnalogMixFractionThreshold[0];
 
     config.emIterLimit_       = dmeConfig.EmIterationLimit;
     config.gTestFactor_       = dmeConfig.GTestStatFactor;
