@@ -60,7 +60,7 @@ public:
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
-        , measurePCIeBandwidth_(sysConfig.analyzerHardware != Mongo::Basecaller::ComputeDevices::Host)
+        , measurePCIeBandwidth_(algoConfig.ComputingMode() == Mongo::Data::BasecallerAlgorithmConfig::ComputeMode::PureGPU)
         , numStreams_(sysConfig.basecallerConcurrency)
     {
         auto priorityRange = Cuda::StreamPriorityRange();

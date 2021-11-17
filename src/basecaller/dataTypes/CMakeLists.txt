@@ -20,8 +20,6 @@ set(CPP_LIST
     configs/BasecallerMetricsConfig.h
     configs/BasecallerPulseAccumConfig.cpp
     configs/BasecallerPulseAccumConfig.h
-    configs/BasecallerPulseToBaseConfig.cpp
-    configs/BasecallerPulseToBaseConfig.h
     configs/BasecallerTraceHistogramConfig.cpp
     configs/BasecallerTraceHistogramConfig.h
     configs/BatchLayoutConfig.h

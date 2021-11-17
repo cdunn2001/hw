@@ -195,11 +195,15 @@ private:
         const auto mode = config_.source.Visit(
             [&](const TraceReanalysis& config)
             {
-                return AllocatorMode::CUDA;
+                return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                       ? AllocatorMode::MALLOC
+                       : AllocatorMode::CUDA;
             },
             [&](const TraceReplication& config)
             {
-                return AllocatorMode::CUDA;
+                return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                       ? AllocatorMode::MALLOC
+                       : AllocatorMode::CUDA;
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {

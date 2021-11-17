@@ -52,6 +52,8 @@ public:
                         {"analyzerHardware"}
     ));
 
+    bool UsesGpu() const { return Method == MethodName::Gpu; }
+
     PB_CONFIG_PARAM(uint32_t, sandwichTolerance, 0);
 
     PB_CONFIG_PARAM(uint32_t, framesPerHFMetricBlock, 4096);

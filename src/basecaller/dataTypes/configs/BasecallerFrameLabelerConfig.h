@@ -56,6 +56,8 @@ public:
                         {"analyzerHardware"}
     ));
 
+    bool UsesGpu() const { return Method == MethodName::SubFrameGaussCapsDevice; }
+
     PB_CONFIG_PARAM(float, UpperThreshold, 7.0f);
     PB_CONFIG_PARAM(float, LowerThreshold, 2.0f);
     PB_CONFIG_PARAM(float, Alpha, 1.0f);

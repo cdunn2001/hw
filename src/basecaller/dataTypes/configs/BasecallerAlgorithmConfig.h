@@ -36,7 +36,6 @@
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 #include <dataTypes/configs/BasecallerPulseAccumConfig.h>
-#include <dataTypes/configs/BasecallerPulseToBaseConfig.h>
 #include <dataTypes/configs/BasecallerMetricsConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 #include <dataTypes/configs/SimulatedFaults.h>
@@ -57,7 +56,6 @@ public:
     PB_CONFIG_OBJECT(BasecallerDmeConfig, dmeConfig);
     PB_CONFIG_OBJECT(BasecallerFrameLabelerConfig, frameLabelerConfig);
     PB_CONFIG_OBJECT(BasecallerPulseAccumConfig, pulseAccumConfig);
-    PB_CONFIG_OBJECT(BasecallerPulseToBaseConfig, PulseToBase);
     PB_CONFIG_OBJECT(BasecallerMetricsConfig, Metrics);
     PB_CONFIG_OBJECT(SimulatedFaults, simulatedFaults);
 
@@ -70,11 +68,43 @@ public:
     std::string CombinedMethodName() const
     {
         return baselinerConfig.Method.toString() + "_"
+             + traceHistogramConfig.Method.toString() + "_"
+             + baselineStatsAggregatorConfig.Method.toString() + "_"
              + dmeConfig.Method.toString() + "_"
              + frameLabelerConfig.Method.toString() + "_"
-             + PulseToBase.Method.toString() + "_"
+             + pulseAccumConfig.Method.toString() + "_"
              + Metrics.Method.toString();
     }
+
+    SMART_ENUM(ComputeMode, PureHost, PureGPU, Hybrid);
+
+    ComputeMode ComputingMode() const
+    {
+        std::vector<bool> computeModes =
+        {
+            baselinerConfig.UsesGpu(),
+            traceHistogramConfig.UsesGpu(),
+            baselineStatsAggregatorConfig.UsesGpu(),
+            dmeConfig.UsesGpu(),
+            frameLabelerConfig.UsesGpu(),
+            pulseAccumConfig.UsesGpu(),
+            Metrics.UsesGpu()
+        };
+
+        if (std::all_of(computeModes.begin(), computeModes.end(), [](bool v) { return v; }))
+        {
+            return ComputeMode::PureGPU;
+        }
+        else if (std::all_of(computeModes.begin(), computeModes.end(), [](bool v) { return !v; }))
+        {
+            return ComputeMode::PureHost;
+        }
+        else
+        {
+            return ComputeMode::Hybrid;
+        }
+    }
+
 };
 
 }}}
