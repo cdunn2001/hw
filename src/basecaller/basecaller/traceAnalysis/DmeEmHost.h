@@ -107,7 +107,8 @@ private:    // Static data
     static float fixedBaselineMean_;
     static float fixedBaselineVar_;
 
-    static float analogMixFracThresh_;
+    static float analogMixFracThresh0_;
+    static float analogMixFracThresh1_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
     static bool iterToLimit_;

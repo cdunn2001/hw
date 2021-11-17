@@ -53,6 +53,7 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 #include <pacbio/sensor/SparseROI.h>
+#include <pacbio/System.h>
 #include <pacbio/text/String.h>
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
@@ -158,7 +159,7 @@ public:
     {
         SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
-        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
 
         RunAnalyzer();
         Join();
@@ -202,7 +203,7 @@ private:
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
-                return AllocatorMode::SHARED_MEMORY;
+                return AllocatorMode::SHARED_MEMORY_HUGE_CUDA;
             }
         );
 
@@ -343,11 +344,17 @@ private:
 
             std::vector<uint32_t> fullBatchIds;
             fullBatchIds.reserve(dataSource.NumZmw());
+            PBLOG_DEBUG << "poolDims.size:" << poolDims.size();
             for (const auto& kv : poolDims)
             {
+                PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch() << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch << "," << kv.second.framesPerBatch;
                 fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
             }
-            assert(fullBatchIds.size() == dataSource.NumZmw());
+            if(fullBatchIds.size() != dataSource.NumZmw())
+            {
+                throw PBException("fullBatchIds.size():" + std::to_string(fullBatchIds.size()) 
+                    + " != dataSource.NumZmw():" + std::to_string(dataSource.NumZmw()));
+            }
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
             // The lane widths may be different.  Depending on the incoming lane width, the
@@ -365,6 +372,10 @@ private:
                     }
                 }
             }
+#if 0
+            // I need this to continue debugging MTL
+            destLaneSeen.insert(0);
+#endif            
 
             const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
             const auto actualZmw = destLaneSeen.size() * laneSize;
@@ -392,13 +403,17 @@ private:
                 size_t currZmw = lane*laneSize;
                 for (size_t i = 0; i < laneSize; ++i)
                 {
+                    assert(idx < actualZmw);
                     holeNumbers[idx] = fullHoleIds[currZmw];
                     properties[idx] = fullProperties[currZmw];
                     batchIds[idx] = fullBatchIds[currZmw];
 
                     currZmw++;
                     idx++;
-                    assert(idx < actualZmw);
+#if 0
+                    // I need this to continue debugging MTL
+                    PBLOG_NOTICE << "select/lane: currZmw" << currZmw << " " << idx;
+#endif
                 }
             }
             assert(idx == actualZmw);
@@ -578,7 +593,29 @@ private:
                     {
                         PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
+                        {
+#if 0
+// uncomment this to get verbose dumps of the raw data
+                            auto dv = batch.BlockData(0);
+                            std::ostringstream oss;
+                            for(uint32_t x = 0; x < 32 && x < dv.Count(); x++)
+                            {
+                                oss << std::hex << (int)dv.Data()[x] << " ";
+                            }
+                            PBLOG_INFO << "DUMP:" << (void*)dv.Data() << ":" << oss.str();
+
+                            static bool first = true;
+                            if (first)
+                            {
+                                first = false;
+                                std::stringstream ss;
+                                ss << "/home/UNIXHOME/mlakata/git/pa-common/build_mongo/x86_64/Release_gcc/tests/pacbio/memory/pbishmtool -m 0x50420041 -a ";
+                                ss << (void*)(dv.Data()) << "-" << (void*)(dv.Data() + 32);
+                                PBLOG_NOTICE << PacBio::System::Run(ss.str());
+                            }
+#endif
                             inputNode->ProcessInput(std::move(batch));
+                        }
                         const auto& reports = graph.SynchronizeAndReport(chunkDurationMS);
 
                         std::stringstream ss;
@@ -677,7 +714,7 @@ int main(int argc, char* argv[])
            << "\n git commit date: " << cmakeGitCommitDate();
         parser.description(ss.str());
 
-        const std::string version = "0.1";
+        const std::string version = STRINGIFIED_SOFTWARE_VERSION;
         parser.version(version);
 
         parser.epilog("");

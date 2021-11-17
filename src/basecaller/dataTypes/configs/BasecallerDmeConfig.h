@@ -27,9 +27,14 @@
 #ifndef mongo_dataTypes_configs_BasecallerDmeConfig_H_
 #define mongo_dataTypes_configs_BasecallerDmeConfig_H_
 
+#include <limits>
+
 #include <pacbio/configuration/PBConfig.h>
 
 #include <basecaller/traceAnalysis/ComputeDevices.h>
+
+using std::numeric_limits;
+
 
 namespace PacBio {
 namespace Mongo {
@@ -65,10 +70,21 @@ public:
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);
 
-    // Threshold for mixing fractions of analog modes in detection model fit.
-    // Associated confidence factor is defined using this threshold.
-    // Must be non-negative.
-    PB_CONFIG_PARAM(float, AnalogMixFractionThreshold, 0.039f);
+    // Thresholds for mixing fractions of analog modes in detection model fit.
+    //
+    // AnalogMixFractionThreshold[0] < AnalogMixFractionThreshold[1].
+    //
+    // Associated confidence factor is defined using AnalogMixFractionThreshold[1]
+    // AnalogMixFractionThreshold[1] must be <= 0.25. If <= 0, the threshold is
+    // disabled (i.e., the associated confidence factor will always be 1).
+    // AnalogMixFractionThreshold[0] defines the lower end of
+    // a 0-1 ramp for the related confidence factor.
+    // AnalogMixFractionThreshold[0] may be < 0. Since mixing fractions cannot be
+    // negative, setting AnalogMixFractionThreshold[0] < 0 effectively sets a
+    // positive lower bound for the confidence factor that is attained when
+    // the mixing fraction is 0.
+    PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
+            std::vector<float>({ 0.02f / 3, 0.02f }));
 
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
@@ -190,5 +206,29 @@ public:
 
 }}}     // namespace PacBio::Mongo::Data
 
+
+// Define validation specialization.  Specializations must happen in the
+// same namespace as the generic declaration.
+namespace PacBio {
+namespace Configuration {
+
+using PacBio::Mongo::Data::BasecallerDmeConfig;
+
+template <>
+inline void ValidateConfig<BasecallerDmeConfig>(const BasecallerDmeConfig& dmeConfig, ValidationResults* results)
+{
+    const auto amft = dmeConfig.AnalogMixFractionThreshold;
+    if (!(isfinite(amft[1]) && (amft[1] <= 0.25f)))  // 0.25 included
+    {
+        results->AddError("Incorrect upper bound: must be finite and <= 0.25");
+    }
+
+    if (!(isfinite(amft[0]) && (amft[0] <= amft[1])))
+    {
+        results->AddError("Incorrect lower bound: must be finite and <= upper one");
+    }
+}
+
+}}
 
 #endif //mongo_dataTypes_configs_BasecallerDmeConfig_H_

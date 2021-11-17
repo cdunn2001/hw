@@ -32,6 +32,9 @@ elif [[ $GDB ]]
 then
     cmd="gdb --args"
     BUILD=Debug_gcc
+elif [[ $ECHO ]]
+then
+    cmd="echo "
 else
     cmd=""
 fi
@@ -114,7 +117,8 @@ cat <<HERE > $tmpjson
   },
   "traceSaver": 
   {
-    "roi": [ [0,127],[192,64]]
+    "roi": [ [0,0,128,256 ]] // this is not working
+    //"roi": [ [0,127],[192,64]] // this is not working either
   }
 } 
 HERE
