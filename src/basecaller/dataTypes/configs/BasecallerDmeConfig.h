@@ -82,9 +82,7 @@ public:
     // AnalogMixFractionThreshold[0] may be < 0. Since mixing fractions cannot be
     // negative, setting AnalogMixFractionThreshold[0] < 0 effectively sets a
     // positive lower bound for the confidence factor that is attained when
-    // the mixing fraction is 0. If AnalogMixFractionThreshold[0] is not set (nan),
-    // legacy behavior is preserved, which effectively sets it to
-    // AnalogMixFractionThreshold / 3.
+    // the mixing fraction is 0.
     PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
             std::vector<float>({ 0.02f / 3, 0.02f }));
 
