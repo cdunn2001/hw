@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,29 +24,16 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_BasecallerConfig_fwd_H_
-#define mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+#include <dataTypes/configs/AnalysisConfig.h>
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
+namespace PacBio::Mongo::Data
+{
 
-class BasecallerAlgorithmConfig;
-class BasecallerBaselinerConfig;
-class BasecallerFrameLabelerConfig;
-class BasecallerMetricsConfig;
-class BasecallerPulseAccumConfig;
-class BasecallerTraceHistogramConfig;
-class BasecallerBaselineStatsAggregatorConfig;
-class BasecallerDmeConfig;
-class BatchLayoutConfig;
-class AnalysisConfig;
-class PrelimHQConfig;
-class SmrtBasecallerConfig;
-class StaticDetModelConfig;
-class SystemsConfig;
+AnalysisConfig MockAnalysisConfig()
+{
+    AnalysisConfig ac;
+    ac.movieInfo = DataSource::MockMovieInfo();
+    return ac;
+}
 
-}}}     // namespace PacBio::Mongo::Data
-
-
-#endif // mongo_dataTypes_configs_BasecallerConfig_fwd_H_
+} // PacBio::Mongo::Data

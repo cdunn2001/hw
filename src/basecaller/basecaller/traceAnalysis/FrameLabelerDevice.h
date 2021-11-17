@@ -28,7 +28,9 @@
 #define PACBIO_MONGO_BASECALLER_FRAME_LABALER_DEVICE_H
 
 #include "FrameLabeler.h"
-#include "dataTypes/BasicTypes.h"
+
+#include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/BasicTypes.h>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
 
@@ -58,7 +60,7 @@ public:     // Static functions
     /// each DeviceSGCFrameLabeler instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::MovieConfig& movieConfig);
+    static void Configure(const Data::AnalysisConfig& analysisConfig);
     static void Finalize();
 
 public:

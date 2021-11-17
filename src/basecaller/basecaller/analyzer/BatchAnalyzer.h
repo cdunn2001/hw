@@ -141,7 +141,7 @@ public:
     FixedModelBatchAnalyzer(uint32_t poolId,
                             const Data::BatchDimensions& dims,
                             const Data::StaticDetModelConfig& staticDetModelConfig,
-                            const Data::MovieConfig& movieConfig,
+                            const Data::AnalysisConfig& analysisConfig,
                             const AlgoFactory& algoFac,
                             Cuda::Memory::DeviceAllocationStash& stash);
 

@@ -49,8 +49,8 @@ using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::DataSource;
 
-const auto DefaultImagePsfSize = TraceFile::ScanData::DefaultImagePsfSize;
-const auto DefaultXtalkSize = TraceFile::ScanData::DefaultXtalkSize;
+const auto DefaultImagePsfSize = 5;
+const auto DefaultXtalkSize = 7;
 
 boost::multi_array<float,2> MakeUnity(size_t dimSize)
 {
@@ -154,7 +154,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                                   crossTalk,
                                   platform,
                                   instrumentName,
-                                  MockMovieConfig());
+                                  MockAnalysisConfig());
 
         BatchDimensions dims;
         dims.lanesPerBatch = 1;
@@ -334,7 +334,7 @@ TEST(Sanity,ROI)
                                   crossTalk,
                                   platform,
                                   instrumentName,
-                                  MockMovieConfig());
+                                  MockAnalysisConfig());
     }
     {
         PacBio::TraceFile::TraceFile reader(traceFileName);

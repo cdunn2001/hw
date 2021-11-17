@@ -30,6 +30,7 @@
 #include <pacbio/logging/Logger.h>
 
 #include <common/MongoConstants.h>
+#include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
@@ -432,6 +433,65 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         }
     }
     return features;
+}
+
+DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
+{
+    DataSource::MovieInfo movieInfo;
+
+    const auto& acqParams = traceFile_.Scan().AcqParams();
+    movieInfo.frameRate = acqParams.frameRate;
+    movieInfo.photoelectronSensitivity = acqParams.aduGain;
+
+    const auto& chipInfo = traceFile_.Scan().ChipInfo();
+    movieInfo.refSnr = chipInfo.analogRefSnr;
+
+    const auto& dyeSet = traceFile_.Scan().DyeSet();
+    assert(dyeSet.numAnalog == movieInfo.analogs.size());
+    for (size_t i = 0; i < movieInfo.analogs.size(); i++)
+    {
+        movieInfo.analogs[i].baseLabel = dyeSet.baseMap[i];
+        movieInfo.analogs[i].ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio[i];
+        movieInfo.analogs[i].pw2SlowStepRatio = dyeSet.pw2SlowStepRatio[i];
+        movieInfo.analogs[i].excessNoiseCV = dyeSet.excessNoiseCV[i];
+        movieInfo.analogs[i].interPulseDistance = dyeSet.ipdMean[i];
+        movieInfo.analogs[i].pulseWidth = dyeSet.pulseWidthMean[i];
+        movieInfo.analogs[i].relAmplitude = dyeSet.relativeAmp[i];
+    }
+
+    return movieInfo;
+}
+
+void TraceFileDataSource::LoadGroundTruth(Mongo::Data::BasecallerAlgorithmConfig& config) const
+{
+    auto setBlMeanAndCovar = [&](float& blMean,
+                                 float& blCovar,
+                                 const std::string& exceptMsg)
+    {
+        if (traceFile_.IsSimulated())
+        {
+            const auto groundTruth = traceFile_.GroundTruth();
+            blMean = groundTruth.stateMean[0][0];
+            blCovar = groundTruth.stateCovariance[0][0];
+        } else
+        {
+            throw PBException(exceptMsg);
+        }
+    };
+
+    if (config.modelEstimationMode == Mongo::Data::BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
+    {
+        setBlMeanAndCovar(config.staticDetModelConfig.baselineMean,
+                          config.staticDetModelConfig.baselineVariance,
+                          "Requested static pipeline analysis but input trace file is not simulated!");
+    }
+    else if (config.dmeConfig.Method == Mongo::Data::BasecallerDmeConfig::MethodName::Fixed &&
+             config.dmeConfig.SimModel.useSimulatedBaselineParams == true)
+    {
+        setBlMeanAndCovar(config.dmeConfig.SimModel.baselineMean,
+                          config.dmeConfig.SimModel.baselineVar,
+                          "Requested fixed DME with baseline params but input trace file is not simulated!");
+    }
 }
 
 void TraceFileDataSource::PreloadInputQueue(size_t chunks)

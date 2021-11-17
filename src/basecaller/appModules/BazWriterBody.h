@@ -61,7 +61,7 @@ public:
                   const BazIO::ZmwInfo& zmwInfo,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
-                  const Mongo::Data::MovieConfig& movieConfig);
+                  const Mongo::Data::AnalysisConfig& analysisConfig);
 
     ~BazWriterBody();
 

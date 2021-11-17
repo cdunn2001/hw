@@ -27,7 +27,7 @@
 
 #include <pacbio/tracefile/TraceFile.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 namespace PacBio {
 namespace Application {
@@ -47,12 +47,12 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const boost::multi_array<float,2>& crossTalk,
                                const Sensor::Platform& platform,
                                const std::string& instrumentName,
-                               const Mongo::Data::MovieConfig& movCfg)
+                               const Mongo::Data::AnalysisConfig& analysisConfig)
     : laneSelector_(std::move(laneSelector))
     , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
 {
-    PopulateTraceData(holeNumbers, properties, batchIds, movCfg);
-    PopulateScanData(numFrames, imagePsf, crossTalk, platform, instrumentName, movCfg);
+    PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
+    PopulateScanData(numFrames, imagePsf, crossTalk, platform, instrumentName, analysisConfig);
 
     PBLOG_INFO << "TraceSaverBody created";
 }
@@ -60,7 +60,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
 void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
                                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                                        const std::vector<uint32_t>& batchIds,
-                                       const Mongo::Data::MovieConfig& movCfg)
+                                       const Mongo::Data::AnalysisConfig& analysisConfig)
 {
     const size_t numZmw = laneSelector_.size() * laneSize;
     if (holeNumbers.size() != numZmw)
@@ -83,7 +83,7 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
         holexy[i][0] = static_cast<int16_t>(properties[i].x);
         holexy[i][1] = static_cast<int16_t>(properties[i].y);
     }
-    file_.Traces().Pedestal(movCfg.pedestal);
+    file_.Traces().Pedestal(analysisConfig.pedestal);
     file_.Traces().HoleXY(holexy);
     file_.Traces().HoleType(holeType);
     file_.Traces().HoleNumber(holeNumbers);
@@ -95,7 +95,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
                                       const boost::multi_array<float,2>& crossTalk,
                                       const Sensor::Platform& platform,
                                       const std::string& instrumentName,
-                                      const Mongo::Data::MovieConfig& movCfg)
+                                      const Mongo::Data::AnalysisConfig& analysisConfig)
 {
     using ScanData = TraceFile::ScanData;
 
@@ -103,12 +103,11 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     runInfo.platformName = platform.toString();
     runInfo.platformId = platform;
     runInfo.instrumentName = instrumentName;
-    runInfo.hqrfMethod = movCfg.hqrfMethod;
     file_.Scan().RunInfo(runInfo);
 
     ScanData::AcqParamsData acqParams;
-    acqParams.aduGain = movCfg.photoelectronSensitivity;
-    acqParams.frameRate = movCfg.frameRate;
+    acqParams.aduGain = analysisConfig.movieInfo.photoelectronSensitivity;
+    acqParams.frameRate = analysisConfig.movieInfo.frameRate;
     acqParams.numFrames = numFrames;
     file_.Scan().AcqParams(acqParams);
 
@@ -116,17 +115,15 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
 
     ScanData::ChipInfoData chipInfo;
     chipInfo.layoutName = defaultLayoutName;
-    chipInfo.analogRefSnr = movCfg.refSnr;
+    chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
     chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
     chipInfo.imagePsf = imagePsf;
-    //for (size_t i = 0; i < imagePsf.num_elements(); i++) chipInfo.imagePsf.data()[i] = imagePsf.data()[i];
     chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
     chipInfo.xtalkCorrection = crossTalk;
-    //for (size_t i = 0; i < crossTalk.num_elements(); i++) chipInfo.xtalkCorrection.data()[i] = crossTalk.data()[i];
     file_.Scan().ChipInfo(chipInfo);
 
     ScanData::DyeSetData dyeSet;
-    const size_t numAnalogs = movCfg.analogs.size();
+    const size_t numAnalogs = analysisConfig.movieInfo.analogs.size();
     dyeSet.numAnalog = static_cast<uint16_t>(numAnalogs);
     dyeSet.relativeAmp.resize(numAnalogs);
     dyeSet.excessNoiseCV.resize(numAnalogs);
@@ -137,7 +134,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     dyeSet.baseMap = "";
     for (size_t i = 0; i < numAnalogs; i++)
     {
-        const AnalogMode& am = movCfg.analogs[i];
+        const auto& am = analysisConfig.movieInfo.analogs[i];
         dyeSet.relativeAmp[i] = am.relAmplitude;
         dyeSet.excessNoiseCV[i] = am.excessNoiseCV;
         dyeSet.ipdMean[i] = am.interPulseDistance;

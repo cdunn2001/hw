@@ -40,7 +40,7 @@
 
 #include <common/cuda/memory/ManagedAllocations.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
@@ -81,11 +81,11 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 
 TEST(TestHostNoOpBaseliner, Run)
 {
-    auto movConfig = Data::MockMovieConfig();
-    movConfig.photoelectronSensitivity = 1;
+    auto analysisConfig = Data::MockAnalysisConfig();
+    analysisConfig.movieInfo.photoelectronSensitivity = 1;
     auto baselinerConfig = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::NoOp,
                                                        BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    HostNoOpBaseliner::Configure(baselinerConfig, movConfig);
+    HostNoOpBaseliner::Configure(baselinerConfig, analysisConfig);
 
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -153,14 +153,14 @@ TEST(TestHostMultiScaleBaseliner, Configure)
     BasecallerBaselinerConfig bbcConfig
         = TestConfig::BaselinerConfig(BasecallerBaselinerConfig::MethodName::HostMultiScale,
                                       BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    const auto movConfig = MockMovieConfig();
+    const auto analysisConfig = MockAnalysisConfig();
 
     // Test a few valid settings for SigmaEmaScaleStrides.
     for (const auto sess : {0.0f, 0.5f, 1.618f, 42.0f, 512.0f, 1.0e+6f, INFINITY})
     {
         bbcConfig.SigmaEmaScaleStrides = sess;
         ASSERT_TRUE(bbcConfig.Validate()) << "  SigmaEmaScaleStrides = " << sess << '.';
-        HostMultiScaleBaseliner::Configure(bbcConfig, movConfig);
+        HostMultiScaleBaseliner::Configure(bbcConfig, analysisConfig);
         EXPECT_FLOAT_EQ(std::pow(0.5f, 1.0f / sess), HostMultiScaleBaseliner::SigmaEmaAlpha())
             << "  SigmaEmaScaleStrides = " << sess << '.';
     }
@@ -222,17 +222,17 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
                             params.pfg_pulseSignalLevels : pfConfig.pulseSignalLevels);
         pfConfig.pedestal = params.pedestalValue;
 
-        Data::MovieConfig movConfig;
-        movConfig.photoelectronSensitivity = scaler;
-        movConfig.pedestal = params.pedestalValue;
-        movConfig.encoding = params.encoding;
+        Data::AnalysisConfig analysisConfig;
+        analysisConfig.movieInfo.photoelectronSensitivity = scaler;
+        analysisConfig.pedestal = params.pedestalValue;
+        analysisConfig.encoding = params.encoding;
         const auto baselinerConfig = TestConfig::BaselinerConfig(
                             params.method,
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
-            HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+            HostMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
         else if (params.method == BasecallerBaselinerConfig::MethodName::DeviceMultiScale)
-            DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+            DeviceMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
         else
             throw PBException("Unexpected baseline filter in TestBaeliner");
 
@@ -476,12 +476,12 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
     using Baseliner = TypeParam;
     constexpr float scaler = 3.46410f; // sqrt(12)
 
-    Data::MovieConfig movConfig;
-    movConfig.photoelectronSensitivity = scaler;
+    Data::AnalysisConfig analysisConfig;
+    analysisConfig.movieInfo.photoelectronSensitivity = scaler;
     const auto baselinerConfig = TestConfig::BaselinerConfig(
             BasecallerBaselinerConfig::MethodName::HostMultiScale, /*ignored*/
             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    Baseliner::Configure(baselinerConfig, movConfig);
+    Baseliner::Configure(baselinerConfig, analysisConfig);
 
     // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for
     // BasecallerBaselinerConfig::MethodName::TwoScaleMedium
