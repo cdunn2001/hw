@@ -38,8 +38,6 @@
 #include <common/StatAccumulator.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
-#include "EdgeFrameClassifier.h"
-
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -68,6 +66,7 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
+    , edgeClassifier_ (poolSize)
 { }
 
 void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
@@ -76,8 +75,10 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
     using Arr = LaneArray<TraceHistogramAccumHost::HistDataType, laneSize>;
     hist_.clear();
     auto view = bounds.GetHostView();
+    assert(view.Size() == edgeClassifier_.size());
     for (size_t i = 0; i < view.Size(); ++i)
     {
+        edgeClassifier_[i].Reset();     // TODO: Do we really want to reset the edge-frame classifiers?
         hist_.emplace_back(numBins, Arr(view[i].lowerBounds), Arr(view[i].upperBounds));
     }
 }
@@ -87,8 +88,11 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
     constexpr unsigned int numBins = LaneHistType::numBins;
     hist_.clear();
     auto view = metrics.baselinerStats.GetHostView();
+    assert(view.Size() == edgeClassifier_.size());
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
+        edgeClassifier_[lane].Reset();     // TODO: Do we really want to reset the edge-frame classifiers?
+
         // Determine histogram parameters.
         const auto& laneBlStats = StatAccumulator<LaneArray<float>>(view[lane].baselineStats);
 
@@ -139,11 +143,8 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     static constexpr float threshSigma = 2.0f;
     const FrameArray threshold {roundCastInt(threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean())};
 
-    // Could make this a non-static class member in order to "join" sequential
-    // trace blocks.  Notice, however, that there is an inherent lag that would
-    // effectively delay the last frame of each block to the histogram for the
-    // next block.
-    EdgeFrameClassifier efc;
+    // The edge-frame classifier for the specified lane.
+    auto& efc = edgeClassifier_.at(lane);
 
     // Iterate over lane-frames.
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)

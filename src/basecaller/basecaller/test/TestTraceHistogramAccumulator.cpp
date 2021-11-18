@@ -379,10 +379,10 @@ TEST_P(Histogram, SingleLaneConstant)
             expected[i] = params.numFrames;
 
             // In host implementation, edge-frame filter excludes first and last
-            // frame of each block.
+            // frame.
             if (GetParam() == TestTypes::TraceHistogramAccumHost)
             {
-                expected[i] -= 2 * params.NumBlocks();
+                expected[i] -= 2;
             }
         }
         EXPECT_TRUE(all(counts == expected));
@@ -426,10 +426,10 @@ TEST_P(Histogram, MultiLaneConstant)
                 expected[j] = params.numFrames;
 
                 // In host implementation, edge-frame filter excludes first and
-                // last frame of each block.
+                // last.
                 if (GetParam() == TestTypes::TraceHistogramAccumHost)
                 {
-                    expected[j] -= 2 * params.NumBlocks();
+                    expected[j] -= 2;
                 }
             }
             EXPECT_TRUE(all(counts == expected)) << lane << " " << i;
@@ -477,10 +477,10 @@ TEST_P(Histogram, MultiPoolConstant)
                     expected[j] = params.numFrames;
                 
                     // In host implementation, edge-frame filter excludes first and
-                    // last frame of each block.
+                    // last frame.
                     if (GetParam() == TestTypes::TraceHistogramAccumHost)
                     {
-                        expected[j] -= 2 * params.NumBlocks();
+                        expected[j] -= 2;
                     }
                 }
                 EXPECT_TRUE(all(counts == expected));
@@ -546,7 +546,6 @@ TEST_P(Histogram, SawtoothSimpleUniform)
             // For bins b = 3, ... numbins-1, the neighboring frame values are
             // all above the threshold.  So all of these frames will pass the
             // EFF, except for the first and last frame of each block.
-            // TODO: How many blocks are there?
 
             // numBins -1 is the only value in the range of the last bin.  The
             // neighboring frame values are always numBins - 2 and 0.  So the

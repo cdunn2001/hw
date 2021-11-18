@@ -38,6 +38,7 @@
 #include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 
+#include "EdgeFrameClassifier.h"
 #include "TraceHistogramAccumulator.h"
 
 namespace PacBio {
@@ -94,6 +95,7 @@ private: // Static data
 
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
+    AlignedVector<EdgeFrameClassifier> edgeClassifier_;
 
 private:    // Functions
     // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
