@@ -597,6 +597,11 @@ TEST_P(Histogram, SawtoothSkipUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
+    // Bin size is 1.
+    // Signal is repeating ramps of {0, 2, 4, ..., numBins - 2?}.
+    // Only 2 and (numBins - 2) are excluded as edge frames by CPU
+    // implementation.
+
     auto hists = RunTest(params,
                          simConfig,
                          std::move(generator));
@@ -616,11 +621,26 @@ TEST_P(Histogram, SawtoothSkipUniform)
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
-                auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                if (i % 2 == 0)
-                    EXPECT_TRUE(all((counts == expect) | (counts == expect+1u)));
+                const auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
+                if (GetParam() == TestTypes::TraceHistogramAccumHost
+                    && (i == 2 || i == numBins - 2))
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
+                else if (i % 2 == 0)
+                {
+                    EXPECT_TRUE(all((counts == expect) | (counts == expect+1u)))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
                 else
-                    EXPECT_TRUE(all(counts == 0u));
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
             }
         }
     }
@@ -644,10 +664,17 @@ TEST_P(Histogram, SawtoothOutliersUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
+    // Bin size = 1.
+    // Histogram range = [100, 400].
+    // Signal is four repeats of {0, 1, 2, ..., 511}.
+    // Values that are marked as edge frames are {0, 1, 2, 511}.
+    // 511 is a high outlier.  The others are low outliers.
+
     auto hists = RunTest(params,
                          simConfig,
                          std::move(generator));
 
+    const bool isHostImpl = (GetParam() == TestTypes::TraceHistogramAccumHost);
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
         EXPECT_EQ(hists[pool]->FramesAdded(), params.numFrames);
@@ -656,14 +683,28 @@ TEST_P(Histogram, SawtoothOutliersUniform)
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
+
+            const auto expectHigh = 4 * (sawConfig.maxAmp
+                                         - params.bounds.upperBounds[0]
+                                         - (isHostImpl ? 1 : 0));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == expectHigh))
+                << "  outlierCountHigh is " << lanedata.outlierCountHigh[0]
+                << ",  expectHigh is " << expectHigh;
+
+            const auto expectLow = 4 * (params.bounds.lowerBounds[0]
+                                        - sawConfig.minAmp
+                                        - (isHostImpl ? 3 : 0));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == expectLow))
+                << "  outlierCountLow is " << lanedata.outlierCountLow[0]
+                << ",  expectLow is " << expectLow;
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all(counts == 4u));
+                EXPECT_TRUE(all(counts == 4u))
+                    << "  i is " << i
+                    << ", count is " << lanedata.binCount[i][0];
             }
         }
     }
