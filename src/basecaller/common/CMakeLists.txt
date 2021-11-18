@@ -12,6 +12,7 @@ add_library(libMongoCommon STATIC
     AutocorrAccumulator.cpp
     AutocorrAccumState.h
     AutocorrAccumState.cpp
+    CircularArray.h
     LaneArray.h
     LaneArray.cpp
     MongoConstants.h
