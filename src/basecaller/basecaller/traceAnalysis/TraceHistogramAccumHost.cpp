@@ -34,8 +34,11 @@
 #include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
+#include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
+
+#include "EdgeFrameClassifier.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -106,37 +109,53 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 }
 
 void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces,
-                                           const PoolDetModel& /* detModel */)
+                                           const PoolDetModel& detModel)
 {
     const auto numLanes = traces.LanesPerBatch();
-
-    // TODO: Pass detection model along and use for edge-frame scrubbing.
-    
     tbb::task_arena().execute([&] {
         // For each lane/block in the batch ...
         tbb::parallel_for((size_t) {0}, numLanes, [&](size_t lane) {
-            AddBlock(traces, lane);
+            AddBlock(traces, detModel, lane);
         });
     });
 }
 
 void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& traces,
+                                       const PoolDetModel& pdm,
                                        unsigned int lane)
 {
     assert(lane < hist_.size());
 
     auto& h = hist_[lane];
 
-    // Get view to the trace data of lane i.
+    // Get views to the trace data and detection model of lane i.
     const auto traceBlock = traces.GetBlockView(lane);
+    const DetModelHost& detModel {pdm.GetHostView()[lane]};
+    const auto& bgMode = detModel.BaselineMode();
+
+    // The threshold below which the sample is most likely full-frame baseline.
+    // TODO: This value should be either configurable or depend on the SNR of
+    // the dimmest pulse component of the detection model.
+    static constexpr float threshSigma = 2.0f;
+    // TODO: Use round-to-nearest here.
+    const FrameArray threshold = threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean();
+
+    // Could make this a non-static class member in order to "join" sequential
+    // trace blocks.  Notice, however, that there is an inherent lag that would
+    // effectively delay the last frame of each block to the histogram for the
+    // next block.
+    EdgeFrameClassifier efc;
 
     // Iterate over lane-frames.
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
     {
-        // TODO: Filter edge frames.
-        h.AddDatum(LaneArray<float>(lfi.Extract()));
+        FrameArray frame = lfi.Extract();
+        const LaneMask<> keep = !efc.IsEdgeFrame(threshold, &frame);
+        // TODO: Can we avoid casting to float here?
+        h.AddDatum(LaneArray<float>(frame), keep);
     }
 }
+
 
 TraceHistogramAccumHost::PoolHistType
 TraceHistogramAccumHost::HistogramImpl() const
