@@ -26,6 +26,7 @@
 #include <appModules/TraceSaver.h>
 
 #include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/tracefile/TraceData.h>
 
 #include <dataTypes/configs/MovieConfig.h>
 
@@ -35,10 +36,12 @@ namespace Application {
 using namespace PacBio::DataSource;
 using namespace Mongo;
 using namespace Mongo::Data;
+ 
 
 TraceSaverBody::TraceSaverBody(const std::string& filename,
                                size_t numFrames,
                                DataSource::DataSourceBase::LaneSelector laneSelector,
+                               const DataSource::PacketLayout& packetLayout,
                                TraceFile::TraceDataType dataType,
                                const std::vector<uint32_t>& holeNumbers,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
@@ -49,6 +52,10 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::string& instrumentName,
                                const Mongo::Data::MovieConfig& movCfg)
     : laneSelector_(std::move(laneSelector))
+    , packetLayout_([packetLayout](){
+        PacBio::TraceFile::TraceData::SetDefaultChunkDims(packetLayout.BlockWidth(), packetLayout.NumFrames(), 0);
+        return packetLayout;
+    }())
     , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
 {
     PopulateTraceData(holeNumbers, properties, batchIds, movCfg);

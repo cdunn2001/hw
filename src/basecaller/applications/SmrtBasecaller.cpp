@@ -369,9 +369,6 @@ private:
                 wxconfig.maxPopLoops = wx2SourceConfig.maxPopLoops;
                 wxconfig.tilePoolFactor = wx2SourceConfig.tilePoolFactor;
                 wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
-                wxconfig.layoutDims[0] = wx2SourceConfig.wxlayout.lanesPerPacket;
-                wxconfig.layoutDims[1] = wx2SourceConfig.wxlayout.framesPerPacket;
-                wxconfig.layoutDims[2] = wx2SourceConfig.wxlayout.zmwsPerLane;
                 wxconfig.verbosity = 100;
                 return std::make_unique<WXIPCDataSource>(std::move(datasourceConfig), wxconfig);
             }
@@ -568,17 +565,16 @@ private:
                 dataType = TraceDataType::UINT8;
             } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
             {
-                if (dataSource.PacketLayouts().begin()->second.Encoding() == PacketLayout::UINT8)
+                if (sampleLayout.Encoding() == PacketLayout::UINT8)
                 {
                     dataType = TraceDataType::UINT8;
                 }
             }
 
-
-
             return std::make_unique<TraceSaverBody>(outputTrcFileName_,
                                                     dataSource.NumFrames(),
                                                     std::move(selection),
+                                                    sampleLayout,
                                                     dataType,
                                                     holeNumbers,
                                                     properties,
@@ -933,7 +929,7 @@ int main(int argc, char* argv[])
 
         bc->Run();
 
-    } catch (std::exception& ex) {
+    } catch (const std::exception& ex) {
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }

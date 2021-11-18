@@ -63,6 +63,7 @@ public:
     TraceSaverBody(const std::string& filename,
                    size_t numFrames,
                    DataSource::DataSourceBase::LaneSelector laneSelector,
+                   const DataSource::PacketLayout& packetLayout,
                    TraceFile::TraceDataType dataType,
                    const std::vector<uint32_t>& holeNumbers,
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
@@ -97,6 +98,7 @@ private:
                           const Mongo::Data::MovieConfig& movCfg);
 
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
+    PacBio::DataSource::PacketLayout packetLayout_;
     TraceFile::TraceFile file_;
 };
 
