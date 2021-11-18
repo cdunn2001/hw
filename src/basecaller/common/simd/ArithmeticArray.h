@@ -90,7 +90,7 @@ inline m512us Blend(const PairRef<const m512b>& b, const m512us& l, const m512us
 ///    is because it's very difficult to type 16 bit literals,
 ///    and even if you have a 16 bit variable it's too easy to
 ///    accidentally bump it up to 32 bit.  Without this exception
-///    we'll be either be constantly casting back to 16 bit types
+///    we'll be either constantly casting back to 16 bit types
 ///    or else suffering from unecessary (and somewhat expensive)
 ///    conversion to arrays of 32 bit types.
 ///    2b. Scalar int and unsigned int are the *only* exceptions

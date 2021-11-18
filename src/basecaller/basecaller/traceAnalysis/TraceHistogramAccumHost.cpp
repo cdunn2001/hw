@@ -137,8 +137,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     // TODO: This value should be configurable, depend on the SNR of
     // the dimmest pulse component of the detection model, or both.
     static constexpr float threshSigma = 2.0f;
-    // TODO: Use round-to-nearest here.
-    const FrameArray threshold = threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean();
+    const FrameArray threshold {roundCastInt(threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean())};
 
     // Could make this a non-static class member in order to "join" sequential
     // trace blocks.  Notice, however, that there is an inherent lag that would

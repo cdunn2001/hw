@@ -23,15 +23,20 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <cmath>
 #include <functional>
 
+#include <boost/numeric/conversion/cast.hpp>
 #include <gtest/gtest.h>
 
 #include <common/LaneArray.h>
 #include <common/simd/ArrayUnion.h>
+#include <type_traits>
 
 using namespace PacBio::Mongo;
 using namespace PacBio::Cuda::Utility;
+
+using boost::numeric_cast;
 
 // Could potentially make this publicly visible.  However
 // CudaArray is quite naturally used in places in structures
@@ -605,7 +610,7 @@ TYPED_TEST(LaneArrayHomogeneousTypes, Comparisons)
 // Test operations unique to LaneArray<float>
 TEST(LaneArray, FloatOps)
 {
-    auto cudaArr = IncreasingCudaArray<float>(-40.2f, 13.9f);
+    auto cudaArr = IncreasingCudaArray<float>(-234.5f, 8.9f);
     LaneArray<float, laneSize> laneArr(cudaArr);
 
     auto result = erfc(laneArr).ToArray();
@@ -618,6 +623,14 @@ TEST(LaneArray, FloatOps)
     for (size_t i = 0; i < laneSize; ++i)
     {
         EXPECT_EQ(result2[i], std::floor(cudaArr[i])) << i;
+    }
+
+    const auto result3 = roundCastInt(laneArr).ToArray();
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        EXPECT_EQ(result3[i], std::rint(cudaArr[i]))
+            << "  i is " << i << '\n'
+            << "  cudaArr[i] is " << cudaArr[i];
     }
 
     // Get rid of negatives so we can take the sqrt and log
@@ -1165,6 +1178,12 @@ TYPED_TEST(LaneArrayCompoundOps, Valid)
 
 }
 
+// TODO: Comment below indicates that conversion from LaneArray<float> to
+// LaneArray<Integer> should perform truncation (round to zero or round to
+// -Infinity), conversions to signed integers actually round to nearest. The
+// primary perpetrators of this atrocity are `operator m512i` and `operator
+// m512ui` members of `m512f`.
+
 // Make sure that we can convert as expected between LaneArrays of
 // different types.  This should mimic scalar conversions as much
 // as possible.  The most notible exception is that float -> int
@@ -1193,30 +1212,36 @@ TEST(LaneArray, Conversions)
             const auto& convData = convArr.ToArray();
             const auto& origData = origArr.ToArray();
 
-            // We're going to need special handling for floats, so check for that
-            const bool isFloat = std::is_same<orig_t, float>::value;
+            constexpr bool isFloatToInteger = std::is_same_v<orig_t, float> && std::is_integral_v<conv_t>;
             for (size_t i = 0; i < origData.size(); ++i)
             {
-                // If the input type is a float, and it's value is out of range of the
-                // destination, then skip that element.  SIMD instructions handle that
-                // differently from static_cast, and since some of our SSE "instructions"
-                // are emulated due to missing intrinsics, we won't even have parity between
-                // SSE and AVX512 code paths.
-                const bool outRange = static_cast<float>(origData[i]) < std::numeric_limits<conv_t>::lowest()
-                                   || static_cast<float>(origData[i]) > std::numeric_limits<conv_t>::max();
-                if (isFloat && outRange)
-                    continue;
+                // Need special handling of float-to-integer conversions.
+                if constexpr (isFloatToInteger)
+                {
+                    // If the input value is out of range of the int, then skip that
+                    // element.  SIMD instructions handle that differently from rint,
+                    // and since some of our SSE "instructions" are emulated due to missing
+                    // intrinsics, we won't even have parity between SSE and AVX512 code
+                    // paths.
+                    const bool outRange = origData[i] < static_cast<float>(std::numeric_limits<conv_t>::min())
+                                          || origData[i] > static_cast<float>(std::numeric_limits<conv_t>::max());
+                    if (outRange) continue;
+
+                    const auto odi = origData[i];
+                    const auto expect = numeric_cast<conv_t>(
+                            std::is_signed_v<conv_t> ? std::rint(odi) : odi);
+                    EXPECT_EQ(expect, convData[i])
+                        << "  i is " << i
+                        << ", origData[i] is " << origData[i];
+                    success &= (expect == convData[i]);
+                }
                 else
                 {
                     // All other cases should be handled by static_cast just fine
-                    bool elemTest = convData[i] == static_cast<conv_t>(origData[i]);
-                    EXPECT_TRUE(elemTest) << i << ": "
-                                          << convData[i] << " "
-                                          << static_cast<conv_t>(origData[i])
-                                          << " " << origData[i];
-                    success &= elemTest;
+                    EXPECT_EQ(static_cast<conv_t>(origData[i]), convData[i])
+                        << i << ":  " << origData[i];
+                    success &= (static_cast<conv_t>(origData[i]) == convData[i]);
                 }
-
             }
             return success;
         };
@@ -1256,8 +1281,9 @@ TEST(LaneArray, Conversions)
     // evenly into any SIMD variables.  This could
     // potentially flush out errors where 16 <-> 32 bit
     // conversions swap the high/low halves or something.
-    std::array<float, 5> fltPattern = {
-        12.5f, -12.5f,
+    std::array<float, 9> fltPattern = {
+        12.1f, 12.5f, 12.9f,
+        -12.1f, -12.5f, -12.9f,
         2.f*std::numeric_limits<int16_t>::max(),
         2.f*std::numeric_limits<int16_t>::min(),
         1.5f*std::numeric_limits<int32_t>::max()};
@@ -1290,7 +1316,7 @@ TEST(LaneArray, Conversions)
 
     for (size_t i = 0; i < laneSize; ++i)
     {
-        fltData[i] = fltPattern[i%5];
+        fltData[i] = fltPattern[i % fltPattern.size()];
         intData[i] = intPattern[i%5];
         uintData[i] = uintPattern[i%5];
         shortData[i] = shortPattern[i%5];
