@@ -157,7 +157,10 @@ public:
 
     void Run()
     {
-        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+        SetGlobalAllocationMode(CachingMode::ENABLED,
+                                (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                                ? AllocatorMode::MALLOC
+                                : AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
         EnableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
 
