@@ -3,7 +3,7 @@
 #include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -13,7 +13,7 @@ template <typename LabelManager>
 std::unique_ptr<LabelManager> HostPulseAccumulator<LabelManager>::manager_;
 
 template <typename LabelManager>
-void HostPulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movieConfig,
+void HostPulseAccumulator<LabelManager>::Configure(const Data::AnalysisConfig& analysisConfig,
                                                    const Data::BasecallerPulseAccumConfig& pulseConfig)
 {
     const auto hostExecution = true;
@@ -23,7 +23,7 @@ void HostPulseAccumulator<LabelManager>::Configure(const Data::MovieConfig& movi
 
     for(size_t i = 0; i < analogMap.size(); i++)
     {
-        analogMap[i] = Data::mapToNucleotideLabel(movieConfig.analogs[i].baseLabel);
+        analogMap[i] = Data::mapToNucleotideLabel(analysisConfig.movieInfo.analogs[i].baseLabel);
     }
 
     manager_ = std::make_unique<LabelManager>(analogMap);

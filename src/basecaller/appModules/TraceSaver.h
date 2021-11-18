@@ -36,7 +36,6 @@
 #include <dataTypes/TraceBatch.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <appModules/DataFileWriter.h>
-#include <pacbio/tracefile/TraceFile.h>
 
 #include <boost/multi_array.hpp>
 
@@ -72,7 +71,7 @@ public:
                    const boost::multi_array<float,2>& crossTalk,
                    const Sensor::Platform& platform,
                    const std::string& instrumentName,
-                   const Mongo::Data::MovieConfig& movCfg);
+                   const Mongo::Data::AnalysisConfig& analysisConfig);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
     TraceSaverBody(TraceSaverBody&&) = delete;
@@ -88,14 +87,14 @@ private:
     void PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
                            const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                            const std::vector<uint32_t>& batchIds,
-                           const Mongo::Data::MovieConfig& movCfg);
+                           const Mongo::Data::AnalysisConfig& analysisConfig);
 
     void PopulateScanData(size_t numFrames,
                           const boost::multi_array<float,2>& imagePsf,
                           const boost::multi_array<float,2>& crossTalk,
                           const Sensor::Platform& platform,
                           const std::string& instrumentName,
-                          const Mongo::Data::MovieConfig& movCfg);
+                          const Mongo::Data::AnalysisConfig& analysisConfig);
 
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
     PacBio::DataSource::PacketLayout packetLayout_;

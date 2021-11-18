@@ -36,7 +36,7 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 
 namespace PacBio {
@@ -47,10 +47,10 @@ namespace Basecaller {
 float HostMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
 
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
-                                        const Data::MovieConfig& movConfig)
+                                        const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = true;
-    InitFactory(hostExecution, movConfig);
+    InitFactory(hostExecution, analysisConfig);
 
     {
         // Validation has already been handled in the configuration framework.

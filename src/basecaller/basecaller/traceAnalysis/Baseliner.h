@@ -27,9 +27,9 @@ public:     // Static functions
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
     static void Configure(const Data::BasecallerBaselinerConfig& baselinerConfig,
-                          const Data::MovieConfig& movConfig);
+                          const Data::AnalysisConfig& analysisConfig);
 
-    static void InitFactory(bool hostExecution, const Data::MovieConfig& movConfig);
+    static void InitFactory(bool hostExecution, const Data::AnalysisConfig& analysisConfig);
 
     static void Finalize();
 

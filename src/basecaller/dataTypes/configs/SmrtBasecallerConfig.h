@@ -57,7 +57,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_VARIANT(source,
                       TraceReplication,
                       TraceReanalysis,
-                      WX2SourceConfig);
+                      WXIPCDataSourceConfig);
 
     PB_CONFIG_PARAM(bool, internalMode, false);
     PB_CONFIG_PARAM(bool, multipleBazFiles, true);

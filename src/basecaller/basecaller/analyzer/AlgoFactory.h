@@ -50,7 +50,7 @@ public:     // Structors and assignment
 
 public:
     void Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                   const Data::MovieConfig& movConfig);
+                   const Data::AnalysisConfig& analysisConfig);
 
     std::unique_ptr<Baseliner> CreateBaseliner(
             unsigned int poolId,

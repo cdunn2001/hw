@@ -43,7 +43,7 @@
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/StaticDetModelConfig.h>
 
 namespace PacBio {
@@ -129,11 +129,11 @@ public:
     void RunTest()
     {
         const auto& dmeConfig = testConfig.dmeConfig;
-        Filter::Configure(dmeConfig, movieConfig);
+        Filter::Configure(dmeConfig, analysisConfig);
         // Hacky, but we have to configure the host dme regardless, since we'll
         // use ScaleModelSNR as part of our validation
         // TODO: Find a way for host and gpu to share the same Configure?
-        DmeEmHost::Configure(dmeConfig, movieConfig);
+        DmeEmHost::Configure(dmeConfig, analysisConfig);
 
         std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
         Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,
@@ -247,7 +247,7 @@ public: // Data
     std::unique_ptr<LaneDetectionModelHost> detModelStart;
     std::unique_ptr<LaneDetectionModelHost> detModelSim;
 
-    Data::MovieConfig movieConfig;
+    Data::AnalysisConfig analysisConfig;
     TestConfig testConfig;
 
     std::unique_ptr<CompleteData> completeData;
@@ -257,9 +257,9 @@ private:
     // Constructs and initializes a fixed detection model used as an initial model for the DME.
     LaneDetectionModel MakeInitialModel(void)
     {
-        movieConfig = PacBio::Mongo::Data::MockMovieConfig();
+        analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
         Data::StaticDetModelConfig staticDetModel;
-        const auto& analogs = staticDetModel.SetupAnalogs(movieConfig);
+        const auto& analogs = staticDetModel.SetupAnalogs(analysisConfig);
 
         const float bgWeight{0.5f};
         LaneDetectionModel ldm;
@@ -413,7 +413,7 @@ private:
         detModelStart = std::make_unique<LaneDetectionModelHost>(MakeInitialModel());
         detModelStart->Confidence(DmeEmHost::FloatVec(GetParam().initModelConf));
         const float simRefSnr = GetParam().simSnr;
-        const auto startRefSnr = movieConfig.refSnr;
+        const auto startRefSnr = analysisConfig.movieInfo.refSnr;
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
         DmeEmHost::ScaleModelSnr(DmeEmHost::FloatVec{simRefSnr/startRefSnr}, detModelSim.get());
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));

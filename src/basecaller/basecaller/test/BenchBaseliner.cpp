@@ -7,7 +7,7 @@
 #include <common/LaneArray.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
 
@@ -117,9 +117,9 @@ public:
 
 BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
 {
-    Data::MovieConfig movConfig;
+    Data::AnalysisConfig analysisConfig;
     auto baselinerConfig = HostTestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    HostMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+    HostMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
 
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
     HostMultiScaleBaseliner baseliner(0, blp, lanesPerPool);
@@ -140,9 +140,9 @@ BENCHMARK_DEFINE_F(BenchBaseliner, Host)(benchmark::State& st)
 
 BENCHMARK_DEFINE_F(BenchBaseliner, Device)(benchmark::State& st)
 {
-    Data::MovieConfig movConfig;
+    Data::AnalysisConfig analysisConfig;
     auto baselinerConfig = DeviceTestConfig::BaselinerConfig(BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    DeviceMultiScaleBaseliner::Configure(baselinerConfig, movConfig);
+    DeviceMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
 
     BaselinerParams blp({2, 8}, {9, 31}, 2.44f, 0.50f); // strides, widths, sigma, mean
     DeviceMultiScaleBaseliner baseliner(0, blp, lanesPerPool);

@@ -55,7 +55,7 @@
 #include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 using std::make_unique;
 using std::ostringstream;
@@ -170,18 +170,18 @@ AlgoFactory::~AlgoFactory()
 
 
 void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
-                            const Data::MovieConfig& movConfig)
+                            const Data::AnalysisConfig& analysisConfig)
 {
     switch (baselinerOpt_)
     {
     case Data::BasecallerBaselinerConfig::MethodName::NoOp:
-        HostNoOpBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        HostNoOpBaseliner::Configure(bcConfig.baselinerConfig, analysisConfig);
         break;
     case Data::BasecallerBaselinerConfig::MethodName::DeviceMultiScale:
-        DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        DeviceMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, analysisConfig);
         break;
     case Data::BasecallerBaselinerConfig::MethodName::HostMultiScale:
-        HostMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, movConfig);
+        HostMultiScaleBaseliner::Configure(bcConfig.baselinerConfig, analysisConfig);
         break;
     default:
         ostringstream msg;
@@ -211,10 +211,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     {
     case Data::BasecallerDmeConfig::MethodName::Fixed:
     case Data::BasecallerDmeConfig::MethodName::EmHost:
-        DmeEmHost::Configure(bcConfig.dmeConfig, movConfig);
+        DmeEmHost::Configure(bcConfig.dmeConfig, analysisConfig);
         break;
     case Data::BasecallerDmeConfig::MethodName::EmDevice:
-        DmeEmDevice::Configure(bcConfig.dmeConfig, movConfig);
+        DmeEmDevice::Configure(bcConfig.dmeConfig, analysisConfig);
         break;
     default:
         ostringstream msg;
@@ -230,10 +230,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         FrameLabeler::Configure();
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
-        FrameLabelerDevice::Configure(movConfig);
+        FrameLabelerDevice::Configure(analysisConfig);
         break;
     case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
-        FrameLabelerHost::Configure(movConfig);
+        FrameLabelerHost::Configure(analysisConfig);
         break;
     default:
         ostringstream msg;
@@ -252,12 +252,12 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::HostPulses:
         HostPulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig,
+            analysisConfig,
             bcConfig.pulseAccumConfig);
         break;
     case Data::BasecallerPulseAccumConfig::MethodName::GpuPulses:
         DevicePulseAccumulator<SubframeLabelManager>::Configure(
-            movConfig,
+            analysisConfig,
             bcConfig.pulseAccumConfig);
         break;
     default:
@@ -272,13 +272,13 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
         DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                          bcConfig.Metrics.framesPerHFMetricBlock,
-                                         movConfig.frameRate,
+                                         analysisConfig.movieInfo.frameRate,
                                          bcConfig.Metrics.realtimeActivityLabels);
         break;
     default:
         HFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
                                    bcConfig.Metrics.framesPerHFMetricBlock,
-                                   movConfig.frameRate,
+                                   analysisConfig.movieInfo.frameRate,
                                    bcConfig.Metrics.realtimeActivityLabels);
     }
 }

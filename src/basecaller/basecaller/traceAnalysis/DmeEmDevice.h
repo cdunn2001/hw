@@ -86,7 +86,7 @@ public:     // Types
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
-                          const Data::MovieConfig &movConfig);
+                          const Data::AnalysisConfig &analysisConfig);
 
 public:
     DmeEmDevice(uint32_t poolId, unsigned int poolSize);

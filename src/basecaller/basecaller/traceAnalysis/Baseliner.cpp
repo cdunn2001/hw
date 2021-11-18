@@ -1,7 +1,7 @@
 #include "Baseliner.h"
 
 #include <dataTypes/configs/BasecallerBaselinerConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -14,22 +14,22 @@ DataSource::PacketLayout::EncodingFormat Baseliner::expectedEncoding_ = DataSour
 
 // static
 void Baseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                          const Data::MovieConfig& movConfig)
+                          const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = true;
-    InitFactory(hostExecution, movConfig);
+    InitFactory(hostExecution, analysisConfig);
 }
 
-void Baseliner::InitFactory(bool hostExecution, const Data::MovieConfig& movConfig)
+void Baseliner::InitFactory(bool hostExecution, const Data::AnalysisConfig& analysisConfig)
 {
     using Cuda::Memory::SyncDirection;
 
     SyncDirection syncDir = hostExecution ? SyncDirection::HostWriteDeviceRead : SyncDirection::HostReadDeviceWrite;
     batchFactory_ = std::make_unique<Data::CameraBatchFactory>(syncDir);
 
-    movieScaler_ = movConfig.photoelectronSensitivity;
-    pedestal_ = movConfig.pedestal;
-    expectedEncoding_ = movConfig.encoding;
+    movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
+    pedestal_ = analysisConfig.pedestal;
+    expectedEncoding_ = analysisConfig.encoding;
 }
 
 void Baseliner::Finalize() {}

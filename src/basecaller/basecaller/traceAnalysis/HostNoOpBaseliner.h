@@ -20,7 +20,7 @@ public:
 
 public:
     static void Configure(const Data::BasecallerBaselinerConfig&,
-                          const Data::MovieConfig&);
+                          const Data::AnalysisConfig&);
 
 
     static void Finalize();

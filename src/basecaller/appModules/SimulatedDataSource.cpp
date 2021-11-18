@@ -34,18 +34,6 @@
 
 #include <common/MongoConstants.h>
 
-namespace
-{
-
-boost::multi_array<float,2> MakeUnity(size_t dim)
-{
-    boost::multi_array<float,2> unityMatrix(boost::extents[dim][dim]);
-    unityMatrix[dim/2][dim/2] = 1.0f;
-    return unityMatrix;
-}
-
-} // anonymous namespace
-
 namespace PacBio {
 namespace Application {
 
@@ -208,16 +196,6 @@ SimulatedDataSource::SimulatedDataSource(size_t minZmw,
 }
 
 int16_t SimulatedDataSource::Pedestal() const { return cache_->Pedestal(); }
-
-boost::multi_array<float,2> SimulatedDataSource::CrosstalkFilterMatrix() const
-{
-    return MakeUnity(TraceFile::ScanData::DefaultXtalkSize);
-}
-
-boost::multi_array<float,2> SimulatedDataSource::ImagePsfMatrix() const
-{
-    return MakeUnity(TraceFile::ScanData::DefaultImagePsfSize);
-}
 
 std::string SimulatedDataSource::InstrumentName() const { return cache_->Name(); }
 
