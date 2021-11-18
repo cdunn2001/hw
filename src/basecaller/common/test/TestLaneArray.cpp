@@ -709,6 +709,7 @@ TEST(LaneArray, IntOps)
     auto b = IncreasingLaneArray<int>(3, 15);
 
     EXPECT_TRUE(ValidateOp<std::bit_or<int>>(a | b, a, b));
+    EXPECT_TRUE(ValidateOp<std::modulus<int>>(a % b, a, b));
 }
 
 // Our unsigned int class supports various bitwise operations,
