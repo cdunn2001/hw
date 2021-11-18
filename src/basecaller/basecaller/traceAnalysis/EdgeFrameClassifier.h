@@ -39,42 +39,45 @@
 namespace PacBio::Mongo::Basecaller
 {
 
-/// A simple, stateful, aggressive classifier that indicates frames whether a
-/// frame might represent the edge of a pulse.
+/// A simple, stateful, aggressive classifier that indicates whether a frame
+/// might represent the edge of a pulse.
 class EdgeFrameClassifier
 {
 public:     // Types
     using FrameArray = LaneArray<Data::BaselinedTraceElement>;
 
-public:     // Const methods
-    const FrameArray& PreviousFrame() const
-    { return prevFrame; }
-
 public:     // Non-const methods
-    /// \brief The primary classifier function.
 
+    /// Sets the state of *this to that of a newly created object.
+    void Reset()
+    {
+        prevFrame = FrameArray{};
+        baselineHistory.clear();
+    }
+
+    /// \brief The primary classifier function.
     /// \details To be called on a sequence of trace frames.  This filter holds
     /// state data and operates with a one-frame delay.  In other words, it
     /// returns the classification of the frame provided by the \e previous
-    /// call.
-    ///
-    /// The first frame pushed through will always be classified as "edge".
-
-    /// \param[in] threshold  The value above which a frame value is judged
-    /// unlikely to represent baseline signal.
-
-    /// \param[in,out] frame  Pointer to an array of trace values for a
-    /// particular frame and for a lane of ZMWs. The next value in the trace is
-    /// taken as input. Contains the value classified as output. Typically, this
-    /// value will be the value given as input in the preceeding call to this
-    /// function.
-
-    /// \returns true when value subsequently returned by \a PreviousFrame() is
-    /// likely to be an edge frame.
-    LaneMask<> IsEdgeFrame(const FrameArray& threshold, FrameArray* frame)
+    /// call. When called the first time after initialization or reset,
+    /// IsEdgeFrame returns {LaneMask<>{true}, FrameArray{0}}. The first frame
+    /// pushed through will always be classified as "edge".
+    /// \param threshold  The value above which a frame is considered unlikely
+    /// to represent baseline signal.
+    /// \param frame  An array of trace values for a particular frame and
+    /// for a lane of ZMWs.
+    /// \returns a pair in which the first element is indicates whether the
+    /// second element is likely to be an edge frame.
+    std::pair<LaneMask<>, FrameArray>
+    IsEdgeFrame(const FrameArray& threshold, const FrameArray& frame)
     {
-        const auto isBaseline = (*frame < threshold);
+        // This definition is not very attentive to avoiding copying FrameArray
+        // objects.  It is hoped that the compiler will inline this function and
+        // some copies will be optimized away.
+
+        const auto isBaseline = (frame < threshold);
         LaneMask<> edge {true};
+        // TODO: Can we avoid this conditional?
         if (baselineHistory.full())
         {
             // Consider prevFrame as suspected edge frame if exactly one of its
@@ -84,16 +87,17 @@ public:     // Non-const methods
 
         // Prepare for next iteration.
         baselineHistory.push_back(isBaseline);
-        std::swap(*frame, prevFrame);
+        const auto candidateFrame = prevFrame;
+        prevFrame = frame;
 
-        return edge;
+        return {edge, candidateFrame};
     }
 
 private:    // Data
     FrameArray prevFrame {};
     CircularArray<LaneMask<>, 2> baselineHistory {};
 };
-    
+
 }   // namespace PacBio::Mongo::Basecaller
 
 #endif  // mongo_basecaller_traceAnalysis_EdgeFrameClassifier_H_

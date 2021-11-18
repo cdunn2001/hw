@@ -134,8 +134,8 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     const auto& bgMode = detModel.BaselineMode();
 
     // The threshold below which the sample is most likely full-frame baseline.
-    // TODO: This value should be either configurable or depend on the SNR of
-    // the dimmest pulse component of the detection model.
+    // TODO: This value should be configurable, depend on the SNR of
+    // the dimmest pulse component of the detection model, or both.
     static constexpr float threshSigma = 2.0f;
     // TODO: Use round-to-nearest here.
     const FrameArray threshold = threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean();
@@ -150,9 +150,8 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
     {
         FrameArray frame = lfi.Extract();
-        const LaneMask<> keep = !efc.IsEdgeFrame(threshold, &frame);
-        // TODO: Can we avoid casting to float here?
-        h.AddDatum(LaneArray<float>(frame), keep);
+        const auto [isEdge, candidateFrame] = efc.IsEdgeFrame(threshold, frame);
+        h.AddDatum(LaneArray<float>(candidateFrame), !isEdge);
     }
 }
 
