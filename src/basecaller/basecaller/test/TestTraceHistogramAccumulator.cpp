@@ -24,6 +24,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -64,6 +65,9 @@ struct TestParameters
     size_t framesPerBlock;
     size_t numFrames;
     LaneHistBounds bounds;
+
+    size_t NumBlocks() const
+    { return (numFrames + framesPerBlock - 1u) / framesPerBlock; }
 };
 
 struct TestConfig : public PBConfig<TestConfig>
@@ -373,6 +377,13 @@ TEST_P(Histogram, SingleLaneConstant)
         if (i < 64)
         {
             expected[i] = params.numFrames;
+
+            // In host implementation, edge-frame filter excludes first and last
+            // frame of each block.
+            if (GetParam() == TestTypes::TraceHistogramAccumHost)
+            {
+                expected[i] -= 2 * params.NumBlocks();
+            }
         }
         EXPECT_TRUE(all(counts == expected));
     }
@@ -411,7 +422,15 @@ TEST_P(Histogram, MultiLaneConstant)
             expected.Simd() = 0;
             if (i >= lane * laneSize && i < (lane+1) * laneSize)
             {
-                expected[i%laneSize] = params.numFrames;
+                const auto j = i % laneSize;
+                expected[j] = params.numFrames;
+
+                // In host implementation, edge-frame filter excludes first and
+                // last frame of each block.
+                if (GetParam() == TestTypes::TraceHistogramAccumHost)
+                {
+                    expected[j] -= 2 * params.NumBlocks();
+                }
             }
             EXPECT_TRUE(all(counts == expected)) << lane << " " << i;
         }
@@ -454,7 +473,15 @@ TEST_P(Histogram, MultiPoolConstant)
                 auto blockZmw = (pool * params.lanesPerPool + lane) * laneSize;
                 if (i >= blockZmw && i < blockZmw + laneSize)
                 {
-                    expected[i%laneSize] = params.numFrames;
+                    const auto j = i % laneSize;
+                    expected[j] = params.numFrames;
+                
+                    // In host implementation, edge-frame filter excludes first and
+                    // last frame of each block.
+                    if (GetParam() == TestTypes::TraceHistogramAccumHost)
+                    {
+                        expected[j] -= 2 * params.NumBlocks();
+                    }
                 }
                 EXPECT_TRUE(all(counts == expected));
             }
@@ -495,11 +522,59 @@ TEST_P(Histogram, SawtoothSimpleUniform)
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == 0u));
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == 0u));
 
-            ArrayUnion<LaneArray<uint16_t>> expected;
+            // The histogram range is [0.0, numBins].
+            // The histogram bin size is 1.0.
+            // The value of the first frame generated is 0.
+            // The sawtooth slope is 1.
+            // Baseline sigma is 1.0.  So the threshold used in the edge-frame
+            // filter (EFF) is 2.0.
+
+            // The range of bin 0 is [0.0f, 1.0f).  Since the trace data are
+            // integers, the only value in this range is 0.  The neighboring
+            // frame values are always numBins and 1.  So the EFF will exclude
+            // all the frames that would fall into this bin.
+
+            // Similarly, 1 is the only value in the range of bin 1. Neighboring
+            // frame values are always 0 and 2.  2 is _barely_ "above" the
+            // threshold (2 >= 2).  So all of the frames that would fall into
+            // this bin are also excluded.
+
+            // 2 is the only value in the range of bin 2.  Neighboring frame
+            // values are always 1 and 3.  So all of the frames that would fall
+            // into this bin are also excluded.
+
+            // For bins b = 3, ... numbins-1, the neighboring frame values are
+            // all above the threshold.  So all of these frames will pass the
+            // EFF, except for the first and last frame of each block.
+            // TODO: How many blocks are there?
+
+            // numBins -1 is the only value in the range of the last bin.  The
+            // neighboring frame values are always numBins - 2 and 0.  So the
+            // EFF will exclude all the frames that would fall into this bin.
+            const std::vector<size_t> effBins {0u, 1u, 2u, numBins - 1u};
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all((counts == 6u) | (counts == 7u)));
+                const auto binSize = lanedata.binSize.front();
+                const auto binStart = lanedata.lowBound.front() + i * binSize;
+                const auto binStop = lanedata.lowBound.front() + (i+1) * binSize;
+                if (GetParam() == TestTypes::TraceHistogramAccumHost &&
+                    std::count(effBins.cbegin(), effBins.cend(), i) != 0)
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "    bin " << i << ','
+                        << "  counts = " << counts.ToArray().front()
+                        << "\n    start = " << binStart
+                        << "\n    stop  = " << binStop;
+                }
+                else
+                {
+                    EXPECT_TRUE(all((counts == 6u) | (counts == 7u)))
+                        << "    bin " << i << ','
+                        << "  counts = " << counts.ToArray().front()
+                        << "\n    start = " << binStart
+                        << "\n    stop  = " << binStop;
+                }
             }
         }
     }
