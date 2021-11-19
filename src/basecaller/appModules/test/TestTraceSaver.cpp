@@ -142,10 +142,18 @@ TYPED_TEST(TestTraceSaver, TestA)
         }
         // which skip (0,64) and (1,64)
 
+        BatchDimensions dims;
+        dims.lanesPerBatch = 1;
+        dims.framesPerBatch = 128;
+        dims.laneWidth = laneWidth;
+        DataSource::PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
+            PacketLayout::EncodingFormat::UINT8,
+            {1,128,laneWidth});
         DataSourceBase::LaneSelector laneSelector(lanes);
         TraceSaverBody traceSaver(traceFile,
                                   numFrames,
                                   std::move(laneSelector),
+                                  packetLayout,
                                   writeType,
                                   holeNumbers,
                                   roiFeatures,
@@ -156,10 +164,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                                   instrumentName,
                                   MockAnalysisConfig());
 
-        BatchDimensions dims;
-        dims.lanesPerBatch = 1;
-        dims.framesPerBatch = 128;
-        dims.laneWidth = laneWidth;
+
 
         // fill each batch with the "alpha" test pattern, which is based on row and column
         // The pattern will be tweaked as necessary to not overflow when using 8 bit data
@@ -321,11 +326,15 @@ TEST(Sanity,ROI)
     PacBio::Dev::TemporaryDirectory tmpDir;
     const std::string traceFileName = tmpDir.DirName() + "/testB.trc.h5";
     const uint64_t frames=1024;
+    DataSource::PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
+        PacketLayout::EncodingFormat::INT16,
+        {1,512,64});
     PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
         TraceSaverBody traceSaver(traceFileName,
                                   frames,
                                   std::move(blocks),
+                                  packetLayout,
                                   TraceFile::TraceDataType::INT16,
                                   holeNumbers,
                                   roiFeatures,

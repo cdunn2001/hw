@@ -94,19 +94,14 @@ cat <<HERE > $tmpjson
   },
   "source":
   {
-    "WX2SourceConfig":
+    "WXIPCDataSourceConfig":
     {
          "dataPath": "HardLoop",
          "maxPopLoops": ${MAXPOPLOOPS},
          "simulatedFrameRate": $RATE,
          "simulatedInputFile": "${INPUT}",
          "sleepDebug": 600,
-         "tilePoolFactor" : ${TILEPOOLFACTOR},
-         "wxlayout": {
-           "framesPerPacket":  ${fpgaFramesPerPacket},
-           "lanesPerPacket" : ${fpgaPacketLanes},
-           "zmwsPerLane" : ${fpgaZmwsPerLane}
-          }
+         "tilePoolFactor" : ${TILEPOOLFACTOR}
     }
   },
   "traceSaver": 

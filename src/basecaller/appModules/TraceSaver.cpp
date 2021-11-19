@@ -53,7 +53,8 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const Mongo::Data::AnalysisConfig& analysisConfig)
     : laneSelector_(std::move(laneSelector))
     , packetLayout_([packetLayout](){
-        PacBio::TraceFile::TraceData::SetDefaultChunkDims(packetLayout.BlockWidth(), packetLayout.NumFrames(), 0);
+        PacBio::TraceFile::TraceData::SetDefaultChunkZmwDim(packetLayout.BlockWidth());
+        PacBio::TraceFile::TraceData::SetDefaultChunkFrameDim( packetLayout.NumFrames());
         return packetLayout;
     }())
     , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
