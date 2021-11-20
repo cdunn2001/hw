@@ -235,12 +235,6 @@ public:
             (void) uploadProfiler;
 
             PacBio::Dev::Profile::FastTimer timer;
-            // TODO need to have a robust check if there is a GPU
-            //      present on this system.  CopyToDevice will
-            //      have an error if that is the case.  This flag
-            //      can serve as an imperfect proxy for now, but
-            //      certain (presumably uncommon) config settings
-            //      can break this.
             if (measurePCIeBandwidth_)
             {
                 bytesUploaded_ += std::visit([](const auto& batch)
