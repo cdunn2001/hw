@@ -24,7 +24,10 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
+#include <numeric>
+#include <vector>
 
+#include <boost/numeric/conversion/cast.hpp>
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
@@ -36,6 +39,8 @@
 #include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
+#include <common/cuda/utility/CudaArray.h>
+#include <common/MongoConstants.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 #include "SpeedTestToggle.h"
@@ -50,10 +55,20 @@ using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Basecaller;
 using namespace PacBio::Mongo::Data;
 
+using boost::numeric_cast;
+
 namespace {
 
 // Just extracting this here to make it easier to type elsewhere
 static constexpr size_t numBins = LaneHistogram<float, int16_t>::numBins;
+
+template <typename T>
+LaneArray<T> iotaLaneArray(const T start = T(0))
+{
+    CudaArray<T, laneSize> a;
+    std::iota(a.begin(), a.end(), start);
+    return LaneArray<T>::FromArray(a);
+}
 
 }
 
@@ -64,6 +79,9 @@ struct TestParameters
     size_t framesPerBlock;
     size_t numFrames;
     LaneHistBounds bounds;
+
+    size_t NumBlocks() const
+    { return (numFrames + framesPerBlock - 1u) / framesPerBlock; }
 };
 
 struct TestConfig : public PBConfig<TestConfig>
@@ -373,6 +391,13 @@ TEST_P(Histogram, SingleLaneConstant)
         if (i < 64)
         {
             expected[i] = params.numFrames;
+
+            // In host implementation, edge-frame filter excludes first and last
+            // frame.
+            if (GetParam() == TestTypes::TraceHistogramAccumHost)
+            {
+                expected[i] -= 2;
+            }
         }
         EXPECT_TRUE(all(counts == expected));
     }
@@ -411,7 +436,15 @@ TEST_P(Histogram, MultiLaneConstant)
             expected.Simd() = 0;
             if (i >= lane * laneSize && i < (lane+1) * laneSize)
             {
-                expected[i%laneSize] = params.numFrames;
+                const auto j = i % laneSize;
+                expected[j] = params.numFrames;
+
+                // In host implementation, edge-frame filter excludes first and
+                // last.
+                if (GetParam() == TestTypes::TraceHistogramAccumHost)
+                {
+                    expected[j] -= 2;
+                }
             }
             EXPECT_TRUE(all(counts == expected)) << lane << " " << i;
         }
@@ -454,7 +487,15 @@ TEST_P(Histogram, MultiPoolConstant)
                 auto blockZmw = (pool * params.lanesPerPool + lane) * laneSize;
                 if (i >= blockZmw && i < blockZmw + laneSize)
                 {
-                    expected[i%laneSize] = params.numFrames;
+                    const auto j = i % laneSize;
+                    expected[j] = params.numFrames;
+
+                    // In host implementation, edge-frame filter excludes first and
+                    // last frame.
+                    if (GetParam() == TestTypes::TraceHistogramAccumHost)
+                    {
+                        expected[j] -= 2;
+                    }
                 }
                 EXPECT_TRUE(all(counts == expected));
             }
@@ -495,11 +536,58 @@ TEST_P(Histogram, SawtoothSimpleUniform)
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == 0u));
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == 0u));
 
-            ArrayUnion<LaneArray<uint16_t>> expected;
+            // The histogram range is [0.0, numBins].
+            // The histogram bin size is 1.0.
+            // The value of the first frame generated is 0.
+            // The sawtooth slope is 1.
+            // Baseline sigma is 1.0.  So the threshold used in the edge-frame
+            // filter (EFF) is 2.0.
+
+            // The range of bin 0 is [0.0f, 1.0f).  Since the trace data are
+            // integers, the only value in this range is 0.  The neighboring
+            // frame values are always numBins and 1.  So the EFF will exclude
+            // all the frames that would fall into this bin.
+
+            // Similarly, 1 is the only value in the range of bin 1. Neighboring
+            // frame values are always 0 and 2.  2 is _barely_ "above" the
+            // threshold (2 >= 2).  So all of the frames that would fall into
+            // this bin are also excluded.
+
+            // 2 is the only value in the range of bin 2.  Neighboring frame
+            // values are always 1 and 3.  So all of the frames that would fall
+            // into this bin are also excluded.
+
+            // For bins b = 3, ... numbins-1, the neighboring frame values are
+            // all above the threshold.  So all of these frames will pass the
+            // EFF, except for the first and last frame of each block.
+
+            // numBins -1 is the only value in the range of the last bin.  The
+            // neighboring frame values are always numBins - 2 and 0.  So the
+            // EFF will exclude all the frames that would fall into this bin.
+            const std::vector<size_t> effBins {0u, 1u, 2u, numBins - 1u};
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all((counts == 6u) | (counts == 7u)));
+                const auto binSize = lanedata.binSize.front();
+                const auto binStart = lanedata.lowBound.front() + i * binSize;
+                const auto binStop = lanedata.lowBound.front() + (i+1) * binSize;
+                if (GetParam() == TestTypes::TraceHistogramAccumHost &&
+                    std::count(effBins.cbegin(), effBins.cend(), i) != 0)
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "    bin " << i << ','
+                        << "  counts = " << counts.ToArray().front()
+                        << "\n    start = " << binStart
+                        << "\n    stop  = " << binStop;
+                }
+                else
+                {
+                    EXPECT_TRUE(all((counts == 6u) | (counts == 7u)))
+                        << "    bin " << i << ','
+                        << "  counts = " << counts.ToArray().front()
+                        << "\n    start = " << binStart
+                        << "\n    stop  = " << binStop;
+                }
             }
         }
     }
@@ -523,6 +611,11 @@ TEST_P(Histogram, SawtoothSkipUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
+    // Bin size is 1.
+    // Signal is repeating ramps of {0, 2, 4, ..., numBins - 2?}.
+    // Only 2 and (numBins - 2) are excluded as edge frames by CPU
+    // implementation.
+
     auto hists = RunTest(params,
                          simConfig,
                          std::move(generator));
@@ -542,11 +635,26 @@ TEST_P(Histogram, SawtoothSkipUniform)
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
-                auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                if (i % 2 == 0)
-                    EXPECT_TRUE(all((counts == expect) | (counts == expect+1u)));
+                const auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
+                if (GetParam() == TestTypes::TraceHistogramAccumHost
+                    && (i == 2 || i == numBins - 2))
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
+                else if (i % 2 == 0)
+                {
+                    EXPECT_TRUE(all((counts == expect) | (counts == expect+1u)))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
                 else
-                    EXPECT_TRUE(all(counts == 0u));
+                {
+                    EXPECT_TRUE(all(counts == 0u))
+                        << "  i is " << i
+                        << ", count is " << lanedata.binCount[i][0];
+                }
             }
         }
     }
@@ -570,10 +678,18 @@ TEST_P(Histogram, SawtoothOutliersUniform)
     sawConfig.startFrameStagger = 0;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
 
+    // Bin size = 1.
+    // Histogram range = [100, 400].
+    // Signal is four repeats of {0, 1, 2, ..., 511}.
+    // Values that are marked as edge frames are {0, 1, 2, 511}.
+    // The the first and last frames for each ZMW are also defined as edge frames.
+    // 511 is a high outlier.  The others are low outliers.
+
     auto hists = RunTest(params,
                          simConfig,
                          std::move(generator));
 
+    const bool isHostImpl = (GetParam() == TestTypes::TraceHistogramAccumHost);
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
         EXPECT_EQ(hists[pool]->FramesAdded(), params.numFrames);
@@ -582,14 +698,28 @@ TEST_P(Histogram, SawtoothOutliersUniform)
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
+
+            const auto expectHigh = 4 * (sawConfig.maxAmp
+                                         - params.bounds.upperBounds[0]
+                                         - (isHostImpl ? 1 : 0));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == expectHigh))
+                << "  outlierCountHigh is " << lanedata.outlierCountHigh[0]
+                << ",  expectHigh is " << expectHigh;
+
+            const auto expectLow = 4 * (params.bounds.lowerBounds[0]
+                                        - sawConfig.minAmp
+                                        - (isHostImpl ? 3 : 0));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == expectLow))
+                << "  outlierCountLow is " << lanedata.outlierCountLow[0]
+                << ",  expectLow is " << expectLow;
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all(counts == 4u));
+                EXPECT_TRUE(all(counts == 4u))
+                    << "  i is " << i
+                    << ", count is " << lanedata.binCount[i][0];
             }
         }
     }
@@ -597,25 +727,97 @@ TEST_P(Histogram, SawtoothOutliersUniform)
 
 TEST_P(Histogram, SawtoothOutliersStagger)
 {
+    constexpr unsigned int numPeriods = 4u;
+    constexpr unsigned int period = 512u;
+
     TestParameters params;
     params.lanesPerPool = 2;
     params.numPools = 2;
-    params.framesPerBlock = 512;
-    params.numFrames = 2048;
+    params.framesPerBlock = period;
+    params.numFrames = period * numPeriods;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 100+numBins;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     SawtoothGenerator::Config sawConfig;
     sawConfig.minAmp = 0;
-    sawConfig.maxAmp = 512;
-    sawConfig.periodFrames = 512;
+    sawConfig.maxAmp = period;
+    sawConfig.periodFrames = period;
     sawConfig.startFrameStagger = 2;
     auto generator = std::make_unique<SawtoothGenerator>(sawConfig);
+
+    // Bin size = 1.
+    // Histogram range = [100, 400].
+    // Signal is four repeats of {0, 1, 2, ..., maxAmp - 1} for ZMW 0.
+    // ZMW z is the same except with a shift of 2*z.  0 <= z < 64.
+    // ZMWs are number sequentially over the sequence of lanes.
+    // Values that are marked as edge frames are {0, 1, 2, 511}.
+    // 511 is a high outlier.  The others are low outliers.
 
     auto hists = RunTest(params,
                          simConfig,
                          std::move(generator));
+
+    const bool isHostImpl = (GetParam() == TestTypes::TraceHistogramAccumHost);
+    const std::vector<size_t> effVals {0u, 1u, 2u, sawConfig.maxAmp - 1u};
+
+    using IntArray = LaneArray<int32_t>;
+
+    // Currently assume that upper and lower histogram bounds are uniform over the lane.
+
+    // Returns the expected number high outliers
+    const auto expectHigh = [&](const IntArray& firstVal, const IntArray& lastVal)
+    {
+        IntArray r = sawConfig.maxAmp - params.bounds.upperBounds[0];
+        r *= numeric_cast<int>(numPeriods);
+        if (isHostImpl)
+        {
+            // Count "edge frames" over the histogram range
+            // We should have 4 copies of maxAmp - 1.
+            IntArray edgeCount = numeric_cast<int>(numPeriods);
+
+            // Is the first frame < maxAmp - 1 and >= histogram range?
+            const auto firstValHigh = (firstVal < sawConfig.maxAmp - 1)
+                                      & (firstVal >= params.bounds.upperBounds[0]);
+            edgeCount += Blend(firstValHigh, IntArray(1), IntArray(0));
+
+            // Is the last frame < maxAmp - 1 and >= histogram range?
+            const auto lastValHigh = (lastVal < sawConfig.maxAmp - 1)
+                                     & (lastVal >= params.bounds.upperBounds[0]);
+            edgeCount += Blend(lastValHigh, IntArray(1), IntArray(0));
+
+            r -= edgeCount;
+        }
+        return r;
+    };
+
+    // Returns the expected number of low outliers.
+    const auto expectLow = [&](const IntArray& firstVal, const IntArray& lastVal)
+    {
+        IntArray r = params.bounds.lowerBounds[0] - sawConfig.minAmp;
+        r *= numeric_cast<int>(numPeriods);
+
+        if (isHostImpl)
+        {
+            // Count "edge frames" over the histogram range
+            // We should have 4 copies of {0, 1, 2}.
+            IntArray edgeCount = 3 * numeric_cast<int>(numPeriods);
+
+            // Is the first frame > 2 and < histogram range?
+            const auto firstValLow = (firstVal > 2)
+                                     & (firstVal < params.bounds.lowerBounds[0]);
+            edgeCount += Blend(firstValLow, IntArray(1), IntArray(0));
+
+            // Is the last frame > 2 and < histogram range?
+            const auto lastValLow = (lastVal > 2)
+                                    & (lastVal < params.bounds.lowerBounds[0]);
+            edgeCount += Blend(lastValLow, IntArray(1), IntArray(0));
+
+            r -= edgeCount;
+        }
+        return r;
+    };
+
 
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
@@ -624,15 +826,32 @@ TEST_P(Histogram, SawtoothOutliersStagger)
         const auto& histdata = hists[pool]->Histogram();
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
+            // Values of first and last frames.
+            const auto z = iotaLaneArray<int32_t>();
+            const IntArray firstVal = z * sawConfig.startFrameStagger;
+            const IntArray lastVal = (firstVal + numeric_cast<int32_t>(params.numFrames) - 1)
+                                     % sawConfig.maxAmp;
+
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
+            EXPECT_TRUE(all(IntArray(lanedata.outlierCountHigh) == expectHigh(firstVal, lastVal)));
+            EXPECT_TRUE(all(IntArray(lanedata.outlierCountLow) == expectLow(firstVal, lastVal)));
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
-                auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all(counts == 4u));
+                using UShortArray = LaneArray<uint16_t>;
+                UShortArray expect = 4u;
+                if (isHostImpl)
+                {
+                    const auto binVal = numeric_cast<int32_t>(i + params.bounds.lowerBounds[0]);
+                    expect -= Blend(firstVal == binVal, UShortArray(1), UShortArray(0));
+                    expect -= Blend(lastVal == binVal, UShortArray(1), UShortArray(0));
+                }
+
+                const auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
+                EXPECT_TRUE(all(counts == expect))
+                    << "  i is " << i
+                    << ", count of ZMW 0 is " << lanedata.binCount[i][0];
             }
         }
     }
@@ -668,14 +887,14 @@ TEST_P(Histogram, Reset)
         for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == (sawConfig.maxAmp - params.bounds.upperBounds[0])*4u));
-            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == (params.bounds.lowerBounds[0] - sawConfig.minAmp)*4u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) > 0u));
+            EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) > 0u));
 
             ArrayUnion<LaneArray<uint16_t>> expected;
             for (size_t i = 0; i < numBins; ++i)
             {
                 auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                EXPECT_TRUE(all(counts == 4u));
+                EXPECT_TRUE(all(counts > 0u));
             }
         }
     }

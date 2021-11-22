@@ -528,6 +528,15 @@ inline m512ui floorCastUInt(const m512f& f)
                  ,_mm_cvtps_epi32(_mm_floor_ps(f.data4())));
 }
 
+inline m512i roundCastInt(const m512f& f)
+{
+    constexpr int mode = _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC;
+    return m512i(_mm_cvtps_epi32(_mm_round_ps(f.data1(), mode)),
+                 _mm_cvtps_epi32(_mm_round_ps(f.data2(), mode)),
+                 _mm_cvtps_epi32(_mm_round_ps(f.data3(), mode)),
+                 _mm_cvtps_epi32(_mm_round_ps(f.data4(), mode)));
+}
+
 }}      // namespace PacBio::Simd
 
 #endif  // mongo_common_simd_m512f_SSE_H_
