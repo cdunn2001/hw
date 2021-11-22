@@ -78,7 +78,6 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
     assert(view.Size() == edgeClassifier_.size());
     for (size_t i = 0; i < view.Size(); ++i)
     {
-        edgeClassifier_[i].Reset();     // TODO: Do we really want to reset the edge-frame classifiers?
         hist_.emplace_back(numBins, Arr(view[i].lowerBounds), Arr(view[i].upperBounds));
     }
 }
@@ -91,8 +90,6 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
     assert(view.Size() == edgeClassifier_.size());
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
-        edgeClassifier_[lane].Reset();     // TODO: Do we really want to reset the edge-frame classifiers?
-
         // Determine histogram parameters.
         const auto& laneBlStats = StatAccumulator<LaneArray<float>>(view[lane].baselineStats);
 

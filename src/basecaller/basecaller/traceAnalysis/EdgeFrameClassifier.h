@@ -66,8 +66,8 @@ public:     // Non-const methods
     /// to represent baseline signal.
     /// \param frame  An array of trace values for a particular frame and
     /// for a lane of ZMWs.
-    /// \returns a pair in which the first element is indicates whether the
-    /// second element is likely to be an edge frame.
+    /// \returns a pair in which the first element indicates whether the second
+    /// element is likely to be an edge frame.
     std::pair<LaneMask<>, FrameArray>
     IsEdgeFrame(const FrameArray& threshold, const FrameArray& frame)
     {
