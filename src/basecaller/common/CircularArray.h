@@ -41,6 +41,9 @@ template <typename T, size_t Capacity>
 class CircularArray
 {
 public:
+    using value_type = T;
+
+public:
     CircularArray() : i0_(0), i1_(-1)
     { }
 
@@ -49,16 +52,16 @@ public:
         if (full()) i0_ = (i0_ + 1) % Capacity;
 
         i1_ = (i1_ + 1) % Capacity;  // OK for size 0 (i1_ = -1) as well
-        buf_[i1_] = item;        
+        buf_[i1_] = item;
     }
 
     void pop_back()
     {
         assert(!empty());
         if (size() == 1)
-        {   // reset to empty state  
+        {   // reset to empty state
             i0_ = 0;
-            i1_ = -1;           
+            i1_ = -1;
         }
         else
         {
@@ -78,7 +81,7 @@ public:
         {
             bool isfull = full();
             i0_ = (Capacity + i0_ - 1) % Capacity;
-            if (isfull) 
+            if (isfull)
                 i1_ = (i0_ + Capacity - 1) % Capacity;
 
             buf_[i0_] = item;
@@ -90,7 +93,7 @@ public:
         assert(!empty());
 
         if (size() == 1)
-        {   // reset to empty state  
+        {   // reset to empty state
             i0_ = 0;
             i1_ = -1;
         }
