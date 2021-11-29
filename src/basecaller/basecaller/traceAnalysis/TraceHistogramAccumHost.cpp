@@ -34,6 +34,7 @@
 #include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
 
+#include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
@@ -65,6 +66,7 @@ void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConf
 TraceHistogramAccumHost::TraceHistogramAccumHost(unsigned int poolId,
                                                  unsigned int poolSize)
     : TraceHistogramAccumulator(poolId, poolSize)
+    , edgeClassifier_ (poolSize)
 { }
 
 void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
@@ -73,6 +75,7 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
     using Arr = LaneArray<TraceHistogramAccumHost::HistDataType, laneSize>;
     hist_.clear();
     auto view = bounds.GetHostView();
+    assert(view.Size() == edgeClassifier_.size());
     for (size_t i = 0; i < view.Size(); ++i)
     {
         hist_.emplace_back(numBins, Arr(view[i].lowerBounds), Arr(view[i].upperBounds));
@@ -84,6 +87,7 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
     constexpr unsigned int numBins = LaneHistType::numBins;
     hist_.clear();
     auto view = metrics.baselinerStats.GetHostView();
+    assert(view.Size() == edgeClassifier_.size());
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
         // Determine histogram parameters.
@@ -106,37 +110,48 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 }
 
 void TraceHistogramAccumHost::AddBatchImpl(const Data::TraceBatch<TraceElementType>& traces,
-                                           const PoolDetModel& /* detModel */)
+                                           const PoolDetModel& detModel)
 {
     const auto numLanes = traces.LanesPerBatch();
-
-    // TODO: Pass detection model along and use for edge-frame scrubbing.
-    
     tbb::task_arena().execute([&] {
         // For each lane/block in the batch ...
         tbb::parallel_for((size_t) {0}, numLanes, [&](size_t lane) {
-            AddBlock(traces, lane);
+            AddBlock(traces, detModel, lane);
         });
     });
 }
 
 void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>& traces,
+                                       const PoolDetModel& pdm,
                                        unsigned int lane)
 {
     assert(lane < hist_.size());
 
     auto& h = hist_[lane];
 
-    // Get view to the trace data of lane i.
+    // Get views to the trace data and detection model of lane i.
     const auto traceBlock = traces.GetBlockView(lane);
+    const DetModelHost& detModel {pdm.GetHostView()[lane]};
+    const auto& bgMode = detModel.BaselineMode();
+
+    // The threshold below which the sample is most likely full-frame baseline.
+    // TODO: This value should be configurable, depend on the SNR of
+    // the dimmest pulse component of the detection model, or both.
+    static constexpr float threshSigma = 2.0f;
+    const FrameArray threshold {roundCastInt(threshSigma * sqrt(bgMode.SignalCovar()) + bgMode.SignalMean())};
+
+    // The edge-frame classifier for the specified lane.
+    auto& efc = edgeClassifier_.at(lane);
 
     // Iterate over lane-frames.
     for (auto lfi = traceBlock.CBegin(); lfi != traceBlock.CEnd(); ++lfi)
     {
-        // TODO: Filter edge frames.
-        h.AddDatum(LaneArray<float>(lfi.Extract()));
+        FrameArray frame = lfi.Extract();
+        const auto [isEdge, candidateFrame] = efc.IsEdgeFrame(threshold, frame);
+        h.AddDatum(LaneArray<float>(candidateFrame), !isEdge);
     }
 }
+
 
 TraceHistogramAccumHost::PoolHistType
 TraceHistogramAccumHost::HistogramImpl() const

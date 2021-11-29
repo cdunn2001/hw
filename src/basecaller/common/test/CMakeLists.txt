@@ -8,6 +8,7 @@ include(pacbio-eigen)
 # Define "object library" to support top-level unit test target.
 add_library(libMongoCommonTest OBJECT
     TestAutocorrAccumulator.cpp
+    TestCircularArray.cpp
     TestLaneArray.cpp
     TestGraphAPI.cpp
     TestBatchDataSource.cpp

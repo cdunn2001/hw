@@ -34,8 +34,11 @@
 #include <common/AlignedVector.h>
 #include <common/LaneArray.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
+#include <dataTypes/BasicTypes.h>
+#include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 
+#include "EdgeFrameClassifier.h"
 #include "TraceHistogramAccumulator.h"
 
 namespace PacBio {
@@ -80,6 +83,11 @@ private:    // TraceHistogramAccumulator implementation.
 
     PoolHistType HistogramImpl() const override;
 
+private:    // Types
+    using FrameArray = LaneArray<TraceElementType>;
+    using FloatArray = LaneArray<float>;
+    using DetModelHost = Data::DetectionModelHost<FloatArray>;
+
 private: // Static data
     static float binSizeCoeff_;
     static unsigned int baselineStatMinFrameCount_;
@@ -87,10 +95,18 @@ private: // Static data
 
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;
+    AlignedVector<EdgeFrameClassifier> edgeClassifier_;
 
 private:    // Functions
     // Add the frames of one trace block (i.e., lane-chunk) into the appropriate histogram.
-    void AddBlock(const Data::TraceBatch<TraceElementType>& ctb, unsigned int lane);
+    void AddBlock(const Data::TraceBatch<TraceElementType>& ctb,
+                  const PoolDetModel& pdm,
+                  unsigned int lane);
+
+    // Determines whether a particular frame is most likely not an edge frame at
+    // the lane level.
+    LaneMask<> MaskEdgeFrames(const FrameArray& frame,
+                              const FrameArray& threshold);
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

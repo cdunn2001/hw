@@ -36,6 +36,7 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DmeEmDevice.cu
     DmeEmHost.h
     DmeEmHost.cpp
+    EdgeFrameClassifier.h
     FrameLabeler.h
     FrameLabeler.cpp
     FrameLabelerDevice.h
