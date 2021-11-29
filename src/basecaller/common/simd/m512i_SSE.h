@@ -173,6 +173,16 @@ public:     // Assignment
         return *this;
     }
 
+    m512i& operator%=(const m512i& x)
+    {
+        // TODO: SIMDmotize this.
+        for (unsigned i = 0; i < size(); ++i)
+        {
+            data.raw[i] %= x.data.raw[i];
+        }
+        return *this;
+    }
+
     m512i operator-() const
     {
         const auto zero = _mm_setzero_si128();
@@ -233,6 +243,12 @@ public:     // Non-member (friend) functions
                      _mm_div_epi32(l.data.simd[1], r.data.simd[1]),
                      _mm_div_epi32(l.data.simd[2], r.data.simd[2]),
                      _mm_div_epi32(l.data.simd[3], r.data.simd[3]));
+    }
+
+    friend m512i operator % (m512i l, const m512i& r)
+    {
+        l %= r;
+        return l;
     }
 
     friend m512i operator & (const m512i& l, const m512i& r)

@@ -127,6 +127,13 @@ public:
             [](auto&& in2){ return floorCastInt(in2); },
             in);
     }
+
+    friend LaneArray<int, ScalarCount> roundCastInt(const LaneArray& in)
+    {
+        return LaneArray<int, ScalarCount>(
+            [](auto&& in2) { return roundCastInt(in2); },
+            in);
+    }
 };
 
 template <size_t ScalarCount>
