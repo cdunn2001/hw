@@ -60,7 +60,7 @@ public:
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
-        , measurePCIeBandwidth_(sysConfig.analyzerHardware != Mongo::Basecaller::ComputeDevices::Host)
+        , measurePCIeBandwidth_(algoConfig.ComputingMode() == Mongo::Data::BasecallerAlgorithmConfig::ComputeMode::PureGPU)
         , numStreams_(sysConfig.basecallerConcurrency)
     {
         auto priorityRange = Cuda::StreamPriorityRange();
@@ -235,12 +235,6 @@ public:
             (void) uploadProfiler;
 
             PacBio::Dev::Profile::FastTimer timer;
-            // TODO need to have a robust check if there is a GPU
-            //      present on this system.  CopyToDevice will
-            //      have an error if that is the case.  This flag
-            //      can serve as an imperfect proxy for now, but
-            //      certain (presumably uncommon) config settings
-            //      can break this.
             if (measurePCIeBandwidth_)
             {
                 bytesUploaded_ += std::visit([](const auto& batch)

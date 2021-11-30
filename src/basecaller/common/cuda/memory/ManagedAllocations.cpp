@@ -85,7 +85,9 @@ struct MallocAllocator
 
     static void* allocate(size_t size)
     {
-        return aligned_alloc(64, size);
+        return aligned_alloc(64, (size % 64 == 0)
+                                                     ? size
+                                                     : (size + 64 - 1 / 64) * 64);
     }
     static void deallocate(void* ptr)
     {

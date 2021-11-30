@@ -51,6 +51,8 @@ public:
                         },
                         {"analyzerHardware"}
     ));
+
+    bool UsesGpu() const { return Method == MethodName::Gpu; }
 };
 
 }}}     // namespace PacBio::Mongo::Data

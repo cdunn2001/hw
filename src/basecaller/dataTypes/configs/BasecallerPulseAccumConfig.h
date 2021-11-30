@@ -80,6 +80,8 @@ public:
                         {"analyzerHardware"}
     ));
 
+    bool UsesGpu() const { return Method == MethodName::GpuPulses; }
+
     // Increasing this number will directly increase memory usage, even if
     // we don't saturate the allowed number of calls, so be conservative.
     // Hard-coded for now to correspond to 512-frame chunk, 100 fps, with

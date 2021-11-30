@@ -63,6 +63,8 @@ public:
     // Use this value as an estimate for baseline standard deviation when
     // we have insufficient data.
     PB_CONFIG_PARAM(float, FallBackBaselineSigma, 10.0f);
+
+    bool UsesGpu() const { return Method == MethodName::Gpu; }
 };
 
 }}}     // namespace PacBio::Mongo::Data

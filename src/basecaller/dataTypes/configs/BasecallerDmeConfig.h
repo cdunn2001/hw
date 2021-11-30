@@ -67,6 +67,8 @@ public:
                         {"analyzerHardware"}
     ));
 
+    bool UsesGpu() const { return Method == MethodName::EmDevice; }
+
     // Parameters for the SpiderFixed model, when in use
     PB_CONFIG_OBJECT(FixedDmeConfig, SimModel);
 
