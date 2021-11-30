@@ -99,7 +99,7 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
     params.crossTalk.resize(boost::extents[params.xtalkSize][params.xtalkSize]);
     params.crossTalk[params.xtalkSize/2][params.xtalkSize/2] = 1.0f;
 
-    params.platform = PacBio::Sensor::Platform::DONT_CARE;
+    params.platform = PacBio::Sensor::Platform::Kestrel;
     params.instrumentName = "instrument1";
 
     const uint32_t lanesPerPool = 64;
