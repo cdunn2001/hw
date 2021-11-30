@@ -41,7 +41,8 @@ using namespace Mongo::Data;
 TraceSaverBody::TraceSaverBody(const std::string& filename,
                                size_t numFrames,
                                DataSource::DataSourceBase::LaneSelector laneSelector,
-                               const DataSource::PacketLayout& packetLayout,
+                               const uint64_t frameBlockingSize,
+                               const uint64_t zmwBlockingSize,
                                TraceFile::TraceDataType dataType,
                                const std::vector<uint32_t>& holeNumbers,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
@@ -52,12 +53,20 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::string& instrumentName,
                                const Mongo::Data::AnalysisConfig& analysisConfig)
     : laneSelector_(std::move(laneSelector))
-    , packetLayout_([packetLayout](){
-        PacBio::TraceFile::TraceData::SetDefaultChunkZmwDim(packetLayout.BlockWidth());
-        PacBio::TraceFile::TraceData::SetDefaultChunkFrameDim( packetLayout.NumFrames());
-        return packetLayout;
-    }())
-    , file_(filename, dataType, laneSelector_.size() * laneSize, numFrames)
+    , file_(
+        // this lambda is a trick to call these chunking static functions before the file_ is constructed.
+        // The `filename` argument is hijacked for the simple reason that it is the first argument
+        // to the file_ constructor, but the filename is purely a spectator to this lambda.
+        ([&](){
+            if (frameBlockingSize > numFrames) throw PBException("frameBlockingSize must not be more than numFrames");
+            if (zmwBlockingSize > holeNumbers.size()) throw PBException("zmwBlockingSize must not be more than numZmws (holeNumbers.size())");
+            PacBio::TraceFile::TraceData::SetDefaultChunkZmwDim(zmwBlockingSize);
+            PacBio::TraceFile::TraceData::SetDefaultChunkFrameDim(frameBlockingSize);
+            return filename;
+        }()),
+        dataType,
+        laneSelector_.size() * laneSize,
+        numFrames)
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
     PopulateScanData(numFrames, imagePsf, crossTalk, platform, instrumentName, analysisConfig);

@@ -34,7 +34,6 @@
 #include <appModules/TraceSaver.h>
 #include <pacbio/ipc/JSON.h>
 #include <pacbio/datasource/MallocAllocator.h>
-#include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/sensor/RectangularROI.h>
 #include <pacbio/sensor/SparseROI.h>
 #include <pacbio/tracefile/TraceFile.h>
@@ -148,14 +147,12 @@ TYPED_TEST(TestTraceSaver, TestA)
         dims.lanesPerBatch = 1;
         dims.framesPerBatch = 128;
         dims.laneWidth = laneWidth;
-        DataSource::PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
-            PacketLayout::EncodingFormat::UINT8,
-            {1,128,laneWidth});
         DataSourceBase::LaneSelector laneSelector(lanes);
         TraceSaverBody traceSaver(traceFile,
                                   numFrames,
                                   std::move(laneSelector),
-                                  packetLayout,
+                                  dims.framesPerBatch,
+                                  dims.laneWidth,
                                   writeType,
                                   holeNumbers,
                                   roiFeatures,
@@ -329,15 +326,15 @@ TEST(Sanity,ROI)
     PacBio::Dev::TemporaryDirectory tmpDir;
     const std::string traceFileName = tmpDir.DirName() + "/testB.trc.h5";
     const uint64_t frames=1024;
-    DataSource::PacketLayout packetLayout(PacketLayout::LayoutType::BLOCK_LAYOUT_DENSE,
-        PacketLayout::EncodingFormat::INT16,
-        {1,512,64});
+    const size_t framesPerHdf5Chunk = 512;
+    const size_t zmwsPerHdf5Chunk = 64;
     PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
         TraceSaverBody traceSaver(traceFileName,
                                   frames,
                                   std::move(blocks),
-                                  packetLayout,
+                                  framesPerHdf5Chunk, 
+                                  zmwsPerHdf5Chunk,
                                   TraceFile::TraceDataType::INT16,
                                   holeNumbers,
                                   roiFeatures,

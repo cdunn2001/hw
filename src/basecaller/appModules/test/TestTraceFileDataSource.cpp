@@ -102,20 +102,16 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
     params.platform = PacBio::Sensor::Platform::Kestrel;
     params.instrumentName = "instrument1";
 
-    const uint32_t lanesPerPool = 64;
-    const uint32_t framesPerBlock = 512;
-    const uint32_t laneSize = 64;
-    PacketLayout packetLayout(PacketLayout::BLOCK_LAYOUT_DENSE,
-                        PacketLayout::INT16,
-                        {lanesPerPool, framesPerBlock, laneSize});
-
+    const size_t framesPerHdf5Chunk = 512;
+    const size_t zmwsPerHdf5Chunk = laneSize;
     // Instantiate this, to force the file's creation on disk
     // We don't really care that the trace data won't be
     // populated, we mostly just want something with batchIds
     TraceSaverBody tmp(name,
                        512,
                        DataSourceBase::LaneSelector(lanes),
-                       packetLayout,
+                       framesPerHdf5Chunk,
+                       zmwsPerHdf5Chunk,
                        TraceDataType::INT16,
                        params.holeNumbers,
                        params.properties,
