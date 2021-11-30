@@ -236,7 +236,7 @@ TYPED_TEST(TestTraceSaver, TestA)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
 
@@ -353,7 +353,7 @@ TEST(Sanity,ROI)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
         EXPECT_EQ(frames, reader.Traces().NumFrames());

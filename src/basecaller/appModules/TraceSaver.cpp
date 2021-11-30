@@ -108,8 +108,7 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     using ScanData = TraceFile::ScanData;
 
     ScanData::RunInfoData runInfo;
-    runInfo.platformName = platform.toString();
-    runInfo.platformId = platform;
+    runInfo.platformId = ScanData::RunInfoData::ToPlatformId(platform);
     runInfo.instrumentName = instrumentName;
     file_.Scan().RunInfo(runInfo);
 

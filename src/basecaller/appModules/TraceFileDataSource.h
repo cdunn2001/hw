@@ -137,7 +137,7 @@ public:
 
     Sensor::Platform Platform() const override
     {
-        return Sensor::Platform::fromString(this->traceFile_.Scan().RunInfo().platformName);
+        return this->traceFile_.Scan().RunInfo().Platform();
     }
     std::string InstrumentName() const override
     {

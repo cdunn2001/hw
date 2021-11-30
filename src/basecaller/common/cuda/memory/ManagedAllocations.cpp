@@ -224,7 +224,7 @@ private:
         // these values.
         static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
         config.baseAddress = 0x5'0000'0000ULL; // 0x4'0000'0000 = 17179869184ULL;
-        config.size = 25769803776ULL * 2;
+        config.size = 25769803776ULL;
         config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
         config.removeSharedSegmentsOnDestruction = false;
 
