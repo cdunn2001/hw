@@ -102,6 +102,8 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     ScanData::RunInfoData runInfo;
     runInfo.platformId = ScanData::RunInfoData::ToPlatformId(platform);
     runInfo.instrumentName = instrumentName;
+    // FIXME: Stub in a default HQRFMethod for now.
+    runInfo.hqrfMethod = "N2";
     file_.Scan().RunInfo(runInfo);
 
     ScanData::AcqParamsData acqParams;
@@ -110,7 +112,10 @@ void TraceSaverBody::PopulateScanData(size_t numFrames,
     acqParams.numFrames = numFrames;
     file_.Scan().AcqParams(acqParams);
 
-    constexpr std::string_view defaultLayoutName = "KestrelDefaultChipLayout";
+    // FIXME: For running on Sequel, the chip layout name is needed here.
+    // We want to eventually move to storing directly into the trace file the
+    // chip layout information.
+    constexpr std::string_view defaultLayoutName = "KestrelPOCRTO3";
 
     ScanData::ChipInfoData chipInfo;
     chipInfo.layoutName = defaultLayoutName;
