@@ -48,9 +48,10 @@ using namespace PacBio::Sensor;
 using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::DataSource;
+using namespace PacBio::TraceFile;
 
-const auto DefaultImagePsfSize = TraceFile::ScanData::DefaultImagePsfSize;
-const auto DefaultXtalkSize = TraceFile::ScanData::DefaultXtalkSize;
+const auto DefaultImagePsfSize = 5;
+const auto DefaultXtalkSize = 7;
 
 boost::multi_array<float,2> MakeUnity(size_t dimSize)
 {
@@ -89,7 +90,8 @@ TYPED_TEST(TestTraceSaver, TestA)
     const uint64_t numSelectedZmws = 128;
     boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
     boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
-    const Platform platform = Platform::DONT_CARE;
+    const Platform platform = Platform::Kestrel;
+    const ScanData::RunInfoData::PlatformId platformId = ScanData::RunInfoData::ToPlatformId(platform);
     const std::string instrumentName = "instrumentX";
 
     const uint32_t numCols = sensorROI.PhysicalCols();
@@ -154,7 +156,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                                   crossTalk,
                                   platform,
                                   instrumentName,
-                                  MockMovieConfig());
+                                  MockAnalysisConfig());
 
         BatchDimensions dims;
         dims.lanesPerBatch = 1;
@@ -231,8 +233,7 @@ TYPED_TEST(TestTraceSaver, TestA)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
-        EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
+        EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
 
         boost::multi_array<TOut, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
@@ -315,7 +316,8 @@ TEST(Sanity,ROI)
     }
     boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
     boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
-    PacBio::Sensor::Platform platform = PacBio::Sensor::Platform::DONT_CARE;
+    PacBio::Sensor::Platform platform = PacBio::Sensor::Platform::Kestrel;
+    ScanData::RunInfoData::PlatformId platformId = ScanData::RunInfoData::ToPlatformId(platform);
     std::string instrumentName = "instrumentX";
 
     PacBio::Dev::TemporaryDirectory tmpDir;
@@ -334,7 +336,7 @@ TEST(Sanity,ROI)
                                   crossTalk,
                                   platform,
                                   instrumentName,
-                                  MockMovieConfig());
+                                  MockAnalysisConfig());
     }
     {
         PacBio::TraceFile::TraceFile reader(traceFileName);
@@ -344,8 +346,7 @@ TEST(Sanity,ROI)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().platformName, platform.toString());
-        EXPECT_EQ(reader.Scan().RunInfo().platformId, platform);
+        EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
         EXPECT_EQ(frames, reader.Traces().NumFrames());
         const auto& holexy = reader.Traces().HoleXY();

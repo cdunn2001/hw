@@ -29,35 +29,14 @@
 
 #include <array>
 
+#include <acquisition/wxipcdatasource/WXIPCDataSourceConfig.h>
+
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/configuration/Validation.h>
 #include <pacbio/utilities/SmartEnum.h>
 #include <pacbio/sensor/Platform.h>
 
 namespace PacBio::Mongo::Data {
-
-struct WX2LayoutConfig  : public Configuration::PBConfig<WX2LayoutConfig>
-{
-    PB_CONFIG(WX2LayoutConfig);
-    PB_CONFIG_PARAM(uint32_t, lanesPerPacket, 2);
-    PB_CONFIG_PARAM(uint32_t, framesPerPacket, 512); // PacBio::Mongo::DataSource::Tile::NumFrames);
-    PB_CONFIG_PARAM(uint32_t, zmwsPerLane, 32); // PacBio::Mongo::DataSource::Tile::NumPixels);
-};
-
-// WARNING
-// This is a shadow struct. Also modify WXDataSourceConfig.h and adjust the constructor in std::make_unique<WXDataSource> in SmrtBasecaller.h
-// TODO: remove the shadow structs.
-struct WX2SourceConfig  : public Configuration::PBConfig<WX2SourceConfig>
-{
-    PB_CONFIG(WX2SourceConfig);
-    PB_CONFIG_PARAM(std::string, dataPath, "Normal"); // FIXME I'm using a string here because it is portable at the moment. Not sure how DataPath_t will be ported.
-    PB_CONFIG_PARAM(std::string, simulatedInputFile, ""); // TODO deprecate this
-    PB_CONFIG_PARAM(double, simulatedFrameRate, 100.0);  // TODO deprecate this
-    PB_CONFIG_PARAM(double, sleepDebug, 0.0);
-    PB_CONFIG_PARAM(uint32_t, maxPopLoops, 10);
-    PB_CONFIG_PARAM(double, tilePoolFactor, 3.0);  // TODO deprecate this
-    PB_CONFIG_OBJECT(WX2LayoutConfig, wxlayout);
-};
 
 struct TraceReanalysis : public Configuration::PBConfig<TraceReanalysis>
 {
@@ -91,6 +70,8 @@ struct TraceReplication : public Configuration::PBConfig<TraceReplication>
 
     PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
 };
+
+using WXIPCDataSourceConfig = PacBio::Acquisition::DataSource::WXIPCDataSourceConfig;
 
 }     // namespace PacBio::Mongo::Data
 

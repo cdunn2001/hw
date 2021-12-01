@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.20)
 add_subdirectory(test)
 
 set(CPP_LIST
+    configs/AnalysisConfig.cpp
+    configs/AnalysisConfig.h
     configs/BasecallerAlgorithmConfig.cpp
     configs/BasecallerAlgorithmConfig.h
     configs/BasecallerBaselinerConfig.cpp
@@ -18,15 +20,11 @@ set(CPP_LIST
     configs/BasecallerMetricsConfig.h
     configs/BasecallerPulseAccumConfig.cpp
     configs/BasecallerPulseAccumConfig.h
-    configs/BasecallerPulseToBaseConfig.cpp
-    configs/BasecallerPulseToBaseConfig.h
     configs/BasecallerTraceHistogramConfig.cpp
     configs/BasecallerTraceHistogramConfig.h
     configs/BatchLayoutConfig.h
     configs/BatchLayoutConfig.cpp
     configs/ConfigForward.h
-    configs/MovieConfig.cpp
-    configs/MovieConfig.h
     configs/PrelimHQConfig.cpp
     configs/PrelimHQConfig.h
     configs/SimulatedFaults.h
@@ -39,7 +37,6 @@ set(CPP_LIST
     configs/SystemsConfig.cpp
     configs/TraceSaverConfig.h
     configs/TraceSaverConfig.cpp
-    AnalogMode.h
     BasecallingMetrics.h
     BasecallingMetrics.cpp
     BasecallingMetricsAccumulator.h
@@ -108,6 +105,7 @@ libBazio
         libMongoCommon
         libMongoCommonCuda
         libPacbioCplusplusApi
+        libPacbioHwAcquisition
         libHalf
 )
 

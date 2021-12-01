@@ -26,6 +26,8 @@
 #ifndef mongo_common_simd_ArithmeticArray_H_
 #define mongo_common_simd_ArithmeticArray_H_
 
+#include <type_traits>
+
 #include <common/simd/BaseArray.h>
 #include <common/simd/LaneMaskImpl.h>
 #include <common/simd/m512b.h>
@@ -90,7 +92,7 @@ inline m512us Blend(const PairRef<const m512b>& b, const m512us& l, const m512us
 ///    is because it's very difficult to type 16 bit literals,
 ///    and even if you have a 16 bit variable it's too easy to
 ///    accidentally bump it up to 32 bit.  Without this exception
-///    we'll be either be constantly casting back to 16 bit types
+///    we'll be either constantly casting back to 16 bit types
 ///    or else suffering from unecessary (and somewhat expensive)
 ///    conversion to arrays of 32 bit types.
 ///    2b. Scalar int and unsigned int are the *only* exceptions
@@ -158,6 +160,15 @@ public: // Compound operators
         return Update([](auto&& l, auto&& r) { l *= r; }, other);
     }
 
+    // Only for integer types.
+    template <typename Other, typename valid = CompoundOpIsValid<Derived, Other>>
+    Derived& operator%=(const Other& other)
+    {
+        static_assert(std::is_integral_v<ScalarType<T>>);
+        static_assert(std::is_integral_v<ScalarType<Other>>);
+        return Update([](auto&& l, auto&& r) { l %= r; }, other);
+    }
+
 public: // Arithmetic friend operators
     friend Derived operator -(const Derived& c)
     {
@@ -209,6 +220,17 @@ public: // Arithmetic friend operators
     {
         return InlineFriendReturn<T1, T2, Derived>(
             [](auto&& l2, auto&& r2){ return l2 + r2;},
+            l, r);
+    }
+
+    // Only for integer types.
+    template <typename T1, typename T2>
+    friend auto operator%(const T1& l, const T2& r) -> InlineFriendReturn<T1, T2, Derived>
+    {
+        static_assert(std::is_integral_v<ScalarType<T1>>);
+        static_assert(std::is_integral_v<ScalarType<T2>>);
+        return InlineFriendReturn<T1, T2, Derived>(
+            [](auto&& l2, auto&&r2){ return l2 % r2; },
             l, r);
     }
 

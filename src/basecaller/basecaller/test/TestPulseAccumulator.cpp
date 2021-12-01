@@ -36,7 +36,7 @@
 
 #include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/CameraTraceBatch.h>
 #include <dataTypes/LabelsBatch.h>
 
@@ -197,12 +197,13 @@ void TestPulseAccumulator()
     TestConfig config{1};
     const auto framesPerChunk = config.layout.framesPerChunk;
 
-    Data::MovieConfig movieConfig;
-    movieConfig.analogs[0].baseLabel = 'A';
-    movieConfig.analogs[1].baseLabel = 'C';
-    movieConfig.analogs[2].baseLabel = 'G';
-    movieConfig.analogs[3].baseLabel = 'T';
-    PulseAccumulatorToTest::Configure(movieConfig, config.pulses);
+    Data::AnalysisConfig analysisConfig;
+    auto& movieInfo = analysisConfig.movieInfo;
+    movieInfo.analogs[0].baseLabel = 'A';
+    movieInfo.analogs[1].baseLabel = 'C';
+    movieInfo.analogs[2].baseLabel = 'G';
+    movieInfo.analogs[3].baseLabel = 'T';
+    PulseAccumulatorToTest::Configure(analysisConfig, config.pulses);
 
     auto cameraBatchFactory = std::make_unique<Data::CameraBatchFactory>(
             Cuda::Memory::SyncDirection::HostWriteDeviceRead);
@@ -368,7 +369,7 @@ struct TestingParams
 template <typename PAT> // Pulse Accumulator under test
 struct TestPulseAccumulatorRejection : public ::testing::TestWithParam<TestingParams>
 {
-    Data::MovieConfig movieConfig;
+    Data::AnalysisConfig analysisConfig;
     TestConfig config{1};
 
     size_t ipd  = 24;  // Inter-pulse distance
@@ -389,12 +390,12 @@ struct TestPulseAccumulatorRejection : public ::testing::TestWithParam<TestingPa
 
         assert(config.Dims().framesPerBatch % (ipd + pw) == 0);
 
-        movieConfig.analogs[0].baseLabel = 'A';
-        movieConfig.analogs[1].baseLabel = 'C';
-        movieConfig.analogs[2].baseLabel = 'G';
-        movieConfig.analogs[3].baseLabel = 'T';
+        analysisConfig.movieInfo.analogs[0].baseLabel = 'A';
+        analysisConfig.movieInfo.analogs[1].baseLabel = 'C';
+        analysisConfig.movieInfo.analogs[2].baseLabel = 'G';
+        analysisConfig.movieInfo.analogs[3].baseLabel = 'T';
 
-        PAT::Configure(movieConfig, config.pulses);
+        PAT::Configure(analysisConfig, config.pulses);
     }
 
     void TearDown() override

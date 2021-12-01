@@ -1,0 +1,5 @@
+#%Module 1.0
+#
+set root $RPM_INSTALL_PREFIX
+module-whatis "@SYSTEMD_ALIAS@ @SOFTWARE_VERSION@  Application that converts ZMQ trace data to base calls"
+prepend-path PATH             $root/bin

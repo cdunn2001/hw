@@ -9,10 +9,10 @@ namespace Mongo {
 namespace Basecaller {
 
 void HostNoOpBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
-                                  const Data::MovieConfig& movConfig)
+                                  const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = true;
-    Baseliner::InitFactory(hostExecution, movConfig);
+    Baseliner::InitFactory(hostExecution, analysisConfig);
 }
 
 void HostNoOpBaseliner::Finalize() {}

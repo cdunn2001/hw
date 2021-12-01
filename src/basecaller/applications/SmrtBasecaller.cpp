@@ -33,7 +33,7 @@
 #include <basecaller/traceAnalysis/AnalysisProfiler.h>
 #include <bazio/file/ZmwInfo.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <common/MongoConstants.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/graphs/GraphManager.h>
@@ -53,6 +53,7 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 #include <pacbio/sensor/SparseROI.h>
+#include <pacbio/System.h>
 #include <pacbio/text/String.h>
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
@@ -119,24 +120,6 @@ public:
             throw PBException("--nop=1 must be used with the WX2DataSource and simulatedInputFile=constant/123 to get correct validation pattern.");
         }
 
-        // TODO these might need cleanup/moving?  At the least need to be able to set them
-        // correctly if not using trace file input
-        config_.source.Visit(
-            [&](const auto& traceConfig) {
-                const std::string& traceFile = traceConfig.traceFile;
-                PBLOG_INFO << "Input Target: " << traceFile;
-                MetaDataFromTraceFileSource(traceFile);
-                GroundTruthFromTraceFileSource(traceFile);
-            },
-            [&](const WX2SourceConfig& wxConfig) {
-                // FIXME An API to load metadata from ICS configuration is not finalized yet.
-                // FIXME In the interest of rapid development, we are just loading a precanned metadata snippet.
-                // TODO replace this call with the official command line API for loading metadata (JSON) from ICS.
-                // for example, LoadMetaDataFromSequelFormat(json value of metadata);
-                movieConfig_ = PacBio::Mongo::Data::MockMovieConfig();
-            }
-        );
-
         if (options.is_set_by_user("outputbazfile"))
         {
             hasBazFile_ = true;
@@ -174,9 +157,12 @@ public:
 
     void Run()
     {
-        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+        SetGlobalAllocationMode(CachingMode::ENABLED,
+                                (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                                ? AllocatorMode::MALLOC
+                                : AllocatorMode::CUDA);
         EnableHostCaching(AllocatorMode::MALLOC);
-        EnableHostCaching(AllocatorMode::SHARED_MEMORY);
+        EnableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
 
         RunAnalyzer();
         Join();
@@ -196,123 +182,6 @@ public:
     { return config_; }
 
 private:
-    void MetaDataFromTraceFileSource(const std::string& traceFileName)
-    {
-        const TraceFile traceFile(traceFileName);
-        const auto& acqParams = traceFile.Scan().AcqParams();
-        const auto& chipInfo = traceFile.Scan().ChipInfo();
-        const auto& dyeSet = traceFile.Scan().DyeSet();
-
-        movieConfig_.frameRate = acqParams.frameRate;
-        movieConfig_.photoelectronSensitivity = acqParams.aduGain;
-        movieConfig_.refSnr = chipInfo.analogRefSnr;
-
-        // Analog information
-        std::string baseMap;
-        std::vector<float> relativeAmpl;
-        std::vector<float> excessNoiseCV;
-        std::vector<float> interPulseDistance;
-        std::vector<float> pulseWidth;
-        std::vector<float> ipd2SlowStepRatio;
-        std::vector<float> pw2SlowStepRatio;
-
-        const constexpr size_t traceNumAnalogs = TraceFile::DefaultNumAnalogs;
-        static_assert (traceNumAnalogs == numAnalogs, "Trace file does not have 4 analogs!");
-
-        baseMap = dyeSet.baseMap;
-        relativeAmpl = dyeSet.relativeAmp;
-        excessNoiseCV = dyeSet.excessNoiseCV;
-        interPulseDistance = dyeSet.ipdMean;
-        pulseWidth = dyeSet.pulseWidthMean;
-        ipd2SlowStepRatio = dyeSet.ipd2SlowStepRatio;
-        pw2SlowStepRatio = dyeSet.pw2SlowStepRatio;
-
-        // Check relative amplitude is sorted decreasing.
-        if (!std::is_sorted(relativeAmpl.rbegin(), relativeAmpl.rend()))
-        {
-            throw PBException("Analogs in trace file not sorted by decreasing relative amplitude!");
-        }
-
-        for (size_t i = 0; i < numAnalogs; i++)
-        {
-            auto& analog = movieConfig_.analogs[i];
-            analog.baseLabel = baseMap[i];
-            analog.relAmplitude = relativeAmpl[i];
-            analog.excessNoiseCV = excessNoiseCV[i];
-            analog.interPulseDistance = interPulseDistance[i];
-            analog.pulseWidth = pulseWidth[i];
-            analog.ipd2SlowStepRatio = ipd2SlowStepRatio[i];
-            analog.pw2SlowStepRatio = pw2SlowStepRatio[i];
-        }
-    }
-
-    void GroundTruthFromTraceFileSource(const std::string& traceFileName)
-    {
-        auto setBlMeanAndCovar = [](const std::string& traceFileName,
-                                    float& blMean,
-                                    float& blCovar,
-                                    const std::string& exceptMsg)
-        {
-            const TraceFile traceFile{traceFileName};
-            if (traceFile.IsSimulated())
-            {
-                const auto groundTruth = traceFile.GroundTruth();
-                blMean = groundTruth.stateMean[0][0];
-                blCovar = groundTruth.stateCovariance[0][0];
-            } else
-            {
-                throw PBException(exceptMsg);
-            }
-        };
-
-        if (config_.algorithm.modelEstimationMode == BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations)
-        {
-            setBlMeanAndCovar(traceFileName,
-                              config_.algorithm.staticDetModelConfig.baselineMean,
-                              config_.algorithm.staticDetModelConfig.baselineVariance,
-                              "Requested static pipeline analysis but input trace file is not simulated!");
-        }
-        else if (config_.algorithm.dmeConfig.Method == BasecallerDmeConfig::MethodName::Fixed &&
-                 config_.algorithm.dmeConfig.SimModel.useSimulatedBaselineParams == true)
-        {
-            setBlMeanAndCovar(traceFileName,
-                              config_.algorithm.dmeConfig.SimModel.baselineMean,
-                              config_.algorithm.dmeConfig.SimModel.baselineVar,
-                              "Requested fixed DME with baseline params but input trace file is not simulated!");
-        }
-    }
-
-    /// In the interim of SequelOnKestrel, we may use metadata that was structured for Spider in JSON format.
-    /// This helper function loads that JSON in to the internal data format.
-    /// TODO: using this as a starting point, support Kestrel runmeta data.
-    void LoadMetaDataFromSequelFormat(const Json::Value& metadata)
-    {
-        movieConfig_.frameRate = metadata["expectedFrameRate"].asFloat();
-        movieConfig_.photoelectronSensitivity = metadata["photoelectronSensitivity"].asFloat();
-        movieConfig_.refSnr = metadata["refDwsSnr"].asFloat();
-
-        auto baseMap = metadata["baseMap"].asString();
-
-        for (unsigned int i = 0; i < numAnalogs; i++)
-        {
-            const auto& analogJson = metadata["analogs"][i];
-            auto& analog = movieConfig_.analogs[i];
-
-            analog.baseLabel = analogJson["base"].asString()[0];
-            analog.relAmplitude = analogJson["relativeAmplitude"].asFloat();
-            analog.excessNoiseCV = analogJson["intraPulseXsnCV"].asFloat();
-            analog.interPulseDistance = analogJson["ipdMeanSeconds"].asFloat();
-            analog.pulseWidth = analogJson["pulseWidthMeanSeconds"].asFloat();
-            analog.ipd2SlowStepRatio = 0.15;
-            analog.pw2SlowStepRatio = 0.15;
-
-            if (analog.baseLabel != baseMap[i])
-            {
-                throw PBException("basemap in wrong order to analogs array");
-            }
-        }
-    }
-
     // TODO fix this up. It is too specialized for WX2 or TraceFile datasources.
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
@@ -329,15 +198,19 @@ private:
         const auto mode = config_.source.Visit(
             [&](const TraceReanalysis& config)
             {
-                return AllocatorMode::CUDA;
+                return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                       ? AllocatorMode::MALLOC
+                       : AllocatorMode::CUDA;
             },
             [&](const TraceReplication& config)
             {
-                return AllocatorMode::CUDA;
+                return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
+                       ? AllocatorMode::MALLOC
+                       : AllocatorMode::CUDA;
             },
-            [&](const WX2SourceConfig& wx2SourceConfig)
+            [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
-                return AllocatorMode::SHARED_MEMORY;
+                return AllocatorMode::SHARED_MEMORY_HUGE_CUDA;
             }
         );
 
@@ -348,31 +221,21 @@ private:
         auto dataSource = config_.source.Visit(
             [&](const TraceReanalysis& config) -> std::unique_ptr<DataSourceBase>
             {
-                return std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
+                auto ds = std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
+                ds->LoadGroundTruth(config_.algorithm);
+                return ds;
             },
             [&](const TraceReplication& config) -> std::unique_ptr<DataSourceBase>
             {
                 return std::make_unique<TraceFileDataSource>(std::move(datasourceConfig), config);
             },
-            [&](const WX2SourceConfig& wx2SourceConfig) -> std::unique_ptr<DataSourceBase>
+            [&](const WXIPCDataSourceConfig& config) -> std::unique_ptr<DataSourceBase>
             {
-                WXIPCDataSourceConfig wxconfig;
-                wxconfig.dataPath = DataPath_t(wx2SourceConfig.dataPath);
-                if ( wxconfig.dataPath == DataPath_t::SimGen || wxconfig.dataPath == DataPath_t::SimLoop)
+                if (config.dataPath == DataPath_t::SimGen || config.dataPath == DataPath_t::SimLoop)
                 {
-                    throw PBException("wxconfig.simconfig needs to be set, not implemented yet.");
+                    throw PBException("config.simConfig needs to be set, not implemented yet.");
                 }
-                wxconfig.sleepDebug = wx2SourceConfig.sleepDebug;
-                wxconfig.simulatedFrameRate = wx2SourceConfig.simulatedFrameRate;
-                wxconfig.simulatedInputFile = wx2SourceConfig.simulatedInputFile;
-                wxconfig.maxPopLoops = wx2SourceConfig.maxPopLoops;
-                wxconfig.tilePoolFactor = wx2SourceConfig.tilePoolFactor;
-                wxconfig.chipLayoutName = "Spider_1p0_NTO"; // FIXME this needs to be a command line parameter supplied by ICS.
-                wxconfig.layoutDims[0] = wx2SourceConfig.wxlayout.lanesPerPacket;
-                wxconfig.layoutDims[1] = wx2SourceConfig.wxlayout.framesPerPacket;
-                wxconfig.layoutDims[2] = wx2SourceConfig.wxlayout.zmwsPerLane;
-                wxconfig.verbosity = 100;
-                return std::make_unique<WXIPCDataSource>(std::move(datasourceConfig), wxconfig);
+                return std::make_unique<WXIPCDataSource>(std::move(datasourceConfig), config);
             }
         );
         return std::make_unique<DataSourceRunner>(std::move(dataSource));
@@ -469,7 +332,8 @@ private:
 
 
     std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
-                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims)
+                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                                                                         const AnalysisConfig& analysisConfig)
     {
         if (outputTrcFileName_ != "")
         {
@@ -487,11 +351,17 @@ private:
 
             std::vector<uint32_t> fullBatchIds;
             fullBatchIds.reserve(dataSource.NumZmw());
+            PBLOG_DEBUG << "poolDims.size:" << poolDims.size();
             for (const auto& kv : poolDims)
             {
+                PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch() << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch << "," << kv.second.framesPerBatch;
                 fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
             }
-            assert(fullBatchIds.size() == dataSource.NumZmw());
+            if(fullBatchIds.size() != dataSource.NumZmw())
+            {
+                throw PBException("fullBatchIds.size():" + std::to_string(fullBatchIds.size()) 
+                    + " != dataSource.NumZmw():" + std::to_string(dataSource.NumZmw()));
+            }
 
             // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
             // The lane widths may be different.  Depending on the incoming lane width, the
@@ -509,6 +379,10 @@ private:
                     }
                 }
             }
+#if 0
+            // I need this to continue debugging MTL
+            destLaneSeen.insert(0);
+#endif            
 
             const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
             const auto actualZmw = destLaneSeen.size() * laneSize;
@@ -536,13 +410,17 @@ private:
                 size_t currZmw = lane*laneSize;
                 for (size_t i = 0; i < laneSize; ++i)
                 {
+                    assert(idx < actualZmw);
                     holeNumbers[idx] = fullHoleIds[currZmw];
                     properties[idx] = fullProperties[currZmw];
                     batchIds[idx] = fullBatchIds[currZmw];
 
                     currZmw++;
                     idx++;
-                    assert(idx < actualZmw);
+#if 0
+                    // I need this to continue debugging MTL
+                    PBLOG_NOTICE << "select/lane: currZmw" << currZmw << " " << idx;
+#endif
                 }
             }
             assert(idx == actualZmw);
@@ -572,7 +450,7 @@ private:
                                                     dataSource.CrosstalkFilterMatrix(),
                                                     dataSource.Platform(),
                                                     dataSource.InstrumentName(),
-                                                    movieConfig_);
+                                                    analysisConfig);
         }
         else
         {
@@ -581,11 +459,11 @@ private:
     }
 
     std::unique_ptr <TransformBody<const TraceBatchVariant, BatchResult>>
-    CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims) const
+    CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims, const AnalysisConfig& analysisConfig) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
                                                 config_.algorithm,
-                                                movieConfig_,
+                                                analysisConfig,
                                                 config_.system);
     }
 
@@ -596,7 +474,8 @@ private:
     }
 
     std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
+    CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                   const AnalysisConfig& analysisConfig)
     {
         if (hasBazFile_)
         {
@@ -635,7 +514,7 @@ private:
                                                    zmwInfo,
                                                    poolDims,
                                                    config_,
-                                                   movieConfig_);
+                                                   analysisConfig);
         } else
         {
             return std::make_unique<NoopBazWriterBody>();
@@ -649,12 +528,10 @@ private:
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
         auto source = CreateSource();
-        // TODO: This is ugly, modifying the movieConfig after it was ostensibly already
-        //       initialized. This is expected to be cleaned up in the near-term, and this
-        //       config will to be re-worked.  The tentative plan is to have the whole thing
-        //       generated by the DataSource, though I'd not call that set in stone yet.
-        movieConfig_.encoding = source->PacketLayouts().begin()->second.Encoding();
-        movieConfig_.pedestal = source->Pedestal();
+        AnalysisConfig analysisConfig;
+        analysisConfig.movieInfo = source->MovieInformation();
+        analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
+        analysisConfig.pedestal = source->Pedestal();
 
         PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
@@ -670,19 +547,19 @@ private:
 
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
-            inputNode->AddNode(CreateTraceSaver(*source, poolDims), GraphProfiler::SAVE_TRACE);
+            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
-                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims), GraphProfiler::ANALYSIS);
+                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
-                preHQ->AddNode(CreateBazSaver(*source, poolDims), GraphProfiler::BAZWRITER);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims, analysisConfig), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
             PacBio::Dev::QuietAutoTimer timer(0);
 
             const double chunkDurationMS = config_.layout.framesPerChunk
-                                        / movieConfig_.frameRate
+                                        / analysisConfig.movieInfo.frameRate
                                         * 1e3;
 
             uint64_t nopSuccesses = 0;
@@ -723,7 +600,29 @@ private:
                     {
                         PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
+                        {
+#if 0
+// uncomment this to get verbose dumps of the raw data
+                            auto dv = batch.BlockData(0);
+                            std::ostringstream oss;
+                            for(uint32_t x = 0; x < 32 && x < dv.Count(); x++)
+                            {
+                                oss << std::hex << (int)dv.Data()[x] << " ";
+                            }
+                            PBLOG_INFO << "DUMP:" << (void*)dv.Data() << ":" << oss.str();
+
+                            static bool first = true;
+                            if (first)
+                            {
+                                first = false;
+                                std::stringstream ss;
+                                ss << "/home/UNIXHOME/mlakata/git/pa-common/build_mongo/x86_64/Release_gcc/tests/pacbio/memory/pbishmtool -m 0x50420041 -a ";
+                                ss << (void*)(dv.Data()) << "-" << (void*)(dv.Data() + 32);
+                                PBLOG_NOTICE << PacBio::System::Run(ss.str());
+                            }
+#endif
                             inputNode->ProcessInput(std::move(batch));
+                        }
                         const auto& reports = graph.SynchronizeAndReport(chunkDurationMS);
 
                         std::stringstream ss;
@@ -794,7 +693,6 @@ private:
 private:
     // Configuration objects
     SmrtBasecallerConfig config_;
-    MovieConfig movieConfig_;
 
     std::string outputBazFile_;
     bool hasBazFile_ = false;
@@ -823,7 +721,7 @@ int main(int argc, char* argv[])
            << "\n git commit date: " << cmakeGitCommitDate();
         parser.description(ss.str());
 
-        const std::string version = "0.1";
+        const std::string version = STRINGIFIED_SOFTWARE_VERSION;
         parser.version(version);
 
         parser.epilog("");

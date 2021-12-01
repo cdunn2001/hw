@@ -31,8 +31,8 @@
 
 #include <common/cuda/PBCudaSimd.h>
 
-#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/AnalogMode.h>
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LaneDetectionModel.h>

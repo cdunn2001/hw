@@ -35,7 +35,7 @@
 #include <common/cuda/streams/LaunchManager.cuh>
 
 #include <dataTypes/configs/BasecallerDmeConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <basecaller/traceAnalysis/DmeDiagnostics.h>
 
 ///////////////////////////////////////////////////////////////////
@@ -49,12 +49,24 @@ using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo::Data;
 
+struct AnalogMode
+{
+    char baseLabel;
+    float relAmplitude;
+    float excessNoiseCV;
+    float interPulseDistance;   // seconds
+    float pulseWidth;           // seconds
+    float pw2SlowStepRatio;
+    float ipd2SlowStepRatio;
+};
 
 // Wrapping all the static configurations into a single struct,
 // as that will be easier to upload to the GPU.
-struct StaticConfig{
+struct StaticConfig
+{
     CudaArray<AnalogMode, 4> analogs;
-    float analogMixFracThresh_;
+    float analogMixFracThresh0_;
+    float analogMixFracThresh1_;
     unsigned short emIterLimit_;
     float gTestFactor_;
     bool iterToLimit_;
@@ -125,7 +137,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 
 template <typename VF>
 __device__ VF ModelSignalCovar(
-        const Data::AnalogMode& analog,
+        const AnalogMode& analog,
         VF signalMean,
         VF baselineVar)
 {
@@ -142,26 +154,35 @@ DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
 
 // static
 void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
-                          const Data::MovieConfig &movConfig)
+                            const Data::AnalysisConfig &analysisConfig)
 {
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
-    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    auto& movieInfo = analysisConfig.movieInfo;
+    for (size_t i = 0; i < movieInfo.analogs.size(); i++)
     {
-        config.analogs[i] = movConfig.analogs[i];
+        config.analogs[i].baseLabel = movieInfo.analogs[i].baseLabel;
+        config.analogs[i].relAmplitude = movieInfo.analogs[i].relAmplitude;
+        config.analogs[i].excessNoiseCV = movieInfo.analogs[i].excessNoiseCV;
+        config.analogs[i].interPulseDistance = movieInfo.analogs[i].interPulseDistance;
+        config.analogs[i].pulseWidth = movieInfo.analogs[i].pulseWidth;
+        config.analogs[i].pw2SlowStepRatio = movieInfo.analogs[i].pw2SlowStepRatio;
+        config.analogs[i].ipd2SlowStepRatio = movieInfo.analogs[i].ipd2SlowStepRatio;
     }
-    config.analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
-    config.emIterLimit_ = dmeConfig.EmIterationLimit;
-    config.gTestFactor_ = dmeConfig.GTestStatFactor;
-    config.iterToLimit_ = dmeConfig.IterateToLimit;
-    config.pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
-    config.snrDropThresh_ = dmeConfig.SnrDropThresh;
-    config.snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
-    config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
+    config.analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
+    config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
+
+    config.emIterLimit_       = dmeConfig.EmIterationLimit;
+    config.gTestFactor_       = dmeConfig.GTestStatFactor;
+    config.iterToLimit_       = dmeConfig.IterateToLimit;
+    config.pulseAmpRegCoeff_  = dmeConfig.PulseAmpRegularization;
+    config.snrDropThresh_     = dmeConfig.SnrDropThresh;
+    config.snrThresh0_        = dmeConfig.MinAnalogSnrThresh0;
+    config.snrThresh1_        = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    config.refSnr_ = movConfig.refSnr;
-    config.movieScaler_ = movConfig.photoelectronSensitivity;
+    config.refSnr_            = movieInfo.refSnr;
+    config.movieScaler_       = movieInfo.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }
@@ -468,20 +489,23 @@ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
     const auto& refBgVar = refModel.baseline.var;
     x = log2(bg.var / refBgVar);
     // TODO: Make this configurable.
-    static const float bgVarTol = 1.0f;
+    const float bgVarTol = 1.5f / (0.5f + refModel.confidence);
     x = exp(-x*x / (2*bgVarTol*bgVarTol));
     cf[ConfFactor::BL_VAR_STABLE] = x;
 
     // Check for missing pulse components.
     // Require that the first (brightest) and last (dimmest) are not absent.
-    // TODO: Make this configurable. Should this threshold be defined in terms
-    // of data count instead of fraction?
-    const float dmFracThresh1 = staticConfig.analogMixFracThresh_;
-    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
+    x = 1.0f;
     const auto& detModes = modelEst.analogs;
-    assert(detModes.size() == 4);
-    x = satlin(dmFracThresh0, dmFracThresh1, detModes.front().weight);
-    x *= satlin(dmFracThresh0, dmFracThresh1, detModes.back().weight);
+    const float analogMixFracThresh1_ = staticConfig.analogMixFracThresh1_;
+    const float analogMixFracThresh0_ = staticConfig.analogMixFracThresh0_;
+    if (analogMixFracThresh1_ > 0.0f)
+    {
+        assert(detModes.size() >= 1);
+        assert(analogMixFracThresh0_ < analogMixFracThresh1_);
+        x *= satlin(analogMixFracThresh0_, analogMixFracThresh1_, detModes.front().weight);
+        x *= satlin(analogMixFracThresh0_, analogMixFracThresh1_, detModes.back().weight);
+    }
     cf[ConfFactor::ANALOG_REP] = x;
 
     // Check for low SNR.

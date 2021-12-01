@@ -30,7 +30,7 @@
 #include "DmeEmHost.h"
 
 #include <common/StatAccumulator.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 #include <limits>
 #include <boost/numeric/conversion/cast.hpp>
@@ -63,7 +63,7 @@ namespace Mongo {
 namespace Basecaller {
 
 // Static configuration parameters
-Cuda::Utility::CudaArray<Data::AnalogMode, numAnalogs>
+Cuda::Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs>
 DmeEmHost::analogs_;
 float DmeEmHost::refSnr_;
 float DmeEmHost::movieScaler_ = 1.0f;
@@ -72,7 +72,8 @@ bool DmeEmHost::fixedBaselineParams_ = false;
 float DmeEmHost::fixedBaselineMean_ = 0;
 float DmeEmHost::fixedBaselineVar_ = 0;
 
-float DmeEmHost::analogMixFracThresh_ = 0.0f;
+float DmeEmHost::analogMixFracThresh0_ = numeric_limits<float>::quiet_NaN();
+float DmeEmHost::analogMixFracThresh1_ = numeric_limits<float>::quiet_NaN();
 unsigned short DmeEmHost::emIterLimit_ = 0;
 float DmeEmHost::gTestFactor_ = 1.0f;
 bool DmeEmHost::iterToLimit_ = false;
@@ -89,13 +90,13 @@ DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
 
 // static
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
-                          const Data::MovieConfig &movConfig)
+                          const Data::AnalysisConfig &analysisConfig)
 {
-    refSnr_ = movConfig.refSnr;
-    movieScaler_ = movConfig.photoelectronSensitivity;
-    for (size_t i = 0; i < movConfig.analogs.size(); i++)
+    refSnr_ = analysisConfig.movieInfo.refSnr;
+    movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
+    for (size_t i = 0; i < analysisConfig.movieInfo.analogs.size(); i++)
     {
-        analogs_[i] = movConfig.analogs[i];
+        analogs_[i] = analysisConfig.movieInfo.analogs[i];
     }
 
     fixedModel_ = (dmeConfig.Method == Data::BasecallerDmeConfig::MethodName::Fixed);
@@ -109,7 +110,8 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 
     // TODO: Validate values.
     // TODO: Log settings.
-    analogMixFracThresh_ = dmeConfig.AnalogMixFractionThreshold;
+    analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
+    analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
     emIterLimit_ = dmeConfig.EmIterationLimit;
     gTestFactor_ = dmeConfig.GTestStatFactor;
     iterToLimit_ = dmeConfig.IterateToLimit;
@@ -702,20 +704,21 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     const auto& refBgVar = refModel.BaselineMode().SignalCovar();
     x = log2(bg.SignalCovar() / refBgVar);
     // TODO: Make this configurable.
-    static const float bgVarTol = 1.0f;
+    const FloatVec bgVarTol = 1.5f / (0.5f + refModel.Confidence());
     x = exp(-x*x / (2*pow2(bgVarTol)));
     cf[ConfFactor::BL_VAR_STABLE] = x;
 
     // Check for missing pulse components.
     // Require that the first (brightest) and last (dimmest) are not absent.
-    // TODO: Make this configurable. Should this threshold be defined in terms
-    // of data count instead of fraction?
-    const float dmFracThresh1 = analogMixFracThresh_;
-    const float dmFracThresh0 = dmFracThresh1 / 3.0f;
+    x = 1.0f;
     const auto& detModes = modelEst.DetectionModes();
-    assert(detModes.size() > 0);
-    x = satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.front().Weight());
-    x *= satlin<FloatVec>(dmFracThresh0, dmFracThresh1, detModes.back().Weight());
+    if (analogMixFracThresh1_ > 0.0f)
+    {
+        assert(detModes.size() >= 1);
+        assert(analogMixFracThresh0_ < analogMixFracThresh1_);
+        x *= satlin<FloatVec>(analogMixFracThresh0_, analogMixFracThresh1_, detModes.front().Weight());
+        x *= satlin<FloatVec>(analogMixFracThresh0_, analogMixFracThresh1_, detModes.back().Weight());
+    }
     cf[ConfFactor::ANALOG_REP] = x;
 
     // Check for low SNR.
@@ -826,7 +829,7 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
 
 // static
 LaneArray<float> DmeEmHost::ModelSignalCovar(
-        const Data::AnalogMode& analog,
+        const PacBio::AuxData::AnalogMode& analog,
         const LaneArray<float>& signalMean,
         const LaneArray<float>& baselineVar)
 {

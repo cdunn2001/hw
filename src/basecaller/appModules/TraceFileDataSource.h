@@ -36,7 +36,9 @@
 
 #include <common/BatchDataSource.h>
 
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/configs/SourceConfig.h>
+
 
 namespace PacBio {
 namespace Application {
@@ -135,12 +137,14 @@ public:
 
     Sensor::Platform Platform() const override
     {
-        return Sensor::Platform::fromString(this->traceFile_.Scan().RunInfo().platformName);
+        return this->traceFile_.Scan().RunInfo().Platform();
     }
     std::string InstrumentName() const override
     {
         return this->traceFile_.Scan().RunInfo().instrumentName;
     }
+
+    DataSource::MovieInfo MovieInformation() const override;
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {
@@ -160,6 +164,8 @@ public:
         info.SetSummary( info.ShortName() + " " + info.hwVersion.ToString());
         return info;
     }
+
+    void LoadGroundTruth(Mongo::Data::BasecallerAlgorithmConfig& config) const;
 
 private:
     // throw a bunch of data into the queues during construction rather than after

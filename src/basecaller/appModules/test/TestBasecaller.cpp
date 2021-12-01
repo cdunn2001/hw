@@ -34,7 +34,7 @@
 
 #include <appModules/Basecaller.h>
 #include <dataTypes/BatchMetadata.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 
 using std::vector;
@@ -65,10 +65,10 @@ TEST(TestBasecaller, CheckMetadata)
     algoConfig.pulseAccumConfig.Method = Data::BasecallerPulseAccumConfig::MethodName::NoOp;
     algoConfig.Metrics.Method = Data::BasecallerMetricsConfig::MethodName::NoOp;
 
-    Data::MovieConfig movConfig = Data::MockMovieConfig();
+    Data::AnalysisConfig analysisConfig = Data::MockAnalysisConfig();
 
     auto basecaller = Application::BasecallerBody(dimMap, algoConfig,
-                                                  movConfig, config.system);
+                                                  analysisConfig, config.system);
 
     vector<Data::TraceBatchVariant> chunk;
     vector<Data::BatchMetadata> bmdVec;

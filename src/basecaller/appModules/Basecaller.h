@@ -42,7 +42,7 @@
 
 #include <dataTypes/BatchResult.h>
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/SystemsConfig.h>
 #include <dataTypes/TraceBatch.h>
 
@@ -55,28 +55,33 @@ class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::Tra
 public:
     BasecallerBody(const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                    const Mongo::Data::BasecallerAlgorithmConfig& algoConfig,
-                   const Mongo::Data::MovieConfig& movConfig,
+                   const Mongo::Data::AnalysisConfig& analysisConfig,
                    const Mongo::Data::SystemsConfig& sysConfig)
         : gpuStash(std::make_unique<Cuda::Memory::DeviceAllocationStash>())
         , algoFactory_(algoConfig)
         , streams_(std::make_unique<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>>())
-        , measurePCIeBandwidth_(sysConfig.analyzerHardware != Mongo::Basecaller::ComputeDevices::Host)
-        , numStreams_(sysConfig.basecallerConcurrency)
+        , measurePCIeBandwidth_(algoConfig.ComputingMode() == Mongo::Data::BasecallerAlgorithmConfig::ComputeMode::PureGPU)
+        , usesGpu_(algoConfig.ComputingMode() != Mongo::Data::BasecallerAlgorithmConfig::ComputeMode::PureHost)
+        , basecallerConcurrency_(sysConfig.basecallerConcurrency)
     {
-        auto priorityRange = Cuda::StreamPriorityRange();
-        assert(priorityRange.greatestPriority <= priorityRange.leastPriority);
-        PBLOG_INFO << "Assigning priority range " << priorityRange.greatestPriority << ":" << priorityRange.leastPriority
-                   << " round robbin amongst " << numStreams_ << " streams";
-        auto priority = priorityRange.greatestPriority;
-        for (size_t i = 0; i < numStreams_; ++i)
+        if (usesGpu_)
         {
-            streams_->Push(std::make_unique<Cuda::CudaStream>(priority));
-            priority++;
-            if (priority > priorityRange.leastPriority) priority = priorityRange.greatestPriority;
+            auto priorityRange = Cuda::StreamPriorityRange();
+            assert(priorityRange.greatestPriority <= priorityRange.leastPriority);
+            PBLOG_INFO << "Assigning priority range " << priorityRange.greatestPriority << ":" << priorityRange.leastPriority
+                       << " round robbin amongst " << basecallerConcurrency_ << " streams";
+            auto priority = priorityRange.greatestPriority;
+
+            for (size_t i = 0; i < basecallerConcurrency_; ++i)
+            {
+                streams_->Push(std::make_unique<Cuda::CudaStream>(priority));
+                priority++;
+                if (priority > priorityRange.leastPriority) priority = priorityRange.greatestPriority;
+            }
         }
         using namespace Mongo::Data;
 
-        algoFactory_.Configure(algoConfig, movConfig);
+        algoFactory_.Configure(algoConfig, analysisConfig);
 
         // TODO this computation will not be sufficient for sparse layouts
         uint32_t maxPoolId = std::accumulate(poolDims.begin(), poolDims.end(), 0u,
@@ -100,7 +105,7 @@ public:
                 case BasecallerAlgorithmConfig::ModelEstimationMode::FixedEstimations:
                     return std::make_unique<FixedModelBatchAnalyzer>(poolId, dims,
                                                                      algoConfig.staticDetModelConfig,
-                                                                     movConfig, algoFactory_,
+                                                                     analysisConfig, algoFactory_,
                                                                      *gpuStash);
                 case BasecallerAlgorithmConfig::ModelEstimationMode::InitialEstimations:
                     return std::make_unique<SingleEstimateBatchAnalyzer>(poolId, dims, algoFactory_,
@@ -120,7 +125,9 @@ public:
 
             bAnalyzer_.emplace(poolId, std::move(batchAnalyzer));
         }
-        gpuStash->PartitionData(sysConfig.maxPermGpuDataMB);
+
+        if (usesGpu_)
+            gpuStash->PartitionData(sysConfig.maxPermGpuDataMB);
     }
 
     BasecallerBody(const BasecallerBody&) = delete;
@@ -134,7 +141,7 @@ public:
         Mongo::Basecaller::IOProfiler::FinalReport();
     }
 
-    size_t ConcurrencyLimit() const override { return numStreams_; }
+    size_t ConcurrencyLimit() const override { return basecallerConcurrency_; }
     float MaxDutyCycle() const override { return .8; }
 
     // Notes:
@@ -220,11 +227,12 @@ public:
         // robustly undo our change to the default stream and
         // put the stream back in the queue, even if there
         // is an exception
-        auto threadStream = streams_->Pop();
-        Utilities::Finally finally1([&, this](){
-            streams_->Push(std::move(threadStream));
+        auto threadStream = usesGpu_ ? streams_->Pop() : nullptr;
+        Utilities::Finally finally1([&, this]() {
+            if (threadStream) streams_->Push(std::move(threadStream));
         });
-        auto finally2 = threadStream->SetAsDefaultStream();
+        auto finally2 = threadStream ? threadStream->SetAsDefaultStream() : []() {};
+
         auto& analyzer = *bAnalyzer_.at(in.Metadata().PoolId());
 
         {
@@ -235,12 +243,6 @@ public:
             (void) uploadProfiler;
 
             PacBio::Dev::Profile::FastTimer timer;
-            // TODO need to have a robust check if there is a GPU
-            //      present on this system.  CopyToDevice will
-            //      have an error if that is the case.  This flag
-            //      can serve as an imperfect proxy for now, but
-            //      certain (presumably uncommon) config settings
-            //      can break this.
             if (measurePCIeBandwidth_)
             {
                 bytesUploaded_ += std::visit([](const auto& batch)
@@ -249,8 +251,11 @@ public:
                 }, in.Data());
                 Cuda::CudaSynchronizeDefaultStream();
             }
-            bytesUploaded_ += gpuStash->RetrievePool(in.Metadata().PoolId());
-            msUpload += timer.GetElapsedMilliseconds();
+            if (usesGpu_)
+            {
+                bytesUploaded_ += gpuStash->RetrievePool(in.Metadata().PoolId());
+                msUpload += timer.GetElapsedMilliseconds();
+            }
         }
 
         auto ret = [&](){
@@ -266,10 +271,13 @@ public:
             auto downloadProfiler = profiler.CreateScopedProfiler(IOStages::Download);
             (void) downloadProfiler;
 
-            PacBio::Dev::Profile::FastTimer timer;
-            bytesDownloaded_ += ret.DeactivateGpuMem();
-            bytesDownloaded_ += gpuStash->StashPool(in.Metadata().PoolId());
-            msDownload += timer.GetElapsedMilliseconds();
+            if (usesGpu_)
+            {
+                PacBio::Dev::Profile::FastTimer timer;
+                bytesDownloaded_ += ret.DeactivateGpuMem();
+                bytesDownloaded_ += gpuStash->StashPool(in.Metadata().PoolId());
+                msDownload += timer.GetElapsedMilliseconds();
+            }
         }
         return ret;
     }
@@ -284,9 +292,10 @@ private:
     std::unique_ptr<PacBio::ThreadSafeQueue<std::unique_ptr<Cuda::CudaStream>>> streams_;
 
     bool measurePCIeBandwidth_;
+    bool usesGpu_;
 
     int32_t currFrame_ = 0;
-    uint32_t numStreams_;
+    uint32_t basecallerConcurrency_;
     size_t bytesUploaded_ = 0;
     size_t bytesDownloaded_ = 0;
     double msUpload = 0.0;

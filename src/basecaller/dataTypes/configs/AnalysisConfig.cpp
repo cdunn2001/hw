@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, Pacific Biosciences of California, Inc.
+// Copyright (c) 2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,32 +24,16 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_BasecallerPulseToBaseConfig_H_
-#define mongo_dataTypes_configs_BasecallerPulseToBaseConfig_H_
+#include <dataTypes/configs/AnalysisConfig.h>
 
-#include <pacbio/configuration/PBConfig.h>
-#include <pacbio/utilities/SmartEnum.h>
-
-namespace PacBio {
-namespace Mongo {
-namespace Data {
-
-class BasecallerPulseToBaseConfig : public Configuration::PBConfig<BasecallerPulseToBaseConfig>
+namespace PacBio::Mongo::Data
 {
-public:
-    PB_CONFIG(BasecallerPulseToBaseConfig);
 
-    SMART_ENUM(MethodName, Simple, Simulator, SigmaCut, ExShortPulse);
-    PB_CONFIG_PARAM(MethodName, Method, MethodName::Simple);
+AnalysisConfig MockAnalysisConfig()
+{
+    AnalysisConfig ac;
+    ac.movieInfo = DataSource::MockMovieInfo();
+    return ac;
+}
 
-    PB_CONFIG_PARAM(uint32_t, BasesPerZmwChunk, 50u); // used by p2bsimulator ... maybe moved up?
-    PB_CONFIG_PARAM(float, SnrThresh, 100.0f);
-    PB_CONFIG_PARAM(double, XspAmpThresh, 0.70);  // Valid range is [0, 1].
-    PB_CONFIG_PARAM(float, XspWidthThresh, 3.5f); // Must be >= 0.
-};
-
-
-}}}     // namespace PacBio::Mongo::Data
-
-#endif //mongo_dataTypes_configs_BasecallerPulseToBaseConfig_H_
-
+} // PacBio::Mongo::Data

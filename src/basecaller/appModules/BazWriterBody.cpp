@@ -40,13 +40,13 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
-inline std::string generateExperimentMetadata(const MovieConfig& movieConfig)
+inline std::string generateExperimentMetadata(const AnalysisConfig& analysisConfig)
 {
     // See PTSD-677
     PBLOG_WARN << "Implementation gap: Generating fake Metadata for baz files";
 
     std::string basemap;
-    for (const auto& analog : movieConfig.analogs)
+    for (const auto& analog : analysisConfig.movieInfo.analogs)
         basemap.push_back(analog.baseLabel);
     std::ostringstream metadata;
     metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
@@ -56,7 +56,7 @@ inline std::string generateExperimentMetadata(const MovieConfig& movieConfig)
     metadata << "\",\"RelativeAmp\":";
     metadata << "[";
     std::string sep = "";
-    for (const auto& analog : movieConfig.analogs)
+    for (const auto& analog : analysisConfig.movieInfo.analogs)
     {
         metadata << sep << analog.relAmplitude;
         sep = ",";
@@ -77,7 +77,7 @@ BazWriterBody::BazWriterBody(
         const BazIO::ZmwInfo& zmwInfo,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
-        const Mongo::Data::MovieConfig& movieConfig)
+        const Mongo::Data::AnalysisConfig& analysisConfig)
     : numThreads_(basecallerConfig.system.ioConcurrency)
     , numBatches_(poolDims.size())
     , multipleBazFiles_(basecallerConfig.multipleBazFiles)
@@ -85,7 +85,7 @@ BazWriterBody::BazWriterBody(
 {
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
 
-    const auto& metadata = generateExperimentMetadata(movieConfig);
+    const auto& metadata = generateExperimentMetadata(analysisConfig);
     const auto pulseSerializationConfig = basecallerConfig.internalMode
         ? Mongo::Data::InternalPulses::Params()
         : Mongo::Data::ProductionPulses::Params();

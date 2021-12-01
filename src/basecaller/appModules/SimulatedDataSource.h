@@ -122,11 +122,13 @@ public:
 
     int16_t Pedestal() const override;
 
-    boost::multi_array<float,2> CrosstalkFilterMatrix() const override;
-    boost::multi_array<float,2> ImagePsfMatrix() const override;
+    boost::multi_array<float,2> CrosstalkFilterMatrix() const override { return MakeUnityMatrix(); }
+    boost::multi_array<float,2> ImagePsfMatrix() const override { return MakeUnityMatrix(); }
 
     Sensor::Platform Platform() const override { return Sensor::Platform::DONT_CARE; }
     std::string InstrumentName() const override;
+
+    DataSource::MovieInfo MovieInformation() const override { return DataSource::MockMovieInfo(); }
 
     DataSource::HardwareInformation GetHardwareInformation() override
     {

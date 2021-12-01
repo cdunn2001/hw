@@ -65,6 +65,8 @@ public:
     // Used by the HostMultiScale implementation.
     // TODO: Use it in a similar way in DeviceMultiScale implementation.
     PB_CONFIG_PARAM(float, SigmaEmaScaleStrides, 512);
+
+    bool UsesGpu() const { return Method == MethodName::DeviceMultiScale; }
 };
 
 }}}     // namespace PacBio::Mongo::Data

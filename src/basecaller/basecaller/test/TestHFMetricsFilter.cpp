@@ -43,7 +43,6 @@
 #include <dataTypes/configs/BasecallerPulseAccumConfig.h>
 #include <dataTypes/configs/BasecallerMetricsConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
 #include <common/MongoConstants.h>
 #include <dataTypes/HQRFPhysicalStates.h>
 

@@ -40,7 +40,7 @@ class BasecallerTraceHistogramConfig;
 class BasecallerBaselineStatsAggregatorConfig;
 class BasecallerDmeConfig;
 class BatchLayoutConfig;
-class MovieConfig;
+class AnalysisConfig;
 class PrelimHQConfig;
 class SmrtBasecallerConfig;
 class StaticDetModelConfig;

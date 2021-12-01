@@ -69,7 +69,7 @@ public:     // Static functions
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
     static void Configure(const Data::BasecallerBaselinerConfig&,
-                          const Data::MovieConfig&);
+                          const Data::AnalysisConfig&);
 
     static void Finalize();
 

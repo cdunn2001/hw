@@ -12,7 +12,7 @@
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 #include <basecaller/traceAnalysis/FrameLabelerDevice.h>
@@ -30,7 +30,7 @@ using namespace PacBio::Primary;
 namespace {
 
 template <typename Labeler>
-std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const MovieConfig& config,
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& config,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
@@ -44,7 +44,7 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const MovieConfig&
 }
 
 std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLabelerConfig::MethodName method,
-                                                              const MovieConfig& config,
+                                                              const AnalysisConfig& config,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
@@ -94,28 +94,29 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     // Beware that we're ignoring some values like relAmp in our
     // analogs, which FrameLabeler does not currently need to know
     LaneModelParameters<PacBio::Cuda::PBHalf, laneSize> refModel;
-    MovieConfig movieConfig;
-    movieConfig.frameRate = 100;
+    AnalysisConfig analysisConfig;
+    auto& movieInfo = analysisConfig.movieInfo;
+    movieInfo.frameRate = 100;
 
-    movieConfig.analogs[0].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[1].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[2].ipd2SlowStepRatio = 0;
-    movieConfig.analogs[3].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[0].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[1].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[2].ipd2SlowStepRatio = 0;
+    movieInfo.analogs[3].ipd2SlowStepRatio = 0;
 
-    movieConfig.analogs[0].interPulseDistance = .308f;
-    movieConfig.analogs[1].interPulseDistance = .234f;
-    movieConfig.analogs[2].interPulseDistance = .234f;
-    movieConfig.analogs[3].interPulseDistance = .188f;
+    movieInfo.analogs[0].interPulseDistance = .308f;
+    movieInfo.analogs[1].interPulseDistance = .234f;
+    movieInfo.analogs[2].interPulseDistance = .234f;
+    movieInfo.analogs[3].interPulseDistance = .188f;
 
-    movieConfig.analogs[0].pulseWidth = .232f;
-    movieConfig.analogs[1].pulseWidth = .185f;
-    movieConfig.analogs[2].pulseWidth = .181f;
-    movieConfig.analogs[3].pulseWidth = .214f;
+    movieInfo.analogs[0].pulseWidth = .232f;
+    movieInfo.analogs[1].pulseWidth = .185f;
+    movieInfo.analogs[2].pulseWidth = .181f;
+    movieInfo.analogs[3].pulseWidth = .214f;
 
-    movieConfig.analogs[0].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[1].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[2].pw2SlowStepRatio = 3.2f;
-    movieConfig.analogs[3].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[0].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[1].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[2].pw2SlowStepRatio = 3.2f;
+    movieInfo.analogs[3].pw2SlowStepRatio = 3.2f;
 
     refModel.AnalogMode(0).SetAllMeans(227.13f);
     refModel.AnalogMode(1).SetAllMeans(154.45f);
@@ -132,7 +133,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 
     std::vector<UnifiedCudaArray<LaneModelParameters<PacBio::Cuda::PBHalf, laneSize>>> models;
     auto frameLabelers = CreateAndConfigure(GetParam(),
-                                            movieConfig,
+                                            analysisConfig,
                                             lanesPerPool,
                                             poolsPerChip);
 

@@ -3,7 +3,7 @@
 #include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
 #include <dataTypes/configs/BasecallerDmeConfig.h>
-#include <dataTypes/configs/MovieConfig.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 
 namespace PacBio {
 namespace Mongo {
