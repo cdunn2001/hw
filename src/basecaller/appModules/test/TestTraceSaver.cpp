@@ -34,7 +34,6 @@
 #include <appModules/TraceSaver.h>
 #include <pacbio/ipc/JSON.h>
 #include <pacbio/datasource/MallocAllocator.h>
-#include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/sensor/RectangularROI.h>
 #include <pacbio/sensor/SparseROI.h>
 #include <pacbio/tracefile/TraceFile.h>
@@ -144,10 +143,16 @@ TYPED_TEST(TestTraceSaver, TestA)
         }
         // which skip (0,64) and (1,64)
 
+        BatchDimensions dims;
+        dims.lanesPerBatch = 1;
+        dims.framesPerBatch = 128;
+        dims.laneWidth = laneWidth;
         DataSourceBase::LaneSelector laneSelector(lanes);
         TraceSaverBody traceSaver(traceFile,
                                   numFrames,
                                   std::move(laneSelector),
+                                  dims.framesPerBatch,
+                                  dims.laneWidth,
                                   writeType,
                                   holeNumbers,
                                   roiFeatures,
@@ -158,10 +163,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                                   instrumentName,
                                   MockAnalysisConfig());
 
-        BatchDimensions dims;
-        dims.lanesPerBatch = 1;
-        dims.framesPerBatch = 128;
-        dims.laneWidth = laneWidth;
+
 
         // fill each batch with the "alpha" test pattern, which is based on row and column
         // The pattern will be tweaked as necessary to not overflow when using 8 bit data
@@ -233,6 +235,7 @@ TYPED_TEST(TestTraceSaver, TestA)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
 
@@ -323,11 +326,15 @@ TEST(Sanity,ROI)
     PacBio::Dev::TemporaryDirectory tmpDir;
     const std::string traceFileName = tmpDir.DirName() + "/testB.trc.h5";
     const uint64_t frames=1024;
+    const size_t framesPerHdf5Chunk = 512;
+    const size_t zmwsPerHdf5Chunk = 64;
     PBLOG_INFO << "Opening TraceSaver with output file " << traceFileName << ", " << numZmws << " ZMWS.";
     {
         TraceSaverBody traceSaver(traceFileName,
                                   frames,
                                   std::move(blocks),
+                                  framesPerHdf5Chunk, 
+                                  zmwsPerHdf5Chunk,
                                   TraceFile::TraceDataType::INT16,
                                   holeNumbers,
                                   roiFeatures,
@@ -346,6 +353,7 @@ TEST(Sanity,ROI)
         EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
                         crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
         EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
         EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
         EXPECT_EQ(frames, reader.Traces().NumFrames());

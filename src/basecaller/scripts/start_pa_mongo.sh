@@ -51,14 +51,8 @@ then
 fi
 nop_option="--nop=${NOP}"
 
-rows=2756
-cols=2912
-numZmws=$(( $rows * $cols ))
-numZmwLanes=$(( numZmws / 64 ))
-
 if false
 then
-    numZmwLanes=1
     sourceType=TRACE_FILE
 else
     sourceType=WX2
@@ -100,24 +94,20 @@ cat <<HERE > $tmpjson
   },
   "source":
   {
-    "WX2SourceConfig":
+    "WXIPCDataSourceConfig":
     {
          "dataPath": "HardLoop",
          "maxPopLoops": ${MAXPOPLOOPS},
          "simulatedFrameRate": $RATE,
          "simulatedInputFile": "${INPUT}",
          "sleepDebug": 600,
-         "tilePoolFactor" : ${TILEPOOLFACTOR},
-         "wxlayout": {
-           "framesPerPacket":  ${fpgaFramesPerPacket},
-           "lanesPerPacket" : ${fpgaPacketLanes},
-           "zmwsPerLane" : ${fpgaZmwsPerLane}
-          }
+         "tilePoolFactor" : ${TILEPOOLFACTOR}
     }
   },
   "traceSaver": 
   {
-    "roi": [ [0,0,128,256 ]] // this is not working
+    //"roi": [ [0,0,4096,3072]]
+    "roi": [ [0,0,64,256 ]]
     //"roi": [ [0,127],[192,64]] // this is not working either
   }
 } 
