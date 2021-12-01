@@ -93,6 +93,9 @@ public:
         // The simulated trace data histogram
         std::unique_ptr<TraceHistogramAccumHost> traceHistAccum;
 
+        // The simulated trace baseliner metrics
+        Data::BaselinerMetrics blMetrics;
+
         // The complete-data estimates of the model
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
@@ -103,9 +106,11 @@ public:
         CompleteData() = default;
 
         CompleteData(TraceHistogramAccumHost&& tha,
+                     Data::BaselinerMetrics&& metrics,
                      std::vector<std::unique_ptr<LaneDetectionModelHost>>&& dms,
                      std::vector<std::vector<unsigned short>>&& fm)
             : traceHistAccum{new TraceHistogramAccumHost(std::move(tha))}
+            , blMetrics{std::move(metrics)}
             , detectionModels{std::move(dms)}
             , frameMode{std::move(fm)}
         { assert(traceHistAccum->FramesAdded() == frameMode.front().size()); }
@@ -148,7 +153,7 @@ public:
 
         // TODO: The Estimate() method currently doesn't return the DME diagnostics
         // with which further unit tests can be written to verify its contents.
-        dme->Estimate(completeData->traceHistAccum->Histogram(), &models);
+        dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
@@ -403,9 +408,9 @@ private:
         // Configure and fill the histogram.
         TraceHistogramAccumHost::Configure(testConfig.traceConfig);
         TraceHistogramAccumHost tha{poolId, poolSize};
-        tha.Reset(ctb.second);
+        tha.Reset(stats);
         tha.AddBatch(traces, pdm);
-        return CompleteData{std::move(tha), std::move(detectionModels), std::move(frameMode)};
+        return CompleteData{std::move(tha), std::move(stats), std::move(detectionModels), std::move(frameMode)};
     }
 
     void SetUp()

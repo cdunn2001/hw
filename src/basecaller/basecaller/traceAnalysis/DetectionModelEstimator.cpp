@@ -133,7 +133,9 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
 
                 auto dmeProf = profiler.CreateScopedProfiler(AnalysisStages::DME);
                 (void)dmeProf;
-                coreEstimator_->Estimate(hists, models);
+
+                const auto& runningStats = baselineAggregator_->TraceStats();
+                coreEstimator_->Estimate(hists, runningStats, models);
                 // Intentional fallthrough, we want to reset our
                 // histograms and baseline stats
             }

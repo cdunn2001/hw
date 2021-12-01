@@ -94,6 +94,7 @@ public:
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
+                      const Data::BaselinerMetrics& metrics,
                       PoolDetModel* detModel) const override;
 };
 

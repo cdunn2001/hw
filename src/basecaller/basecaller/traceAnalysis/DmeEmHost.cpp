@@ -121,120 +121,98 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 }
 
 
-void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModelPool) const
+void DmeEmHost::EstimateImpl(const PoolHist &hist, const Data::BaselinerMetrics& metrics, PoolDetModel *detModelPool) const
 {
     if (fixedModel_) return;
 
     const auto& hView = hist.data.GetHostView();
     auto dmView = detModelPool->GetHostView();
+    auto blsView = metrics.baselinerStats.GetHostView();
 
-    LaneDetModel& model0 = dmView[0]; // using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
-    LaneDetModelHost ldModel0(model0);
-    
 #ifndef NDEBUG
+                                            // using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
+    LaneDetModelHost ldModel0(dmView[0]);   // using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
+
     for (LaneDetModel &dmLane : dmView)
     {
-        LaneDetModelHost laneDetModel(dmLane);  // using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
+        LaneDetModelHost laneDetModel(dmLane);  
 
         assert(laneDetModel.FrameInterval() == ldModel0.FrameInterval());
     }
 #endif // NDEBUG
 
-    const LaneDetModelHost ldModel1 = PrelimEstimate(detModelPool);
-    
+    // All models are assumed similar, use 0th as a common one
+    const LaneDetModelHost estCommonModel = PrelimEstimate(blsView[0], dmView[0]);
+
     tbb::task_arena().execute([&] {
         tbb::parallel_for((unsigned int) {0}, PoolSize(), [&](unsigned int lane) {
             auto& dmLane = dmView[lane];
 
-            // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd).
+            // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd)
             const UHistType uhist(hView[lane]);
             LaneDetModelHost laneDetModel(dmLane);
 
-            // Estimate parameters for this lane.
-            EstimateModel(uhist, &laneDetModel);
+            // Estimate parameters for this lane off the common one
+            EstimateFiniteMixture(uhist, estCommonModel, &laneDetModel);
 
-            // Transcribe results back into *detModel.
+            // Transcribe results back into *detModel
             laneDetModel.ExportTo(&dmLane);
         });
     });
 }
 
-void DmeEmHost::EstimateModel(const UHistType& hist, LaneDetModelHost* detModel) const
+DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState, LaneDetModelHost model /* copy */) const
 {
-    // TODO: Evolve model. Use trace autocorrelation to adjust confidence
-    // half-life.
-
-    EstimateFiniteMixture(hist, detModel);
-}
-
-DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(PoolDetModel *detModelPool) const
-{
-    using std::max;
+    using std::max;  using std::min;
+    using std::sqrt;
     using std::isfinite;
 
-    assert(detModelPool->Size());
+    auto nBlFrames = FloatVec(blStatAccState.NumBaselineFrames());
+    auto totalFrames = FloatVec(blStatAccState.TotalFrames());
+    const auto blWeight = max(nBlFrames / totalFrames, 0.01f);
 
-    // Aggregate the block-specific baseline statistics.
-    FloatVec nFrames = 0.0f;
-    FloatVec nBaseline = 0.0f;
-    FloatVec resid = 0.0f;
-    FloatVec var = 0.0f;
-    auto dmView = detModelPool->GetHostView();
-    for (LaneDetModel &ldm : dmView)
-    {
-        LaneDetModelHost laneDetModel(ldm);
-        auto& blm = laneDetModel.BaselineMode();
-
-        // const auto n = dtb->Size();   // How to get this one? 
-        // const auto n = laneDetModel.FrameInterval(); // Seems like FrameInterval
-        // const auto nf = static_cast<float>(n);
-
-        // auto w2 = ldm.BaselineMode().weights;  // weights ??
-
-        float nf = 1000;
-
-        auto weights = blm.Weight();
-        auto nbl = nf * weights;
-        const auto mask = (nbl >= 2.0f);
-        nbl = Blend(mask, nbl, 0.0f);
-        nBaseline += nbl;
-        nFrames   += Blend(mask, nf, FloatVec(0));
-        var       += Blend(mask, (nbl-1) * blm.SignalCovar(), 0.0f);
-        // resid   dtb->BaselineResidual ?????
-    }
-    assert(all(nFrames >= nBaseline));
-    resid /= nBaseline;
-    var /= nBaseline - 1;
-
-    LaneDetModel& ldm0 = dmView[0]; // using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
-    LaneDetModelHost m0(ldm0);
-
-    // Reject statistics with insufficient data.
+    // Reject baseline statistics with insufficient data
     constexpr float nBaselineMin = 2.0f;
-    assert(nBaselineMin > 1.0f);
-    const BoolVec mask = nBaseline >= nBaselineMin;
-    const auto& m0blm = m0.BaselineMode();
+    const BoolVec mask = nBlFrames >= nBaselineMin;
+    const auto& m0blm = model.BaselineMode();  // SignalModeHost<FloatVec>
+    const StatAccumulator<FloatVec>& blsa = blStatAccState.baselineStats;
 
-    var = Blend(mask, var, m0blm.SignalCovar());
-    resid = Blend(mask, resid, m0blm.SignalMean());
-    assert(all(isfinite(var)) && all(var > 0.0f));
-    assert(all(isfinite(resid)));
+    auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
+    auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
+    assert(all(isfinite(blMean)));
+    assert(all(isfinite(blVar)) && all(blVar > 0.0f));
 
-    const FloatVec blWeight = max(nBaseline / nFrames, 0.01f);
-    // m0.Rescale(blVar, blResid, blWeight, frameInterval); // What's that???
+    assert(model.DetectionModes().size() == numAnalogs);
 
-    FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBaseline - nBaselineMin);
-    m0.Confidence(conf);
+    // Rescale
+    auto scale = sqrt(blVar / m0blm.SignalCovar());
 
-    return m0;
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        auto& mode = model.DetectionModes()[i];
+        const auto mean = mode.SignalMean() * scale;
+        const auto& var = ModelSignalCovar(Analog(i), mean, blVar);
+
+        mode.SignalMean(mean);
+        mode.SignalCovar(var);
+        mode.Weight(0.25f*(1.0f-blWeight));
+    }
+
+    model.BaselineMode().Weight(blWeight);
+    model.BaselineMode().SignalMean(blMean);
+    model.BaselineMode().SignalCovar(blVar);
+
+    // Frame interval is not updated since it is not exported
+
+    FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBlFrames - nBaselineMin);
+    model.Confidence(conf);
+
+    return model;
 }
 
-void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost* detModel) const
+void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost workModel /* copy */, LaneDetModelHost* detModel) const
 {
     const auto& numFrames = hist.TotalCount();
-
-    // Make a working copy of the detection model.
-    LaneDetModelHost workModel = *detModel;
 
     // Keep a copy of the initial model.
     const auto initModel = workModel;
@@ -814,17 +792,17 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     return pdm;
 }
 
-void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
                                  LaneDetModel& ldm) const
 {
     using ElementType = typename Data::BaselinerStatAccumState::StatElement;
     using LaneArr = LaneArray<ElementType>;
 
-    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
+    StatAccumulator<LaneArr> blsa (blStatAccState.baselineStats);
 
     const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
     const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
-    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / LaneArr(blStats.fullAutocorrState.basicStats.moment0);
+    const auto& blWeight = LaneArr(blStatAccState.NumBaselineFrames()) / LaneArr(blStatAccState.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;

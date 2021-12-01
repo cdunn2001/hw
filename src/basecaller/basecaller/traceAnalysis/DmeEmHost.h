@@ -32,6 +32,7 @@
 #include <common/LaneArray.h>
 #include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
+#include <dataTypes/BaselinerStatAccumulator.h>
 
 #include "CoreDMEstimator.h"
 #include "DmeDiagnostics.h"
@@ -54,6 +55,7 @@ public:     // Types
     using CountVec = LaneArray<LaneHist::CountType>;
     using UHistType = Data::UHistogramSimd<FloatVec, CountVec>;
     using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
+    using BlStatAccState = Data::BaselinerStatAccumState;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
@@ -95,6 +97,7 @@ private:    // Types
 
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
+                      const Data::BaselinerMetrics& metrics,
                       PoolDetModel* detModel) const override;
 
 private:    // Static data
@@ -133,16 +136,15 @@ private:    // Static functions
                       const LaneDetModelHost& modelEst);
 
 private:    // Functions
-    void EstimateModel(const UHistType& hist,
-                              LaneDetModelHost* detModel) const;
-
-    LaneDetModelHost PrelimEstimate(PoolDetModel *detModelPool) const;
+    LaneDetModelHost PrelimEstimate(const BlStatAccState& accState, 
+                                    LaneDetModelHost m /* copy */) const;
 
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
     void EstimateFiniteMixture(const UHistType& hist,
-                              LaneDetModelHost* detModel) const;
+                               LaneDetModelHost workModel /* copy */, 
+                               LaneDetModelHost* detModel) const;
 
 
 
