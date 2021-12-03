@@ -356,7 +356,7 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 
     auto threadFrames = traces.NumFrames() / blockDim.x;
     auto start = threadIdx.x * threadFrames;
-    auto stop = min(start + threadFrames, traces.NumFrames());
+    auto stop = start + threadFrames;
 
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -442,7 +442,7 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 
     auto threadFrames = traces.NumFrames() / blockDim.x;
     auto start = threadIdx.x * threadFrames;
-    auto stop = min(start + threadFrames, traces.NumFrames());
+    auto stop = start + threadFrames;
 
     for (int zmw = 0; zmw < laneSize/2; ++zmw)
     {
@@ -576,7 +576,7 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
 
     auto threadFrames = traces.NumFrames() / blockDim.y;
     auto start = threadIdx.y * threadFrames;
-    auto stop = min(start + threadFrames, traces.NumFrames());
+    auto stop = start + threadFrames;
 
     auto dat = traces.ZmwData(blockIdx.x, threadIdx.x);
 
