@@ -33,6 +33,7 @@
 #include <sstream>
 
 #include <pacbio/datasource/AllocationSlicer.h>
+#include <pacbio/PBException.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/HugePage.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
@@ -51,13 +52,15 @@ using namespace PacBio::Memory;
 using namespace PacBio::DataSource;
 
 // Helper class to keep track of memory high water marks
-class AllocStat
+class MemUsageStat
 {
 public:
     void AllocationSize(size_t size)
     {
         currentBytes_ += size;
-        peakBytes_ = std::max(currentBytes_, peakBytes_);
+        past_.peakBytes = std::max(currentBytes_, past_.peakBytes);
+        past_.recentPeakBytes = std::max(currentBytes_, past_.recentPeakBytes);
+        past_.recentMinBytes = std::min(currentBytes_, past_.recentMinBytes);
     }
     void DeallocationSize(size_t size)
     {
@@ -65,10 +68,23 @@ public:
         currentBytes_ -= size;
     }
 
-    size_t PeakMemUsage() const { return peakBytes_; }
+    struct PastUsage
+    {
+        size_t peakBytes{0};
+        size_t recentPeakBytes{0};
+        size_t recentMinBytes{0};
+    };
+
+    // Returns the memory usage statistics between now and the previous call.
+    // That does mean that this call effectively resets all statistics marked
+    // as "recent"
+    PastUsage PastMemUsage()
+    {
+        return std::exchange(past_, {past_.peakBytes, currentBytes_, currentBytes_});
+    }
 private:
     size_t currentBytes_{0};
-    size_t peakBytes_{0};
+    PastUsage past_;
 };
 
 /////////////////////////////////////////
@@ -83,19 +99,13 @@ struct MallocAllocator
 
     static std::string StaticName() { return "MallocAllocator";}
 
-    static void* allocate(size_t size)
+    void* allocate(size_t size)
     {
-        return aligned_alloc(64, (size % 64 == 0)
-                                                     ? size
-                                                     : (size + 64 - 1 / 64) * 64);
+        return aligned_alloc(64, (size + 64 - 1) / 64 * 64);
     }
-    static void deallocate(void* ptr)
+    void deallocate(void* ptr)
     {
         free(ptr);
-    }
-    static std::string ReportStatus()
-    {
-        return "MallocAllocator::ReportStatus is not implemented";
     }
 };
 
@@ -108,81 +118,23 @@ struct PinnedAllocator
 
     static std::string StaticName() { return "HugePinnedPinnedAllocatorAllocator";}
 
-    static void* allocate(size_t size)
+    void* allocate(size_t size)
     {
         return CudaRawMallocHost(size);
     }
-    static void deallocate(void* ptr)
+    void deallocate(void* ptr)
     {
         CudaFreeHost(ptr);
     }
-    static std::string ReportStatus()
-    {
-        return "PinnedAllocator::ReportStatus is not implemented";
-    }
 };
 
-struct HugePinnedAllocator
+class SharedHugePinnedAllocator
 {
-    static constexpr uint32_t supportedIAllocatorFlags =
-          IAllocator::CUDA_MEMORY
-        | IAllocator::HUGEPAGES
-        | IAllocator::ALIGN_64B;
+public:
+    SharedHugePinnedAllocator(std::unique_ptr<SharedMemoryAllocator> sharedAllocator)
+        : slicer_{1<<30, 1, Helper{std::move(sharedAllocator)}}
+    {}
 
-    static constexpr const char* description = "Pinned HugePage Host Memory";
-
-    static std::string StaticName() { return "HugePinnedAllocator";}
-
-    static void* allocate(size_t size)
-    {
-        return Allocator().Allocate(size);
-    }
-
-    static void deallocate(void* ptr)
-    {
-        Allocator().Deallocate(ptr);
-    }
-    static std::string ReportStatus() 
-    {
-        return "HugePinnedAllocator::ReportStatus is not implemented";
-    }
-
-private:
-    // Helper class, to do the extra work required to unify huge
-    // page allocations with the cuda runtime
-    struct HugePinnedHelper
-    {
-        static void* Malloc(size_t size)
-        {
-            auto ptr = PacBio::HugePage::Malloc(size);
-            // This function both page-locks the allocation,
-            // and registers the address range with the cuda
-            // runtime
-            CudaHostRegister(ptr, size);
-            return ptr;
-        }
-
-        static void Free(void* ptr)
-        {
-            // This function unlocks the page, and updates
-            // the cuda runtime bookkeeping to reflect that
-            CudaHostUnregister(ptr);
-            PacBio::HugePage::Free(ptr);
-        }
-    };
-
-    // Singleton access.  We're already using a static and application
-    // wide allocation cache, so it makes sense to similarly treat
-    // the AllocationSlicer that backs it all
-    static AllocationSlicer<HugePinnedHelper, 64>& Allocator()
-    {
-        static AllocationSlicer<HugePinnedHelper, 64> alloc_(1<<30);
-        return alloc_;
-    }
-};
-
-struct SharedHugeCudaPinnedAllocator
-{
     static constexpr uint32_t supportedIAllocatorFlags =
           IAllocator::CUDA_MEMORY
         | IAllocator::HUGEPAGES
@@ -192,59 +144,79 @@ struct SharedHugeCudaPinnedAllocator
 
     static constexpr const char* description = "Shared Pinned HugePage Host Memory";
 
-    static std::string StaticName() { return "SharedHugeCudaPinnedAllocator";}
+    static std::string StaticName() { return "SharedHugePinnedAllocator";}
 
-    static void* allocate(size_t size)
+    void* allocate(size_t size)
     {
-        void* ptr = Allocator().Allocate(size);
-#if 0
-        CudaHostRegister(ptr, size);
-#endif
-        return ptr;
+        return slicer_.Allocate(size);
     }
 
-    static void deallocate(void* ptr)
+    void deallocate(void* ptr)
     {
-#if 0
-        CudaHostUnregister(ptr);
-#endif
-        Allocator().Deallocate(ptr);
+        slicer_.Deallocate(ptr);
     }
 
-    static std::string ReportStatus()
-    {
-        return Allocator().ReportStatus();
-    }
 private:
-    // Singleton access.  We're already using a static and application
-    // wide allocation cache, so it makes sense to similarly treat
-    // the AllocationSlicer that backs it all
-    static SharedMemoryAllocator& Allocator()
+    // Helper class, to do the extra work required to unify huge
+    // page allocations with the cuda runtime
+    struct Helper
     {
-        // FIXME This is just a proof of concept hack.
-        // This needs to be plumbed with the WXIPCDataSource which knows
-        // these values.
-        static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
-        config.baseAddress = 0x5'0000'0000ULL; // 0x4'0000'0000 = 17179869184ULL;
-        config.size = 25769803776ULL;
-        config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
-        config.removeSharedSegmentsOnDestruction = false;
+        Helper(std::unique_ptr<SharedMemoryAllocator> allocator)
+            : sharedAlloc_(std::move(allocator))
+        {}
 
-        static SharedMemoryAllocator alloc_(config);
-        return alloc_;
-    }
+        void* Malloc(size_t size)
+        {
+            assert(size % (1ull<<30) == 0);
+            auto ptr = sharedAlloc_->Allocate(size);
+            assert((reinterpret_cast<uint64_t>(ptr) & ((1ull << 30) -1)) == 0);
+
+            // This function both page-locks the allocation,
+            // and registers the address range with the cuda
+            // runtime
+            CudaHostRegister(ptr, size);
+            return ptr;
+        }
+
+        void Free(void* ptr)
+        {
+            // This function unlocks the page, and updates
+            // the cuda runtime bookkeeping to reflect that
+            CudaHostUnregister(ptr);
+            sharedAlloc_->Deallocate(ptr);
+        }
+
+        std::unique_ptr<SharedMemoryAllocator> sharedAlloc_;
+    };
+
+private:
+    AllocationSlicer<Helper, 256> slicer_;
 };
 
+// BENTODO temporary
+std::unique_ptr<SharedMemoryAllocator> Allocator()
+{
+    // FIXME This is just a proof of concept hack.
+    // This needs to be plumbed with the WXIPCDataSource which knows
+    // these values.
+    static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
+    config.baseAddress = 0x5'0000'0000ULL; // 0x4'0000'0000 = 17179869184ULL;
+    config.size = 25769803776ULL;
+    config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
+    config.removeSharedSegmentsOnDestruction = false;
+
+    return std::make_unique<SharedMemoryAllocator>(config);
+}
 
 struct GpuAllocator
 {
     static constexpr const char* description = "Gpu Memory";
 
-    static void* allocate(size_t size)
+    void* allocate(size_t size)
     {
         return CudaRawMalloc(size);
     }
-    static void deallocate(void* ptr)
+    void deallocate(void* ptr)
     {
         CudaFree(ptr);
     }
@@ -268,23 +240,68 @@ struct GpuAllocator
 template <typename Allocator>
 struct AllocationManager
 {
-private:
-    AllocationManager()
+    // Use ProcureCache instead.
+    template <typename...Args, std::enable_if_t<std::is_constructible_v<Allocator, Args...>, int> = 0>
+    AllocationManager(CacheMode cachingMode, Args&&... args)
+        : allocator_(std::forward<Args>(args)...)
+        , cache_(cachingMode == CacheMode::DISABLED ? false : true)
+    {}
+
+public:
+
+    /// static generator function for obtaining an AllocationManager
+    /// This is used instead of a regular constructor for two reasons:
+    /// 1. Allow the retrieval of a pre-existing cache when CacheMode::GLOBAL_CACHE is used
+    /// 2. Keep track of all caches alive, so that their usage and memory statistics can
+    ///    be observed
+    template <typename... Args, std::enable_if_t<std::is_constructible_v<Allocator, Args...>, int> = 0>
+    static std::shared_ptr<AllocationManager> ProcureCache(CacheMode mode, Args&&... args)
     {
-        // We're doing something somewhat subtle here.  AllocationManager is
-        // used with a static storage duration, but it's members include memory
-        // allocations that in turn rely on other data structures with static
-        // storage as well.  The most notable of these is the cuda runtime
-        // itself.  If we're not careful about the lifetime of static objects,
-        // we will potentially crash during application teardown, when we try
-        // to give memory back to the cuda runtime that is no longer alive.
-        //
-        // The destruction order of static/global objects is the reverse of
-        // the *completion* of their constructors.  By creating and destroying
-        // an allocation here during the ctor, we ensure that all static/global
-        // infrastructure required to free allocations will live longer than
-        // this object, making destruction of the contained allocations safe.
-        Allocator::deallocate(Allocator::allocate(1));
+        std::lock_guard<std::mutex> lm(staticMutex_);
+
+        std::shared_ptr<AllocationManager> ret;
+
+        if (mode == CacheMode::GLOBAL_CACHE)
+        {
+            ret = globalCache_.lock();
+        }
+
+        if (!ret)
+        {
+            ret.reset(new AllocationManager(mode, std::forward<Args>(args)...));
+            refList_.push_back(ret);
+            if (mode == CacheMode::GLOBAL_CACHE)
+                globalCache_ = ret;
+        }
+
+        return ret;
+    }
+
+    /// Produces a vector of all AllocationManagers currently alive.  Due
+    /// to threading issues it's both possible for this vector to contain
+    /// an empty shared_ptr, as well as possible that this vector will
+    /// contain the last owning reference to a Manager.  The latter is
+    /// benign, the former means you must always check for null before usage.
+    ///
+    /// \return a vector of shared_ptr to all current AllocationManager instances
+    static std::vector<std::shared_ptr<AllocationManager>> GetAllRefs()
+    {
+        std::lock_guard<std::mutex> lm(staticMutex_);
+
+        //prune empty weak_ptr instances,
+        refList_.erase(std::remove_if(refList_.begin(),
+                                      refList_.end(),
+                                      [](auto& weak) { return weak.expired(); }),
+                       refList_.end());
+
+        std::vector<std::shared_ptr<AllocationManager>> ret;
+        ret.reserve(refList_.size());
+        std::transform(refList_.begin(),
+                       refList_.end(),
+                       std::back_inserter(ret),
+                       [](auto& weak) { return weak.lock(); });
+
+        return ret;
     }
 
     AllocationManager(const AllocationManager&) = delete;
@@ -292,158 +309,177 @@ private:
     AllocationManager& operator=(const AllocationManager&) = delete;
     AllocationManager& operator=(AllocationManager&&) = delete;
 
+private:
     struct Deleter
     {
         void operator()(void* ptr)
         {
-            Allocator::deallocate(ptr);
+            assert(ref_);
+            ref_->deallocate(ptr);
         }
+        Allocator* ref_;
     };
     using Ptr_t = std::unique_ptr<void, Deleter>;
 public:
-
-    // Singleton access function.  Static variables in a function have
-    // a well defined and sane initialization guarantee, while actual
-    // global variables do not (since the ordering of initialization
-    // between different translation units is indeterminate)
-    // We're returning a shared_pointer here so that judicious useage
-    // of weak_ptr can help detect lifetime issues resulting from static
-    // teardown order.
-    static std::shared_ptr<AllocationManager> GetManager()
-    {
-        static auto manager = std::shared_ptr<AllocationManager>(new AllocationManager{});
-        return manager;
-    };
 
     ~AllocationManager()
     {
         if (cache_) FlushPools();
     }
 
-    // After calling this, calls to the `Return` functions will always
-    // store memory for future use, and host allocations will use
-    // pinned memory.  Beware no memory is ever freed until
-    // you call `DisableCaching`.  For certain usage patterns
-    // (e.g. irregular and unpredictable allocation sizes), use of
-    // AllocationManager will effectively look like a memory leak
-    void EnableCaching()
-    {
-        std::lock_guard<std::mutex> lm(m_);
-        cache_ = true;
-    }
-
-    // After calling this, calls to the `Return` functions
-    // will immediately destroy all allocations it receives
-    void DisableCaching()
-    {
-        std::lock_guard<std::mutex> lm(m_);
-        cache_ = false;
-        FlushPoolsImpl();
-    }
-
     void* GetAlloc(size_t size, const AllocationMarker& marker)
     {
         if (size == 0) return nullptr;
 
-        std::lock_guard<std::mutex> lm(m_);
+        std::lock_guard<std::mutex> lm(instanceMutex_);
         assert(allocMarkers_.count(marker.AsHash()) == 0
                || allocMarkers_.at(marker.AsHash()) == marker);
         allocMarkers_.emplace(marker.AsHash(), marker);
         stats_[marker.AsHash()].AllocationSize(size);
+        fullStats_.AllocationSize(size);
 
         auto& queue = allocs_[size];
         if (queue.size() > 0)
         {
             auto alloc = std::move(queue.front());
             queue.pop_front();
+            cacheStats_.DeallocationSize(size);
             return alloc.release();
         } else {
-            return Allocator::allocate(size);
+            return allocator_.allocate(size);
         }
     }
 
-    void ReturnAlloc(void* alloc, size_t size, size_t allocID)
+    void ReturnAlloc(void* ptr, size_t size, size_t allocID)
     {
-        Utilities::Finally f([&]{ if(alloc) Allocator::deallocate(alloc);});
-        std::lock_guard<std::mutex> lm(m_);
+        Utilities::Finally f([&]{ if(ptr) allocator_.deallocate(ptr);});
+        std::lock_guard<std::mutex> lm(instanceMutex_);
+
+        if (allocID != 0)
+        {
+            stats_[allocID].DeallocationSize(size);
+            fullStats_.DeallocationSize(size);
+        }
 
         if (cache_)
         {
-            if (allocID != 0)
-                stats_[allocID].DeallocationSize(size);
-            allocs_[size].push_front(Ptr_t{alloc});
-            alloc = nullptr;
+            cacheStats_.AllocationSize(size);
+            allocs_[size].push_front(Ptr_t{ptr, {&allocator_}});
+            ptr = nullptr;
         }
     }
 
     void FlushPools()
     {
-        std::lock_guard<std::mutex> lm(m_);
+        std::lock_guard<std::mutex> lm(instanceMutex_);
 
         FlushPoolsImpl();
     }
 
-    void Report()
+    /// Generates report, to show what sections of code are allocating
+    /// the most memory
+    std::string Report()
     {
-        std::lock_guard<std::mutex> lm(m_);
+        std::lock_guard<std::mutex> lm(instanceMutex_);
 
-        ReportImpl();
+        return ReportImpl();
     }
 
 private:
-    void ReportImpl()
+    std::string ReportImpl()
     {
-        // Generate reports, to see what sections of code are allocating
-        // the most memory
-        auto Report = [&](auto& stats) {
+        if (stats_.empty()) return "";
 
-            std::vector<std::pair<std::string, size_t>> highWaters;
-            for (auto& kv : stats)
-            {
-                const auto& name = allocMarkers_.at(kv.first).AsString();
-                const auto value = kv.second.PeakMemUsage();
-                highWaters.emplace_back(std::make_pair(name, value));
-            }
+        struct TaggedStats
+        {
+            std::string name;
+            MemUsageStat::PastUsage stats;
+        };
+        // All the stats, sorted by decreasing recent
+        // memory usage
+        std::vector<TaggedStats> sortedStats;
+        for (auto& kv : stats_)
+        {
+            sortedStats.push_back({
+                    allocMarkers_.at(kv.first).AsString(),
+                    kv.second.PastMemUsage()
+            });
+        }
 
-            std::sort(highWaters.begin(),
-                      highWaters.end(),
-                      [](const auto& l, const auto& r) {return l.second > r.second; });
-            size_t sum = 0;
-            sum = std::accumulate(highWaters.begin(),
-                                  highWaters.end(),
-                                  sum,
-                                  [](const auto& a, const auto& b) { return a+b.second; });
+        std::sort(sortedStats.begin(),
+                  sortedStats.end(),
+                  [](const auto& l, const auto& r)
+                  {return l.stats.recentPeakBytes > r.stats.recentPeakBytes; });
 
-            std::stringstream msg;
-            const float mb = static_cast<float>(1<<20);
-            msg << "High water marks sum: " << sum / mb << " MB\n";
-            for (const auto& val : highWaters)
-            {
-                std::ios state(nullptr);
-                state.copyfmt(msg);
-                msg << "\t" << std::setprecision(2) << std::setw(5) << 100.0f * val.second / sum << "% : ";
-                msg.copyfmt(state);
-                msg << val.first << ": ";
-                msg << val.second / mb << " MB\n";
-            }
-            Logging::LogStream ls(Logging::LogLevel::INFO);
-            ls << msg.str();
+        const auto peakSum = std::accumulate(sortedStats.begin(),
+                                             sortedStats.end(),
+                                             0ull,
+                                             [](const auto& a, const auto& b)
+                                             { return a+b.stats.peakBytes; });
+
+        const auto recentPeakSum = std::accumulate(sortedStats.begin(),
+                                                   sortedStats.end(),
+                                                   0ull,
+                                                   [](const auto& a, const auto& b)
+                                                   { return a+b.stats.recentPeakBytes; });
+
+        const auto recentUnused = cacheStats_.PastMemUsage().recentMinBytes;
+        const auto totalAllocs = fullStats_.PastMemUsage().peakBytes;
+
+        auto PrettyMemNumber = [](auto& stream, float f) -> decltype(auto)
+        {
+            constexpr auto KiB = static_cast<float>(1<<10);
+            constexpr auto MiB = static_cast<float>(1<<20);
+            constexpr auto GiB = static_cast<float>(1<<30);
+
+            stream << std::setw(4);
+
+            if (f >= GiB) stream << f / GiB << " GiB";
+            else if (f >= MiB) stream << f / MiB << " MiB";
+            else if (f >= KiB) stream << f / KiB << " KiB";
+            else stream << f << "B";
+
+            return stream;
         };
 
-        if (!stats_.empty())
+        std::stringstream msg;
+        msg << std::setprecision(3);
+
+        msg << "----Memory usage report for " << Allocator::description << "-----\n"
+            << "Total mem usage: ";
+        PrettyMemNumber(msg, totalAllocs) << " \n"
+            << "All Time High Water Marks sum: ";
+        PrettyMemNumber(msg, peakSum) << " (Savings: "
+            << 100.0f - 100.0f * totalAllocs / peakSum << "%)\n"
+            << "Recent High Water Marks Sum: ";
+        PrettyMemNumber(msg, recentPeakSum) << " (Savings: "
+            << 100.0f - 100.0f * totalAllocs / recentPeakSum << "%)\n"
+            << "Unused Cache: ";
+        PrettyMemNumber(msg, recentUnused) << " (Waste: "
+            << 100.0f * recentUnused / totalAllocs << "%)\n"
+            << "High Water Breakdown:\n";
+
+        for (const auto& val : sortedStats)
         {
-            PBLOG_INFO << "----Memory high water mark report for " << Allocator::description << "-----";
-            Report(stats_);
-            PBLOG_INFO << "------------------------------------------";
-            PBLOG_INFO << "Note: Different filter stages consume memory at different times.  "
-                       << "The sum of high water marks for individual high watermarks won't "
-                       << "be quite the same as the high watermark for the application as a whole";
+            msg << "\t" << std::setw(5) << 100.0f * val.stats.recentPeakBytes / recentPeakSum << "% : ";
+            PrettyMemNumber(msg, val.stats.recentPeakBytes) << " ("
+                << std::setw(5) << 100.0f * val.stats.recentPeakBytes / val.stats.peakBytes << "% Of Peak) : "
+                << val.name << "\n";
         }
+
+        msg << "------------------------------------------\n";
+        msg << "Note: Different filter stages consume memory at different times.  "
+            << "The sum of high water marks for individual high watermarks is not expected to "
+            << "be quite the same as the high watermark for the application as a whole\n";
+
+        return msg.str();
     }
+
     // Clears out all allocation pools (and generates a usage report)
     void FlushPoolsImpl()
     {
-        ReportImpl();
+        Logging::LogStream ls(Logging::LogLevel::INFO);;
+        ls << ReportImpl();
 
         // Delete all allocations (and statistics) we're currently holding on to.
         allocs_.clear();
@@ -451,23 +487,47 @@ private:
         allocMarkers_.clear();
     }
 
+    // We do have an explicit struct before members are destroyed, but I'm still listing
+    // this first since entries into allocs_ below maintain a reference to the allocator_
+    // here
+    Allocator allocator_;
 
     std::map<size_t, std::deque<Ptr_t>> allocs_;
-    std::map<size_t, AllocStat> stats_;
+    std::map<size_t, MemUsageStat> stats_;
     std::map<size_t, AllocationMarker> allocMarkers_;
 
-    std::mutex m_;
-    bool cache_ = false;
+    MemUsageStat cacheStats_;
+    MemUsageStat fullStats_;
+
+    std::mutex instanceMutex_;
+    bool cache_;
+
+    // Some static data to keep track of all the managers currently in existence.
+    // We're using weak_ptr here specifically because we want to observe, but
+    // not prolong the lifetime of things
+    static std::mutex staticMutex_;
+    static std::weak_ptr<AllocationManager> globalCache_;
+    static std::vector<std::weak_ptr<AllocationManager>> refList_;
 };
 
+template <typename T>
+std::mutex AllocationManager<T>::staticMutex_;
+template <typename T>
+std::weak_ptr<AllocationManager<T>> AllocationManager<T>::globalCache_;
+template <typename T>
+std::vector<std::weak_ptr<AllocationManager<T>>> AllocationManager<T>::refList_;
+
 template <typename HostAllocator>
-class MongoCachedAllocator final : public IMongoCachedAllocator, private detail::DataManager
+class CachedAllocatorImpl final : public KestrelAllocator, private detail::DataManager
 {
     using HostManager = AllocationManager<HostAllocator>;
     using GpuManager = AllocationManager<GpuAllocator>;
 public:
-    MongoCachedAllocator(const AllocationMarker& defaultMarker)
+    template <typename...Args, std::enable_if_t<std::is_constructible_v<HostManager, CacheMode, Args...>, int> = 0>
+    CachedAllocatorImpl(const AllocationMarker& defaultMarker, CacheMode cacheMode, Args&&... args)
         : defaultMarker_(defaultMarker)
+        , hostManager_(HostManager::ProcureCache(cacheMode, std::forward<Args>(args)...))
+        , gpuManager_(GpuManager::ProcureCache(cacheMode))
     {}
 
     std::string Name() const override
@@ -477,7 +537,7 @@ public:
 
     std::string ReportStatus() const override
     {
-        return HostAllocator::ReportStatus();
+        return hostManager_->Report() + "\n" + gpuManager_->Report();
     }
 
     PacBio::Memory::SmartAllocation GetAllocation(size_t size) override
@@ -493,16 +553,20 @@ public:
 
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
         (void)tmp;
-        auto mngr = HostManager::GetManager();
         return PacBio::Memory::SmartAllocation{size,
             // Storing mngr as a weak pointer in these lambdas to help
-            // sniff out static teardown issues.  It's a bit of cautious
-            // paranoia for the first lambda since the current implemntation
-            // evaluates it immediately, but it's more important for the second
-            // when the allocation might be returned after the Manager is already
-            // dead.  There is no robust promise of recovery, but we'll at least
-            // avoid some obvious and definite sources of UB.
-            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr},
+            // sniff out lifetime issues.  It's a bit of cautious paranoia
+            // for the first lambda, since the current implementation
+            // evaluates it immediately, but it's more important for the second.
+            // If any allocations are returned after the manager is already
+            // destroyed then we will (try to) log the issue and explicitly
+            // leak the memory.  Since a likely cause for this scenario is that
+            // someone used the allocation inside a static object, we may well
+            // be in the static teardown phase after main exits, and there isn't
+            // much more we can reliably do, especially since if we try to free
+            // any cuda allocations after the cuda runtime is destroyed, we'll
+            // probably get a hard crash
+            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
              &marker](size_t sz){
                 auto manager = mngr.lock();
                 if (manager)
@@ -510,7 +574,7 @@ public:
                 else
                     return static_cast<void*>(nullptr);
             },
-            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{mngr},
+            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
              size,
              id = marker.AsHash()]
             (void* ptr){
@@ -545,16 +609,20 @@ public:
 
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
         (void)tmp;
-        auto mngr = GpuManager::GetManager();
         return SmartDeviceAllocation{size,
             // Storing mngr as a weak pointer in these lambdas to help
-            // sniff out static teardown issues.  It's a bit of cautious
-            // paranoia for the first lambda since the current implemntation
-            // evaluates it immediately, but it's more important for the second
-            // when the allocation might be returned after the Manager is already
-            // dead.  There is no robust promise of recovery, but we'll at least
-            // avoid some obvious and definite sources of UB.
-            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr},
+            // sniff out lifetime issues.  It's a bit of cautious paranoia
+            // for the first lambda, since the current implementation
+            // evaluates it immediately, but it's more important for the second.
+            // If any allocations are returned after the manager is already
+            // destroyed then we will (try to) log the issue and explicitly
+            // leak the memory.  Since a likely cause for this scenario is that
+            // someone used the allocation inside a static object, we may well
+            // be in the static teardown phase after main exits, and there isn't
+            // much more we can reliably do, especially since if we try to free
+            // any cuda allocations after the cuda runtime is destroyed, we'll
+            // probably get a hard crash
+            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{gpuManager_},
              &marker](size_t sz){
                 auto manager = mngr.lock();
                 if (manager)
@@ -562,7 +630,7 @@ public:
                 else
                     return static_cast<void*>(nullptr);
             },
-            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{mngr},
+            [mngr = std::weak_ptr<AllocationManager<GpuAllocator>>{gpuManager_},
              size,
              id = marker.AsHash()](void* ptr){
                 static thread_local size_t counter = 0;
@@ -595,162 +663,128 @@ public:
 
 private:
     AllocationMarker defaultMarker_;
+    std::shared_ptr<HostManager> hostManager_;
+    std::shared_ptr<GpuManager> gpuManager_;
 };
 
-std::pair<AllocatorMode, std::unique_ptr<IMongoCachedAllocator>>& AllocInstance()
+struct GlobalModeInfo
 {
-    using Data = std::pair<AllocatorMode, std::unique_ptr<IMongoCachedAllocator>>;
-    static Data data{AllocatorMode::MALLOC,
-                     std::make_unique<MongoCachedAllocator<MallocAllocator>>(AllocationMarker("Not Recorded"))};
+    // We'll set this to true whenever we change to a new setting, so that we can
+    // detect and error out if there are nested calls to SetGlobalAllocationMode.
+    // For simplicity we're just not going to support that.
+    bool customSettings = false;
+    AllocatorMode mode = AllocatorMode::MALLOC;
+    std::unique_ptr<KestrelAllocator> allocator =
+        std::make_unique<CachedAllocatorImpl<MallocAllocator>>(std::string{"Not Recorded"},
+                                                               CacheMode::DISABLED);
+};
 
+GlobalModeInfo& GetGlobalModeInfo()
+{
+    static GlobalModeInfo data;
     return data;
 }
 
 } // anon namespace
 
-// Helper function, to help consolidate switches over AllocatorMode
-// to a single location.  `f` is expected to be a function-like
-// thing that accepts an AllocationManager as an argument
-template <typename F>
-void VisitHostManager(AllocatorMode mode, F&& f)
+PacBio::Utilities::Finally SetGlobalAllocationMode(CacheMode cacheMode, AllocatorMode memType)
 {
-    // Putting this in a small lambda to avoid repeating the
-    // null check.  I can't imagine this function will get called
-    // after the static managers are destroyed, but might as well
-    // be safe;
-    auto Invoke = [&](auto&& mgr)
-    {
-        assert(mgr);
-        f(*mgr);
-    };
-    switch (mode)
+    auto& data = GetGlobalModeInfo();
+
+    if (data.customSettings)
+        throw PBException("Nested calls to SetGlobalAllocatoinMode are not supported. "
+                          "We can only change the settings when they are currently at "
+                          "the default");
+
+    data.customSettings = true;
+
+    AllocationMarker loc{"Not Recorded"};
+    switch(memType)
     {
     case AllocatorMode::MALLOC:
         {
-            Invoke(AllocationManager<MallocAllocator>::GetManager());
-            return;
+            data.allocator = std::make_unique<CachedAllocatorImpl<MallocAllocator>>(loc, cacheMode);
+            break;
         }
     case AllocatorMode::CUDA:
         {
-            Invoke(AllocationManager<PinnedAllocator>::GetManager());
-            return;
-        }
-    case AllocatorMode::HUGE_CUDA:
-        {
-            Invoke(AllocationManager<HugePinnedAllocator>::GetManager());
-            return;
+            data.allocator = std::make_unique<CachedAllocatorImpl<PinnedAllocator>>(loc, cacheMode);
+            break;
         }
     case AllocatorMode::SHARED_MEMORY_HUGE_CUDA:
         {
-            Invoke(AllocationManager<SharedHugeCudaPinnedAllocator>::GetManager());
-            return;
+            throw PBException("Cannot use SHARED_MEMORY_HUGE_CUDA as a global allocation mode");
+            break;
         }
+    default:
+        throw PBException("Invalid AllocatorMode in SetGlobalAllocationMode");
     }
-    throw PBException("Unexpected AllocationMode");
+    data.mode = memType;
+
+    return PacBio::Utilities::Finally([](){
+        GetGlobalModeInfo() = GlobalModeInfo{};
+    });
 }
 
-void SetGlobalAllocationMode(CachingMode caching, AllocatorMode alloc)
+std::unique_ptr<KestrelAllocator>
+CreateMallocAllocator(const AllocationMarker& defaultMarker,
+                      CacheMode cachingMode)
 {
-    auto& data = AllocInstance();
-    data.first = alloc;
-    data.second = CreateAllocator(alloc, AllocationMarker("Not Recorded"));
-
-    if (caching == CachingMode::ENABLED)
-    {
-        EnableHostCaching(alloc);
-        EnableGpuCaching();
-    } else
-    {
-        DisableHostCaching(alloc);
-        DisableGpuCaching();
-    }
+    return std::make_unique<CachedAllocatorImpl<MallocAllocator>>(defaultMarker, cachingMode);
 }
 
-std::unique_ptr<IMongoCachedAllocator> CreateAllocator(AllocatorMode alloc, const AllocationMarker& marker)
+std::unique_ptr<KestrelAllocator>
+CreatePinnedAllocator(const AllocationMarker& defaultMarker,
+                      CacheMode cachingMode)
 {
-    switch (alloc)
-    {
-    case AllocatorMode::MALLOC:
-        {
-            return std::make_unique<MongoCachedAllocator<MallocAllocator>>(marker);
-        }
-    case AllocatorMode::CUDA:
-        {
-            return std::make_unique<MongoCachedAllocator<PinnedAllocator>>(marker);
-        }
-    case AllocatorMode::HUGE_CUDA:
-        {
-            return std::make_unique<MongoCachedAllocator<HugePinnedAllocator>>(marker);
-        }
-    case AllocatorMode::SHARED_MEMORY_HUGE_CUDA:
-        {
-            return std::make_unique<MongoCachedAllocator<SharedHugeCudaPinnedAllocator>>(marker);
-        }
-    }
-    throw PBException("Unsupported AllocatorMode");
+    return std::make_unique<CachedAllocatorImpl<PinnedAllocator>>(defaultMarker, cachingMode);
 }
 
-IMongoCachedAllocator& GetGlobalAllocator()
+// BENTODO this needs to hand in the shared allocator
+std::unique_ptr<KestrelAllocator>
+CreateSharedHugePinnedAllocator(const AllocationMarker& defaultMarker,
+                                CacheMode cachingMode)
 {
-    return *AllocInstance().second;
+    return std::make_unique<CachedAllocatorImpl<SharedHugePinnedAllocator>>(defaultMarker, cachingMode, Allocator());
+}
+
+KestrelAllocator& GetGlobalAllocator()
+{
+    return *GetGlobalModeInfo().allocator;
 }
 
 void ReportAllMemoryStats()
 {
-    auto Report = [](auto&& mgr)
+
+    Logging::LogStream ls(Logging::LogLevel::INFO);
     {
-        if (mgr) mgr->Report();
-    };
-
-    Report(AllocationManager<MallocAllocator>::GetManager());
-    Report(AllocationManager<PinnedAllocator>::GetManager());
-    Report(AllocationManager<HugePinnedAllocator>::GetManager());
-    Report(AllocationManager<SharedHugeCudaPinnedAllocator>::GetManager());
-    Report(AllocationManager<GpuAllocator>::GetManager());
-}
-
-void EnableHostCaching(AllocatorMode mode)
-{
-    VisitHostManager(mode,
-                 [](auto& manager)
-                 {
-                     manager.EnableCaching();
-                 });
-}
-void EnableGpuCaching()
-{
-    auto mngr = AllocationManager<GpuAllocator>::GetManager();
-    mngr->EnableCaching();
-}
-
-void DisableHostCaching(AllocatorMode mode)
-{
-    VisitHostManager(mode,
-                 [](auto& manager)
-                 {
-                     manager.DisableCaching();
-                 });
-}
-void DisableGpuCaching()
-{
-    auto mngr = AllocationManager<GpuAllocator>::GetManager();
-    mngr->DisableCaching();
-}
-
-void DisableAllCaching()
-{
-    // I don't think this report has much value for normal runs,
-    // but may be useful if profiling or diagnosing performance
-    // issues, in which case we're probably using RelWithDebInfo
-    // and this will turn on.
-#ifndef NDEBUG
-    Profiler::FinalReport();
-#endif
-    DisableHostCaching(AllocatorMode::MALLOC);
-    DisableHostCaching(AllocatorMode::CUDA);
-    DisableHostCaching(AllocatorMode::HUGE_CUDA);
-    DisableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
-    DisableGpuCaching();
+        auto caches = AllocationManager<MallocAllocator>::GetAllRefs();
+        for (auto& cache : caches)
+        {
+            if(cache) ls << cache->Report();
+        }
+    }
+    {
+        auto caches = AllocationManager<PinnedAllocator>::GetAllRefs();
+        for (auto& cache : caches)
+        {
+            if(cache) ls << cache->Report();
+        }
+    }
+    {
+        auto caches = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
+        for (auto& cache : caches)
+        {
+            if(cache) ls << cache->Report();
+        }
+    }
+    {
+        auto caches = AllocationManager<GpuAllocator>::GetAllRefs();
+        for (auto& cache : caches)
+        {
+            if(cache) ls << cache->Report();
+        }
+    }
 }
 
 

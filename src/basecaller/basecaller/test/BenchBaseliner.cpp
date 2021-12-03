@@ -101,17 +101,19 @@ protected:
     uint32_t lanesPerPool = numZmwLanes / numPools;
     uint32_t framesPerChunk = 512;
 
+private:
+    PacBio::Utilities::Finally resetMem_;
+
 public:
+    BenchBaseliner()
+        : resetMem_(SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                            AllocatorMode::MALLOC))
+    {}
+
     void SetUp(const ::benchmark::State& state) {
         numZmwLanes = state.range(0); // mul by blocks
         lanesPerPool = numZmwLanes / numPools;
         framesPerChunk = state.range(1);
-
-        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::MALLOC);
-    }
-
-    void TearDown(const ::benchmark::State& state) {
-        DisableAllCaching();
     }
 };
 

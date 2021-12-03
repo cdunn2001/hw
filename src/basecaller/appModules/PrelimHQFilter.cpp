@@ -87,8 +87,10 @@ public:
                                                        config.expectedPulsesPerZmw*expectedBytesPerBase,
                                                        config.lookbackSize,
                                                        config.enablePreHQ,
-                                                       CreateAllocator(AllocatorMode::MALLOC, std::string("PrelimHQFilter_packetsAllocator")),
-                                                       CreateAllocator(AllocatorMode::MALLOC, std::string("PrelimHQFilter_metricsAllocator"))))
+                                                       CreateMallocAllocator(std::string("PrelimHQFilter_packetsAllocator"),
+                                                                             CacheMode::GLOBAL_CACHE),
+                                                       CreateMallocAllocator(std::string("PrelimHQFilter_metricsAllocator"),
+                                                                             CacheMode::GLOBAL_CACHE)))
         , dummyPreHQ_(config)
         , serializers_(numZmws)
     {}

@@ -45,8 +45,6 @@ using namespace PacBio::Mongo;
 TEST(TestBasecaller, CheckMetadata)
 {
     Logging::LogSeverityContext logContext (Logging::LogLevel::WARN);
-    Cuda::Memory::SetGlobalAllocationMode(Cuda::Memory::CachingMode::DISABLED,
-                                          Cuda::Memory::AllocatorMode::MALLOC);
 
     Data::SmrtBasecallerConfig config{};
     auto& algoConfig = config.algorithm;
