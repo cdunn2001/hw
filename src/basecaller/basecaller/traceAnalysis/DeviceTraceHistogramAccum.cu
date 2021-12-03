@@ -62,104 +62,129 @@ __constant__ StaticConfig staticConfig;
 
 using LaneModel = Data::LaneModelParameters<PBHalf2, laneSize/2>;
 
-class EdgeScrubbingState
+// A specialized implementation of a length 2 circular buffer,
+// for use in keeping track of if the previous two frames were
+// baseline or not.  This is very heavily tied to our use of
+// PBShort2 and certain cuda intrinsics, it is not meant for
+// general use.
+class BaselineHistory
 {
 public:
-    // Inner class, mostly because I want private access to the state data,
-    // and it was too annoying to set up all the forward declarations and
-    // such that would be required if this was a standalone class
-    class EdgeFinder
+    __device__ PBShort2 PeakBack() const
     {
-        __device__ PBShort2 Computethreshold(const LaneModel& laneModel,
-                                             uint32_t idx)
-        {
-            // The threshold below which the sample is most likely full-frame baseline.
-            // TODO: This value should be configurable, depend on the SNR of
-            // the dimmest pulse component of the detection model, or both.
-            static constexpr float threshSigma = 2.0f;
+        // Grabs the back value of our "circular buffer".
+        // 0x3322 means that our low two bytes will be a replication
+        // of the third byte of history_, and the high two bytes
+        // will be a replication of the fourth byte of history_.
+        // Since bytes in history_ are either 0xFF or 0x00,
+        // the replication turns things into the true and false values
+        // for PBShort2.
+        return PBShort2::FromRaw(__byte_perm(history_, 0, 0x3322));
+    }
 
-            const auto& laneBg = laneModel.BaselineMode();
-            return ToShort(threshSigma * sqrt(laneBg.vars[idx]) + laneBg.means[idx]);
-        }
-    public:
-        // Constructs by loading data from an EdgeScrubbingState
-        __device__ EdgeFinder(const EdgeScrubbingState& l,
-                              const LaneModel& laneModel,
-                              uint32_t idx)
-            : prev_{l.prev[idx]}
-            , circular_{l.circular[idx]}
-        {
-            threshold_ = Computethreshold(laneModel, idx);
-        }
+    __device__ void PushFront(PBShort2 isBaseline)
+    {
+        // Now do a "push front" to our "circular buffer".
+        // 0x1064 means that the low two bytes from history_
+        // are moved to the high two bytes, and the new low two
+        // bytes in history_ are first and third byte from
+        // `isBaseline`.  Again since true and false for PBShort2
+        // are 0xFFFF and 0x0000 respectively, grabbing the first
+        // and third byte is the same as grabbing the second and
+        // fourth, and either gives us complete information.
+        history_ = __byte_perm(history_, isBaseline.data(), 0x1064);
+    }
 
-        // Constructs by using two explicit data inputs to prime
-        // the EdgeFinder
-        __device__ EdgeFinder(PBShort2 frame1, PBShort2 frame2,
-                              const LaneModel& laneModel,
-                              uint32_t idx = threadIdx.x)
-        {
-            threshold_ = Computethreshold(laneModel, idx);
+private:
+    // history_ is an array of bytes, where 0x00 indicates false and
+    // 0xFF indicates true.  The low two bytes represent whether the
+    // previous frame was baseline for a pair of ZMW, and the high
+    // two bytes indicate the same for the frame prior to that
+    uint32_t history_ = 0;
+};
 
-            // Intentional discard of return values, we just want to prime
-            // the state data
-            IsEdgeFrame(frame1);
-            IsEdgeFrame(frame2);
-        }
-
-        // Stores the current data back into an EdgeScrubbingState
-        __device__ void Store(EdgeScrubbingState& l,
-                              uint32_t idx = threadIdx.x)
-        {
-            l.prev[idx] = prev_;
-            l.circular[idx] = circular_;
-        }
-
-        // Used to classify edge frames.  The return is the previously
-        // added frame, along with a PBShort2 incicating if that was an
-        // edge frame or not.
-        __device__ std::pair<PBShort2, PBShort2> IsEdgeFrame(PBShort2 frame)
-        {
-            const auto isBaseline = (frame < threshold_);
-            // Grabs the back value of our "circular buffer".
-            // 0x3322 means that our low two bytes will be a replication
-            // of the third bytes of circular, and the high two bytes
-            // will be a replication of the fourth byte of circular.
-            // Since bytes in `circular_` are either 0xFF or 0x00,
-            // the replication turns things into the true and false values
-            // for PBShort2.
-            uint32_t back = __byte_perm(circular_, 0, 0x3322);
-            auto edge = PBShort2::FromRaw(back ^ isBaseline.data());
-
-            // Now do a "push front" to our "circular buffer".
-            // 0x1064 means that the low two bytes from `circular`
-            // are moved to the high two bytes, and the new low two
-            // bytes in `circular` are first and third bytes from
-            // `isBaseline`.  Again since true and false for PBShort2
-            // are 0xFFFF and 0x0000 respectively, grabbing the first
-            // and third bytes is the same as grabbing the second and
-            // fourth, and either gives us complete information.
-            circular_ = __byte_perm(circular_, isBaseline.data(), 0x1064);
-            auto candidate = prev_;
-            prev_ = frame;
-            return {edge, candidate};
-        }
-    private:
-        PBShort2 prev_;
-        uint32_t circular_;
-        PBShort2 threshold_;
-    };
+// Raw state data for a whole lane of EdgeFinder instances,
+// for preserving state data between chunks.
+struct EdgeScrubbingState
+{
+    static constexpr uint32_t Len = laneSize/2;
 
     __device__ EdgeScrubbingState()
     {
-        for (uint32_t i = 0; i < laneSize/2; ++i)
+        for (uint32_t i = 0; i < Len; ++i)
         {
             prev[i] = PBShort2{0};
-            circular[i] = 0;
         }
     }
+
+    Cuda::Utility::CudaArray<PBShort2, Len> prev;
+    Cuda::Utility::CudaArray<BaselineHistory, Len> baselineHistory;
+};
+
+class EdgeFinder
+{
+    __device__ PBShort2 Computethreshold(const LaneModel& laneModel,
+                                         uint32_t idx)
+    {
+        // The threshold below which the sample is most likely full-frame baseline.
+        // TODO: This value should be configurable, depend on the SNR of
+        // the dimmest pulse component of the detection model, or both.
+        static constexpr float threshSigma = 2.0f;
+
+        const auto& laneBg = laneModel.BaselineMode();
+        return ToShort(threshSigma * sqrt(laneBg.vars[idx]) + laneBg.means[idx]);
+    }
+
+public:
+    // Constructs by loading data from an EdgeScrubbingState
+    __device__ EdgeFinder(const EdgeScrubbingState& l,
+                          const LaneModel& laneModel,
+                          uint32_t idx)
+        : prev_{l.prev[idx]}
+        , baselineHistory_{l.baselineHistory[idx]}
+    {
+        threshold_ = Computethreshold(laneModel, idx);
+    }
+
+    // Constructs by using two explicit data inputs to prime
+    // the EdgeFinder
+    __device__ EdgeFinder(PBShort2 frame1, PBShort2 frame2,
+                          const LaneModel& laneModel,
+                          uint32_t idx = threadIdx.x)
+    {
+        threshold_ = Computethreshold(laneModel, idx);
+
+        // Intentional discard of return values, we just want to prime
+        // the state data
+        IsEdgeFrame(frame1);
+        IsEdgeFrame(frame2);
+    }
+
+    // Stores the current data back into an EdgeScrubbingState
+    __device__ void Store(EdgeScrubbingState& l,
+                          uint32_t idx = threadIdx.x)
+    {
+        l.prev[idx] = prev_;
+        l.baselineHistory[idx] = baselineHistory_;
+    }
+
+    // Used to classify edge frames.  The return is the previously
+    // added frame, along with a PBShort2 indicating if that was an
+    // edge frame or not.
+    __device__ std::pair<PBShort2, PBShort2> IsEdgeFrame(PBShort2 frame)
+    {
+        const auto isBaseline = (frame < threshold_);
+        const auto edge = baselineHistory_.PeakBack() ^ isBaseline;
+        baselineHistory_.PushFront(isBaseline);
+
+        auto candidate = prev_;
+        prev_ = frame;
+        return {edge, candidate};
+    }
 private:
-    Cuda::Utility::CudaArray<PBShort2, laneSize/2> prev;
-    Cuda::Utility::CudaArray<uint32_t, laneSize/2> circular;
+    PBShort2 prev_;
+    BaselineHistory baselineHistory_;
+    PBShort2 threshold_;
 };
 
 }
@@ -225,13 +250,8 @@ __global__ void BinningGlobalInterleaved(Data::GpuBatchData<const PBShort2> trac
     const auto start = initEdgeDetection ? 2 : 0;
     const auto stop = traces.NumFrames();
     auto edgeFinder = (start == 0)
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                         models[blockIdx.x],
-                                         threadIdx.x/2)
-        : EdgeScrubbingState::EdgeFinder(zmw[0], zmw[1],
-                                         models[blockIdx.x],
-                                         threadIdx.x/2);
-
+        ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2)
+        : EdgeFinder(zmw[0], zmw[1], models[blockIdx.x], threadIdx.x/2);
 
     float lowBound = hist.lowBound[threadIdx.x];
     float binSize = hist.binSize[threadIdx.x];
@@ -293,13 +313,8 @@ __global__ void BinningGlobalContig(Data::GpuBatchData<const PBShort2> traces,
     const auto start = initEdgeDetection ? 2 : 0;
     const auto stop = traces.NumFrames();
     auto edgeFinder = (start == 0)
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                         models[blockIdx.x],
-                                         threadIdx.x/2)
-        : EdgeScrubbingState::EdgeFinder(zmw[0], zmw[1],
-                                         models[blockIdx.x],
-                                         threadIdx.x/2);
-
+        ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x/2)
+        : EdgeFinder(zmw[0], zmw[1], models[blockIdx.x], threadIdx.x/2);
 
     float lowBound = hist.lowBound[threadIdx.x];
     float binSize = hist.binSize[threadIdx.x];
@@ -365,12 +380,9 @@ __global__ void BinningGlobalContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
         auto edgeFinder = (start == 0)
-            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                             models[blockIdx.x],
-                                             zmw)
-            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
-                                             models[blockIdx.x],
-                                             zmw);
+            ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
+            : EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
+
         for (int i = start; i < stop; ++i)
         {
             auto [isEdge, val] = edgeFinder.IsEdgeFrame(dat[i]);
@@ -458,12 +470,8 @@ __global__ void BinningSharedContigCoopWarps(Data::GpuBatchData<const PBShort2> 
 
         auto dat = traces.ZmwData(blockIdx.x, zmw);
         auto edgeFinder = (start == 0)
-            ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                             models[blockIdx.x],
-                                             zmw)
-            : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
-                                             models[blockIdx.x],
-                                             zmw);
+            ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], zmw)
+            : EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], zmw);
 
         for (int i = start; i < stop; ++i)
         {
@@ -581,12 +589,8 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
     auto dat = traces.ZmwData(blockIdx.x, threadIdx.x);
 
     auto edgeFinder = (start == 0)
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                         models[blockIdx.x],
-                                         threadIdx.x)
-        : EdgeScrubbingState::EdgeFinder(dat[start-2], dat[start-1],
-                                         models[blockIdx.x],
-                                         threadIdx.x);
+        ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x)
+        : EdgeFinder(dat[start-2], dat[start-1], models[blockIdx.x], threadIdx.x);
 
     auto scrubbed = std::numeric_limits<int16_t>::lowest();
     for (int i = start; i < stop; ++i)
@@ -694,13 +698,8 @@ __global__ void BinningSharedInterleaved2DBlock(Data::GpuBatchData<const PBShort
     auto trace = traces.ZmwData(blockIdx.x, threadIdx.x);
 
     auto edgeFinder = (start == 0)
-        ? EdgeScrubbingState::EdgeFinder(edgeState[blockIdx.x],
-                                         models[blockIdx.x],
-                                         threadIdx.x)
-        : EdgeScrubbingState::EdgeFinder(trace[start-2], trace[start-1],
-                                         models[blockIdx.x],
-                                         threadIdx.x);
-
+        ? EdgeFinder(edgeState[blockIdx.x], models[blockIdx.x], threadIdx.x)
+        : EdgeFinder(trace[start - 2], trace[start - 1], models[blockIdx.x], threadIdx.x);
 
     for (int i = start; i < stop; ++i)
     {
