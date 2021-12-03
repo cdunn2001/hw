@@ -51,8 +51,8 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/AnalysisConfig.h>
@@ -196,7 +196,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        DeviceTraceHistogramAccum::Configure(bcConfig.traceHistogramConfig);
+        TraceHistogramAccumDevice::Configure(bcConfig.traceHistogramConfig);
         break;
     default:
         ostringstream msg;
@@ -352,7 +352,7 @@ AlgoFactory::CreateTraceHistAccumulator(unsigned int poolId, const Data::BatchDi
         return std::make_unique<TraceHistogramAccumHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, dims.lanesPerBatch, &registrar);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;

@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_basecaller_traceAnalysis_DeviceTraceHistogramAccum_H_
-#define mongo_basecaller_traceAnalysis_DeviceTraceHistogramAccum_H_
+#ifndef mongo_basecaller_traceAnalysis_TraceHistogramAccumDevice_H_
+#define mongo_basecaller_traceAnalysis_TraceHistogramAccumDevice_H_
 
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 
@@ -53,17 +53,17 @@ enum class DeviceHistogramTypes
     SharedInterleaved2DBlock
 };
 
-class DeviceTraceHistogramAccum : public TraceHistogramAccumulator
+class TraceHistogramAccumDevice : public TraceHistogramAccumulator
 {
 public:
     static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig);
 
-    DeviceTraceHistogramAccum(unsigned int poolId,
+    TraceHistogramAccumDevice(unsigned int poolId,
                              unsigned int poolSize,
                              Cuda::Memory::StashableAllocRegistrar* registrar,
                              DeviceHistogramTypes type = DeviceHistogramTypes::SharedInterleaved2DBlock);
 
-    ~DeviceTraceHistogramAccum();
+    ~TraceHistogramAccumDevice();
 
     void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
                       const TraceHistogramAccumulator::PoolDetModel& detModel) override;
@@ -81,4 +81,4 @@ private:
 
 }}}
 
-#endif //mongo_basecaller_traceAnalysis_DeviceTraceHistogramAccum_H_
+#endif //mongo_basecaller_traceAnalysis_TraceHistogramAccumDevice_H_

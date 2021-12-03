@@ -35,8 +35,8 @@
 
 #include <appModules/SimulatedDataSource.h>
 
+#include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
@@ -121,17 +121,17 @@ std::unique_ptr<TraceHistogramAccumulator> HistFactory(TestTypes type,
     case TestTypes::TraceHistogramAccumHost:
         return std::make_unique<TraceHistogramAccumHost>(poolId, lanesPerPool);
     case TestTypes::DeviceGlobalInterleaved:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalInterleaved);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalInterleaved);
     case TestTypes::DeviceGlobalContig:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContig);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContig);
     case TestTypes::DeviceGlobalContigCoopWarps:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContigCoopWarps);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContigCoopWarps);
     case TestTypes::DeviceSharedContigCoopWarps:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContigCoopWarps);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContigCoopWarps);
     case TestTypes::DeviceSharedContig2DBlock:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContig2DBlock);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContig2DBlock);
     case TestTypes::DeviceSharedInterleaved2DBlock:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedInterleaved2DBlock);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedInterleaved2DBlock);
     }
     throw PBException("Not a valid test type");
 }
@@ -157,7 +157,7 @@ public:
         case TestTypes::DeviceSharedContigCoopWarps:
         case TestTypes::DeviceSharedContig2DBlock:
         case TestTypes::DeviceSharedInterleaved2DBlock:
-            DeviceTraceHistogramAccum::Configure(config);
+            TraceHistogramAccumDevice::Configure(config);
             break;
         }
     }

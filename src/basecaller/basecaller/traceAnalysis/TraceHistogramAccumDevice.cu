@@ -28,7 +28,7 @@
 
 #include <cstdint>
 
-#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
 
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
@@ -835,7 +835,7 @@ __global__ void ResetHistsStats(DeviceView<Hist> hists,
     ResetHist(&hists[blockIdx.x], binInfo);
 }
 
-class DeviceTraceHistogramAccum::ImplBase
+class TraceHistogramAccumDevice::ImplBase
 {
 public:
     using HistDataType = TraceHistogramAccumulator::HistDataType;
@@ -869,14 +869,14 @@ private:
 
 // Handles trace histograms for strategies that interleave zmw data
 // e.g. all data for a given bin is contiguous in memory
-class HistInterleavedZmw : public DeviceTraceHistogramAccum::ImplBase
+class HistInterleavedZmw : public TraceHistogramAccumDevice::ImplBase
 {
 public:
     HistInterleavedZmw(unsigned int poolId,
                        unsigned int poolSize,
                        Cuda::Memory::StashableAllocRegistrar* registrar,
                        DeviceHistogramTypes type)
-        : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
+        : TraceHistogramAccumDevice::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
         , edgeState_(registrar, SOURCE_MARKER(), poolSize)
     {}
@@ -931,14 +931,14 @@ private:
 
 // Handles trace histograms for strategies that have contiguous histograms
 // e.g. all data for a given zmw is contiguous in memory
-class HistContigZmw : public DeviceTraceHistogramAccum::ImplBase
+class HistContigZmw : public TraceHistogramAccumDevice::ImplBase
 {
 public:
     HistContigZmw(unsigned int poolId,
                   unsigned int poolSize,
                   Cuda::Memory::StashableAllocRegistrar* registrar,
                   DeviceHistogramTypes type)
-        : DeviceTraceHistogramAccum::ImplBase(poolId, poolSize, type)
+        : TraceHistogramAccumDevice::ImplBase(poolId, poolSize, type)
         , data_(registrar, SOURCE_MARKER(), poolSize)
         , edgeState_(registrar, SOURCE_MARKER(), poolSize)
     {}
@@ -1006,7 +1006,7 @@ private:
     bool initEdgeDetection_ = true;
 };
 
-void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
+void TraceHistogramAccumDevice::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
 {
     StaticConfig config;
 
@@ -1026,31 +1026,31 @@ void DeviceTraceHistogramAccum::Configure(const Data::BasecallerTraceHistogramCo
 }
 
 
-void DeviceTraceHistogramAccum::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
+void TraceHistogramAccumDevice::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
                                              const TraceHistogramAccumulator::PoolDetModel& detModel)
 {
     impl_->AddBatchImpl(traces, detModel);
     CudaSynchronizeDefaultStream();
 }
 
-void DeviceTraceHistogramAccum::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
+void TraceHistogramAccumDevice::ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds)
 {
     impl_->ResetImpl(bounds);
     CudaSynchronizeDefaultStream();
 }
 
-void DeviceTraceHistogramAccum::ResetImpl(const Data::BaselinerMetrics& metrics)
+void TraceHistogramAccumDevice::ResetImpl(const Data::BaselinerMetrics& metrics)
 {
     impl_->ResetImpl(metrics);
     CudaSynchronizeDefaultStream();
 }
 
-DeviceTraceHistogramAccum::PoolHistType DeviceTraceHistogramAccum::HistogramImpl() const
+TraceHistogramAccumDevice::PoolHistType TraceHistogramAccumDevice::HistogramImpl() const
 {
     return impl_->HistogramImpl();
 }
 
-DeviceTraceHistogramAccum::DeviceTraceHistogramAccum(unsigned int poolId,
+TraceHistogramAccumDevice::TraceHistogramAccumDevice(unsigned int poolId,
                                                      unsigned int poolSize,
                                                      Cuda::Memory::StashableAllocRegistrar* registrar,
                                                      DeviceHistogramTypes type)
@@ -1078,6 +1078,6 @@ DeviceTraceHistogramAccum::DeviceTraceHistogramAccum(unsigned int poolId,
     CudaSynchronizeDefaultStream();
 }
 
-DeviceTraceHistogramAccum::~DeviceTraceHistogramAccum() = default;
+TraceHistogramAccumDevice::~TraceHistogramAccumDevice() = default;
 
 }}}
