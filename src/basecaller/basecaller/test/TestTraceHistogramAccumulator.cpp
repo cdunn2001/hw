@@ -36,11 +36,12 @@
 #include <appModules/SimulatedDataSource.h>
 
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
-#include <basecaller/traceAnalysis/DeviceTraceHistogramAccum.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 #include "SpeedTestToggle.h"
@@ -116,17 +117,17 @@ std::unique_ptr<TraceHistogramAccumulator> HistFactory(TestTypes type,
     case TestTypes::TraceHistogramAccumHost:
         return std::make_unique<TraceHistogramAccumHost>(poolId, lanesPerPool);
     case TestTypes::DeviceGlobalInterleaved:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalInterleaved);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalInterleaved);
     case TestTypes::DeviceGlobalContig:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContig);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContig);
     case TestTypes::DeviceGlobalContigCoopWarps:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContigCoopWarps);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::GlobalContigCoopWarps);
     case TestTypes::DeviceSharedContigCoopWarps:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContigCoopWarps);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContigCoopWarps);
     case TestTypes::DeviceSharedContig2DBlock:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContig2DBlock);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedContig2DBlock);
     case TestTypes::DeviceSharedInterleaved2DBlock:
-        return std::make_unique<DeviceTraceHistogramAccum>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedInterleaved2DBlock);
+        return std::make_unique<TraceHistogramAccumDevice>(poolId, lanesPerPool, registrar, DeviceHistogramTypes::SharedInterleaved2DBlock);
     }
     throw PBException("Not a valid test type");
 }
@@ -139,12 +140,12 @@ class Histogram : public testing::TestWithParam<TestTypes>
     using Profiler = ScopedProfilerChain<Profiles>;
 public:
 
-    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& config)
+    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& histConfig, const Data::AnalysisConfig& anlyConfig)
     {
         switch (GetParam())
         {
         case TestTypes::TraceHistogramAccumHost:
-            TraceHistogramAccumHost::Configure(config);
+            TraceHistogramAccumHost::Configure(histConfig, anlyConfig);
             break;
         case TestTypes::DeviceGlobalInterleaved:
         case TestTypes::DeviceGlobalContig:
@@ -152,7 +153,7 @@ public:
         case TestTypes::DeviceSharedContigCoopWarps:
         case TestTypes::DeviceSharedContig2DBlock:
         case TestTypes::DeviceSharedInterleaved2DBlock:
-            DeviceTraceHistogramAccum::Configure(config);
+            TraceHistogramAccumDevice::Configure(histConfig, anlyConfig);
             break;
         }
     }
@@ -309,7 +310,9 @@ TEST_P(Histogram, ResetFromStats)
 
     TestConfig testConfig;
     const auto& histConfig = testConfig.histConfig;
-    ConfigureHists(histConfig);
+
+    Data::AnalysisConfig anlyConfig;
+    ConfigureHists(histConfig, anlyConfig);
 
     const uint32_t numLanes = 2;
     Data::BaselinerMetrics metrics(numLanes,

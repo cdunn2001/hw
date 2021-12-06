@@ -56,6 +56,13 @@ public:
     // of baseline sigma multiplied by this coefficient.
     PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
 
+    // The bin size of trace histogram is constrained to be no less than
+    // BinSizeLowBoundCoeff * photoelectronSensitivity * 1 DN.
+    // A value of zero effectively disables the lower bound (since the bin
+    // size is naturally required to be positive).
+    // When enabled, a value of one is the natural value.
+    PB_CONFIG_PARAM(float, BinSizeLowBoundCoeff, 1.0f);
+
     // Use fall-back baseline sigma when number of baseline frames is
     // less than this value.
     PB_CONFIG_PARAM(unsigned int, BaselineStatMinFrameCount, 50u);
@@ -88,6 +95,11 @@ inline void ValidateConfig<BasecallerTraceHistogramConfig>(const BasecallerTrace
     if (config.FallBackBaselineSigma <= 0.0f)
     {
         results->AddError("FallBackBaselineSigma must be positive.");
+    }
+
+    if (config.BinSizeLowBoundCoeff <= 0.0f)
+    {
+        results->AddError("BinSizeLowBoundCoeff must be positive.");
     }
 }
 
