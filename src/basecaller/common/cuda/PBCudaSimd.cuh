@@ -127,6 +127,11 @@ inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
     return PBShort2::FromRaw(first.data() & second.data());
 }
 
+inline __device__ PBShort2 operator ^(PBShort2 first, PBShort2 second)
+{
+    return PBShort2::FromRaw(first.data() ^ second.data());
+}
+
 
 // TODO we need to come to a concensus about things like && vs &.  These overloads are to unify
 // with host side code that does it this way
