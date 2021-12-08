@@ -659,6 +659,9 @@ __global__ void BinningSharedContig2DBlock(Data::GpuBatchData<const PBShort2> tr
         edgeFinder.Store(edgeState[blockIdx.x]);
 }
 
+// This is the final production implementation (the previous are really only
+// kept around for academic purposes)
+//
 // The last attempt was good, but this one is better.  We still use the same 2D
 // block of threads, but now the histogram data is stored interleaved.  We no
 // longer have to transpose the data after reading it, though we now have to rely
