@@ -133,9 +133,11 @@ public:
         }
 
         auto devices = PacBio::Cuda::CudaAllGpuDevices();
-        if(devices.size() == 0)
+        bool usesGpu = config_.algorithm.ComputingMode() != BasecallerAlgorithmConfig::ComputeMode::PureHost;
+        if(devices.size() == 0 && usesGpu)
         {
-            throw PBException("No CUDA devices available on this computer");
+            throw PBException("No CUDA devices available on this computer. "
+                              "Did you mean to use --config=system.analyzerHardware=Host?");
         }
         PBLOG_INFO << "Found " << devices.size() << " CUDA devices";
         int idevice = 0;
