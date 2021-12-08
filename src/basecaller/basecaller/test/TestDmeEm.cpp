@@ -99,7 +99,7 @@ public:
         // The complete-data estimates of the model
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
-        // The mode simulated for 5each frame.
+        // The mode simulated for each frame.
         std::vector<std::vector<unsigned short>> frameMode;
 
         // Constructors
@@ -423,10 +423,10 @@ TEST_P(EmDevice, EstimateFiniteMixture)
 
 const std::array<unsigned int,nModes> frameCountsBalanced = {500, 125, 125, 125, 125};
 const auto snrSweep = ::testing::Values(
-        // TestDmeEmParam{14.4f,  frameCountsBalanced,      0.0f,       0.0f},
-        // TestDmeEmParam{16.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        // TestDmeEmParam{20.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        // TestDmeEmParam{24.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{14.4f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{16.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{20.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{24.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmParam{32.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmParam{40.0f,  frameCountsBalanced,      0.0f,       0.0f}
         );
