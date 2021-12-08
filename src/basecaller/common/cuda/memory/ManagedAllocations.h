@@ -31,6 +31,7 @@
 
 #include <mongo-config.h>
 
+#include <pacbio/datasource/SharedMemoryAllocator.h>
 #include <pacbio/memory/SmartAllocation.h>
 #include <pacbio/memory/IAllocator.h>
 #include <pacbio/utilities/Finally.h>
@@ -201,6 +202,7 @@ CreatePinnedAllocator(const AllocationMarker& defaultMarker,
 /// is required for interfacing with things like the WX2.
 std::unique_ptr<KestrelAllocator>
 CreateSharedHugePinnedAllocator(const AllocationMarker& defaultMarker,
+                                std::unique_ptr<DataSource::SharedMemoryAllocator> sharedAlloc,
                                 CacheMode cacheMode = CacheMode::DISABLED);
 }}} // ::PacBio::Cuda::Memory
 

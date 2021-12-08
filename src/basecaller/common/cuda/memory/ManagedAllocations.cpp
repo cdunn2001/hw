@@ -193,21 +193,6 @@ private:
     AllocationSlicer<Helper, 256> slicer_;
 };
 
-// BENTODO temporary
-std::unique_ptr<SharedMemoryAllocator> Allocator()
-{
-    // FIXME This is just a proof of concept hack.
-    // This needs to be plumbed with the WXIPCDataSource which knows
-    // these values.
-    static SharedMemoryAllocator::SharedMemoryAllocatorConfig config;
-    config.baseAddress = 0x5'0000'0000ULL; // 0x4'0000'0000 = 17179869184ULL;
-    config.size = 25769803776ULL;
-    config.numaBinding = 0x1; // Only works for single SRA wx-daemon.  TODO make this general.
-    config.removeSharedSegmentsOnDestruction = false;
-
-    return std::make_unique<SharedMemoryAllocator>(config);
-}
-
 struct GpuAllocator
 {
     static constexpr const char* description = "Gpu Memory";
@@ -740,12 +725,12 @@ CreatePinnedAllocator(const AllocationMarker& defaultMarker,
     return std::make_unique<CachedAllocatorImpl<PinnedAllocator>>(defaultMarker, cachingMode);
 }
 
-// BENTODO this needs to hand in the shared allocator
 std::unique_ptr<KestrelAllocator>
 CreateSharedHugePinnedAllocator(const AllocationMarker& defaultMarker,
+                                std::unique_ptr<DataSource::SharedMemoryAllocator> sharedAlloc,
                                 CacheMode cachingMode)
 {
-    return std::make_unique<CachedAllocatorImpl<SharedHugePinnedAllocator>>(defaultMarker, cachingMode, Allocator());
+    return std::make_unique<CachedAllocatorImpl<SharedHugePinnedAllocator>>(defaultMarker, cachingMode, std::move(sharedAlloc));
 }
 
 KestrelAllocator& GetGlobalAllocator()
