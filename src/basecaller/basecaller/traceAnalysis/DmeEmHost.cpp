@@ -128,46 +128,26 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist, const Data::BaselinerMetrics&
     if (fixedModel_) return;
 
     const auto& hView = hist.data.GetHostView();
+    const auto blsView = metrics.baselinerStats.GetHostView();
     auto dmView = detModelPool->GetHostView();
-    auto blsView = metrics.baselinerStats.GetHostView();
-
-#ifndef NDEBUG
-                                            // using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
-    LaneDetModelHost ldModel0(dmView[0]);   // using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
-
-    for (LaneDetModel &dmLane : dmView)
-    {
-        LaneDetModelHost laneDetModel(dmLane);  
-
-        assert(laneDetModel.FrameInterval() == ldModel0.FrameInterval());
-    }
-#endif // NDEBUG
-
-    // All models are assumed similar, use 0th as a common one
-    const LaneDetModelHost estCommonModel = PrelimEstimate(blsView[0], dmView[0]);
 
     tbb::task_arena().execute([&] {
-        tbb::parallel_for((unsigned int) {0}, PoolSize(), [&](unsigned int lane) {
-            auto& dmLane = dmView[lane];
-
-            // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd)
-            const UHistType uhist(hView[lane]);
-            LaneDetModelHost laneDetModel(dmLane);
-
-            // Estimate parameters for this lane off the common one
-            EstimateFiniteMixture(uhist, estCommonModel, &laneDetModel);
-
-            // Transcribe results back into *detModel
-            laneDetModel.ExportTo(&dmLane);
+        tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
+            // Estimate parameters for this lane and 
+            // transcribe results into dmLane
+            EstimateModel(hView[l], blsView[l], dmView[l]);
         });
     });
 }
 
-DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState, LaneDetModelHost model /* copy */) const
+DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState, const LaneDetModel& ldm) const
 {
-    using std::max;  using std::min;
+    using std::max;
+    using std::min;
     using std::sqrt;
     using std::isfinite;
+
+    LaneDetModelHost model(ldm);
 
     auto nBlFrames = FloatVec(blStatAccState.NumBaselineFrames());
     auto totalFrames = FloatVec(blStatAccState.TotalFrames());
@@ -183,8 +163,7 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
     auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
     assert(all(isfinite(blMean)));
     assert(all(isfinite(blVar)) && all(blVar > 0.0f));
-
-    assert(model.DetectionModes().size() == numAnalogs);
+    assert(model.DetectionModes().size() == numAnalogs); // simpler for loop below
 
     // Rescale
     auto scale = sqrt(blVar / m0blm.SignalCovar());
@@ -212,16 +191,26 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
     return model;
 }
 
-void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost workModel /* copy */, LaneDetModelHost* detModel) const
+void DmeEmHost::EstimateModel(const LaneHist& blHist,
+                                      const BlStatAccState& blStatAccState,
+                                      LaneDetModel& model) const
 {
-    const auto& numFrames = hist.TotalCount();
+    LaneDetModelHost modelHost0(model);
 
-    // Keep a copy of the initial model.
-    const auto initModel = workModel;
+    // Update model based on estimate of baseline variance
+    // with confidence-weighted method
+    LaneDetModelHost modelHost1 = PrelimEstimate(blStatAccState, model);
+    modelHost0.Update(modelHost1);
+
+    // EstimateFiniteMixture below
+    LaneDetModelHost workModel = modelHost0;
 
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.BaselineMode();
     auto& pulseModes = workModel.DetectionModes();
+
+    const UHistType hist(blHist); // Host-friendly data type
+    const auto& numFrames = hist.TotalCount();
 
     // Scale the model based on fractile of the data.
     const auto scaleFactor = PrelimScaleFactor(workModel, hist);
@@ -283,7 +272,7 @@ void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost wo
     const FloatVec sExpect = s / scaleFactor;
 
     // sExpectWeight is the inverse of the variance of the normal prior for s.
-    const FloatVec sExpectWeight = initModel.Confidence() * pulseAmpRegCoeff_;
+    const FloatVec sExpectWeight = modelHost0.Confidence() * pulseAmpRegCoeff_;
 
     // Log likelihood--really a posterior since we've added a prior for s.
     FloatVec logLike {numeric_limits<float>::lowest()};
@@ -550,7 +539,7 @@ void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost wo
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     // Compute confidence score.
-    dmeDx.confidFactors = ComputeConfidence(dmeDx, initModel, workModel);
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, modelHost0, workModel);
     {
         using std::min;  using std::max;
         FloatVec conf = 1.0f;
@@ -568,7 +557,10 @@ void DmeEmHost::EstimateFiniteMixture(const UHistType& hist, LaneDetModelHost wo
     //    }
 
     // Blend the estimate into the output model.
-    detModel->Update(workModel);
+    modelHost0.Update(workModel);
+
+    // Transcribe results back into model
+    modelHost0.ExportTo(&model);
 }
 
 

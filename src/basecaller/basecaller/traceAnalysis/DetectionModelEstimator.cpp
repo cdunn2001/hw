@@ -108,9 +108,9 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
         traceAccumulator_->AddBatch(traces, *models);
     }
 
+    Data::BaselinerMetrics runningStats = baselineAggregator_->TraceStats();
     if (poolStatus_ != PoolStatus::SEQUENCING)
     {
-        const auto& runningStats = baselineAggregator_->TraceStats();
         *models = coreEstimator_->InitDetectionModels(runningStats.baselinerStats);
     }
 
@@ -134,14 +134,13 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
                 auto dmeProf = profiler.CreateScopedProfiler(AnalysisStages::DME);
                 (void)dmeProf;
 
-                const auto& runningStats = baselineAggregator_->TraceStats();
                 coreEstimator_->Estimate(hists, runningStats, models);
                 // Intentional fallthrough, we want to reset our
                 // histograms and baseline stats
             }
         case PoolStatus::STARTUP_HIST_INIT:
             {
-                traceAccumulator_->Reset(baselineAggregator_->TraceStats());
+                traceAccumulator_->Reset(runningStats);
                 baselineAggregator_->Reset();
                 break;
             }
