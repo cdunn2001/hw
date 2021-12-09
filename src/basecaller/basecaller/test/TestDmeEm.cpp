@@ -218,13 +218,13 @@ public:
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 9.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad pulse mean for analog");
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 10.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
+                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
                 Assert(expected, result, absErrTol, "Bad pulse variance for analog");
             }
         }

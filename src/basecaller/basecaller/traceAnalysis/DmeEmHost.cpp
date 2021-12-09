@@ -156,7 +156,7 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
     // Reject baseline statistics with insufficient data
     constexpr float nBaselineMin = 2.0f;
     const BoolVec mask = nBlFrames >= nBaselineMin;
-    const auto& m0blm = model.BaselineMode();  // SignalModeHost<FloatVec>
+    const Data::SignalModeHost<FloatVec>& m0blm = model.BaselineMode();
     const StatAccumulator<FloatVec>& blsa = blStatAccState.baselineStats;
 
     auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
@@ -200,7 +200,9 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     LaneDetModelHost modelHost1 = PrelimEstimate(blStatAccState, model);
-    modelHost0.Update(modelHost1);
+
+    // TODO: Until further works completed, this update causes unit test failures
+    // modelHost0.Update(modelHost1);
 
     // EstimateFiniteMixture below
     LaneDetModelHost workModel = modelHost0;
