@@ -28,8 +28,6 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     DeviceMultiScaleBaseliner.cu
     DevicePulseAccumulator.h
     DevicePulseAccumulator.cu
-    TraceHistogramAccumDevice.h
-    TraceHistogramAccumDevice.cu
     DmeDiagnostics.h
     DmeDiagnostics.cpp
     DmeEmDevice.h
@@ -63,6 +61,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     TraceAnalysisForward.h
     TraceFilters.h
     TraceFilters.cpp
+    TraceHistogramAccumDevice.h
+    TraceHistogramAccumDevice.cu
     TraceHistogramAccumHost.h
     TraceHistogramAccumHost.cpp
     TraceHistogramAccumulator.h

@@ -81,6 +81,11 @@ struct TestParameters
     size_t numFrames;
     LaneHistBounds bounds;
 
+    // Optional paramters, if you want to (implicitly)
+    // control the edge frame scrubbing threshold
+    float BaselineMean = 0.0f;
+    float BaselineVar = 1.0f;
+
     size_t NumBlocks() const
     { return (numFrames + framesPerBlock - 1u) / framesPerBlock; }
 };
@@ -212,7 +217,8 @@ private:
                  DeviceAllocationStash& stash,
                  DataSourceBase::Configuration sourceConfig,
                  const SimulatedDataSource::SimConfig& simConfig,
-                 std::unique_ptr<SignalGenerator> gen)
+                 std::unique_ptr<SignalGenerator> gen,
+                 const TestParameters& testParams)
     {
         BatchDimensions dims;
         dims.laneWidth = laneSize;
@@ -231,7 +237,9 @@ private:
                                                      SyncDirection::Symmetric,
                                                      SOURCE_MARKER()};
         {
-            const auto laneDetModel = MockLaneDetectionModel<PBHalf>();
+            auto laneDetModel = MockLaneDetectionModel<PBHalf>();
+            laneDetModel.BaselineMode().SetAllMeans(testParams.BaselineMean);
+            laneDetModel.BaselineMode().SetAllVars(testParams.BaselineVar);
             auto pdmv = pdm.GetHostView();
             std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
         }
@@ -296,7 +304,7 @@ private:
         DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
         sourceConfig.numFrames = params.numFrames;
 
-        BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator));
+        BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator), params);
     }
 
     // Is the current test monitoring performance?
@@ -393,14 +401,8 @@ TEST_P(Histogram, SingleLaneConstant)
         expected.Simd() = 0;
         if (i < 64)
         {
-            expected[i] = params.numFrames;
-
-            // In host implementation, edge-frame filter excludes first and last
-            // frame.
-            if (GetParam() == TestTypes::TraceHistogramAccumHost)
-            {
-                expected[i] -= 2;
-            }
+            // edge-frame filter excludes first and last frame.
+            expected[i] = params.numFrames - 2;
         }
         EXPECT_TRUE(all(counts == expected));
     }
@@ -440,14 +442,8 @@ TEST_P(Histogram, MultiLaneConstant)
             if (i >= lane * laneSize && i < (lane+1) * laneSize)
             {
                 const auto j = i % laneSize;
-                expected[j] = params.numFrames;
-
-                // In host implementation, edge-frame filter excludes first and
-                // last.
-                if (GetParam() == TestTypes::TraceHistogramAccumHost)
-                {
-                    expected[j] -= 2;
-                }
+                // edge-frame filter excludes first and last.
+                expected[j] = params.numFrames - 2;
             }
             EXPECT_TRUE(all(counts == expected)) << lane << " " << i;
         }
@@ -491,14 +487,8 @@ TEST_P(Histogram, MultiPoolConstant)
                 if (i >= blockZmw && i < blockZmw + laneSize)
                 {
                     const auto j = i % laneSize;
-                    expected[j] = params.numFrames;
-
-                    // In host implementation, edge-frame filter excludes first and
-                    // last frame.
-                    if (GetParam() == TestTypes::TraceHistogramAccumHost)
-                    {
-                        expected[j] -= 2;
-                    }
+                    // edge-frame filter excludes first and last frame.
+                    expected[j] = params.numFrames - 2;
                 }
                 EXPECT_TRUE(all(counts == expected));
             }
@@ -574,8 +564,7 @@ TEST_P(Histogram, SawtoothSimpleUniform)
                 const auto binSize = lanedata.binSize.front();
                 const auto binStart = lanedata.lowBound.front() + i * binSize;
                 const auto binStop = lanedata.lowBound.front() + (i+1) * binSize;
-                if (GetParam() == TestTypes::TraceHistogramAccumHost &&
-                    std::count(effBins.cbegin(), effBins.cend(), i) != 0)
+                if (std::count(effBins.cbegin(), effBins.cend(), i) != 0)
                 {
                     EXPECT_TRUE(all(counts == 0u))
                         << "    bin " << i << ','
@@ -639,8 +628,7 @@ TEST_P(Histogram, SawtoothSkipUniform)
             for (size_t i = 0; i < numBins; ++i)
             {
                 const auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
-                if (GetParam() == TestTypes::TraceHistogramAccumHost
-                    && (i == 2 || i == numBins - 2))
+                if (i == 2 || i == numBins - 2)
                 {
                     EXPECT_TRUE(all(counts == 0u))
                         << "  i is " << i
@@ -692,7 +680,6 @@ TEST_P(Histogram, SawtoothOutliersUniform)
                          simConfig,
                          std::move(generator));
 
-    const bool isHostImpl = (GetParam() == TestTypes::TraceHistogramAccumHost);
     for (size_t pool = 0; pool < params.numPools; ++pool)
     {
         EXPECT_EQ(hists[pool]->FramesAdded(), params.numFrames);
@@ -702,16 +689,12 @@ TEST_P(Histogram, SawtoothOutliersUniform)
         {
             const auto& lanedata = histdata.data.GetHostView()[lane];
 
-            const auto expectHigh = 4 * (sawConfig.maxAmp
-                                         - params.bounds.upperBounds[0]
-                                         - (isHostImpl ? 1 : 0));
+            const auto expectHigh = 4 * (sawConfig.maxAmp - params.bounds.upperBounds[0] - 1);
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountHigh) == expectHigh))
                 << "  outlierCountHigh is " << lanedata.outlierCountHigh[0]
                 << ",  expectHigh is " << expectHigh;
 
-            const auto expectLow = 4 * (params.bounds.lowerBounds[0]
-                                        - sawConfig.minAmp
-                                        - (isHostImpl ? 3 : 0));
+            const auto expectLow = 4 * (params.bounds.lowerBounds[0] - sawConfig.minAmp - 3);
             EXPECT_TRUE(all(LaneArray<uint16_t>(lanedata.outlierCountLow) == expectLow))
                 << "  outlierCountLow is " << lanedata.outlierCountLow[0]
                 << ",  expectLow is " << expectLow;
@@ -761,7 +744,6 @@ TEST_P(Histogram, SawtoothOutliersStagger)
                          simConfig,
                          std::move(generator));
 
-    const bool isHostImpl = (GetParam() == TestTypes::TraceHistogramAccumHost);
     const std::vector<size_t> effVals {0u, 1u, 2u, sawConfig.maxAmp - 1u};
 
     using IntArray = LaneArray<int32_t>;
@@ -771,53 +753,48 @@ TEST_P(Histogram, SawtoothOutliersStagger)
     // Returns the expected number high outliers
     const auto expectHigh = [&](const IntArray& firstVal, const IntArray& lastVal)
     {
+        // Count "edge frames" over the histogram range
+        // We should have 4 copies of maxAmp - 1.
+        IntArray edgeCount = numeric_cast<int>(numPeriods);
+
+        // Is the first frame < maxAmp - 1 and >= histogram range?
+        const auto firstValHigh = (firstVal < sawConfig.maxAmp - 1)
+                                  & (firstVal >= params.bounds.upperBounds[0]);
+        edgeCount += Blend(firstValHigh, IntArray(1), IntArray(0));
+
+        // Is the last frame < maxAmp - 1 and >= histogram range?
+        const auto lastValHigh = (lastVal < sawConfig.maxAmp - 1)
+                                 & (lastVal >= params.bounds.upperBounds[0]);
+        edgeCount += Blend(lastValHigh, IntArray(1), IntArray(0));
+
         IntArray r = sawConfig.maxAmp - params.bounds.upperBounds[0];
         r *= numeric_cast<int>(numPeriods);
-        if (isHostImpl)
-        {
-            // Count "edge frames" over the histogram range
-            // We should have 4 copies of maxAmp - 1.
-            IntArray edgeCount = numeric_cast<int>(numPeriods);
+        r -= edgeCount;;
 
-            // Is the first frame < maxAmp - 1 and >= histogram range?
-            const auto firstValHigh = (firstVal < sawConfig.maxAmp - 1)
-                                      & (firstVal >= params.bounds.upperBounds[0]);
-            edgeCount += Blend(firstValHigh, IntArray(1), IntArray(0));
-
-            // Is the last frame < maxAmp - 1 and >= histogram range?
-            const auto lastValHigh = (lastVal < sawConfig.maxAmp - 1)
-                                     & (lastVal >= params.bounds.upperBounds[0]);
-            edgeCount += Blend(lastValHigh, IntArray(1), IntArray(0));
-
-            r -= edgeCount;
-        }
         return r;
     };
 
     // Returns the expected number of low outliers.
     const auto expectLow = [&](const IntArray& firstVal, const IntArray& lastVal)
     {
+        // Count "edge frames" over the histogram range
+        // We should have 4 copies of {0, 1, 2}.
+        IntArray edgeCount = 3 * numeric_cast<int>(numPeriods);
+
+        // Is the first frame > 2 and < histogram range?
+        const auto firstValLow = (firstVal > 2)
+                                 & (firstVal < params.bounds.lowerBounds[0]);
+        edgeCount += Blend(firstValLow, IntArray(1), IntArray(0));
+
+        // Is the last frame > 2 and < histogram range?
+        const auto lastValLow = (lastVal > 2)
+                                & (lastVal < params.bounds.lowerBounds[0]);
+        edgeCount += Blend(lastValLow, IntArray(1), IntArray(0));
+
         IntArray r = params.bounds.lowerBounds[0] - sawConfig.minAmp;
         r *= numeric_cast<int>(numPeriods);
+        r -= edgeCount;
 
-        if (isHostImpl)
-        {
-            // Count "edge frames" over the histogram range
-            // We should have 4 copies of {0, 1, 2}.
-            IntArray edgeCount = 3 * numeric_cast<int>(numPeriods);
-
-            // Is the first frame > 2 and < histogram range?
-            const auto firstValLow = (firstVal > 2)
-                                     & (firstVal < params.bounds.lowerBounds[0]);
-            edgeCount += Blend(firstValLow, IntArray(1), IntArray(0));
-
-            // Is the last frame > 2 and < histogram range?
-            const auto lastValLow = (lastVal > 2)
-                                    & (lastVal < params.bounds.lowerBounds[0]);
-            edgeCount += Blend(lastValLow, IntArray(1), IntArray(0));
-
-            r -= edgeCount;
-        }
         return r;
     };
 
@@ -844,12 +821,9 @@ TEST_P(Histogram, SawtoothOutliersStagger)
             {
                 using UShortArray = LaneArray<uint16_t>;
                 UShortArray expect = 4u;
-                if (isHostImpl)
-                {
-                    const auto binVal = numeric_cast<int32_t>(i + params.bounds.lowerBounds[0]);
-                    expect -= Blend(firstVal == binVal, UShortArray(1), UShortArray(0));
-                    expect -= Blend(lastVal == binVal, UShortArray(1), UShortArray(0));
-                }
+                const auto binVal = numeric_cast<int32_t>(i + params.bounds.lowerBounds[0]);
+                expect -= Blend(firstVal == binVal, UShortArray(1), UShortArray(0));
+                expect -= Blend(lastVal == binVal, UShortArray(1), UShortArray(0));
 
                 const auto counts = LaneArray<uint16_t>(lanedata.binCount[i]);
                 EXPECT_TRUE(all(counts == expect))
@@ -943,6 +917,9 @@ TEST_P(Histogram, PerfPulseManySignals)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -950,11 +927,13 @@ TEST_P(Histogram, PerfPulseManySignals)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};
@@ -972,6 +951,9 @@ TEST_P(Histogram, PerfPulseOneSignal)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -979,11 +961,13 @@ TEST_P(Histogram, PerfPulseOneSignal)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};
@@ -1002,6 +986,9 @@ TEST_P(Histogram, PerfSortedPulseManySignals)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -1009,11 +996,13 @@ TEST_P(Histogram, PerfSortedPulseManySignals)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};
@@ -1031,6 +1020,9 @@ TEST_P(Histogram, PerfSortedPulseOneSignal)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -1038,11 +1030,13 @@ TEST_P(Histogram, PerfSortedPulseOneSignal)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};
@@ -1061,6 +1055,9 @@ TEST_P(Histogram, PerfRandomPulseManySignals)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -1068,11 +1065,13 @@ TEST_P(Histogram, PerfRandomPulseManySignals)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};
@@ -1090,6 +1089,9 @@ TEST_P(Histogram, PerfRandomPulseOneSignal)
     if (!PerfTestsEnabled()) GTEST_SKIP();
     auto finally = this->SetupPerfMonitoring();
 
+    constexpr auto baselineMean = 120;
+    constexpr auto baselineSigma = 10;
+
     TestParameters params;
     params.lanesPerPool = 8192;
     params.numPools = 30;
@@ -1097,11 +1099,13 @@ TEST_P(Histogram, PerfRandomPulseOneSignal)
     params.numFrames = 512;
     params.bounds.lowerBounds = 100;
     params.bounds.upperBounds = 400;
+    params.BaselineMean = baselineMean;
+    params.BaselineVar = baselineSigma*baselineSigma;
 
     SimulatedDataSource::SimConfig simConfig(laneSize, params.numFrames);
     PicketFenceGenerator::Config picketConfig;
-    picketConfig.baselineSignalLevel = 120;
-    picketConfig.baselineSigma = 10;
+    picketConfig.baselineSignalLevel = baselineMean;
+    picketConfig.baselineSigma = baselineSigma;
     picketConfig.pulseIpdRate = .2;
     picketConfig.pulseWidthRate = 0.1;
     picketConfig.pulseSignalLevels = {180, 250, 320, 380};

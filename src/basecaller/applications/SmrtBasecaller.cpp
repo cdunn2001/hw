@@ -431,17 +431,17 @@ private:
                 dataType = TraceDataType::UINT8;
             } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
             {
-                if (dataSource.PacketLayouts().begin()->second.Encoding() == PacketLayout::UINT8)
+                if (sampleLayout.Encoding() == PacketLayout::UINT8)
                 {
                     dataType = TraceDataType::UINT8;
                 }
             }
 
-
-
             return std::make_unique<TraceSaverBody>(outputTrcFileName_,
                                                     dataSource.NumFrames(),
                                                     std::move(selection),
+                                                    sampleLayout.NumFrames(),
+                                                    sampleLayout.BlockWidth(),
                                                     dataType,
                                                     holeNumbers,
                                                     properties,
@@ -794,7 +794,7 @@ int main(int argc, char* argv[])
 
         bc->Run();
 
-    } catch (std::exception& ex) {
+    } catch (const std::exception& ex) {
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }
