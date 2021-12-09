@@ -1014,7 +1014,9 @@ __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneH
 }
 
 
-void DmeEmDevice::EstimateImpl(const PoolHist &hist, const Data::BaselinerMetrics& metrics, PoolDetModel *detModel) const
+void DmeEmDevice::EstimateImpl(const PoolHist &hist, 
+                               const Data::BaselinerMetrics& metrics,
+                               PoolDetModel *detModel) const
 {
     Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)(hist.data, *detModel);
     Cuda::CudaSynchronizeDefaultStream();

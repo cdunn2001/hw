@@ -83,9 +83,9 @@ public:     // Static functions
 
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const AuxData::AnalogMode& analog,
-                                             const LaneArray<float>& signalMean,
-                                             const LaneArray<float>& baselineVar);
+    static FloatVec ModelSignalCovar(const AuxData::AnalogMode& analog,
+                                             const FloatVec& signalMean,
+                                             const FloatVec& baselineVar);
 
 
 private:    // Functions
@@ -145,8 +145,8 @@ private:    // Functions
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
     void EstimateModel(const LaneHist& blHist,
-                               const BlStatAccState& accState,
-                               LaneDetModel& model) const;
+                       const BlStatAccState& accState,
+                       LaneDetModel* model) const;
 
 
 

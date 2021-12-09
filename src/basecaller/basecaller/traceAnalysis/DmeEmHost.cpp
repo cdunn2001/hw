@@ -123,7 +123,9 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 }
 
 
-void DmeEmHost::EstimateImpl(const PoolHist &hist, const Data::BaselinerMetrics& metrics, PoolDetModel *detModelPool) const
+void DmeEmHost::EstimateImpl(const PoolHist &hist,
+                             const Data::BaselinerMetrics& metrics,
+                             PoolDetModel *detModelPool) const
 {
     if (fixedModel_) return;
 
@@ -133,14 +135,14 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist, const Data::BaselinerMetrics&
 
     tbb::task_arena().execute([&] {
         tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
-            // Estimate parameters for this lane and 
-            // transcribe results into dmLane
-            EstimateModel(hView[l], blsView[l], dmView[l]);
+            // Estimate parameters transcribe results back to this lane
+            EstimateModel(hView[l], blsView[l], &dmView[l]);
         });
     });
 }
 
-DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState, const LaneDetModel& ldm) const
+DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
+                                                      const LaneDetModel& ldm) const
 {
     using std::max;
     using std::min;
@@ -149,9 +151,9 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
 
     LaneDetModelHost model(ldm);
 
-    auto nBlFrames = FloatVec(blStatAccState.NumBaselineFrames());
-    auto totalFrames = FloatVec(blStatAccState.TotalFrames());
-    const auto blWeight = max(nBlFrames / totalFrames, 0.01f);
+    const FloatVec nBlFrames(blStatAccState.NumBaselineFrames());
+    const FloatVec totalFrames(blStatAccState.TotalFrames());
+    const FloatVec blWeight = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
     constexpr float nBaselineMin = 2.0f;
@@ -192,14 +194,16 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
 }
 
 void DmeEmHost::EstimateModel(const LaneHist& blHist,
-                                      const BlStatAccState& blStatAccState,
-                                      LaneDetModel& model) const
+                              const BlStatAccState& blStatAccState,
+                              LaneDetModel *model) const
 {
-    LaneDetModelHost modelHost0(model);
+    assert(model != nullptr);
+
+    LaneDetModelHost modelHost0(*model);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost modelHost1 = PrelimEstimate(blStatAccState, model);
+    LaneDetModelHost modelHost1 = PrelimEstimate(blStatAccState, *model);
 
     // TODO: Until further works completed, this update causes unit test failures
     // modelHost0.Update(modelHost1);
@@ -562,7 +566,7 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     modelHost0.Update(workModel);
 
     // Transcribe results back into model
-    modelHost0.ExportTo(&model);
+    modelHost0.ExportTo(model);
 }
 
 
@@ -792,14 +796,11 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
                                  LaneDetModel& ldm) const
 {
-    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
-    using LaneArr = LaneArray<ElementType>;
-
-    StatAccumulator<LaneArr> blsa (blStatAccState.baselineStats);
-
-    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
-    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
-    const auto& blWeight = LaneArr(blStatAccState.NumBaselineFrames()) / LaneArr(blStatAccState.fullAutocorrState.basicStats.moment0);
+    const StatAccumulator<FloatVec> blsa(blStatAccState.baselineStats);
+    
+    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
+    const FloatVec& blWeight = FloatVec(blStatAccState.NumBaselineFrames()) / FloatVec(blStatAccState.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
@@ -822,12 +823,12 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
 }
 
 // static
-LaneArray<float> DmeEmHost::ModelSignalCovar(
+DmeEmHost::FloatVec DmeEmHost::ModelSignalCovar(
         const PacBio::AuxData::AnalogMode& analog,
-        const LaneArray<float>& signalMean,
-        const LaneArray<float>& baselineVar)
+        const DmeEmHost::FloatVec& signalMean,
+        const DmeEmHost::FloatVec& baselineVar)
 {
-    LaneArray<float> r {baselineVar};
+    FloatVec r {baselineVar};
     r += signalMean * CoreDMEstimator::shotVarCoeff;
     r += pow2(signalMean * analog.excessNoiseCV);
     return r;
