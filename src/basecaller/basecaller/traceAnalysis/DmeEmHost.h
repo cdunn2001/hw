@@ -33,6 +33,7 @@
 #include <common/LaneArray.h>
 #include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
+#include <dataTypes/BaselinerStatAccumulator.h>
 
 #include "CoreDMEstimator.h"
 #include "DmeDiagnostics.h"
@@ -55,6 +56,7 @@ public:     // Types
     using CountVec = LaneArray<LaneHist::CountType>;
     using UHistType = Data::UHistogramSimd<FloatVec, CountVec>;
     using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
+    using BlStatAccState = Data::BaselinerStatAccumState;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
@@ -81,9 +83,9 @@ public:     // Static functions
 
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
-    static LaneArray<float> ModelSignalCovar(const AuxData::AnalogMode& analog,
-                                             const LaneArray<float>& signalMean,
-                                             const LaneArray<float>& baselineVar);
+    static FloatVec ModelSignalCovar(const AuxData::AnalogMode& analog,
+                                             const FloatVec& signalMean,
+                                             const FloatVec& baselineVar);
 
 
 private:    // Functions
@@ -96,6 +98,7 @@ private:    // Types
 
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
+                      const Data::BaselinerMetrics& metrics,
                       PoolDetModel* detModel) const override;
 
 private:    // Static data
@@ -135,11 +138,15 @@ private:    // Static functions
                       const LaneDetModelHost& modelEst);
 
 private:    // Functions
+    LaneDetModelHost PrelimEstimate(const BlStatAccState& accState, 
+                                    const LaneDetModel &model) const;
+
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateLaneDetModel(const UHistType& hist,
-                              LaneDetModelHost* detModel) const;
+    void EstimateModel(const LaneHist& blHist,
+                       const BlStatAccState& accState,
+                       LaneDetModel* model) const;
 
 
 
