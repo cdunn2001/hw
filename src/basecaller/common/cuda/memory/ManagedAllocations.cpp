@@ -60,12 +60,12 @@ public:
         currentBytes_ += size;
         past_.peakBytes = std::max(currentBytes_, past_.peakBytes);
         past_.recentPeakBytes = std::max(currentBytes_, past_.recentPeakBytes);
-        past_.recentMinBytes = std::min(currentBytes_, past_.recentMinBytes);
     }
     void DeallocationSize(size_t size)
     {
-        assert(size <- currentBytes_);
+        assert(size <= currentBytes_);
         currentBytes_ -= size;
+        past_.recentMinBytes = std::min(currentBytes_, past_.recentMinBytes);
     }
 
     struct PastUsage
@@ -101,7 +101,8 @@ struct MallocAllocator
 
     void* allocate(size_t size)
     {
-        return aligned_alloc(64, (size + 64 - 1) / 64 * 64);
+        static constexpr uint32_t alignment = 64;
+        return aligned_alloc(64, (size + alignment - 1) / alignment * alignment);
     }
     void deallocate(void* ptr)
     {
@@ -262,29 +263,25 @@ public:
         return ret;
     }
 
-    /// Produces a vector of all AllocationManagers currently alive.  Due
-    /// to threading issues it's both possible for this vector to contain
-    /// an empty shared_ptr, as well as possible that this vector will
-    /// contain the last owning reference to a Manager.  The latter is
-    /// benign, the former means you must always check for null before usage.
-    ///
     /// \return a vector of shared_ptr to all current AllocationManager instances
     static std::vector<std::shared_ptr<AllocationManager>> GetAllRefs()
     {
         std::lock_guard<std::mutex> lm(staticMutex_);
 
-        //prune empty weak_ptr instances,
+        std::vector<std::shared_ptr<AllocationManager>> ret;
+        ret.reserve(refList_.size());
+        for (auto& weak : refList_)
+        {
+            auto shared = weak.lock();
+            if (shared) ret.push_back(shared);
+        }
+
+        //prune empty weak_ptr instances while we are here
         refList_.erase(std::remove_if(refList_.begin(),
                                       refList_.end(),
                                       [](auto& weak) { return weak.expired(); }),
                        refList_.end());
 
-        std::vector<std::shared_ptr<AllocationManager>> ret;
-        ret.reserve(refList_.size());
-        std::transform(refList_.begin(),
-                       refList_.end(),
-                       std::back_inserter(ret),
-                       [](auto& weak) { return weak.lock(); });
 
         return ret;
     }
@@ -299,10 +296,10 @@ private:
     {
         void operator()(void* ptr)
         {
-            assert(ref_);
-            ref_->deallocate(ptr);
+            assert(allocator_);
+            allocator_->deallocate(ptr);
         }
-        Allocator* ref_;
+        Allocator* allocator_{nullptr};
     };
     using Ptr_t = std::unique_ptr<void, Deleter>;
 public:
@@ -337,14 +334,11 @@ public:
 
     void ReturnAlloc(void* ptr, size_t size, size_t allocID)
     {
-        Utilities::Finally f([&]{ if(ptr) allocator_.deallocate(ptr);});
+        Utilities::Finally f([&](){ if(ptr) allocator_.deallocate(ptr);});
         std::lock_guard<std::mutex> lm(instanceMutex_);
 
-        if (allocID != 0)
-        {
-            stats_[allocID].DeallocationSize(size);
-            fullStats_.DeallocationSize(size);
-        }
+        stats_[allocID].DeallocationSize(size);
+        fullStats_.DeallocationSize(size);
 
         if (cache_)
         {
@@ -472,9 +466,9 @@ private:
         allocMarkers_.clear();
     }
 
-    // We do have an explicit struct before members are destroyed, but I'm still listing
-    // this first since entries into allocs_ below maintain a reference to the allocator_
-    // here
+    // We do have an explicit clearing of the cache before member variables are
+    // destroyed, but I'm still listing this first since entries into allocs_
+    // below maintain a reference to the allocator_ here
     Allocator allocator_;
 
     std::map<size_t, std::deque<Ptr_t>> allocs_;
@@ -539,7 +533,7 @@ public:
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
         (void)tmp;
         return PacBio::Memory::SmartAllocation{size,
-            // Storing mngr as a weak pointer in these lambdas to help
+            // Storing hostManager_ as a weak pointer in these lambdas to help
             // sniff out lifetime issues.  It's a bit of cautious paranoia
             // for the first lambda, since the current implementation
             // evaluates it immediately, but it's more important for the second.
@@ -595,7 +589,7 @@ public:
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::GpuAllocate);
         (void)tmp;
         return SmartDeviceAllocation{size,
-            // Storing mngr as a weak pointer in these lambdas to help
+            // Storing gpuManager_ as a weak pointer in these lambdas to help
             // sniff out lifetime issues.  It's a bit of cautious paranoia
             // for the first lambda, since the current implementation
             // evaluates it immediately, but it's more important for the second.
@@ -746,28 +740,32 @@ void ReportAllMemoryStats()
         auto caches = AllocationManager<MallocAllocator>::GetAllRefs();
         for (auto& cache : caches)
         {
-            if(cache) ls << cache->Report();
+            assert(cache);
+            ls << cache->Report();
         }
     }
     {
         auto caches = AllocationManager<PinnedAllocator>::GetAllRefs();
         for (auto& cache : caches)
         {
-            if(cache) ls << cache->Report();
+            assert(cache);
+            ls << cache->Report();
         }
     }
     {
         auto caches = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
         for (auto& cache : caches)
         {
-            if(cache) ls << cache->Report();
+            assert(cache);
+            ls << cache->Report();
         }
     }
     {
         auto caches = AllocationManager<GpuAllocator>::GetAllRefs();
         for (auto& cache : caches)
         {
-            if(cache) ls << cache->Report();
+            assert(cache);
+            ls << cache->Report();
         }
     }
 }
