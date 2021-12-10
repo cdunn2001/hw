@@ -168,9 +168,13 @@ private:
 
         void* Malloc(size_t size)
         {
-            assert(size % (1ull<<30) == 0);
+            if(size % (1ull<<30) != 0)
+                throw PBException("Implementation bug!  Expected request to "
+                                  "be an integer number of 1GB Huge Pages");
             auto ptr = sharedAlloc_->Allocate(size);
-            assert((reinterpret_cast<uint64_t>(ptr) & ((1ull << 30) -1)) == 0);
+            if((reinterpret_cast<uint64_t>(ptr) & ((1ull << 30) -1)) != 0)
+                throw PBException("Implementation bug!  SharedMemoryAllocator "
+                                  "was expected to return a 1GB aligned allocation");
 
             // This function both page-locks the allocation,
             // and registers the address range with the cuda
@@ -263,6 +267,9 @@ public:
         return ret;
     }
 
+    /// Note: Has a minor side effect where the static vector of weak_ptrs
+    ///       will have it's empty members pruned
+    ///
     /// \return a vector of shared_ptr to all current AllocationManager instances
     static std::vector<std::shared_ptr<AllocationManager>> GetAllRefs()
     {
@@ -402,7 +409,12 @@ private:
                                                    [](const auto& a, const auto& b)
                                                    { return a+b.stats.recentPeakBytes; });
 
-        const auto recentUnused = cacheStats_.PastMemUsage().recentMinBytes;
+        // This is a measure of any allocations that now seem to reside permanently
+        // in the cache, and aren't really being used anymore.  This is a side effect
+        // of a memory usage spike, and due to the simplicitly of the current caching
+        // scheme, this is memory that won't be returned to the system until the
+        // cache is destroyed
+        const auto recentFallow = cacheStats_.PastMemUsage().recentMinBytes;
         const auto totalAllocs = fullStats_.PastMemUsage().peakBytes;
 
         auto PrettyMemNumber = [](auto& stream, float f) -> decltype(auto)
@@ -434,8 +446,8 @@ private:
         PrettyMemNumber(msg, recentPeakSum) << " (Savings: "
             << 100.0f - 100.0f * totalAllocs / recentPeakSum << "%)\n"
             << "Unused Cache: ";
-        PrettyMemNumber(msg, recentUnused) << " (Waste: "
-            << 100.0f * recentUnused / totalAllocs << "%)\n"
+        PrettyMemNumber(msg, recentFallow) << " (Waste: "
+            << 100.0f * recentFallow / totalAllocs << "%)\n"
             << "High Water Breakdown:\n";
 
         for (const auto& val : sortedStats)
