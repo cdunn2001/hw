@@ -14,6 +14,10 @@ VSC=${VSC:-0}
 NOP=${NOP:-0}
 MAXPOPLOOPS=${MAXPOPLOOPS:-10}
 TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
+LOOPBACK=${LOOPBACK:-false}
+
+# append this directory to the PATH
+scriptdir=$(dirname $(realpath $0))
 
 if [[ $INPUT == "designer" ]]
 then
@@ -77,6 +81,7 @@ fi
 # maxCallsPerZmw should be increased because packet depth is 512 frames vs 128 frames
 
 tmpjson=$(mktemp)
+acqconfig=$(mktemp)
 cat <<HERE > $tmpjson
 {
   "algorithm": 
@@ -101,21 +106,73 @@ cat <<HERE > $tmpjson
          "simulatedFrameRate": $RATE,
          "simulatedInputFile": "${INPUT}",
          "sleepDebug": 600,
-         "tilePoolFactor" : ${TILEPOOLFACTOR}
+         "tilePoolFactor" : ${TILEPOOLFACTOR},
+         "loopback": ${LOOPBACK}
     }
   },
   "traceSaver": 
   {
-    //"roi": [ [0,0,4096,3072]]
-    "roi": [ [0,0,64,256 ]]
-    //"roi": [ [0,127],[192,64]] // this is not working either
+    "roi": [ [0,0,64,256 ]] // works
+    //"roi": [ [0,0,1,64 ], [1,0,1,64], [2,64,1,64]] // works
+    //"roi":[[0,0,6,3072]] // works
+    //"roi":[[0,0,24,3072]] // ??
   }
 } 
 HERE
 
+cat <<HERE > $acqconfig
+{
+  "source":
+  {
+    "WXIPCDataSourceConfig":
+    {
+      "acqConfig" :
+      {
+        "refSnr":  12.0,
+        "C" : {
+          "baseLabel": "C",
+          "relAmplitude": 1.0,
+          "excessNoiseCV": 0.1,
+          "interPulseDistance": 0.07,
+          "pulseWidth": 0.209,
+          "pw2SlowStepRatio": 3.2,
+          "ipd2SlowStepRatio": 0
+        },
+        "A" : {
+          "baseLabel": "A",
+          "relAmplitude": 0.67,
+          "excessNoiseCV": 0.1,
+          "interPulseDistance": 0.08,
+          "pulseWidth": 0.166,
+          "pw2SlowStepRatio": 3.2,
+          "ipd2SlowStepRatio": 0
+        },
+        "T" : {
+          "baseLabel": "T",
+          "relAmplitude": 0.445,
+          "excessNoiseCV": 0.1,
+          "interPulseDistance": 0.08,
+          "pulseWidth": 0.163,
+          "pw2SlowStepRatio": 3.2,
+          "ipd2SlowStepRatio": 0
+        },
+        "G" : {
+          "baseLabel": "G",
+          "relAmplitude": 0.26,
+          "excessNoiseCV": 0.1,
+          "interPulseDistance": 0.07,
+          "pulseWidth": 0.193,
+          "pw2SlowStepRatio": 3.2,
+          "ipd2SlowStepRatio": 0
+        }
+      }
+    }
+  }
+}
+HERE
 
 cat -n $tmpjson
-
+cat -n $acqconfig
 
 if [[ $VSC == 0 ]]
 then
@@ -124,6 +181,22 @@ else
   cd ../build
 fi
 
+# prepend to PATH
+if [[ $scriptdir == /opt/pacbio* ]]
+then
+  # no change to PATH
+  true
+elif [[ $VSC == 1 ]]
+then
+  # Visual studio build dir
+  export PATH=$scriptdir/build_vsc:${PATH}
+else
+  # normal build dir
+  export PATH=$scriptdir/../build/x86_64/${BUILD}/applications:${PATH}
+fi
+
+echo PATH = $PATH
+
 set -x
 pwd
-$cmd ./applications/smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson ${nop_option} ${trc_output}
+$cmd smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output}
