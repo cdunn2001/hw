@@ -174,7 +174,7 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
     {
         auto& mode = model.DetectionModes()[i];
         const auto mean = mode.SignalMean() * scale;
-        const auto& var = ModelSignalCovar(Analog(i), mean, blVar);
+        const auto var = ModelSignalCovar(Analog(i), mean, blVar);
 
         mode.SignalMean(mean);
         mode.SignalCovar(var);
@@ -195,21 +195,21 @@ DmeEmHost::LaneDetModelHost DmeEmHost::PrelimEstimate(const BlStatAccState& blSt
 
 void DmeEmHost::EstimateModel(const LaneHist& blHist,
                               const BlStatAccState& blStatAccState,
-                              LaneDetModel *model) const
+                              LaneDetModel *detModel) const
 {
-    assert(model != nullptr);
+    assert(detModel != nullptr);
 
-    LaneDetModelHost modelHost0(*model);
+    LaneDetModelHost model0(*detModel);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost modelHost1 = PrelimEstimate(blStatAccState, *model);
+    LaneDetModelHost model1 = PrelimEstimate(blStatAccState, *detModel);
 
     // TODO: Until further works completed, this update causes unit test failures
-    // modelHost0.Update(modelHost1);
+    // model0.Update(model1);
 
     // EstimateFiniteMixture below
-    LaneDetModelHost workModel = modelHost0;
+    LaneDetModelHost workModel = model0;
 
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.BaselineMode();
@@ -278,7 +278,7 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     const FloatVec sExpect = s / scaleFactor;
 
     // sExpectWeight is the inverse of the variance of the normal prior for s.
-    const FloatVec sExpectWeight = modelHost0.Confidence() * pulseAmpRegCoeff_;
+    const FloatVec sExpectWeight = model0.Confidence() * pulseAmpRegCoeff_;
 
     // Log likelihood--really a posterior since we've added a prior for s.
     FloatVec logLike {numeric_limits<float>::lowest()};
@@ -545,7 +545,7 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     // Compute confidence score.
-    dmeDx.confidFactors = ComputeConfidence(dmeDx, modelHost0, workModel);
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, model0, workModel);
     {
         using std::min;  using std::max;
         FloatVec conf = 1.0f;
@@ -563,10 +563,10 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     //    }
 
     // Blend the estimate into the output model.
-    modelHost0.Update(workModel);
+    model0.Update(workModel);
 
     // Transcribe results back into model
-    modelHost0.ExportTo(model);
+    model0.ExportTo(detModel);
 }
 
 
