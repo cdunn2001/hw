@@ -66,24 +66,26 @@ class MyValidator:
 
 
 
-    def validate(self,roispec):
+    def validate(self,roispec,args):
         """validates the whole file"""
+
         numValid = 0
         numWrong = 0
-        res = self.validate_roi(roispec)
-        if res[1] != 0:
-            print("ROI is invalid, %d in ROI, %d outside" % res)
-        numValid += res[0]
-        numWrong += res[1]
 
-        return
+        if args.validate_roi:
+            res = self.validate_roi(roispec)
+            if res[1] != 0:
+                print("ROI is invalid, %d in ROI, %d outside" % res)
+            numValid += res[0]
+            numWrong += res[1]
 
-        for zmw in range(0,self.holexy.shape[0]):
-            traceValid = self.validate_trace(zmw)
-            if traceValid:
-                numValid += 1
-            else :
-                numWrong += 1
+        if args.validate_traces:
+            for zmw in range(0,self.holexy.shape[0]):
+                traceValid = self.validate_trace(zmw)
+                if traceValid:
+                    numValid += 1
+                else :
+                    numWrong += 1
         print("valid:%d wrong:%d" % (numValid, numWrong))
 
     def validate_trace(self,zmw):
@@ -115,8 +117,17 @@ if __name__ == '__main__':
     group.add_argument('--file',
                        help="trc.h5 filename",
                        default='')
+    group.add_argument('--validate_roi',
+                       action=argparse.BooleanOptionalAction,
+                       default=True,
+                       help="If True, the HolesXY are checked to match the ROI"
+                       )
+    group.add_argument('--validate_traces',
+                       action=argparse.BooleanOptionalAction,
+                       default=True,
+                       help="If True, the traces are compared against the Alpha test pattern")
     args = parser.parse_args()
 
     f = MyValidator(args.file)
     roispec=eval(args.roi)
-    f.validate(roispec)
+    f.validate(roispec,args)

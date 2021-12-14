@@ -7,7 +7,7 @@
 source ../../../module_setup.sh
 module purge
 module unload python
-module load   python/3.7.3
+module load   python/3.9.6
 if [ ! -e python_ve ]; then
   python3 -m venv python_ve
 elif python_ve/bin/pip3 --help > /dev/null; then
