@@ -165,16 +165,18 @@ public:
     static bool PerfTestsEnabled()
     { return SpeedTestToggle::Enabled(); }
 
+    Histogram()
+        : resetMem_{Memory::SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                                    AllocatorMode::CUDA)}
+    {}
+
     // Sets up things for performance monitoring, and creates an RAII functor
     // to tear it down again at the end of the test.
     PacBio::Utilities::Finally SetupPerfMonitoring()
     {
-        Memory::SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         monitorPerf_ = true;
 
         return PacBio::Utilities::Finally([](){
-            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::CUDA);
-            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::MALLOC);
             Profiler::FinalReport();
         });
     }
@@ -300,7 +302,10 @@ private:
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
                             {params.lanesPerPool, params.framesPerBlock, laneSize});
-        DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+        auto caching = monitorPerf_ ? CacheMode::GLOBAL_CACHE : CacheMode::DISABLED;
+        DataSourceBase::Configuration sourceConfig(layout,
+                                                   CreatePinnedAllocator(SOURCE_MARKER(),
+                                                                         caching));
         sourceConfig.numFrames = params.numFrames;
 
         BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator), params);
@@ -308,6 +313,7 @@ private:
 
     // Is the current test monitoring performance?
     bool monitorPerf_ = false;
+    PacBio::Utilities::Finally resetMem_;
 };
 
 

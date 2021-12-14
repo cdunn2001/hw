@@ -256,7 +256,8 @@ void run(const Data::DataManagerParams& dataParams,
          size_t simulKernels,
          BaselineFilterMode mode)
 {
-    SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+    auto resetMem = SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                            AllocatorMode::CUDA);
 
     if (mode == BaselineFilterMode::GlobalFull)
     {
@@ -403,8 +404,6 @@ void run(const Data::DataManagerParams& dataParams,
         }
         }
     }
-
-    Memory::DisableAllCaching();
 }
 
 }}

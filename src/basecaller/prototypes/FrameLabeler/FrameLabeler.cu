@@ -39,7 +39,8 @@ void run(const Data::DataManagerParams& dataParams,
          const Data::LaneModelParameters<PBHalf, laneSize>& referenceModel,
          size_t simulKernels)
 {
-    SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
+    auto resetMem = SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                            AllocatorMode::CUDA);
 
     static constexpr size_t gpuBlockThreads = laneSize/2;
 
@@ -92,8 +93,6 @@ void run(const Data::DataManagerParams& dataParams,
     RunThreads(simulKernels, manager, tmp);
 
     FrameLabeler::Finalize();
-
-    Memory::DisableAllCaching();
 }
 
 }}
