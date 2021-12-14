@@ -660,7 +660,6 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     ZmwDetectionModel model1;
     PrelimEstimate(blStatAccState, detModel, &model1);
 
-    // TODO: Until further works completed, this update causes unit test failures
     if (threadIdx.x%2 == 0)
         UpdateTo<0>(model1, detModel, threadIdx.x/2);
     else

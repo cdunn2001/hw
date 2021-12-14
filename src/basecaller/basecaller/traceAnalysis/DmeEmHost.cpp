@@ -204,13 +204,12 @@ void DmeEmHost::EstimateModel(const LaneHist& blHist,
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     LaneDetModelHost model1 = PrelimEstimate(blStatAccState, *detModel);
+    model0.Update(model1);
 
-    // TODO: Until further works completed, this update causes unit test failures
-    // model0.Update(model1);
-
-    // EstimateFiniteMixture below
+    // Make a working copy of the detection model.
     LaneDetModelHost workModel = model0;
 
+    // EstimateFiniteMixture below
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.BaselineMode();
     auto& pulseModes = workModel.DetectionModes();
