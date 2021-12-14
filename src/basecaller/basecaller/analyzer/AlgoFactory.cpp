@@ -51,8 +51,8 @@
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
-#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/AnalysisConfig.h>

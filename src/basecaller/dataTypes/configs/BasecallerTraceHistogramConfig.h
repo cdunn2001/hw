@@ -97,7 +97,7 @@ inline void ValidateConfig<BasecallerTraceHistogramConfig>(const BasecallerTrace
         results->AddError("FallBackBaselineSigma must be positive.");
     }
 
-    if (config.BinSizeLowBoundCoeff <= 0.0f)
+    if (config.BinSizeLowBoundCoeff < 0.0f)
     {
         results->AddError("BinSizeLowBoundCoeff must be positive.");
     }

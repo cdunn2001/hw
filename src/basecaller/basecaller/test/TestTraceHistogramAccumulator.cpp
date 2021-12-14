@@ -35,8 +35,8 @@
 
 #include <appModules/SimulatedDataSource.h>
 
-#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumDevice.h>
+#include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>

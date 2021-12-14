@@ -112,9 +112,9 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
                                     sqrt(laneBlStats.Variance()),
                                     FloatVec(FallBackBaselineSigma()));
 
-        FloatVec binSize = max(binSizeCoeff_ * blSigma, binSizeMin);
-        auto loBound = blMean - 4.0f*blSigma;
-        auto upBound = loBound + float(numBins)*binSize;
+        const FloatVec binSize = max(binSizeCoeff_ * blSigma, binSizeMin);
+        const auto loBound = blMean - 4.0f*blSigma;
+        const auto upBound = loBound + float(numBins)*binSize;
 
         hist_.emplace_back(numBins, loBound, upBound);
     }
