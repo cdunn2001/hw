@@ -103,11 +103,11 @@ public:
         size_t capacity_;
     };
 
-    ZmwByteData(const BazIO::FileHeader& fh, const ZmwDataCounts& expectedSizes, size_t idx)
+    ZmwByteData(uint32_t metricByteSize, const ZmwDataCounts& expectedSizes, size_t idx)
       : packetByteStream_(expectedSizes.packetsByteSize)
-      , hFMByteStream_(expectedSizes.numHFMBs * fh.HFMetricByteSize())
-      , mFMByteStream_(expectedSizes.numMFMBs * fh.MFMetricByteSize())
-      , lFMByteStream_(expectedSizes.numLFMBs * fh.LFMetricByteSize())
+      , hFMByteStream_(expectedSizes.numHFMBs * metricByteSize)
+      , mFMByteStream_(expectedSizes.numMFMBs * metricByteSize)
+      , lFMByteStream_(expectedSizes.numLFMBs * metricByteSize)
       , sizes_(expectedSizes)
       , numEvents_(0)
       , zmwIndex_(idx)
@@ -389,8 +389,15 @@ private:
 // Free functions, used to help parse binary data into metrics and packet
 // information
 
-BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal);
-RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data);
+BlockLevelMetrics ParseMetrics(const std::vector<MetricField>& metricFields,
+                               uint32_t metricFrames,
+                               double frameRateHz,
+                               const std::vector<float> relAmps,
+                               const std::string& baseMap,
+                               const ZmwByteData& data, bool internal);
+RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& packetGroups,
+                          const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& packetFields,
+                          const ZmwByteData& data);
 RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& groups,
                           const uint8_t* data,
                           size_t dataSize,

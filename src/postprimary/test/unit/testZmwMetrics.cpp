@@ -96,7 +96,7 @@ TEST(zmwMetrics, PulseMetrics)
     const auto& fh = config.GenerateHeader();
 
     const auto& hqRegion = config.GenerateHQRegion();
-    const auto& pulseMetrics = PulseMetrics(fh, hqRegion, bazMetrics);
+    const auto& pulseMetrics = PulseMetrics(fh.FrameRateHz(), hqRegion, bazMetrics);
 
     EXPECT_EQ(2048 / (fh.MFMetricFrames()/fh.FrameRateHz()), pulseMetrics.Rate());
     EXPECT_NEAR(400.0f / 2048.0f / fh.FrameRateHz(), pulseMetrics.Width(), 0.1);
@@ -117,7 +117,7 @@ TEST(zmwMetrics, BaseMetrics)
     const auto& fh = config.GenerateHeader();
     const auto& hqRegion = config.GenerateHQRegion();
 
-    const auto& baseMetrics = BaseMetrics(fh, hqRegion, bazMetrics, events);
+    const auto& baseMetrics = BaseMetrics(fh.FrameRateHz(), hqRegion, bazMetrics, events);
 
     double expbr = 2048 / (fh.MFMetricFrames()/fh.FrameRateHz());
     EXPECT_EQ(expbr, baseMetrics.Rate());
@@ -169,7 +169,8 @@ TEST(zmwMetrics, ProductivityReadMetrics)
     EXPECT_EQ(ProductivityClass::PRODUCTIVE, prod.productivity);
     EXPECT_EQ(ReadTypeClass::PARTIALHQREAD1, prod.readType);
 
-    ReadMetrics readMetrics(fh, hqRegion, events, prod);
+    ReadMetrics readMetrics(fh.MovieTimeInHrs(), fh.ZmwUnitFeatures(events.ZmwIndex()),
+                            hqRegion, events, prod);
 
     EXPECT_EQ(0, readMetrics.UnitFeatures());
     EXPECT_EQ(4194368, readMetrics.HoleNumber());

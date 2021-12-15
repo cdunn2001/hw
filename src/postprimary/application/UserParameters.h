@@ -38,6 +38,7 @@
 #pragma once
 
 #include <string>
+#include <fstream>
 #include <sstream>
 #include <vector>
 #include <limits>
@@ -58,9 +59,19 @@ struct UserParameters
         for(int i=0;i<argc;i++) ss << argv[i] << " ";
         originalCommandLine = ss.str();
     }
+
+    void ReadFileList()
+    {
+        std::ifstream in(fileListPath);
+        std::string filePath;
+        while (std::getline(in, filePath))
+            inputFilePaths.push_back(filePath);
+    }
+
     std::string originalCommandLine;
 
-    std::string inputFilePath;
+    std::vector<std::string> inputFilePaths;
+    std::string fileListPath;
     std::string uuid;
     std::string outputPrefix;
     std::string subreadsetFilePath;

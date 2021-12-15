@@ -18,7 +18,7 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     std::vector<MetricField> fields;
     MetricFrequency frequency = MetricFrequency::HIGH;
 
-    const PacBio::BazIO::FileHeader& fh = config.GenerateHeader();
+    const auto& fh = config.GenerateHeader();
     if (!fh.HFMetricFields().empty())
     {
         assert(fh.MFMetricFields().empty());
@@ -143,7 +143,9 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
         rawMetrics.UIntMetric(MetricFieldName::NUM_FRAMES).push_back(metricFrames);
     }
 
-    return BlockLevelMetrics(rawMetrics, fh, frequency, true);
+    return BlockLevelMetrics(rawMetrics,
+                             fh.HFMetricFrames(), fh.FrameRateHz(), fh.RelativeAmplitudes(), fh.BaseMap(),
+                             frequency, true);
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
 // arguments to function parameters
@@ -182,7 +184,7 @@ EventData SimulateEventData(const ReadConfig& config)
 
     const auto& fh = config.GenerateHeader();
     return EventData(
-            fh, 0, false,
+            0, fh.ZmwIndexToNumber(0), false,
             BazIO::BazEventData(fields, {}),
             std::move(states));
 }
@@ -202,7 +204,8 @@ ZmwMetrics RunMetrics(const EventData& events,
     ProductivityMetrics prodClassifier(4, minEmptyTime, emptyOutlierTime);
     auto prod = prodClassifier.ComputeProductivityInfo(hqRegion, metrics, true);
 
-    return ZmwMetrics(fh, hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
+    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwIndex()),
+                      hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
 }
 
 
@@ -222,7 +225,7 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
     PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters,
                                   readconfig.nlfb()};
     using Platform = PacBio::Primary::Postprimary::Platform;
-    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, *fh, hqRegion, zmwMetrics, events, metrics,
+    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);
     return std::make_tuple(zmw, std::move(fh));
 }

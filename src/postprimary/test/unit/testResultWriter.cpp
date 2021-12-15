@@ -145,7 +145,12 @@ TEST(ResultWriter,Basics)
 
     {
         bool computeStats = true;
-        ResultWriter rw(&user, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+        ResultWriter rw(&user, &cmd, rmd, &ppaAlgoConfig,
+                        fileHeader.MovieName(), fileHeader.MovieTimeInHrs(),
+                        fileHeader.BazVersion(), fileHeader.BazWriterVersion(),
+                        fileHeader.BaseCallerVersion(),
+                        fileHeader.FrameRateHz(), fileHeader.Internal(),
+                        apps, computeStats, fileHeader.MaxNumZMWs());
 
         std::vector<ComplexResult> crv;
 
@@ -220,7 +225,15 @@ TEST(ResultWriter,Basics)
         bool computeStats = false; // bam2bam usage
         user.subreadsetFilePath = SUBREADSET;
         PacBio::BAM::DataSet ds(datasetfile);
-        ResultWriter rw(&user, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+        ResultWriter rw(&user, &cmd, rmd, &ppaAlgoConfig,
+                        fileHeader.MovieName(),
+                        fileHeader.MovieTimeInHrs(),
+                        fileHeader.BazVersion(),
+                        fileHeader.BazWriterVersion(),
+                        fileHeader.BaseCallerVersion(),
+                        fileHeader.FrameRateHz(),
+                        fileHeader.Internal(),
+                        apps, computeStats, fileHeader.MaxNumZMWs());
         EXPECT_NO_THROW(rw.SetCollectionMetadataDataSet(&ds););
     }
 
@@ -275,7 +288,15 @@ TEST(ResultWriter,LB_SM_tags)
 </Collections>
         )";
         user.outputPrefix = tmpdir.DirName() + "/LB_SM_tags_1_";
-        ResultWriter rw1(&user, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+        ResultWriter rw1(&user, &cmd, rmd, &ppaAlgoConfig,
+                         fileHeader.MovieName(),
+                         fileHeader.MovieTimeInHrs(),
+                         fileHeader.BazVersion(),
+                         fileHeader.BazWriterVersion(),
+                         fileHeader.BaseCallerVersion(),
+                         fileHeader.FrameRateHz(),
+                         fileHeader.Internal(),
+                         apps, computeStats, fileHeader.MaxNumZMWs());
     }
     {
         std::string datasetfile = user.outputPrefix + ".subreadset.xml";
@@ -330,7 +351,15 @@ TEST(ResultWriter,LB_SM_tags)
 </Collections>
         )";
         user.outputPrefix = tmpdir.DirName() + "/LB_SM_tags_2_";
-        ResultWriter rw2(&user, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+        ResultWriter rw2(&user, &cmd, rmd, &ppaAlgoConfig,
+                         fileHeader.MovieName(),
+                         fileHeader.MovieTimeInHrs(),
+                         fileHeader.BazVersion(),
+                         fileHeader.BazWriterVersion(),
+                         fileHeader.BaseCallerVersion(),
+                         fileHeader.FrameRateHz(),
+                         fileHeader.Internal(),
+                         apps, computeStats, fileHeader.MaxNumZMWs());
     }
     {
         std::string datasetfile = user.outputPrefix + ".subreadset.xml";
@@ -366,7 +395,15 @@ TEST(ResultWriter,LB_SM_tags)
 </Collections>
         )";
         user.outputPrefix = tmpdir.DirName() + "/LB_SM_tags_3_";
-        ResultWriter rw3(&user, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+        ResultWriter rw3(&user, &cmd, rmd, &ppaAlgoConfig,
+                         fileHeader.MovieName(),
+                         fileHeader.MovieTimeInHrs(),
+                         fileHeader.BazVersion(),
+                         fileHeader.BazWriterVersion(),
+                         fileHeader.BaseCallerVersion(),
+                         fileHeader.FrameRateHz(),
+                         fileHeader.Internal(),
+                         apps, computeStats, fileHeader.MaxNumZMWs());
     }
 
     {
@@ -450,7 +487,15 @@ TEST(ResultWriter,StreamingToStdout)
             // this RAII object will capture all of stdout to bamFileName, and will release stdout
             // when it goes out of scope.
             TemporaryFileRedirection redirector(STDOUT_FILENO, bamFileName);
-            ResultWriterEx rw(&user1, &cmd, rmd, &ppaAlgoConfig, fileHeader, apps, computeStats, fileHeader.MaxNumZMWs());
+            ResultWriterEx rw(&user1, &cmd, rmd, &ppaAlgoConfig,
+                              fileHeader.MovieName(),
+                              fileHeader.MovieTimeInHrs(),
+                              fileHeader.BazVersion(),
+                              fileHeader.BazWriterVersion(),
+                              fileHeader.BaseCallerVersion(),
+                              fileHeader.FrameRateHz(),
+                              fileHeader.Internal(),
+                              apps, computeStats, fileHeader.MaxNumZMWs());
         }
         // TEST_COUT << " wrote BAM to " << bamFileName << std::endl;
 

@@ -228,7 +228,10 @@ public:
     // TODO: Once metrics computation has been refactored, remove `internal`
     //       flag from this class.
     BlockLevelMetrics(const RawMetricData& rawMetrics,
-                      const BazIO::FileHeader& fh,
+                      uint32_t metricFrames,
+                      double frameRateHz,
+                      const std::vector<float> relAmps,
+                      const std::string& baseMap,
                       MetricFrequency frequency,
                       bool internal);
 

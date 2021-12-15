@@ -55,7 +55,6 @@ public:
     using FileHeader = BazIO::FileHeader;
 public: // stateless
     static void FillPerZmwStats(const Platform& platform,
-                                const FileHeader& fh,
                                 const RegionLabel& hqRegion,
                                 const ZmwMetrics& zmwMetrics,
                                 const EventData& events,

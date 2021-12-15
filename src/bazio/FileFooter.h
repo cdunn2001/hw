@@ -74,6 +74,9 @@ public:
     const std::vector<uint32_t>& TruncatedSuperchunks(uint32_t zmwId) const
     { return truncationMap_.at(zmwId); }
 
+    const std::map<uint32_t, std::vector<uint32_t>>& TruncationMap() const
+    { return truncationMap_; }
+
 private:
     std::map<uint32_t, std::vector<uint32_t>> truncationMap_;
 

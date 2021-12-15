@@ -73,6 +73,8 @@ public:
     ~FileHeader() = default;
 
 public:
+    bool IsConsistent(const FileHeader& other) const;
+
     std::string BazVersion() const
     { 
         return std::to_string(bazMajorVersion_) + "." + 
@@ -127,15 +129,8 @@ public:
     uint64_t OffsetFirstChunk() const
     { return offsetFirstChunk_; }
 
-    std::vector<FieldParams<PacketFieldName>> PacketFields() const
-    {
-        std::vector<FieldParams<PacketFieldName>> fp;
-        for (const auto& g : encodeInfo_)
-        {
-            fp.insert(std::end(fp), g.members.begin(), g.members.end());
-        }
-        return fp;
-    }
+    const std::vector<FieldParams<PacketFieldName>>& PacketFields() const
+    { return packetFields_; }
 
     const std::vector<GroupParams<PacketFieldName>>& PacketGroups() const
     { return encodeInfo_; }
@@ -210,10 +205,11 @@ public:
     const Json::Value& BasecallerConfig() const
     { return basecallerConfig_; }
 
-    const std::vector<float> RelativeAmplitudes() const
+    // Returned amplitudes are in the order given by BaseMap().
+    const std::vector<float>& RelativeAmplitudes() const
     { return relAmps_; }
 
-    const std::string BaseMap() const
+    const std::string& BaseMap() const
     { return baseMap_; }
 
     const Json::Value& ExperimentMetadata() const
@@ -277,6 +273,12 @@ public:
     bool Internal() const
     { return internal_; }
 
+    uint32_t PacketByteSize() const
+    { return packetByteSize_; }
+
+    uint32_t MetricByteSize() const
+    { return metricByteSize_; }
+
 public:
     void BazMajorVersion(int v)
     { bazMajorVersion_ = v; }
@@ -309,9 +311,6 @@ public:
     { internal_ = internal; }
 
 private:
-
-
-private:
     static const uint8_t MAGICNUMBER0 = 0x02;
     static const uint8_t MAGICNUMBER1 = 'B';
     static const uint8_t MAGICNUMBER2 = 'A';
@@ -319,6 +318,7 @@ private:
 
 private:
     std::vector<GroupParams<PacketFieldName>> encodeInfo_;
+    std::vector<FieldParams<PacketFieldName>> packetFields_;
     std::vector<MetricField> hFMetricFields_;
     std::vector<MetricField> mFMetricFields_;
     std::vector<MetricField> lFMetricFields_;
@@ -343,6 +343,7 @@ private:
     std::string movieName_;
 
     uint32_t packetByteSize_   = 0;
+    uint32_t metricByteSize_   = 0;
     uint32_t hFMetricByteSize_ = 0;
     uint32_t mFMetricByteSize_ = 0;
     uint32_t lFMetricByteSize_ = 0;

@@ -125,6 +125,9 @@ public:
     const std::vector<uint32_t>& UnitFeatures() const
     { return zmwData_.holeFeatures; }
 
+    const std::map<uint32_t,uint32_t>& ZmwNumbersToIndex() const
+    { return zmwNumbersToIndex_; }
+
     const std::map<std::string,uint32_t>& HoleTypesMap() const
     { return holeTypesMap_; }
 

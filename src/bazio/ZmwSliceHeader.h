@@ -48,9 +48,9 @@ struct ZmwSliceHeader
     uint32_t packetsByteSize;      // 16 B
     uint16_t numEvents;            // 18 B
     uint16_t numHFMBs;             // 20 B number of high-frequency metric blocks
-    uint8_t  numMFMBs;             /* 20 B number of medium-frequency metric blocks
+    uint8_t  numMFMBs;             /* 21 B number of medium-frequency metric blocks
                                            CANNOT be larger than 15 */
-    uint8_t  numLFMBs;             /* 20 B number of low-frequency metric blocks
+    uint8_t  numLFMBs;             /* 22 B number of low-frequency metric blocks
                                            CANNOT be larger than 15 */
 
     static constexpr size_t SizeOf() 

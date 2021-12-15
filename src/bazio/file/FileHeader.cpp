@@ -32,6 +32,7 @@
 
 #include <pacbio/logging/Logger.h>
 #include <pacbio/tracefile/ScanData.h>
+#include <pacbio/text/String.h>
 
 #include <json/reader.h>
 
@@ -171,6 +172,7 @@ void FileHeader::Init(const char* header, const size_t length)
     // Parse packets and store them as vector of structs
     ParsePackets(headerValue, packetByteSize_);
 
+    // TODO: Eventually we want to get rid of the above since there is no frequency for metrics.
     // Parse metric nodes
     if (headerValue.isMember("HF_METRIC"))
         ParseMetrics(headerValue["HF_METRIC"], hFMetricFields_, hFMetricByteSize_, hFMetricFrames_);
@@ -189,11 +191,20 @@ void FileHeader::Init(const char* header, const size_t length)
 
     packetByteSize_ /= 8;
     if (hFMetricByteSize_ > 0)
+    {
         hFMetricByteSize_ /= 8;
+        metricByteSize_ = hFMetricByteSize_;
+    }
     if (mFMetricByteSize_ > 0)
+    {
         mFMetricByteSize_ /= 8;
+        metricByteSize_ = mFMetricByteSize_;
+    }
     if (lFMetricByteSize_ > 0)
+    {
         lFMetricByteSize_ /= 8;
+        metricByteSize_ = lFMetricByteSize_;
+    }
 
     // Compute ratio of hf to mf and hf to lf
     if (hFMetricFrames_ > 0)
@@ -293,9 +304,57 @@ void FileHeader::ParsePackets(Json::Value& root,
         // Get current encoding group.
         const auto encodingGroupJson = packetArray[i];
         GroupParams<PacketFieldName> gp(encodingGroupJson);
+        packetFields_.insert(std::end(packetFields_), gp.members.begin(), gp.members.end());
         encodeInfo_.push_back(gp);
         packetByteSize += gp.totalBits;
     }
+}
+
+bool FileHeader::IsConsistent(const FileHeader& other) const
+{
+    if (this->BazLongVersion() != other.BazLongVersion())
+        throw PBException("FileHeader BAZ versions mismatch!");
+
+    if (this->BaseCallerVersion() != other.BaseCallerVersion())
+        throw PBException("FileHeader BaseCaller versions mismatch!");
+
+    if (this->ZmwInformation().HoleFeatureMap().size() != other.ZmwInformation().HoleFeatureMap().size()
+        || !std::equal(this->ZmwInformation().HoleFeatureMap().begin(),
+                       this->ZmwInformation().HoleFeatureMap().end(), other.ZmwInformation().HoleFeatureMap().begin(),
+                      [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
+                      { return a.first == b.first && a.second == b.second; }))
+        throw PBException("FileHeader Hole Feature map mismatch!");
+
+    if (this->ZmwInformation().HoleTypesMap().size() != other.ZmwInformation().HoleTypesMap().size()
+        || !std::equal(this->ZmwInformation().HoleTypesMap().begin(),
+                       this->ZmwInformation().HoleTypesMap().end(), other.ZmwInformation().HoleTypesMap().begin(),
+                      [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
+                      { return a.first == b.first && a.second == b.second; }))
+        throw PBException("FileHeader Hole Types map mismatch!");
+
+    if (this->Internal() != other.Internal())
+        throw PBException("FileHeader internal mismatch!");
+
+    if (this->PacketByteSize() != other.PacketByteSize())
+        throw PBException("FileHeader packet byte size mismatch!");
+
+    if (this->MetricByteSize() != other.MetricByteSize())
+        throw PBException("FileHeader metric byte size mismatch!");
+
+    if (this->NumSuperChunks() != other.NumSuperChunks())
+        throw PBException("FileHeader number super chunks mismatch!");
+
+    if (PacBio::Text::String::Split(this->MovieName(), '.').front() !=
+        PacBio::Text::String::Split(other.MovieName(), '.').front())
+        throw PBException("FileHeader movie name mismatch!");
+
+    // TODO:
+    // Check packet/metric fields?
+    // Check basemap and relative amplitudes?
+    // Check metric frames?
+    // Check frameRate?
+
+    return true;
 }
 
 }} // PacBio::BazIO

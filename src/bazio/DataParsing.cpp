@@ -224,7 +224,12 @@ RawMetricData ParseMetricFields(const std::vector<MetricField>& fields, const Zm
     return metrics;
 }
 
-BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal)
+BlockLevelMetrics ParseMetrics(const std::vector<MetricField>& metricFields,
+                               uint32_t metricFrames,
+                               double frameRateHz,
+                               const std::vector<float> relAmps,
+                               const std::string& baseMap,
+                               const ZmwByteData& data, bool internal)
 {
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
@@ -238,19 +243,19 @@ BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& d
             throw PBException("Unexpected medium frequency metrics!");
         if (data.lFMByteStream().size() != 0)
             throw PBException("Unexpected low frequency metrics!");
-        rawMetrics = ParseMetricFields(fh.HFMetricFields(), data.hFMByteStream());
+        rawMetrics = ParseMetricFields(metricFields, data.hFMByteStream());
         frequency = MetricFrequency::HIGH;
     }
     else if (data.mFMByteStream().size() != 0)
     {
         if (data.lFMByteStream().size() != 0)
             throw PBException("Unexpected low frequency metrics!");
-        rawMetrics = ParseMetricFields(fh.MFMetricFields(), data.mFMByteStream());
+        rawMetrics = ParseMetricFields(metricFields, data.mFMByteStream());
         frequency = MetricFrequency::MEDIUM;
     }
     else if (data.lFMByteStream().size() > 0)
     {
-        rawMetrics = ParseMetricFields(fh.LFMetricFields(), data.lFMByteStream());
+        rawMetrics = ParseMetricFields(metricFields, data.lFMByteStream());
         frequency = MetricFrequency::LOW;
     }
     else
@@ -258,19 +263,21 @@ BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& d
         PBLOG_WARN << "No metrics present to parse!";
         frequency = MetricFrequency::MEDIUM;
     }
-    return BlockLevelMetrics(rawMetrics, fh, frequency, internal);
+    return BlockLevelMetrics(rawMetrics, metricFrames, frameRateHz, relAmps, baseMap, frequency, internal);
 
     // TODO validate num_pulses and num_bases
 }
 
-RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data)
+RawEventData ParsePackets(const std::vector<GroupParams<PacketFieldName>>& packetGroups,
+                          const std::vector<FieldParams<PacketFieldName>>& packetFields,
+                          const ZmwByteData& data)
 {
 
     if (!data.IsFull())
         throw PBException("Missing data when Parsing Metrics");
 
-    auto rawData = ParsePacketFields(fh.PacketGroups(), data.packetByteStream().get(), data.packetByteStream().size(), data.NumEvents());
-    return RawEventData(std::move(rawData), fh.PacketFields());
+    auto rawData = ParsePacketFields(packetGroups, data.packetByteStream().get(), data.packetByteStream().size(), data.NumEvents());
+    return RawEventData(std::move(rawData), packetFields);
 }
 
 RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& groups,

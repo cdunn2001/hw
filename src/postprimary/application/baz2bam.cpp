@@ -133,6 +133,7 @@ int main(int argc, char* argv[])
         parser.add_option_group(groupMand);
 
         auto groupOpt = PacBio::Process::OptionGroup(parser, "Optional parameters");
+        groupOpt.add_option("--filelist").dest("filelist").help("Text file containing full paths to BAZ files, one per line");
         groupOpt.add_option("--uuid").help("If this is specified, it must"
                                             " compare to the UUID of the subreadset within the metadata XML. pa-ws "
                                             " will set this option for sanity checking.  baz2bam will return "
@@ -144,7 +145,7 @@ int main(int argc, char* argv[])
         groupOpt.add_option("-b --bamThreads").type_int().set_default(4).dest("bamthreads").help(
             "Number of threads for parallel BAM compression. Note due to technical reasons, out-of-line pbi indexing "
             "will use 2x these threads (one set for each bam file), and inline pbi indexing will use 4x (inline indexing "
-            "requires a separate and simultanous decompressing read)");
+            "requires a separate and simultaneous decompressing read)");
         groupOpt.add_option("--inlinePbi").action_store_true().help(
             "Generate pbindex inline with BAM writing");
         groupOpt.add_option("--silent").action_store_true().help("No progress output.");
@@ -299,12 +300,22 @@ int main(int argc, char* argv[])
 
         if (args.size() >= 1)
         {
-            user->inputFilePath = args[0];
+            user->inputFilePaths.insert(std::end(user->inputFilePaths), args.begin(), args.end());
         }
         else
         {
-            std::cerr << "ERROR: INPUT EMPTY." << std::endl;
-            problem = true;
+            user->fileListPath = options["filelist"];
+            if ("" == user->fileListPath)
+            {
+                std::cerr << "ERROR: INPUT EMPTY." << std::endl;
+                problem = true;
+            }
+            user->ReadFileList();
+            if (user->inputFilePaths.empty())
+            {
+                std::cerr << "ERROR: INPUT FILE LIST EMPTY." << std::endl;
+                problem = true;
+            }
         }
 
         user->outputPrefix = options["output"];

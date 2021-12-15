@@ -43,12 +43,15 @@ namespace PacBio {
 namespace Primary {
 
 BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
-                                     const BazIO::FileHeader& fh,
+                                     uint32_t metricFrames,
+                                     double frameRateHz,
+                                     const std::vector<float> relAmps,
+                                     const std::string& baseMap,
                                      MetricFrequency frequency,
                                      bool internal)
 {
     internal_ = internal;
-    assert(fh.MetricFieldScaling(MetricFieldName::NUM_PULSES, frequency) == 1);
+    //assert(fh.MetricFieldScaling(MetricFieldName::NUM_PULSES, frequency) == 1);
 
     // The below assumes that the metrics are all of the same size.
     const size_t expectedSize = [&]() -> size_t
@@ -75,16 +78,16 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     switch (frequency)
     {
     case MetricFrequency::HIGH:
-        framesPerBlock = fh.HFMetricFrames();
+        framesPerBlock = metricFrames;
         break;
     case MetricFrequency::MEDIUM:
-        framesPerBlock = fh.MFMetricFrames();
+        framesPerBlock = metricFrames;
         break;
     case MetricFrequency::LOW:
-        framesPerBlock = fh.LFMetricFrames();
+        framesPerBlock = metricFrames;
         break;
     }
-    const auto frameRate = static_cast<float>(fh.FrameRateHz());
+    const auto frameRate = static_cast<float>(frameRateHz);
 
     const auto toFloatVec = [](const auto& data) {
         std::vector<float> ret;
@@ -200,10 +203,10 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     numBases_ = AnalogMetric<uint32_t>(std::move(bdata), frequency, frameRate, framesPerBlock);
     numBasesAll_ = SingleMetric<uint32_t>(std::move(basesSum), frequency, frameRate, framesPerBlock);
 
-    const float relampA = fh.RelativeAmplitudes()[fh.BaseMap().find('A')];
-    const float relampC = fh.RelativeAmplitudes()[fh.BaseMap().find('C')];
-    const float relampG = fh.RelativeAmplitudes()[fh.BaseMap().find('G')];
-    const float relampT = fh.RelativeAmplitudes()[fh.BaseMap().find('T')];
+    const float relampA = relAmps[baseMap.find('A')];
+    const float relampC = relAmps[baseMap.find('C')];
+    const float relampG = relAmps[baseMap.find('G')];
+    const float relampT = relAmps[baseMap.find('T')];
     const float minamp = std::min({relampA, relampC, relampG, relampT});
 
     // These differ depending on if we're Spider or Sequel.  For now at least,

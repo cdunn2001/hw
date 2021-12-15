@@ -218,15 +218,16 @@ public:
     }
 
     static std::shared_ptr<RuntimeMetaData> ParseRMD(
-        const BazIO::FileHeader& fileHeader,
+        const std::string basecallerVersion,
+        const std::string movieName,
         const std::shared_ptr<UserParameters>& user)
     {
         auto rmd = ParseRMD(user);
 
         // Now that we've parsed the MetadataXML, finish the RMD with data from the fileHeader
-        rmd->basecallerVersion = fileHeader.BaseCallerVersion();
+        rmd->basecallerVersion = basecallerVersion;
         if (user->runtimeMetaDataFilePath.empty())
-            rmd->movieName  = fileHeader.MovieName();
+            rmd->movieName  = movieName;
 
         static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for run metadata XML"; return true;}();
         (void)warnOnce;
