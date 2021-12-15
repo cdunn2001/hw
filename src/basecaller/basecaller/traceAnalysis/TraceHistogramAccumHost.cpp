@@ -36,6 +36,7 @@
 
 #include <common/LaneArray.h>
 #include <common/StatAccumulator.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 namespace PacBio {
@@ -46,18 +47,24 @@ namespace Basecaller {
 float TraceHistogramAccumHost::binSizeCoeff_;
 unsigned int TraceHistogramAccumHost::baselineStatMinFrameCount_;
 float TraceHistogramAccumHost::fallBackBaselineSigma_;
+float TraceHistogramAccumHost::movieScaler_ = 1.0f;
+float TraceHistogramAccumHost::binSizeLowBoundCoeff_ = 1.0f;
 
-void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
+void TraceHistogramAccumHost::Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
+                                        const Data::AnalysisConfig& analysisConfig)
 {
-    binSizeCoeff_ = traceConfig.BinSizeCoeff;
+    movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
+    binSizeLowBoundCoeff_ = histConfig.BinSizeLowBoundCoeff;
+
+    binSizeCoeff_ = histConfig.BinSizeCoeff;
     PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
                << binSizeCoeff_ << '.';
 
-    baselineStatMinFrameCount_ = traceConfig.BaselineStatMinFrameCount;
+    baselineStatMinFrameCount_ = histConfig.BaselineStatMinFrameCount;
     PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
                << baselineStatMinFrameCount_ << '.';
 
-    fallBackBaselineSigma_ = traceConfig.FallBackBaselineSigma;
+    fallBackBaselineSigma_ = histConfig.FallBackBaselineSigma;
     PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
                << fallBackBaselineSigma_ << '.';
 }
@@ -84,28 +91,32 @@ void TraceHistogramAccumHost::ResetImpl(const Cuda::Memory::UnifiedCudaArray<Lan
 
 void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
 {
-    constexpr unsigned int numBins = LaneHistType::numBins;
+    constexpr uint32_t numBins = LaneHistType::numBins;
     hist_.clear();
     auto view = metrics.baselinerStats.GetHostView();
     assert(view.Size() == edgeClassifier_.size());
+
+    const float binSizeMin = binSizeLowBoundCoeff_ * std::max(1.0f, movieScaler_);
+
     for (size_t lane = 0; lane < view.Size(); ++lane)
     {
-        // Determine histogram parameters.
-        const auto& laneBlStats = StatAccumulator<LaneArray<float>>(view[lane].baselineStats);
+        // Determine histogram parameters
+        const StatAccumulator<FloatVec>& laneBlStats = view[lane].baselineStats;
 
-        const auto& blCount = laneBlStats.Count();
-        const auto& sufficientData = blCount >= BaselineStatMinFrameCount();
-        const auto& blMean = Blend(sufficientData,
+        const auto& sufficientData =
+                    laneBlStats.Count() >= BaselineStatMinFrameCount();
+        const FloatVec& blMean = Blend(sufficientData,
                                    laneBlStats.Mean(),
-                                   LaneArray<float>(0.0f));
-        const auto& blSigma = Blend(sufficientData,
+                                   FloatVec(0.0f));
+        const FloatVec& blSigma = Blend(sufficientData,
                                     sqrt(laneBlStats.Variance()),
-                                    LaneArray<float>(FallBackBaselineSigma()));
+                                    FloatVec(FallBackBaselineSigma()));
 
-        const auto binSize = BinSizeCoeff() * blSigma;
-        const auto lower = blMean - 4.0f*blSigma;
-        const auto upper = lower + float(numBins)*binSize;
-        hist_.emplace_back(numBins, lower, upper);
+        const FloatVec binSize = max(binSizeCoeff_ * blSigma, binSizeMin);
+        const auto loBound = blMean - 4.0f*blSigma;
+        const auto upBound = loBound + float(numBins)*binSize;
+
+        hist_.emplace_back(numBins, loBound, upBound);
     }
 }
 

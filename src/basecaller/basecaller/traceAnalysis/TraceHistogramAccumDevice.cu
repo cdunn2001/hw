@@ -36,6 +36,7 @@
 #include <common/cuda/streams/LaunchManager.cuh>
 
 #include <dataTypes/BatchData.cuh>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 using namespace PacBio::Cuda::Memory;
@@ -56,6 +57,8 @@ struct StaticConfig
     float binSizeCoeff_;
     unsigned int baselineStatMinFrameCount_;
     float fallBackBaselineSigma_;
+    float movieScaler_;
+    float binSizeLowBoundCoeff_;
 };
 
 __constant__ StaticConfig staticConfig;
@@ -767,6 +770,9 @@ struct ZmwBinsInfo
 
 __device__ ZmwBinsInfo ComputeBounds(const StatAccumState& laneBlStats)
 {
+    const float binSizeMin =
+             staticConfig.binSizeLowBoundCoeff_ * std::max(1.0f, staticConfig.movieScaler_);
+
     const auto blCount = laneBlStats.moment0[threadIdx.x];
     const auto mom1 = laneBlStats.moment1[threadIdx.x];
     auto blMean = mom1 / blCount + laneBlStats.offset[threadIdx.x];
@@ -780,7 +786,8 @@ __device__ ZmwBinsInfo ComputeBounds(const StatAccumState& laneBlStats)
     }
 
     const auto lower = blMean - 4.0f*blSigma;
-    const auto binSize = staticConfig.binSizeCoeff_ * blSigma;
+    const auto binSize = max(staticConfig.binSizeCoeff_ * blSigma, binSizeMin);
+
     return {lower, binSize};
 }
 
@@ -1009,25 +1016,28 @@ private:
     bool initEdgeDetection_ = true;
 };
 
-void TraceHistogramAccumDevice::Configure(const Data::BasecallerTraceHistogramConfig& traceConfig)
+void TraceHistogramAccumDevice::Configure(const Data::BasecallerTraceHistogramConfig& histConfig,
+                                          const Data::AnalysisConfig& analysisConfig)
 {
     StaticConfig config;
 
-    config.binSizeCoeff_ = traceConfig.BinSizeCoeff;
+    config.movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
+    config.binSizeLowBoundCoeff_ = histConfig.BinSizeLowBoundCoeff;
+
+    config.binSizeCoeff_ = histConfig.BinSizeCoeff;
     PBLOG_INFO << "TraceHistogramAccumulator: BinSizeCoeff = "
                << config.binSizeCoeff_ << '.';
 
-    config.baselineStatMinFrameCount_ = traceConfig.BaselineStatMinFrameCount;
+    config.baselineStatMinFrameCount_ = histConfig.BaselineStatMinFrameCount;
     PBLOG_INFO << "TraceHistogramAccumulator: BaselineStatMinFrameCount = "
                << config.baselineStatMinFrameCount_ << '.';
 
-    config.fallBackBaselineSigma_ = traceConfig.FallBackBaselineSigma;
+    config.fallBackBaselineSigma_ = histConfig.FallBackBaselineSigma;
     PBLOG_INFO << "TraceHistogramAccumulator: FallBackBaselineSigma = "
                << config.fallBackBaselineSigma_ << '.';
 
     CudaRawCopyToSymbol(&staticConfig, &config, sizeof(StaticConfig));
 }
-
 
 void TraceHistogramAccumDevice::AddBatchImpl(const Data::TraceBatch<DataType>& traces,
                                              const TraceHistogramAccumulator::PoolDetModel& detModel)

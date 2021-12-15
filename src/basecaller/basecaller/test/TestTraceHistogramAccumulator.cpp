@@ -41,6 +41,7 @@
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 #include "SpeedTestToggle.h"
@@ -144,12 +145,12 @@ class Histogram : public testing::TestWithParam<TestTypes>
     using Profiler = ScopedProfilerChain<Profiles>;
 public:
 
-    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& config)
+    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& histConfig, const Data::AnalysisConfig& anlyConfig)
     {
         switch (GetParam())
         {
         case TestTypes::TraceHistogramAccumHost:
-            TraceHistogramAccumHost::Configure(config);
+            TraceHistogramAccumHost::Configure(histConfig, anlyConfig);
             break;
         case TestTypes::DeviceGlobalInterleaved:
         case TestTypes::DeviceGlobalContig:
@@ -157,7 +158,7 @@ public:
         case TestTypes::DeviceSharedContigCoopWarps:
         case TestTypes::DeviceSharedContig2DBlock:
         case TestTypes::DeviceSharedInterleaved2DBlock:
-            TraceHistogramAccumDevice::Configure(config);
+            TraceHistogramAccumDevice::Configure(histConfig, anlyConfig);
             break;
         }
     }
@@ -323,7 +324,9 @@ TEST_P(Histogram, ResetFromStats)
 
     TestConfig testConfig;
     const auto& histConfig = testConfig.histConfig;
-    ConfigureHists(histConfig);
+
+    Data::AnalysisConfig anlyConfig;
+    ConfigureHists(histConfig, anlyConfig);
 
     const uint32_t numLanes = 2;
     Data::BaselinerMetrics metrics(numLanes,

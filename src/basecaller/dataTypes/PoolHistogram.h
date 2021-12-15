@@ -27,7 +27,7 @@ struct LaneHistogram
     // nBins(snr, bsc, xsn) = (snr + 4(1 + sqrt(1 + snr + xsn*snr^2))) / bsc,
     // where bsc = binSizeCoeff, and xsn = excess noise CV.
     // In practice, the value will probably be determined somewhat empirically.
-    static constexpr unsigned int numBins = 300;
+    static constexpr uint32_t numBins = 300;
 
     /// The lower bound of the lowest bin.
     Array<DataT> lowBound;
