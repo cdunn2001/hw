@@ -99,7 +99,7 @@ inline void ValidateConfig<BasecallerTraceHistogramConfig>(const BasecallerTrace
 
     if (config.BinSizeLowBoundCoeff < 0.0f)
     {
-        results->AddError("BinSizeLowBoundCoeff must be positive.");
+        results->AddError("BinSizeLowBoundCoeff must be non-negative.");
     }
 }
 
