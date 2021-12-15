@@ -96,6 +96,46 @@ __device__ const AnalogMode& Analog(int i)
 
 static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 
+__device__ void UpdateModeTo(const ZmwAnalogMode& from,
+                             ZmwAnalogMode& to,
+                             float fraction)
+{
+    const float a = fraction;
+    const float b = 1 - fraction;
+    to.mean = a * from.mean + b * to.mean;
+    to.var  = a * from.var  + b * to.var;
+}
+
+__device__ void UpdateModeTo(const ZmwDetectionModel& from,
+                             ZmwDetectionModel& to,
+                             float fraction)
+{
+    UpdateModeTo(from.baseline, to.baseline, fraction);
+    for (int i = 0; i < to.numAnalogs; ++i)
+    {
+        UpdateModeTo(from.analogs[i], to.analogs[i], fraction);
+    }
+}
+
+__device__ void UpdateModeTo(const ZmwDetectionModel& from,
+                         ZmwDetectionModel& to)
+{
+    float toConfidence = 0;
+    assert (from.confidence >= 0.0f);
+    assert (toConfidence >= 0.0f);
+
+    const auto confSum = from.confidence + toConfidence;
+    const float fraction = confSum > 0.0f ? from.confidence / confSum: 0.f;
+
+    assert (fraction >= 0.0f);
+    assert (fraction <= 1.0f);
+    //assert ((fraction > 0) | (confSum == Confidence())));
+
+    UpdateModeTo(from, to, fraction);
+    // TODO no confidence stored in LaneModelParamters
+    //Confidence(confSum);
+}
+
 // Functions to Move data from a Zmw based structure to the appropriate slot in
 // a lane-based structure
 template <int low>
@@ -558,7 +598,6 @@ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
     return cf;
 }
 
-
 // TODO this code replicates host stat accumulator for float and PBHalf2 below
 __device__ float Mean(const StatAccumState& stats)
 {
@@ -577,20 +616,13 @@ __device__ float Variance(const StatAccumState& stats)
     var = max(var, 0.0f);
 
     const float nan = std::numeric_limits<float>::quiet_NaN();
-    return Blend(stats.moment0[threadIdx.x] > 1.0f, var, nan);
+    return stats.moment0[threadIdx.x] > 1.0f ? var : nan;
 };
 
-
 __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
-                               const LaneDetModel& ldm,
                                ZmwDetectionModel* model)
 {
     assert(model != nullptr);
-
-    if (threadIdx.x % 2 == 0)
-        model->Assign<0>(ldm, threadIdx.x/2);
-    else
-        model->Assign<1>(ldm, threadIdx.x/2);
 
     float nBlFrames   = blStatAccState.baselineStats.moment0[threadIdx.x];
     float totalFrames = blStatAccState.fullAutocorrState.basicStats.moment0[threadIdx.x];
@@ -602,8 +634,8 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     ZmwAnalogMode& m0blm = model->baseline;
     const StatAccumState& blsa  = blStatAccState.baselineStats;
 
-    auto blMean = Blend(mask, Mean(blsa), m0blm.mean);
-    auto blVar  = Blend(mask, Variance(blsa), m0blm.var);
+    auto blMean = mask ? Mean(blsa)     : m0blm.mean;
+    auto blVar  = mask ? Variance(blsa) : m0blm.var;
 
     auto& detectionModes = model->analogs;
 
@@ -634,48 +666,37 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     model->confidence = conf;
 }
 
-
 // Use the trace histogram and the input detection model to compute a new
 // estimate for the detection model. Mix the new estimate with the input
 // model, weighted by confidence scores. That result is returned in detModel.
 __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
                                      const BaselinerStatAccumState& blStatAccState,
-                                     LaneDetModel* laneDetModel)
+                                     LaneDetModel* detModel)
 {
     // TODO: Evolve model. Use trace autocorrelation to adjust confidence
     // half-life.
-
-    assert(laneDetModel != nullptr);
-
-    LaneDetModel detModel = *laneDetModel;
+    assert(detModel != nullptr);
 
     ZmwDetectionModel model0;
     if (threadIdx.x%2 == 0)
-        model0.Assign<0>(detModel, threadIdx.x/2);
+        model0.Assign<0>(*detModel, threadIdx.x/2);
     else
-        model0.Assign<1>(detModel, threadIdx.x/2);
+        model0.Assign<1>(*detModel, threadIdx.x/2);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     ZmwDetectionModel model1;
-    PrelimEstimate(blStatAccState, detModel, &model1);
-
     if (threadIdx.x%2 == 0)
-        UpdateTo<0>(model1, detModel, threadIdx.x/2);
+        model1.Assign<0>(*detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(model1, detModel, threadIdx.x/2);
+        model1.Assign<1>(*detModel, threadIdx.x/2);
+    
+    PrelimEstimate(blStatAccState, &model1);
 
-    if (threadIdx.x%2 == 0)
-        model0.Assign<0>(detModel, threadIdx.x/2);
-    else
-        model0.Assign<1>(detModel, threadIdx.x/2);
+    UpdateModeTo(model1, model0);
 
     // Make a working copy of the detection model.
-    ZmwDetectionModel workModel;
-    if (threadIdx.x % 2 == 0)
-        workModel.Assign<0>(detModel, threadIdx.x/2);
-    else
-        workModel.Assign<1>(detModel, threadIdx.x/2);
+    ZmwDetectionModel workModel = model0;
 
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.baseline;
@@ -1109,10 +1130,13 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     //    }
 
     // Blend the estimate into the output model.
+    UpdateModeTo(workModel, model0);
+
+    // Transcribe results back into model
     if (threadIdx.x%2 == 0)
-        UpdateTo<0>(workModel, *laneDetModel, threadIdx.x/2);
+        UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(workModel, *laneDetModel, threadIdx.x/2);
+        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
@@ -1137,11 +1161,11 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     auto& blStats = stats[blockIdx.x];
     auto& model = models[blockIdx.x];
 
-    auto& blsa = blStats.baselineStats;
+    const auto& blsa = blStats.baselineStats;
     const auto& basicStats = blStats.fullAutocorrState.basicStats;
 
     // TODO this code replicates host stat accumulator
-    auto Mean_ = [](const auto& stats) -> PBHalf2
+    auto half2Mean = [](const auto& stats) -> PBHalf2
     {
         return { stats.moment1[threadIdx.x*2]/stats.moment0[threadIdx.x*2],
                  stats.moment1[threadIdx.x*2+1]/stats.moment0[threadIdx.x*2+1]
@@ -1150,7 +1174,7 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
 
     /// The unbiased sample variance of the aggregated samples.
     /// NaN if Count() < 2.
-    auto Variance_ = [](const auto& stats) -> PBHalf2
+    auto half2Variance = [](const auto& stats) -> PBHalf2
     {
         const PBHalf2 nan = std::numeric_limits<float>::quiet_NaN();
         const PBHalf2 mom0 { stats.moment0[2*threadIdx.x], stats.moment0[2*threadIdx.x+1]};
@@ -1163,8 +1187,8 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         return Blend(mom0 > 1.0f, var, nan);
     };
 
-    const PBHalf2& blMean =  Mean_(blsa);
-    const PBHalf2& blVar  = Variance_(blsa);
+    const PBHalf2& blMean =  half2Mean(blsa);
+    const PBHalf2& blVar  = half2Variance(blsa);
     const PBHalf2 blWeight = {
         blsa.moment0[2*threadIdx.x] / basicStats.moment0[2*threadIdx.x],
         blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]

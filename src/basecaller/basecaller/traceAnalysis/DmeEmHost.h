@@ -138,15 +138,15 @@ private:    // Static functions
                       const LaneDetModelHost& modelEst);
 
 private:    // Functions
-    LaneDetModelHost PrelimEstimate(const BlStatAccState& accState, 
-                                    const LaneDetModel &model) const;
+    void PrelimEstimate(const BlStatAccState& blStatAccState,
+                        LaneDetModelHost *model) const;
 
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateModel(const LaneHist& blHist,
-                       const BlStatAccState& accState,
-                       LaneDetModel* model) const;
+    void EstimateLaneDetModel(const LaneHist& blHist,
+                              const BlStatAccState& blAccState,
+                              LaneDetModel* model) const;
 
 
 
