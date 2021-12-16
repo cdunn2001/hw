@@ -109,6 +109,7 @@ private:    // Static data
 
     static float analogMixFracThresh0_;
     static float analogMixFracThresh1_;
+    static float scaleSnrConfTol_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
     static bool iterToLimit_;

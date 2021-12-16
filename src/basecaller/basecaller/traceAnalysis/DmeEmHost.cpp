@@ -74,14 +74,15 @@ float DmeEmHost::fixedBaselineVar_ = 0;
 
 float DmeEmHost::analogMixFracThresh0_ = numeric_limits<float>::quiet_NaN();
 float DmeEmHost::analogMixFracThresh1_ = numeric_limits<float>::quiet_NaN();
+float DmeEmHost::scaleSnrConfTol_      = 1.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
-float DmeEmHost::gTestFactor_ = 1.0f;
-bool DmeEmHost::iterToLimit_ = false;
-float DmeEmHost::pulseAmpRegCoeff_ = 0.0f;
-float DmeEmHost::snrDropThresh_ = 1.0f;
-float DmeEmHost::snrThresh0_ = 0.0f;
-float DmeEmHost::snrThresh1_ = 0.0f;
-float DmeEmHost::successConfThresh_ = 0.0f;
+float DmeEmHost::gTestFactor_          = 1.0f;
+bool DmeEmHost::iterToLimit_           = false;
+float DmeEmHost::pulseAmpRegCoeff_     = 0.0f;
+float DmeEmHost::snrDropThresh_        = 1.0f;
+float DmeEmHost::snrThresh0_           = 0.0f;
+float DmeEmHost::snrThresh1_           = 0.0f;
+float DmeEmHost::successConfThresh_    = 0.0f;
 
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
@@ -112,14 +113,15 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Log settings.
     analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
-    emIterLimit_ = dmeConfig.EmIterationLimit;
-    gTestFactor_ = dmeConfig.GTestStatFactor;
-    iterToLimit_ = dmeConfig.IterateToLimit;
-    pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
-    snrDropThresh_ = dmeConfig.SnrDropThresh;
-    snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
-    snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
-    successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
+    scaleSnrConfTol_      = dmeConfig.ScaleSnrConfTol;
+    emIterLimit_          = dmeConfig.EmIterationLimit;
+    gTestFactor_          = dmeConfig.GTestStatFactor;
+    iterToLimit_          = dmeConfig.IterateToLimit;
+    pulseAmpRegCoeff_     = dmeConfig.PulseAmpRegularization;
+    snrDropThresh_        = dmeConfig.SnrDropThresh;
+    snrThresh0_           = dmeConfig.MinAnalogSnrThresh0;
+    snrThresh1_           = dmeConfig.MinAnalogSnrThresh1;
+    successConfThresh_    = dmeConfig.SuccessConfidenceThresh;
 }
 
 
@@ -519,7 +521,8 @@ DmeEmHost::FloatVec
 DmeEmHost::PrelimScaleFactor(const LaneDetModelHost& model,
                              const UHistType& hist)
 {
-    using std::max;  using std::min;
+    using std::max;
+    using std::min;
     using std::sqrt;
 
     // Define a fractile that includes all of the background and half of the pulse frames.
@@ -542,16 +545,13 @@ DmeEmHost::PrelimScaleFactor(const LaneDetModelHost& model,
     }
     avgSignalMean /= static_cast<float>(numAnalogs);
 
-    auto scaleFactor = hist.Fractile(fractile) / avgSignalMean;
+    // Moderate scaling by the clamped model confidence
+    const FloatVec w = satlin<FloatVec>(0, scaleSnrConfTol_, model.Confidence());
+    FloatVec scaleFactor = hist.Fractile(fractile) / avgSignalMean;
+    scaleFactor = (1.0f - w) * scaleFactor + w;
 
-    // Moderate scaling by the clamped confidence.
-    const auto cc = min(model.Confidence(), 1.0f);
-    scaleFactor = (1.0f - cc) * scaleFactor + cc;
-
-    // Make sure that scaleFactor > 0.
-    scaleFactor = max(scaleFactor, 0.1f);
-
-    return scaleFactor;
+    // Clamp the scale factor to a "reasonable" size
+    return min(max(scaleFactor, 0.1f), 10.0f);
 }
 
 

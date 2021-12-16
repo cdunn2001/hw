@@ -88,6 +88,14 @@ public:
     PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
             std::vector<float>({ 0.02f / 3, 0.02f }));
 
+    // If the confidence of the initial model for the core DME EM algorithm
+    // is less than ScaleSnrConfTol, its SNR will be scaled toward a
+    // fractile of the frame data that estimates the average pulse signal
+    // level of the analogs.
+    // Value must be positive.
+    // Used only by DmeMonochrome.
+    PB_CONFIG_PARAM(float, ScaleSnrConfTol, 1.0f);
+
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
 
