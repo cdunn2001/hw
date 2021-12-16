@@ -193,10 +193,10 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (histAccumOpt_)
     {
     case Data::BasecallerTraceHistogramConfig::MethodName::Host:
-        TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig);
+        TraceHistogramAccumHost::Configure(bcConfig.traceHistogramConfig, analysisConfig);
         break;
     case Data::BasecallerTraceHistogramConfig::MethodName::Gpu:
-        TraceHistogramAccumDevice::Configure(bcConfig.traceHistogramConfig);
+        TraceHistogramAccumDevice::Configure(bcConfig.traceHistogramConfig, analysisConfig);
         break;
     default:
         ostringstream msg;

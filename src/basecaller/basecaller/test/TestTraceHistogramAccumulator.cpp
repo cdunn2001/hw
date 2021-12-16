@@ -41,6 +41,7 @@
 #include <common/cuda/memory/ManagedAllocations.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
+#include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerTraceHistogramConfig.h>
 
 #include "SpeedTestToggle.h"
@@ -144,12 +145,12 @@ class Histogram : public testing::TestWithParam<TestTypes>
     using Profiler = ScopedProfilerChain<Profiles>;
 public:
 
-    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& config)
+    static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& histConfig, const Data::AnalysisConfig& anlyConfig)
     {
         switch (GetParam())
         {
         case TestTypes::TraceHistogramAccumHost:
-            TraceHistogramAccumHost::Configure(config);
+            TraceHistogramAccumHost::Configure(histConfig, anlyConfig);
             break;
         case TestTypes::DeviceGlobalInterleaved:
         case TestTypes::DeviceGlobalContig:
@@ -157,7 +158,7 @@ public:
         case TestTypes::DeviceSharedContigCoopWarps:
         case TestTypes::DeviceSharedContig2DBlock:
         case TestTypes::DeviceSharedInterleaved2DBlock:
-            TraceHistogramAccumDevice::Configure(config);
+            TraceHistogramAccumDevice::Configure(histConfig, anlyConfig);
             break;
         }
     }
@@ -165,16 +166,18 @@ public:
     static bool PerfTestsEnabled()
     { return SpeedTestToggle::Enabled(); }
 
+    Histogram()
+        : resetMem_{Memory::SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                                    AllocatorMode::CUDA)}
+    {}
+
     // Sets up things for performance monitoring, and creates an RAII functor
     // to tear it down again at the end of the test.
     PacBio::Utilities::Finally SetupPerfMonitoring()
     {
-        Memory::SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
         monitorPerf_ = true;
 
         return PacBio::Utilities::Finally([](){
-            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::CUDA);
-            Memory::SetGlobalAllocationMode(CachingMode::DISABLED, AllocatorMode::MALLOC);
             Profiler::FinalReport();
         });
     }
@@ -300,7 +303,10 @@ private:
         PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                             PacketLayout::INT16,
                             {params.lanesPerPool, params.framesPerBlock, laneSize});
-        DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+        auto caching = monitorPerf_ ? CacheMode::GLOBAL_CACHE : CacheMode::DISABLED;
+        DataSourceBase::Configuration sourceConfig(layout,
+                                                   CreatePinnedAllocator(SOURCE_MARKER(),
+                                                                         caching));
         sourceConfig.numFrames = params.numFrames;
 
         BinData(hists, stash, std::move(sourceConfig), simConfig, std::move(generator), params);
@@ -308,6 +314,7 @@ private:
 
     // Is the current test monitoring performance?
     bool monitorPerf_ = false;
+    PacBio::Utilities::Finally resetMem_;
 };
 
 
@@ -317,7 +324,9 @@ TEST_P(Histogram, ResetFromStats)
 
     TestConfig testConfig;
     const auto& histConfig = testConfig.histConfig;
-    ConfigureHists(histConfig);
+
+    Data::AnalysisConfig anlyConfig;
+    ConfigureHists(histConfig, anlyConfig);
 
     const uint32_t numLanes = 2;
     Data::BaselinerMetrics metrics(numLanes,

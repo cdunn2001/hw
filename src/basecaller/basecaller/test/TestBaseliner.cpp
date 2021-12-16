@@ -105,7 +105,7 @@ TEST(TestHostNoOpBaseliner, Run)
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                         PacketLayout::INT16,
                         {lanesPerPool, batchConfig.framesPerChunk, laneSize});
-    DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+    DataSourceBase::Configuration sourceConfig(layout, CreatePinnedAllocator(SOURCE_MARKER()));
     SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
     sourceConfig.numFrames = simConfig.NumFrames();
 
@@ -263,7 +263,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
                             {lanesPerPool, batchConfig.framesPerChunk, laneSize});
         size_t numFrames = numBlocks * batchConfig.framesPerChunk;
         SimulatedDataSource::SimConfig simConfig(laneSize, numFrames);
-        DataSourceBase::Configuration sourceConfig(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+        DataSourceBase::Configuration sourceConfig(layout, CreatePinnedAllocator(SOURCE_MARKER()));
         sourceConfig.numFrames = numFrames;
         auto generator = std::make_unique<PicketFenceGenerator>(pfConfig);
         source = std::make_unique<SimulatedDataSource>(

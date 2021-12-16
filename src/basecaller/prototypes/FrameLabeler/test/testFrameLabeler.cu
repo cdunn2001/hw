@@ -79,7 +79,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     }();
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, {lanesPerPool, blockLen, laneSize});
-    DataSourceBase::Configuration cfg(layout, CreateAllocator(AllocatorMode::CUDA, SOURCE_MARKER()));
+    DataSourceBase::Configuration cfg(layout, CreatePinnedAllocator(SOURCE_MARKER()));
 
     TraceReplication trcConfig;
     trcConfig.traceFile = traceFile;

@@ -56,7 +56,8 @@ enum class DeviceHistogramTypes
 class TraceHistogramAccumDevice : public TraceHistogramAccumulator
 {
 public:
-    static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig);
+    static void Configure(const Data::BasecallerTraceHistogramConfig& sigConfig,
+                          const Data::AnalysisConfig&);
 
     TraceHistogramAccumDevice(unsigned int poolId,
                              unsigned int poolSize,

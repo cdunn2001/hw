@@ -133,9 +133,11 @@ public:
         }
 
         auto devices = PacBio::Cuda::CudaAllGpuDevices();
-        if(devices.size() == 0)
+        bool usesGpu = config_.algorithm.ComputingMode() != BasecallerAlgorithmConfig::ComputeMode::PureHost;
+        if(devices.size() == 0 && usesGpu)
         {
-            throw PBException("No CUDA devices available on this computer");
+            throw PBException("No CUDA devices available on this computer. "
+                              "Did you mean to use --config=system.analyzerHardware=Host?");
         }
         PBLOG_INFO << "Found " << devices.size() << " CUDA devices";
         int idevice = 0;
@@ -157,25 +159,16 @@ public:
 
     void Run()
     {
-        SetGlobalAllocationMode(CachingMode::ENABLED,
-                                (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
-                                ? AllocatorMode::MALLOC
-                                : AllocatorMode::CUDA);
-        EnableHostCaching(AllocatorMode::MALLOC);
-        EnableHostCaching(AllocatorMode::SHARED_MEMORY_HUGE_CUDA);
+        const bool pureHost = config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost;
+        // resetMem is a `Finally` object, that will return the memory settings to the default
+        // at the end of scope (which will prevent potential issues during static teardown)
+        auto resetMem = SetGlobalAllocationMode(CacheMode::GLOBAL_CACHE,
+                                                pureHost
+                                                ? AllocatorMode::MALLOC
+                                                : AllocatorMode::CUDA);
 
         RunAnalyzer();
         Join();
-
-        // Go ahead and free up all our allocation pools, though we
-        // don't strictly need to do this as they can clean up after
-        // themselves.  Still, there are currently some outstanding
-        // static lifetime issues that can affect *other* allocations
-        // that live past the end of main, so for now this is just
-        // a way to be explicit and encourage the practice of manually
-        // getting rid of any static lifetime allocations before main
-        // ends
-        DisableAllCaching();
     }
 
     const SmrtBasecallerConfig& Config() const
@@ -195,26 +188,27 @@ private:
                             PacketLayout::INT16,
                             layoutDims);
 
-        const auto mode = config_.source.Visit(
-            [&](const TraceReanalysis& config)
+        auto allo = config_.source.Visit(
+            [&](const auto& config)
             {
+                using Config_t = std::decay_t<decltype(config)>;
+                static_assert(std::is_same_v<Config_t, TraceReanalysis>
+                              || std::is_same_v<Config_t, TraceReplication>);
+
                 return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
-                       ? AllocatorMode::MALLOC
-                       : AllocatorMode::CUDA;
-            },
-            [&](const TraceReplication& config)
-            {
-                return (config_.algorithm.ComputingMode() == BasecallerAlgorithmConfig::ComputeMode::PureHost)
-                       ? AllocatorMode::MALLOC
-                       : AllocatorMode::CUDA;
+                    ? CreateMallocAllocator(config_.source.GetEnum().toString(),
+                                            CacheMode::GLOBAL_CACHE)
+                    : CreatePinnedAllocator(config_.source.GetEnum().toString(),
+                                            CacheMode::GLOBAL_CACHE);
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
-                return AllocatorMode::SHARED_MEMORY_HUGE_CUDA;
+                return CreateSharedHugePinnedAllocator(config_.source.GetEnum().toString(),
+                                                       WXIPCDataSource::CreateAllocator(wx2SourceConfig),
+                                                       CacheMode::PRIVATE_CACHE);
             }
         );
 
-        auto allo = CreateAllocator(mode, AllocationMarker(config_.source.GetEnum().toString()));
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 

@@ -49,10 +49,12 @@ class TraceHistogramAccumHost : public TraceHistogramAccumulator
 {
 public:     // Types
     using TraceElementType = Data::BaselinedTraceElement;
+    using FloatVec = LaneArray<float>;
 
 public:     // Static functions
 
-    static void Configure(const Data::BasecallerTraceHistogramConfig& traceConfig);
+    static void Configure(const Data::BasecallerTraceHistogramConfig& traceConfig,
+                          const Data::AnalysisConfig&);
 
     static float BinSizeCoeff()
     { return binSizeCoeff_; }
@@ -92,6 +94,8 @@ private: // Static data
     static float binSizeCoeff_;
     static unsigned int baselineStatMinFrameCount_;
     static float fallBackBaselineSigma_;
+    static float movieScaler_;  // photoelectronSensitivity gain factor
+    static float binSizeLowBoundCoeff_;
 
 private:    // Data
     AlignedVector<Data::UHistogramSimd<LaneArray<HistDataType>, LaneArray<HistCountType>>> hist_;

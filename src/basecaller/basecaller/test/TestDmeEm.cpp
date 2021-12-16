@@ -69,7 +69,7 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
 {
     PB_CONFIG(TestConfig);
 
-    PB_CONFIG_OBJECT(Data::BasecallerTraceHistogramConfig, traceConfig);
+    PB_CONFIG_OBJECT(Data::BasecallerTraceHistogramConfig, histConfig);
     PB_CONFIG_OBJECT(Data::BasecallerDmeConfig, dmeConfig);
 
     PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
@@ -391,7 +391,7 @@ private:
         }
 
         // Configure and fill the histogram.
-        TraceHistogramAccumHost::Configure(testConfig.traceConfig);
+        TraceHistogramAccumHost::Configure(testConfig.histConfig, analysisConfig);
         TraceHistogramAccumHost tha{poolId, poolSize};
         tha.Reset(stats);
         tha.AddBatch(traces, pdm);

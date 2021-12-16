@@ -68,15 +68,13 @@ __global__ void SpinKernel(uint64_t duration, DeviceView<T>)
 //       orchestrated below
 struct StreamMonitor : public ::testing::Test
 {
-    void SetUp() override
-    {
-        SetGlobalAllocationMode(CachingMode::ENABLED, AllocatorMode::CUDA);
-    }
+    StreamMonitor()
+        : resetMem_(SetGlobalAllocationMode(CacheMode::PRIVATE_CACHE,
+                                            AllocatorMode::CUDA))
+    {}
 
-    void TearDown() override
-    {
-        Memory::DisableAllCaching();
-    }
+private:
+    PacBio::Utilities::Finally resetMem_;
 };
 
 
