@@ -201,7 +201,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost model1(*detModel);
+    LaneDetModelHost model1 = model0;
     PrelimEstimate(blStatAccState, &model1);
 
     // TODO: Until further works completed, this update causes unit test failures

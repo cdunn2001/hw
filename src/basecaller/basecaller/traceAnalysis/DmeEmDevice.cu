@@ -106,9 +106,9 @@ __device__ void UpdateModeTo(const ZmwAnalogMode& from,
     to.var  = a * from.var  + b * to.var;
 }
 
-__device__ void UpdateModeTo(const ZmwDetectionModel& from,
-                             ZmwDetectionModel& to,
-                             float fraction)
+__device__ void UpdateModelTo(const ZmwDetectionModel& from,
+                              ZmwDetectionModel& to,
+                              float fraction)
 {
     UpdateModeTo(from.baseline, to.baseline, fraction);
     for (int i = 0; i < to.numAnalogs; ++i)
@@ -117,8 +117,8 @@ __device__ void UpdateModeTo(const ZmwDetectionModel& from,
     }
 }
 
-__device__ void UpdateModeTo(const ZmwDetectionModel& from,
-                         ZmwDetectionModel& to)
+__device__ void UpdateModelTo(const ZmwDetectionModel& from,
+                              ZmwDetectionModel& to)
 {
     float toConfidence = 0;
     assert (from.confidence >= 0.0f);
@@ -131,7 +131,7 @@ __device__ void UpdateModeTo(const ZmwDetectionModel& from,
     assert (fraction <= 1.0f);
     //assert ((fraction > 0) | (confSum == Confidence())));
 
-    UpdateModeTo(from, to, fraction);
+    UpdateModelTo(from, to, fraction);
     // TODO no confidence stored in LaneModelParamters
     //Confidence(confSum);
 }
@@ -685,15 +685,11 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    ZmwDetectionModel model1;
-    if (threadIdx.x%2 == 0)
-        model1.Assign<0>(*detModel, threadIdx.x/2);
-    else
-        model1.Assign<1>(*detModel, threadIdx.x/2);
+    ZmwDetectionModel model1 = model0;
     
     PrelimEstimate(blStatAccState, &model1);
 
-    UpdateModeTo(model1, model0);
+    UpdateModelTo(model1, model0);
 
     // Make a working copy of the detection model.
     ZmwDetectionModel workModel = model0;
@@ -1130,13 +1126,13 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     //    }
 
     // Blend the estimate into the output model.
-    UpdateModeTo(workModel, model0);
+    UpdateModelTo(workModel, model0);
 
     // Transcribe results back into model
     if (threadIdx.x%2 == 0)
-        UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
+        UpdateTo<0>(model0, *detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
+        UpdateTo<1>(model0, *detModel, threadIdx.x/2);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
