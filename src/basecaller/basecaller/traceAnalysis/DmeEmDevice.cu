@@ -686,7 +686,6 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     ZmwDetectionModel model1 = model0;
-    
     PrelimEstimate(blStatAccState, &model1);
 
     UpdateModelTo(model1, model0);
@@ -1125,14 +1124,11 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     //        this->dmeDumpCollector_->CollectRawEstimate1D(*dtbs.front(), hist, dmeDx, *workModel);
     //    }
 
-    // Blend the estimate into the output model.
-    UpdateModelTo(workModel, model0);
-
     // Transcribe results back into model
     if (threadIdx.x%2 == 0)
-        UpdateTo<0>(model0, *detModel, threadIdx.x/2);
+        UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(model0, *detModel, threadIdx.x/2);
+        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
