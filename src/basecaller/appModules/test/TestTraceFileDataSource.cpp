@@ -147,11 +147,11 @@ TEST(TraceFileDataSourceMisc, Replication)
     EXPECT_EQ(source.NumZmw(), numZmw);
     EXPECT_EQ(source.NumFrames(), numFrames);
     EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
-    const size_t ip = source.ImagePsfMatrix().shape()[0]/1;
+    const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
     EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
                     expMetadata.chipInfo.imagePsf[ip][ip]);
     EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
-    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/1;
+    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
     EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
                     expMetadata.chipInfo.xtalkCorrection[cf][cf]);
     EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
@@ -244,11 +244,11 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
     const auto& expMetadata = MockExperimentData();
 
     EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
-    const size_t ip = source.ImagePsfMatrix().shape()[0]/1;
+    const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
     EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
                     expMetadata.chipInfo.imagePsf[ip][ip]);
     EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
-    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/1;
+    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
     EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
                     expMetadata.chipInfo.xtalkCorrection[cf][cf]);
     EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
@@ -360,11 +360,11 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
 
     {
         EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
-        const size_t ip = source.ImagePsfMatrix().shape()[0]/1;
+        const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
         EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
                         expMetadata.chipInfo.imagePsf[ip][ip]);
         EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
-        const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/1;
+        const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
         EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
                         expMetadata.chipInfo.xtalkCorrection[cf][cf]);
         EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
