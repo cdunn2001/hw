@@ -68,10 +68,7 @@ public:
                    const std::vector<uint32_t>& holeNumbers,
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                    const std::vector<uint32_t>& batchIds,
-                   const boost::multi_array<float,2>& imagePsf,
-                   const boost::multi_array<float,2>& crossTalk,
-                   const Sensor::Platform& platform,
-                   const std::string& instrumentName,
+                   const TraceFile::ScanData::Data& experimentMetadata,
                    const Mongo::Data::AnalysisConfig& analysisConfig);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
@@ -90,12 +87,7 @@ private:
                            const std::vector<uint32_t>& batchIds,
                            const Mongo::Data::AnalysisConfig& analysisConfig);
 
-    void PopulateScanData(size_t numFrames,
-                          const boost::multi_array<float,2>& imagePsf,
-                          const boost::multi_array<float,2>& crossTalk,
-                          const Sensor::Platform& platform,
-                          const std::string& instrumentName,
-                          const Mongo::Data::AnalysisConfig& analysisConfig);
+    void PopulateScanData(const TraceFile::ScanData::Data& experimentMetadata);
 
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
     PacBio::DataSource::PacketLayout packetLayout_;

@@ -324,10 +324,68 @@ private:
         throw PBException("No repacker exists that can handle the provided PacketLayouts");
     }
 
+    ScanData::Data CreateExperimentMetadata(const DataSourceRunner& dataSource, const AnalysisConfig& analysisConfig)
+    {
+        ScanData::Data expMetadata;
+
+        auto& runInfo = expMetadata.runInfo;
+        runInfo.platformId = ScanData::RunInfoData::ToPlatformId(dataSource.Platform());
+        runInfo.instrumentName = dataSource.InstrumentName();
+        // FIXME: Stub in a default HQRFMethod for now. This should eventually go away
+        // or be renamed and moved elsewhere.
+        runInfo.hqrfMethod = "N2";
+
+        auto& acqParams = expMetadata.acqParams;
+        acqParams.aduGain = analysisConfig.movieInfo.photoelectronSensitivity;
+        acqParams.frameRate = analysisConfig.movieInfo.frameRate;
+        acqParams.numFrames = dataSource.NumFrames();
+
+        // FIXME: For running on Sequel, the chip layout name is needed here.
+        // We want to eventually move to storing directly into the trace file the
+        // chip layout information.
+        constexpr std::string_view defaultLayoutName = "KestrelPOCRTO3";
+
+        auto& chipInfo = expMetadata.chipInfo;
+        chipInfo.layoutName = defaultLayoutName;
+        chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
+        const auto& imagePsf = dataSource.ImagePsfMatrix();
+        chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
+        chipInfo.imagePsf = imagePsf;
+        const auto& crossTalk = dataSource.CrosstalkFilterMatrix();
+        chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
+        chipInfo.xtalkCorrection = crossTalk;
+
+        auto& dyeSet = expMetadata.dyeSet;
+        const size_t numAnalogs = analysisConfig.movieInfo.analogs.size();
+        dyeSet.numAnalog = static_cast<uint16_t>(numAnalogs);
+        dyeSet.relativeAmp.resize(numAnalogs);
+        dyeSet.excessNoiseCV.resize(numAnalogs);
+        dyeSet.ipdMean.resize(numAnalogs);
+        dyeSet.pulseWidthMean.resize(numAnalogs);
+        dyeSet.pw2SlowStepRatio.resize(numAnalogs);
+        dyeSet.ipd2SlowStepRatio.resize(numAnalogs);
+        dyeSet.baseMap = "";
+        for (size_t i = 0; i < numAnalogs; i++)
+        {
+            const auto& am = analysisConfig.movieInfo.analogs[i];
+            dyeSet.relativeAmp[i] = am.relAmplitude;
+            dyeSet.excessNoiseCV[i] = am.excessNoiseCV;
+            dyeSet.ipdMean[i] = am.interPulseDistance;
+            dyeSet.pulseWidthMean[i] = am.pulseWidth;
+            dyeSet.pw2SlowStepRatio[i] = am.pw2SlowStepRatio;
+            dyeSet.ipd2SlowStepRatio[i] = am.ipd2SlowStepRatio;
+            dyeSet.baseMap += am.baseLabel;
+        }
+
+        expMetadata.acquisitionXML = "ADD_ME";
+
+        return expMetadata;
+    }
 
     std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
                                                                          const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                                                         const AnalysisConfig& analysisConfig)
+                                                                         const AnalysisConfig& analysisConfig,
+                                                                         const ScanData::Data& experimentMetadata)
     {
         if (outputTrcFileName_ != "")
         {
@@ -440,10 +498,7 @@ private:
                                                     holeNumbers,
                                                     properties,
                                                     batchIds,
-                                                    dataSource.ImagePsfMatrix(),
-                                                    dataSource.CrosstalkFilterMatrix(),
-                                                    dataSource.Platform(),
-                                                    dataSource.InstrumentName(),
+                                                    experimentMetadata,
                                                     analysisConfig);
         }
         else
@@ -469,7 +524,7 @@ private:
 
     std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                   const AnalysisConfig& analysisConfig)
+                   const ScanData::Data& experimentMetadata)
     {
         if (hasBazFile_)
         {
@@ -508,7 +563,7 @@ private:
                                                    zmwInfo,
                                                    poolDims,
                                                    config_,
-                                                   analysisConfig);
+                                                   experimentMetadata);
         } else
         {
             return std::make_unique<NoopBazWriterBody>();
@@ -539,14 +594,16 @@ private:
             auto repacker = CreateRepacker(source->PacketLayouts(), source->NumZmw());
             auto poolDims = repacker->BatchLayouts();
 
+            auto experimentData = CreateExperimentMetadata(*source, analysisConfig);
+
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
-            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig), GraphProfiler::SAVE_TRACE);
+            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
-                preHQ->AddNode(CreateBazSaver(*source, poolDims, analysisConfig), GraphProfiler::BAZWRITER);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
