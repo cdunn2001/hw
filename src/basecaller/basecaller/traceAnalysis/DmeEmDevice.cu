@@ -681,7 +681,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     if (threadIdx.x%2 == 0)
         model0.Assign<0>(*detModel, threadIdx.x/2);
     else
-        model0.Assign<1>(*detModel, threadIdx.x/2 + 1);
+        model0.Assign<1>(*detModel, threadIdx.x/2);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
@@ -1128,7 +1128,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     if (threadIdx.x%2 == 0)
         UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(workModel, *detModel, threadIdx.x/2 + 1);
+        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
