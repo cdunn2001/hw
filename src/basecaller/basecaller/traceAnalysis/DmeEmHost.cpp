@@ -168,7 +168,7 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     assert(model->DetectionModes().size() == numAnalogs); // simpler for loop below
 
     // Rescale
-    auto scale = sqrt(blVar / m0blm.SignalCovar());
+    const auto scale = sqrt(blVar / m0blm.SignalCovar());
 
     for (size_t i = 0; i < numAnalogs; ++i)
     {
@@ -201,14 +201,14 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost model1 = model0;
-    PrelimEstimate(blStatAccState, &model1);
+    LaneDetModelHost workModel = model0;
+    PrelimEstimate(blStatAccState, &workModel);
 
     // TODO: Until further works completed, this update causes unit test failures
-    // model0.Update(model1);
+    // model0.Update(workModel);
 
     // Make a working copy of the detection model.
-    LaneDetModelHost workModel = model0;
+    workModel = model0;
 
     // EstimateFiniteMixture below
     // The term "mode" refers to a component of the mixture model.

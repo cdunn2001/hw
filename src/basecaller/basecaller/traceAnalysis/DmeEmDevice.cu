@@ -96,7 +96,7 @@ __device__ const AnalogMode& Analog(int i)
 
 static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 
-__device__ void UpdateModeTo(const ZmwAnalogMode& from,
+__device__ void UpdateTo(const ZmwAnalogMode& from,
                              ZmwAnalogMode& to,
                              float fraction)
 {
@@ -106,18 +106,18 @@ __device__ void UpdateModeTo(const ZmwAnalogMode& from,
     to.var  = a * from.var  + b * to.var;
 }
 
-__device__ void UpdateModelTo(const ZmwDetectionModel& from,
+__device__ void UpdateTo(const ZmwDetectionModel& from,
                               ZmwDetectionModel& to,
                               float fraction)
 {
-    UpdateModeTo(from.baseline, to.baseline, fraction);
+    UpdateTo(from.baseline, to.baseline, fraction);
     for (int i = 0; i < to.numAnalogs; ++i)
     {
-        UpdateModeTo(from.analogs[i], to.analogs[i], fraction);
+        UpdateTo(from.analogs[i], to.analogs[i], fraction);
     }
 }
 
-__device__ void UpdateModelTo(const ZmwDetectionModel& from,
+__device__ void UpdateTo(const ZmwDetectionModel& from,
                               ZmwDetectionModel& to)
 {
     float toConfidence = 0;
@@ -131,7 +131,7 @@ __device__ void UpdateModelTo(const ZmwDetectionModel& from,
     assert (fraction <= 1.0f);
     //assert ((fraction > 0) | (confSum == Confidence())));
 
-    UpdateModelTo(from, to, fraction);
+    UpdateTo(from, to, fraction);
     // TODO no confidence stored in LaneModelParamters
     //Confidence(confSum);
 }
@@ -624,9 +624,9 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
 {
     assert(model != nullptr);
 
-    float nBlFrames   = blStatAccState.baselineStats.moment0[threadIdx.x];
-    float totalFrames = blStatAccState.fullAutocorrState.basicStats.moment0[threadIdx.x];
-    float blWeight    = max(nBlFrames / totalFrames, 0.01f);
+    const float nBlFrames   = blStatAccState.baselineStats.moment0[threadIdx.x];
+    const float totalFrames = blStatAccState.fullAutocorrState.basicStats.moment0[threadIdx.x];
+    const float blWeight    = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
     float nBaselineMin(2.0f);
@@ -681,17 +681,17 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     if (threadIdx.x%2 == 0)
         model0.Assign<0>(*detModel, threadIdx.x/2);
     else
-        model0.Assign<1>(*detModel, threadIdx.x/2);
+        model0.Assign<1>(*detModel, threadIdx.x/2 + 1);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    ZmwDetectionModel model1 = model0;
-    PrelimEstimate(blStatAccState, &model1);
+    ZmwDetectionModel workModel = model0;
+    PrelimEstimate(blStatAccState, &workModel);
 
-    UpdateModelTo(model1, model0);
+    UpdateTo(workModel, model0);
 
     // Make a working copy of the detection model.
-    ZmwDetectionModel workModel = model0;
+    workModel = model0;
 
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.baseline;
@@ -1128,14 +1128,14 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     if (threadIdx.x%2 == 0)
         UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
+        UpdateTo<1>(workModel, *detModel, threadIdx.x/2 + 1);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
-                               Cuda::Memory::DeviceView<const BaselinerStatAccumState> accStates,
+                               Cuda::Memory::DeviceView<const BaselinerStatAccumState> blStatsState,
                                Cuda::Memory::DeviceView<LaneDetModel> models)
 {
-    EstimateLaneDetModel(hists[blockIdx.x], accStates[blockIdx.x], &models[blockIdx.x]);
+    EstimateLaneDetModel(hists[blockIdx.x], blStatsState[blockIdx.x], &models[blockIdx.x]);
 }
 
 
