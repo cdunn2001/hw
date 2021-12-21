@@ -34,23 +34,21 @@
 // Programmer: Armin Töpfer
 
 #include <iostream>
-#include <memory>
 #include <string>
 
 #include <pacbio/process/OptionParser.h>
 
 #include <bazio/BazCore.h>
-#include <bazio/BazReader.h>
-#include <bazio/SimulateConfigs.h>
+#include <bazio/file/FileHeaderBuilder.h>
+
 #include <BazVersion.h>
 
 #include "Simulation.h"
+#include "SimulateConfigs.h"
 #include "SimulationFromFasta.h"
 
 using namespace PacBio::Primary;
 using namespace PacBio::Primary::Postprimary;
-
-static const std::string EXPERIMENT_METADATA = generateExperimentMetadata();
 
 // Entry point
 int main(int argc, char* argv[])
@@ -102,11 +100,6 @@ int main(int argc, char* argv[])
         .set_default(66)
         .dest("chunks")
         .help("Chunks per movie. Default: %default");
-    groupOpt.add_option("-l","--layout")
-        .set_default("SequEL_4.0_RTO3")
-        .dest("chiplayout")
-        .help("Chip layout name. Default: %default")
-        .metavar("STRING");
     groupOpt.add_option("-r").action_store_true().dest("rtal").help("RTAL BAZ layout.");
     groupOpt.add_option("-p").action_store_true().dest("internal").help("Internal pulse mode.");
     groupOpt.add_option("-n").action_store_true().dest("noMetrics").help("No metrics mode.");
@@ -126,9 +119,9 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    std::string chipLayoutName = options["chiplayout"];
-
-    std::string basecallerConfig = generateBasecallerConfig(chipLayoutName);
+    bool internal = static_cast<bool>(options.get("internal"));
+    std::string basecallerConfig = generateBasecallerConfig(internal);
+    std::string experimentMetadata = generateExperimentMetadata();
 
     // Set #zmw
     size_t zmws = (int)options.get("zmws");
@@ -138,46 +131,49 @@ int main(int argc, char* argv[])
         for (size_t z = 0; z < zmws; z++) zmwNumbers.push_back(z);
     }
 
+    using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
+
+    constexpr uint32_t framesPerMetricBlock = 4096;
     if ((int)options.get("sizeBases") > 0)
     {
-        std::vector<uint32_t> dummyNumbers(zmws);
-        std::vector<uint32_t> emptyList;
+        uint32_t frames = (int)options.get("sizeBases");
 
-        uint32_t frames = (int)options.get("sizeBases") ;
-        FileHeaderBuilder fhb("m00001_052415_013000", 80.0, frames,
-                              PacBio::SmrtData::Readout::BASES_WITHOUT_QVS,
+        FileHeaderBuilder fhb("m00001_052415_013000", 100.0, frames,
+                              PacBio::BazIO::ProductionPulses::Params(),
                               PacBio::SmrtData::MetricsVerbosity::MINIMAL,
-                              EXPERIMENT_METADATA,
+                              experimentMetadata,
                               basecallerConfig,
-                              dummyNumbers,
-                              emptyList,
-                              1024,4096,16384);
+                              Simulation::SimulateZmwInfo(zmwNumbers),
+                              framesPerMetricBlock, framesPerMetricBlock, framesPerMetricBlock,
+                              FileHeaderBuilder::Flags().RealTimeActivityLabels(true));
 
-        std::cerr << "BAZ size: "
-            << fhb.ExpectedFileByteSize(2.5)
-            << std::endl;
+        PBLOG_ERROR << "Expected file size based on file header not yet implemented!";
+
+//        std::cerr << "BAZ size: "
+//            << fhb.ExpectedFileByteSize(2.5)
+//            << std::endl;
         return 0;
     }
     if ((int)options.get("sizePulses") > 0)
     {
         std::vector<uint32_t> dummyNumbers(zmws);
         std::vector<uint32_t> emptyList;
-        uint32_t frames = (int)options.get("sizePulses") ;
+        uint32_t frames = (int)options.get("sizePulses");
 
-        FileHeaderBuilder fhb("m00001_052415_013000", 80, frames,
-                               PacBio::SmrtData::Readout::PULSES,
-                               PacBio::SmrtData::MetricsVerbosity::HIGH,
-                               EXPERIMENT_METADATA,
-                               basecallerConfig,
-                               dummyNumbers,
-                               emptyList,
-                               1024,4096,16384,
-                               FileHeaderBuilder::Flags()
-                                    .RealTimeActivityLabels(true));
+        FileHeaderBuilder fhb("m00001_052415_013000", 100.0f, frames,
+                              PacBio::BazIO::InternalPulses::Params() ,
+                              PacBio::SmrtData::MetricsVerbosity::HIGH,
+                              experimentMetadata,
+                              basecallerConfig,
+                              Simulation::SimulateZmwInfo(zmwNumbers),
+                              framesPerMetricBlock, framesPerMetricBlock, framesPerMetricBlock,
+                              FileHeaderBuilder::Flags().RealTimeActivityLabels(true));
 
-        std::cerr << "BAZ size: "
-                << fhb.ExpectedFileByteSize(2.5)
-                << std::endl;
+        PBLOG_ERROR << "Expected file size based on file header not yet implemented!";
+
+//        std::cerr << "BAZ size: "
+//                << fhb.ExpectedFileByteSize(2.5)
+//                << std::endl;
         return 0;
     }
 
@@ -214,7 +210,7 @@ int main(int argc, char* argv[])
     //    return 0;
     //}
 
-    Simulation sim(filename, chipLayoutName, zmwNumbers, zmws, bps, seconds, chunks, silent);
+    Simulation sim(filename, zmwNumbers, zmws, bps, seconds, chunks, silent);
     sim.Summarize((bool)options.get("summarize"));
 
     if (fasta.empty())
@@ -241,9 +237,7 @@ int main(int argc, char* argv[])
     else
     {
         using PacBio::SmrtData::Readout;
-        Readout readout = Readout::BASES_WITHOUT_QVS;
-        if (static_cast<bool>(options.get("internal")))
-            readout = Readout::PULSES;
+        Readout readout = internal ? Readout::PULSES : Readout::BASES_WITHOUT_QVS;
 
         if (options.is_set_by_user("zmws"))
             SimulationFromFasta(filename, fasta, readout, silent, zmwNumbers, options.get("rtal"), (int)options.get("zmws"));

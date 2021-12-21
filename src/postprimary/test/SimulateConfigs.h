@@ -25,36 +25,10 @@
 
 #pragma once
 
-namespace PacBio {
-namespace Primary {
-
-inline std::string generateExperimentMetadata(const std::vector<float>& relamps=std::vector<float>{1, 0.946, 0.529, 0.553},
-                                              const std::string& basemap="CTAG")
+namespace PacBio::Primary::Postprimary
 {
-    std::ostringstream metadata;
-    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
-    metadata << "SequelII";
-    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
-    metadata << basemap;
-    metadata << "\",\"RelativeAmp\":";
-    metadata << "[";
-    std::string sep = "";
-    for (const auto& val : relamps)
-    {
-        metadata << sep << val;
-        sep = ",";
-    }
-    metadata << "]}}";
-    return metadata.str();
-}
 
-inline std::string generateBasecallerConfig(const std::string& pipename)
-{
-    std::ostringstream metadata;
-    metadata << "{\"algorithm\":{\"pipe\":\"";
-    metadata << pipename;
-    metadata << "\"}}";
-    return metadata.str();
-}
+std::string generateExperimentMetadata(size_t psfSize=1, size_t xtalkSize=1);
+std::string generateBasecallerConfig(bool internal=false);
 
-}}
+}

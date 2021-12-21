@@ -7,6 +7,7 @@ module load smrttools/8.0.0
 module load samtools
 module load xpath
 module load jq
+module load composer_xe/2017.4.196 # needed for simbazwriter
 module load primary-toolkit/1.0.7
 
 

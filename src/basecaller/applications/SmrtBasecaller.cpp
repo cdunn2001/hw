@@ -75,13 +75,6 @@ using namespace PacBio::Process;
 using namespace PacBio::Primary;
 using namespace PacBio::TraceFile;
 
-////////////
-// vvvv TODO This could be cleaned up.
-
-// Need a global to support CtrlC handling
-std::atomic<bool> globalHalt{false};
-
-
 // ^^^^
 ///////
 

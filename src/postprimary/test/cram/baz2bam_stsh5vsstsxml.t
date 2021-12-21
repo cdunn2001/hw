@@ -1,6 +1,6 @@
 Generate sts.xml and sts.h5
 
-  $ bazFile="/pbi/dept/primary/sim/spider/kestrel-test/prod.baz"
+  $ bazFile="/pbi/dept/primary/sim/kestrel/kestrel-test-expmetadata/prod.baz"
   $ outPrefix="MetricsTest"
   $ baz2bam -o ${outPrefix} -m $TESTDIR/data/metadata.xml ${bazFile} --silent --enableBarcodedAdapters=False
 

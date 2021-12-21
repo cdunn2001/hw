@@ -55,6 +55,10 @@ public:
     using MetricFieldName = PacBio::Primary::MetricFieldName;
     using MetricFrequency = PacBio::Primary::MetricFrequency;
 public:
+    static Json::Value ParseExperimentMetadata(const std::string& metadata);
+    static bool ValidateExperimentMetadata(const Json::Value& metadata);
+    static bool ValidateExperimentMetadata(const std::string& metadata);
+public:
     FileHeader() = default;
 
     FileHeader(const char* header, const size_t length)
@@ -207,18 +211,10 @@ public:
     { return basecallerConfig_; }
 
     const std::vector<float> RelativeAmplitudes() const
-    {
-        // Returned amplitudes are in the order given by BaseMap().
-        std::vector<float> relamps;
-        for (const auto& val : experimentMetadata_["DyeSet"]["RelativeAmp"])
-        {
-            relamps.push_back(val.asFloat());
-        }
-        return relamps;
-    }
+    { return relAmps_; }
 
     const std::string BaseMap() const
-    { return experimentMetadata_["DyeSet"]["BaseMap"].asString(); }
+    { return baseMap_; }
 
     const Json::Value ExperimentMetadata() const
     { return experimentMetadata_; }
@@ -340,6 +336,8 @@ private:
     std::string basecallerVersion_;
     std::string bazWriterVersion_;
     std::string basecallerConfig_;
+    std::vector<float> relAmps_;
+    std::string baseMap_;
     Json::Value experimentMetadata_;
 
     std::string movieName_;

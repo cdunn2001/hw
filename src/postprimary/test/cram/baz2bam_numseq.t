@@ -1,6 +1,6 @@
 Generate sts.xml
 
-  $ baz2bam -j 12 -o out -m $TESTDIR/data/metadata.xml --silent /pbi/dept/primary/sim/spider/kestrel-test/prod.baz
+  $ baz2bam -j 12 -o out -m $TESTDIR/data/metadata.xml --silent /pbi/dept/primary/sim/kestrel/kestrel-test-expmetadata/prod.baz
 
 Check for productivity, readtype, and loading
 

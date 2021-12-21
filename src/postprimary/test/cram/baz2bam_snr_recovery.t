@@ -1,7 +1,7 @@
 
 Kiwi CRF HQRF (now the default)
 
-  $ baz2bam --minSnr 3.75 -o out_crf -m $TESTDIR/data/metadata.xml /pbi/dept/primary/sim/spider/kestrel-test/prod.baz --silent --enableBarcodedAdapters=False
+  $ baz2bam --minSnr 3.75 -o out_crf -m $TESTDIR/data/metadata.xml /pbi/dept/primary/sim/kestrel/kestrel-test-expmetadata/prod.baz --silent --enableBarcodedAdapters=False
 
 Number of reads and SNRs from subreads.bam
 
