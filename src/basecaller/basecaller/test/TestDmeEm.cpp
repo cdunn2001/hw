@@ -93,6 +93,9 @@ public:
         // The simulated trace data histogram
         std::unique_ptr<TraceHistogramAccumHost> traceHistAccum;
 
+        // The simulated trace baseliner metrics
+        Data::BaselinerMetrics blMetrics;
+
         // The complete-data estimates of the model
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
@@ -103,9 +106,11 @@ public:
         CompleteData() = default;
 
         CompleteData(TraceHistogramAccumHost&& tha,
+                     Data::BaselinerMetrics&& metrics,
                      std::vector<std::unique_ptr<LaneDetectionModelHost>>&& dms,
                      std::vector<std::vector<unsigned short>>&& fm)
             : traceHistAccum{new TraceHistogramAccumHost(std::move(tha))}
+            , blMetrics{std::move(metrics)}
             , detectionModels{std::move(dms)}
             , frameMode{std::move(fm)}
         { assert(traceHistAccum->FramesAdded() == frameMode.front().size()); }
@@ -123,6 +128,22 @@ public: // Structors
     }
 
 public:
+    void Assert(const DmeEmHost::FloatVec& expected, 
+                const DmeEmHost::FloatVec& actual, 
+                const DmeEmHost::FloatVec& absErrTol,
+                const std::string& message)
+    {
+        auto exp = MakeUnion(expected);
+        auto act = MakeUnion(actual);
+        auto tol = MakeUnion(absErrTol);
+
+        for (uint32_t i = 0; i < laneSize; ++i)
+        {
+            EXPECT_NEAR(exp[i], act[i], tol[i]) << message;
+        }
+    }
+
+
     // The main test.  Ideally this should just be in the usual TEST_P macro, but we
     // need to parameterize both over type as well as value, which gtest does not make
     // easy to do.
@@ -148,12 +169,11 @@ public:
 
         // TODO: The Estimate() method currently doesn't return the DME diagnostics
         // with which further unit tests can be written to verify its contents.
-        dme->Estimate(completeData->traceHistAccum->Histogram(), &models);
+        dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
                                         Data::FrameIntervalSizeType(0));
-        const auto numFramesF = boost::numeric_cast<float>(numFrames);
 
         using PacBio::Simd::MakeUnion;
         // Check the pool detection models that should be updated for each lane.
@@ -168,32 +188,20 @@ public:
                 const auto& cdbm = completeDataModel.BaselineMode();
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
-                DmeEmHost::FloatVec absErrTol = 5.0f * sqrt(expected * (1.0f - expected) / numFramesF);
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad mixing fraction for i = " << i << '.';
-                }
+                DmeEmHost::FloatVec absErrTol = 5.0f * sqrt(expected * (1.0f - expected) / numFrames);
+                Assert(expected, result, absErrTol, "Bad mixing fraction");
 
                 // Check baseline estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad baseline mean for i = " << i << '.';
-                }
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                Assert(expected, result, absErrTol, "Bad baseline mean");
 
                 // Check baseline estimated variance.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad baseline variance for i = " << i << '.';
-                }
+                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
+                Assert(expected, result, absErrTol, "Bad baseline variance");
             }
 
             // Check detection modes.
@@ -204,38 +212,20 @@ public:
                 const auto& cdbm = completeDataModel.DetectionModes()[a];
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
-                DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFramesF));
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    if (MakeUnion(expected)[i] == 0) continue;
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad mixing fraction for analog " << a
-                                        << " for i = " << i << '.';
-                }
+                DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFrames));
+                Assert(expected, result, absErrTol, "Bad mixing fraction for analog");
 
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.1f * sqrt(cdbm.SignalCovar() / numFramesF / cdbm.Weight());
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    if (isnan(MakeUnion(expected)[i])) continue;
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad pulse mean for analog " << a
-                                        << " for i = " << i << ".";
-                }
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                Assert(expected, result, absErrTol, "Bad pulse mean for analog");
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 5.0f * sqrt(2.0f / (numFramesF * cdbm.Weight() - 1.0f)) * cdbm.SignalCovar();
-                for (unsigned int i = 0; i < laneSize; ++i)
-                {
-                    if (isnan(MakeUnion(expected)[i])) continue;
-                    EXPECT_NEAR(MakeUnion(expected)[i], MakeUnion(result)[i], MakeUnion(absErrTol)[i])
-                                        << "Bad pulse variance for analog " << a
-                                        << " for i = " << i << ".";
-                }
+                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
+                Assert(expected, result, absErrTol, "Bad pulse variance for analog");
             }
         }
     }
@@ -403,9 +393,9 @@ private:
         // Configure and fill the histogram.
         TraceHistogramAccumHost::Configure(testConfig.histConfig, analysisConfig);
         TraceHistogramAccumHost tha{poolId, poolSize};
-        tha.Reset(ctb.second);
+        tha.Reset(stats);
         tha.AddBatch(traces, pdm);
-        return CompleteData{std::move(tha), std::move(detectionModels), std::move(frameMode)};
+        return CompleteData{std::move(tha), std::move(stats), std::move(detectionModels), std::move(frameMode)};
     }
 
     void SetUp()

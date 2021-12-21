@@ -288,7 +288,7 @@ public:     // Read Access
 public: // Modify Access
     void Weight(const FloatVec& w)
     {
-        assert(all(w >= 0.0f));
+        assert(all(0.0f <= w) && all(w <= 1.0f));
         weight_ = w;
     }
 
