@@ -97,28 +97,28 @@ __device__ const AnalogMode& Analog(int i)
 static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 
 __device__ void UpdateTo(const ZmwAnalogMode& from,
-                             ZmwAnalogMode& to,
+                             ZmwAnalogMode* to,
                              float fraction)
 {
     const float a = fraction;
     const float b = 1 - fraction;
-    to.mean = a * from.mean + b * to.mean;
-    to.var  = a * from.var  + b * to.var;
+    to->mean = a * from.mean + b * to->mean;
+    to->var  = a * from.var  + b * to->var;
 }
 
 __device__ void UpdateTo(const ZmwDetectionModel& from,
-                              ZmwDetectionModel& to,
+                              ZmwDetectionModel *to,
                               float fraction)
 {
-    UpdateTo(from.baseline, to.baseline, fraction);
-    for (int i = 0; i < to.numAnalogs; ++i)
+    UpdateTo(from.baseline, &to->baseline, fraction);
+    for (int i = 0; i < to->numAnalogs; ++i)
     {
-        UpdateTo(from.analogs[i], to.analogs[i], fraction);
+        UpdateTo(from.analogs[i], &to->analogs[i], fraction);
     }
 }
 
 __device__ void UpdateTo(const ZmwDetectionModel& from,
-                              ZmwDetectionModel& to)
+                              ZmwDetectionModel *to)
 {
     float toConfidence = 0;
     assert (from.confidence >= 0.0f);
@@ -140,24 +140,24 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 // a lane-based structure
 template <int low>
 __device__ void UpdateTo(const ZmwAnalogMode& from,
-                         LaneAnalogMode<PBHalf2, 32>& to,
+                         LaneAnalogMode<PBHalf2, 32> *to,
                          int idx, float fraction)
 {
     const float a = fraction;
     const float b = 1 - fraction;
-    to.means[idx].Set<low>(a * from.mean + b * to.means[idx].Get<low>());
-    to.vars[idx].Set<low>(a * from.var + b * to.vars[idx].Get<low>());
+    to->means[idx].Set<low>(a * from.mean + b * to->means[idx].Get<low>());
+    to->vars[idx].Set<low>(a * from.var + b * to->vars[idx].Get<low>());
 }
 
 template <int low>
 __device__ void UpdateTo(const ZmwDetectionModel& from,
-                         LaneModelParameters<PBHalf2, 32>& to,
+                         LaneModelParameters<PBHalf2, 32> *to,
                          int idx, float fraction)
 {
-    UpdateTo<low>(from.baseline, to.BaselineMode(), idx, fraction);
-    for (int i = 0; i < to.numAnalogs; ++i)
+    UpdateTo<low>(from.baseline, &to->BaselineMode(), idx, fraction);
+    for (int i = 0; i < to->numAnalogs; ++i)
     {
-        UpdateTo<low>(from.analogs[i], to.AnalogMode(i), idx, fraction);
+        UpdateTo<low>(from.analogs[i], &to->AnalogMode(i), idx, fraction);
     }
     // TODO no updated boolean
     // TODO no frame interval to update
@@ -165,7 +165,7 @@ __device__ void UpdateTo(const ZmwDetectionModel& from,
 
 template <int low>
 __device__ void UpdateTo(const ZmwDetectionModel& from,
-                         LaneModelParameters<Cuda::PBHalf2, 32>& to, int idx)
+                         LaneModelParameters<Cuda::PBHalf2, 32> *to, int idx)
 {
     float toConfidence = 0;
     assert (from.confidence >= 0.0f);
@@ -688,7 +688,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     ZmwDetectionModel workModel = model0;
     PrelimEstimate(blStatAccState, &workModel);
 
-    UpdateTo(workModel, model0);
+    UpdateTo(workModel, &model0);
 
     // Make a working copy of the detection model.
     workModel = model0;
@@ -1126,9 +1126,9 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
     // Transcribe results back into model
     if (threadIdx.x%2 == 0)
-        UpdateTo<0>(workModel, *detModel, threadIdx.x/2);
+        UpdateTo<0>(workModel, detModel, threadIdx.x/2);
     else
-        UpdateTo<1>(workModel, *detModel, threadIdx.x/2);
+        UpdateTo<1>(workModel, detModel, threadIdx.x/2);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
