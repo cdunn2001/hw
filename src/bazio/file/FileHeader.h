@@ -57,7 +57,7 @@ public:
 public:
     static Json::Value ParseExperimentMetadata(const std::string& metadata);
     static bool ValidateExperimentMetadata(const Json::Value& metadata);
-    static bool ValidateExperimentMetadata(const std::string& metadata);
+
 public:
     FileHeader() = default;
 
@@ -207,7 +207,7 @@ public:
     const std::string& BazWriterVersion() const
     { return bazWriterVersion_; }
 
-    const std::string& BasecallerConfig() const
+    const Json::Value& BasecallerConfig() const
     { return basecallerConfig_; }
 
     const std::vector<float> RelativeAmplitudes() const
@@ -216,7 +216,7 @@ public:
     const std::string BaseMap() const
     { return baseMap_; }
 
-    const Json::Value ExperimentMetadata() const
+    const Json::Value& ExperimentMetadata() const
     { return experimentMetadata_; }
 
     const std::string& MovieName() const
@@ -302,14 +302,14 @@ public:
     void BazWriterVersion(const std::string& version)
     { bazWriterVersion_ = version; }
 
-    void BasecallerConfig(const std::string& config)
-    { basecallerConfig_ = config; }
-
     void MovieLengthFrames(const uint32_t movieLengthFrames)
     { movieLengthFrames_ = movieLengthFrames; }
 
     void Internal(bool internal)
     { internal_ = internal; }
+
+private:
+
 
 private:
     static const uint8_t MAGICNUMBER0 = 0x02;
@@ -335,7 +335,7 @@ private:
 
     std::string basecallerVersion_;
     std::string bazWriterVersion_;
-    std::string basecallerConfig_;
+    Json::Value basecallerConfig_;
     std::vector<float> relAmps_;
     std::string baseMap_;
     Json::Value experimentMetadata_;
@@ -375,6 +375,10 @@ private:
 
     void ParsePackets(Json::Value& root, 
                       uint32_t& packetByteSize);
+
+    Json::Value ParseBasecallerConfig(const std::string& config);
+    bool ValidateBasecallerConfig(const Json::Value& config);
+
 };
 
 }} // PacBio::BazIO

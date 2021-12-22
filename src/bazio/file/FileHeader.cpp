@@ -23,8 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-//#include <cassert>
-//#include <iostream>
+
 #include <memory>
 #include <string>
 #include <stdexcept>
@@ -32,6 +31,7 @@
 #include "FileHeader.h"
 
 #include <pacbio/logging/Logger.h>
+#include <pacbio/tracefile/ScanData.h>
 
 #include <json/reader.h>
 
@@ -41,42 +41,17 @@
 namespace PacBio {
 namespace BazIO {
 
-
 Json::Value FileHeader::ParseExperimentMetadata(const std::string& metadata)
 {
-    Json::Value experimentMetadata;
-    bool parseable = Json::Reader{}.parse(metadata, experimentMetadata);
-    if (!parseable) throw PBException("EXPERIMENT_METADATA unparseable in BAZ header!");
-
-    return experimentMetadata;
+    Json::Value value;
+    bool parseable = Json::Reader{}.parse(metadata, value);
+    if (!parseable) throw PBException("EXPERIMENT_METADATA unparseable to JSON!");
+    return value;
 }
 
 bool FileHeader::ValidateExperimentMetadata(const Json::Value& metadata)
 {
-    if (!metadata.isMember("dyeSet"))
-    {
-        PBLOG_ERROR << "Missing dyeSet information in EXPERIMENT_METADATA in BAZ header";
-        return false;
-    }
-
-    if (!metadata["dyeSet"].isMember("relativeAmp"))
-    {
-        PBLOG_ERROR << "Missing relativeAmp information in EXPERIMENT_METADATA in BAZ header";
-        return false;
-    }
-
-    if (!metadata["dyeSet"].isMember("baseMap"))
-    {
-        PBLOG_ERROR << "Missing baseMap information in EXPERIMENT_METADATA in BAZ header";
-        return false;
-    }
-
-    return true;
-}
-
-bool FileHeader::ValidateExperimentMetadata(const std::string& metadata)
-{
-    return ValidateExperimentMetadata(ParseExperimentMetadata(metadata));
+    return PacBio::TraceFile::ScanData::Data(metadata).Validate();
 }
 
 void FileHeader::Init(const char* header, const size_t length)
@@ -135,9 +110,7 @@ void FileHeader::Init(const char* header, const size_t length)
     // Parse and check experiment metadata:
     experimentMetadata_ = ParseExperimentMetadata(headerValue.get("EXPERIMENT_METADATA", Json::Value{""}).asString());
     if (!ValidateExperimentMetadata(experimentMetadata_))
-    {
-        throw PBException("Non-valid EXPERIMENT_METADATA in BAZ header!");
-    }
+        throw PBException("Non-valid EXPERIMENT_METADATA!");
 
     for (const auto& val : experimentMetadata_["dyeSet"]["relativeAmp"])
     {
@@ -149,13 +122,14 @@ void FileHeader::Init(const char* header, const size_t length)
     if (!headerValue.isMember("BASECALLER_CONFIG"))
     {
         PBLOG_WARN << "Missing BASECALLER_CONFIG in BAZ header";
-        basecallerConfig_ = "{}";
     }
     else
     {
-        basecallerConfig_ = headerValue["BASECALLER_CONFIG"].asString();
+        bool parseable = Json::Reader{}.parse(headerValue["BASECALLER_CONFIG"].asString(), basecallerConfig_);
+        if (!parseable) throw PBException("BASECALLER_CONFIG unparseable to JSON!");
+        if (basecallerConfig_.isMember("internalMode"))
+            internal_ = basecallerConfig_["internalMode"].asBool();
     }
-
 
     if (headerValue.isMember("TRUNCATED"))
         truncated_ = headerValue["TRUNCATED"].asUInt();

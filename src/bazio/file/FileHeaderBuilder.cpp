@@ -124,7 +124,7 @@ std::string FileHeaderBuilder::CreateJSON()
     header["FRAME_RATE_HZ"] = frameRateHz_;
     header["OUTPUT_LENGTH_FRAMES"] = sliceLengthFrames_;
     header["MOVIE_LENGTH_FRAMES"] = movieLengthFrames_;
-    if(FileHeader::ValidateExperimentMetadata(experimentMetadata_))
+    if(FileHeader::ValidateExperimentMetadata(FileHeader::ParseExperimentMetadata(experimentMetadata_)))
         header["EXPERIMENT_METADATA"] = experimentMetadata_;
     else
         throw PBException("Error validating experiment metadata for creating JSON file header");

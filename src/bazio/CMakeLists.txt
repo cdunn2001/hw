@@ -42,13 +42,8 @@ add_library(libBazio
         DataParsing.cpp
         DataParsing.h
         FieldType.h
-        #FileFooter.h
-        #FileFooterBuilder.h
-        #FileHeader.cpp
-        #FileHeader.h
-        #FileHeaderBuilder.h
-        #FileHeaderBuilder.cpp
-        #FileHeaderValidator.h
+        FileFooter.h
+        FileFooterBuilder.h
         MetricBlock.h
         MetricData.h
         MetricField.h

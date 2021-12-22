@@ -23,7 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
+#ifndef PACBIO_POSTPRIMARY_TEST_SIMULATE_CONFIGS_H
+#define PACBIO_POSTPRIMARY_TEST_SIMULATE_CONFIGS_H
 
 namespace PacBio::Primary::Postprimary
 {
@@ -32,3 +33,5 @@ std::string generateExperimentMetadata(size_t psfSize=1, size_t xtalkSize=1);
 std::string generateBasecallerConfig(bool internal=false);
 
 }
+
+#endif // PACBIO_POSTPRIMARY_TEST_SIMULATE_CONFIGS_H
