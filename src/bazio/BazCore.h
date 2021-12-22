@@ -40,10 +40,6 @@
 
 #include "SmartMemory.h"
 #include "FieldType.h"
-#include "FileHeader.h"
-#include "FileFooter.h"
-#include "FileHeaderBuilder.h"
-#include "FileFooterBuilder.h"
 #include "MetricBlock.h"
 #include "MetricField.h"
 #include "MetricFieldMap.h"

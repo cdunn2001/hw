@@ -4,7 +4,6 @@
 #include <utility>
 #include <vector>
 
-#include <bazio/FileHeader.h>
 #include <pacbio/primary/HQRFMethod.h>
 
 #include <postprimary/application/PpaAlgoConfig.h>

@@ -32,6 +32,8 @@
 #include <appModules/TraceSaver.h>
 #include <dataTypes/configs/AnalysisConfig.h>
 
+#include "MockExperimentData.h"
+
 using namespace PacBio::Application;
 using namespace PacBio::DataSource;
 using namespace PacBio::TraceFile;
@@ -42,16 +44,11 @@ namespace {
 
 struct GeneratedTraceInfo
 {
-    static constexpr size_t psfSize = 5;
-    static constexpr size_t xtalkSize = 7;
     std::vector<uint32_t> holeNumbers;
     std::vector<DataSourceBase::UnitCellProperties> properties;
     std::vector<uint32_t> batchIds;
-    boost::multi_array<float,2> imagePsf;
-    boost::multi_array<float,2> crossTalk;
-    PacBio::Sensor::Platform platform;
-    std::string instrumentName;
 };
+
 GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 {
     const uint32_t numLanes = 12;
@@ -94,14 +91,6 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 
     assert(params.batchIds.size() == numZmw);
 
-    params.imagePsf.resize(boost::extents[params.psfSize][params.psfSize]);
-    params.imagePsf[params.psfSize/2][params.psfSize/2] = 1.0f;
-    params.crossTalk.resize(boost::extents[params.xtalkSize][params.xtalkSize]);
-    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2] = 1.0f;
-
-    params.platform = PacBio::Sensor::Platform::Kestrel;
-    params.instrumentName = "instrument1";
-
     const size_t framesPerHdf5Chunk = 512;
     const size_t zmwsPerHdf5Chunk = laneSize;
     // Instantiate this, to force the file's creation on disk
@@ -116,10 +105,7 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
                        params.holeNumbers,
                        params.properties,
                        params.batchIds,
-                       params.imagePsf,
-                       params.crossTalk,
-                       params.platform,
-                       params.instrumentName,
+                       MockExperimentData(),
                        Data::MockAnalysisConfig());
     (void)tmp;
 
@@ -156,16 +142,20 @@ TEST(TraceFileDataSourceMisc, Replication)
 
     TraceFileDataSource source(std::move(sourceConfig), trcConfig);
 
+    const auto& expMetadata = MockExperimentData();
+
     EXPECT_EQ(source.NumZmw(), numZmw);
     EXPECT_EQ(source.NumFrames(), numFrames);
-    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
-                    params.imagePsf[params.psfSize/2][params.psfSize/2]);
-    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
-                    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
-    EXPECT_EQ(source.Platform(), params.platform);
-    EXPECT_EQ(source.InstrumentName(), params.instrumentName);
+    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
+    const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
+                    expMetadata.chipInfo.imagePsf[ip][ip]);
+    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
+    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
+                    expMetadata.chipInfo.xtalkCorrection[cf][cf]);
+    EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
+    EXPECT_EQ(source.InstrumentName(), expMetadata.runInfo.instrumentName);
 
     {
         // TraceReplication ignores the incoming hole numbers and just
@@ -250,14 +240,19 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
 
     const auto numZmw = source.NumZmw();
     EXPECT_EQ(numZmw, params.batchIds.size());
-    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
-                    params.imagePsf[params.psfSize/2][params.psfSize/2]);
-    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
-                    params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
-    EXPECT_EQ(source.Platform(), params.platform);
-    EXPECT_EQ(source.InstrumentName(), params.instrumentName);
+
+    const auto& expMetadata = MockExperimentData();
+
+    EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
+    const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
+    EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
+                    expMetadata.chipInfo.imagePsf[ip][ip]);
+    EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
+    const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
+    EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
+                    expMetadata.chipInfo.xtalkCorrection[cf][cf]);
+    EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
+    EXPECT_EQ(source.InstrumentName(), expMetadata.runInfo.instrumentName);
 
     {
         // Hole numbers should be preserved in reanalysis mode
@@ -361,15 +356,19 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
     EXPECT_NE(numZmw, params.batchIds.size());
     EXPECT_EQ(numZmw, laneSize*2);
 
+    const auto& expMetadata = MockExperimentData();
+
     {
-        EXPECT_EQ(source.ImagePsfMatrix().num_elements(), params.imagePsf.num_elements());
-        EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[params.psfSize/2][params.psfSize/2],
-                        params.imagePsf[params.psfSize/2][params.psfSize/2]);
-        EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), params.crossTalk.num_elements());
-        EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[params.xtalkSize/2][params.xtalkSize/2],
-                        params.crossTalk[params.xtalkSize/2][params.xtalkSize/2]);
-        EXPECT_EQ(source.Platform(), params.platform);
-        EXPECT_EQ(source.InstrumentName(), params.instrumentName);
+        EXPECT_EQ(source.ImagePsfMatrix().num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
+        const size_t ip = source.ImagePsfMatrix().shape()[0]/2;
+        EXPECT_FLOAT_EQ(source.ImagePsfMatrix()[ip][ip],
+                        expMetadata.chipInfo.imagePsf[ip][ip]);
+        EXPECT_EQ(source.CrosstalkFilterMatrix().num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
+        const size_t cf = source.CrosstalkFilterMatrix().shape()[0]/2;
+        EXPECT_FLOAT_EQ(source.CrosstalkFilterMatrix()[cf][cf],
+                        expMetadata.chipInfo.xtalkCorrection[cf][cf]);
+        EXPECT_EQ(source.Platform(), expMetadata.runInfo.Platform());
+        EXPECT_EQ(source.InstrumentName(), expMetadata.runInfo.instrumentName);
     }
 
     {

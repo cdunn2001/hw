@@ -1,4 +1,4 @@
-// Copyright (c) 2021, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -22,6 +22,14 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+//  Mocks experiment data for testing.
 
-#include "SimulateConfigs.h"
+#ifndef PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H
+#define PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H
 
+
+PacBio::TraceFile::ScanData::Data MockExperimentData(size_t psfSize=1, size_t xtalkSize=1);
+
+#endif // PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H

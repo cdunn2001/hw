@@ -61,10 +61,10 @@
 #include <vector>
 
 #include <bazio/BazCore.h>
-#include <bazio/SimulateConfigs.h>
 #include <bazio/Timing.h>
 #include <bazio/encoding/test/TestingPulse.h>
 
+#include "SimulateConfigs.h"
 #include "SimulationRNG.h"
 #include "SimulateWriteUtils.h"
 
@@ -103,14 +103,12 @@ public:
 
 public: // structors
     Simulation(const std::string& fileName,
-               const std::string& chipLayoutName,
                const std::vector<uint32_t>& zmwNumbers,
                const int zmws, const double bps,
                const int seconds, const int chunks, bool silent,
                bool realtimeActivityLabels=false,
                const std::vector<float>& relativeAmplitudes=std::vector<float>{1, 0.946, 0.529, 0.553})
         : fileName_(fileName)
-        , chipLayoutName_(chipLayoutName)
         , zmwNumbers_(zmwNumbers)
         , zmws_(zmws)
         , bps_(bps)
@@ -135,7 +133,6 @@ public: // structors
 private: // data
     SimulationRNG rng;
     std::string fileName_;
-    std::string chipLayoutName_;
     std::vector<uint32_t> zmwNumbers_;
     int zmws_;
     double bps_;
@@ -159,8 +156,8 @@ public:
                               (readout != Readout::PULSES)
                               ? BazIO::ProductionPulses::Params() : BazIO::InternalPulses::Params(),
                               verbosity,
-                              generateExperimentMetadata(relativeAmplitudes_, baseMap_),
-                              generateBasecallerConfig("Spider"),
+                              generateExperimentMetadata(),
+                              generateBasecallerConfig(),
                               SimulateZmwInfo(zmwNumbers_),
                               1024, // hFMetricFrames
                               4096, // mFMetricFrames

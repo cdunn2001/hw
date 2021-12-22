@@ -42,10 +42,12 @@ if(NOT TARGET ${exec})
     )
 
     target_link_libraries(libtestSequelPpa
-        libPpaBase
-        libPpaInterfaces
-        libSequelCommon1
-        libGtest
+        PUBLIC
+            libPpaBase
+            libPpaInterfaces
+            libSimBazWriter
+            libSequelCommon1
+            libGtest
     )
 
     target_link_libraries(${exec}
