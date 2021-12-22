@@ -63,7 +63,7 @@ namespace PacBio {
 namespace Primary {
 namespace Postprimary {
 
-class RuntimeMetaData;
+struct RuntimeMetaData;
 class BamProducer;
 
 static const std::string chipStatsMetaType        = "PacBio.SubreadFile.ChipStatsFile";

@@ -61,6 +61,8 @@ public:
         std::copy(data.begin(), data.end(), v.Data());
     }
 
+    virtual ~GeneratorBase() = default;
+
 protected:
     size_t BlockLen() const { return blockLen_; }
     size_t LaneWidth() const { return laneWidth_; }

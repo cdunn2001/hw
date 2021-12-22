@@ -45,7 +45,7 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     : baselineMode_ (ldm.BaselineMode())
     , updated_ (false)  // TODO: Is this right?
 {
-    static_assert(numAnalogs == ldm.numAnalogs, "Mismatch in number of analogs.");
+    static_assert(numAnalogs == LaneDetectionModel<VF2>::numAnalogs, "Mismatch in number of analogs.");
     detectionModes_.reserve(numAnalogs);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {

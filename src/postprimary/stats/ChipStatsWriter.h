@@ -289,7 +289,7 @@ private: // data
             c.XMLStream() << "<AdapterDimerFraction>" << adapterDimerFraction << "</AdapterDimerFraction>";
             c.XMLStream() << "<ShortInsertFraction>" << shortInsertFraction << "</ShortInsertFraction>";
         }},
-        {"UMY", [this](ChipStatsWriter& c, const ChipStats& stats) {
+        {"UMY", [](ChipStatsWriter& c, const ChipStats& stats) {
             // TODO: These length metrics are currently being stored as float and are derived
             // from the subread metrics that are currently being stored as double. These should
             // all be converted to unsigned ints but the blast radius is too large to address this

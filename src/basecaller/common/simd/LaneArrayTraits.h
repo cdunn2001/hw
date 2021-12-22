@@ -61,6 +61,8 @@
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 
+#include <tuple>
+
 namespace PacBio {
 namespace Simd {
 

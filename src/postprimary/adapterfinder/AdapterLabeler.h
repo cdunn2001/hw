@@ -754,14 +754,14 @@ private:
 
             // Iterate over the outputs, classify the ZMW
             float meanStemAcc = 0;
-            float meanStemLen = 0;
+            //float meanStemLen = 0;
 
             for (size_t i = 0; i < acceptedCells.size(); ++i)
             {
                 meanStemAcc += Accuracy(std::get<1>(precedingStemAlignments[i]));
-                meanStemLen += ReadLength(std::get<1>(precedingStemAlignments[i]));
+                //meanStemLen += ReadLength(std::get<1>(precedingStemAlignments[i]));
                 meanStemAcc += Accuracy(std::get<1>(postcedingStemAlignments[i]));
-                meanStemLen += ReadLength(std::get<1>(postcedingStemAlignments[i]));
+                //meanStemLen += ReadLength(std::get<1>(postcedingStemAlignments[i]));
             }
             auto numStems = precedingStemAlignments.size() + postcedingStemAlignments.size();
             float consensusAccuracy = 0.0;
@@ -776,7 +776,7 @@ private:
             if (numStems)
             {
                 meanStemAcc /= numStems;
-                meanStemLen /= numStems;
+                //meanStemLen /= numStems;
             }
             if (acceptedCells.size())
                 meanAdapterAcc /= acceptedCells.size();
@@ -1070,14 +1070,14 @@ private:
 
             // Iterate over the outputs, classify the ZMW
             float meanStemAcc = 0;
-            float meanStemLen = 0;
+            //float meanStemLen = 0;
 
             for (size_t i = 0; i < precedingStemAlignments.size(); ++i)
             {
                 meanStemAcc += Accuracy(std::get<1>(precedingStemAlignments[i]));
-                meanStemLen += ReadLength(std::get<1>(precedingStemAlignments[i]));
+                //meanStemLen += ReadLength(std::get<1>(precedingStemAlignments[i]));
                 meanStemAcc += Accuracy(std::get<1>(postcedingStemAlignments[i]));
-                meanStemLen += ReadLength(std::get<1>(postcedingStemAlignments[i]));
+                //meanStemLen += ReadLength(std::get<1>(postcedingStemAlignments[i]));
             }
             auto numStems = precedingStemAlignments.size() + postcedingStemAlignments.size();
             float consensusAccuracy = 0.0;
@@ -1093,7 +1093,7 @@ private:
             if (numStems)
             {
                 meanStemAcc /= numStems;
-                meanStemLen /= numStems;
+                //meanStemLen /= numStems;
             }
             if (loopCells.size())
                 meanLoopAcc /= loopCells.size();

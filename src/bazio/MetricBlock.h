@@ -451,7 +451,7 @@ public: // getters
     { return dmeStatus_; }
 
     ActivityLabeler::Activity ActivityLabel() const
-    { return activityLabel_; }
+    { return static_cast<ActivityLabeler::Activity>(activityLabel_); }
 
     Flt PkmidA() const
     { return pkmidA_; }
