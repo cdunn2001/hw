@@ -33,11 +33,12 @@
 #include <pacbio/smrtdata/MetricsVerbosity.h>
 #include <pacbio/logging/Logger.h>
 
+
 #include "FileHeaderBuilder.h"
 #include "RunLength.h"
 
 #include <bazio/SmartMemory.h>
-#include <bazio/FileHeaderValidator.h>
+#include <bazio/file/FileHeader.h>
 #include <bazio/MetricFieldName.h>
 #include <bazio/MetricFrequency.h>
 
@@ -123,8 +124,10 @@ std::string FileHeaderBuilder::CreateJSON()
     header["FRAME_RATE_HZ"] = frameRateHz_;
     header["OUTPUT_LENGTH_FRAMES"] = sliceLengthFrames_;
     header["MOVIE_LENGTH_FRAMES"] = movieLengthFrames_;
-    Primary::validateExperimentMetadata(experimentMetadata_);
-    header["EXPERIMENT_METADATA"] = experimentMetadata_;
+    if(FileHeader::ValidateExperimentMetadata(FileHeader::ParseExperimentMetadata(experimentMetadata_)))
+        header["EXPERIMENT_METADATA"] = experimentMetadata_;
+    else
+        throw PBException("Error validating experiment metadata for creating JSON file header");
     header["BASECALLER_CONFIG"] = basecallerConfig_;
 
     if (fileFooterOffset_ == 0)

@@ -39,6 +39,8 @@
 #include <pacbio/tracefile/TraceFile.h>
 #include <vector>
 
+#include "MockExperimentData.h"
+
 using std::vector;
 
 using namespace PacBio;
@@ -51,13 +53,6 @@ using namespace PacBio::TraceFile;
 
 const auto DefaultImagePsfSize = 5;
 const auto DefaultXtalkSize = 7;
-
-boost::multi_array<float,2> MakeUnity(size_t dimSize)
-{
-    boost::multi_array<float,2> unity(boost::extents[dimSize][dimSize]);
-    unity[dimSize/2][dimSize/2] = 1.0f;
-    return unity;
-}
 
 template <typename T>
 struct TestTraceSaver : public ::testing::Test {};
@@ -87,11 +82,6 @@ TYPED_TEST(TestTraceSaver, TestA)
     SensorSize sensorROI(0, 0, 2, laneWidth * 2, 1, 1);
     const uint64_t numSensorZmws = sensorROI.NumUnitCells();
     const uint64_t numSelectedZmws = 128;
-    boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
-    boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
-    const Platform platform = Platform::Kestrel;
-    const ScanData::RunInfoData::PlatformId platformId = ScanData::RunInfoData::ToPlatformId(platform);
-    const std::string instrumentName = "instrumentX";
 
     const uint32_t numCols = sensorROI.PhysicalCols();
     // standard alpha pattern, with the caveat that if we are generating
@@ -109,6 +99,7 @@ TYPED_TEST(TestTraceSaver, TestA)
 
     PacBio::Dev::TemporaryDirectory tmpDir;
     const std::string traceFile = tmpDir.DirName() + "/testA.trc.h5";
+    const auto& expMetadata = MockExperimentData(DefaultImagePsfSize, DefaultXtalkSize);
     {
         std::unique_ptr<GenericROI> roi = std::make_unique<RectangularROI>(0, 0, 2, laneWidth, sensorROI);
         ASSERT_EQ(roi->CountZMWs(), numSelectedZmws);
@@ -157,10 +148,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                                   holeNumbers,
                                   roiFeatures,
                                   batchIds,
-                                  imagePsf,
-                                  crossTalk,
-                                  platform,
-                                  instrumentName,
+                                  expMetadata,
                                   MockAnalysisConfig());
 
 
@@ -228,16 +216,15 @@ TYPED_TEST(TestTraceSaver, TestA)
     }
     {
         PacBio::TraceFile::TraceFile reader(traceFile);
-
-        EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), imagePsf.num_elements());
+        EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
-                        imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
-        EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
+                        expMetadata.chipInfo.imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
+        EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
-                        crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
-        EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
-        EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
+                        expMetadata.chipInfo.xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2]);
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), expMetadata.runInfo.Platform());
+        EXPECT_EQ(reader.Scan().RunInfo().platformId, expMetadata.runInfo.platformId);
+        EXPECT_EQ(reader.Scan().RunInfo().instrumentName, expMetadata.runInfo.instrumentName);
 
         boost::multi_array<TOut, 1> zmwTrace(boost::extents[numFrames]);  // read entire ZMW
         ASSERT_EQ(numFrames, zmwTrace.num_elements());
@@ -317,11 +304,8 @@ TEST(Sanity,ROI)
             k++;
         }
     }
-    boost::multi_array<float,2> imagePsf = MakeUnity(DefaultImagePsfSize);
-    boost::multi_array<float,2> crossTalk = MakeUnity(DefaultXtalkSize);
-    PacBio::Sensor::Platform platform = PacBio::Sensor::Platform::Kestrel;
-    ScanData::RunInfoData::PlatformId platformId = ScanData::RunInfoData::ToPlatformId(platform);
-    std::string instrumentName = "instrumentX";
+
+    const auto& expMetadata = MockExperimentData(DefaultImagePsfSize, DefaultXtalkSize);
 
     PacBio::Dev::TemporaryDirectory tmpDir;
     const std::string traceFileName = tmpDir.DirName() + "/testB.trc.h5";
@@ -339,23 +323,20 @@ TEST(Sanity,ROI)
                                   holeNumbers,
                                   roiFeatures,
                                   batchIds,
-                                  imagePsf,
-                                  crossTalk,
-                                  platform,
-                                  instrumentName,
+                                  expMetadata,
                                   MockAnalysisConfig());
     }
     {
         PacBio::TraceFile::TraceFile reader(traceFileName);
-        EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), imagePsf.num_elements());
+        EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
-                        imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
-        EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), crossTalk.num_elements());
+                        expMetadata.chipInfo.imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
+        EXPECT_EQ(reader.Scan().ChipInfo().xtalkCorrection.num_elements(), expMetadata.chipInfo.xtalkCorrection.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2],
-                        crossTalk[DefaultXtalkSize/2][DefaultXtalkSize/2]);
-        EXPECT_EQ(reader.Scan().RunInfo().Platform(), platform);
-        EXPECT_EQ(reader.Scan().RunInfo().platformId, platformId);
-        EXPECT_EQ(reader.Scan().RunInfo().instrumentName, instrumentName);
+                        expMetadata.chipInfo.xtalkCorrection[DefaultXtalkSize/2][DefaultXtalkSize/2]);
+        EXPECT_EQ(reader.Scan().RunInfo().Platform(), expMetadata.runInfo.Platform());
+        EXPECT_EQ(reader.Scan().RunInfo().platformId, expMetadata.runInfo.platformId);
+        EXPECT_EQ(reader.Scan().RunInfo().instrumentName, expMetadata.runInfo.instrumentName);
         EXPECT_EQ(frames, reader.Traces().NumFrames());
         const auto& holexy = reader.Traces().HoleXY();
         const auto& holeNumbers = reader.Traces().HoleNumber();

@@ -38,36 +38,6 @@ using namespace PacBio::Primary;
 using namespace PacBio::Mongo;
 using namespace PacBio::Mongo::Data;
 
-namespace {
-
-inline std::string generateExperimentMetadata(const AnalysisConfig& analysisConfig)
-{
-    // See PTSD-677
-    PBLOG_WARN << "Implementation gap: Generating fake Metadata for baz files";
-
-    std::string basemap;
-    for (const auto& analog : analysisConfig.movieInfo.analogs)
-        basemap.push_back(analog.baseLabel);
-    std::ostringstream metadata;
-    metadata << "{\"ChipInfo\":{\"LayoutName\":\"";
-    metadata << "SequelII";
-    metadata << "\"},\"DyeSet\":{\"BaseMap\":\"";
-    metadata << basemap;
-    metadata << "\",\"RelativeAmp\":";
-    metadata << "[";
-    std::string sep = "";
-    for (const auto& analog : analysisConfig.movieInfo.analogs)
-    {
-        metadata << sep << analog.relAmplitude;
-        sep = ",";
-    }
-    metadata << "]}}";
-    return metadata.str();
-}
-
-}
-
-
 namespace PacBio {
 namespace Application {
 
@@ -77,15 +47,14 @@ BazWriterBody::BazWriterBody(
         const BazIO::ZmwInfo& zmwInfo,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
-        const Mongo::Data::AnalysisConfig& analysisConfig)
+        const PacBio::TraceFile::ScanData::Data& experimentMetadata)
     : numThreads_(basecallerConfig.system.ioConcurrency)
     , numBatches_(poolDims.size())
     , multipleBazFiles_(basecallerConfig.multipleBazFiles)
     , bazName_(bazName)
 {
     const auto metricFrames = basecallerConfig.algorithm.Metrics.framesPerHFMetricBlock;
-
-    const auto& metadata = generateExperimentMetadata(analysisConfig);
+    const auto& metadata = experimentMetadata.Serialize().toStyledString();
     const auto pulseSerializationConfig = basecallerConfig.internalMode
         ? Mongo::Data::InternalPulses::Params()
         : Mongo::Data::ProductionPulses::Params();

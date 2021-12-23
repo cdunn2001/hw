@@ -34,6 +34,8 @@ namespace PacBio {
 namespace Application {
 
 using namespace PacBio::DataSource;
+using namespace PacBio::TraceFile;
+
 using namespace Mongo;
 using namespace Mongo::Data;
  
@@ -47,10 +49,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::vector<uint32_t>& holeNumbers,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                                const std::vector<uint32_t>& batchIds,
-                               const boost::multi_array<float,2>& imagePsf,
-                               const boost::multi_array<float,2>& crossTalk,
-                               const Sensor::Platform& platform,
-                               const std::string& instrumentName,
+                               const TraceFile::ScanData::Data& experimentMetadata,
                                const Mongo::Data::AnalysisConfig& analysisConfig)
     : laneSelector_(std::move(laneSelector))
     , file_(
@@ -69,7 +68,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         numFrames)
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
-    PopulateScanData(numFrames, imagePsf, crossTalk, platform, instrumentName, analysisConfig);
+    PopulateScanData(experimentMetadata);
 
     PBLOG_INFO << "TraceSaverBody created";
 }
@@ -107,65 +106,13 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
     file_.Traces().AnalysisBatch(batchIds);
 }
 
-void TraceSaverBody::PopulateScanData(size_t numFrames,
-                                      const boost::multi_array<float,2>& imagePsf,
-                                      const boost::multi_array<float,2>& crossTalk,
-                                      const Sensor::Platform& platform,
-                                      const std::string& instrumentName,
-                                      const Mongo::Data::AnalysisConfig& analysisConfig)
+void TraceSaverBody::PopulateScanData(const ScanData::Data& experimentMetadata)
 {
-    using ScanData = TraceFile::ScanData;
-
-    ScanData::RunInfoData runInfo;
-    runInfo.platformId = ScanData::RunInfoData::ToPlatformId(platform);
-    runInfo.instrumentName = instrumentName;
-    // FIXME: Stub in a default HQRFMethod for now.
-    runInfo.hqrfMethod = "N2";
-    file_.Scan().RunInfo(runInfo);
-
-    ScanData::AcqParamsData acqParams;
-    acqParams.aduGain = analysisConfig.movieInfo.photoelectronSensitivity;
-    acqParams.frameRate = analysisConfig.movieInfo.frameRate;
-    acqParams.numFrames = numFrames;
-    file_.Scan().AcqParams(acqParams);
-
-    // FIXME: For running on Sequel, the chip layout name is needed here.
-    // We want to eventually move to storing directly into the trace file the
-    // chip layout information.
-    constexpr std::string_view defaultLayoutName = "KestrelPOCRTO3";
-
-    ScanData::ChipInfoData chipInfo;
-    chipInfo.layoutName = defaultLayoutName;
-    chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
-    chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
-    chipInfo.imagePsf = imagePsf;
-    chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
-    chipInfo.xtalkCorrection = crossTalk;
-    file_.Scan().ChipInfo(chipInfo);
-
-    ScanData::DyeSetData dyeSet;
-    const size_t numAnalogs = analysisConfig.movieInfo.analogs.size();
-    dyeSet.numAnalog = static_cast<uint16_t>(numAnalogs);
-    dyeSet.relativeAmp.resize(numAnalogs);
-    dyeSet.excessNoiseCV.resize(numAnalogs);
-    dyeSet.ipdMean.resize(numAnalogs);
-    dyeSet.pulseWidthMean.resize(numAnalogs);
-    dyeSet.pw2SlowStepRatio.resize(numAnalogs);
-    dyeSet.ipd2SlowStepRatio.resize(numAnalogs);
-    dyeSet.baseMap = "";
-    for (size_t i = 0; i < numAnalogs; i++)
-    {
-        const auto& am = analysisConfig.movieInfo.analogs[i];
-        dyeSet.relativeAmp[i] = am.relAmplitude;
-        dyeSet.excessNoiseCV[i] = am.excessNoiseCV;
-        dyeSet.ipdMean[i] = am.interPulseDistance;
-        dyeSet.pulseWidthMean[i] = am.pulseWidth;
-        dyeSet.pw2SlowStepRatio[i] = am.pw2SlowStepRatio;
-        dyeSet.ipd2SlowStepRatio[i] = am.ipd2SlowStepRatio;
-        dyeSet.baseMap += am.baseLabel;
-    }
-    file_.Scan().DyeSet(dyeSet);
-
+    file_.Scan().RunInfo(experimentMetadata.runInfo);
+    file_.Scan().AcqParams(experimentMetadata.acqParams);
+    file_.Scan().ChipInfo(experimentMetadata.chipInfo);
+    file_.Scan().DyeSet(experimentMetadata.dyeSet);
+    file_.Scan().AcquisitionXML(experimentMetadata.acquisitionXML);
 }
 
 void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)

@@ -125,47 +125,100 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 }
 
 
-void DmeEmHost::EstimateImpl(const PoolHist &hist, PoolDetModel *detModel) const
+void DmeEmHost::EstimateImpl(const PoolHist &hist,
+                             const Data::BaselinerMetrics& metrics,
+                             PoolDetModel *detModelPool) const
 {
     if (fixedModel_) return;
 
     const auto& hView = hist.data.GetHostView();
-    auto dmView = detModel->GetHostView();
+    const auto blsView = metrics.baselinerStats.GetHostView();
+    auto dmView = detModelPool->GetHostView();
 
     tbb::task_arena().execute([&] {
-        tbb::parallel_for((unsigned int) {0}, PoolSize(), [&](unsigned int lane) {
-            auto& dmLane = dmView[lane];
-
-            // Convert to host-friendly data types (e.g., LaneHist-->UHistogramSimd).
-            const UHistType uhist(hView[lane]);
-            LaneDetModelHost laneDetModel(dmLane);
-
-            // Estimate parameters for this lane.
-            EstimateLaneDetModel(uhist, &laneDetModel);
-
-            // Transcribe results back into *detModel.
-            laneDetModel.ExportTo(&dmLane);
+        tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
+            // Estimate parameters transcribe results back to this lane
+            EstimateLaneDetModel(hView[l], blsView[l], &dmView[l]);
         });
     });
 }
 
-
-void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* detModel) const
+void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
+                               LaneDetModelHost *model) const
 {
-    // TODO: Evolve model. Use trace autocorrelation to adjust confidence
-    // half-life.
+    assert(model != nullptr);
 
-    const auto& numFrames = hist.TotalCount();
+    using std::max;
+    using std::min;
+    using std::sqrt;
+    using std::isfinite;
+
+    const FloatVec nBlFrames(blStatAccState.NumBaselineFrames());
+    const FloatVec totalFrames(blStatAccState.TotalFrames());
+    const FloatVec blWeight = max(nBlFrames / totalFrames, 0.01f);
+
+    // Reject baseline statistics with insufficient data
+    constexpr float nBaselineMin = 2.0f;
+    const BoolVec mask = nBlFrames >= nBaselineMin;
+    const Data::SignalModeHost<FloatVec>& m0blm = model->BaselineMode();
+    const StatAccumulator<FloatVec>& blsa = blStatAccState.baselineStats;
+
+    auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
+    auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
+    assert(all(isfinite(blMean)));
+    assert(all(isfinite(blVar)) && all(blVar > 0.0f));
+    assert(model->DetectionModes().size() == numAnalogs); // simpler for loop below
+
+    // Rescale
+    const auto scale = sqrt(blVar / m0blm.SignalCovar());
+
+    for (size_t i = 0; i < numAnalogs; ++i)
+    {
+        auto& mode = model->DetectionModes()[i];
+        const auto mean = mode.SignalMean() * scale;
+        const auto var = ModelSignalCovar(Analog(i), mean, blVar);
+
+        mode.SignalMean(mean);
+        mode.SignalCovar(var);
+        mode.Weight(0.25f*(1.0f-blWeight));
+    }
+
+    model->BaselineMode().Weight(blWeight);
+    model->BaselineMode().SignalMean(blMean);
+    model->BaselineMode().SignalCovar(blVar);
+
+    // Frame interval is not updated since it is not exported
+
+    FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBlFrames - nBaselineMin);
+    model->Confidence(conf);
+}
+
+void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
+                                     const BlStatAccState& blStatAccState,
+                                     LaneDetModel *detModel) const
+{
+    assert(detModel != nullptr);
+
+    LaneDetModelHost model0(*detModel);
+
+    // Update model based on estimate of baseline variance
+    // with confidence-weighted method
+    LaneDetModelHost workModel = model0;
+    PrelimEstimate(blStatAccState, &workModel);
+
+    // TODO: Until further works completed, this update causes unit test failures
+    // model0.Update(workModel);
 
     // Make a working copy of the detection model.
-    LaneDetModelHost workModel = *detModel;
+    workModel = model0;
 
-    // Keep a copy of the initial model.
-    const auto initModel = workModel;
-
+    // EstimateFiniteMixture below
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.BaselineMode();
     auto& pulseModes = workModel.DetectionModes();
+
+    const UHistType hist(blHist); // Host-friendly data type
+    const auto& numFrames = hist.TotalCount();
 
     // Scale the model based on fractile of the data.
     const auto scaleFactor = PrelimScaleFactor(workModel, hist);
@@ -227,7 +280,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     const FloatVec sExpect = s / scaleFactor;
 
     // sExpectWeight is the inverse of the variance of the normal prior for s.
-    const FloatVec sExpectWeight = initModel.Confidence() * pulseAmpRegCoeff_;
+    const FloatVec sExpectWeight = model0.Confidence() * pulseAmpRegCoeff_;
 
     // Log likelihood--really a posterior since we've added a prior for s.
     FloatVec logLike {numeric_limits<float>::lowest()};
@@ -494,7 +547,7 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     // Compute confidence score.
-    dmeDx.confidFactors = ComputeConfidence(dmeDx, initModel, workModel);
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, model0, workModel);
     {
         using std::min;  using std::max;
         FloatVec conf = 1.0f;
@@ -512,7 +565,10 @@ void DmeEmHost::EstimateLaneDetModel(const UHistType& hist, LaneDetModelHost* de
     //    }
 
     // Blend the estimate into the output model.
-    detModel->Update(workModel);
+    model0.Update(workModel);
+
+    // Transcribe results back into model
+    model0.ExportTo(detModel);
 }
 
 
@@ -737,17 +793,14 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     return pdm;
 }
 
-void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
                                  LaneDetModel& ldm) const
 {
-    using ElementType = typename Data::BaselinerStatAccumState::StatElement;
-    using LaneArr = LaneArray<ElementType>;
-
-    StatAccumulator<LaneArr> blsa (blStats.baselineStats);
-
-    const auto& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
-    const auto& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
-    const auto& blWeight = LaneArr(blStats.NumBaselineFrames()) / LaneArr(blStats.fullAutocorrState.basicStats.moment0);
+    const StatAccumulator<FloatVec> blsa(blStatAccState.baselineStats);
+    
+    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
+    const FloatVec& blWeight = FloatVec(blStatAccState.NumBaselineFrames()) / FloatVec(blStatAccState.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
@@ -770,12 +823,12 @@ void DmeEmHost::InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
 }
 
 // static
-LaneArray<float> DmeEmHost::ModelSignalCovar(
+DmeEmHost::FloatVec DmeEmHost::ModelSignalCovar(
         const PacBio::AuxData::AnalogMode& analog,
-        const LaneArray<float>& signalMean,
-        const LaneArray<float>& baselineVar)
+        const DmeEmHost::FloatVec& signalMean,
+        const DmeEmHost::FloatVec& baselineVar)
 {
-    LaneArray<float> r {baselineVar};
+    FloatVec r {baselineVar};
     r += signalMean * CoreDMEstimator::shotVarCoeff;
     r += pow2(signalMean * analog.excessNoiseCV);
     return r;

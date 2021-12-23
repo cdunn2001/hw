@@ -81,9 +81,6 @@ struct ZmwDetectionModel
 /// approach for model estimation that runs on the CPU (as opposed to the GPU).
 class DmeEmDevice : public CoreDMEstimator
 {
-public:     // Types
-    using LaneDetModel = Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>;
-
 public:     // Static functions
     static void Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::AnalysisConfig &analysisConfig);
@@ -94,6 +91,7 @@ public:
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
+                      const Data::BaselinerMetrics& metrics,
                       PoolDetModel* detModel) const override;
 };
 

@@ -48,7 +48,7 @@ void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
     traceMax = max(blSubtracted, traceMax);
 
     // Add frame to baseline statistics if so flagged
-    baselineStats_.AddSample(bs, isBaseline);
+    baselineSubtractedStats_.AddSample(bs, isBaseline);
     rawBaselineSum_ += Blend(isBaseline, rawTrace, LaneArray{0});
 }
 
@@ -59,7 +59,7 @@ BaselinerStatAccumulator<T>::Merge(const BaselinerStatAccumulator& other)
     baselineSubtractedCorr_.Merge(other.BaselineSubtractedStats());
     traceMin = min(traceMin, other.traceMin);
     traceMax = max(traceMax, other.traceMax);
-    baselineStats_.Merge(other.BaselineFramesStats());
+    baselineSubtractedStats_.Merge(other.BaselineFramesStats());
     rawBaselineSum_ += other.rawBaselineSum_;
     return *this;
 }
