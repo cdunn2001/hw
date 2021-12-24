@@ -234,18 +234,18 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 
     config.analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
-    config.scaleSnrConfTol_      = dmeConfig.ScaleSnrConfTol;
+    config.scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
 
-    config.emIterLimit_       = dmeConfig.EmIterationLimit;
-    config.gTestFactor_       = dmeConfig.GTestStatFactor;
-    config.iterToLimit_       = dmeConfig.IterateToLimit;
+    config.emIterLimit_ = dmeConfig.EmIterationLimit;
+    config.gTestFactor_ = dmeConfig.GTestStatFactor;
+    config.iterToLimit_ = dmeConfig.IterateToLimit;
     config.pulseAmpRegCoeff_  = dmeConfig.PulseAmpRegularization;
-    config.snrDropThresh_     = dmeConfig.SnrDropThresh;
-    config.snrThresh0_        = dmeConfig.MinAnalogSnrThresh0;
-    config.snrThresh1_        = dmeConfig.MinAnalogSnrThresh1;
+    config.snrDropThresh_ = dmeConfig.SnrDropThresh;
+    config.snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
+    config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    config.refSnr_            = movieInfo.refSnr;
-    config.movieScaler_       = movieInfo.photoelectronSensitivity;
+    config.refSnr_ = movieInfo.refSnr;
+    config.movieScaler_ = movieInfo.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }

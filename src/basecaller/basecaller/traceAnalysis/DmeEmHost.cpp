@@ -74,15 +74,15 @@ float DmeEmHost::fixedBaselineVar_ = 0;
 
 float DmeEmHost::analogMixFracThresh0_ = numeric_limits<float>::quiet_NaN();
 float DmeEmHost::analogMixFracThresh1_ = numeric_limits<float>::quiet_NaN();
-float DmeEmHost::scaleSnrConfTol_      = 1.0f;
+float DmeEmHost::scaleSnrConfTol_ = 1.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
-float DmeEmHost::gTestFactor_          = 1.0f;
-bool DmeEmHost::iterToLimit_           = false;
-float DmeEmHost::pulseAmpRegCoeff_     = 0.0f;
-float DmeEmHost::snrDropThresh_        = 1.0f;
-float DmeEmHost::snrThresh0_           = 0.0f;
-float DmeEmHost::snrThresh1_           = 0.0f;
-float DmeEmHost::successConfThresh_    = 0.0f;
+float DmeEmHost::gTestFactor_ = 1.0f;
+bool DmeEmHost::iterToLimit_ = false;
+float DmeEmHost::pulseAmpRegCoeff_ = 0.0f;
+float DmeEmHost::snrDropThresh_ = 1.0f;
+float DmeEmHost::snrThresh0_ = 0.0f;
+float DmeEmHost::snrThresh1_ = 0.0f;
+float DmeEmHost::successConfThresh_ = 0.0f;
 
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
@@ -113,15 +113,15 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Log settings.
     analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
-    scaleSnrConfTol_      = dmeConfig.ScaleSnrConfTol;
-    emIterLimit_          = dmeConfig.EmIterationLimit;
-    gTestFactor_          = dmeConfig.GTestStatFactor;
-    iterToLimit_          = dmeConfig.IterateToLimit;
-    pulseAmpRegCoeff_     = dmeConfig.PulseAmpRegularization;
-    snrDropThresh_        = dmeConfig.SnrDropThresh;
-    snrThresh0_           = dmeConfig.MinAnalogSnrThresh0;
-    snrThresh1_           = dmeConfig.MinAnalogSnrThresh1;
-    successConfThresh_    = dmeConfig.SuccessConfidenceThresh;
+    scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
+    emIterLimit_ = dmeConfig.EmIterationLimit;
+    gTestFactor_ = dmeConfig.GTestStatFactor;
+    iterToLimit_ = dmeConfig.IterateToLimit;
+    pulseAmpRegCoeff_ = dmeConfig.PulseAmpRegularization;
+    snrDropThresh_ = dmeConfig.SnrDropThresh;
+    snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
+    snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
+    successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
 }
 
 
