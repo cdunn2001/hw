@@ -40,7 +40,7 @@ namespace Basecaller {
 
 /// A simple type that bundles a few diagnostics for iterative
 /// maximum-likelihood estimation methods, including the expectation-
-/// maximization-like algorithms used in DmeMonochrome.
+/// maximization-like algorithms.
 template <typename VF>
 struct alignas(VF) MaxLikelihoodDiagnostics
 {

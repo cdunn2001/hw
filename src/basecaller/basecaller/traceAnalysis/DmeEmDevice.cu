@@ -73,6 +73,7 @@ struct StaticConfig
     CudaArray<AnalogMode, 4> analogs;
     float analogMixFracThresh0_;
     float analogMixFracThresh1_;
+    float scaleSnrConfTol_;
     unsigned short emIterLimit_;
     float gTestFactor_;
     bool iterToLimit_;
@@ -86,6 +87,16 @@ struct StaticConfig
 };
 
 __constant__ StaticConfig staticConfig;
+
+/// Saturated linear activation function.
+/// A fuzzy threshold that ramps from 0 at a to 1 at b.
+/// \returns (x - a)/(b - a) clamped to [0, 1] range.
+// TODO fix duplication?
+__device__ float satlin(float a, float b, float x)
+{
+    const auto r = (x - a) / (b - a);
+    return min(max(r, 0.f), 1.f);
+}
 
 using LaneDetModel = Data::LaneModelParameters<PBHalf2, laneSize/2>;
 
@@ -220,19 +231,21 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
         config.analogs[i].pw2SlowStepRatio = movieInfo.analogs[i].pw2SlowStepRatio;
         config.analogs[i].ipd2SlowStepRatio = movieInfo.analogs[i].ipd2SlowStepRatio;
     }
+
     config.analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
+    config.scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
 
-    config.emIterLimit_       = dmeConfig.EmIterationLimit;
-    config.gTestFactor_       = dmeConfig.GTestStatFactor;
-    config.iterToLimit_       = dmeConfig.IterateToLimit;
+    config.emIterLimit_ = dmeConfig.EmIterationLimit;
+    config.gTestFactor_ = dmeConfig.GTestStatFactor;
+    config.iterToLimit_ = dmeConfig.IterateToLimit;
     config.pulseAmpRegCoeff_  = dmeConfig.PulseAmpRegularization;
-    config.snrDropThresh_     = dmeConfig.SnrDropThresh;
-    config.snrThresh0_        = dmeConfig.MinAnalogSnrThresh0;
-    config.snrThresh1_        = dmeConfig.MinAnalogSnrThresh1;
+    config.snrDropThresh_ = dmeConfig.SnrDropThresh;
+    config.snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
+    config.snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    config.refSnr_            = movieInfo.refSnr;
-    config.movieScaler_       = movieInfo.photoelectronSensitivity;
+    config.refSnr_ = movieInfo.refSnr;
+    config.movieScaler_ = movieInfo.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(staticConfig, &config);
 }
@@ -346,16 +359,13 @@ __device__ float PrelimScaleFactor(const ZmwDetectionModel& model,
     }
     avgSignalMean /= static_cast<float>(numAnalogs);
 
+    // Moderate scaling by the clamped model confidence
+    const float w = satlin(0, staticConfig.scaleSnrConfTol_, model.confidence);
     auto scaleFactor = Fractile(hist, fractile) / avgSignalMean;
+    scaleFactor = (1.0f - w) * scaleFactor + w;
 
-    // Moderate scaling by the clamped confidence.
-    const auto cc = min(model.confidence, 1.0f);
-    scaleFactor = (1.0f - cc) * scaleFactor + cc;
-
-    // Make sure that scaleFactor > 0.
-    scaleFactor = max(scaleFactor, 0.1f);
-
-    return scaleFactor;
+    // Clamp the scale factor to a "reasonable" size
+    return min(max(scaleFactor, 0.1f), 10.0f);
 }
 
 /// Updates *detModel by increasing the amplitude of all detection modes by
@@ -492,17 +502,6 @@ Gtest(const DmeEmDevice::LaneHist& histogram, const ZmwDetectionModel& model)
 
     return {g, static_cast<float>(dof), pval};
 }
-
-/// Saturated linear activation function.
-/// A fuzzy threshold that ramps from 0 at a to 1 at b.
-/// \returns (x - a)/(b - a) clamped to [0, 1] range.
-// TODO fix duplication?
-__device__ float satlin(float a, float b, float x)
-{
-    const auto r = (x - a) / (b - a);
-    return min(max(r, 0.f), 1.f);
-}
-
 
 // Compute the confidence factors of a model estimate, given the
 // diagnostics of the estimation, a reference model.
