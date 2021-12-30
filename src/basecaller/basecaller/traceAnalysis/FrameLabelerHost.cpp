@@ -33,14 +33,15 @@
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
+#include <basecaller/traceAnalysis/SubframeScorer.h>
 #include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
-#include <prototypes/FrameLabeler/SubframeScorer.cuh>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo;
+using namespace PacBio::Mongo::Basecaller;
 using namespace PacBio::Mongo::Data;
 
 namespace {

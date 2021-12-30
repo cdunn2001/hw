@@ -29,18 +29,11 @@
 
 #include "FrameLabeler.h"
 
-#include <dataTypes/configs/ConfigForward.h>
+#include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 #include <dataTypes/BasicTypes.h>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
-
-namespace PacBio {
-namespace Cuda {
-// Forward declare of cuda type that cannot be directly included here
-// TODO prototype needs more cleaning, and should probably be renamed
-class FrameLabeler;
-
-}}
 
 namespace PacBio {
 namespace Mongo {
@@ -75,7 +68,8 @@ private:    // Customizable implementation
     Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
             const PoolModelParameters& models) override;
 
-    std::unique_ptr<Cuda::FrameLabeler> labeler_;
+    class Impl;
+    std::unique_ptr<Impl> labeler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
