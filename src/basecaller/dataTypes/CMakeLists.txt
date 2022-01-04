@@ -59,8 +59,6 @@ set(CPP_LIST
     HQRFPhysicalStates.h
     CameraTraceBatch.h
     CameraTraceBatch.cpp
-    DetectionModelHost.h
-    DetectionModelHost.cpp
     LaneDetectionModel.h
     LaneDetectionModel.cpp
     LabelsBatch.h

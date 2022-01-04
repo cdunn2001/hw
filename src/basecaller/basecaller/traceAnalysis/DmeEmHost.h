@@ -31,9 +31,9 @@
 
 #include <pacbio/auxdata/AnalogMode.h>
 #include <common/LaneArray.h>
-#include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 
+#include "DetectionModelHost.h"
 #include "CoreDMEstimator.h"
 #include "DmeDiagnostics.h"
 
