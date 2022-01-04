@@ -61,7 +61,7 @@ namespace Postprimary {
 
 using namespace PacBio::BAM;
 
-struct BamProducer
+class BamProducer
 {
 private:
     std::unique_ptr<BamWriter>          bamStream_;

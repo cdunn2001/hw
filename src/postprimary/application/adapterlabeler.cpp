@@ -158,7 +158,6 @@ int main(int argc, char** argv)
         }
 
         uint32_t totalFound = 0;
-        RegionLabel lastAdapter;
         for (const auto& read : *readList)
         {
             RegionLabel hqRegion(

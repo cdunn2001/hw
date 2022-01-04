@@ -39,9 +39,9 @@ const std::string SPLIT_EASY_FASTA      = data + "/SplitControlFilterEasyTrue.fa
 std::string controlFasta(CONTROL_FASTA);
 std::string controlAdapterFasta(CONTROL_ADAPTER_FASTA);
 auto controls = std::make_shared<std::vector<FastaEntry>>(
-        std::move(FastaUtilities::ParseSingleFastaFile(controlFasta)));
+        FastaUtilities::ParseSingleFastaFile(controlFasta));
 auto controlAdapters = std::make_shared<std::vector<FastaEntry>>(
-        std::move(FastaUtilities::ParseSingleFastaFile(controlAdapterFasta)));
+        FastaUtilities::ParseSingleFastaFile(controlAdapterFasta));
 ControlFilter controlFilter(controls, Platform::RSII, controlAdapters, false);
 ControlFilter splitControlFilter(controls, Platform::SEQUELII, controlAdapters);
 

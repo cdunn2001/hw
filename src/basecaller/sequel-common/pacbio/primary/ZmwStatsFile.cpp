@@ -161,7 +161,7 @@ ZmwStatsFile::ZmwStatsFile(const std::string& filename, uint32_t numHoles, uint3
     config.numFrames = numTimeslices * binSize;
     config.binSize = binSize;
     OpenForWrite(config, true);
-    workerThread_ = std::move(std::async(std::launch::async, [this](){ return this->WriterThread(); }));
+    workerThread_ = std::async(std::launch::async, [this](){ return this->WriterThread(); });
 }
 
 ZmwStatsFile::ZmwStatsFile(const std::string& filename, const NewFileConfig& config, bool dummyScanData)
@@ -183,7 +183,7 @@ ZmwStatsFile::ZmwStatsFile(const std::string& filename, const NewFileConfig& con
     }
 
     OpenForWrite(config, dummyScanData);
-    workerThread_ = std::move(std::async(std::launch::async, [this](){ return this->WriterThread(); }));
+    workerThread_ = std::async(std::launch::async, [this](){ return this->WriterThread(); });
 }
 
 ZmwStatsFile::~ZmwStatsFile()

@@ -37,8 +37,9 @@ namespace PacBio::Mongo::Data
 /// particular movie and is used by the basecaller as the
 /// main structure for obtaining any configuration needed for
 /// analysis.
-struct AnalysisConfig
+class AnalysisConfig
 {
+public:
     PacBio::DataSource::MovieInfo movieInfo;
 
     // The pedestal value applied upstream before any

@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
         const PbiFilterQuery bamQuery(filter, input);
 
         // Iterate over all records 
-        for (const auto record : bamQuery)
+        for (const auto& record : bamQuery)
             sv.CheckZMW(record.Sequence(), record.HoleNumber());
 
         std::cout << input << std::endl;

@@ -205,7 +205,6 @@ private:   // data
     std::unique_ptr<IPC::MessageSocketPublisher> publisher_;
 #endif
     RAIISignalHandler raiiSignalHander_;
-    double                            lastHeartbeatTime_{0.0};
     double                            currentProgress_{0};
     uint32_t                          numZmwsToProcess_{0};
 

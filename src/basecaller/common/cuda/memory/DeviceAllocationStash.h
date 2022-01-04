@@ -105,8 +105,6 @@ private:
     // and download.
     std::mutex uploadMutex_;
     std::mutex downloadMutex_;
-
-    size_t maxResidentMiB_;
 };
 
 // Helper class used to facilitate registering a StashableDeviceAllocation

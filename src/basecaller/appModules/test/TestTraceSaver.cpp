@@ -108,8 +108,8 @@ TYPED_TEST(TestTraceSaver, TestA)
                       || std::is_same_v<TOut, uint8_t>,
                       "Testing code needs an update to handle additional types");
         auto writeType = std::is_same_v<TOut, int16_t>
-            ? TraceFile::TraceDataType::INT16
-            : TraceFile::TraceDataType::UINT8;
+            ? TraceDataType::INT16
+            : TraceDataType::UINT8;
 
         std::vector<DataSourceBase::LaneIndex> lanes;
         lanes.push_back(0);  // starting at (0,0)
@@ -319,7 +319,7 @@ TEST(Sanity,ROI)
                                   std::move(blocks),
                                   framesPerHdf5Chunk, 
                                   zmwsPerHdf5Chunk,
-                                  TraceFile::TraceDataType::INT16,
+                                  TraceDataType::INT16,
                                   holeNumbers,
                                   roiFeatures,
                                   batchIds,

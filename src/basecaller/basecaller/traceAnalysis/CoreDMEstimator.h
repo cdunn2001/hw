@@ -75,6 +75,7 @@ public:     // Static constants
 
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
+    virtual ~CoreDMEstimator() = default;
 
 public:     // Functions
     /// Initialize detection models based soley on baseline variance and
@@ -85,6 +86,7 @@ public:     // Functions
     /// trace histogram.
     void Estimate(const PoolHist& hist, const Data::BaselinerMetrics& metrics, PoolDetModel* detModel) const
     {
+        assert(hist.poolId == poolId_);
         assert(detModel);
         assert(hist.data.Size() == poolSize_);
         assert(detModel->Size() == poolSize_);
