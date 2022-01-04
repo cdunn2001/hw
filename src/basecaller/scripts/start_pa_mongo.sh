@@ -15,6 +15,7 @@ NOP=${NOP:-0}
 MAXPOPLOOPS=${MAXPOPLOOPS:-10}
 TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
 LOOPBACK=${LOOPBACK:-false}
+SRA_INDEX=${SRA_INDEX:-0}  # 0 to 3
 
 # append this directory to the PATH
 scriptdir=$(dirname $(realpath $0))
@@ -101,6 +102,7 @@ cat <<HERE > $tmpjson
   {
     "WXIPCDataSourceConfig":
     {
+         "sraIndex": $SRA_INDEX,
          "dataPath": "HardLoop",
          "maxPopLoops": ${MAXPOPLOOPS},
          "simulatedFrameRate": $RATE,
@@ -173,13 +175,6 @@ HERE
 
 cat -n $tmpjson
 cat -n $acqconfig
-
-if [[ $VSC == 0 ]]
-then
-  cd ../build/x86_64/${BUILD}
-else
-  cd ../build
-fi
 
 # prepend to PATH
 if [[ $scriptdir == /opt/pacbio* ]]
