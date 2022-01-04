@@ -145,7 +145,7 @@ private:
                               internal ? BazIO::InternalPulses::Params() : BazIO::ProductionPulses::Params(),
                               metricsVerbosity,
                               generateExperimentMetadata(),
-                              generateBasecallerConfig("Spider"),
+                              generateBasecallerConfig(internal),
                               Simulation::SimulateZmwInfo(zmwNumbers_),
                               hFMetricsFrames,
                               mFMetricFrames,

@@ -44,11 +44,6 @@ add_library(libBazio
         FieldType.h
         FileFooter.h
         FileFooterBuilder.h
-        FileHeader.cpp
-        FileHeader.h
-        FileHeaderBuilder.h
-        FileHeaderBuilder.cpp
-        FileHeaderValidator.h
         MetricBlock.h
         MetricData.h
         MetricField.h

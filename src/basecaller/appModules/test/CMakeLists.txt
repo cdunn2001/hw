@@ -5,6 +5,7 @@ include(pacbio-gtest)
 
 # Define "object library" to support top-level unit test target.
 add_library(libTestAppModules OBJECT
+    MockExperimentData.cpp
     TestBlockRepacker.cpp
     TestBasecaller.cpp
     TestSimulatedDataSource.cpp

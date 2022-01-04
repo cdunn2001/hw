@@ -32,7 +32,7 @@ public:     // Structors
         : baselineSubtractedCorr_ {state.fullAutocorrState}
         , traceMin {state.traceMin}
         , traceMax {state.traceMax}
-        , baselineStats_ {state.baselineStats}
+        , baselineSubtractedStats_ {state.baselineStats}
         , rawBaselineSum_ {state.rawBaselineSum}
     { }
 
@@ -53,7 +53,7 @@ public:     // Const functions
             baselineSubtractedCorr_.GetState(),
             traceMin,
             traceMax,
-            baselineStats_.GetState(),
+            baselineSubtractedStats_.GetState(),
             rawBaselineSum_,
         };
     }
@@ -62,7 +62,7 @@ public:     // Const functions
     { return baselineSubtractedCorr_; }
 
     const StatAccumulator<FloatArray>& BaselineFramesStats() const
-    { return baselineStats_; }
+    { return baselineSubtractedStats_; }
 
     const LaneArray& TraceMin() const
     { return traceMin; }
@@ -84,7 +84,7 @@ private:
     LaneArray traceMax{std::numeric_limits<T>::lowest()};
 
     // Baseline frames statistics after baseline estimate has been subtracted
-    StatAccumulator<FloatArray> baselineStats_;
+    StatAccumulator<FloatArray> baselineSubtractedStats_;
 
     // Sum of baseline frames _prior_ to baseline subtraction
     FloatArray rawBaselineSum_{0};

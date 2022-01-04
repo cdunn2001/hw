@@ -88,6 +88,13 @@ public:
     PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
             std::vector<float>({ 0.02f / 3, 0.02f }));
 
+    // If the confidence of the initial model for the core DME EM algorithm
+    // is less than ScaleSnrConfTol, its SNR will be scaled toward a
+    // fractile of the frame data that estimates the average pulse signal
+    // level of the analogs.
+    // Value must be positive.
+    PB_CONFIG_PARAM(float, ScaleSnrConfTol, 1.0f);
+
     // Upper bound for expectation-maximization iterations.
     PB_CONFIG_PARAM(unsigned short, EmIterationLimit, 20);
 
@@ -104,20 +111,20 @@ public:
     PB_CONFIG_PARAM(bool, IterateToLimit, false);
 
     // Parameters for the fuzzy threshold for minimum analog SNR in
-    // DmeMonochrome confidence factor.
+    // confidence factor.
     // Largest SNR for which the confidence factor is 0.
     PB_CONFIG_PARAM(float, MinAnalogSnrThresh0, 2.0f);
     // Smallest SNR for which the confidence factor is 1.
     PB_CONFIG_PARAM(float, MinAnalogSnrThresh1, 4.0f);
 
     // A non-negative coefficient for the regularization term for pulse
-    // amplitude scale estimation in DmeMonochrome. This is multiplied by
+    // amplitude scale estimation. This is multiplied by
     // the confidence of the running-average model. Setting this parameter
     // to zero effectively disables the regularization.
     PB_CONFIG_PARAM(float, PulseAmpRegularization, 0.0f);
 
-    // A coefficient to scale the threshold used in DmeMonochrome to
-    // penalize the confidence if the SNR drops dramatically.
+    // A coefficient to scale the threshold to penalize the confidence if 
+    // the SNR drops dramatically.
     // The primary motive for this confidence factor is to guard against
     // registration error in the fit when there are few data representing
     // incorporation of the brightest analog in the data.
@@ -192,7 +199,7 @@ public:
     // Used only by 1C4A (Spider).
     PB_CONFIG_PARAM(float, ConfidenceHalfLifePauseEnhance, 0.0f);
 
-    // Parameters to control the DmeMonochrome confidence factor that
+    // Parameters to control the confidence factor that
     // applies a fuzzy threshold on the log of a Pearson's chi-square (PCS)
     // statistic. Both are offsets from a scale A set by the total of the
     // bin counts. If log(PCS) < A + GofLogChiSqrThresh1, the confidence

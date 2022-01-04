@@ -1,4 +1,4 @@
-  $ simbazwriter -l Spider_1p0_NTO -o gold.baz -f $TESTDIR/data/goldenSubset.fasta --silent > /dev/null 2>&1
+  $ simbazwriter -o gold.baz -f $TESTDIR/data/goldenSubset.fasta --silent > /dev/null 2>&1
   $ baz2bam gold.baz -o gold_adapter -Q $TESTDIR/data/goldenSubset.fasta -j 8 --fasta --fastq --silent --metadata=$TESTDIR/data/spider_metadata.xml --disableControlFiltering --enableBarcodedAdapters=False
   Disabling control filtering
 

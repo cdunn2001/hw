@@ -23,8 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <cassert>
-#include <iostream>
+
 #include <memory>
 #include <string>
 #include <stdexcept>
@@ -32,16 +31,28 @@
 #include "FileHeader.h"
 
 #include <pacbio/logging/Logger.h>
+#include <pacbio/tracefile/ScanData.h>
 
 #include <json/reader.h>
 
-#include <bazio/FileHeaderValidator.h>
 #include <bazio/MetricField.h>
-#include <bazio/MetricFieldMap.h>
 #include <bazio/SmartMemory.h>
 
 namespace PacBio {
 namespace BazIO {
+
+Json::Value FileHeader::ParseExperimentMetadata(const std::string& metadata)
+{
+    Json::Value value;
+    bool parseable = Json::Reader{}.parse(metadata, value);
+    if (!parseable) throw PBException("EXPERIMENT_METADATA unparseable to JSON!");
+    return value;
+}
+
+bool FileHeader::ValidateExperimentMetadata(const Json::Value& metadata)
+{
+    return PacBio::TraceFile::ScanData::Data(metadata).Validate();
+}
 
 void FileHeader::Init(const char* header, const size_t length)
 {
@@ -97,19 +108,28 @@ void FileHeader::Init(const char* header, const size_t length)
     complete_ = headerValue["COMPLETE"].asUInt();
 
     // Parse and check experiment metadata:
-    experimentMetadata_ = Primary::parseExperimentMetadata(
-            headerValue.get("EXPERIMENT_METADATA", Json::Value{""}).asString());
+    experimentMetadata_ = ParseExperimentMetadata(headerValue.get("EXPERIMENT_METADATA", Json::Value{""}).asString());
+    if (!ValidateExperimentMetadata(experimentMetadata_))
+        throw PBException("Non-valid EXPERIMENT_METADATA!");
+
+    for (const auto& val : experimentMetadata_["dyeSet"]["relativeAmp"])
+    {
+        relAmps_.push_back(val.asFloat());
+    }
+
+    baseMap_ = experimentMetadata_["dyeSet"]["baseMap"].asString();
 
     if (!headerValue.isMember("BASECALLER_CONFIG"))
     {
         PBLOG_WARN << "Missing BASECALLER_CONFIG in BAZ header";
-        basecallerConfig_ = "{}";
     }
     else
     {
-        basecallerConfig_ = headerValue["BASECALLER_CONFIG"].asString();
+        bool parseable = Json::Reader{}.parse(headerValue["BASECALLER_CONFIG"].asString(), basecallerConfig_);
+        if (!parseable) throw PBException("BASECALLER_CONFIG unparseable to JSON!");
+        if (basecallerConfig_.isMember("internalMode"))
+            internal_ = basecallerConfig_["internalMode"].asBool();
     }
-
 
     if (headerValue.isMember("TRUNCATED"))
         truncated_ = headerValue["TRUNCATED"].asUInt();

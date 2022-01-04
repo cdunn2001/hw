@@ -10,7 +10,9 @@ add_subdirectory(cram)
 
 # simbazwriter
 
-add_library(libSimBazWriter OBJECT
+add_library(libSimBazWriter STATIC
+    SimulateConfigs.h
+    SimulateConfigs.cpp
     SimulateWriteUtils.h
     SimulateWriteUtils.cpp
     Simulation.h
@@ -20,9 +22,11 @@ add_library(libSimBazWriter OBJECT
 )
 
 target_link_libraries(libSimBazWriter
-    libBazio
-    libSequelCommon1
-    libZlib
+    PUBLIC
+        libBazio
+        libSequelCommon1
+        libZlib
+        libMongoDataTypes
 )
 
 add_executable(simbazwriter
@@ -30,7 +34,7 @@ add_executable(simbazwriter
 )
 
 target_link_libraries(simbazwriter
-    PUBLIC
+    PRIVATE
         libSimBazWriter
 )
 

@@ -43,7 +43,6 @@
 #include <bazio/BazIOConfig.h>
 #include <bazio/MetricBlock.h>
 #include <bazio/FileFooterBuilder.h>
-#include <bazio/FileHeader.h>
 #include <bazio/Sanity.h>
 #include <bazio/writing/BazBuffer.h>
 #include <bazio/ZmwSliceHeader.h>

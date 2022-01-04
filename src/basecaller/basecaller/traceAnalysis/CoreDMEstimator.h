@@ -31,6 +31,7 @@
 
 #include <common/cuda/PBCudaSimd.h>
 
+#include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LaneDetectionModel.h>
@@ -82,12 +83,12 @@ public:     // Functions
 
     /// Estimate detection model parameters based on existing values and
     /// trace histogram.
-    void Estimate(const PoolHist& hist, PoolDetModel* detModel) const
+    void Estimate(const PoolHist& hist, const Data::BaselinerMetrics& metrics, PoolDetModel* detModel) const
     {
         assert(detModel);
         assert(hist.data.Size() == poolSize_);
         assert(detModel->Size() == poolSize_);
-        EstimateImpl(hist, detModel);
+        EstimateImpl(hist, metrics, detModel);
     }
 
     unsigned int PoolSize() const
@@ -101,7 +102,7 @@ private:
     unsigned int poolSize_;
 
 private:    // Customization functions
-    virtual void EstimateImpl(const PoolHist&, PoolDetModel*) const
+    virtual void EstimateImpl(const PoolHist&, const Data::BaselinerMetrics&, PoolDetModel*) const
     {
         // Do nothing.
         // Derived implementation class should update detModel.
