@@ -6,7 +6,6 @@ module purge
 module use /pbi/dept/primary/modulefiles
 module use /mnt/software/modulefiles
 module load devtoolset/8
-module load composer_xe/2017.4.196
 module load pacbio-devtools
 module load patchelf
 module load libusb/1.0.22
