@@ -19,6 +19,7 @@
 #include <basecaller/traceAnalysis/FrameLabelerHost.h>
 
 using namespace PacBio::Application;
+using namespace PacBio::Configuration;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::DataSource;
@@ -29,12 +30,21 @@ using namespace PacBio::Primary;
 
 namespace {
 
+struct TestConfig : PBConfig<TestConfig>
+{
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(BasecallerFrameLabelerConfig, labeler);
+    PB_CONFIG_PARAM(Basecaller::ComputeDevices, analyzerHardware, Basecaller::ComputeDevices::Host);
+};
+
 template <typename Labeler>
-std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& config,
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& analysisConfig,
+                                                              const BasecallerFrameLabelerConfig& labelerConfig,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
-    Labeler::Configure(config);
+    Labeler::Configure(analysisConfig, labelerConfig);
     std::vector<std::unique_ptr<FrameLabeler>> ret;
     for (size_t pool = 0; pool < numPools; ++pool)
     {
@@ -44,16 +54,19 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConf
 }
 
 std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLabelerConfig::MethodName method,
-                                                              const AnalysisConfig& config,
+                                                              const AnalysisConfig& analysisConfig,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
+    Json::Value json;
+    json["labeler"]["Method"] = method.toString();
+    TestConfig cfg{json};
     switch(method)
     {
-    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
-        return CreateAndConfigure<FrameLabelerDevice>(config, lanesPerPool, numPools);
-    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
-        return CreateAndConfigure<FrameLabelerHost>(config, lanesPerPool, numPools);
+    case BasecallerFrameLabelerConfig::MethodName::Device:
+        return CreateAndConfigure<FrameLabelerDevice>(analysisConfig, cfg.labeler, lanesPerPool, numPools);
+    case BasecallerFrameLabelerConfig::MethodName::Host:
+        return CreateAndConfigure<FrameLabelerHost>(analysisConfig, cfg.labeler, lanesPerPool, numPools);
     default:
         throw PBException("Test does not support this FrameLabeler type");
     }
@@ -213,5 +226,5 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 }
 
 INSTANTIATE_TEST_SUITE_P(somthing, FrameLabelerTest,
-                         testing::Values(BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice,
-                                         BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost));
+                         testing::Values(BasecallerFrameLabelerConfig::MethodName::Device,
+                                         BasecallerFrameLabelerConfig::MethodName::Host));

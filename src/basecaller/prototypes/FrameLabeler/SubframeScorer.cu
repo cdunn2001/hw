@@ -26,6 +26,8 @@
 
 #include "SubframeScorer.cuh"
 
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
+
 using namespace PacBio::Cuda::Utility;
 
 namespace PacBio {
@@ -35,6 +37,7 @@ namespace Subframe {
 
 template <typename T>
 TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+                                      const Data::BasecallerSubframeConfig& config,
                                       double frameRate)
 {
     // We only have access to single precision math on the host, so populate data as float for now,
@@ -99,9 +102,9 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::Analog
     };
 
     // Slurp in fudge factors from the config file
-    const auto alphaFactor = 1.0f;//config.Alpha;
-    const auto betaFactor = 1.0f;//config.Beta;
-    const auto gammaFactor = 1.0f;//config.Gamma;
+    const auto alphaFactor = config.alpha;
+    const auto betaFactor = config.beta;
+    const auto gammaFactor = config.gamma;
 
     // Precompute the probabilities of 1, 2 and 3 frame ipds after each analog
     CudaArray<CudaArray<float, 3>, numAnalogs> ipdLenProbs;

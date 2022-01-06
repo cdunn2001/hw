@@ -6,6 +6,7 @@
 #include <common/KernelThreadPool.h>
 
 #include <dataTypes/BatchData.cuh>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 #include "SubframeScorer.cuh"
 #include "FrameLabelerKernels.cuh"
@@ -54,7 +55,9 @@ void run(const Data::DataManagerParams& dataParams,
 
     const auto numBatches = dataParams.numZmwLanes / dataParams.kernelLanes;
 
-    FrameLabeler::Configure(meta, dataParams.frameRate);
+    FrameLabeler::Configure(meta,
+                            Data::BasecallerFrameLabelerConfig{},
+                            dataParams.frameRate);
     std::vector<FrameLabeler> frameLabelers;
     models.reserve(numBatches);
     frameLabelers.reserve(numBatches);

@@ -112,10 +112,10 @@ AlgoFactory::~AlgoFactory()
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Finalize();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
+    case Data::BasecallerFrameLabelerConfig::MethodName::Device:
         FrameLabelerDevice::Finalize();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
+    case Data::BasecallerFrameLabelerConfig::MethodName::Host:
         FrameLabelerHost::Finalize();
         break;
     default:
@@ -229,11 +229,11 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         FrameLabeler::Configure();
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
-        FrameLabelerDevice::Configure(analysisConfig);
+    case Data::BasecallerFrameLabelerConfig::MethodName::Device:
+        FrameLabelerDevice::Configure(analysisConfig, bcConfig.frameLabelerConfig);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
-        FrameLabelerHost::Configure(analysisConfig);
+    case Data::BasecallerFrameLabelerConfig::MethodName::Host:
+        FrameLabelerHost::Configure(analysisConfig, bcConfig.frameLabelerConfig);
         break;
     default:
         ostringstream msg;
@@ -328,10 +328,10 @@ AlgoFactory::CreateFrameLabeler(unsigned int poolId,
     case Data::BasecallerFrameLabelerConfig::MethodName::NoOp:
         return std::make_unique<FrameLabeler>(poolId);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
+    case Data::BasecallerFrameLabelerConfig::MethodName::Device:
         return std::make_unique<FrameLabelerDevice>(poolId, dims.lanesPerBatch, &registrar);
         break;
-    case Data::BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
+    case Data::BasecallerFrameLabelerConfig::MethodName::Host:
         return std::make_unique<FrameLabelerHost>(poolId, dims.lanesPerBatch);
         break;
     default:

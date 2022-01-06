@@ -36,6 +36,7 @@
 #include <common/MongoConstants.h>
 
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
@@ -88,6 +89,7 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
 
     // Ctor for host construction
     TransitionMatrix(Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+                     const Data::BasecallerSubframeConfig& config,
                      double frameRate);
 };
 

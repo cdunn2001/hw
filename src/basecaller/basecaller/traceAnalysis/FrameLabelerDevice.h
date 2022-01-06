@@ -29,7 +29,7 @@
 
 #include "FrameLabeler.h"
 
-#include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/BasicTypes.h>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
@@ -60,7 +60,8 @@ public:     // Static functions
     /// each DeviceSGCFrameLabeler instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::AnalysisConfig& analysisConfig);
+    static void Configure(const Data::AnalysisConfig& analysisConfig,
+                          const Data::BasecallerFrameLabelerConfig& labelerConfig);
     static void Finalize();
 
 public:

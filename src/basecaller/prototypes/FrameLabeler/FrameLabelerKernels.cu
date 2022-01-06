@@ -31,6 +31,8 @@
 #include <common/cuda/CudaLaneArray.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
 
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
+
 using namespace PacBio::Cuda;
 using namespace PacBio::Simd;
 using namespace PacBio::Cuda::Memory;
@@ -51,6 +53,14 @@ namespace
 // Unfortunately __constant__ variables *have* to be global.  We will initialize
 // this during the FrameLabeler::Configure function.
 __constant__ Subframe::TransitionMatrix<half> trans;
+
+struct RoiThresholds
+{
+    float upperThreshold = 0;
+    float lowerThreshold = 0;
+};
+
+__constant__ RoiThresholds roiThresh;
 
 __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
 {
@@ -337,10 +347,16 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 constexpr size_t FrameLabeler::BlockThreads;
 
 void FrameLabeler::Configure(const std::array<PacBio::AuxData::AnalogMode,4>& analogs,
+                             const BasecallerFrameLabelerConfig& config,
                              double frameRate)
 {
-    Subframe::TransitionMatrix<half> transHost(analogs, frameRate);
+    Subframe::TransitionMatrix<half> transHost(analogs, config.viterbi, frameRate);
     CudaCopyToSymbol(trans, &transHost);
+
+    RoiThresholds thresh;
+    thresh.upperThreshold = config.roi.upperThreshold;
+    thresh.lowerThreshold = config.roi.lowerThreshold;
+    CudaCopyToSymbol(roiThresh, &thresh);
 }
 
 void FrameLabeler::Finalize() {}

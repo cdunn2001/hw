@@ -38,12 +38,15 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
-void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig)
+void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig,
+                                   const Data::BasecallerFrameLabelerConfig& labelerConfig)
 {
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Cuda::FrameLabeler::Configure(analysisConfig.movieInfo.analogs, analysisConfig.movieInfo.frameRate);
+    Cuda::FrameLabeler::Configure(analysisConfig.movieInfo.analogs,
+                                  labelerConfig,
+                                  analysisConfig.movieInfo.frameRate);
 }
 
 void FrameLabelerDevice::Finalize()

@@ -221,6 +221,7 @@ public:
     // only need enough to satisfy the current active batches, not one for
     // each possible pool.
     static void Configure(const std::array<PacBio::AuxData::AnalogMode, 4>& meta,
+                          const Data::BasecallerFrameLabelerConfig& config,
                           double frameRate);
 
 public:

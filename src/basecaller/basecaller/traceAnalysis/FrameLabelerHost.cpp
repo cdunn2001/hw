@@ -34,6 +34,7 @@
 #include <common/LaneArray.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 #include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 #include <prototypes/FrameLabeler/SubframeScorer.cuh>
 
 using namespace PacBio::Cuda;
@@ -367,9 +368,10 @@ class FrameLabelerHost::Impl
 public:
 
     static void Configure(const std::array<AuxData::AnalogMode,4>& analogs,
+                          const BasecallerFrameLabelerConfig& labelerConfig,
                           double frameRate)
     {
-        trans = Subframe::TransitionMatrix<float>(analogs, frameRate);
+        trans = Subframe::TransitionMatrix<float>(analogs, labelerConfig.viterbi, frameRate);
     }
 
 public:
@@ -431,12 +433,15 @@ private:
 
 Subframe::TransitionMatrix<float> FrameLabelerHost::Impl::trans;
 
-void FrameLabelerHost::Configure(const Data::AnalysisConfig& analysisConfig)
+void FrameLabelerHost::Configure(const Data::AnalysisConfig& analysisConfig,
+                                 const Data::BasecallerFrameLabelerConfig& labelerConfig)
 {
     const auto hostExecution = true;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Impl::Configure(analysisConfig.movieInfo.analogs, analysisConfig.movieInfo.frameRate);
+    Impl::Configure(analysisConfig.movieInfo.analogs,
+                    labelerConfig,
+                    analysisConfig.movieInfo.frameRate);
 }
 
 void FrameLabelerHost::Finalize()
