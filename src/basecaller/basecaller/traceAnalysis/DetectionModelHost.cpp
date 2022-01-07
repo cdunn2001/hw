@@ -33,6 +33,8 @@
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
 
+#include "DmeEmHost.h"
+
 using PacBio::Simd::MakeUnion;
 
 namespace PacBio {
@@ -57,19 +59,132 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     //       will probably need a similar update.
 }
 
+template <typename VF>
+void DetectionModelHost<VF>::Update0(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = a * tbm.SignalCovar() + b * obm.SignalCovar();
+    tbm.SignalCovar(bv);
+
+    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+
+        VF bm = a * tdmi.SignalMean() + b * odmi.SignalMean();
+        tdmi.SignalMean(bm);
+
+        VF bv = a * tdmi.SignalCovar() + b * odmi.SignalCovar();
+        tdmi.SignalCovar(bv);
+    }
+
+    return;
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Update1(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    // Baseline mode
+    VF bw = a * tbm.Weight() + b * obm.Weight();
+    tbm.Weight(bw);
+
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = pow(tbm.SignalCovar(), a) * pow(obm.SignalCovar(), b);
+    tbm.SignalCovar(bv);
+
+    // Equally partition remaining weight among four analogs.
+    const VF aw = 0.25f * (1.0f - bw);
+
+    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+        tdmi.Weight(aw);
+
+        auto am = pow(tdmi.SignalMean(), a) * pow(odmi.SignalMean(), b);
+        tdmi.SignalMean(am);
+
+        const auto cv2 = pow2(VF(Basecaller::DmeEmHost::Analog(i).excessNoiseCV));
+        const VF av = ModelSignalCovar(cv2, am, bv);
+        tdmi.SignalCovar(av);
+    }
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Update2(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    const auto prevBlCovar = tbm.SignalCovar();
+
+    // Baseline mode
+    VF bw = a * tbm.Weight() + b * obm.Weight();
+    tbm.Weight(bw);
+
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = pow(tbm.SignalCovar(), a) * pow(obm.SignalCovar(), b);
+    tbm.SignalCovar(bv);
+
+    // Equally partition remaining weight among four analogs.
+    const VF aw = 0.25f * (1.0f - bw);
+
+    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+        tdmi.Weight(aw);
+
+        const auto tXsnCVSq = XsnCoeffCVSq(tdmi.SignalMean(), tdmi.SignalCovar(), prevBlCovar);
+        const auto oXsnCVSq = XsnCoeffCVSq(tdmi.SignalMean(), tdmi.SignalCovar(), obm.SignalCovar());
+        const auto newXsnCVSq = tXsnCVSq * a + oXsnCVSq * b;
+
+        auto am = pow(tdmi.SignalMean(), a) * pow(odmi.SignalMean(), b);
+        tdmi.SignalMean(am);
+
+        // For simplicity, using weighted sum of xsnCV^2, rather than of xsnCV 
+        const VF av = ModelSignalCovar(newXsnCVSq, am, bv);
+        tdmi.SignalCovar(av);
+    }
+
+}
 
 template <typename VF>
 DetectionModelHost<VF>&
-DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
+DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction, uint32_t updMethod)
 {
     assert (all((fraction >= 0.0f) & (fraction <= 1.0f)));
 
     const auto mask = (fraction > 0.0f);
     updated_ |= mask;
-    baselineMode_.Update(other.baselineMode_, fraction);
-    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+
+    switch (updMethod)
     {
-        detectionModes_[i].Update(other.detectionModes_[i], fraction);
+    case 0: Update0(other, fraction); break;
+    case 1: Update1(other, fraction); break;
+    case 2: Update2(other, fraction); break;
+    default: throw PBException("DetectionModel: Bad update method id.");
     }
 
     FrameInterval(other.FrameInterval());
@@ -82,7 +197,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
 
 template <typename VF>
 DetectionModelHost<VF>&
-DetectionModelHost<VF>::Update(const DetectionModelHost& other)
+DetectionModelHost<VF>::Update(const DetectionModelHost& other, uint32_t updateMethod)
 {
     assert (this->FrameInterval() == other.FrameInterval());
     assert (all(this->Confidence() >= 0.0f));
@@ -96,7 +211,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other)
     assert (all(fraction <= 1.0f));
     assert (all((fraction > 0) | (confSum == Confidence())));
 
-    Update(other, fraction);
+    Update(other, fraction, updateMethod);
     Confidence(confSum);
     return *this;
 }
@@ -113,6 +228,32 @@ void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
         detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
     }
     // TODO: What about confid_, updated_, and frameInterval_?
+}
+
+// static
+template <typename VF>
+VF DetectionModelHost<VF>::ModelSignalCovar(
+        const VF& excessNoiseCV2,
+        const VF& signalMean,
+        const VF& baselineVar)
+{
+    VF r {baselineVar};
+    r += signalMean * Basecaller::CoreDMEstimator::shotVarCoeff;
+    r += pow2(signalMean) * excessNoiseCV2;
+    return r;
+}
+
+template <typename VF>
+VF DetectionModelHost<VF>::XsnCoeffCVSq(
+        const VF& signalMean,
+        const VF& signalCovar,
+        const VF& baselineVar)
+{
+    VF r {signalCovar};
+    r -= baselineVar;
+    r -= signalMean * Basecaller::CoreDMEstimator::shotVarCoeff;
+    r -= pow2(signalMean);
+    return r;
 }
 
 template <typename VF>

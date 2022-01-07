@@ -123,8 +123,12 @@ public:
     // to zero effectively disables the regularization.
     PB_CONFIG_PARAM(float, PulseAmpRegularization, 0.0f);
 
-    // A coefficient to scale the threshold to penalize the confidence if 
-    // the SNR drops dramatically.
+    // Controls the mathematical details of the method for weighted update
+    // of DetectionModel.
+    PB_CONFIG_PARAM(unsigned int, ModelUpdateMethod, 0);
+
+    // A coefficient to scale the threshold used in DmeMonochrome to
+    // penalize the confidence if the SNR drops dramatically.
     // The primary motive for this confidence factor is to guard against
     // registration error in the fit when there are few data representing
     // incorporation of the brightest analog in the data.

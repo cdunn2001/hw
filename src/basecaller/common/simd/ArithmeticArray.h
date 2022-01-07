@@ -307,6 +307,13 @@ public: // more friend functions (not operators)
         return Derived([](auto&& x) { return x*x; }, d);
     }
 
+    friend Derived pow(const Derived& l, const Derived& r)
+    {
+        return Derived(
+            [](auto&& l2, auto&& r2){ return pow(l2, r2);},
+            l, r);
+    }
+
     friend ScalarType<T> reduceMax(const Derived& c)
     {
         auto init = std::numeric_limits<ScalarType<T>>::lowest();

@@ -34,8 +34,8 @@
 #include <dataTypes/UHistogramSimd.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
-#include "DetectionModelHost.h"
 #include "CoreDMEstimator.h"
+#include "DetectionModelHost.h"
 #include "DmeDiagnostics.h"
 
 namespace PacBio {
@@ -81,13 +81,6 @@ public:     // Static functions
 
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 
-    /// The variance for \analog signal based on model including Poisson and
-    /// "excess" noise.
-    static FloatVec ModelSignalCovar(const AuxData::AnalogMode& analog,
-                                             const FloatVec& signalMean,
-                                             const FloatVec& baselineVar);
-
-
 private:    // Functions
     void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 public:
@@ -120,6 +113,7 @@ private:    // Static data
     static float snrDropThresh_;
     static float snrThresh0_, snrThresh1_;
     static float successConfThresh_;
+    static uint32_t updateMethod_;
 
 private:    // Static functions
     // Compute a preliminary scaling factor based on a fractile statistic.

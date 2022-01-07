@@ -83,6 +83,7 @@ float DmeEmHost::snrDropThresh_ = 1.0f;
 float DmeEmHost::snrThresh0_ = 0.0f;
 float DmeEmHost::snrThresh1_ = 0.0f;
 float DmeEmHost::successConfThresh_ = 0.0f;
+uint32_t DmeEmHost::updateMethod_ = 0;
 
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
@@ -122,6 +123,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
     snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
+    updateMethod_             = dmeConfig.ModelUpdateMethod;
 }
 
 
@@ -176,7 +178,8 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     {
         auto& mode = model->DetectionModes()[i];
         const auto mean = mode.SignalMean() * scale;
-        const auto var = ModelSignalCovar(Analog(i), mean, blVar);
+        const auto cv2 = pow2(FloatVec(Analog(i).excessNoiseCV));
+        const auto var = LaneDetModelHost::ModelSignalCovar(cv2, mean, blVar);
 
         mode.SignalMean(mean);
         mode.SignalCovar(var);
@@ -513,10 +516,10 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
         // variance and the pulse mode mean.
         // Note that we've ignored these dependencies when updating the means
         // and the background variance above.
-        for (unsigned int a = 0; a < numAnalogs; ++a)
+        for (size_t i = 0; i < numAnalogs; ++i)
         {
-            const auto i = a + 1;
-            var[i] = ModelSignalCovar(Analog(a), mu[i], var[0]);
+            const auto cv2 = pow2(FloatVec(Analog(i).excessNoiseCV));
+            var[i+1] = LaneDetModelHost::ModelSignalCovar(cv2, mu[i+1], var[0]);
         }
     }
 
@@ -565,7 +568,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     //    }
 
     // Blend the estimate into the output model.
-    model0.Update(workModel);
+    model0.Update(workModel, updateMethod_);
 
     // Transcribe results back into model
     model0.ExportTo(detModel);
@@ -760,8 +763,7 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
 }
 
 // static
-void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
-                              LaneDetModelHost* detModel)
+void DmeEmHost::ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel)
 {
     assert (all(scale > 0.0f));
     const auto baselineCovar = detModel->BaselineMode().SignalCovar();
@@ -771,9 +773,9 @@ void DmeEmHost::ScaleModelSnr(const FloatVec& scale,
     {
         auto& dmi = detectionModes_[a];
         dmi.SignalMean(scale * dmi.SignalMean());
-        dmi.SignalCovar(ModelSignalCovar(Analog(a),
-                                         dmi.SignalMean(),
-                                         baselineCovar));
+        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
+        dmi.SignalCovar(LaneDetModelHost::ModelSignalCovar(
+                            cv2, dmi.SignalMean(), baselineCovar));
     }
     // TODO: Should we update updated_?
 }
@@ -816,23 +818,11 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
-        aMode.vars = ModelSignalCovar(Analog(a), aMean, blVar);
+        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
+        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
 
         aMode.weights = aWeight;
     }
 }
-
-// static
-DmeEmHost::FloatVec DmeEmHost::ModelSignalCovar(
-        const PacBio::AuxData::AnalogMode& analog,
-        const DmeEmHost::FloatVec& signalMean,
-        const DmeEmHost::FloatVec& baselineVar)
-{
-    FloatVec r {baselineVar};
-    r += signalMean * CoreDMEstimator::shotVarCoeff;
-    r += pow2(signalMean * analog.excessNoiseCV);
-    return r;
-}
-
 
 }}}     // namespace PacBio::Mongo::Basecaller
