@@ -123,7 +123,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
     snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    updateMethod_             = dmeConfig.ModelUpdateMethod;
+    updateMethod_    = dmeConfig.ModelUpdateMethod;
 }
 
 
@@ -518,8 +518,8 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
         // and the background variance above.
         for (size_t i = 0; i < numAnalogs; ++i)
         {
-            const auto cv2 = pow2(FloatVec(Analog(i).excessNoiseCV));
-            var[i+1] = LaneDetModelHost::ModelSignalCovar(cv2, mu[i+1], var[0]);
+            const auto cv = Analog(i).excessNoiseCV;
+            var[i+1] = LaneDetModelHost::ModelSignalCovar(FloatVec(cv*cv), mu[i+1], var[0]);
         }
     }
 
