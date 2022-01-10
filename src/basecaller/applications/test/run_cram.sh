@@ -19,4 +19,7 @@ fi
 
 echo "Using bazviewer: $(which bazviewer)."
 echo "Using smrt-basecaller: $(which smrt-basecaller)."
-cram -v *.t
+
+pushd $(dirname "$0")
+cram -v sim*.t
+popd
