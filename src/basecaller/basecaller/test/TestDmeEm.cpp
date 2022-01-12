@@ -124,6 +124,7 @@ public: // Structors
     {
         Json::Value json;
         json["dmeConfig"]["PulseAmpRegularization"] = GetParam().pulseAmpReg;
+        json["dmeConfig"]["ModelUpdateMethod"]   = 0;
         testConfig = TestConfig(json);
     }
 

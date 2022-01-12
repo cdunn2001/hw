@@ -29,6 +29,8 @@ struct SimdTypeTraits<m512f>
 };
 
 /// Computes the value of \a base raised to the power \a exp.
+/// This could be defined using the intrinsic _mm_pow_ps for SSE 
+/// or _mm512_pow_ps for AVX-512F
 inline m512f pow(const m512f& base, const m512f& exp)
 {
     ArrayUnion<m512f> x;

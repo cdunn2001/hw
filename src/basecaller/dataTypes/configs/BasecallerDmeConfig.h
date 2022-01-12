@@ -127,8 +127,8 @@ public:
     // of DetectionModel.
     PB_CONFIG_PARAM(unsigned int, ModelUpdateMethod, 0);
 
-    // A coefficient to scale the threshold used in DmeMonochrome to
-    // penalize the confidence if the SNR drops dramatically.
+    // A coefficient to scale the threshold used to penalize the confidence 
+    // if the SNR drops dramatically.
     // The primary motive for this confidence factor is to guard against
     // registration error in the fit when there are few data representing
     // incorporation of the brightest analog in the data.

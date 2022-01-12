@@ -83,7 +83,6 @@ float DmeEmHost::snrDropThresh_ = 1.0f;
 float DmeEmHost::snrThresh0_ = 0.0f;
 float DmeEmHost::snrThresh1_ = 0.0f;
 float DmeEmHost::successConfThresh_ = 0.0f;
-uint32_t DmeEmHost::updateMethod_ = 0;
 
 
 DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
@@ -123,7 +122,8 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     snrThresh0_ = dmeConfig.MinAnalogSnrThresh0;
     snrThresh1_ = dmeConfig.MinAnalogSnrThresh1;
     successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
-    updateMethod_    = dmeConfig.ModelUpdateMethod;
+
+    LaneDetModelHost::Configure(dmeConfig);
 }
 
 
@@ -568,7 +568,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     //    }
 
     // Blend the estimate into the output model.
-    model0.Update(workModel, updateMethod_);
+    model0.Update(workModel);
 
     // Transcribe results back into model
     model0.ExportTo(detModel);

@@ -35,6 +35,7 @@
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -71,6 +72,8 @@ public:     // Static constants
     static constexpr unsigned int vecSize = Simd::SimdTypeTraits<VF>::width;
 
 public:     // Static functions
+    static void Configure(const Data::BasecallerDmeConfig &dmeConfig);
+
     /// The variance for \analog signal based on model including Poisson and
     /// "excess" noise.
     static FloatVec ModelSignalCovar(const VF& excessNoiseCV2,
@@ -166,7 +169,7 @@ public:     // Non-const interface
     /// Does not modify Confidence().
     /// The particular update method can be indicated in config
     /// \returns *this.
-    DetectionModelHost& Update(const DetectionModelHost& other, VF fraction, uint32_t updMethod);
+    DetectionModelHost& Update(const DetectionModelHost& other, VF fraction);
 
     /// Similar to the other overload of Update. This version defines the
     /// averaging weights in proportion to the Confidence of *this
@@ -174,7 +177,7 @@ public:     // Non-const interface
     /// If both confidences are zero, *this is not modified.
     /// The frame intervals of this and other must match.
     /// \returns *this.
-    DetectionModelHost& Update(const DetectionModelHost& other, uint32_t updateMethod);
+    DetectionModelHost& Update(const DetectionModelHost& other);
 
     /// Sets the estimation confidence score for all unit cells.
     /// value >= 0.
@@ -220,14 +223,17 @@ public:     // Non-const interface
     }
 
 private:
+
     /// Updates *this with the SIMD weighted average
     /// "\a fraction * other + (1 - \a fraction) * *this".
     /// 0 <= \a fraction <= 1.
     void Update0(const DetectionModelHost& other, VF fraction);
+
     // Updates *this with geometric averaging for variances and analog means.
     // Still uses arithmetic averaging for baseline mean.
     // Uses noise model to set analog variances.
     void Update1(const DetectionModelHost& other, VF fraction);
+
     // Yet another update method
     void Update2(const DetectionModelHost& other, VF fraction);
 
@@ -254,7 +260,8 @@ private:    // Members
     // Frame interval associated with estimateConfid_.
     FrameIntervalType frameInterval_ {0, 1};
 
-    int updateMethod_ = 0;
+private:    // Static data
+    static uint32_t updateMethod_;
 };
 
 

@@ -113,7 +113,6 @@ private:    // Static data
     static float snrDropThresh_;
     static float snrThresh0_, snrThresh1_;
     static float successConfThresh_;
-    static uint32_t updateMethod_;
 
 private:    // Static functions
     // Compute a preliminary scaling factor based on a fractile statistic.

@@ -125,7 +125,7 @@ __device__ VF XsnCoeffCVSq(const VF& sigMean, const VF& sigCovar, const VF& blVa
     return r;
 }
 
-__device__ void UpdateModeToMode(const ZmwAnalogMode& from,
+__device__ void UpdateMode(const ZmwAnalogMode& from,
                              ZmwAnalogMode* to,
                              float fraction)
 {
@@ -135,18 +135,18 @@ __device__ void UpdateModeToMode(const ZmwAnalogMode& from,
     to->var  = a * from.var  + b * to->var;
 }
 
-__device__ void UpdateModelToModel(const ZmwDetectionModel& from,
+__device__ void UpdateModel(const ZmwDetectionModel& from,
                               ZmwDetectionModel *to,
                               float fraction)
 {
-    UpdateModeToMode(from.baseline, &to->baseline, fraction);
+    UpdateMode(from.baseline, &to->baseline, fraction);
     for (int i = 0; i < to->numAnalogs; ++i)
     {
-        UpdateModeToMode(from.analogs[i], &to->analogs[i], fraction);
+        UpdateMode(from.analogs[i], &to->analogs[i], fraction);
     }
 }
 
-__device__ void UpdateModelToModel(const ZmwDetectionModel& from,
+__device__ void UpdateModel(const ZmwDetectionModel& from,
                               ZmwDetectionModel *to)
 {
     float toConfidence = 0;
@@ -160,7 +160,7 @@ __device__ void UpdateModelToModel(const ZmwDetectionModel& from,
     assert (fraction <= 1.0f);
     //assert ((fraction > 0) | (confSum == Confidence())));
 
-    UpdateModelToModel(from, to, fraction);
+    UpdateModel(from, to, fraction);
     // TODO no confidence stored in LaneModelParamters
     //Confidence(confSum);
 }
@@ -275,7 +275,7 @@ __device__ void UpdateTo2(const ZmwDetectionModel& from,
         tdmi.weights[idx].Set<low>(aw);
 
         const auto tXsnCVSq = XsnCoeffCVSq(tdmi.vars[idx].Get<low>(), tdmi.vars[idx].Get<low>(), prevBlCovar);
-        const auto oXsnCVSq = XsnCoeffCVSq(tdmi.vars[idx].Get<low>(), tdmi.vars[idx].Get<low>(), odmi.var);
+        const auto oXsnCVSq = XsnCoeffCVSq(odmi.mean, odmi.var, obm.var);
         const auto newXsnCVSq = a * tXsnCVSq  + b * oXsnCVSq;
 
         auto am = powf(tdmi.means[idx].Get<low>(), a) + powf(odmi.mean, b);
@@ -798,7 +798,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     ZmwDetectionModel workModel = model0;
     PrelimEstimate(blStatAccState, &workModel);
 
-    UpdateModelToModel(workModel, &model0);
+    UpdateModel(workModel, &model0);
 
     // Make a working copy of the detection model.
     workModel = model0;

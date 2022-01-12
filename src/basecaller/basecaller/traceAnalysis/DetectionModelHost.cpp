@@ -41,6 +41,10 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+// Static configuration parameters
+template <typename VF>
+uint32_t DetectionModelHost<VF>::updateMethod_ = 0;
+
 template <typename VF>
 template <typename VF2>
 DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
@@ -57,6 +61,12 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     // TODO: What about confid_ and frameInterval_?
     // Note: If this TODO is fixed, the ZmwDetectionModel defined in DmeEmDevice
     //       will probably need a similar update.
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Configure(const Data::BasecallerDmeConfig &dmeConfig)
+{
+    updateMethod_ = dmeConfig.ModelUpdateMethod;
 }
 
 template <typename VF>
@@ -157,14 +167,14 @@ void DetectionModelHost<VF>::Update2(const DetectionModelHost& other, VF fractio
 
         tdmi.Weight(aw);
 
+       // For simplicity, using weighted sum of xsnCV^2, rather than of xsnCV
         const auto tXsnCVSq = XsnCoeffCVSq(tdmi.SignalMean(), tdmi.SignalCovar(), prevBlCovar);
-        const auto oXsnCVSq = XsnCoeffCVSq(tdmi.SignalMean(), tdmi.SignalCovar(), obm.SignalCovar());
+        const auto oXsnCVSq = XsnCoeffCVSq(odmi.SignalMean(), odmi.SignalCovar(), obm.SignalCovar());
         const auto newXsnCVSq = a * tXsnCVSq + b * oXsnCVSq;
 
         auto am = pow(tdmi.SignalMean(), a) * pow(odmi.SignalMean(), b);
         tdmi.SignalMean(am);
 
-        // For simplicity, using weighted sum of xsnCV^2, rather than of xsnCV 
         const VF av = ModelSignalCovar(newXsnCVSq, am, bv);
         tdmi.SignalCovar(av);
     }
@@ -173,14 +183,14 @@ void DetectionModelHost<VF>::Update2(const DetectionModelHost& other, VF fractio
 
 template <typename VF>
 DetectionModelHost<VF>&
-DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction, uint32_t updMethod)
+DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
 {
     assert (all((fraction >= 0.0f) & (fraction <= 1.0f)));
 
     const auto mask = (fraction > 0.0f);
     updated_ |= mask;
 
-    switch (updMethod)
+    switch (updateMethod_)
     {
     case 0: Update0(other, fraction); break;
     case 1: Update1(other, fraction); break;
@@ -198,7 +208,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction, uin
 
 template <typename VF>
 DetectionModelHost<VF>&
-DetectionModelHost<VF>::Update(const DetectionModelHost& other, uint32_t updateMethod)
+DetectionModelHost<VF>::Update(const DetectionModelHost& other)
 {
     assert (this->FrameInterval() == other.FrameInterval());
     assert (all(this->Confidence() >= 0.0f));
@@ -212,7 +222,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, uint32_t updateM
     assert (all(fraction <= 1.0f));
     assert (all((fraction > 0) | (confSum == Confidence())));
 
-    Update(other, fraction, updateMethod);
+    Update(other, fraction);
     Confidence(confSum);
     return *this;
 }
