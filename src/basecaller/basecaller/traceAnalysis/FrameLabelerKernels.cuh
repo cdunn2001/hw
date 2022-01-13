@@ -32,6 +32,7 @@
 #include <dataTypes/BatchData.cuh>
 
 #include <basecaller/traceAnalysis/FrameLabelerDeviceDataStructures.cuh>
+#include <basecaller/traceAnalysis/RoiDevice.cuh>
 #include <basecaller/traceAnalysis/SubframeScorer.h>
 
 namespace PacBio::Mongo::Basecaller {
@@ -52,7 +53,11 @@ using Subframe::numStates;
 ///
 /// \param[in, out] vec    A loglikilhood for each of the stats on input, and a
 ///                        normalized probability on output
-__device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
+/// \param[in]      isRoi  boolean (simd) value indicating if either of the two
+///                        zmw are within the "region of interest".  If we are
+///                        not in the roi then the result will have all
+///                        probability in the background state.
+__device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec, PBShort2 isRoi)
 {
     auto maxVal = vec[0];
     #pragma unroll 1
@@ -67,10 +72,11 @@ __device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
         vec[i] = exp(vec[i] - maxVal);
         sum += vec[i];
     }
+    vec[0] = Blend(isRoi, vec[0] / sum, 1);
     #pragma unroll 1
-    for (int i = 0; i < numStates; ++i)
+    for (int i = 1; i < numStates; ++i)
     {
-        vec[i] /= sum;
+        vec[i] = Blend(isRoi, vec[i] / sum, 0);
     }
 }
 
@@ -170,15 +176,33 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
     logLike = logAccum;
 }
 
-template <size_t blockThreads>
-__launch_bounds__(blockThreads, 32)
+// A helper to facilitate range based for loops on a subset of data.
+// Use MakeRange below to loop between a pair of iterators.
+template <typename T>
+struct Range
+{
+    T b;
+    T e;
+
+    __device__ T begin() { return b; }
+    __device__ T end() { return e; }
+};
+
+template <typename T>
+__device__ Range<std::decay_t<T>> MakeRange(T&& b, T&&e)
+{
+    return Range<std::decay_t<T>>{std::forward<T>(b), std::forward<T>(e)};
+}
+
+template <size_t blockThreads, typename RoiFilter>
 __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                   Cuda::Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
+                                   Cuda::Memory::DeviceView<LatentViterbi<blockThreads, RoiFilter::lookBack>> latentData,
                                    ViterbiData<blockThreads> batchViterbiData,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
+                                   Mongo::Data::GpuBatchData<PBShort2> roiWorkspace,
                                    Cuda::Memory::DeviceView<Utility::CudaArray<float, laneSize>> viterbiScore)
 {
     // When/if this changes, some of this kernel is going to have to be udpated or generalized
@@ -224,6 +248,7 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     Utility::CudaArray<PBHalf2, numStates> scratch;
     auto& logLike = scratch;
     auto& latent = latentData[blockIdx.x];
+    const int numFrames = input.NumFrames();
     auto bc = latent.GetLabelsBoundary();
     const PBHalf2 zero(0.0f);
     const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
@@ -232,45 +257,110 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
         logLike[i] = Blend(bc == i, zero, ninf);
     }
 
+    auto latZmw = prevLat.ZmwData(blockIdx.x, threadIdx.x);
+    Roi::ForwardRecursion<RoiFilter> forwardRoi(latent.GetLatentTraces(), latZmw,
+                                                     latent.GetRoiBoundary(),
+                                                     1 / sqrt(latent.GetModel().BaselineMode().vars[threadIdx.x]),
+                                                     roiWorkspace.ZmwData(blockIdx.x, threadIdx.x));
+
     auto labels = batchViterbiData.BlockData();
 
-    // Forward recursion on latent data
+    // We're going to need to do the forward recursion in a few different
+    // stages, mostly becuase we're stitching together two different
+    // data sequences.  Throwing together a quick lambda here to avoid
+    // duplication elsewhere, and make it a touch clearer what is different
+    // in the various stages.
+    size_t frame = 0;
+    auto RecursionLoop = [&] (auto&& range) mutable
     {
-        auto latZmw = prevLat.ZmwData(blockIdx.x, threadIdx.x);
-        scorer.Setup(latent.GetModel());
-        for (int frame = 0; frame < ViterbiStitchLookback; ++frame)
+        for (const auto& val : range)
         {
-            Recursion(sharedMaxVal, labels, logLike, scorer, trans, latZmw[frame], frame);
+            Recursion(sharedMaxVal, labels,
+                      logLike, scorer,
+                      trans, forwardRoi.Process(val),
+                      frame);
+            frame++;
         }
-        }
+    };
 
-    // Forward recursion on this block's data
-    scorer.Setup(models[blockIdx.x]);
-    const int numFrames = input.NumFrames();
+    // Run through all the latent data first
+    scorer.Setup(latent.GetModel());
+    RecursionLoop(MakeRange(latZmw.begin()+ RoiFilter::lookForward, latZmw.end()));
+    assert(frame == ViterbiStitchLookback + RoiFilter::stitchFrames);
+    assert(forwardRoi.NextIdx() == frame);
+
+    // Take care to handle the latency of the roi filter.  We have
+    // a few frames now where we input data from the new block into
+    // the roi filter, but still get back data from the latent data
+    // and so we need to continue using the old model
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    const int anchor = numFrames - ViterbiStitchLookback;
-    for (int frame = 0; frame < anchor; ++frame)
-    {
-        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
-    }
+    RecursionLoop(MakeRange(inZmw.begin(), inZmw.begin() + RoiFilter::lookForward));
+    assert(frame == ViterbiStitchLookback + RoiFilter::stitchFrames + RoiFilter::lookForward);
+    assert(forwardRoi.NextIdx() == frame);
 
-    // Need to store the log likelihoods at the actual anchor point, so
-    // once we choose a terminus state, we can retrieve it's proper
-    // log likelihood
+    // We've been fudging things a bit, by using a singular baseline variance in
+    // the roi computation, though really the roi computation spans a few frames
+    // which means that near a block boundary not all frames have the same model.
+    // With the current setting (4 points, with a latency of 2), updating things
+    // here means we split the difference and never have more than 2 frames using
+    // the wrong variance. (though the effect spans all four frames)
+    forwardRoi.UpdateInvSigma(1 / sqrt(models[blockIdx.x].BaselineMode().vars[threadIdx.x]));
+
+    // Now we can update things to use the new model, though we'll pause
+    // at the anchor point to record the log likelihood at that point
+    scorer.Setup(models[blockIdx.x]);
+    const int anchor = numFrames - ViterbiStitchLookback - RoiFilter::stitchFrames;
+    RecursionLoop(MakeRange(inZmw.begin()+RoiFilter::lookForward, inZmw.begin() + anchor));
     Utility::CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
+    assert(frame == numFrames);
+    assert(forwardRoi.NextIdx() == frame);
 
-    for (int frame = anchor; frame < numFrames; ++frame)
+    // Now we can do forward recursion on the up until the start of the roi lookback.
+    // There's no point in doing recursion beyond this point, because we won't ever
+    // have a valid roi value to use during traceback.
+    RecursionLoop(MakeRange(inZmw.begin() + anchor, inZmw.end() - RoiFilter::stitchFrames));
+    assert(frame == numFrames + ViterbiStitchLookback);
+    assert(forwardRoi.NextIdx() == frame);
+
+    // Continue doing the forward ROI computation on the rest of the data.
+    for (const auto& val : MakeRange(inZmw.end() - RoiFilter::stitchFrames, inZmw.end()))
     {
-        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
+        forwardRoi.Process(val);
     }
+    assert(forwardRoi.NextIdx() == frame + RoiFilter::stitchFrames);
 
-    // Compute the probabilities of the possible end states.  Propagate
-    // them backwards a few frames, as some paths may converge and we
-    // can have a more certain estimate.
-    Normalize(logLike);
+    // Applies the faux roi boundary condition for the LHS (currently `off`), and then
+    // walk things back for a number of frames.  The more we walk things back the more
+    // likely we'll have a robust roi determination, but the more we walk things back
+    // the more latent data we have to pay to store.
+    Roi::BackwardRecursion<RoiFilter> backRoi(roiWorkspace.ZmwData(blockIdx.x, threadIdx.x));
+    assert(backRoi.FramesRemaining() == frame);
+
+    // Now that we have a better ROI boundary condition, we can work on finding
+    // the viterbi boundary contidion. We start just by computing the probabilities
+    // of the possible end states.  We then propogate these probabilities backwards
+    // by doing a traceback of all states simultaneously.  As we propogate backwards
+    // some paths may converge, which effectively increases our certainty about the
+    // true state at that frame.  However as before, the more we traverse back the
+    // more latent data we have to pay to store.
+    //
+    // Note: There are two ways we can incorporate the roi information.  If we look
+    //       at a non-roi classification for the *current* frame, then we can adjust
+    //       the loglikelihood for the current frame to make every state but the
+    //       baseline impossible.  If we look at a non-roi classification for the *previous*
+    //       frame then we can adjust the traceback links to force all states to
+    //       trace back to the baseline state.
+    //
+    //       We use both of those here.  We use the current frame's roi as part of
+    //       operation converting the loglikelihood to a normalized probabilitiy.
+    //       This also means that during the subsequent loops, each iteration is
+    //       now looking at the previous frames ROI and we can adjust the traceback
+    //       information
+    Normalize(logLike, backRoi.PopRoiState());
     auto& prob = scratch;
     const int lookStart = numFrames + ViterbiStitchLookback - 1;
     const int lookStop = numFrames - 1;
+    PBShort2 isRoi = 0;
     for (int i = lookStart; i > lookStop; --i)
     {
         Utility::CudaArray<PBHalf2, numStates> newProb;
@@ -278,10 +368,11 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
         {
             newProb[state] = PBHalf2(0.0f);
         }
+        isRoi = backRoi.PopRoiState();
         auto packedLabels = labels(i, 0);
         for (short state = 0; state < numStates; ++state)
         {
-            auto prev = packedLabels.PopFront();
+            auto prev = Blend(isRoi, packedLabels.PopFront(), 0);
             // a PackedLabels fits four x/y pairs, so after every 4th state we have exhausted
             // the current packedLabels and need to extract the next one.
             if ((state % 4) == 3)
@@ -293,7 +384,11 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
         }
         prob = newProb;
     }
+    // We've started looking at the roi for the previous frame, so we need
+    // the -1 here to account for that.
+    assert(backRoi.FramesRemaining() == input.NumFrames()-1);
 
+    latent.SetRoiBoundary(isRoi);
     PBHalf2 maxProb = prob[0];
     PBShort2 anchorState(0);
     #pragma unroll 1
@@ -314,22 +409,33 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
         outZmw[frame] = traceState;
+        // Break once we've output the labels for frame 0.  We don't need
+        // to trace back to the boundary condition, and we don't have the
+        // roi for frame negative 1 anyway.
+        if (frame == 0) break;
         auto x = labels(frame, traceState.X() / 4).XAt(traceState.X() % 4);
         auto y = labels(frame, traceState.Y() / 4).YAt(traceState.Y() % 4);
-        traceState = PBShort2(x,y);
+        auto isRoi = backRoi.PopRoiState();
+        traceState = Blend(isRoi, PBShort2(x,y), 0);
     }
+    assert(backRoi.FramesRemaining() == 0);
 
     // Update latent data
     latent.SetLabelsBoundary(anchorState);
     latent.SetModel(models[blockIdx.x]);
 
     auto outLatZmw = nextLat.ZmwData(blockIdx.x, threadIdx.x);
-    const auto offset = numFrames - ViterbiStitchLookback;
-    for (int i = 0; i < ViterbiStitchLookback; ++i)
+    const auto numLatent = ViterbiStitchLookback + RoiFilter::lookForward + RoiFilter::stitchFrames;
+    const auto offset = numFrames - numLatent;
+    assert(outLatZmw.size() == numLatent);
+    for (int i = 0; i < numLatent; ++i)
     {
-
         outLatZmw[i] = inZmw[i + offset];
     }
+
+    // Store frames that have had their labels emitted already, but we also need
+    // access to during the next batch for use in the roi filter
+    latent.SetLatentTraces(inZmw.begin() + offset - 1);
 }
 
 }

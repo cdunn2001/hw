@@ -74,6 +74,15 @@ public:
         data_[threadIdx.x] = u;
     }
 
+    // Allow single-threaded assignment, since right now it's somewhere
+    // between difficult and impossible to directly initialize a CudaArray
+    // of CudaLaneArrays (...this naming is horrible...)
+    template <typename U>
+    __device__ void SerialAssign(const U& u)
+    {
+        for (auto& d : data_) d = u;
+    }
+
     // Assignment makes sense, but we need to make sure we only copy
     // our thread's slot.  We lose trivially_copyable which
     // is unfortunate, but I really don't see any way around that.

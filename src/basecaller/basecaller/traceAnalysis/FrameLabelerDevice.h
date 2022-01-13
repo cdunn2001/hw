@@ -63,13 +63,16 @@ public:
                        Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
     ~FrameLabelerDevice() override;
 
+    // public so we can derive children
+    struct Impl;
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
     Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
             const PoolModelParameters& models) override;
 
-    class Impl;
     std::unique_ptr<Impl> labeler_;
+
+    static Data::BasecallerRoiConfig::RoiFilterType roiType;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

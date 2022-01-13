@@ -62,6 +62,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     MaxLikelihoodDiagnostics.h
     PulseAccumulator.h
     PulseAccumulator.cpp
+    RoiDevice.cuh
+    RoiDevice.cu
     SparseMatrix.h
     SubframeLabelManager.h
     SubframeLabelManager.cpp

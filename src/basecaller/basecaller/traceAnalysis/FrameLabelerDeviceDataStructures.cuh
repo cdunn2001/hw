@@ -42,7 +42,7 @@ using namespace Cuda;
 
 // Persistent data we need to hold on to, between consecutive runs of the
 // FrameLabeler
-template <size_t laneWidth>
+template <size_t laneWidth, int32_t latentFrames>
 struct __align__(128) LatentViterbi
 {
     using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
@@ -50,11 +50,14 @@ struct __align__(128) LatentViterbi
  public:
     __device__ LatentViterbi()
         : labelsBoundary_(0, SerialConstruct{})
+        , roiBoundary_(0, SerialConstruct{})
     {
         auto SetAll = [](auto& arr, const auto& val) {
             for (int i = 0; i < laneWidth; ++i)
                 arr[i] = val;
         };
+
+        for (auto& val : latentTrc_) val.SerialAssign(0);
 
         // I'm a little uncertain how to initialize this model.  I'm tryin to
         // make it work with latent data that we are guaranteed to be all zeroes,
@@ -78,10 +81,29 @@ struct __align__(128) LatentViterbi
     __device__ void SetLabelsBoundary(PBShort2 boundary) { labelsBoundary_ = boundary; }
     __device__ PBShort2 GetLabelsBoundary() const { return labelsBoundary_; }
 
+    __device__ void SetRoiBoundary(PBShort2 boundary) { roiBoundary_ = boundary; }
+    __device__ PBShort2 GetRoiBoundary() const { return roiBoundary_; }
+
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
     {
         oldModel.ParallelAssign(model);
+    }
+
+    __device__ const Utility::CudaArray<LaneArr, latentFrames>& GetLatentTraces() const
+    {
+        return latentTrc_;
+    }
+    // Accepts an iterator to the last frame emitted during an analysis.
+    // This iterator will be *decremented* to extract/store as much latent
+    // data as is necessary to enable the roi computation of the next block
+    __device__ void SetLatentTraces(Data::StrideIterator<const PBShort2> trc)
+    {
+        for (int idx = latentFrames - 1; idx >= 0; --idx)
+        {
+            latentTrc_[idx] = *trc;
+            --trc;
+        }
     }
 
 private:
@@ -91,6 +113,13 @@ private:
     // the label for the last frame emitted in the
     // previous block
     LaneArr labelsBoundary_;
+    // the ROI determination for the last frame
+    // emitted in the previous block
+    LaneArr roiBoundary_;
+    // Latent traces, which already had labels emitted
+    // in the previous block, but are still needed
+    // for the roi computation of the current block
+    Utility::CudaArray<LaneArr, latentFrames> latentTrc_;
 };
 
 // This class represents compressed frame labels, where
