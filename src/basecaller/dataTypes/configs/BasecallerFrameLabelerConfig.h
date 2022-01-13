@@ -54,7 +54,7 @@ class BasecallerRoiConfig : public Configuration::PBConfig<BasecallerRoiConfig>
     // Default is basically the original Sequel configuration,
     // and NoOp disables the Roi filter
     SMART_ENUM(RoiFilterType, Default, NoOp);
-    PB_CONFIG_PARAM(RoiFilterType, filterType, RoiFilterType::NoOp);
+    PB_CONFIG_PARAM(RoiFilterType, filterType, RoiFilterType::Default);
 
     PB_CONFIG_PARAM(float, upperThreshold, 7.0f);
     PB_CONFIG_PARAM(float, lowerThreshold, 2.0f);
