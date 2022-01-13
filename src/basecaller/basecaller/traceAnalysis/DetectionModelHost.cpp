@@ -33,11 +33,17 @@
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
 
+#include "DmeEmHost.h"
+
 using PacBio::Simd::MakeUnion;
 
 namespace PacBio {
 namespace Mongo {
 namespace Data {
+
+// Static configuration parameters
+template <typename VF>
+uint32_t DetectionModelHost<VF>::updateMethod_ = 0;
 
 template <typename VF>
 template <typename VF2>
@@ -57,6 +63,123 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
     //       will probably need a similar update.
 }
 
+template <typename VF>
+void DetectionModelHost<VF>::Configure(const Data::BasecallerDmeConfig &dmeConfig)
+{
+    updateMethod_ = dmeConfig.ModelUpdateMethod;
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Update0(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    // Baseline mode
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = a * tbm.SignalCovar() + b * obm.SignalCovar();
+    tbm.SignalCovar(bv);
+
+    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+
+        VF am = a * tdmi.SignalMean() + b * odmi.SignalMean();
+        tdmi.SignalMean(am);
+
+        VF av = a * tdmi.SignalCovar() + b * odmi.SignalCovar();
+        tdmi.SignalCovar(av);
+    }
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Update1(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    // Baseline mode
+    VF bw = a * tbm.Weight() + b * obm.Weight();
+    tbm.Weight(bw);
+
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = pow(tbm.SignalCovar(), a) * pow(obm.SignalCovar(), b);
+    tbm.SignalCovar(bv);
+
+    // Equally partition remaining weight among four analogs.
+    const VF aw = 0.25f * (1.0f - bw);
+
+    for (size_t i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+
+        tdmi.Weight(aw);
+
+        auto am = pow(tdmi.SignalMean(), a) * pow(odmi.SignalMean(), b);
+        tdmi.SignalMean(am);
+
+        const auto cv = Basecaller::DmeEmHost::Analog(i).excessNoiseCV;
+        const VF av = ModelSignalCovar(VF(cv*cv), am, bv);
+        tdmi.SignalCovar(av);
+    }
+}
+
+template <typename VF>
+void DetectionModelHost<VF>::Update2(const DetectionModelHost& other, VF fraction)
+{
+    const auto a = 1.0f - fraction;
+    const auto& b = fraction;
+
+    auto& tbm = (*this).BaselineMode();
+    auto& obm = other.BaselineMode();
+
+    const auto prevBlCovar = tbm.SignalCovar();
+
+    // Baseline mode
+    VF bw = a * tbm.Weight() + b * obm.Weight();
+    tbm.Weight(bw);
+
+    VF bm = a * tbm.SignalMean() + b * obm.SignalMean();
+    tbm.SignalMean(bm);
+
+    VF bv = pow(tbm.SignalCovar(), a) * pow(obm.SignalCovar(), b);
+    tbm.SignalCovar(bv);
+
+    // Equally partition remaining weight among four analogs.
+    const VF aw = 0.25f * (1.0f - bw);
+
+    for (size_t i = 0; i < detectionModes_.size(); ++i)
+    {
+        auto& tdmi = (*this).DetectionModes()[i];
+        auto& odmi = other.DetectionModes()[i];
+
+        tdmi.Weight(aw);
+
+       // For simplicity, using weighted sum of xsnCV^2, rather than of xsnCV
+        const auto tXsnCVSq = XsnCoeffCVSq(tdmi.SignalMean(), tdmi.SignalCovar(), prevBlCovar);
+        const auto oXsnCVSq = XsnCoeffCVSq(odmi.SignalMean(), odmi.SignalCovar(), obm.SignalCovar());
+        const auto newXsnCVSq = a * tXsnCVSq + b * oXsnCVSq;
+
+        auto am = pow(tdmi.SignalMean(), a) * pow(odmi.SignalMean(), b);
+        tdmi.SignalMean(am);
+
+        const VF av = ModelSignalCovar(newXsnCVSq, am, bv);
+        tdmi.SignalCovar(av);
+    }
+
+}
 
 template <typename VF>
 DetectionModelHost<VF>&
@@ -66,10 +189,13 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
 
     const auto mask = (fraction > 0.0f);
     updated_ |= mask;
-    baselineMode_.Update(other.baselineMode_, fraction);
-    for (unsigned int i = 0; i < detectionModes_.size(); ++i)
+
+    switch (updateMethod_)
     {
-        detectionModes_[i].Update(other.detectionModes_[i], fraction);
+    case 0: Update0(other, fraction); break;
+    case 1: Update1(other, fraction); break;
+    case 2: Update2(other, fraction); break;
+    default: throw PBException("DetectionModel: Bad update method id.");
     }
 
     FrameInterval(other.FrameInterval());
@@ -113,6 +239,31 @@ void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
         detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
     }
     // TODO: What about confid_, updated_, and frameInterval_?
+}
+
+// static
+template <typename VF>
+VF DetectionModelHost<VF>::ModelSignalCovar(
+        const VF& excessNoiseCV2,
+        const VF& sigMean,
+        const VF& blVar)
+{
+    VF r {blVar};
+    r += sigMean * Basecaller::CoreDMEstimator::shotVarCoeff;
+    r += pow2(sigMean) * excessNoiseCV2;
+    return r;
+}
+
+template <typename VF>
+VF DetectionModelHost<VF>::XsnCoeffCVSq(
+        const VF& sigMean,
+        const VF& sigCovar,
+        const VF& blVar)
+{
+    VF r {sigCovar - blVar};
+    r -= sigMean * Basecaller::CoreDMEstimator::shotVarCoeff;
+    r /= pow2(sigMean);
+    return r;
 }
 
 template <typename VF>

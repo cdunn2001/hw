@@ -31,11 +31,11 @@
 
 #include <pacbio/auxdata/AnalogMode.h>
 #include <common/LaneArray.h>
-#include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 
 #include "CoreDMEstimator.h"
+#include "DetectionModelHost.h"
 #include "DmeDiagnostics.h"
 
 namespace PacBio {
@@ -80,13 +80,6 @@ public:     // Static functions
     static void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel);
 
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
-
-    /// The variance for \analog signal based on model including Poisson and
-    /// "excess" noise.
-    static FloatVec ModelSignalCovar(const AuxData::AnalogMode& analog,
-                                             const FloatVec& signalMean,
-                                             const FloatVec& baselineVar);
-
 
 private:    // Functions
     void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;

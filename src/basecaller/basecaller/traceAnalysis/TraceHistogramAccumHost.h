@@ -35,9 +35,9 @@
 #include <common/LaneArray.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
 #include <dataTypes/BasicTypes.h>
-#include <dataTypes/DetectionModelHost.h>
 #include <dataTypes/UHistogramSimd.h>
 
+#include "DetectionModelHost.h"
 #include "EdgeFrameClassifier.h"
 #include "TraceHistogramAccumulator.h"
 

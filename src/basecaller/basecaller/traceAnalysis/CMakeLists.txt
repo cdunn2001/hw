@@ -22,6 +22,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     CoreDMEstimator.cpp
     DetectionModelEstimator.h
     DetectionModelEstimator.cpp
+    DetectionModelHost.h
+    DetectionModelHost.cpp
     DeviceHFMetricsFilter.h
     DeviceHFMetricsFilter.cu
     DeviceMultiScaleBaseliner.h

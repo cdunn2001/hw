@@ -17,6 +17,7 @@ add_library(libMongoBasecallerTest OBJECT
 
 target_link_libraries(libMongoBasecallerTest
     libMongoBasecallerAnalyzer
+    libMongoBasecallerTraceAnalysis
     libProtoCommon
     libAppModules
     libTbb

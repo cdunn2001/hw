@@ -30,10 +30,12 @@
 //  Defines classes DetectionModelHost, SignalModeHost, and related types.
 
 #include <array>
+
 #include <common/AlignedVector.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/configs/BasecallerDmeConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -69,6 +71,18 @@ public:     // Types
 public:     // Static constants
     static constexpr unsigned int vecSize = Simd::SimdTypeTraits<VF>::width;
 
+public:     // Static functions
+    static void Configure(const Data::BasecallerDmeConfig &dmeConfig);
+
+    /// The variance for \analog signal based on model including Poisson and
+    /// "excess" noise.
+    static FloatVec ModelSignalCovar(const VF& excessNoiseCV2,
+                                     const FloatVec& signalMean,
+                                     const FloatVec& baselineVar);
+
+    static FloatVec XsnCoeffCVSq(const VF& signalMean,
+                                 const VF& signalCovar,
+                                 const VF& baselineCovar);
 
 public:     // Structors and assignment
     DetectionModelHost() = delete;
@@ -151,14 +165,11 @@ public:     // Const interface
     void ExportTo(LaneDetectionModel<VF2>* ldm) const;
 
 public:     // Non-const interface
-    /// Updates *this with the SIMD weighted average
-    /// "\a fraction * other + (1 - \a fraction) * *this".
+    /// Updates *this with the other parameters
     /// Does not modify Confidence().
-    /// 0 <= \a fraction <= 1.
+    /// The particular update method can be indicated in config
     /// \returns *this.
-    DetectionModelHost& Update(
-        const DetectionModelHost& other,
-        VF fraction);
+    DetectionModelHost& Update(const DetectionModelHost& other, VF fraction);
 
     /// Similar to the other overload of Update. This version defines the
     /// averaging weights in proportion to the Confidence of *this
@@ -211,6 +222,21 @@ public:     // Non-const interface
         FrameInterval(newInterval);
     }
 
+private:
+
+    /// Updates *this with the SIMD weighted average
+    /// "\a fraction * other + (1 - \a fraction) * *this".
+    /// 0 <= \a fraction <= 1.
+    void Update0(const DetectionModelHost& other, VF fraction);
+
+    // Updates *this with geometric averaging for variances and analog means.
+    // Still uses arithmetic averaging for baseline mean.
+    // Uses noise model to set analog variances.
+    void Update1(const DetectionModelHost& other, VF fraction);
+
+    // Yet another update method
+    void Update2(const DetectionModelHost& other, VF fraction);
+
 private:    // Members
 
     // The baseline mode refers to the background mode _after_ the baseline
@@ -233,6 +259,9 @@ private:    // Members
 
     // Frame interval associated with estimateConfid_.
     FrameIntervalType frameInterval_ {0, 1};
+
+private:    // Static data
+    static uint32_t updateMethod_;
 };
 
 
@@ -302,24 +331,6 @@ public: // Modify Access
     void SignalCovar(const FloatVec& v)
     {
         var_ = v;
-    }
-
-    /// Blends in another detection mode with specified mixing fraction.
-    /// After calling Update, *this will be the weighted average of the precall
-    /// value and other.
-    /// 0 <= \a fraction <= 1.
-    void Update(const SignalModeHost<FloatVec>& other, const FloatVec fraction)
-    {
-        // TODO: When we have SIMD compare operations, add assert statements
-        // to ensure that 0 <= fraction <= 1 (see bug 27767).
-
-        // Don't think that any exceptions can occur here.
-        // So just update in-place.
-
-        const FloatVec a = FloatVec(1) - fraction;
-        const FloatVec& b = fraction;
-        mean_ = a * mean_  +  b * other.mean_;
-        var_ = a * var_  +  b * other.var_;
     }
 
 private:    // Data

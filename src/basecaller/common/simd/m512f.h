@@ -28,6 +28,20 @@ struct SimdTypeTraits<m512f>
     static const uint8_t width = 16;
 };
 
+/// Computes the value of \a base raised to the power \a exp.
+/// This could be defined using the intrinsic _mm_pow_ps for SSE 
+/// or _mm512_pow_ps for AVX-512F
+inline m512f pow(const m512f& base, const m512f& exp)
+{
+    ArrayUnion<m512f> x;
+    for (uint8_t i = 0; i < SimdTypeTraits<m512f>::width; ++i)
+    {
+        x[i] = std::pow(base[i], exp[i]);
+    }
+    return x;
+}
+
+
 }}      // namespace PacBio::Simd
 
 #endif  // mongo_common_simd_m512f_H_
