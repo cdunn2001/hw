@@ -1,15 +1,11 @@
-set (VERSION bid56)
+set (VERSION bid57)
 
 set (LOCAL_THIRD_PARTY_SCRIPTS OFF CACHE BOOL "Use local version of third party scripts" FORCE)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE STRING "Location of a local  pa-third-party repository" FORCE)
 
-function (SetupProject projName nexusVersionsDirectory)
+function (SetupProject nexusVersionsDirectory)
 
-if( ${projName} MATCHES "sequel|mongo" )
-    message("Using ${projName} artifacts")
-else()
-    message(FATAL_ERROR "projName=${projName} is not allowed. Must be either sequel or mongo.")
-endif()
+set(projName "mongo")
 if( NOT EXISTS "${nexusVersionsDirectory}")
     message(FATAL_ERROR "nexusVersionsDirectory=${nexusVersionsDirectory} does not exist.")
 endif()

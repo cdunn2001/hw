@@ -12,7 +12,7 @@ enable_testing()
 option(USE_SYSTEMD "Enables systemd support such as feeding the watchdog" ON)
 
 include(../../setup-thirdparty.cmake)
-SetupProject("mongo" "${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
+SetupProject("${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 
 # TODO: Use C++17 when we have a newer version of GCC available.
 set(CMAKE_CXX_STANDARD 14)
@@ -79,9 +79,6 @@ add_library(lib-pa-ws
         PaWsProcess.cpp
         WebService.h
         WebService.cpp
-
-        # this file doesn't exist but is necessary to put here to force refreshing the git-rev.h file
-        git-rev-pseudo-header.h
 )
 if(USE_SYSTEMD)
     target_compile_definitions(lib-pa-ws PUBLIC -DUSE_SYSTEMD)
@@ -94,6 +91,7 @@ target_link_libraries(lib-pa-ws
       libPaWsDoc
       libPaWsDashboard
       curl
+      GitVersionInfo
 )
 
 add_executable(pa-ws
