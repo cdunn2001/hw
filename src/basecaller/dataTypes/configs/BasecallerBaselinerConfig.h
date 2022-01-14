@@ -66,6 +66,16 @@ public:
     // TODO: Use it in a similar way in DeviceMultiScale implementation.
     PB_CONFIG_PARAM(float, SigmaEmaScaleStrides, 512);
 
+    // Baseline standard deviation divided by JumpSuppression defines a
+    // tolerance for large increases in the baseline estimate.  Any jump that
+    // exceeds this tolerance is ignored and the most recent (accepted)
+    // estimate is retained.
+    // Notice that this effect is asymmetric; it applies only to increases,
+    // not to decreases.
+    // Notice also that this suppression is applied before smoothing by the EMA
+    // controlled by MeanEmaScaleStrides.
+    PB_CONFIG_PARAM(float, JumpSuppression, 0.25f);
+
     bool UsesGpu() const { return Method == MethodName::DeviceMultiScale; }
 };
 

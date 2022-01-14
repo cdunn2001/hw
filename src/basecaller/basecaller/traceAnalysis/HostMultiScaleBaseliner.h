@@ -17,7 +17,7 @@ class HostMultiScaleBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeOut = Parent::ElementTypeOut;
+    using ElementTypeOut = Parent::ElementTypeOut;   // int16_t
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
     using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
@@ -25,7 +25,6 @@ public:
 public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig&,
                           const Data::AnalysisConfig&);
-
 
     static void Finalize();
 
@@ -58,7 +57,9 @@ private:
     FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
 private:     // Static data
+    static float meanEmaAlpha_;
     static float sigmaEmaAlpha_;
+    static float jumpTolCoeff_;
 
 private:
 
@@ -92,7 +93,10 @@ private:
                                 const LaneArray& baselineSubtractedFrames,
                                 Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
 
+        FloatArray GetBlSmoothed(const FloatArray& lower, const FloatArray& upper);
         FloatArray GetSmoothedSigma(const FloatArray& sigma);
+
+        FloatArray GetBlEma(const FloatArray& lower, const FloatArray& upper);
 
     private:    // Multi-stage filter
         enum class FilterType
@@ -161,6 +165,17 @@ private:
     private:
         MultiStageFilter<ElementTypeOut, FilterType::Lower> msLowerOpen_;
         MultiStageFilter<ElementTypeOut, FilterType::Upper> msUpperOpen_;
+
+        // Unbiased exponential moving average used to smooth estimates of
+        // baseline mean.
+        FloatArray blMeanUemaSum_ = 0.0f;
+
+        // Normalization factor for UEMA. See blMeanUemaSum_.
+        FloatArray blMeanUemaWeight_ = 0.0f;
+
+        // Uniformly initialized to negative value, which is used as condition to
+        // initialize when processing first trace block.
+        FloatArray blSigmaEma_ = -1.0f;
 
         const size_t stride_;
         const FloatArray cSigmaBias_;
