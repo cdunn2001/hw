@@ -9,6 +9,8 @@ project (pa-ws
 
 enable_testing()
 
+option(USE_SYSTEMD "Enables systemd support such as feeding the watchdog" ON)
+
 include(../../setup-thirdparty.cmake)
 SetupProject("mongo" "${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 
@@ -82,6 +84,9 @@ add_library(lib-pa-ws
         # this file doesn't exist but is necessary to put here to force refreshing the git-rev.h file
         git-rev-pseudo-header.h
 )
+if(USE_SYSTEMD)
+    target_compile_definitions(lib-pa-ws PUBLIC -DUSE_SYSTEMD)
+endif()
 
 target_link_libraries(lib-pa-ws
     PUBLIC
