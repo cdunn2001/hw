@@ -141,6 +141,11 @@ public:
     PacBio::IPC::HttpResponse POST_Storages(const std::vector<std::string>& args, const std::string& postData);
     PacBio::IPC::HttpResponse POST_Transfer(const std::vector<std::string>& args, const std::string& postData);
 
+    PacBio::IPC::HttpResponse DELETE_Postprimaries(const std::vector<std::string>& args);
+    PacBio::IPC::HttpResponse DELETE_Sockets(const std::vector<std::string>& args);
+    PacBio::IPC::HttpResponse DELETE_Storages(const std::vector<std::string>& args);
+    PacBio::IPC::HttpResponse DELETE_Transfer(const std::vector<std::string>& args);
+
 
     /// General http formatted response function.
     /// \param conn : mongoose connection

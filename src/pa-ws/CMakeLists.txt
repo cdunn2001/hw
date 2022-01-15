@@ -52,7 +52,6 @@ include(pacbio-git-info)
 generate_version_h(${SOFTWARE_VERSION})
 message(STATUS "SOFTWARE_VERSION is ${SOFTWARE_VERSION}")
 generate_config_header(PaWsHeader.h PaWsHeader)
-create_git_rev_header()
 
 # # exported header-only library. To be used as an exported artifact.
 # add_library(lib-wx-api INTERFACE)

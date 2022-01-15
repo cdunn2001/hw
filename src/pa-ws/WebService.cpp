@@ -746,6 +746,36 @@ HttpResponse WebServiceHandler::POST_Postprimaries(const std::vector<std::string
 {
     HttpResponse response;
     response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
+    const auto json = PacBio::IPC::ParseJSON(postData);
+
+    auto nextArg = args.begin();
+
+    if (nextArg == args.end())
+    {
+        if (config_.debug.simulationLevel == 1)
+        {
+            PostprimaryObject ppaObject(json);
+            response.httpStatus = HttpStatus::CREATED;
+            response.json = ppaObject.mid;
+        }
+    }
+    else
+    {
+        const std::string mid = *nextArg;
+        ++nextArg;
+        if (nextArg == args.end()) 
+        {
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to postprimaries must include command: stop");
+        }
+        else if (*nextArg == "stop")
+        {
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
+        }
+    }
     return response;
 }
 
@@ -758,7 +788,21 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
     const auto json = PacBio::IPC::ParseJSON(postData);
 
     if (nextArg != args.end())
-    {
+    {   
+        if (*nextArg == "reset")
+        {
+            // TODO
+            // for(auto& socket: sockets_)
+            // {
+            //    socket.reset();  this is pseudocode
+            // }
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
+            return response;
+        }
         uint32_t socketNumber = std::stoul(*nextArg);
         if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
         {
@@ -767,24 +811,33 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
         nextArg++;
         if (nextArg == args.end())
         {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST must include final app name: basecaller, darkcal or loadingcal");
-        }
-        if (postData == "")
-        {
-            throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST must include final app name: basecaller, darkcal, loadingcal or reset");
         }
         if (*nextArg == "basecaller")
         {
             nextArg++;
-            if (nextArg == args.end())
+            if (nextArg == args.end() || *nextArg == "start")
             {
-                response.httpStatus = HttpStatus::OK;
+                if (postData == "")
+                {
+                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+                }
                 SocketBasecallerObject sbo(json);
+                if (config_.debug.simulationLevel == 1)
+                {
+                    response.httpStatus = HttpStatus::CREATED;
+                    response.json = sbo.Serialize();
+                }
                 (void) socketNumber;
             }
             else if (*nextArg == "stop")
             {
                 // do something
+                if (config_.debug.simulationLevel == 1)
+                {
+                    response.httpStatus = HttpStatus::OK;
+                    response.json = "tbd";
+                }
             }
             else
             {
@@ -794,13 +847,27 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
         else if (*nextArg == "darkcal")
         {
             nextArg++;
-            if (nextArg == args.end())
+            if (nextArg == args.end() || *nextArg == "start")
             {
-                SocketDarkcalObject sbo(json);
+                if (postData == "")
+                {
+                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+                }
+                SocketDarkcalObject sdco(json);
+                if (config_.debug.simulationLevel == 1)
+                {
+                    response.httpStatus = HttpStatus::CREATED;
+                    response.json = sdco.Serialize();
+                }
             }
             else if (*nextArg == "stop")
             {
                 // do something
+                if (config_.debug.simulationLevel == 1)
+                {
+                    response.httpStatus = HttpStatus::OK;
+                    response.json = "tbd";
+                }
             }
             else
             {
@@ -810,9 +877,18 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
         else if (*nextArg == "loadingcal")
         {
             nextArg++;
-            if (nextArg == args.end())
+            if (nextArg == args.end() || *nextArg == "start")
             {
-                SocketLoadingcalObject sbo(json);
+                if (postData == "")
+                {
+                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+                }
+                SocketLoadingcalObject slco(json);
+                if (config_.debug.simulationLevel == 1)
+                {
+                    response.httpStatus = HttpStatus::CREATED;
+                    response.json = slco.Serialize();
+                }
             }
             else if (*nextArg == "stop")
             {
@@ -823,9 +899,18 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
                 throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to loadingcal contains unknown command:" + *nextArg);
             }
         }
+        else if (*nextArg == "reset")
+        {
+            // TODO
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
+        }
         else
         {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST URL must include final app name: basecaller, darkcal or loadingcal");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST URL must include final app name: basecaller, darkcal, loadingcal or reset");
         }
     }
     else
@@ -841,11 +926,38 @@ HttpResponse WebServiceHandler::POST_Storages(const std::vector<std::string>& ar
     HttpResponse response;
     response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
 
-    if (args.size() >= 1)
-    {
-        if (args[0] == "stop")
+    auto nextArg = args.begin();
+    const auto json = PacBio::IPC::ParseJSON(postData);
+
+    if (nextArg != args.end())
+    {   
+        uint32_t socketNumber = std::stoul(*nextArg);
+        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
+        {
+            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
+        }
+        nextArg++;
+        if (nextArg == args.end())
+        {
+            StorageObject so(json);
+            // do something
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::CREATED;
+                response.json = so.Serialize();
+            }
+        } else if (*nextArg == "free")
         {
             // do something
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
+        }
+        else
+        {
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to " + *nextArg + " doesn't exit");
         }
     }
     return response;
@@ -861,6 +973,11 @@ HttpResponse WebServiceHandler::POST_Transfer(const std::vector<std::string>& ar
         if (args[0] == "stop")
         {
             // do something
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
         }
     }
 
@@ -898,78 +1015,6 @@ std::string WebServiceHandler::GuessContentTypeFromExtension(const std::string& 
     }
     return contentType;
 }
-
-#if 0
-/// clear any error states in the PA pipeline. It might take a few seconds for the "dismiss" message to
-/// propagate through the pipeline and have all of the processes report in with a status messages,
-/// so this can block up to about "maxRetries" seconds.
-void WebServiceHandler::ClearErrors(const int maxRetries)
-{
-    if (AnyErrored())
-    {
-        {
-            auto pis = LockPaInternalStatus();
-            PBLOG_WARN << "At least one subsystem was in error mode: " + pis->RenderJSON();
-        }
-        PBLOG_INFO << "Attempting to dismiss error condition";
-        acqRemote_.DismissError(); // this will dismiss all errors in the pipeline, starting with pa-acq, continuing
-        // through pa-t2b and pa-bw. ppa does not have an error state, so it does not need to be cleared, although
-        // this is confusing as there is a "PPAState::error" enum, but this is actually an exception event, not
-        // a persistent state.
-    }
-
-    for (int attempt = maxRetries; attempt >= 0 ; attempt--)
-    {
-        bool ready = ReadyToStartAcquisition();
-        if (ready)
-        {
-            break;
-        }
-        else
-        {
-            if (attempt == 0 )
-            {
-                auto pis = LockPaInternalStatus();
-                throw HttpResponseException( HttpStatus::FORBIDDEN,
-                                             "PA realtime is not ready to start acquisition. "
-                                             "Can't start new acquisition." + pis->RenderJSON());
-            }
-            else
-            {
-                PBLOG_WARN << "PA realtime is not ready to start acquisition, remaining attempts " << attempt;
-            }
-            POSIX::sleep(1);
-        }
-    }
-}
-
-/// Creates a new acquisition for the database.
-/// \param  postJson : the RunMetaData XML as part of a JSON object
-/// \returns The HTTP response
-HttpResponse WebServiceHandler::CreateAcquisitions(const Json::Value& postJson)
-{
-    HttpResponse response;
-    response.httpStatus = HttpStatus::OK;
-
-    if (!postJson["rundetails"].isString())
-    {
-        throw PBException("acquisition POST data does not have valid JSON with rundetails fields");
-    }
-
-    PBLOG_DEBUG << "POST Acquisitions Raw Run Details";
-    PBLOG_DEBUG << postJson["rundetails"];
-
-    std::string rmdString = postJson["rundetails"].asString();
-
-    const int maxRetires = 7;
-    ClearErrors(maxRetires);
-
-    AcqResList acqResList = webServer_->CreateAcquisitions(rmdString);
-
-    response.json = acqResList.Json();
-    return response;
-}
-#endif
 
 
 /// Handle the POST data
@@ -1096,6 +1141,31 @@ HttpResponse WebServiceHandler::DELETE(const std::string& uri)
     {
         auto args = String::Split(String::Chomp(uri,'/'), '/');
 
+        PBLOG_DEBUG << "args:" << String::Join(args.begin(), args.end(), ',');
+
+        if (args.size() >= 1)
+        {
+            if (args[0] == "sockets")
+            {
+                args.erase(args.begin());
+                return DELETE_Sockets(args);
+            }
+            else if (args[0] == "postprimaries")
+            {
+                args.erase(args.begin());
+                return DELETE_Postprimaries(args);
+            }
+            else if (args[0] == "storages")
+            {
+                args.erase(args.begin());
+                return DELETE_Storages(args);
+            }
+            else if (args[0] == "transfers")
+            {
+                args.erase(args.begin());
+                return DELETE_Transfer(args);
+            }
+        }
         throw HttpResponseException(HttpStatus::NOT_FOUND, "not found:" + args[0]);
     }
 
@@ -1125,27 +1195,86 @@ HttpResponse WebServiceHandler::DELETE(const std::string& uri)
 }
 
 
-#if 0
-/// helper function to go a HTTP GET
-/// \param httpClient : the persistent client from the parent
-/// \param url : the url to GET
-/// \returns a ConfigurationObject derived instance (or anything that supports Load(std:string))
-template<typename T>
-T HttpGet(PacBio::IPC::CurlPlusPlus& httpClient, std::string& url)
+HttpResponse WebServiceHandler::DELETE_Sockets(const std::vector<std::string>& args)
 {
-    T t;
-    std::string s = httpClient.Get(url);
-    HttpStatus code = static_cast<HttpStatus>(httpClient.GetHttpCode());
-    PBLOG_TRACE << url << " status:" << code << " " << s;
-    if (code != HttpStatus::OK && code != HttpStatus::CREATED)
+    HttpResponse response;
+    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
+
+    auto nextArg = args.begin();
+    if (nextArg != args.end())
     {
-        throw PBException(url + " GET failed with code " + std::to_string((int) code));
+        uint32_t socketNumber = std::stoul(*nextArg);
+        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
+        {
+            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
+        }
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
+        }
     }
-    t.Load(s);
-    return t;
+    return response;
 }
-#endif
+
+HttpResponse WebServiceHandler::DELETE_Postprimaries(const std::vector<std::string>& args)
+{
+    HttpResponse response;
+    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
+
+    auto nextArg = args.begin();
+    if (nextArg != args.end())
+    {
+        const std::string mid = *nextArg;
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
+        }
+    }
+    return response;
+}
+
+HttpResponse WebServiceHandler::DELETE_Storages(const std::vector<std::string>& args)
+{
+    HttpResponse response;
+    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
+
+    auto nextArg = args.begin();
+    if (nextArg != args.end())
+    {
+        uint32_t socketNumber = std::stoul(*nextArg);
+        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
+        {
+            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
+        }
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
+        }
+    }
+    return response;
+}
+
+HttpResponse WebServiceHandler::DELETE_Transfer(const std::vector<std::string>& args)
+{
+    HttpResponse response;
+    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
+
+    auto nextArg = args.begin();
+    if (nextArg != args.end())
+    {
+        const std::string mid = *nextArg;
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
+        }
+    }
+    return response;
+}
 
 
-}}}
+}}} // namespace
 
