@@ -51,7 +51,6 @@ include(pacbio-git-info)
 generate_version_h(${SOFTWARE_VERSION})
 message(STATUS "SOFTWARE_VERSION is ${SOFTWARE_VERSION}")
 generate_config_header(PaCalHeader.h PaCalHeader)
-create_git_rev_header()
 
 add_library(lib-pa-cal
     STATIC

@@ -38,7 +38,9 @@
 #include <pacbio/POSIX.h>
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
+#ifdef USE_SYSTEMD
 #include <pacbio/process/SystemdClient.h>
+#endif
 #include <pacbio/process/RESTDataModel.h>
 #include <pacbio/process/RESTServer.h>
 #include <pacbio/sensor/Platform.h>
@@ -238,11 +240,15 @@ void PaWsProcess::RunAllThreads()
 
 
         PBLOG_INFO << "PaWsProcess entering event loop";
+#ifdef USE_SYSTEMD
         SystemdClient systemdClient;
+#endif
         while(!ExitRequested())
         {
             PacBio::POSIX::Sleep(1.0);
+#ifdef USE_SYSTEMD
             if (enableWatchdog_) systemdClient.FeedWatchdog(); // TODO. Instead of feeding the watchdog here, this should trigger a cascade of functions that wind through all threads
+#endif
         }
         PBLOG_INFO << "PaWsProcess exiting event loop.";
     }
