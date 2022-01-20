@@ -1285,7 +1285,11 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
 
         PBFloat2 tmp = mom1 * mom1 / mom0;
         tmp = (mom2 - tmp) / (mom0 - 1.0f);
-        PBHalf2 var = max(PBHalf2{tmp.X(), tmp.Y()}, 0.0f);
+        // We're having problems with the baseline variance overflowing a half precision
+        // storage.  Something is already terribly wrong if our variance is over
+        // 65k, but we'll put a limiter here because having a literal infinity run
+        // around is causing problems elsewhere
+        PBHalf2 var = min(max(PBHalf2{tmp.X(), tmp.Y()}, 0.0f), 60000.f);
         return Blend(mom0 > 1.0f, var, nan);
     };
 
