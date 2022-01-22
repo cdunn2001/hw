@@ -17,8 +17,8 @@ if [[ ! -v NO_MODULE_LOAD ]]; then
     module load pacbio-pa-mongo/workspace
 fi
 
-echo "Using bazviewer: $(which bazviewer)."
-echo "Using smrt-basecaller: $(which smrt-basecaller)."
+echo "Using bazviewer: $(which bazviewer)"
+echo "Using smrt-basecaller: $(which smrt-basecaller)"
 
 pushd $(dirname "$0")
 cram -v *.t

@@ -59,6 +59,18 @@ public:
                         {"analyzerHardware"}
     ));
     
+    // Two parameters soley for tuning calibration coefficients.
+    // Each adjusts its corresponding coefficient by a factor of exp2(x).
+    PB_CONFIG_PARAM(float, MeanBiasAdjust, 0.0f);
+    PB_CONFIG_PARAM(float, SigmaBiasAdjust, 0.0f);
+
+    // The "half-life" for the unbiased exponential moving average used to
+    // smooth the estimate of the baseline.
+    // MeanEmaScaleStrides must be >= 0.
+    // Internal use of single-precision floating-point sets the practical
+    // limit that MeanEmaScaleStrides should not exceed about 3.0e6.
+    PB_CONFIG_PARAM(float, MeanEmaScaleStrides, 0.0f);
+
     // The "half-life" for the exponential moving average used to smooth
     // the lower-upper-gap-based estimate of baseline sigma.
     // SigmaEmaScaleStrides must be >= +0.

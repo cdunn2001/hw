@@ -226,9 +226,10 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         analysisConfig.movieInfo.photoelectronSensitivity = scaler;
         analysisConfig.pedestal = params.pedestalValue;
         analysisConfig.encoding = params.encoding;
-        const auto baselinerConfig = TestConfig::BaselinerConfig(
+        auto baselinerConfig = TestConfig::BaselinerConfig(
                             params.method,
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+        baselinerConfig.SigmaEmaScaleStrides = 0;
         if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
             HostMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
         else if (params.method == BasecallerBaselinerConfig::MethodName::DeviceMultiScale)
@@ -478,9 +479,10 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
 
     Data::AnalysisConfig analysisConfig;
     analysisConfig.movieInfo.photoelectronSensitivity = scaler;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(
+    auto baselinerConfig = TestConfig::BaselinerConfig(
             BasecallerBaselinerConfig::MethodName::HostMultiScale, /*ignored*/
             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
+    baselinerConfig.SigmaEmaScaleStrides = 0;
     Baseliner::Configure(baselinerConfig, analysisConfig);
 
     // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for

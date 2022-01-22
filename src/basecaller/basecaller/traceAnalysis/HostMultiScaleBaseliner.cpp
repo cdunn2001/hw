@@ -44,6 +44,8 @@ namespace Mongo {
 namespace Basecaller {
 
 // static
+float HostMultiScaleBaseliner::cMeanBiasAdj_ = 0.0f;
+float HostMultiScaleBaseliner::cSigmaBiasAdj_ = 0.0f;
 float HostMultiScaleBaseliner::meanEmaAlpha_ = 0.0f;
 float HostMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
 float HostMultiScaleBaseliner::jumpTolCoeff_ = std::numeric_limits<float>::infinity();
@@ -59,8 +61,15 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
         // This just asserts that the configuration is indeed valid.
         assert(bbc.Validate());
 
-        const float meanEmaScale = 1.0; //bbc.MeanEmaScaleStrides;
+        cMeanBiasAdj_ = bbc.MeanBiasAdjust;
+        assert(std::isfinite(cMeanBiasAdj_));
+
+        cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
+        assert(std::isfinite(cSigmaBiasAdj_));
+
+        const float meanEmaScale = bbc.MeanEmaScaleStrides;
         meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);
+        assert(0.0f <= meanEmaAlpha_ && meanEmaAlpha_ < 1.0f);
 
         const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
         std::ostringstream msg;
@@ -70,8 +79,9 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
         sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
         assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
 
-        const float js = bbc.JumpSuppression;
-        jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
+        // TODO: Enable jumpTolCoeff_
+        // const float js = bbc.JumpSuppression;
+        // jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
     }
 }
 
@@ -136,42 +146,24 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     // Compute and subtract baseline while tabulating the stats.
     auto trIt = traceData.CBegin();
     auto blsIt = baselineSubtractedData.Begin();
-
-    const auto sbInv = 1.0f / cSigmaBias_;
     auto loIt = lower->CBegin(), upIt = upper->CBegin();
     const size_t tileCount = traceData.NumFrames() / Stride();
 
-    auto firstBatch = false;
-    if (firstBatch)
-    {
-        for (size_t i = 0; i < tileCount; i++, upIt++, loIt++)
-        {
-            auto upperVal = upIt.Extract() - pedestal_;
-            auto lowerVal = loIt.Extract() - pedestal_;
-            blSigmaEma_ += upperVal - lowerVal;
-        }
-
-        blSigmaEma_ /= cSigmaBias_ * FloatArray(tileCount);
-    }
-
+    trIt = traceData.CBegin();
     loIt = lower->CBegin(), upIt = upper->CBegin();
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     for (size_t i = 0; i < tileCount; i++, upIt++, loIt++)
     {
         auto lowerVal = loIt.Extract() - pedestal_;
         auto upperVal = upIt.Extract() - pedestal_;
-
-        // Ema sigma
-        FloatArray blEstUema = GetBlEma(lowerVal, upperVal);
-
-        // Smoothed sigma
-        FloatArray blEstSmooth = GetBlSmoothed(lowerVal, upperVal);
+        FloatArray blEst = GetSmoothedBlEstimate(lowerVal, upperVal);
 
         // Estimates are scattered on stride intervals.
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
+            // Data scaled shifted and scaled
             auto rawSignal = trIt.Extract() - pedestal_;
-            LaneArray blSubtractedFrame((rawSignal - blEstSmooth) * scaler_);
+            LaneArray blSubtractedFrame((rawSignal - blEst) * scaler_);
             // ... stored as output traces
             blsIt.Store(blSubtractedFrame);
             // ... and added to statistics
@@ -187,16 +179,21 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
                                                                       Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
     // Thresholds below are specified as floats whereas incoming frame data are shorts.
+    constexpr float sigmaThrL = 4.5f;
+    FloatArray thrLow = FloatArray(sigmaThrL) * blSigmaEma_;
+
+    constexpr float sigmaThrH = 4.5f;
+    FloatArray thrHigh = FloatArray(sigmaThrH) * blSigmaEma_;
 
     // Compute the high mask at the plus-1 position (this) for variance
-    const auto& maskHp1 = baselineSubtractedFrame < thrHigh_ * scaler_;
+    const auto& maskHp1 = baselineSubtractedFrame < thrHigh * scaler_;
 
     // Compute the full mask to use for the single-frame latent variance
     // Minus-1[High] & Pos-0[Low] & Plus-1[High]
     const auto& mask = latHMask1_ & latLMask_ & maskHp1;
 
     // Push the plus-1 frame masks
-    latLMask_ = baselineSubtractedFrame < thrLow_ * scaler_;
+    latLMask_ = baselineSubtractedFrame < thrLow * scaler_;
     latHMask2_ = latHMask1_;
     latHMask1_ = maskHp1;
 
@@ -208,48 +205,17 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
 }
 
 HostMultiScaleBaseliner::FloatArray
-HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedSigma(const FloatArray& sigma)
+HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper)
 {
-    // Fixed thresholds for variance computation.
-    // TODO - Make these tunable parameters.
-    const FloatArray minSigma { sqrt(1.0f/12.0f) };
-    const auto sigmaEmaAlpha = SigmaEmaAlpha();
+    const float sigmaEmaAlpha = SigmaEmaAlpha();
 
-    bgSigma_ = (1.0f - sigmaEmaAlpha) * bgSigma_
-                + sigmaEmaAlpha * max(sigma, minSigma);
-
-    // Update thresholds for classifying baseline frames.
-    constexpr float sigmaThrL { 4.5f };
-    thrLow_ = FloatArray{sigmaThrL} * bgSigma_;
-
-    constexpr float sigmaThrH { 4.5f };
-    thrHigh_ = FloatArray{sigmaThrH} * bgSigma_;
-
-    return bgSigma_;
-}
-
-HostMultiScaleBaseliner::FloatArray
-HostMultiScaleBaseliner::MultiScaleBaseliner::GetBlSmoothed(const FloatArray& lowerVal, const FloatArray& upperVal)
-{
-    const auto sbInv = 1.0f / cSigmaBias_;
-    const auto& bias = (upperVal + lowerVal) * 0.5f;
-    const auto& framebkgndSigma = (upperVal - lowerVal) * sbInv;
-    const auto& smoothedBkgndSigma = GetSmoothedSigma(framebkgndSigma);
-    FloatArray blEstSmooth = bias + cMeanBias_ * smoothedBkgndSigma;
-    return blEstSmooth;
-}
-
-HostMultiScaleBaseliner::FloatArray
-HostMultiScaleBaseliner::MultiScaleBaseliner::GetBlEma(const FloatArray& lower, const FloatArray& upper)
-{
-    // Calculate new single-stride estimate of baseline sigma.
-    auto newSigmaEma = blSigmaEma_ * sigmaEmaAlpha_;
     // TODO: Possible catastrophic loss of precision here!
-    newSigmaEma += (1.0f - sigmaEmaAlpha_) * (upper - lower) / cSigmaBias_;
+    auto sigma = (upper - lower) / cSigmaBias_;
+    auto newSigmaEma = sigmaEmaAlpha * blSigmaEma_ + (1.0f - sigmaEmaAlpha) * sigma;
 
     // Calculate the new single-stride estimate of baseline mean.
-    const FloatArray blBias = cMeanBias_ * newSigmaEma;
-    const FloatArray blEst = 0.5f * (upper + lower) + blBias;
+    const FloatArray bias = 0.5f * (upper + lower);
+    const FloatArray blEst = bias + cMeanBias_ * newSigmaEma;
 
     // We presume that large jumps represent pathological enzyme-analog
     // binding events.
@@ -257,8 +223,11 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetBlEma(const FloatArray& lower, 
     // averages if blEst exceeds previous baseline EMA by more than
     // jump tolerance.
     // Notice the asymmetry--only positive jumps are suppressed.
-    const auto& mask = ((blMeanUemaWeight_ == 0.0f)
-        | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < jumpTolCoeff_* blSigmaEma_));
+    
+    // TODO: Enable masking for jumpTolCoeff_
+    // const auto mask = ((blMeanUemaWeight_ == 0.0f)
+    //     | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < jumpTolCoeff_* blSigmaEma_));
+    const MaskArray mask = true;
 
     // Conditionally update EMAs of baseline mean and sigma.
     const FloatArray newWeight = meanEmaAlpha_ * blMeanUemaWeight_ + (1.0f - meanEmaAlpha_);
