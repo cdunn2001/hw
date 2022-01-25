@@ -56,10 +56,17 @@ class DeviceMultiScaleBaseliner : public Baseliner
 {
     static constexpr size_t lag = 4;
 
+private:     // Static data
     // Used to initialze the morpholigical filters.  Really the first bunch of frames
     // out are garbage, but setting this value at least close to the expected baseline
     // means it will potentially not be horribly off base.
     static constexpr short initVal = 150;
+
+    static float cSigmaBiasAdj_;
+    static float cMeanBiasAdj_;
+    static float meanEmaAlpha_;
+    static float sigmaEmaAlpha_;
+    static float jumpTolCoeff_;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.

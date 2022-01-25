@@ -231,10 +231,10 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneAr
 
     // Conditionally update EMAs of baseline mean and sigma.
     const FloatArray newWeight = meanEmaAlpha_ * blMeanUemaWeight_ + (1.0f - meanEmaAlpha_);
-    const FloatArray newSum = meanEmaAlpha_ * blMeanUemaSum_ + (1.0f - meanEmaAlpha_) * blEst;
+    const FloatArray newSum    = meanEmaAlpha_ * blMeanUemaSum_    + (1.0f - meanEmaAlpha_) * blEst;
     blMeanUemaWeight_ = Blend(mask, newWeight, blMeanUemaWeight_);
-    blMeanUemaSum_ = Blend(mask, newSum, blMeanUemaSum_);
-    blSigmaEma_ = Blend(mask, newSigmaEma, blSigmaEma_);
+    blMeanUemaSum_    = Blend(mask, newSum, blMeanUemaSum_);
+    blSigmaEma_       = Blend(mask, newSigmaEma, blSigmaEma_);
 
     assert(all(blMeanUemaWeight_ > 0.0f));
 

@@ -39,12 +39,39 @@ namespace Basecaller {
 using namespace PacBio::Cuda::Memory;
 
 constexpr short  DeviceMultiScaleBaseliner::initVal;
+float DeviceMultiScaleBaseliner::cMeanBiasAdj_  = 0.0f;
+float DeviceMultiScaleBaseliner::cSigmaBiasAdj_ = 0.0f;
+float DeviceMultiScaleBaseliner::meanEmaAlpha_  = 0.0f;
+float DeviceMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
+float DeviceMultiScaleBaseliner::jumpTolCoeff_  = std::numeric_limits<float>::infinity();
 
-void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&,
+void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
                                           const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = false;
     InitFactory(hostExecution, analysisConfig);
+
+    cMeanBiasAdj_ = bbc.MeanBiasAdjust;
+    assert(std::isfinite(cMeanBiasAdj_));
+
+    cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
+    assert(std::isfinite(cSigmaBiasAdj_));
+
+    const float meanEmaScale = bbc.MeanEmaScaleStrides;
+    meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);
+    assert(0.0f <= meanEmaAlpha_ && meanEmaAlpha_ < 1.0f);
+
+    const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
+    std::ostringstream msg;
+    msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
+    // TODO: Use a scoped logger.
+    PBLOG_INFO << msg.str();
+    sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
+    assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
+
+    // TODO: Enable jumpTolCoeff_
+    // const float js = bbc.JumpSuppression;
+    // jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
@@ -70,6 +97,10 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
     Cuda::ComposedConstructArgs args;
     args.pedestal = pedestal_;
     args.scale = Scale();
+    args.meanBiasAdj   = cMeanBiasAdj_;
+    args.sigmaBiasAdj  = cSigmaBiasAdj_;
+    args.meanEmaAlpha  = meanEmaAlpha_;
+    args.sigmaEmaAlpha = sigmaEmaAlpha_;
     args.numLanes = lanesPerPool;
     args.val = initVal;
     switch (expectedEncoding_)
