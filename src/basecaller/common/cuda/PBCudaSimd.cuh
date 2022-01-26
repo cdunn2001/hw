@@ -148,8 +148,10 @@ inline __device__ PBShort2 operator ||(PBShort2 first, PBShort2 second)
     // represent true/false, then the logical operations are the same
     // as bitwise operations.  If they are not, then using logical
     // operations on arbitrary integers will not work as expected.
-    assert(first.data() == 0 || first.data() == 0xFFFFFFFF);
-    assert(second.data() == 0 || second.data() == 0xFFFFFFFF);
+    assert(first.X() == 0 || first.X() == static_cast<short>(0xFFFF));
+    assert(first.Y() == 0 || first.Y() == static_cast<short>(0xFFFF));
+    assert(second.X() == 0 || second.X() == static_cast<short>(0xFFFF));
+    assert(second.Y() == 0 || second.Y() == static_cast<short>(0xFFFF));
     return first | second;
 }
 inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
@@ -158,6 +160,10 @@ inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
     // represent true/false, then the logical operations are the same
     // as bitwise operations.  If they are not, then using logical
     // operations on arbitrary integers will not work as expected.
+    assert(first.X() == 0 || first.X() == static_cast<short>(0xFFFF));
+    assert(first.Y() == 0 || first.Y() == static_cast<short>(0xFFFF));
+    assert(second.X() == 0 || second.X() == static_cast<short>(0xFFFF));
+    assert(second.Y() == 0 || second.Y() == static_cast<short>(0xFFFF));
     return first & second;
 }
 

@@ -81,8 +81,8 @@ struct RoiFilter<RoiFilterType::Default>
     //   * [-1, 1)
     //   * [-1, 2)
     //   * [-1, 3)
-    __device__ static PBHalf2 SmoothedVal(const Utility::CudaArray<PBShort2, lookFull>& oldVals,
-                                          PBShort2 newVal)
+    __device__ static PBHalf2 SmoothedVal(const Utility::CudaArray<PBHalf2, lookFull>& oldVals,
+                                          PBHalf2 newVal)
     {
         auto mval = max((oldVals[0] + oldVals[1]) / sqrt(2), oldVals[1]);
         mval = max(mval, (oldVals[0] + oldVals[1] + oldVals[2]) / sqrt(3));
@@ -98,8 +98,8 @@ struct RoiFilter<RoiFilterType::NoOp>
     static constexpr size_t lookForward = 0;
     static constexpr size_t lookBack = 0;
 
-    __device__ static PBHalf2 SmoothedVal(const Utility::CudaArray<PBShort2, 0>&,
-                                          PBShort2)
+    __device__ static PBHalf2 SmoothedVal(const Utility::CudaArray<PBHalf2, 0>&,
+                                          PBHalf2)
     {
         // A bit of a hack, but return an arbitrarily high value
         // to try and make sure this frame gets labeled as roi.
@@ -109,6 +109,14 @@ struct RoiFilter<RoiFilterType::NoOp>
     }
 };
 
+// This class (or really rather the two nested classes) are holdovers
+// from an earlier implementation which took a (flawed) approach at
+// doing the roi and viterbi algorithms at the same time.  The
+// abstractions are probably a bit heavier than is necessary now that
+// the roi computation is done upfront and in isolation.  This probably
+// could be simplified a lot, I've just run out of time.  Future maintainers
+// should feel free to re-org this, as long as they verify that the algorithm
+// runtime is not affected by the changes.
 class Roi
 {
     static constexpr int16_t roiBit = 0x1;
@@ -123,40 +131,30 @@ public:
     public:
         template <typename T>
         __device__ ForwardRecursion(const Utility::CudaArray<T, RoiFilter::lookBack>& latentTraces,
-                       const Mongo::Data::StridedBlockView<PBShort2>& inTraces,
-                       PBShort2 roiBC,
-                       PBHalf2 invSigma,
-                       const Mongo::Data::StridedBlockView<PBShort2>& roi)
+                                    const Mongo::Data::StridedBlockView<PBShort2>& inTraces,
+                                    PBHalf2 invSigma,
+                                    PBShort2 roiBC,
+                                    const Mongo::Data::StridedBlockView<PBShort2>& roi)
            : roi_(roi)
            , prevRoi_(roiBC)
-           , invSigma_(invSigma)
         {
             int datIdx = 0;
             assert(inTraces.size() > RoiFilter::lookForward);
             for (const auto& val : latentTraces)
             {
-                data_[datIdx] = val;
+                data_[datIdx] = PBShort2{val} * invSigma;
                 datIdx++;
             }
             for (int trcIdx = 0; trcIdx < RoiFilter::lookForward; ++trcIdx, ++datIdx)
             {
-                data_[datIdx] = inTraces[trcIdx];
+                data_[datIdx] = inTraces[trcIdx] * invSigma;
             }
             assert(datIdx == arrSize);
         }
 
-        __device__ void UpdateInvSigma(PBHalf2 invSigma)
+        __device__ void Process(PBHalf2 val)
         {
-            invSigma_ = invSigma;
-        }
-
-        __device__ PBShort2 Process(PBShort2 val)
-        {
-            // Note: The sigma used is only an approximation while we're crossing
-            //       a block boundary.  Some subset of the points will be
-            //       using a (hopefully slightly) wrong baseline variance
-            //       here
-            const auto sVal = RoiFilter::SmoothedVal(data_, val) * invSigma_;
+            const auto sVal = RoiFilter::SmoothedVal(data_, val);
 
             PBHalf2 thresh = Blend((prevRoi_ & roiBit) != 0,
                                    PBHalf2{roiThresh.lowerThreshold},
@@ -171,10 +169,6 @@ public:
             roiIdx_++;
             prevRoi_ = roiVal;
 
-            PBShort2 ret = (RoiFilter::lookForward > 0)
-                ? data_[arrSize - RoiFilter::lookForward]
-                : val;
-
             if constexpr (arrSize > 1)
             {
                 #pragma unroll
@@ -184,7 +178,6 @@ public:
                 }
                 data_[arrSize-1] = val;
             }
-            return ret;
         }
 
         __device__ int16_t NextIdx() const { return roiIdx_; }
@@ -192,10 +185,9 @@ public:
     private:
         static constexpr size_t arrSize = RoiFilter::lookForward + RoiFilter::lookBack;
 
-        Utility::CudaArray<PBShort2, arrSize> data_;
+        Utility::CudaArray<PBHalf2, arrSize> data_;
         Mongo::Data::StridedBlockView<PBShort2> roi_;
         PBShort2 prevRoi_;
-        PBHalf2 invSigma_;
         int16_t roiIdx_ = 0;
     };
 
@@ -203,7 +195,7 @@ public:
     struct BackwardRecursion
     {
         __device__ BackwardRecursion(const Mongo::Data::StridedBlockView<PBShort2>& roi)
-            : prevRoi_(0)
+            : prevRoi_(false)
             , roiIdx_(roi.size())
             , roi_(roi)
         {
@@ -216,7 +208,7 @@ public:
             }
         }
 
-        __device__ PBShort2 PopRoiState()
+        __device__ void PopRoiState()
         {
             --roiIdx_;
             assert(roiIdx_ < roi_.size());
@@ -224,7 +216,7 @@ public:
             auto roiBool = (roi_[roiIdx_] & roiBit) != 0;
             roiBool = roiBool || ((roi_[roiIdx_] & midBit) != 0 && prevRoi_ != 0);
             prevRoi_ = Blend(roiBool, roiBit, PBShort2{0});
-            return roiBool;
+            roi_[roiIdx_] = roiBool;
         }
 
         __device__ int16_t FramesRemaining() const { return roiIdx_; }
@@ -234,6 +226,49 @@ public:
         Mongo::Data::StridedBlockView<PBShort2> roi_;
     };
 };
+
+// Performs the algorithm that determins if each frame is within the
+// ROI.  The main gist of things are as follows:
+//  * For each frame, we look at some window of baseline sigma normalized
+//    traces to determine a value for that frame.  The precise window and
+//    function used is controlled by the RoiFilter template parameter
+//  * If the produced value is above the "high" threshold, then it is
+//    determined to be ROI
+//  * If the produced value is between the "high" and "low" thresholds, then
+//    it is determined to be ROI *IFF* one of its neighbors is also ROI
+//  * Since we might need to know if the next point is ROI before we can tell
+//    if the curent point is ROI, we have to do both a forwards and backwards
+//    traversal over the data.  On the forward pass we determine who is ROI from
+//    the high threshold, and who is maybe ROI from the low threshold.  On the
+//    backwards pass we then have enough information to make the final ROI
+//    determination.
+//  * The effect is that all consecutive frames above the low threshold are
+//    ROI, as long as at least one of those points is also above the high threshold
+template <typename RoiFilter, typename T, size_t len>
+__device__ static void ComputeRoi(const Utility::CudaArray<T, len>& latentTraces,
+                                  PBShort2 roiBC,
+                                  const Mongo::Data::StridedBlockView<PBShort2>& traces1,
+                                  const Mongo::Data::StridedBlockView<const PBShort2>& traces2,
+                                  PBHalf2 invSigma1,
+                                  PBHalf2 invSigma2,
+                                  const Mongo::Data::StridedBlockView<PBShort2>& roi)
+{
+    assert(roi.size() == traces1.size() + traces2.size() - RoiFilter::lookForward);
+
+    Roi::ForwardRecursion<RoiFilter> forward(latentTraces, traces1, invSigma1, roiBC, roi);
+    for (size_t i = RoiFilter::lookForward; i < traces1.size(); ++i)
+    {
+        forward.Process(traces1[i] * invSigma1);
+    }
+
+    for (size_t i = 0; i < traces2.size(); ++i)
+    {
+        forward.Process(traces2[i] * invSigma2);
+    }
+
+    Roi::BackwardRecursion<RoiFilter> backward(roi);
+    while (backward.FramesRemaining() > 0) backward.PopRoiState();
+}
 
 }
 
