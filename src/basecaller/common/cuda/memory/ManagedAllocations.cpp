@@ -415,7 +415,9 @@ private:
         // scheme, this is memory that won't be returned to the system until the
         // cache is destroyed
         const auto recentFallow = cacheStats_.PastMemUsage().recentMinBytes;
-        const auto totalAllocs = fullStats_.PastMemUsage().peakBytes;
+        const auto fullInfo = fullStats_.PastMemUsage();
+        const auto totalAllocs = fullInfo.peakBytes;
+        const auto recentAllocs = fullInfo.recentPeakBytes;
 
         auto PrettyMemNumber = [](auto& stream, float f) -> decltype(auto)
         {
@@ -437,8 +439,10 @@ private:
         msg << std::setprecision(3);
 
         msg << "----Memory usage report for " << Allocator::description << "-----\n"
-            << "Total mem usage: ";
+            << "All Time High Water: ";
         PrettyMemNumber(msg, totalAllocs) << " \n"
+            << "Recent High Water: ";
+        PrettyMemNumber(msg, recentAllocs) << " \n"
             << "All Time High Water Marks sum: ";
         PrettyMemNumber(msg, peakSum) << " (Savings: "
             << 100.0f - 100.0f * totalAllocs / peakSum << "%)\n"

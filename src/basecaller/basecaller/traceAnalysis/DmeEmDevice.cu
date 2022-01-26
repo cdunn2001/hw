@@ -360,7 +360,7 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.refSnr_ = movieInfo.refSnr;
     config.movieScaler_ = movieInfo.photoelectronSensitivity;
 
-    Cuda::CudaCopyToSymbol(staticConfig, &config);
+    Cuda::CudaCopyToSymbol(&staticConfig, &config);
 }
 
 __device__ int TotalCount(const DmeEmDevice::LaneHist& hist)

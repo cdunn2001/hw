@@ -139,29 +139,33 @@ public:
            , prevRoi_(roiBC)
         {
             int datIdx = 0;
-            assert(inTraces.size() > RoiFilter::lookForward);
+            assert(inTraces.size() >= RoiFilter::lookForward);
             for (const auto& val : latentTraces)
             {
-                data_[datIdx] = PBShort2{val} * invSigma;
+                previousData_[datIdx] = PBShort2{val} * invSigma;
                 datIdx++;
             }
             for (int trcIdx = 0; trcIdx < RoiFilter::lookForward; ++trcIdx, ++datIdx)
             {
-                data_[datIdx] = inTraces[trcIdx] * invSigma;
+                previousData_[datIdx] = inTraces[trcIdx] * invSigma;
             }
             assert(datIdx == arrSize);
         }
 
-        __device__ void Process(PBHalf2 val)
+        // Makes incremental process on the ROI forward recursion step.  It accepts
+        // a new sigma normalized baseline frame, applies the RoiFilter smoothing
+        // process to it, and then compares the resulting value to the lower/upper
+        // thresholds used in the ROI determination process
+        __device__ void ProcessNextFrame(PBHalf2 sigmaNormalized)
         {
-            const auto sVal = RoiFilter::SmoothedVal(data_, val);
+            const auto frameValue = RoiFilter::SmoothedVal(previousData_, sigmaNormalized);
 
             PBHalf2 thresh = Blend((prevRoi_ & roiBit) != 0,
                                    PBHalf2{roiThresh.lowerThreshold},
                                    PBHalf2{roiThresh.upperThreshold});
 
-            PBShort2 roiVal = Blend(sVal >= thresh, roiBit, PBShort2{0});
-            roiVal = roiVal | Blend(sVal >= roiThresh.lowerThreshold, midBit, PBShort2{0});
+            PBShort2 roiVal = Blend(frameValue >= thresh, roiBit, PBShort2{0});
+            roiVal = roiVal | Blend(frameValue >= roiThresh.lowerThreshold, midBit, PBShort2{0});
 
             assert(roiIdx_ < roi_.size());
             assert(roiIdx_ >= 0);
@@ -174,9 +178,9 @@ public:
                 #pragma unroll
                 for (size_t i = 0; i < arrSize-1; ++i)
                 {
-                    data_[i] = data_[i+1];
+                    previousData_[i] = previousData_[i+1];
                 }
-                data_[arrSize-1] = val;
+                previousData_[arrSize-1] = sigmaNormalized;
             }
         }
 
@@ -185,7 +189,7 @@ public:
     private:
         static constexpr size_t arrSize = RoiFilter::lookForward + RoiFilter::lookBack;
 
-        Utility::CudaArray<PBHalf2, arrSize> data_;
+        Utility::CudaArray<PBHalf2, arrSize> previousData_;
         Mongo::Data::StridedBlockView<PBShort2> roi_;
         PBShort2 prevRoi_;
         int16_t roiIdx_ = 0;
@@ -258,12 +262,12 @@ __device__ static void ComputeRoi(const Utility::CudaArray<T, len>& latentTraces
     Roi::ForwardRecursion<RoiFilter> forward(latentTraces, traces1, invSigma1, roiBC, roi);
     for (size_t i = RoiFilter::lookForward; i < traces1.size(); ++i)
     {
-        forward.Process(traces1[i] * invSigma1);
+        forward.ProcessNextFrame(traces1[i] * invSigma1);
     }
 
     for (size_t i = 0; i < traces2.size(); ++i)
     {
-        forward.Process(traces2[i] * invSigma2);
+        forward.ProcessNextFrame(traces2[i] * invSigma2);
     }
 
     Roi::BackwardRecursion<RoiFilter> backward(roi);

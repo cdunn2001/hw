@@ -68,10 +68,11 @@ __device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
         vec[i] = exp(vec[i] - maxVal);
         sum += vec[i];
     }
+    auto invSum = 1 / sum;
     #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
-        vec[i] /= sum;
+        vec[i] *= invSum;
     }
 }
 
@@ -94,7 +95,7 @@ __device__ void Recursion(Labels& labels, LogLike& logLike, const Scorer& scorer
     // code sections did bit twiddles on.  Trying to encapsulate that into
     // a small class caused this filter to slow down by almost 2x.  The
     // combination of making it a struct, and the fact that AddRow used to
-    // be a template function that accepted packedLabelsby reference, caused
+    // be a template function that accepted packedLabels by reference, caused
     // the variable to be pushed to global memory and the increased memory
     // traffic killed performance.  For whatever reason, capturing this
     // by reference in a lambda doesn't cause any issues, though one would
@@ -206,6 +207,11 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
         logLike[i] = Blend(bc == i, zero, ninf);
     }
 
+    // We need to have enough space to compute the ROI for all frames we will emit in this block,
+    // plus enough extra to cover the viterbi lookback process, *plus* yet a little more extdra
+    // so handle the viterbi stitching process (which really is just having a few extra frames
+    // to lessen the impact of an arbitrary RHS boundary condition)
+    assert(roiWorkspace.NumFrames() == input.NumFrames() + ViterbiStitchLookback + RoiFilter::stitchFrames);
     ComputeRoi<RoiFilter>(latent.GetLatentTraces(),
                           latent.GetRoiBoundary(),
                           prevLat.ZmwData(blockIdx.x, threadIdx.x),

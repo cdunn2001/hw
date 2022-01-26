@@ -876,7 +876,7 @@ void DeviceHFMetricsFilter::Configure(uint32_t sandwichTolerance,
                                realtimeActivityLabels,
                                false);
     auto trainedCartHost = TrainedCartDevice::PopulatedModel();
-    CudaCopyToSymbol(trainedCartParams, &trainedCartHost);
+    CudaCopyToSymbol(&trainedCartParams, &trainedCartHost);
 }
 
 }}} // PacBio::Mongo::Basecaller

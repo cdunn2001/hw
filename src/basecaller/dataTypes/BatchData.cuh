@@ -59,7 +59,7 @@ public:
         ptr_ += count*stride_;
         return *this;
     }
-    __device__ StrideIterator operator+(int count)
+    __device__ StrideIterator operator+(int count) const
     {
         StrideIterator ret = *this;
         return ret += count;
@@ -73,7 +73,7 @@ public:
         ptr_ -= count*stride_;
         return *this;
     }
-    __device__ StrideIterator operator-(int count)
+    __device__ StrideIterator operator-(int count) const
     {
         StrideIterator ret = *this;
         return ret -= count;

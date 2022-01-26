@@ -65,14 +65,16 @@ public:
 
     // public so we can derive children
     struct Impl;
+
+private:     // Static data
+    static Data::BasecallerRoiConfig::RoiFilterType roiType;
+
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
     Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
             const PoolModelParameters& models) override;
 
     std::unique_ptr<Impl> labeler_;
-
-    static Data::BasecallerRoiConfig::RoiFilterType roiType;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
