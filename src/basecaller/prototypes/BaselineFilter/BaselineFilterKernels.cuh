@@ -272,8 +272,8 @@ public:
         // Baseline stats
         stats.baselineStats.moment0[2*threadIdx.x]   = m0B_[threadIdx.x].FloatX();
         stats.baselineStats.moment0[2*threadIdx.x+1] = m0B_[threadIdx.x].FloatY();
-        stats.baselineStats.moment1[2*threadIdx.x]   = m1B_[threadIdx.x].FloatX();
-        stats.baselineStats.moment1[2*threadIdx.x+1] = m1B_[threadIdx.x].FloatY();
+        stats.baselineStats.moment1[2*threadIdx.x]   = m1B_[threadIdx.x].X();
+        stats.baselineStats.moment1[2*threadIdx.x+1] = m1B_[threadIdx.x].Y();
         stats.baselineStats.moment2[2*threadIdx.x]   = m2B_[threadIdx.x].X();
         stats.baselineStats.moment2[2*threadIdx.x+1] = m2B_[threadIdx.x].Y();
 
@@ -288,8 +288,8 @@ public:
         // Regular stats
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x]   = m0_[threadIdx.x].FloatX();
         stats.fullAutocorrState.basicStats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
-        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x]   = m1_[threadIdx.x].FloatX();
-        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x]   = m1_[threadIdx.x].X();
+        stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].Y();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x]   = m2_[threadIdx.x].X();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
@@ -302,11 +302,11 @@ private:
     Utility::CudaArray<PBFloat2,  blockThreads> rawSumB_;
     // Baseline stats computed from baseline-subtracted frames classified as baseline
     Utility::CudaArray<PBHalf2,  blockThreads> m0B_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1B_;
+    Utility::CudaArray<PBFloat2,  blockThreads> m1B_;
     Utility::CudaArray<PBFloat2, blockThreads> m2B_;
     // Auto-correlation stats computed from all frames
     Utility::CudaArray<PBHalf2,  blockThreads> m0_;
-    Utility::CudaArray<PBHalf2,  blockThreads> m1_;
+    Utility::CudaArray<PBFloat2,  blockThreads> m1_;
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
 };
 
