@@ -799,9 +799,14 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
                                  LaneDetModel& ldm) const
 {
     const StatAccumulator<FloatVec> blsa(blStatAccState.baselineStats);
-    
+
     const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
-    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : blsa.Variance();
+
+    // We're having problems with the baseline variance overflowing a half precision
+    // storage.  Something is already terribly wrong if our variance is over
+    // 65k, but we'll put a limiter here because having a literal infinity run
+    // around is causing problems elsewhere
+    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : min(blsa.Variance(), FloatVec{60000});
     const FloatVec& blWeight = FloatVec(blStatAccState.NumBaselineFrames()) / FloatVec(blStatAccState.fullAutocorrState.basicStats.moment0);
 
     ldm.BaselineMode().means = blMean;
