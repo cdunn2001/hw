@@ -144,7 +144,7 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     }
 
     return BlockLevelMetrics(rawMetrics,
-                             fh.HFMetricFrames(), fh.FrameRateHz(), fh.RelativeAmplitudes(), fh.BaseMap(),
+                             metricFrames, fh.FrameRateHz(), fh.RelativeAmplitudes(), fh.BaseMap(),
                              frequency, true);
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
