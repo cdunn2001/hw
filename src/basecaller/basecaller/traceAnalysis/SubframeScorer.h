@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,33 +24,23 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_CUDA_SUBFRAME_SCORER_H
-#define PACBIO_CUDA_SUBFRAME_SCORER_H
+#ifndef MONGO_BASECALLER_SUBFRAME_SCORER_H
+#define MONGO_BASECALLER_SUBFRAME_SCORER_H
 
 #include <algorithm>
 
 #include <pacbio/auxdata/AnalogMode.h>
 
-#include <common/cuda/PBCudaSimd.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/MongoConstants.h>
 
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
+#include <basecaller/traceAnalysis/SparseMatrix.h>
 #include <basecaller/traceAnalysis/SubframeLabelManager.h>
 
-#include "SparseMatrix.cuh"
-
-namespace PacBio {
-
-// I normally wouldn't do `using namespace` in a header, but these
-// prototypes pre-exist some of the new Mongo infrastructure that has
-// come up, and there has not yet been time to clean up and "productionize"
-// them.  Eventually everything real should be moved out of the prototypes
-// anyway
-using namespace PacBio::Mongo;
-
-namespace Cuda {
+namespace PacBio::Mongo::Basecaller {
 
 static constexpr unsigned int ViterbiStitchLookback = 16u;
 
@@ -87,7 +77,8 @@ struct __align__(128) TransitionMatrix : public SparseTransitionSpec<T>
     TransitionMatrix() = default;
 
     // Ctor for host construction
-    TransitionMatrix(Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+    TransitionMatrix(Cuda::Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+                     const Data::BasecallerSubframeConfig& config,
                      double frameRate);
 };
 
@@ -308,26 +299,26 @@ struct __align__(128) BlockStateSubframeScorer
     }
 
     VF bgMean_;
-    Utility::CudaArray<VF, numAnalogs> ffmean_; // full-frame states
+    Cuda::Utility::CudaArray<VF, numAnalogs> ffmean_; // full-frame states
 
     VF bInvVar_;
-    Utility::CudaArray<VF, numAnalogs> pInvVar_;
+    Cuda::Utility::CudaArray<VF, numAnalogs> pInvVar_;
 
     // -0.5 * log det(V) - log 2\pi.
     VF bgFixedTerm_;    // background (a.k.a. baseline)
-    Utility::CudaArray<VF, numAnalogs> ffFixedTerm_;    // full-frame states
+    Cuda::Utility::CudaArray<VF, numAnalogs> ffFixedTerm_;    // full-frame states
 
     // Log of displacement of pulse means from baseline mean.
-    Utility::CudaArray<VF, numAnalogs> logPMean_;
+    Cuda::Utility::CudaArray<VF, numAnalogs> logPMean_;
 
     // Joints in the subframe score function.
     VF x0_;
-    Utility::CudaArray<VF, numAnalogs> x1_;
+    Cuda::Utility::CudaArray<VF, numAnalogs> x1_;
 
     // Normal approximation fallback for dimmest analog subframe when x1 < x0.
     NormalLog<VF> dimFallback_;
 };
 
-}}}
+}}
 
-#endif //PACBIO_CUDA_SUBFRAME_SCORER_H
+#endif //MONGO_BASECALLER_SUBFRAME_SCORER_H

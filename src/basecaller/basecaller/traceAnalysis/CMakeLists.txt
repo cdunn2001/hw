@@ -41,8 +41,12 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     FrameLabeler.cpp
     FrameLabelerDevice.h
     FrameLabelerDevice.cu
+    FrameLabelerDeviceDataStructures.cuh
+    FrameLabelerDeviceDataStructures.cu
     FrameLabelerHost.h
     FrameLabelerHost.cpp
+    FrameLabelerKernels.cuh
+    FrameLabelerKernels.cu
     HFMetricsFilter.h
     HFMetricsFilter.cpp
     HostHFMetricsFilter.h
@@ -58,8 +62,11 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     MaxLikelihoodDiagnostics.h
     PulseAccumulator.h
     PulseAccumulator.cpp
+    SparseMatrix.h
     SubframeLabelManager.h
     SubframeLabelManager.cpp
+    SubframeScorer.cpp
+    SubframeScorer.h
     TraceAnalysisForward.h
     TraceFilters.h
     TraceFilters.cpp
@@ -80,7 +87,6 @@ target_include_directories(libMongoBasecallerTraceAnalysis
 target_link_libraries(libMongoBasecallerTraceAnalysis
     PUBLIC
         libMongoDataTypes
-        libFrameLabeler
     PRIVATE
         libEigen
 )

@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -26,36 +26,89 @@
 
 #include "FrameLabelerDevice.h"
 
-#include <prototypes/FrameLabeler/FrameLabelerKernels.cuh>
-#include <dataTypes/configs/AnalysisConfig.h>
+#include <common/cuda/streams/LaunchManager.cuh>
+
+#include <basecaller/traceAnalysis/FrameLabelerDeviceDataStructures.cuh>
+#include <basecaller/traceAnalysis/FrameLabelerKernels.cuh>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::Mongo::Data;
 
-namespace PacBio {
-namespace Mongo {
-namespace Basecaller {
+namespace PacBio::Mongo::Basecaller {
 
-// static
-void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig)
+void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig,
+                                   const Data::BasecallerFrameLabelerConfig& labelerConfig)
 {
     const auto hostExecution = false;
     InitFactory(hostExecution, ViterbiStitchLookback);
 
-    Cuda::FrameLabeler::Configure(analysisConfig.movieInfo.analogs, analysisConfig.movieInfo.frameRate);
+    Subframe::TransitionMatrix<half> transHost(analysisConfig.movieInfo.analogs,
+                                               labelerConfig.viterbi,
+                                               analysisConfig.movieInfo.frameRate);
+    CudaCopyToSymbol(trans, &transHost);
 }
 
-void FrameLabelerDevice::Finalize()
+void FrameLabelerDevice::Finalize() {}
+
+class FrameLabelerDevice::Impl
 {
-    Cuda::FrameLabeler::Finalize();
-}
+    static constexpr size_t BlockThreads = laneSize/2;
+
+    static BatchDimensions LatBatchDims(size_t lanesPerPool)
+    {
+        BatchDimensions ret;
+        ret.framesPerBatch = ViterbiStitchLookback;
+        ret.laneWidth = laneSize;
+        ret.lanesPerBatch = lanesPerPool;
+        return ret;
+    }
+
+public:
+
+    Impl(size_t lanesPerPool, StashableAllocRegistrar* registrar= nullptr)
+        : latent_(registrar, SOURCE_MARKER(), lanesPerPool)
+        , prevLat_(LatBatchDims(lanesPerPool), SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
+    {
+        PBLauncher(InitLatent, lanesPerPool, BlockThreads)(prevLat_);
+        CudaSynchronizeDefaultStream();
+    }
+
+    void ProcessBatch(const UnifiedCudaArray<LaneModelParameters>& models,
+                      const Mongo::Data::BatchData<int16_t>& input,
+                      Mongo::Data::BatchData<int16_t>& latOut,
+                      Mongo::Data::BatchData<int16_t>& output,
+                      Mongo::Data::FrameLabelerMetrics& metricsOutput)
+    {
+
+        ViterbiDataHost<BlockThreads> labels(input.NumFrames() + ViterbiStitchLookback, input.LanesPerBatch());
+
+        const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, input.LanesPerBatch(), BlockThreads);
+        launcher(models,
+                 input,
+                 latent_,
+                 labels,
+                 prevLat_,
+                 latOut,
+                 output,
+                 metricsOutput.viterbiScore);
+
+        CudaSynchronizeDefaultStream();
+        std::swap(prevLat_, latOut);
+    }
+
+private:
+    DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
+    Mongo::Data::BatchData<int16_t> prevLat_;
+};
+
+constexpr size_t FrameLabelerDevice::Impl::BlockThreads;
 
 FrameLabelerDevice::FrameLabelerDevice(uint32_t poolId,
                                        uint32_t lanesPerPool,
                                        StashableAllocRegistrar* registrar)
     : FrameLabeler(poolId)
-    , labeler_(std::make_unique<Cuda::FrameLabeler>(lanesPerPool, registrar))
+    , labeler_{std::make_unique<Impl>(lanesPerPool, registrar)}
 {}
 
 FrameLabelerDevice::~FrameLabelerDevice() = default;
@@ -65,8 +118,12 @@ FrameLabelerDevice::Process(TraceBatch<Data::BaselinedTraceElement> trace,
                             const PoolModelParameters& models)
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
-    labeler_->ProcessBatch(
-            models, ret.first.TraceData(), ret.first.LatentTrace(), ret.first, ret.second);
+
+    labeler_->ProcessBatch(models,
+                           ret.first.TraceData(),
+                           ret.first.LatentTrace(),
+                           ret.first,
+                           ret.second);
 
     // Update the trace data so downstream filters can't see the held back portion
     ret.first.TraceData().SetFrameLimit(ret.first.NumFrames() - ViterbiStitchLookback);
@@ -74,4 +131,4 @@ FrameLabelerDevice::Process(TraceBatch<Data::BaselinedTraceElement> trace,
     return ret;
 }
 
-}}}     // namespace PacBio::Mongo::Basecaller
+}  // namespace PacBio::Mongo::Basecaller

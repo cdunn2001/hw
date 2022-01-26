@@ -82,7 +82,7 @@ public:
         , newHQ_(numZmw, true)
         , numHQ_(numZmw)
         , maxLookBack_(0)
-        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
+        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, allocator_)
         , metrics_(numZmw)
     {
         for (size_t zmw = 0; zmw < numZmw; ++zmw)
@@ -103,7 +103,7 @@ public:
         , numHQ_(0)
         , aggregatedMetrics_(std::make_unique<AggregatedMetricBufferT>(numZmw, allocator_))
         , maxLookBack_(maxLookBack)
-        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, *allocator_)
+        , metricsBuffer_(std::max(indexInfo_.size(), 100ul), 1, allocator_)
         , metrics_(numZmw)
     {
         if (enablePreHQ)
@@ -132,7 +132,7 @@ public:
     std::pair<MemoryBuffer<OutputMetricT>,std::vector<MemoryBufferView<OutputMetricT>>> GetMetrics()
     {
         auto p =  std::make_pair(std::move(metricsBuffer_), std::move(metrics_));
-        metricsBuffer_ = MemoryBuffer<OutputMetricT>(std::max(indexInfo_.size(), 100ul), 1, *allocator_);
+        metricsBuffer_ = MemoryBuffer<OutputMetricT>(std::max(indexInfo_.size(), 100ul), 1, allocator_);
         metrics_ = std::vector<MemoryBufferView<OutputMetricT>>(indexInfo_.size());
         return p;
     }

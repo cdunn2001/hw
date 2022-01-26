@@ -222,7 +222,7 @@ public:
     // amount of over-allocations.  If this proves impossible it may prove
     // worthwhile to make the growth rates configurable.
     MemoryBuffer(size_t bufferSize, size_t initialBufferCount,
-                 Memory::IAllocator& allocator)
+                 std::shared_ptr<Memory::IAllocator> allocator)
       : size_(0)
       , bufferSize_(bufferSize)
       , bufferIdx_(0)
@@ -230,7 +230,7 @@ public:
     {
         for (size_t i = 0; i < initialBufferCount; ++i)
         {
-            storage_.emplace_back(allocator_, bufferSize_);
+            storage_.emplace_back(*allocator_, bufferSize_);
         }
     }
 
@@ -325,7 +325,7 @@ private:
             {
                 try
                 {
-                    storage_.emplace_back(allocator_, bufferSize_);
+                    storage_.emplace_back(*allocator_, bufferSize_);
                 }
                 catch(...)
                 {
@@ -355,7 +355,7 @@ private:
     size_t bufferSize_;         // size (in bytes) of the underlying backend buffers
                                 // we will use
     size_t bufferIdx_;          // Idx of the buffer we're currently filling
-    std::reference_wrapper<Memory::IAllocator> allocator_;    // Helper class to actually allocate memory
+    std::shared_ptr<Memory::IAllocator> allocator_;    // Helper class to actually allocate memory
     std::vector<MemoryInnerBuffer> storage_;  // All memory that has been allocated
 };
 

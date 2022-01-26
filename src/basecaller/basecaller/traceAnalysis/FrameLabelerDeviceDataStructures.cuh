@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,36 +24,32 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
-#define PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
-
-#include <pacbio/auxdata/AnalogMode.h>
-#include <pacbio/ipc/ThreadSafeQueue.h>
+#ifndef PACBIO_MONGO_BASECALLER_FRAME_DATA_STRUCTURES_H
+#define PACBIO_MONGO_BASECALLER_FRAME_DATA_STRUCTURES_H
 
 #include <common/cuda/CudaLaneArray.cuh>
-#include <common/cuda/PBCudaSimd.cuh>
-#include <common/cuda/streams/KernelLaunchInfo.h>
 #include <common/cuda/memory/DeviceOnlyArray.cuh>
-#include <common/MongoConstants.h>
+#include <common/cuda/PBCudaSimd.cuh>
 
 #include <dataTypes/BatchData.cuh>
-#include <dataTypes/BatchMetrics.h>
-#include <dataTypes/configs/ConfigForward.h>
+#include <dataTypes/LaneDetectionModel.h>
 
-#include "SubframeScorer.cuh"
+#include <basecaller/traceAnalysis/SubframeScorer.h>
 
-using namespace PacBio::Mongo;
+namespace PacBio::Mongo::Basecaller {
 
-namespace PacBio {
-namespace Cuda {
+using namespace Cuda;
 
+// Persistent data we need to hold on to, between consecutive runs of the
+// FrameLabeler
 template <size_t laneWidth>
 struct __align__(128) LatentViterbi
 {
     using LaneModelParameters = Mongo::Data::LaneModelParameters<PBHalf2, laneWidth>;
+    using LaneArr = CudaLaneArray<PBShort2, laneWidth>;
  public:
     __device__ LatentViterbi()
-        : boundary_(0, SerialConstruct{})
+        : labelsBoundary_(0, SerialConstruct{})
     {
         auto SetAll = [](auto& arr, const auto& val) {
             for (int i = 0; i < laneWidth; ++i)
@@ -79,8 +75,8 @@ struct __align__(128) LatentViterbi
         }
     }
 
-    __device__ void SetBoundary(PBShort2 boundary) { boundary_ = boundary; }
-    __device__ PBShort2 GetBoundary() const { return boundary_; }
+    __device__ void SetLabelsBoundary(PBShort2 boundary) { labelsBoundary_ = boundary; }
+    __device__ PBShort2 GetLabelsBoundary() const { return labelsBoundary_; }
 
     __device__ const LaneModelParameters& GetModel() const { return oldModel; }
     __device__ void SetModel(const LaneModelParameters& model)
@@ -89,8 +85,12 @@ struct __align__(128) LatentViterbi
     }
 
 private:
+
+    // Model for the previous block of data
     LaneModelParameters oldModel;
-    CudaLaneArray<PBShort2, laneWidth> boundary_;
+    // the label for the last frame emitted in the
+    // previous block
+    LaneArr labelsBoundary_;
 };
 
 // This class represents compressed frame labels, where
@@ -130,9 +130,9 @@ public:
 
     // extracts the front x,y pair, effectively pushes
     // zeroes into the back two slots.
-    __device__ ushort2 PopFront()
+    __device__ PBShort2 PopFront()
     {
-        auto ret = make_ushort2(data_ & 0xF, (data_ >> bitsPerValue) & 0xF);
+        auto ret = PBShort2(data_ & 0xF, (data_ >> bitsPerValue) & 0xF);
         data_ = data_ >> 2*bitsPerValue;
         return ret;
     }
@@ -151,6 +151,7 @@ private:
     uint32_t data_;
 };
 
+// Host handle for the workspace required for the Viterbi algorithm
 template <size_t laneWidth>
 struct ViterbiDataHost
 {
@@ -161,18 +162,19 @@ struct ViterbiDataHost
         , numFrames_(numFrames)
     {}
 
-    Memory::DeviceView<T> Data(const KernelLaunchInfo& info)
+    Cuda::Memory::DeviceView<T> Data(const KernelLaunchInfo& info)
     {
         return data_.GetDeviceView(info);
     }
     int NumFrames() const { return numFrames_; }
  private:
-    Memory::DeviceOnlyArray<T> data_;
+    Cuda::Memory::DeviceOnlyArray<T> data_;
     int numFrames_;
 };
 
+// Workspace for the viterbi algorith, to hold the traceback information
 template <size_t laneWidth>
-struct ViterbiData : private Memory::detail::DataManager
+struct ViterbiData : private Cuda::Memory::detail::DataManager
 {
     using T = PackedLabels;
     static constexpr int numPackedLabels = ViterbiDataHost<laneWidth>::numPackedLabels;
@@ -201,7 +203,7 @@ struct ViterbiData : private Memory::detail::DataManager
                                        + threadIdx.x]);
     }
  private:
-    Memory::DeviceView<T> data_;
+    Cuda::Memory::DeviceView<T> data_;
     int numFrames_;
 };
 
@@ -210,41 +212,6 @@ struct ViterbiData : private Memory::detail::DataManager
 template <size_t laneWidth>
 ViterbiData<laneWidth> KernelArgConvert(ViterbiDataHost<laneWidth>& v, const KernelLaunchInfo& info) { return ViterbiData<laneWidth>(v, info); }
 
+}
 
-
-class FrameLabeler
-{
-    static constexpr size_t BlockThreads = laneSize/2;
-public:
-
-    // Helpers to provide scratch space data.  Used to pool allocations so we
-    // only need enough to satisfy the current active batches, not one for
-    // each possible pool.
-    static void Configure(const std::array<PacBio::AuxData::AnalogMode, 4>& meta,
-                          double frameRate);
-
-public:
-    static void Finalize();
-
-public:
-    FrameLabeler(size_t lanesPerPool, Memory::StashableAllocRegistrar* registrar= nullptr);
-
-    FrameLabeler(const FrameLabeler&) = delete;
-    FrameLabeler(FrameLabeler&&) = default;
-    FrameLabeler& operator=(const FrameLabeler&) = delete;
-    FrameLabeler& operator=(FrameLabeler&&) = default;
-
-
-    void ProcessBatch(const Memory::UnifiedCudaArray<Mongo::Data::LaneModelParameters<PBHalf, laneSize>>& models,
-                      const Mongo::Data::BatchData<int16_t>& input,
-                      Mongo::Data::BatchData<int16_t>& latOut,
-                      Mongo::Data::BatchData<int16_t>& output,
-                      Mongo::Data::FrameLabelerMetrics& metricsOutput);
-private:
-    Memory::DeviceOnlyArray<LatentViterbi<BlockThreads>> latent_;
-    Mongo::Data::BatchData<int16_t> prevLat_;
-};
-
-}}
-
-#endif //PACBIO_CUDA_FRAME_LABELER_KERNELS_CUH_
+#endif /*PACBIO_MONGO_BASECALLER_FRAME_DATA_STRUCTURES_H*/

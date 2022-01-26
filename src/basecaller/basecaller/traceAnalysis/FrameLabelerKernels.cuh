@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,25 +24,19 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "FrameLabelerKernels.cuh"
+#ifndef PACBIO_MONGO_BASECALLER_FRAMELABELER_KERNELS_H
+#define PACBIO_MONGO_BASECALLER_FRAMELABELER_KERNELS_H
 
-#include <type_traits>
+#include <common/cuda/PBCudaSimd.cuh>
 
-#include <common/cuda/CudaLaneArray.cuh>
-#include <common/cuda/streams/LaunchManager.cuh>
+#include <dataTypes/BatchData.cuh>
 
-using namespace PacBio::Cuda;
-using namespace PacBio::Simd;
-using namespace PacBio::Cuda::Memory;
-using namespace PacBio::Cuda::Utility;
-using namespace PacBio::Cuda::Subframe;
-using namespace PacBio::Mongo::Data;
+#include <basecaller/traceAnalysis/FrameLabelerDeviceDataStructures.cuh>
+#include <basecaller/traceAnalysis/SubframeScorer.h>
 
-namespace PacBio {
-namespace Cuda {
+namespace PacBio::Mongo::Basecaller {
 
-namespace
-{
+using namespace Cuda;
 
 // Make the transition matrix visible to all threads via constant memory,
 // which for this use case, has performance benefits over generic device
@@ -50,9 +44,15 @@ namespace
 //
 // Unfortunately __constant__ variables *have* to be global.  We will initialize
 // this during the FrameLabeler::Configure function.
-__constant__ Subframe::TransitionMatrix<half> trans;
+extern __constant__ Subframe::TransitionMatrix<half> trans;
 
-__device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
+using Subframe::numStates;
+
+/// Transforms a loglikelihood to a normalized probability distribution.
+///
+/// \param[in, out] vec    A loglikilhood for each of the stats on input, and a
+///                        normalized probability on output
+__device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
 {
     auto maxVal = vec[0];
     #pragma unroll 1
@@ -74,7 +74,7 @@ __device__ void Normalize(CudaArray<PBHalf2, numStates>& vec)
     }
 }
 
-__global__ void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
+__global__ static void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 {
     auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
     for (auto val : zmwData) val = PBShort2(0);
@@ -84,7 +84,7 @@ template <typename T2, typename Labels, typename LogLike, typename Scorer, typen
 __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
                           const SparseMatrix<TransT, Rows...>& trans, PBShort2 data, int idx)
 {
-    CudaArray<PBHalf2, numStates> logAccum;
+    Utility::CudaArray<PBHalf2, numStates> logAccum;
     PackedLabels packedLabels;
 
     // Note: The cuda optimizer seems to be finicky about what gets placed
@@ -93,7 +93,7 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
     // code sections did bit twiddles on.  Trying to encapsulate that into
     // a small class caused this filter to slow down by almost 2x.  The
     // combination of making it a struct, and the fact that AddRow used to
-    // be a template function that accepted packedLabels by reference, caused
+    // be a template function that accepted packedLabelsby reference, caused
     // the variable to be pushed to global memory and the increased memory
     // traffic killed performance.  For whatever reason, capturing this
     // by reference in a lambda doesn't cause any issues, though one would
@@ -172,14 +172,14 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
 
 template <size_t blockThreads>
 __launch_bounds__(blockThreads, 32)
-__global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParameters<PBHalf2, blockThreads>> models,
+__global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                   Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
+                                   Cuda::Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
                                    ViterbiData<blockThreads> batchViterbiData,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
-                                   Memory::DeviceView<CudaArray<float, laneSize>> viterbiScore)
+                                   Cuda::Memory::DeviceView<Utility::CudaArray<float, laneSize>> viterbiScore)
 {
     // When/if this changes, some of this kernel is going to have to be udpated or generalized
     static_assert(Subframe::numStates == 13,
@@ -221,10 +221,10 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     __shared__ CudaLaneArray<PBHalf2, blockThreads> sharedMaxVal;
 
     // Initial setup
-    CudaArray<PBHalf2, numStates> scratch;
+    Utility::CudaArray<PBHalf2, numStates> scratch;
     auto& logLike = scratch;
     auto& latent = latentData[blockIdx.x];
-    auto bc = latent.GetBoundary();
+    auto bc = latent.GetLabelsBoundary();
     const PBHalf2 zero(0.0f);
     const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
     for (int i = 0; i < numStates; ++i)
@@ -242,7 +242,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
         {
             Recursion(sharedMaxVal, labels, logLike, scorer, trans, latZmw[frame], frame);
         }
-    }
+        }
 
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
@@ -257,7 +257,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     // Need to store the log likelihoods at the actual anchor point, so
     // once we choose a terminus state, we can retrieve it's proper
     // log likelihood
-    CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
+    Utility::CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
 
     for (int frame = anchor; frame < numFrames; ++frame)
     {
@@ -273,7 +273,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     const int lookStop = numFrames - 1;
     for (int i = lookStart; i > lookStop; --i)
     {
-        CudaArray<PBHalf2, numStates> newProb;
+        Utility::CudaArray<PBHalf2, numStates> newProb;
         for (short state = 0; state < numStates; ++state)
         {
             newProb[state] = PBHalf2(0.0f);
@@ -288,8 +288,8 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
             {
                 packedLabels = labels(i, state / 4 + 1);
             }
-            newProb[prev.x] += Blend(PBBool2(true,false), prob[state], zero);
-            newProb[prev.y] += Blend(PBBool2(false,true), prob[state], zero);
+            newProb[prev.X()] += Blend(PBBool2(true,false), prob[state], zero);
+            newProb[prev.Y()] += Blend(PBBool2(false,true), prob[state], zero);
         }
         prob = newProb;
     }
@@ -320,7 +320,7 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
     }
 
     // Update latent data
-    latent.SetBoundary(anchorState);
+    latent.SetLabelsBoundary(anchorState);
     latent.SetModel(models[blockIdx.x]);
 
     auto outLatZmw = nextLat.ZmwData(blockIdx.x, threadIdx.x);
@@ -334,54 +334,4 @@ __global__ void FrameLabelerKernel(const Memory::DeviceView<const LaneModelParam
 
 }
 
-constexpr size_t FrameLabeler::BlockThreads;
-
-void FrameLabeler::Configure(const std::array<PacBio::AuxData::AnalogMode,4>& analogs,
-                             double frameRate)
-{
-    Subframe::TransitionMatrix<half> transHost(analogs, frameRate);
-    CudaCopyToSymbol(trans, &transHost);
-}
-
-void FrameLabeler::Finalize() {}
-
-static BatchDimensions LatBatchDims(size_t lanesPerPool)
-{
-    BatchDimensions ret;
-    ret.framesPerBatch = ViterbiStitchLookback;
-    ret.laneWidth = laneSize;
-    ret.lanesPerBatch = lanesPerPool;
-    return ret;
-}
-
-FrameLabeler::FrameLabeler(size_t lanesPerPool, StashableAllocRegistrar* registrar)
-    : latent_(registrar, SOURCE_MARKER(), lanesPerPool)
-    , prevLat_(LatBatchDims(lanesPerPool), Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER())
-{
-    PBLauncher(InitLatent, lanesPerPool, BlockThreads)(prevLat_);
-    CudaSynchronizeDefaultStream();
-}
-
-void FrameLabeler::ProcessBatch(const Memory::UnifiedCudaArray<LaneModelParameters<PBHalf, laneSize>>& models,
-                                const Mongo::Data::BatchData<int16_t>& input,
-                                Mongo::Data::BatchData<int16_t>& latOut,
-                                Mongo::Data::BatchData<int16_t>& output,
-                                Mongo::Data::FrameLabelerMetrics& metricsOutput)
-{
-    ViterbiDataHost<BlockThreads> labels(input.NumFrames() + ViterbiStitchLookback, input.LanesPerBatch());
-
-    const auto& launcher = PBLauncher(FrameLabelerKernel<BlockThreads>, input.LanesPerBatch(), BlockThreads);
-    launcher(models,
-             input,
-             latent_,
-             labels,
-             prevLat_,
-             latOut,
-             output,
-             metricsOutput.viterbiScore);
-
-    CudaSynchronizeDefaultStream();
-    std::swap(prevLat_, latOut);
-}
-
-}}
+#endif /*PACBIO_MONGO_BASECALLER_FRAMELABELER_KERNELS_H*/
