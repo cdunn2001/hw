@@ -86,7 +86,7 @@ public:
     // not to decreases.
     // Notice also that this suppression is applied before smoothing by the EMA
     // controlled by MeanEmaScaleStrides.
-    PB_CONFIG_PARAM(float, JumpSuppression, 0.25f);
+    PB_CONFIG_PARAM(float, JumpSuppression, 0.0f);
 
     bool UsesGpu() const { return Method == MethodName::DeviceMultiScale; }
 };

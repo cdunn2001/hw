@@ -366,8 +366,7 @@ struct LatentBaselineData
             auto sigma = (upper - lower) / sParams.cSigmaBias;
             auto newSigmaEma = sigmaEmaAlpha * blSigmaEma + PBHalf2(1.0f - sigmaEmaAlpha) * sigma;
 
-            auto bias = 0.5f * (upper + lower);
-            auto blEst = bias + sParams.cMeanBias * newSigmaEma;
+            auto blEst = 0.5f * (upper + lower) + sParams.cMeanBias * newSigmaEma;
 
             // Conditionally update EMAs of baseline mean and sigma.
             bool mask = true; // TODO: Enable masking for jumpTolCoeff_
@@ -553,7 +552,7 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
 
         for (int j = i*stride; j < (i+1)*stride; ++j)
         {
-            // Data scaled first
+            // Data shifted and scaled
             auto rawSignal = inZmw(j);
             auto blSubtractedFrame = (rawSignal - blEst) * sParams.scale;
             // ... stored as output traces

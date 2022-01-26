@@ -17,10 +17,10 @@ class HostMultiScaleBaseliner : public Baseliner
 {
     using Parent = Baseliner;
 public:
-    using ElementTypeOut = Parent::ElementTypeOut;   // int16_t
+    using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
-    using MaskArray = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
+    using BoolArray = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig&,
@@ -180,9 +180,9 @@ private:
 
         LaneArray latData_{0};
         LaneArray latRawData_{0};
-        MaskArray latLMask_{false};
-        MaskArray latHMask2_{false};
-        MaskArray latHMask1_{false};
+        BoolArray latLMask_{false};
+        BoolArray latHMask2_{false};
+        BoolArray latHMask1_{false};
 
         const size_t stride_;
         float scaler_;  // Converts DN quantization to e- values

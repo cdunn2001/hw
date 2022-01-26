@@ -147,12 +147,12 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto trIt = traceData.CBegin();
     auto blsIt = baselineSubtractedData.Begin();
     auto loIt = lower->CBegin(), upIt = upper->CBegin();
-    const size_t tileCount = traceData.NumFrames() / Stride();
+    const size_t fdSize = traceData.NumFrames() / Stride();
 
     trIt = traceData.CBegin();
     loIt = lower->CBegin(), upIt = upper->CBegin();
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
-    for (size_t i = 0; i < tileCount; i++, upIt++, loIt++)
+    for (size_t i = 0; i < fdSize; i++, upIt++, loIt++)
     {
         auto lowerVal = loIt.Extract() - pedestal_;
         auto upperVal = upIt.Extract() - pedestal_;
@@ -161,7 +161,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         // Estimates are scattered on stride intervals.
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
-            // Data scaled shifted and scaled
+            // Data shifted and scaled
             auto rawSignal = trIt.Extract() - pedestal_;
             LaneArray blSubtractedFrame((rawSignal - blEst) * scaler_);
             // ... stored as output traces
@@ -214,8 +214,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneAr
     auto newSigmaEma = sigmaEmaAlpha * blSigmaEma_ + (1.0f - sigmaEmaAlpha) * sigma;
 
     // Calculate the new single-stride estimate of baseline mean.
-    const FloatArray bias = 0.5f * (upper + lower);
-    const FloatArray blEst = bias + cMeanBias_ * newSigmaEma;
+    const FloatArray blEst = 0.5f * (upper + lower) + cMeanBias_ * newSigmaEma;
 
     // We presume that large jumps represent pathological enzyme-analog
     // binding events.
@@ -227,7 +226,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneAr
     // TODO: Enable masking for jumpTolCoeff_
     // const auto mask = ((blMeanUemaWeight_ == 0.0f)
     //     | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < jumpTolCoeff_* blSigmaEma_));
-    const MaskArray mask = true;
+    const BoolArray mask = true;
 
     // Conditionally update EMAs of baseline mean and sigma.
     const FloatArray newWeight = meanEmaAlpha_ * blMeanUemaWeight_ + (1.0f - meanEmaAlpha_);
