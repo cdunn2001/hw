@@ -37,7 +37,7 @@ then
     exit 1
 fi
 
-MAIN_ARGS="--config source.TraceReplication={"'"'"cache"'"'":true,"'"'"numZmwLanes"'"'":${LANES_PER_CHIP},"'"'"numFrames"'"'":${FRAMES},"'"'"traceFile"'"'":"'"'"${INPUT}"'"'"} \
+MAIN_ARGS="--cache --numZmwLanes ${LANES_PER_CHIP} --frames=${FRAMES}  --inputfile ${INPUT} \
            --config=algorithm.dmeConfig.IterateToLimit=${DME_FULL_ITERATE} \
            --config=system.maxPermGpuDataMB=${PERM_GPU_MB} \
            --config=system.basecallerConcurrency=${BASECALLER_CONCURRENCY} \
