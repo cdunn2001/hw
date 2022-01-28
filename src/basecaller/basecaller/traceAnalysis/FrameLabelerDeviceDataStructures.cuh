@@ -110,12 +110,15 @@ private:
 
     // Model for the previous block of data
     LaneModelParameters oldModel;
+
     // the label for the last frame emitted in the
     // previous block
     LaneArr labelsBoundary_;
+
     // the ROI determination for the last frame
     // emitted in the previous block
     LaneArr roiBoundary_;
+
     // Latent traces, which already had labels emitted
     // in the previous block, but are still needed
     // for the roi computation of the current block
