@@ -62,10 +62,8 @@ void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& b
         assert(bbc.Validate());
 
         cMeanBiasAdj_ = bbc.MeanBiasAdjust;
-        assert(std::isfinite(cMeanBiasAdj_));
 
         cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
-        assert(std::isfinite(cSigmaBiasAdj_));
 
         const float meanEmaScale = bbc.MeanEmaScaleStrides;
         meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);
@@ -148,9 +146,6 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     auto blsIt = baselineSubtractedData.Begin();
     auto loIt = lower->CBegin(), upIt = upper->CBegin();
     const size_t fdSize = traceData.NumFrames() / Stride();
-
-    trIt = traceData.CBegin();
-    loIt = lower->CBegin(), upIt = upper->CBegin();
     auto baselinerStats = Data::BaselinerStatAccumulator<ElementTypeOut>{};
     for (size_t i = 0; i < fdSize; i++, upIt++, loIt++)
     {
@@ -207,10 +202,11 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
 HostMultiScaleBaseliner::FloatArray
 HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper)
 {
+    static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
     const float sigmaEmaAlpha = SigmaEmaAlpha();
 
     // TODO: Possible catastrophic loss of precision here!
-    auto sigma = (upper - lower) / cSigmaBias_;
+    auto sigma = max((upper - lower) / cSigmaBias_, minSigma);
     auto newSigmaEma = sigmaEmaAlpha * blSigmaEma_ + (1.0f - sigmaEmaAlpha) * sigma;
 
     // Calculate the new single-stride estimate of baseline mean.

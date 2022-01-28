@@ -52,10 +52,8 @@ void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&
     InitFactory(hostExecution, analysisConfig);
 
     cMeanBiasAdj_ = bbc.MeanBiasAdjust;
-    assert(std::isfinite(cMeanBiasAdj_));
 
     cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
-    assert(std::isfinite(cSigmaBiasAdj_));
 
     const float meanEmaScale = bbc.MeanEmaScaleStrides;
     meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);

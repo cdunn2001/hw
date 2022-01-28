@@ -71,6 +71,8 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
         Json::Value json;
         json["baselineConfig"]["Method"] = method.toString();
         json["baselineConfig"]["Filter"] = type.toString();
+        json["baselineConfig"]["SigmaEmaScaleStrides"] = 0;
+        
         TestConfig cfg{json};
 
         return cfg.baselineConfig;
@@ -229,7 +231,6 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         auto baselinerConfig = TestConfig::BaselinerConfig(
                             params.method,
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-        baselinerConfig.SigmaEmaScaleStrides = 0;
         if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
             HostMultiScaleBaseliner::Configure(baselinerConfig, analysisConfig);
         else if (params.method == BasecallerBaselinerConfig::MethodName::DeviceMultiScale)
@@ -482,7 +483,6 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
     auto baselinerConfig = TestConfig::BaselinerConfig(
             BasecallerBaselinerConfig::MethodName::HostMultiScale, /*ignored*/
             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
-    baselinerConfig.SigmaEmaScaleStrides = 0;
     Baseliner::Configure(baselinerConfig, analysisConfig);
 
     // BaselinerParams is taken from FilterParamsLookup(baselinerConfig.Method) for

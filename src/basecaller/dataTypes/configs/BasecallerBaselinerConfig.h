@@ -59,7 +59,7 @@ public:
                         {"analyzerHardware"}
     ));
     
-    // Two parameters soley for tuning calibration coefficients.
+    // Two parameters solely for tuning calibration coefficients.
     // Each adjusts its corresponding coefficient by a factor of exp2(x).
     PB_CONFIG_PARAM(float, MeanBiasAdjust, 0.0f);
     PB_CONFIG_PARAM(float, SigmaBiasAdjust, 0.0f);
@@ -101,12 +101,39 @@ inline void ValidateConfig<Mongo::Data::BasecallerBaselinerConfig>(
         const Mongo::Data::BasecallerBaselinerConfig& config,
         ValidationResults* results)
 {
+    const float mba = config.MeanBiasAdjust;
+    if (!std::isfinite(mba))
+    {
+        std::ostringstream msg;
+        msg << "Bad value.  MeanBiasAdjust = " << mba
+            << ".  Should be finite.";
+        results->AddError(msg.str());
+    }
+
+    const float sba = config.SigmaBiasAdjust;
+    if (!std::isfinite(sba))
+    {
+        std::ostringstream msg;
+        msg << "Bad value.  SigmaBiasAdjust = " << sba
+            << ".  Should be finite.";
+        results->AddError(msg.str());
+    }
+
     const float sess = config.SigmaEmaScaleStrides;
     if (std::isnan(sess) || std::signbit(sess))
     {
         std::ostringstream msg;
         msg << "Bad value.  SigmaEmaScaleStrides = " << sess
             << ".  May not be negative, -0, or NaN.";
+        results->AddError(msg.str());
+    }
+
+    const float mess = config.MeanEmaScaleStrides;
+    if (mess < 0)
+    {
+        std::ostringstream msg;
+        msg << "Bad value.  MeanEmaScaleStrides = " << mess
+            << ".  Should be greater or equal to zero.";
         results->AddError(msg.str());
     }
 }

@@ -360,10 +360,11 @@ struct LatentBaselineData
     public:
         __device__ PBHalf2 SmoothedBlEstimate(PBHalf2 lower, PBHalf2 upper, const BlSubtractParams& sParams)
         {
+            static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
             PBHalf2 meanEmaAlpha  = sParams.meanEmaAlpha;
             PBHalf2 sigmaEmaAlpha = sParams.sigmaEmaAlpha;
 
-            auto sigma = (upper - lower) / sParams.cSigmaBias;
+            auto sigma = max((upper - lower) / sParams.cSigmaBias, minSigma);
             auto newSigmaEma = sigmaEmaAlpha * blSigmaEma + PBHalf2(1.0f - sigmaEmaAlpha) * sigma;
 
             auto blEst = 0.5f * (upper + lower) + sParams.cMeanBias * newSigmaEma;
