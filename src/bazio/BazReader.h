@@ -98,7 +98,7 @@ public:
         { return zmwFeatures_.at(zmwIndex); }
 
         const std::vector<MetricField>& MetricFields() const
-        { return fhs_.front()->MFMetricFields(); }
+        { return fhs_.front()->MetricFields(); }
 
         const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& PacketFields() const
         { return fhs_.front()->PacketFields(); }
@@ -107,7 +107,7 @@ public:
         { return fhs_.front()->PacketGroups(); }
 
         uint32_t MetricFrames() const
-        { return fhs_.front()->HFMetricFrames(); }
+        { return fhs_.front()->MetricFrames(); }
 
         double FrameRateHz() const
         { return fhs_.front()->FrameRateHz(); }

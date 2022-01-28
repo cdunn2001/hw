@@ -118,13 +118,9 @@ BazWriterBody::BazWriterBody(
                                  100.0f,
                                  expectedFrames,
                                  pulseSerializationConfig,
-                                 SmrtData::MetricsVerbosity::MINIMAL,
                                  metadata,
                                  basecallerConfig.Serialize().toStyledString(),
                                  zmwInfo,
-                                 // Hack, until metrics handling can be rewritten
-                                 metricFrames,
-                                 metricFrames,
                                  metricFrames);
 
             fh.BaseCallerVersion("0.1");
@@ -144,13 +140,9 @@ BazWriterBody::BazWriterBody(
                              100.0f,
                              expectedFrames,
                              pulseSerializationConfig,
-                             SmrtData::MetricsVerbosity::MINIMAL,
                              metadata,
                              basecallerConfig.Serialize().toStyledString(),
                              zmwInfo,
-                             // Hack, until metrics handling can be rewritten
-                             metricFrames,
-                             metricFrames,
                              metricFrames);
 
         fh.BaseCallerVersion("0.1");

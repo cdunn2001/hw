@@ -47,21 +47,17 @@ struct ZmwSliceHeader
     uint32_t zmwIndex;             // 12 B
     uint32_t packetsByteSize;      // 16 B
     uint16_t numEvents;            // 18 B
-    uint16_t numHFMBs;             // 20 B number of high-frequency metric blocks
-    uint8_t  numMFMBs;             /* 21 B number of medium-frequency metric blocks
-                                           CANNOT be larger than 15 */
-    uint8_t  numLFMBs;             /* 22 B number of low-frequency metric blocks
-                                           CANNOT be larger than 15 */
+    uint16_t numMBs;               // 20 B number of metrics blocks
 
     static constexpr size_t SizeOf() 
     { 
         return sizeof(offsetPacket)  + sizeof(zmwIndex) +
                sizeof(packetsByteSize) +
-               sizeof(numEvents) + sizeof(numHFMBs) + sizeof(numMFMBs) + sizeof(numLFMBs); 
+               sizeof(numEvents) + sizeof(numMBs);
     }
 
 
 };
-static_assert(ZmwSliceHeader::SizeOf() == 22, "ZmwSliceHeader is not 22!");
+static_assert(ZmwSliceHeader::SizeOf() == 20, "ZmwSliceHeader is not 20!");
 
 }}

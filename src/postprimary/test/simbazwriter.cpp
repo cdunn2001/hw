@@ -133,18 +133,17 @@ int main(int argc, char* argv[])
 
     using FileHeaderBuilder = PacBio::BazIO::FileHeaderBuilder;
 
-    constexpr uint32_t framesPerMetricBlock = 4096;
+    constexpr uint32_t framesPerMetricBlock = 1024;
     if ((int)options.get("sizeBases") > 0)
     {
         uint32_t frames = (int)options.get("sizeBases");
 
         FileHeaderBuilder fhb("m00001_052415_013000", 100.0, frames,
                               PacBio::BazIO::ProductionPulses::Params(),
-                              PacBio::SmrtData::MetricsVerbosity::MINIMAL,
                               experimentMetadata,
                               basecallerConfig,
                               Simulation::SimulateZmwInfo(zmwNumbers),
-                              framesPerMetricBlock, framesPerMetricBlock, framesPerMetricBlock,
+                              framesPerMetricBlock,
                               FileHeaderBuilder::Flags().RealTimeActivityLabels(true));
 
         PBLOG_ERROR << "Expected file size based on file header not yet implemented!";
@@ -162,11 +161,10 @@ int main(int argc, char* argv[])
 
         FileHeaderBuilder fhb("m00001_052415_013000", 100.0f, frames,
                               PacBio::BazIO::InternalPulses::Params() ,
-                              PacBio::SmrtData::MetricsVerbosity::HIGH,
                               experimentMetadata,
                               basecallerConfig,
                               Simulation::SimulateZmwInfo(zmwNumbers),
-                              framesPerMetricBlock, framesPerMetricBlock, framesPerMetricBlock,
+                              framesPerMetricBlock,
                               FileHeaderBuilder::Flags().RealTimeActivityLabels(true));
 
         PBLOG_ERROR << "Expected file size based on file header not yet implemented!";

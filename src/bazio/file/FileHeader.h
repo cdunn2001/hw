@@ -53,7 +53,6 @@ class FileHeader
 public:
     using MetricField = PacBio::Primary::MetricField;
     using MetricFieldName = PacBio::Primary::MetricFieldName;
-    using MetricFrequency = PacBio::Primary::MetricFrequency;
 public:
     static Json::Value ParseExperimentMetadata(const std::string& metadata);
     static bool ValidateExperimentMetadata(const Json::Value& metadata);
@@ -96,35 +95,14 @@ public:
     uint64_t BazPatchVersion() const
     { return bazPatchVersion_; }
 
-    uint32_t HFMetricByteSize() const
-    { return hFMetricByteSize_; }
-
-    uint32_t MFMetricByteSize() const
-    { return mFMetricByteSize_; }
-
-    uint32_t LFMetricByteSize() const
-    { return lFMetricByteSize_; }
-
     uint32_t OutputLengthFrames() const
     { return outputLengthFrames_; }
 
     double FrameRateHz() const
     { return frameRateHz_; }
 
-    uint32_t HFMetricFrames() const
-    { return hFMetricFrames_; }
-
-    uint32_t MFMetricFrames() const
-    { return mFMetricFrames_; }
-
-    uint32_t LFMetricFrames() const
-    { return lFMetricFrames_; }
-
-    uint32_t HFbyMFRatio() const
-    { return hFbyMFRatio_; }
-
-    uint32_t HFbyLFRatio() const
-    { return hFbyLFRatio_; }
+    uint32_t MetricFrames() const
+    { return metricFrames_; }
 
     uint64_t OffsetFirstChunk() const
     { return offsetFirstChunk_; }
@@ -135,14 +113,8 @@ public:
     const std::vector<GroupParams<PacketFieldName>>& PacketGroups() const
     { return encodeInfo_; }
 
-    const std::vector<MetricField>& HFMetricFields() const
-    { return hFMetricFields_; }
-
-    const std::vector<MetricField>& MFMetricFields() const
-    { return mFMetricFields_; }
-
-    const std::vector<MetricField>& LFMetricFields() const
-    { return lFMetricFields_; }
+    const std::vector<MetricField>& MetricFields() const
+    { return metricFields_; }
 
     bool HasPacketField(PacketFieldName fieldName) const
     {
@@ -152,45 +124,18 @@ public:
                                          [&fieldName](const auto& fp) { return fp.name == fieldName; }); });
     }
 
-    bool HasHFMField(MetricFieldName fieldName) const
+    bool HasMetricField(MetricFieldName fieldName) const
     {
-        for (const auto& field : hFMetricFields_)
+        for (const auto& field : metricFields_)
         {
             if (field.fieldName == fieldName) return true;
         }
         return false;
     }
 
-    bool HasMFMField(MetricFieldName fieldName) const
+    int MetricFieldScaling(const MetricFieldName fieldName) const
     {
-        for (const auto& field : mFMetricFields_)
-        {
-            if (field.fieldName == fieldName) return true;
-        }
-        return false;
-    }
-
-    bool HasLFMField(MetricFieldName fieldName) const
-    {
-        for (const auto& field : lFMetricFields_)
-        {
-            if (field.fieldName == fieldName) return true;
-        }
-        return false;
-    }
-
-    int MetricFieldScaling(const MetricFieldName fieldName,
-                           const MetricFrequency fieldFrequency) const
-    {
-        const std::vector<MetricField>* fields;
-        switch (fieldFrequency)
-        {
-            case MetricFrequency::LOW:    fields = &lFMetricFields_; break;
-            case MetricFrequency::MEDIUM: fields = &mFMetricFields_; break;
-            case MetricFrequency::HIGH:   fields = &hFMetricFields_; break;
-            default: throw std::runtime_error("Unknown fieldFrequency");
-        }
-        for (const auto& field : *fields)
+        for (const auto& field : metricFields_)
             if (field.fieldName == fieldName)
                 return field.fieldScalingFactor;
         return 0;
@@ -289,12 +234,6 @@ public:
     void BazPatchVersion(int v)
     { bazPatchVersion_ = v; }
 
-    void HFbyMFRatio(uint32_t arg)
-    { hFbyMFRatio_ = arg; }
-
-    void HFbyLFRatio(uint32_t arg)
-    { hFbyLFRatio_ = arg; }
-
     void FrameRateHz(double arg)
     { frameRateHz_ = arg; }
 
@@ -319,9 +258,7 @@ private:
 private:
     std::vector<GroupParams<PacketFieldName>> encodeInfo_;
     std::vector<FieldParams<PacketFieldName>> packetFields_;
-    std::vector<MetricField> hFMetricFields_;
-    std::vector<MetricField> mFMetricFields_;
-    std::vector<MetricField> lFMetricFields_;
+    std::vector<MetricField> metricFields_;
 
     ZmwInfo zmwInfo_;
     std::vector<uint32_t> zmwNumberRejects_;
@@ -344,19 +281,11 @@ private:
 
     uint32_t packetByteSize_   = 0;
     uint32_t metricByteSize_   = 0;
-    uint32_t hFMetricByteSize_ = 0;
-    uint32_t mFMetricByteSize_ = 0;
-    uint32_t lFMetricByteSize_ = 0;
 
     uint32_t outputLengthFrames_ = 0;
     double frameRateHz_ = -1;
 
-    uint32_t hFMetricFrames_ = 0;
-    uint32_t mFMetricFrames_ = 0;
-    uint32_t lFMetricFrames_ = 0;
-
-    uint32_t hFbyMFRatio_ = 0;
-    uint32_t hFbyLFRatio_ = 0;
+    uint32_t metricFrames_ = 0;
 
     uint32_t movieLengthFrames_ = 0;
 

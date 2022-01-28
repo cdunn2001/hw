@@ -29,13 +29,11 @@
 #include <algorithm>
 
 #include <json/json.h>
-#include <pacbio/smrtdata/MetricsVerbosity.h>
 
 #include <bazio/encoding/EncodingParams.h>
 
 #include <bazio/MetricFieldName.h>
 #include <bazio/MetricField.h>
-#include <bazio/MetricFrequency.h>
 
 #include "ZmwInfo.h"
 
@@ -49,7 +47,6 @@ class FileHeaderBuilder
 public:
     using MetricField = PacBio::Primary::MetricField;
     using MetricFieldName = PacBio::Primary::MetricFieldName;
-    using MetricFrequency = PacBio::Primary::MetricFrequency;
 
 public:
     class Flags
@@ -85,13 +82,10 @@ public:
                       const float frameRateHz,
                       const uint32_t movieLengthFrames,
                       const std::vector<GroupParams<PacketFieldName>>& pulseGroups,
-                      const SmrtData::MetricsVerbosity metricsVerbosity,
                       const std::string& experimentMetadata,
                       const std::string& basecallerConfig,
                       const ZmwInfo& zmwInfo,
-                      const uint32_t hFMetricFrames,
-                      const uint32_t mFMetricFrames,
-                      const uint32_t sliceLengthFrames,
+                      const uint32_t metricsFrames,
                       const Flags& flags=Flags());
 
     FileHeaderBuilder(FileHeaderBuilder&&) = default;
@@ -110,14 +104,8 @@ public:
         return fps;
     }
 
-    inline std::vector<MetricField> HFMetricFields() const
-    { return hFMetricFields_; }
-
-    inline std::vector<MetricField> MFMetricFields() const
-    { return mFMetricFields_; }
-
-    inline std::vector<MetricField> LFMetricFields() const
-    { return lFMetricFields_; }
+    inline std::vector<MetricField> MetricFields() const
+    { return metricFields_; }
 
     inline std::string MovieName() const
     { return movieName_; }
@@ -140,23 +128,11 @@ public:
     inline uint32_t BazPatchVersion() const
     { return bazPatchVersion_; }
 
-    inline uint32_t SliceLengthFrames() const
-    { return sliceLengthFrames_; }
-
     inline double FrameRateHz() const
     { return frameRateHz_; }
 
-    inline uint32_t HFMetricFrames() const
-    { return hFMetricFrames_; }
-
-    inline uint32_t MFMetricFrames() const
-    { return mFMetricFrames_; }
-
-    inline uint32_t LFMetricFrames() const
-    { return lFMetricFrames_; }
-
-    inline SmrtData::MetricsVerbosity MetricsVerbosityConfig() const
-    { return metricsVerbosity_; }
+    inline uint32_t MetricFrames() const
+    { return metricFrames_; }
 
     inline uint32_t MaxNumZmws() const
     { return zmwInfo_.NumZmws(); }
@@ -190,28 +166,16 @@ public:
     inline void ZmwNumberRejects(const std::vector<uint32_t>& rejects)
     { zmwNumberRejects_ = rejects; }
 
-    void ClearAllMetricFields()
-    {
-        lFMetricFields_.clear();
-        mFMetricFields_.clear();
-        hFMetricFields_.clear();
-    }
-    void ClearMetricFields(const MetricFrequency& frequency);
+    void ClearMetricFields()
+    { metricFields_.clear(); }
 
-    void AddMetricField(const MetricFrequency& frequency,
-                        const MetricFieldName fieldName,
+    void AddMetricField(const MetricFieldName fieldName,
                         const uint8_t fieldBitSize,
                         const bool fieldSigned,
                         const uint16_t fieldScalingFactor);
 
-    inline void HFMetricFields(const std::vector<MetricField>& hFMetricFields)
-    { hFMetricFields_ = hFMetricFields; }
-
-    inline void MFMetricFields(const std::vector<MetricField>& mFMetricFields)
-    { mFMetricFields_ = mFMetricFields; }
-
-    inline void LFMetricFields(const std::vector<MetricField>& lFMetricFields)
-    { lFMetricFields_ = lFMetricFields; }
+    inline void MetricFields(const std::vector<MetricField>& metricFields)
+    { metricFields_ = metricFields; }
 
     inline void MovieName(const std::string& movieName)
     { movieName_ = movieName; }
@@ -231,17 +195,11 @@ public:
     inline void BazPatchVersion(const uint32_t bazPatchVersion)
     { bazPatchVersion_ = bazPatchVersion; }
 
-    inline void SliceLengthFrames(const uint32_t sliceLengthFrames)
-    { sliceLengthFrames_ = sliceLengthFrames; }
-
     inline void FrameRateHz(const double frameRateHz)
     { frameRateHz_ = frameRateHz; }
 
-    inline void HFMetricFrames(const uint32_t hFMetricFrames)
-    { hFMetricFrames_ = hFMetricFrames; }
-
-    inline void LFMetricFrames(const uint32_t lFMetricFrames)
-    { lFMetricFrames_ = lFMetricFrames; }
+    inline void MetricFrames(const uint32_t metricFrames)
+    { metricFrames_ = metricFrames; }
 
     inline void Done()
     { complete_ = true; }
@@ -260,15 +218,12 @@ public:
 
 private:
     std::vector<GroupParams<PacketFieldName>> encodeInfo_;
-    std::vector<MetricField> hFMetricFields_;
-    std::vector<MetricField> mFMetricFields_;
-    std::vector<MetricField> lFMetricFields_;
+    std::vector<MetricField> metricFields_;
 
     std::string movieName_;
     std::string basecallerVersion_;
     std::string bazWriterVersion_;
 
-    SmrtData::MetricsVerbosity metricsVerbosity_;
     std::string experimentMetadata_;
     std::string basecallerConfig_;
 
@@ -278,11 +233,8 @@ private:
     uint32_t bazMajorVersion_;
     uint32_t bazMinorVersion_;
     uint32_t bazPatchVersion_;
-    uint32_t sliceLengthFrames_;
     double frameRateHz_;
-    uint32_t hFMetricFrames_;
-    uint32_t mFMetricFrames_;
-    uint32_t lFMetricFrames_;
+    uint32_t metricFrames_;
 
     bool complete_ = false;
     bool truncated_ = false;
@@ -298,13 +250,12 @@ private:
 
     bool SanityCheckMetricBlockSizes();
 
-    void DefaultMetrics(MetricFrequency frequency = MetricFrequency::MEDIUM);
-    void DefaultMetricsRTAL(MetricFrequency frequency = MetricFrequency::MEDIUM);
+    void DefaultMetrics();
+    void DefaultMetricsRTAL();
 
     void AddMetricsToJson(Json::Value& header,
                           const std::vector<MetricField>& metrics,
-                          const int frames,
-                          const MetricFrequency& frequency);
+                          const uint32_t frames);
 
     void AddPacketsToJson(Json::Value& header);
 };

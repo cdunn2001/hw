@@ -122,9 +122,9 @@ TEST(ResultWriter,Basics)
     user.savePbi = false;
     std::shared_ptr<RuntimeMetaData> rmd(new RuntimeMetaData);
     FileHeaderBuilder fhb("FakeMovie", 80.0, 80.0*60*60*3,
-            ProductionPulses::Params(), MetricsVerbosity::MINIMAL,
+            ProductionPulses::Params(),
             generateExperimentMetadata(),
-            "{}", Simulation::SimulateZmwInfo({0}),1024,4096,16384);
+            "{}", Simulation::SimulateZmwInfo({0}), 4096);
     std::string header = fhb.CreateJSON();
     FileHeader fileHeader(header.c_str(), header.size());
     const std::vector<PacBio::BAM::ProgramInfo> apps;
@@ -257,13 +257,10 @@ TEST(ResultWriter,LB_SM_tags)
                           80.0, // frame rate hz
                           80 * 60 * 60 * 3, // moie length frames
                           ProductionPulses::Params(),
-                          MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(), //experimentMetadata,
                           "{}", //basecallerConfig,
                           Simulation::SimulateZmwInfo({0}),
-                          1024, //hfMetricFrames
-                          4096, //mfMetricFrames,
-                          16384); //sliceLengthFrames
+                          4096);
 
     std::shared_ptr<RuntimeMetaData> rmd(new RuntimeMetaData);
     rmd->subreadSet.uniqueId = "9c428b0b-8d5d-439c-a0c4-16b6db7e3007";
@@ -449,13 +446,10 @@ TEST(ResultWriter,StreamingToStdout)
                           80.0,
                           80.0 * 60 * 60 * 3,
                           ProductionPulses::Params(),
-                          MetricsVerbosity::MINIMAL,
                           generateExperimentMetadata(),
                           "{}",
                           Simulation::SimulateZmwInfo({0}),
-                          1024,
-                          4096,
-                          16384);
+                          4096);
     std::string header = fhb.CreateJSON();
     FileHeader fileHeader(header.c_str(), header.size());
     const std::vector<PacBio::BAM::ProgramInfo> apps;

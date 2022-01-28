@@ -41,9 +41,7 @@ struct ReadConfig
 
     // In frames
     int32_t numFrames = 5242880; 
-    int32_t hfnf = 1024;
-    int32_t mfnf = 4096;
-    int32_t lfnf = 16384;
+    int32_t mnf = 4096;
     int32_t seqstart = 100;
     int32_t seqend = numFrames;
 
@@ -82,9 +80,7 @@ struct ReadConfig
     uint32_t numAnalogs = 4;
     uint32_t numFilters = 2;
 
-    uint32_t nhfb() const { return (numFrames  + hfnf - 1) / hfnf; }
-    uint32_t nmfb() const { return (numFrames  + mfnf - 1) / mfnf; }
-    uint32_t nlfb() const { return (numFrames  + lfnf - 1) / lfnf; }
+    uint32_t nmb() const { return (numFrames  + mnf - 1) / mnf; }
 
     FileHeader GenerateHeader() const
     {
@@ -93,13 +89,10 @@ struct ReadConfig
                 80,
                 numFrames,
                 ProductionPulses::Params(),
-                PacBio::SmrtData::MetricsVerbosity::HIGH,
                 generateExperimentMetadata(),
                 "{}", // basecaller config
                 Simulation::SimulateZmwInfo(std::vector<uint32_t>(1, 4194368)),
-                hfnf,
-                mfnf,
-                lfnf);
+                mnf);
 
         auto charVec = builder.CreateJSONCharVector();
         return FileHeader(charVec.data(), charVec.size());
@@ -133,9 +126,9 @@ EventData SimulateEventData();
 
 // Called by test
 ZmwMetrics RunMetrics(const EventData& events,
-                   const BlockLevelMetrics& metrics,
-                   const RegionLabel& hqRegion,
-                   const ReadConfig& config);
+                      const BlockLevelMetrics& metrics,
+                      const RegionLabel& hqRegion,
+                      const ReadConfig& config);
 
 
 // Called by stats if necessary. Produces the ZmwStats object that holds many

@@ -75,9 +75,7 @@ private:
 
     // Contains multidimensional arrays (zmw x metric_block) for each metric,
     // type erased to handle both floating and integral data
-    DataFrame hfMetrics_;
-    DataFrame mfMetrics_;
-    DataFrame lfMetrics_;
+    DataFrame metrics_;
 
     std::vector<int> zmwNumbers_;
     const BazReader::FileHeaders* fh_;
@@ -92,41 +90,13 @@ public:
         {
             const auto fieldName = metric.fieldName;
             if (metric.fieldScalingFactor != 1)
-                hfMetrics_[fieldName.toString()] = Array2DPtr<float>{};
+                metrics_[fieldName.toString()] = Array2DPtr<float>{};
             else
             {
                 if (metric.fieldSigned)
-                    hfMetrics_[fieldName.toString()] = Array2DPtr<int>{};
+                    metrics_[fieldName.toString()] = Array2DPtr<int>{};
                 else
-                    hfMetrics_[fieldName.toString()] = Array2DPtr<uint>{};
-            }
-        }
-
-        for (const auto metric : fh_->MetricFields())
-        {
-            const auto fieldName = metric.fieldName;
-            if (metric.fieldScalingFactor != 1)
-                mfMetrics_[fieldName.toString()] = Array2DPtr<float>{};
-            else
-            {
-                if (metric.fieldSigned)
-                    mfMetrics_[fieldName.toString()] = Array2DPtr<int>{};
-                else
-                    mfMetrics_[fieldName.toString()] = Array2DPtr<uint>{};
-            }
-        }
-
-        for (const auto metric : fh_->MetricFields())
-        {
-            const auto fieldName = metric.fieldName;
-            if (metric.fieldScalingFactor != 1)
-                lfMetrics_[fieldName.toString()] = Array2DPtr<float>{};
-            else
-            {
-                if (metric.fieldSigned)
-                    lfMetrics_[fieldName.toString()] = Array2DPtr<int>{};
-                else
-                    lfMetrics_[fieldName.toString()] = Array2DPtr<uint>{};
+                    metrics_[fieldName.toString()] = Array2DPtr<uint>{};
             }
         }
     }
@@ -190,26 +160,10 @@ public:
         };
 
         {
-            const auto& rawData = ParseMetricFields(fh_->MetricFields(), data.hFMByteStream());
+            const auto& rawData = ParseMetricFields(fh_->MetricFields(), data.MetricByteStream());
             for (const auto& metric : fh_->MetricFields())
             {
-                FillMetric(rawData, metric, data, hfMetrics_);
-            }
-        }
-
-        {
-            const auto& rawData = ParseMetricFields(fh_->MetricFields(), data.mFMByteStream());
-            for (const auto& metric : fh_->MetricFields())
-            {
-                FillMetric(rawData, metric, data, mfMetrics_);
-            }
-        }
-
-        {
-            const auto& rawData = ParseMetricFields(fh_->MetricFields(), data.lFMByteStream());
-            for (const auto& metric : fh_->MetricFields())
-            {
-                FillMetric(rawData, metric, data, lfMetrics_);
+                FillMetric(rawData, metric, data, metrics_);
             }
         }
     }
@@ -243,21 +197,7 @@ public:
         for (const auto metric : fh_->MetricFields())
         {
             const auto fieldName = metric.fieldName;
-            boost::apply_visitor(WriteVisitor(h, "/HFMetrics/" + fieldName.toString()), hfMetrics_[fieldName.toString()]);
-        }
-
-        h.CreateGroup("/MFMetrics");
-        for (const auto metric : fh_->MetricFields())
-        {
-            const auto fieldName = metric.fieldName;
-            boost::apply_visitor(WriteVisitor(h, "/MFMetrics/" + fieldName.toString()), mfMetrics_[fieldName.toString()]);
-        }
-
-        h.CreateGroup("/LFMetrics");
-        for (const auto metric : fh_->MetricFields())
-        {
-            const auto fieldName = metric.fieldName;
-            boost::apply_visitor(WriteVisitor(h, "/LFMetrics/" + fieldName.toString()), lfMetrics_[fieldName.toString()]);
+            boost::apply_visitor(WriteVisitor(h, "/Metrics/" + fieldName.toString()), metrics_[fieldName.toString()]);
         }
     }
 };
@@ -363,46 +303,18 @@ static void FillMetrics(const BazReader::FileHeaders* fh, const ZmwByteData& dat
         }
     };
 
-    auto rawMetrics = ParseMetricFields(fh->MetricFields(), data.hFMByteStream());
-    size_t limit = std::min(data.Sizes().numHFMBs, frameLimit / fh->MetricFrames() + 1);
+    auto rawMetrics = ParseMetricFields(fh->MetricFields(), data.MetricByteStream());
+    size_t limit = std::min(data.Sizes().numMBs, frameLimit / fh->MetricFrames() + 1);
     if (fh->MetricFields().size() == 0) limit = 0;
     for (size_t i = 0; i < limit; ++i)
     {
         Jval x;
-        x["HF_ID"] = (int)i;
+        x["ID"] = (int)i;
         for (const auto metric : fh->MetricFields())
         {
             FillJson(x, metric, rawMetrics, i);
         }
-        single["HF_METRICS"].append(x);
-    }
-
-    rawMetrics = ParseMetricFields(fh->MetricFields(), data.mFMByteStream());
-    limit = std::min(data.Sizes().numMFMBs, frameLimit / fh->MetricFrames() + 1);
-    if (fh->MetricFields().size() == 0) limit = 0;
-    for (size_t i = 0; i < limit; ++i)
-    {
-        Jval x;
-        x["MF_ID"] = (int)i;
-        for (const auto metric : fh->MetricFields())
-        {
-            FillJson(x, metric, rawMetrics, i);
-        }
-        single["MF_METRICS"].append(x);
-    }
-
-    rawMetrics = ParseMetricFields(fh->MetricFields(), data.lFMByteStream());
-    limit = std::min(data.Sizes().numLFMBs, frameLimit / fh->MetricFrames() + 1);
-    if (fh->MetricFields().size() == 0) limit = 0;
-    for (size_t i = 0; i < limit; ++i)
-    {
-        Jval x;
-        x["LF_ID"] = (int)i;
-        for (const auto metric : fh->MetricFields())
-        {
-            FillJson(x, metric, rawMetrics, i);
-        }
-        single["LF_METRICS"].append(x);
+        single["METRICS"].append(x);
     }
 }
 
@@ -601,9 +513,7 @@ int main(int argc, char* argv[])
                     jzmw["ZMW_ID"]     = zmw.zmwIndex;
                     jzmw["ZMW_NUMBER"] = fh.ZmwIndexToNumber(zmw.zmwIndex);
                     jzmw["NUM_EVENTS"] = zmw.numEvents;
-                    jzmw["NUM_HFMBS"]  = zmw.numHFMBs;
-                    jzmw["NUM_MFMBS"]  = zmw.numMFMBs;
-                    jzmw["NUM_LFMBS"]  = zmw.numLFMBs;
+                    jzmw["NUM_MBS"]    = zmw.numMBs;
                     jzmw["PACKET_STREAM_BYTE_SIZE"] = zmw.packetsByteSize;
                     field.append(jzmw);
                     if (filter && std::find(whiteList.begin(), whiteList.end(), zmw.zmwIndex) == whiteList.end())

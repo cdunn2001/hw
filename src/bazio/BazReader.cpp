@@ -196,9 +196,7 @@ BazReader::BazReader(const std::vector<std::string>& fileNames,
         for (const auto& header : headers)
         {
             zmwBytes += header.packetsByteSize;
-            zmwBytes += header.numHFMBs * fh_->MetricByteSize();
-            zmwBytes += header.numMFMBs * fh_->MetricByteSize();
-            zmwBytes += header.numLFMBs * fh_->MetricByteSize();
+            zmwBytes += header.numMBs * fh_->MetricByteSize();
         }
         // If the current zmw fits within our quota, add it to the slice.
         // If it doesn't fit, but it's the first one, still add it to
@@ -319,21 +317,11 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
                    &chunkHeadersMemory[bytesRead],
                    sizeof(ZmwSliceHeader::numEvents));
             bytesRead += sizeof(ZmwSliceHeader::numEvents);
-            // Read number of high-frequency metric blocks
-            memcpy(&header.numHFMBs,
+            // Read number of metric blocks
+            memcpy(&header.numMBs,
                    &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numHFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numHFMBs);
-            // Read number of medium-frequency metric blocks
-            memcpy(&header.numMFMBs,
-                   &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numMFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numMFMBs);
-            // Read number of low-frequency metric blocks
-            memcpy(&header.numLFMBs,
-                   &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numLFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numLFMBs);
+                   sizeof(ZmwSliceHeader::numMBs));
+            bytesRead += sizeof(ZmwSliceHeader::numMBs);
         }
 
         ++headerId;
@@ -409,9 +397,7 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
             const auto& h = zmwHeaders[j];
             assert(i == h.zmwIndex);
             dataSizes[i - startZmw].packetsByteSize += h.packetsByteSize;
-            dataSizes[i - startZmw].numHFMBs += h.numHFMBs;
-            dataSizes[i - startZmw].numMFMBs += h.numMFMBs;
-            dataSizes[i - startZmw].numLFMBs += h.numLFMBs;
+            dataSizes[i - startZmw].numMBs += h.numMBs;
             chunkToHeaderSplit[j].push_back(h);
         }
     }
@@ -504,35 +490,14 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
                     throw std::runtime_error("Error reading");
                 bytesRead += h.packetsByteSize;
             }
-            if (h.numHFMBs > 0)
+            if (h.numMBs > 0)
             {
-                // For high-frequency metric blocks
-                auto* data = s.NextHFBytes(h.numHFMBs * fh_->MetricByteSize());
+                auto* data = s.NextMetricBytes(h.numMBs * fh_->MetricByteSize());
                 assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->MetricByteSize() * h.numHFMBs, files_[currentFileIdx].get());
-                if (readResult != fh_->MetricByteSize() * h.numHFMBs)
+                auto readResult = fread(data, 1, fh_->MetricByteSize() * h.numMBs, files_[currentFileIdx].get());
+                if (readResult != fh_->MetricByteSize() * h.numMBs)
                     throw std::runtime_error("Error reading");
-                bytesRead += fh_->MetricByteSize() * h.numHFMBs;
-            }
-            if (h.numMFMBs > 0)
-            {
-                // For medium-frequency metric blocks
-                auto* data = s.NextMFBytes(h.numMFMBs * fh_->MetricByteSize());
-                assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->MetricByteSize() * h.numMFMBs, files_[currentFileIdx].get());
-                if (readResult != fh_->MetricByteSize() * h.numMFMBs)
-                    throw std::runtime_error("Error reading");
-                bytesRead += fh_->MetricByteSize() * h.numMFMBs;
-            }
-            if (h.numLFMBs > 0)
-            {
-                // For low-frequency metric blocks
-                auto* data = s.NextLFBytes(h.numLFMBs * fh_->MetricByteSize());
-                assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->MetricByteSize() * h.numLFMBs, files_[currentFileIdx].get());
-                if (readResult != fh_->MetricByteSize() * h.numLFMBs)
-                    throw std::runtime_error("Error reading");
-                bytesRead += fh_->MetricByteSize() * h.numLFMBs;
+                bytesRead += fh_->MetricByteSize() * h.numMBs;
             }
         }
     }

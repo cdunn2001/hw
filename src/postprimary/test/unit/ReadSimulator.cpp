@@ -16,32 +16,16 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     int metricFrames = 0;
     int numMetricBlocks = 0;
     std::vector<MetricField> fields;
-    MetricFrequency frequency = MetricFrequency::HIGH;
 
     const auto& fh = config.GenerateHeader();
-    if (!fh.HFMetricFields().empty())
+    if (!fh.MetricFields().empty())
     {
-        assert(fh.MFMetricFields().empty());
-        assert(fh.LFMetricFields().empty());
-        fields = fh.HFMetricFields();
-        metricFrames = fh.HFMetricFrames();
-        numMetricBlocks = config.nhfb();
-        frequency = MetricFrequency::HIGH;
-    } else if (!fh.MFMetricFields().empty()) {
-        assert(fh.HFMetricFields().empty());
-        assert(fh.LFMetricFields().empty());
-        fields = fh.MFMetricFields();
-        metricFrames = fh.MFMetricFrames();
-        numMetricBlocks = config.nmfb();
-        frequency = MetricFrequency::MEDIUM;
-    } else if (!fh.LFMetricFields().empty()) {
-        assert(fh.HFMetricFields().empty());
-        assert(fh.MFMetricFields().empty());
-        fields = fh.LFMetricFields();
-        metricFrames = fh.LFMetricFrames();
-        numMetricBlocks = config.nlfb();
-        frequency = MetricFrequency::LOW;
-    } else {
+        fields = fh.MetricFields();
+        metricFrames = fh.MetricFrames();
+        numMetricBlocks = config.nmb();
+    }
+    else
+    {
         assert(false);
     }
 
@@ -145,7 +129,7 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
 
     return BlockLevelMetrics(rawMetrics,
                              metricFrames, fh.FrameRateHz(), fh.RelativeAmplitudes(), fh.BaseMap(),
-                             frequency, true);
+                             true);
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
 // arguments to function parameters
@@ -222,8 +206,7 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
 {
     auto fh = std::make_unique<PacBio::BazIO::FileHeader>(readconfig.GenerateHeader());
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
-    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters,
-                                  readconfig.nlfb()};
+    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.nmb()};
     using Platform = PacBio::Primary::Postprimary::Platform;
     Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);

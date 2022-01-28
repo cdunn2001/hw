@@ -52,7 +52,7 @@ TEST(zmwMetrics, IsSequencingInRegion)
         data.C = C;
         data.G = G;
         data.T = T;
-        return AnalogMetric<float>(std::move(data), MetricFrequency::MEDIUM, 80.0f, 4096);
+        return AnalogMetric<float>(std::move(data), 80.0f, 4096);
     };
     // each channel has one high pulse rate in the same block
     std::vector<float> A {1, 10, 40, 0};

@@ -98,7 +98,7 @@ TEST(zmwMetrics, PulseMetrics)
     const auto& hqRegion = config.GenerateHQRegion();
     const auto& pulseMetrics = PulseMetrics(fh.FrameRateHz(), hqRegion, bazMetrics);
 
-    EXPECT_EQ(2048 / (fh.MFMetricFrames()/fh.FrameRateHz()), pulseMetrics.Rate());
+    EXPECT_EQ(2048 / (fh.MetricFrames()/fh.FrameRateHz()), pulseMetrics.Rate());
     EXPECT_NEAR(400.0f / 2048.0f / fh.FrameRateHz(), pulseMetrics.Width(), 0.1);
     EXPECT_EQ(98304, pulseMetrics.TotalCount());
 }
@@ -119,7 +119,7 @@ TEST(zmwMetrics, BaseMetrics)
 
     const auto& baseMetrics = BaseMetrics(fh.FrameRateHz(), hqRegion, bazMetrics, events);
 
-    double expbr = 2048 / (fh.MFMetricFrames()/fh.FrameRateHz());
+    double expbr = 2048 / (fh.MetricFrames()/fh.FrameRateHz());
     EXPECT_EQ(expbr, baseMetrics.Rate());
 
     double expbw = 400.0f / 2048.0f / fh.FrameRateHz();

@@ -145,7 +145,7 @@ private: // data
     bool summarize_;
 public:
 
-    BazIO::FileHeaderBuilder GetFileHeaderBuilder(const Readout readout, const MetricsVerbosity verbosity)
+    BazIO::FileHeaderBuilder GetFileHeaderBuilder(const Readout readout)
     {
         std::vector<uint32_t> emptyList;
         double frameRate = 100.0;
@@ -155,13 +155,10 @@ public:
                               frameRate * chunks_ * seconds_,
                               (readout != Readout::PULSES)
                               ? BazIO::ProductionPulses::Params() : BazIO::InternalPulses::Params(),
-                              verbosity,
                               generateExperimentMetadata(),
                               generateBasecallerConfig(),
                               SimulateZmwInfo(zmwNumbers_),
-                              1024, // hFMetricFrames
-                              4096, // mFMetricFrames
-                              16384, // sliceLengthFrames
+                              4096,
                               FileHeaderBuilder::Flags()
                                 .RealTimeActivityLabels(realtimeActivityLabels_)
         );
@@ -170,7 +167,6 @@ public:
     void SimulateTrivial()
     {
         const Readout readout = Readout::BASES_WITHOUT_QVS;
-        const MetricsVerbosity verbosity = MetricsVerbosity::MINIMAL;
         const uint16_t numMetrics = 16;
         const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
         auto basecall = std::make_unique<SimPulse[]>(numEvents);
@@ -186,7 +182,7 @@ public:
             currentFrame += ipd + basecall[i].Width();
         }
 
-        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
+        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout);
 
         SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
@@ -264,11 +260,11 @@ public:
         writer.WaitForTermination();
     }
 
-    void Simulate(const Readout readout, const MetricsVerbosity verbosity, uint16_t numMetrics)
+    void Simulate(const Readout readout, uint16_t numMetrics)
     {
-        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout, verbosity);
+        BazIO::FileHeaderBuilder fhb = GetFileHeaderBuilder(readout);
 
-        if (numMetrics == 0) fhb.ClearAllMetricFields();
+        if (numMetrics == 0) fhb.ClearMetricFields();
         SimBazWriter writer(fileName_, fhb, PacBio::Primary::BazIOConfig{}, silent_);
 
         std::vector<uint64_t> currentPulseFrames(zmws_, 0);
@@ -293,8 +289,8 @@ public:
             {
                 const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
                 auto basecall = rng.SimulateBaseCalls(numEvents, &currentPulseFrames[i], &currentBaseFrames[i], readout == Readout::PULSES);
-                std::vector<SpiderMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
-                writer.AddZmwSlice(basecall.get(), numEvents, std::move(hfMetric), i);
+                std::vector<SpiderMetricBlock> metric = rng.SimulateMetrics(numMetrics);
+                writer.AddZmwSlice(basecall.get(), numEvents, std::move(metric), i);
 
             }
             if (!silent_) Timing::PrintTime(now, "Simulation");
@@ -309,22 +305,22 @@ public:
 
     void SimulateBases()
     {
-        Simulate(Readout::BASES, MetricsVerbosity::MINIMAL, 16);
+        Simulate(Readout::BASES, 16);
     }
 
     void SimulatePulses()
     {
-        Simulate(Readout::PULSES, MetricsVerbosity::HIGH, 16);
+        Simulate(Readout::PULSES, 16);
     }
 
     void SimulateBasesNoMetrics()
     {
-        Simulate(Readout::BASES, MetricsVerbosity::NONE, 0);
+        Simulate(Readout::BASES, 0);
     }
 
     void SimulatePulsesNoMetrics()
     {
-        Simulate(Readout::PULSES, MetricsVerbosity::NONE, 0);
+        Simulate(Readout::PULSES, 0);
     }
 
     void Summarize(bool flag)

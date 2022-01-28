@@ -236,34 +236,15 @@ BlockLevelMetrics ParseMetrics(const std::vector<MetricField>& metricFields,
 
     // For now, all metrics must be at the same frequency
     RawMetricData rawMetrics;
-    MetricFrequency frequency;
-    if (data.hFMByteStream().size() != 0)
+    if (data.MetricByteStream().size() != 0)
     {
-        if (data.mFMByteStream().size() != 0)
-            throw PBException("Unexpected medium frequency metrics!");
-        if (data.lFMByteStream().size() != 0)
-            throw PBException("Unexpected low frequency metrics!");
-        rawMetrics = ParseMetricFields(metricFields, data.hFMByteStream());
-        frequency = MetricFrequency::HIGH;
-    }
-    else if (data.mFMByteStream().size() != 0)
-    {
-        if (data.lFMByteStream().size() != 0)
-            throw PBException("Unexpected low frequency metrics!");
-        rawMetrics = ParseMetricFields(metricFields, data.mFMByteStream());
-        frequency = MetricFrequency::MEDIUM;
-    }
-    else if (data.lFMByteStream().size() > 0)
-    {
-        rawMetrics = ParseMetricFields(metricFields, data.lFMByteStream());
-        frequency = MetricFrequency::LOW;
+        rawMetrics = ParseMetricFields(metricFields, data.MetricByteStream());
     }
     else
     {
         PBLOG_WARN << "No metrics present to parse!";
-        frequency = MetricFrequency::MEDIUM;
     }
-    return BlockLevelMetrics(rawMetrics, metricFrames, frameRateHz, relAmps, baseMap, frequency, internal);
+    return BlockLevelMetrics(rawMetrics, metricFrames, frameRateHz, relAmps, baseMap, internal);
 
     // TODO validate num_pulses and num_bases
 }

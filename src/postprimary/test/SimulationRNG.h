@@ -116,7 +116,7 @@ public: // structors
     SimulationRNG& operator=(const SimulationRNG&) = delete;
 
 public:
-    std::vector<SpiderMetricBlock> SimulateHFMetrics(const uint16_t numMetricBlocks)
+    std::vector<SpiderMetricBlock> SimulateMetrics(const uint16_t numMetricBlocks)
     {
         std::vector<SpiderMetricBlock> metrics;
         metrics.resize(numMetricBlocks);
