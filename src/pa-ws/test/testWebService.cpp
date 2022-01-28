@@ -38,7 +38,6 @@
 #include <pa-ws/api/PostprimaryObject.h>
 #include <pa-ws/api/SocketObject.h>
 #include <pa-ws/api/StorageObject.h>
-#include <pa-ws/api/TransferObject.h>  
 
 #include  <pa-ws/mockup.h>
 

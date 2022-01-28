@@ -4,7 +4,7 @@ mediaroot: media
 markdown2extras: wiki-tables
 ---
 
-# Primary Primary Analysis Webservice API
+# Primary Analysis Webservice API
 
 | Version | Date         | Author |
 |---------|--------------|--------|
@@ -12,9 +12,9 @@ markdown2extras: wiki-tables
 
 <img src=webservice.png height=150>
 
-The PrimaryPrimary Analysis Webservice API is for controlling the ``pa-ws`` service. The service acts as a controller for all 
-primary analysis applications, such as basecalling, calibration,
-postprimary processing and transfer off instrument.
+The Primary Analysis Webservice API is for controlling the ``pa-ws`` service. The service acts as a controller for all 
+primary analysis applications, such as basecalling, calibration
+and postprimary processing.
 
 This API is intended to be called by 3 clients:
 
@@ -22,7 +22,7 @@ This API is intended to be called by 3 clients:
 
 2. Chrome status dashboard - a self-referential dashboard written in Javascript that allows a live dashboard of pa-ws.
 
-3. Test frameworks - For example, an end-to-end simulation.
+3. Test frameworks - For example, an end-to-end simulation. The test framework is essentially acting as an ICS emulator.
 
 
 # Glossary
@@ -35,28 +35,29 @@ ICS
 
 movie
 : A legacy term that is still a useful metaphor for describing
-the "recording" of the live SMRT sequencing observations, but it has been extended to include the lifetime of processing the recording all the way to final basecalls.  Other synonyms for "movie" are "acquisition.
+the "recording" of the live SMRT sequencing observations, but it has been extended to include the lifetime of processing the recording all the way to final basecalls.  Other synonyms for "movie" are "acquisition" and "subreadset" (which is the name used in the run design metadata XML).
+
+pawnee
+: An acroynym for "PAWs Nrt Execution Engine". This program runs all of the NRT postprimary applications. From the perspective of pa-ws, 
+pawnee *is* postprimary, regardless of the postprimary workflow.
 
 pa-ws
 : The process that is the webservices interface to the world, including ICS, for all primary analysis functions.
 
 postprimary
-: A second process that analyzes basecalls and cuts the continuous stream of DNA bases into subreads, which map to the actual DNA template, by identifying and removing the artificial adapter sequences that were attached to the original DNA template.  In addition, the subreads can be further refined using CCS (aka HiFi) to reduce errors. These two processes run in a Linux pipe, such that together it virtually appears to be a single process, and this combined processing stage is called "postprimary".
+: A second process that analyzes basecalls and cuts the continuous stream of DNA bases into subreads, which map to the actual DNA template, by identifying and removing the artificial adapter sequences that were attached to the original DNA template.  In addition, the subreads can be further refined using CCS (aka HiFi) to reduce errors. These two processes run in a Linux pipe, such that together it virtually appears to be a single process, and this combined processing stage is called "postprimary". In late 2021, additional workflows were added (at least a dozen) and all of the workflows are now controlled by a new project named "pawnee".
 
 sensor
-: A collective term for both the physical CMOS sensor that is mounted to a stage as well as the PCB known as the "sensor board" that connects the CMOS sensor to the Aurora data link, through an FPGA.  Because the name is vague in general, it should not be used without additional wording, such as "sensor chip" vs "sensor board" vs "sensor stage" or "sensor socket"
+: A collective term for both the physical CMOS sensor that is mounted to a stage as well as the PCB known as the "sensor board" that connects the CMOS sensor to the Aurora data link, through an FPGA.  Because the name is vague in general, it should not be used without additional wording, such as "sensor chip" (the consumable item) vs "sensor board" (the PCB with the FPGAs) vs "sensor stage" (the mounting platform for the sensor chip) or "sensor socket" (the electrical connector to the sensor chip). The "sensors" are numbered starting at 1.
 
 socket
 : A place where the sensor chip is mounted. The sockets are fixed in position inside the instrument.  The sensor boards attached to the sockets and each sensor board is giving a unique "socket number" and this number is used to identify where the sensor chips are placed.
 
 SRA
-: acronym for Sensor Resource Allocation. A logical grouping of hardware and software resources.  See section below for details. For the purpose of the API, an SRA is identified by the ``socket``.
+: acronym for Sensor Resource Allocation. A logical grouping of hardware and software resources.  See section below for details. For the purpose of the API, an SRA is identified by the ``socket``.  As this is a heavily used software concept and used in arrays and vectors, SRAs are indexed at 0. Ideally, the pa-ws API does not expose SRA indices.
 
 storage
 : All files used to process an SRA are placed in a virtualized "storage" unit, which acts as a dedicated hard drive. An SRA typically will be placed in a single "storage" unit, although this is not a requirement.
-
-transfer
-: The act of copying files from the internal "storage" units to somewhere off instrument. As the files are large, this act takes significant time and must be monitored for success.
 
 
 # Conventions
@@ -76,7 +77,7 @@ media types will be accepted as input and output:
 | Media name                   | Shortcut  | Use         | Reference |
 |------------------------------|-----------|-------------|--------------------- |
 | ``application/json``         | ``.json`` | General              | <https://en.wikipedia.org/wiki/JSON> |
-| ``text/plain``               | ``.text`` | Single data field    | n/a |
+| ``text/plain``               | ``.txt``  | Single data field    | n/a |
 | ``image/png``                | ``.png``  | 2D chip image, lossless compression       | <https://en.wikipedia.org/wiki/Portable_Network_Graphics> |
 | ``image/x-portable-graymap`` | ``.pgm``  | 2D chip image, trivial uncompressed, P2 and P3 formats | <http://netpbm.sourceforge.net/doc/pgm.html> |
 
@@ -85,7 +86,7 @@ extension to chose the accepted return type.  This is useful for
 manually typing in a URL to a webbrowser to return a particular
 image type (for example ``.png``), or when returning a
 particular data field without JSON quoting (for example
-``.text``).
+``.txt``).
 
 For example, to request that the response be in PNG format, the http header must contain
 
@@ -113,9 +114,11 @@ Note that P3 (binary PGM) would be preferred over P2.
 
 All field names shall use lower case.
 
-All fields shall use "snake-case" for multiword names, which
-concatenates the names with underscores.  For example,
-``current_frame_index``.
+All fields shall use "camelCase" for multiword names, which
+concatenates the names with following words capitalized in the first lett.  For example,
+``currentFrameIndex``. If this document contains non-camelCase words (for example
+snake_case), then this document is incorrect and should be fixed. This document is 
+manually managed and I manually changed the naming convention after an early draft.
 
 ## Endpoint paths
 
@@ -141,7 +144,7 @@ Something will be returned, but it will only suitable for humans and the format 
 For single values, just the JSON value will be returned. This
 can be cumbersome with JSON strings that are quoted.  If this is
 not desired, a shortcut can be used to change the return type to
-``text/plain`` by adding ``.text`` to the end of the URL. For
+``text/plain`` by adding ``.txt`` to the end of the URL. For
 example, the state of the SRA can be returned in one of the
 following ways:
 
@@ -149,10 +152,27 @@ following ways:
     "RUNNING"
     curl {{url_base}}/sockets/1/basecaller/status.json
     "RUNNING"
-    curl {{url_base}}/sockets/1/basecaller/status.text
+    curl {{url_base}}/sockets/1/basecaller/status.txt
     RUNNING
 
 Of course, using a ``.png`` shortcut for a text field is not allowed and will return a 400 Bad Request.
+
+##  File URLs
+
+All filenames shall be specified using proper URL syntax.  For the immediate design, the following URLs shall be supported.
+
+ * ``file:/path0/path1/path2`` or ``file://host/path0/path1/path2``
+   These get translated to ``/path0/part1/path2`` etc on the command lines.
+
+ * http://pawshost/storages/m123456/files/file0
+
+   This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/file0``.
+
+ * http://pawshost/storages/m123456/files/path0/filename
+
+   This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/path0/file0``.
+ 
+If the protocol is left off, then the protocol is assumed to be `file:`. 
 
 ### All API calls start with
 
@@ -347,15 +367,6 @@ sequenceDiagram
       B-->>-C: OK "?"
     end  
 
-    C->>B: POST /transfer/m123456
-    B->>C: /transfer/m123456
-
-    loop Confirm "?"
-      C->>+B: GET {{url_base}}/transfer/m123456/status
-      B-->>-C: OK "?"
-    end  
-
-    C->> B: DELETE /transfers/m123456
     C->> B: DELETE /postprimary/m123456
     C->> B: DELETE /sockets/0
     C->> B: DELETE /storage/m123456
@@ -448,18 +459,18 @@ Returns a JSON of overall health
 
     {
         "uptime": seconds since process launch (double precision seconds since Epoch),
-        "cpu_load" : CPU load as floating point number, normalized to one core (1.0),
+        "cpuLoad" : CPU load as floating point number, normalized to one core (1.0),
         "version": "daemon software version",
         "personality":
         {
             "version": semantic version (#.#.#) of personality as string,
-            "build_timestamp": ISO 8091 of the build time, e.g. "2021-02-11 14:01:00Z",
+            "buildTimestamp": ISO 8091 of the build time, e.g. "2021-02-11 14:01:00Z",
             "comment": optional comment about personality for R&D purposes,
             "wxinfo": {
                 all fields of the output of `wxinfo -d`
             }
         },
-        "num_sras": number of SRAs available, indexed from 0 to N-1
+        "numSras": number N of SRAs available, indexed from 0 to N-1
     }
 
 
@@ -491,18 +502,18 @@ TODO: decide if SRA will be a field or not, or if the /sras will have its own lo
 # JSON objects
 
 ```json
-"process_status": {
-    "execution_status": "UNKNOWN" or "RUNNING" or "COMPLETE",
-    "completion_status": "UNKNOWN" or "SUCCESS" or "FAILED" or
+"processStatus": {
+    "executionStatus": "UNKNOWN" or "RUNNING" or "COMPLETE",
+    "completionStatus": "UNKNOWN" or "SUCCESS" or "FAILED" or
                         "ABORTED",
     "timestamp" : "<ISO8601 format, Zulu timezone>"
-    "exit_code" : 0
+    "exitCode" : 0
 }
 ```
 
-``complete_status`` is only valid when ``execution_status=COMPLETE``.
+``completeStatus`` is only valid when ``executionStatus=COMPLETE``.
 
-``exit_code`` will be 0 on success, 1 to 127 on non-signaled error exit, and 128 to 144 on signaled exit.  For example, segmentation fault is a signaled exit of 137 (128 + 11).
+``exitCode`` will be 0 on success, 1 to 127 on non-signaled error exit, and 128 to 144 on signaled exit.  For example, segmentation fault is a signaled exit of 137 (128 + 11).
 
 # Sockets
 
@@ -514,45 +525,45 @@ The GET end point will return the values previously POSTed, in addition to a "st
 
 ## Sockets/N/basecaller
 
-Optional key:value pairs on POST:
+Optional key:value pairs on POST. This list is not exhaustive, but highlights the more important fields.
 
-crosstalk_filter
+crosstalkFilter
 : Usually this is omitted, and the crosstalk_filter is calculated from the pixel_spread_function. But if the crosstalk_filter is specified, the pixel_spread_function is ignored.
 
-log_level
+logLevel
 : defaults to INFO
 
-log_url
+logUrl
 : if omitted, no log file will be saved
 
-movie_max_frames and movie_max_seconds
+movieMaxFrames and movieMaxSeconds
 : if only one is specified, the other value will be extrapolated using the expected_frame_rate and a small margin.
 
-sequencing_roi
+sequencingRoi
 : Can be omitted and the entire chip will be used
 
-trace_file_roi and trace_file_url
+traceFileRoi and traceFileUrl
 : Can both be omitted and no trace file will be written. If the trace file is to be written, they *both* must be specified.
 
 ## Sockets/N/darkcal
 
 Optional key:value pairs on POST:
 
-log_level
+logLevel
 : defaults to INFO
 
-movie_max_frames and movie_max_seconds
+movieMaxFrames and movieMaxSeconds
 : if only one is specified, the other value will be extrapolated using the expected_frame_rate and a small margin.
 
-log_url
+logUrl
 : if omitted, no log file will be saved
 
 The object mode for an SRA is
 
 ```json
 {
-    "sra_index": 0 to 3,
-    "sensor_number": 1 to 4,
+    "sraIndex": 0 to 3,
+    "sensorNumber": 1 to 4,
     "status":
     {
         "sensor":
@@ -560,7 +571,7 @@ The object mode for an SRA is
             "rows": number of rows on connected sensor,
             "cols": number of columns on connected sensor,
             "exposure": exposure time of each frame in seconds (floating point),
-            "cell_id": cell name or ID
+            "cellId": cell name or ID
             "chiplayout": name of the chiplayout,
             TBD other fields that the sensor can transmit via PDU messenging such as chip serial number
         },
@@ -577,18 +588,18 @@ The object mode for an SRA is
         "live":
         {
             "aurora": "up" or "down",  # Aurora connection
-            "current_frame_index" : uint64 of the current frame header,
-            "frame_rate" : frame rate per second as double precision (as measured by frame header received time),
-            "frame_rate_sensor" : frame rate per second as double precision (as measured by deltas of the frame header time stamp),
-            "thread_duty_cycle" : measurement of the thread duty cycle. A value of 1.0 is fully loaded,
-            "movie_number": the most recent movie_number seen in the stream. should match configuration.movie_number to take data, or 0 by default
-            "memory_pool": pool number of the last pointer handled. All pointers should be in the same pool,
-            "movie_state": "idle" | "ready" | "movie"
+            "currentFrameIndex" : uint64 of the current frame header,
+            "frameRate" : frame rate per second as double precision (as measured by frame header received time),
+            "frameRateSensor" : frame rate per second as double precision (as measured by deltas of the frame header time stamp),
+            "threadDutyCycle" : measurement of the thread duty cycle. A value of 1.0 is fully loaded,
+            "movieNumber": the most recent movie_number seen in the stream. should match configuration.movie_number to take data, or 0 by default
+            "memoryPool": pool number of the last pointer handled. All pointers should be in the same pool,
+            "movieState": "idle" | "ready" | "movie"
         },
         "transmitter" : {
-            "frame_index": uint64 of the frame that was last transmitted,
-            "frame_offset": uint64 offset into the simulated file or pattern,
-            "num_frames": total number of frames in the simulated file or pattern,
+            "frameIndex": uint64 of the frame that was last transmitted,
+            "frameOffset": uint64 offset into the simulated file or pattern,
+            "numFrames": total number of frames in the simulated file or pattern,
             "state" : state of the movie transmitter
             {
                 "idle",
@@ -599,21 +610,21 @@ The object mode for an SRA is
     },
     "configuration" :
     {
-        "movie_number": movie_number   # the desired movie number
+        "movieNumber": movie_number   # the desired movie number
         "roi" : 
         [
             [ rowMin, colMin, numRows, numCols ]   rectangles of sequencing ROI
         ]
-        "pop_socket": string that names the pop socket (incoming IPC messages),
-        "push_socket": string that names the push socket (outgoing IPC messages),
+        "popSocket": string that names the pop socket (incoming IPC messages),
+        "pushSocket": string that names the push socket (outgoing IPC messages),
         "uuid": uuid of acquisition aka subread set from XML. Not used programmatically,
-        "data_path":
+        "dataPath":
             "normal" |  no loopback. Receiver connected to sensor, transmitter goes off coprocessor.
             "hardloop" | transmitter and received Aurora ports are connected together
             "softloop" | transmitter and receiver data is connected through FPGA fabric
         }
     },
-    "sensor_fpga_registers":   contains the last cached values of the registers. When the registers are updated is TBD.
+    "sensorFpgaRegisters":   contains the last cached values of the registers. When the registers are updated is TBD.
     [
         { 
             "number": register number,
@@ -756,7 +767,7 @@ for JSON numerical values.
 
     $ curl {{url_base}}/sras/3/ipc/configuration/push_socket
     "localhost:46600"
-    $ curl {{url_base}}/sras/3/ipc/configuration/pull_socket.text
+    $ curl {{url_base}}/sras/3/ipc/configuration/pull_socket.txt
     localhost:46601
     $ curl {{url_base}}/sras/3/ipc/configuration/movie_number
     3141592

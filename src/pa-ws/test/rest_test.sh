@@ -67,20 +67,6 @@ echo
 
 curl $curlopts -X GET $baseurl/storages/m123456_000001       | pretty
 
-echo
-echo "#########################################################################"
-echo
-echo "GET /transfers"
-echo
-
-curl $curlopts -X GET $baseurl/transfers       | pretty
-
-echo
-echo "GET /transfers/m123456_000001"
-echo
-
-curl $curlopts -X GET $baseurl/transfers/m123456_000001       | pretty
-
 echo "</pre>"
 
 failures=0
@@ -128,21 +114,6 @@ echo -e "</li>\n"
 ret=$(curl $curlopts --data '{"mid":"m123456_987654_s0"}' -X POST $baseurl/storages/0 ) 
 echo "<li> storages POST returned $ret"
 if [[ $ret =~ CODE(201) ]] ; then echo FAIL POST $baseurl/storages/0; failures=$(($failures+1)); fi
-echo -e "</li>\n"
-
-# transfers
-ret=$(curl $curlopts --data '{"mid":"m123456_987654_s0","uuid":"123"}' -X POST $baseurl/transfers )
-echo "<li> transfers POST returned $ret"
-if [[ $ret =~ CODE(201) ]] ; then echo FAIL POST $baseurl/transfers; failures=$(($failures+1)); fi
-echo -e "</li>\n"
-
-ret=$(curl $curlopts -X POST $baseurl/transfers/m123456_987654_s0/stop )
-echo "<li> transfers/stop POST returned $ret"
-if [[ $ret =~ CODE(200) ]] ; then echo FAIL POST $baseurl/transfers/m123456_987654_s0/stop; failures=$(($failures+1)); fi
-echo -e "</li>\n"
-
-ret=$(curl $curlopts -X DELETE $baseurl/transfers/m123456_987654_s0 )
-echo "<li> transfers DELETE returned $ret"
 echo -e "</li>\n"
 
 echo "</ul>"

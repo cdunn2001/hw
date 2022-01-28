@@ -130,22 +130,4 @@ StorageObject := {
   "process_status": ProcessStatusObject
 }  
 
-TransferStatusObject := {
-  "progress": double,
-  "bytes_transferred": uint64_t,
-  "current_file": string,
-  "estimated_time_remaining": double,
-  "completed_files": [ string, string ...]
-}  
-
-TransferObject := {
-  "mid": string,
-  "urls_to_transfer": [ string, string ...],
-  "destination_url": string,
-  "protocol": "UNKNOWN" | "RSYNC" | "SSH_RSYNC",
-  "output_log_url": url,
-  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR",
-  "status": TransferStatusObject,
-  "process_status": ProcessStatusObject
-}  
 

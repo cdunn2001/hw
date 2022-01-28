@@ -40,6 +40,7 @@ add_subdirectory(../../doc doc)
 set(SOFTWARE_VERSION "0.0.0")
 set(SYSTEMD_COMMON_JSON "/etc/pacbio/app-common.json")
 
+add_subdirectory(api)
 add_subdirectory(dashboard)
 add_subdirectory(test)
 
@@ -88,6 +89,7 @@ target_link_libraries(lib-pa-ws
     PUBLIC
       libBoost
       libPacbioCplusplusApi
+      libPaWsApi
       libPaWsDoc
       libPaWsDashboard
       curl

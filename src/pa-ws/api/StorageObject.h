@@ -68,6 +68,15 @@ struct StorageObject : PacBio::Configuration::PBConfig<StorageObject>
     PB_CONFIG_PARAM(url, outputLogUrl, "discard:"); ///< Destination URL for the log file. Logging happens during construction and freeing. EXAMPLE("http://localhost:23632/storages/m123456_987654/storage.log")
     PB_CONFIG_PARAM(LogLevel_t, logLevel, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("INFO")
 
+    // TBD. The /storages/$mid/files endpoint refers to the actual files themselves. It is possible GET
+    // the contents of the files. Under the hood, pa-ws will translate any references to these files into
+    // local filenames when passed to the command lines of the manages processes. For example, if postprimary is
+    // posted with a setting such as "bazTempFile":"http://nrt1:23602/storages/m1234/files/foo_temp.txt", pa-ws
+    // will translate this to a command line that will look something like
+    // `baz2bam --tempfile /data/pa/tmp.Egf3vDs1Fc/foo_temp.txt`, where /data/pa/tmp.Egf3vDs1Fc has been allocated
+    // for the "m1234" storages object.
+    // A GET to this top level directory will return a list of files in the directory.
+    // TBD not sure if the GET should recursively walk the subdirectories. Maybe this is an option.
     PB_CONFIG_PARAM(std::vector<StorageItemObject>, files, 0); ///< A list of all the files in this StorageObject EXAMPLE(["http://localhost:23632/storages/m123456_987654/storage.log","http://localhost:23632/storages/m123456_987654/my.baz",...])
 
     PB_CONFIG_OBJECT(StorageDiskReportObject, space);

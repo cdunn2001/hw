@@ -170,26 +170,4 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     return po;
 }
 
-TransferObject CreateMockupOfTransferObject(int index, const std::string& mid)
-{
-    TransferObject to;
-    to.mid = mid;
-    to.protocol = TransferObject::Protocol::RSYNC;
-    to.destinationUrl = "rsync://my.smrt.server.org:54321/this/experiment/"
-        +mid+"_00000" + std::to_string(index);
-    std::string root = "http://localhost:23632/storages/" + mid + "/";
-
-    to.urlsToTransfer.push_back(root + mid + ".dataset.xml");
-    to.urlsToTransfer.push_back(root + mid + ".ccs.bam");
-    to.urlsToTransfer.push_back(root + mid + ".baz2bam.log");
-    to.status.currentFile = root + mid + ".ccs.bam";
-    to.status.estimatedTimeRemaining = 3600.1;
-    to.status.progress = 0.95;
-    to.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::RUNNING;
-    to.processStatus.timestamp = PacBio::Utilities::ISO8601::TimeString();
-
-    return to;
-}
-
 }} // namespace
-

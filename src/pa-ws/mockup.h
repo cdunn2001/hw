@@ -34,7 +34,6 @@
 #include "api/SocketObject.h"
 #include "api/StorageObject.h"
 #include "api/PostprimaryObject.h"
-#include "api/TransferObject.h"
 
 namespace PacBio {
 namespace API {
@@ -44,8 +43,6 @@ SocketObject CreateMockupOfSocketObject(int index);
 StorageObject CreateMockupOfStorageObject(int socket_number, const std::string& mid);
 
 PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid);
-
-TransferObject CreateMockupOfTransferObject(int index, const std::string& mid);
 
 }}
 

@@ -35,6 +35,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <arpa/inet.h>
+#include <regex>
 #include <boost/regex.hpp>
 
 // 3rd party includes
@@ -56,6 +57,7 @@
 #include <pacbio/utilities/ISO8601.h>
 
 #include <dochelp.h>
+#include <apihelp.h>
 #include <DashboardWrapper.h>
 
 // application includes
@@ -67,7 +69,6 @@
 #include "api/SocketObject.h"
 #include "api/PostprimaryObject.h"
 #include "api/StorageObject.h"
-#include "api/TransferObject.h"
 
 #include "mockup.h"
 
@@ -455,66 +456,21 @@ HttpResponse WebServiceHandler::GET(const std::string& uri)
                 args.erase(args.begin());
                 return GET_Storages(args);
             }
-            else if (args[0] == "transfers")
-            {
-                args.erase(args.begin());
-                return GET_Transfer(args);
-            }
-            else if (args[0] == "api")
-            {
-                response.json = "here is the API";
-            }
-#if 0
-            else if (args[0] == "sras")
-            {
-                args.erase(args.begin());
-                if (args.size() == 0)
-                {
-                    Json::Value allSras = Json::arrayValue;
-                    for (auto sraIndex : GetSraObjectDatabase().GetSraIndices() )
-                    {
-                        auto so = LockSra(sraIndex);
-                        allSras.append(so->Json());
-                    }
-                    response.json = allSras;
-                }
-                else
-                {
-                    auto sraIndex = std::stoul(args[0]);
-                    args.erase(args.begin());
-                    if (!GetSraObjectDatabase().HasSraIndex(sraIndex))
-                    {
-                        throw HttpResponseException(HttpStatus::NOT_FOUND,
-                                                    uri + " not found");
-                    }
-                    auto so = LockSra(sraIndex);
-                    response.json = so->Json();
-
-                    // now dive down into JSON member if necessary
-                    while (args.size() >= 1)
-                    {
-                        const std::string member = args[0];
-                        args.erase(args.begin());
-                        if (response.json.isMember(member))
-                        {
-                            response.json = response.json[member];
-                        }
-                        else
-                        {
-                            PBLOG_ERROR << "member " << member << " not found "
-                                << " in " << so->Json();
-                            throw HttpResponseException(HttpStatus::NOT_FOUND,
-                                uri + " not found, member " + member
-                                + " does not exist");
-                        }
-                    }
-                }
-            }
-            else if (args[0] == "api")
+            else if (args[0] == "doc")
             {
                 response.json = GetDocString();
-                response.contentType = "text/plain";
+                response.contentType = "text/html";
             }
+            else if (args[0] == "api")
+            {
+                std::string api = GetApiString();
+                std::regex e ("REPLACE_WITH_LOCALHOST");
+                api = std::regex_replace (api, e, PacBio::POSIX::gethostname());
+
+                response.json = api;
+                response.contentType = "text/html";
+            }
+#if 0
             else if (args[0] == "dashboard")
             {
                 response.json = GetDashboardString();
@@ -709,38 +665,6 @@ HttpResponse WebServiceHandler::GET_Storages(const std::vector<std::string>& arg
     return response;
 }
 
-
-HttpResponse WebServiceHandler::GET_Transfer(const std::vector<std::string>& args)
-{
-    HttpResponse response;
-    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
-
-    Json::Value objects = Json::arrayValue;
-    if (config_.debug.simulationLevel == 1)
-    {
-        response.httpStatus = HttpStatus::OK;
-        if (args.size() == 0)
-        {
-            for(uint32_t i=1;i<=4;i++)
-            {
-                auto t = PacBio::API::CreateMockupOfTransferObject(i, "m123456_00000" + std::to_string(i));
-                objects.append(t.mid);
-                // objects[t.mid] = t.Serialize();
-            }
-            response.json = objects;
-        }
-        else
-        {
-            std::string mid = args[0];
-            int i = mid.back() - '0';
-            auto t = PacBio::API::CreateMockupOfTransferObject(i,mid);
-            response.json = t.Serialize();
-        }
-
-    }
-
-    return response;
-}
 
 HttpResponse WebServiceHandler::POST_Postprimaries(const std::vector<std::string>& args, const std::string& postData)
 {
@@ -963,27 +887,6 @@ HttpResponse WebServiceHandler::POST_Storages(const std::vector<std::string>& ar
     return response;
 }
 
-HttpResponse WebServiceHandler::POST_Transfer(const std::vector<std::string>& args, const std::string& postData)
-{
-    HttpResponse response;
-    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
-
-    if (args.size() >= 1)
-    {
-        if (args[0] == "stop")
-        {
-            // do something
-            if (config_.debug.simulationLevel == 1)
-            {
-                response.httpStatus = HttpStatus::OK;
-                response.json = "tbd";
-            }
-        }
-    }
-
-    return response;
-}
-
 std::string WebServiceHandler::GuessContentTypeFromExtension(const std::string& uri)
 {
     using namespace PacBio::Text;
@@ -1053,11 +956,6 @@ HttpResponse WebServiceHandler::POST(
             {
                 args.erase(args.begin());
                 return POST_Storages(args,postDataString);
-            }
-            else if (args[0] == "transfers")
-            {
-                args.erase(args.begin());
-                return POST_Transfer(args,postDataString);
             }
             else if (args[0] == "api")
             {
@@ -1130,7 +1028,7 @@ HttpResponse WebServiceHandler::POST(
     return response;
 }
 
-/// Handle the DELETE, which is liked a request to delete an acquisition or a smrt-transfer.
+/// Handle the DELETE
 /// \param uri : the URI just POSTED to, with the protocol, hostname and port stripped off. Should not start with a /
 /// \returns the HTTP response
 HttpResponse WebServiceHandler::DELETE(const std::string& uri)
@@ -1159,11 +1057,6 @@ HttpResponse WebServiceHandler::DELETE(const std::string& uri)
             {
                 args.erase(args.begin());
                 return DELETE_Storages(args);
-            }
-            else if (args[0] == "transfers")
-            {
-                args.erase(args.begin());
-                return DELETE_Transfer(args);
             }
         }
         throw HttpResponseException(HttpStatus::NOT_FOUND, "not found:" + args[0]);
@@ -1256,25 +1149,6 @@ HttpResponse WebServiceHandler::DELETE_Storages(const std::vector<std::string>& 
     }
     return response;
 }
-
-HttpResponse WebServiceHandler::DELETE_Transfer(const std::vector<std::string>& args)
-{
-    HttpResponse response;
-    response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
-
-    auto nextArg = args.begin();
-    if (nextArg != args.end())
-    {
-        const std::string mid = *nextArg;
-        if (config_.debug.simulationLevel == 1)
-        {
-            response.httpStatus = HttpStatus::OK;
-            response.json = "tbd";
-        }
-    }
-    return response;
-}
-
 
 }}} // namespace
 
