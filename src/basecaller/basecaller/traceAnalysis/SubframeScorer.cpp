@@ -1,4 +1,4 @@
-// Copyright (c) 2019, Pacific Biosciences of California, Inc.
+// Copyright (c) 2019-2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -24,22 +24,22 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "SubframeScorer.cuh"
+#include "SubframeScorer.h"
+
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 using namespace PacBio::Cuda::Utility;
 
-namespace PacBio {
-namespace Cuda {
-namespace Subframe {
-
+namespace PacBio::Mongo::Basecaller::Subframe {
 
 template <typename T>
-TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+TransitionMatrix<T>::TransitionMatrix(CudaArray<PacBio::AuxData::AnalogMode, numAnalogs> analogs,
+                                      const Data::BasecallerSubframeConfig& config,
                                       double frameRate)
 {
     // We only have access to single precision math on the host, so populate data as float for now,
     // and at the end we'll convert it and populate our actual half precision data member;
-    Utility::CudaArray<Utility::CudaArray<float, numStates>, numStates> dataFloat;
+    CudaArray<CudaArray<float, numStates>, numStates> dataFloat;
     auto map = this->InitMatrix();
     for (int i = 0; i < numStates; ++i)
     {
@@ -67,7 +67,7 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::Analog
     }
 
     // Mean IPD for the input analog set.
-    const float meanIpd = [&analogs,&frameRate](){
+    const float meanIpd = [&analogs](){
         float sum = 0.0f;
         for (uint32_t i = 0; i < numAnalogs; ++i) sum+=analogs[i].interPulseDistance;
         return sum/numAnalogs;
@@ -99,9 +99,9 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::Analog
     };
 
     // Slurp in fudge factors from the config file
-    const auto alphaFactor = 1.0f;//config.Alpha;
-    const auto betaFactor = 1.0f;//config.Beta;
-    const auto gammaFactor = 1.0f;//config.Gamma;
+    const auto alphaFactor = config.alpha;
+    const auto betaFactor = config.beta;
+    const auto gammaFactor = config.gamma;
 
     // Precompute the probabilities of 1, 2 and 3 frame ipds after each analog
     CudaArray<CudaArray<float, 3>, numAnalogs> ipdLenProbs;
@@ -222,7 +222,7 @@ TransitionMatrix<T>::TransitionMatrix(Utility::CudaArray<PacBio::AuxData::Analog
     }
 }
 
-template class TransitionMatrix<float>;
-template class TransitionMatrix<half>;
+template struct TransitionMatrix<float>;
+template struct TransitionMatrix<half>;
 
-}}}
+}

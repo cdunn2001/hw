@@ -9,6 +9,7 @@ add_library(libMongoBasecallerTest OBJECT
     SpeedTestToggle.cpp
     TestBaseliner.cpp
     TestDmeEm.cpp
+    TestFrameLabeler.cpp
     TestHFMetricsFilter.cpp
     TestBaselineStatsAggregator.cpp
     TestTraceHistogramAccumulator.cpp

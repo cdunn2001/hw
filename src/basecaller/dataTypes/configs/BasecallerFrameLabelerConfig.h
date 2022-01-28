@@ -36,33 +36,52 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
+class BasecallerSubframeConfig : public Configuration::PBConfig<BasecallerSubframeConfig>
+{
+    PB_CONFIG(BasecallerSubframeConfig);
+
+    PB_CONFIG_PARAM(float, alpha, 1.0f);
+    PB_CONFIG_PARAM(float, beta, 1.0f);
+    PB_CONFIG_PARAM(float, gamma, 1.0f);
+};
+
+class BasecallerRoiConfig : public Configuration::PBConfig<BasecallerRoiConfig>
+{
+    PB_CONFIG(BasecallerRoiConfig);
+
+    // Placeholder config, as there is talk of evaluating different
+    // Finite Impulse Response filters for the roi computation
+    // Default is basically the original Sequel configuration,
+    // and NoOp disables the Roi filter
+    SMART_ENUM(RoiFilterType, Default, NoOp);
+    PB_CONFIG_PARAM(RoiFilterType, filterType, RoiFilterType::Default);
+
+    PB_CONFIG_PARAM(float, upperThreshold, 7.0f);
+    PB_CONFIG_PARAM(float, lowerThreshold, 2.0f);
+};
+
 class BasecallerFrameLabelerConfig : public Configuration::PBConfig<BasecallerFrameLabelerConfig>
 {
 public:
     PB_CONFIG(BasecallerFrameLabelerConfig);
 
-    // TODO: When we are done testing subframe and it presumably becomes
-    //       default, consider putting subframe specific options into a
-    //       new subgroup
-
-    SMART_ENUM(MethodName, NoOp, SubFrameGaussCapsDevice, SubFrameGaussCapsHost)
+    SMART_ENUM(MethodName, NoOp, Device, Host)
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {
                             return device == Basecaller::ComputeDevices::Host ?
-                                MethodName::SubFrameGaussCapsHost :
-                                MethodName::SubFrameGaussCapsDevice;
+                                MethodName::Host :
+                                MethodName::Device;
                         },
                         {"analyzerHardware"}
     ));
 
-    bool UsesGpu() const { return Method == MethodName::SubFrameGaussCapsDevice; }
+    bool UsesGpu() const { return Method == MethodName::Device; }
 
-    PB_CONFIG_PARAM(float, UpperThreshold, 7.0f);
-    PB_CONFIG_PARAM(float, LowerThreshold, 2.0f);
-    PB_CONFIG_PARAM(float, Alpha, 1.0f);
-    PB_CONFIG_PARAM(float, Beta, 1.0f);
-    PB_CONFIG_PARAM(float, Gamma, 1.0f);
+    // When/if we get alternative implementations, change these to be
+    // variants over the implementation specific configs
+    PB_CONFIG_OBJECT(BasecallerSubframeConfig, viterbi);
+    PB_CONFIG_OBJECT(BasecallerRoiConfig, roi);
 };
 
 }}}     // namespace PacBio::Mongo::Data

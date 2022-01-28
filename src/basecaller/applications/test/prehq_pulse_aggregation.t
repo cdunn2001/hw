@@ -13,12 +13,12 @@ maintenance becomes annoying, as long as something else is dropped in its place
   257
 
   $ bazviewer --silent --summary ${BAZFILE}
-  events:46665
-  bases:46665
-  call A:11604
-  call C:11889
-  call G:11758
-  call T:11414
+  events:46543
+  bases:46543
+  call A:11595
+  call C:11865
+  call G:11724
+  call T:11359
   {
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }

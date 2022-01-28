@@ -86,7 +86,7 @@ void CudaCopyHostToDevice(T* dest, const T* src, size_t count) { CudaRawCopyHost
 template <typename T>
 void CudaCopyDeviceToDevice(T* dest, const T* src, size_t count) { CudaRawCopyDeviceToDevice(dest, src, count*sizeof(T)); }
 template <typename T>
-void CudaCopyToSymbol(const T& dest, const T* src) { CudaRawCopyToSymbol(&dest, src, sizeof(T)); }
+void CudaCopyToSymbol(const T* dest, const T* src) { CudaRawCopyToSymbol(dest, src, sizeof(T)); }
 
 }} // ::Pacbio::Cuda
 

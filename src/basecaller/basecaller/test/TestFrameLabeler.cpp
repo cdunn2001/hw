@@ -1,5 +1,29 @@
-#include <array>
-#include <cassert>
+// Copyright (c) 2019-2022, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -8,9 +32,7 @@
 
 #include <appModules/TraceFileDataSource.h>
 
-#include <common/cuda/memory/DeviceOnlyObject.cuh>
-#include <common/cuda/memory/ManagedAllocations.h>
-#include <common/cuda/utility/CudaArray.h>
+#include <common/MongoConstants.h>
 
 #include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
@@ -19,7 +41,7 @@
 #include <basecaller/traceAnalysis/FrameLabelerHost.h>
 
 using namespace PacBio::Application;
-using namespace PacBio::Cuda::Utility;
+using namespace PacBio::Configuration;
 using namespace PacBio::Cuda::Memory;
 using namespace PacBio::DataSource;
 using namespace PacBio::Mongo;
@@ -29,12 +51,21 @@ using namespace PacBio::Primary;
 
 namespace {
 
+struct TestConfig : PBConfig<TestConfig>
+{
+    PB_CONFIG(TestConfig);
+
+    PB_CONFIG_OBJECT(BasecallerFrameLabelerConfig, labeler);
+    PB_CONFIG_PARAM(ComputeDevices, analyzerHardware, ComputeDevices::Host);
+};
+
 template <typename Labeler>
-std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& config,
+std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConfig& analysisConfig,
+                                                              const BasecallerFrameLabelerConfig& labelerConfig,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
-    Labeler::Configure(config);
+    Labeler::Configure(analysisConfig, labelerConfig);
     std::vector<std::unique_ptr<FrameLabeler>> ret;
     for (size_t pool = 0; pool < numPools; ++pool)
     {
@@ -44,16 +75,19 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(const AnalysisConf
 }
 
 std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLabelerConfig::MethodName method,
-                                                              const AnalysisConfig& config,
+                                                              const AnalysisConfig& analysisConfig,
                                                               size_t lanesPerPool,
                                                               size_t numPools)
 {
+    Json::Value json;
+    json["labeler"]["Method"] = method.toString();
+    TestConfig cfg{json};
     switch(method)
     {
-    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice:
-        return CreateAndConfigure<FrameLabelerDevice>(config, lanesPerPool, numPools);
-    case BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost:
-        return CreateAndConfigure<FrameLabelerHost>(config, lanesPerPool, numPools);
+    case BasecallerFrameLabelerConfig::MethodName::Device:
+        return CreateAndConfigure<FrameLabelerDevice>(analysisConfig, cfg.labeler, lanesPerPool, numPools);
+    case BasecallerFrameLabelerConfig::MethodName::Host:
+        return CreateAndConfigure<FrameLabelerHost>(analysisConfig, cfg.labeler, lanesPerPool, numPools);
     default:
         throw PBException("Test does not support this FrameLabeler type");
     }
@@ -212,6 +246,8 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     FrameLabeler::Finalize();
 }
 
-INSTANTIATE_TEST_SUITE_P(somthing, FrameLabelerTest,
-                         testing::Values(BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsDevice,
-                                         BasecallerFrameLabelerConfig::MethodName::SubFrameGaussCapsHost));
+INSTANTIATE_TEST_SUITE_P(Device, FrameLabelerTest,
+                         testing::Values(BasecallerFrameLabelerConfig::MethodName::Device));
+
+INSTANTIATE_TEST_SUITE_P(Host, FrameLabelerTest,
+                         testing::Values(BasecallerFrameLabelerConfig::MethodName::Host));

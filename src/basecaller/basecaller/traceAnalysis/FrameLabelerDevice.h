@@ -30,17 +30,10 @@
 #include "FrameLabeler.h"
 
 #include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 #include <dataTypes/BasicTypes.h>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
-
-namespace PacBio {
-namespace Cuda {
-// Forward declare of cuda type that cannot be directly included here
-// TODO prototype needs more cleaning, and should probably be renamed
-class FrameLabeler;
-
-}}
 
 namespace PacBio {
 namespace Mongo {
@@ -60,7 +53,8 @@ public:     // Static functions
     /// each DeviceSGCFrameLabeler instance for a given movie.
     /// \note Not thread safe. Do not call this function while threads are
     /// running analysis.
-    static void Configure(const Data::AnalysisConfig& analysisConfig);
+    static void Configure(const Data::AnalysisConfig& analysisConfig,
+                          const Data::BasecallerFrameLabelerConfig& labelerConfig);
     static void Finalize();
 
 public:
@@ -69,12 +63,18 @@ public:
                        Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
     ~FrameLabelerDevice() override;
 
+    // public so we can derive children
+    struct Impl;
+
+private:     // Static data
+    static Data::BasecallerRoiConfig::RoiFilterType roiType;
+
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
     Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
             const PoolModelParameters& models) override;
 
-    std::unique_ptr<Cuda::FrameLabeler> labeler_;
+    std::unique_ptr<Impl> labeler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

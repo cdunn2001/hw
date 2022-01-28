@@ -30,8 +30,8 @@
 //  efficient traversal patterns that the compiler can potentially optimize
 //  aggresively
 
-#ifndef Sequel_Basecaller_Common_SparseMatrix2_H_
-#define Sequel_Basecaller_Common_SparseMatrix2_H_
+#ifndef MONGO_BASECALLER_SPARSE_MATRIX_H
+#define MONGO_BASECALLER_SPARSE_MATRIX_H
 
 #include <algorithm>
 #include <array>
@@ -44,8 +44,7 @@
 
 #include <common/cuda/CudaFunctionDecorators.h>
 
-namespace PacBio {
-namespace Cuda {
+namespace PacBio::Mongo::Basecaller {
 
 // Simple container types to keep track of a list of template parameters all of
 // the same type.
@@ -719,6 +718,6 @@ using SparseMatrixSpec = typename SparseMatrixGenerator<T, Rows...>::type;
 template <size_t row, size_t firstIdx, class...Segments>
 constexpr std::array<CompactSegment,sizeof...(Segments)> SparseRow<row, firstIdx, Segments...>::segments;
 
-}}
+}
 
-#endif /* Sequel_Basecaller_Common_SparseMatrix_H_ */
+#endif /*MONGO_BASECALLER_SPARSE_MATRIX_H*/
