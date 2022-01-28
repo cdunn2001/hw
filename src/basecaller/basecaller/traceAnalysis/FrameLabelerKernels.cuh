@@ -32,6 +32,7 @@
 #include <dataTypes/BatchData.cuh>
 
 #include <basecaller/traceAnalysis/FrameLabelerDeviceDataStructures.cuh>
+#include <basecaller/traceAnalysis/RoiDevice.cuh>
 #include <basecaller/traceAnalysis/SubframeScorer.h>
 
 namespace PacBio::Mongo::Basecaller {
@@ -67,10 +68,11 @@ __device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
         vec[i] = exp(vec[i] - maxVal);
         sum += vec[i];
     }
+    auto invSum = 1 / sum;
     #pragma unroll 1
     for (int i = 0; i < numStates; ++i)
     {
-        vec[i] /= sum;
+        vec[i] *= invSum;
     }
 }
 
@@ -80,9 +82,9 @@ __global__ static void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
     for (auto val : zmwData) val = PBShort2(0);
 }
 
-template <typename T2, typename Labels, typename LogLike, typename Scorer, typename TransT, class... Rows>
-__device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Scorer& scorer,
-                          const SparseMatrix<TransT, Rows...>& trans, PBShort2 data, int idx)
+template <typename Labels, typename LogLike, typename Scorer, typename TransT, class... Rows>
+__device__ void Recursion(Labels& labels, LogLike& logLike, const Scorer& scorer,
+                          const SparseMatrix<TransT, Rows...>& trans, PBShort2 data, PBShort2 isRoi, int idx)
 {
     Utility::CudaArray<PBHalf2, numStates> logAccum;
     PackedLabels packedLabels;
@@ -93,7 +95,7 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
     // code sections did bit twiddles on.  Trying to encapsulate that into
     // a small class caused this filter to slow down by almost 2x.  The
     // combination of making it a struct, and the fact that AddRow used to
-    // be a template function that accepted packedLabelsby reference, caused
+    // be a template function that accepted packedLabels by reference, caused
     // the variable to be pushed to global memory and the increased memory
     // traffic killed performance.  For whatever reason, capturing this
     // by reference in a lambda doesn't cause any issues, though one would
@@ -115,6 +117,7 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
         // decltype to extract the type information within a lambda.
         using Row = std::remove_pointer_t<decltype(row)>;
         constexpr auto firstIdx = Row::firstIdx;
+        constexpr auto nextState = Row::rowIdx;
 
         // Currently only handle Rows with a single Segment.  This can be
         // generalized to handle an arbitrary number of Segments, but it
@@ -122,7 +125,7 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
         // until necessary
         using Segment = typename Row::Segment0;
 
-        maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
+        auto maxVal = score + PBHalf2(rowData[0]) + logLike[firstIdx];
         ushort2 maxIdx = make_ushort2(firstIdx,firstIdx);
 
         uint32_t dataIndex = Segment::dataIndex;
@@ -136,8 +139,10 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
             if (cond.X()) maxIdx.x = prevState;
             if (cond.Y()) maxIdx.y = prevState;
         }
-        constexpr auto nextState = Row::rowIdx;
-        logAccum[nextState] = maxVal;
+        // If we're not in the ROI, then all non-baseline states suffer
+        // a "penalty" that should make them effectively impossible
+        auto penalty = Blend(nextState == 0 || isRoi, PBHalf2{0}, PBHalf2{std::numeric_limits<float>::infinity()});
+        logAccum[nextState] = maxVal - penalty;
 
         // Always slot new entries into the back, and after 4 inserts it will be fully populated
         // and ready for storage.  This approach has empirically been observed to be faster than
@@ -170,15 +175,15 @@ __device__ void Recursion(T2& maxVal, Labels& labels, LogLike& logLike, const Sc
     logLike = logAccum;
 }
 
-template <size_t blockThreads>
-__launch_bounds__(blockThreads, 32)
+template <size_t blockThreads, typename RoiFilter>
 __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::LaneModelParameters<PBHalf2, blockThreads>> models,
                                    const Mongo::Data::GpuBatchData<const PBShort2> input,
-                                   Cuda::Memory::DeviceView<LatentViterbi<blockThreads>> latentData,
+                                   Cuda::Memory::DeviceView<LatentViterbi<blockThreads, RoiFilter::lookBack>> latentData,
                                    ViterbiData<blockThreads> batchViterbiData,
                                    Mongo::Data::GpuBatchData<PBShort2> prevLat,
                                    Mongo::Data::GpuBatchData<PBShort2> nextLat,
                                    Mongo::Data::GpuBatchData<PBShort2> output,
+                                   Mongo::Data::GpuBatchData<PBShort2> roiWorkspace,
                                    Cuda::Memory::DeviceView<Utility::CudaArray<float, laneSize>> viterbiScore)
 {
     // When/if this changes, some of this kernel is going to have to be udpated or generalized
@@ -189,42 +194,12 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     assert(blockDim.x == blockThreads);
     __shared__ BlockStateSubframeScorer<CudaLaneArray<PBHalf2, blockThreads>> scorer;
 
-    // This optimization requires some notes, and may need to be revisited
-    // periodically.  The BlockStateSubframeScorer above uses 26 32-bit words
-    // of storage per thread.  In order to get 32 occupant blocks (the best we
-    // can do when our block size is 32 threads) then there really are only 24
-    // words available.  The best we can do with the above data structure is
-    // roughly 29 blocks.  However in an experiment where I pushed two members from
-    // `scorer` to local mem / registers, my throughput went down.  I did get the
-    // desired increase in occupancy, and overall there were the same number of
-    // memory requests so the new local variables were not causing new memory
-    // traffic, but our cache hit rate went down.  The improved occupancy helped
-    // us less than the new increase in memory latency hurt us.
-    //
-    // This is not entirely unexpected as more resident blocks means they effectively
-    // each get less L1 space to use.  So I did a subsequent experiment adding this one
-    // extra shared variable, to see if we could decrease our occpancy a little more
-    // and get even better L1 usage.
-    //
-    // The result was a 4% increase in throughput, which for a single change is good
-    // enough to want to keep.  However when profiling things, it did not appear that
-    // we were actually benefiting from an increase in cache hits.  Instead the delta
-    // between our theoretical occupancy (limited by our shared memory usage) and
-    // our actual achieved occupancy went down.  In other words the added shared
-    // memory usage decreased our maximum occupancy, but for whatever reason, the
-    // occpancy we actually got stayed the same.
-    //
-    // I'm not sure what all affects the delta between theoretical and achieved.  If
-    // other changes affect that balance, then this might become a less optimal choice,
-    // and these two should be moved back to being per-thread automatic variables in
-    // the `Recursion` function
-    __shared__ CudaLaneArray<PBHalf2, blockThreads> sharedMaxVal;
-
     // Initial setup
     Utility::CudaArray<PBHalf2, numStates> scratch;
     auto& logLike = scratch;
     auto& latent = latentData[blockIdx.x];
     auto bc = latent.GetLabelsBoundary();
+    const auto numLatent = prevLat.NumFrames();
     const PBHalf2 zero(0.0f);
     const PBHalf2 ninf(-std::numeric_limits<float>::infinity());
     for (int i = 0; i < numStates; ++i)
@@ -232,26 +207,45 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
         logLike[i] = Blend(bc == i, zero, ninf);
     }
 
+    // We need to have enough space to compute the ROI for all frames we will emit in this block,
+    // plus enough extra to cover the viterbi lookback process, *plus* yet a little more extdra
+    // so handle the viterbi stitching process (which really is just having a few extra frames
+    // to lessen the impact of an arbitrary RHS boundary condition)
+    assert(roiWorkspace.NumFrames() == input.NumFrames() + ViterbiStitchLookback + RoiFilter::stitchFrames);
+    ComputeRoi<RoiFilter>(latent.GetLatentTraces(),
+                          latent.GetRoiBoundary(),
+                          prevLat.ZmwData(blockIdx.x, threadIdx.x),
+                          input.ZmwData(blockIdx.x, threadIdx.x),
+                          1 / sqrt(latent.GetModel().BaselineMode().vars[threadIdx.x]),
+                          1 / sqrt(models[blockIdx.x].BaselineMode().vars[threadIdx.x]),
+                          roiWorkspace.ZmwData(blockIdx.x, threadIdx.x));
+
     auto labels = batchViterbiData.BlockData();
+    auto roi = roiWorkspace.ZmwData(blockIdx.x, threadIdx.x);
 
     // Forward recursion on latent data
     {
         auto latZmw = prevLat.ZmwData(blockIdx.x, threadIdx.x);
         scorer.Setup(latent.GetModel());
-        for (int frame = 0; frame < ViterbiStitchLookback; ++frame)
+        for (int frame = 0; frame < numLatent; ++frame)
         {
-            Recursion(sharedMaxVal, labels, logLike, scorer, trans, latZmw[frame], frame);
+            Recursion(labels, logLike, scorer,
+                      trans, latZmw[frame],
+                      roi[frame], frame);
         }
-        }
+    }
 
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
     const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
-    const int anchor = numFrames - ViterbiStitchLookback;
+    const int anchor = numFrames - numLatent;
     for (int frame = 0; frame < anchor; ++frame)
     {
-        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(labels, logLike, scorer,
+                  trans, inZmw[frame],
+                  roi[frame + numLatent],
+                  frame + numLatent);
     }
 
     // Need to store the log likelihoods at the actual anchor point, so
@@ -259,9 +253,12 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     // log likelihood
     Utility::CudaArray<PBHalf2, numStates> anchorLogLike = logLike;
 
-    for (int frame = anchor; frame < numFrames; ++frame)
+    for (int frame = anchor; frame < anchor + ViterbiStitchLookback; ++frame)
     {
-        Recursion(sharedMaxVal, labels, logLike, scorer, trans, inZmw[frame], frame + ViterbiStitchLookback);
+        Recursion(labels, logLike, scorer,
+                  trans, inZmw[frame],
+                  roi[frame + numLatent],
+                  frame + numLatent);
     }
 
     // Compute the probabilities of the possible end states.  Propagate
@@ -320,15 +317,16 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     }
 
     // Update latent data
+    latent.SetRoiBoundary(roi[numFrames-1]);
     latent.SetLabelsBoundary(anchorState);
     latent.SetModel(models[blockIdx.x]);
+    latent.SetLatentTraces(inZmw.begin() + anchor - 1);
 
     auto outLatZmw = nextLat.ZmwData(blockIdx.x, threadIdx.x);
-    const auto offset = numFrames - ViterbiStitchLookback;
-    for (int i = 0; i < ViterbiStitchLookback; ++i)
+    assert(outLatZmw.size() == numLatent);
+    for (int i = 0; i < numLatent; ++i)
     {
-
-        outLatZmw[i] = inZmw[i + offset];
+        outLatZmw[i] = inZmw[i + anchor];
     }
 }
 

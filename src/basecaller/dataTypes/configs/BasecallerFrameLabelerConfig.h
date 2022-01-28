@@ -49,6 +49,13 @@ class BasecallerRoiConfig : public Configuration::PBConfig<BasecallerRoiConfig>
 {
     PB_CONFIG(BasecallerRoiConfig);
 
+    // Placeholder config, as there is talk of evaluating different
+    // Finite Impulse Response filters for the roi computation
+    // Default is basically the original Sequel configuration,
+    // and NoOp disables the Roi filter
+    SMART_ENUM(RoiFilterType, Default, NoOp);
+    PB_CONFIG_PARAM(RoiFilterType, filterType, RoiFilterType::Default);
+
     PB_CONFIG_PARAM(float, upperThreshold, 7.0f);
     PB_CONFIG_PARAM(float, lowerThreshold, 2.0f);
 };

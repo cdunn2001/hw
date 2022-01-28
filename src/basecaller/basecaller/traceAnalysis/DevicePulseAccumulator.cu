@@ -371,7 +371,7 @@ void DevicePulseAccumulator<LabelManager>::Configure(const Data::AnalysisConfig&
     StaticConfig config;
     config.ampThr_ = ampThresh_;
     config.widThr_ = widthThresh_;
-    Cuda::CudaCopyToSymbol(staticConfig, &config);
+    Cuda::CudaCopyToSymbol(&staticConfig, &config);
 
     AccumImpl::Configure(analogMap);
 }
