@@ -4,6 +4,9 @@
 # or it has been properly installed. It then installs or updates the
 # python modules it needs. To completely install the virtual environment
 # from scratch, please do `rm -rf e2e_ve` before sourcing this script.
+
+. /usr/share/Modules/init/sh
+module use /mnt/software/modulefiles
 module unload python
 module load   python/3.7.3
 if [ ! -e e2e_ve ]
