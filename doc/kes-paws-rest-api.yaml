@@ -4,9 +4,19 @@ info:
   description: The REST API for controlling primary analysis processes and data storage.
   version: 0.0.2
 servers:
-  - url: http://pa-dev01.lab.nanofluidics.com:23632
-    description: Optional server description, e.g. Main (production) server
+  - url: http://REPLACE_WITH_HOSTNAME:23632
+    description: The server that served this documentation file.
 paths:
+  /status:
+    get:
+      summary: Returns top level status of the pa-ws process.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PawsStatusObject'
   /sockets:
     get:
       summary: Returns a list of socket numbers.

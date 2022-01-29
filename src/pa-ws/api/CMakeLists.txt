@@ -6,15 +6,16 @@
 
 # convert C++ code to HTML
 add_custom_command(OUTPUT kes-paws-rest-api-swagger.html
-    DEPENDS swagger-yaml-to-html.py apihelp.h doc_accessor_TEMPLATE.cpp ObjectTypes.h PostprimaryObject.h ProcessStatusObject.h SocketObject.h StorageObject.h
+    DEPENDS swagger-yaml-to-html.py apihelp.h doc_accessor_TEMPLATE.cpp PawsStatusObject.h ObjectTypes.h PostprimaryObject.h ProcessStatusObject.h SocketObject.h StorageObject.h
+      ../../../doc/kes-paws-rest-api.yaml Makefile
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     COMMAND make 
-    COMMAND cp ${CMAKE_CURRENT_LIST_DIR}/kes-paws-rest-api-swagger.html ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND cp ${CMAKE_CURRENT_LIST_DIR}/kes-paws-rest-api-swagger-temp.html ${CMAKE_CURRENT_BINARY_DIR}/kes-paws-rest-api-swagger.html
 )
 
 # create a linkable library that has the documentation contents embedded as strings.
 add_custom_command(OUTPUT docsPaWsApi.o
-    DEPENDS kes-paws-rest-api-swagger.html
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kes-paws-rest-api-swagger.html
     COMMAND ld -r -b binary -o ${CMAKE_CURRENT_BINARY_DIR}/docsPaWsApi.o kes-paws-rest-api-swagger.html
     COMMAND objcopy --rename-section .data=.rodata,alloc,load,readonly,data,contents ${CMAKE_CURRENT_BINARY_DIR}/docsPaWsApi.o ${CMAKE_CURRENT_BINARY_DIR}/docsPaWsApi.o
 )

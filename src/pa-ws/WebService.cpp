@@ -67,6 +67,7 @@
 #include <git-rev.h>
 
 #include "api/SocketObject.h"
+#include "api/PawsStatusObject.h"
 #include "api/PostprimaryObject.h"
 #include "api/StorageObject.h"
 
@@ -464,41 +465,33 @@ HttpResponse WebServiceHandler::GET(const std::string& uri)
             else if (args[0] == "api")
             {
                 std::string api = GetApiString();
-                std::regex e ("REPLACE_WITH_LOCALHOST");
+                std::regex e ("REPLACE_WITH_HOSTNAME");
                 api = std::regex_replace (api, e, PacBio::POSIX::gethostname());
 
                 response.json = api;
                 response.contentType = "text/html";
             }
-#if 0
             else if (args[0] == "dashboard")
             {
-                response.json = GetDashboardString();
+                response.json = "not implemented"; // GetDashboardString();
                 response.contentType = "text/plain";
             }
             else if (args[0] == "status")
             {
-                response.json["uptime"] = GetUpTime();
-                response.json["uptime_message"] = 
-                    ConvertTimeSpanToString(response.json["uptime"].asDouble());
-                response.json["cpu_load"] = 0.0; // CPU load as floating point,
-                                                 // normalized to one core (1.0)
-                response.json["time"] = PacBio::Utilities::Time::GetTimeOfDay();
-                response.json["version"] = std::string(SHORT_VERSION_STRING) 
+                PacBio::API::PawsStatusObject status;
+                status.uptime = GetUpTime();
+                status.uptimeMessage = ConvertTimeSpanToString(status.uptime);
+                status.time = PacBio::Utilities::Time::GetTimeOfDay();
+                status.timestamp = PacBio::Utilities::ISO8601::TimeString(status.time);
+                status.version = std::string(SHORT_VERSION_STRING) 
                     + "." + cmakeGitHash();
-                //       << "\n git branch: " << cmakeGitBranch()
-                //       << "\n git hash: " << cmakeGitHash()
-                //       << "\n git commit date: " << cmakeGitCommitDate();
-                response.json["num_sras"] = 666; // config_.numSRAs;
-                response.json["personality"]["version"] = "?";
-                response.json["personality"]["build_timestamp"] = "TBD"; // ISO 8091 of the build time, e.g. "2021-02-11 14:01:00Z",
-                response.json["personality"]["comment"] = "n/a";         // optional comment about personality for R&D purposes,
-                response.json["personality"]["wxinfo"] = "TBD"; // TODO  // all fields of the output of `wxinfo -d`
-                response.json["personality"]["frameLatency"] = 512*3; // fixme
+                response.json = status.Serialize();
+                response.contentType = "application/json";
             }
             else if (args[0] == "log")
             {
                 response.json = Json::arrayValue;
+                // TODO
                 response.json[0] = "log entry 0";
                 response.json[1] = "log entry 1";
             }
@@ -522,7 +515,6 @@ HttpResponse WebServiceHandler::GET(const std::string& uri)
                                                 indexPath + " not found");
                 }
             }
-#endif
 #endif
             else
             {
@@ -855,11 +847,7 @@ HttpResponse WebServiceHandler::POST_Storages(const std::vector<std::string>& ar
 
     if (nextArg != args.end())
     {   
-        uint32_t socketNumber = std::stoul(*nextArg);
-        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
-        {
-            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
-        }
+        std::string mid = *nextArg;
         nextArg++;
         if (nextArg == args.end())
         {
@@ -882,6 +870,16 @@ HttpResponse WebServiceHandler::POST_Storages(const std::vector<std::string>& ar
         else
         {
             throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to " + *nextArg + " doesn't exit");
+        }
+    }
+    else
+    {
+        StorageObject so(json);
+        // create endpoint
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::CREATED;
+            response.json = so.Serialize();
         }
     }
     return response;
