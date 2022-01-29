@@ -39,6 +39,8 @@ do
 
     pushd $d > /dev/null
 
+    fulldir=$(pwd)
+
     # This generated script will blow away all files in the build directory (except itself) before running cmake. Unless the command line
     # arguments change, or there is severe disk corruption causing permissions problems, this local script should
     # be sufficient to start fresh with cmake.  Note that the `rm` command specifically does not use the -f force option,

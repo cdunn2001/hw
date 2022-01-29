@@ -67,7 +67,8 @@ makeTarget()
     pushd ${build_dir}
     ./cmake_setup.sh
 
-    cmake --build ./ -- $targets
+    # Build targets and spare 1 CPU for better response
+    cmake --build ./ -j 7 -- $targets
     exitStatus=$?
     if [[ ${exitStatus} -ne 0 ]]; then
         exit $exitStatus
