@@ -242,7 +242,7 @@ private:
             auto laneDetModel = MockLaneDetectionModel<PBHalf>();
             laneDetModel.BaselineMode().SetAllMeans(testParams.BaselineMean);
             laneDetModel.BaselineMode().SetAllVars(testParams.BaselineVar);
-            auto pdmv = pdm.GetHostView();
+            auto pdmv = pdm.data.GetHostView();
             std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
         }
 

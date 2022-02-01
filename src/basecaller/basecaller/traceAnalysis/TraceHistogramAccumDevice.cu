@@ -899,13 +899,15 @@ public:
         case DeviceHistogramTypes::GlobalInterleaved:
             {
                 auto binning = PBLauncher(BinningGlobalInterleaved, PoolSize(), laneSize);
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         case DeviceHistogramTypes::SharedInterleaved2DBlock:
             {
                 auto binning = PBLauncher(BinningSharedInterleaved2DBlock, PoolSize(), dim3{laneSize/2, 32, 1});
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         default:
@@ -962,25 +964,29 @@ public:
         case DeviceHistogramTypes::GlobalContig:
             {
                 auto binning = PBLauncher(BinningGlobalContig, PoolSize(), laneSize);
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         case DeviceHistogramTypes::GlobalContigCoopWarps:
             {
                 auto binning = PBLauncher(BinningGlobalContigCoopWarps, PoolSize(), laneSize/2);
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         case DeviceHistogramTypes::SharedContigCoopWarps:
             {
                 auto binning = PBLauncher(BinningSharedContigCoopWarps, PoolSize(), laneSize/2);
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         case DeviceHistogramTypes::SharedContig2DBlock:
             {
                 auto binning = PBLauncher(BinningSharedContig2DBlock, PoolSize(), dim3{laneSize/2, laneSize/2,1});
-                binning(traces, data_, detModel, edgeState_, initEdgeDetection_);
+                binning(traces, data_, detModel.data,
+                        edgeState_, initEdgeDetection_);
                 break;
             }
         default:

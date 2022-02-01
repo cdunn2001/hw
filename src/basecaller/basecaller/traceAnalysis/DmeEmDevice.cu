@@ -1253,7 +1253,8 @@ void DmeEmDevice::EstimateImpl(const PoolHist &hist,
                                const Data::BaselinerMetrics& metrics,
                                PoolDetModel *detModel) const
 {
-    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)(hist.data, metrics.baselinerStats, *detModel);
+    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)
+                    (hist.data, metrics.baselinerStats, detModel->data);
     Cuda::CudaSynchronizeDefaultStream();
 }
 
@@ -1325,7 +1326,7 @@ DmeEmDevice::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm);
+    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm.data);
     Cuda::CudaSynchronizeDefaultStream();
 
     return pdm;

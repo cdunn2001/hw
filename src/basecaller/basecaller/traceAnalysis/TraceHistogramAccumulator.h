@@ -58,7 +58,7 @@ public:     // Types
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
     using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
-    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolDetModel = Data::DetectionModelPool<Cuda::PBHalf>;
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);

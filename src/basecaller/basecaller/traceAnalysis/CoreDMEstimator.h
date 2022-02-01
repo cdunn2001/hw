@@ -46,8 +46,10 @@ class CoreDMEstimator
 {
 public:     // Types
     using DetModelElementType = Cuda::PBHalf;
+    // TODO: Definitions of LaneDetModel and PoolDetModel should be fused with
+    // similar definitions in DetectionModelEstimator.
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
-    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolDetModel = Data::DetectionModelPool<DetModelElementType>;
     using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
@@ -89,7 +91,7 @@ public:     // Functions
         assert(hist.poolId == poolId_);
         assert(detModel);
         assert(hist.data.Size() == poolSize_);
-        assert(detModel->Size() == poolSize_);
+        assert(detModel->data.Size() == poolSize_);
         EstimateImpl(hist, metrics, detModel);
     }
 

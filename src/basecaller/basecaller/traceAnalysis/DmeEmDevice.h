@@ -72,8 +72,7 @@ struct ZmwDetectionModel
     Cuda::Utility::CudaArray<ZmwAnalogMode, numAnalogs> analogs;
     ZmwAnalogMode baseline;
 
-    // TODO: Even the host version does not have a way to propogate the confidence between
-    //       estimations
+    // TODO: Need to handle confidence and frame interval.
     float confidence = 0;
 };
 

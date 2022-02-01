@@ -140,7 +140,7 @@ private:    // Functions
     // model, weighted by confidence scores. That result is returned in detModel.
     void EstimateLaneDetModel(const LaneHist& blHist,
                               const BlStatAccState& blAccState,
-                              LaneDetModel* model) const;
+                              LaneDetModelHost* model) const;
 
 
 

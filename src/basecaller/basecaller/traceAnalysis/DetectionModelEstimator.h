@@ -67,7 +67,7 @@ public: // static functions
 
 public:
     using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
-    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolDetModel = Data::DetectionModelPool<Cuda::PBHalf>;
 
     DetectionModelEstimator(uint32_t poolId,
                             const Data::BatchDimensions& dims,

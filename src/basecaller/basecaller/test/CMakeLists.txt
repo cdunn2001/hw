@@ -8,6 +8,7 @@ include(pacbio-gbench)
 add_library(libMongoBasecallerTest OBJECT
     SpeedTestToggle.cpp
     TestBaseliner.cpp
+    TestDetectionModelHost.cpp
     TestDmeEm.cpp
     TestFrameLabeler.cpp
     TestHFMetricsFilter.cpp

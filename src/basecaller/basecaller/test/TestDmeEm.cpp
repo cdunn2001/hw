@@ -33,6 +33,7 @@
 #include <sstream>
 
 #include <gtest/gtest.h>
+#include <boost/numeric/conversion/cast.hpp>
 
 #include <basecaller/traceAnalysis/ComputeDevices.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
@@ -48,6 +49,8 @@
 #include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/StaticDetModelConfig.h>
 
+using boost::numeric_cast;
+
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
@@ -58,11 +61,13 @@ namespace {
 static constexpr unsigned int nAnalogs = 4;
 static constexpr unsigned int nModes = nAnalogs + 1;
 
+using FrameIntervalSizeType = Data::FrameIntervalType::SizeType;
+
 // Testing parameters
 struct TestDmeEmParam
 {
     float simSnr;
-    std::array<Data::FrameIntervalSizeType,nModes> nFrames;
+    std::array<FrameIntervalSizeType, nModes> nFrames;
     float initModelConf;
     float pulseAmpReg;
 };
@@ -161,14 +166,14 @@ public:
         DmeEmHost::Configure(dmeConfig, analysisConfig);
 
         std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
-        Cuda::Memory::UnifiedCudaArray<LaneDetectionModel> models(poolSize,
-                                                                  Cuda::Memory::SyncDirection::Symmetric,
-                                                                  SOURCE_MARKER());
+        Data::DetectionModelPool<Cuda::PBHalf> models(poolSize,
+                                                      Cuda::Memory::SyncDirection::Symmetric,
+                                                      SOURCE_MARKER());
 
         // Initialize the model using the initial fixed detection model host.
         for (unsigned int l = 0; l < poolSize; ++l)
         {
-            detModelStart->ExportTo(&models.GetHostView()[l]);
+            detModelStart->ExportTo(&models.data.GetHostView()[l]);
         }
 
         // TODO: The Estimate() method currently doesn't return the DME diagnostics
@@ -177,13 +182,13 @@ public:
 
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
-                                        Data::FrameIntervalSizeType(0));
+                                               FrameIntervalSizeType(0));
 
         using PacBio::Simd::MakeUnion;
         // Check the pool detection models that should be updated for each lane.
         for (unsigned int l = 0; l < poolSize; ++l)
         {
-            LaneDetectionModelHost resultModel{models.GetHostView()[l]};
+            LaneDetectionModelHost resultModel {models, l};
             LaneDetectionModelHost completeDataModel{*completeData->detectionModels[l]};
 
             {
@@ -282,9 +287,11 @@ private:
         return ldm;
     }
 
-    CompleteData SimulateCompleteData(const std::array<Data::FrameIntervalSizeType,nModes>& nFrames, const LaneDetectionModelHost& simModel)
+    CompleteData SimulateCompleteData(const std::array<FrameIntervalSizeType, nModes>& nFrames,
+                                      const LaneDetectionModelHost& simModel)
     {
-        const size_t totalFrames = std::accumulate(nFrames.begin(), nFrames.end(),Data::FrameIntervalSizeType(0));
+        const size_t totalFrames = std::accumulate(nFrames.begin(), nFrames.end(),
+                                                   FrameIntervalSizeType(0));
 
         // Random number generator.
         std::mt19937 rng (42);
@@ -400,7 +407,7 @@ private:
                                                      SOURCE_MARKER()};
         {
             const auto laneDetModel = MakeInitialModel();
-            auto pdmv = pdm.GetHostView();
+            auto pdmv = pdm.data.GetHostView();
             std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
         }
 
@@ -414,7 +421,10 @@ private:
 
     void SetUp()
     {
-        detModelStart = std::make_unique<LaneDetectionModelHost>(MakeInitialModel());
+        const auto& nFrames = GetParam().nFrames;
+        const auto totalFrameCount = numeric_cast<int>(std::accumulate(nFrames.begin(), nFrames.end(), 0u));
+        detModelStart = std::make_unique<LaneDetectionModelHost>(MakeInitialModel(),
+                                                                 Data::FrameIntervalType{0, totalFrameCount});
         detModelStart->Confidence(DmeEmHost::FloatVec(GetParam().initModelConf));
         const float simRefSnr = GetParam().simSnr;
         const auto startRefSnr = analysisConfig.movieInfo.refSnr;

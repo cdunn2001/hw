@@ -135,14 +135,18 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
 
     const auto& hView = hist.data.GetHostView();
     const auto blsView = metrics.baselinerStats.GetHostView();
-    auto dmView = detModelPool->GetHostView();
+    auto dmView = detModelPool->data.GetHostView();
 
     tbb::task_arena().execute([&] {
         tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
             // Estimate parameters transcribe results back to this lane
-            EstimateLaneDetModel(hView[l], blsView[l], &dmView[l]);
+            LaneDetModelHost detModelHost {dmView[l], detModelPool->frameInterval};
+            EstimateLaneDetModel(hView[l], blsView[l], &detModelHost);
+            detModelHost.ExportTo(&dmView[l]);
         });
     });
+
+    // TODO: Update detModel->frameInterval.
 }
 
 void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
@@ -198,22 +202,20 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
 
 void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
                                      const BlStatAccState& blStatAccState,
-                                     LaneDetModel *detModel) const
+                                     LaneDetModelHost* detModel) const
 {
     assert(detModel != nullptr);
 
-    LaneDetModelHost model0(*detModel);
-
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost workModel = model0;
+    LaneDetModelHost workModel = *detModel;
     PrelimEstimate(blStatAccState, &workModel);
 
     // TODO: Until further works completed, this update causes unit test failures
-    // model0.Update(workModel);
+    // detModel->Update(workModel);
 
     // Make a working copy of the detection model.
-    workModel = model0;
+    workModel = *detModel;
 
     // EstimateFiniteMixture below
     // The term "mode" refers to a component of the mixture model.
@@ -283,7 +285,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     const FloatVec sExpect = s / scaleFactor;
 
     // sExpectWeight is the inverse of the variance of the normal prior for s.
-    const FloatVec sExpectWeight = model0.Confidence() * pulseAmpRegCoeff_;
+    const FloatVec sExpectWeight = detModel->Confidence() * pulseAmpRegCoeff_;
 
     // Log likelihood--really a posterior since we've added a prior for s.
     FloatVec logLike {numeric_limits<float>::lowest()};
@@ -550,7 +552,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     // Compute confidence score.
-    dmeDx.confidFactors = ComputeConfidence(dmeDx, model0, workModel);
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, *detModel, workModel);
     {
         using std::min;  using std::max;
         FloatVec conf = 1.0f;
@@ -568,10 +570,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     //    }
 
     // Blend the estimate into the output model.
-    model0.Update(workModel);
-
-    // Transcribe results back into model
-    model0.ExportTo(detModel);
+    detModel->Update(workModel);
 }
 
 
@@ -785,7 +784,7 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
-    auto pdmHost = pdm.GetHostView();
+    auto pdmHost = pdm.data.GetHostView();
     const auto& blStatsHost = blStats.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {

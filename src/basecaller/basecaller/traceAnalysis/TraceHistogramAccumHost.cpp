@@ -142,7 +142,7 @@ void TraceHistogramAccumHost::AddBlock(const Data::TraceBatch<TraceElementType>&
 
     // Get views to the trace data and detection model of lane i.
     const auto traceBlock = traces.GetBlockView(lane);
-    const DetModelHost& detModel {pdm.GetHostView()[lane]};
+    const DetModelHost detModel {pdm, lane};
     const auto& bgMode = detModel.BaselineMode();
 
     // The threshold below which the sample is most likely full-frame baseline.
