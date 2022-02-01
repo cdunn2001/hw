@@ -29,6 +29,7 @@
 //  Description:
 //  Defines abstract class BaselineStatsAggregator.
 
+#include <common/IntInterval.h>
 #include <dataTypes/BaselinerStatAccumState.h>
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
@@ -45,6 +46,7 @@ class BaselineStatsAggregator
 {
 public:     // Types
     using DataType = Data::BaselinedTraceElement;
+    using FrameIntervalType = IntInterval<Data::FrameIndexType>;
 
 public:
     BaselineStatsAggregator(uint32_t poolId, unsigned int poolSize);
@@ -58,20 +60,30 @@ public:
     unsigned int PoolSize() const
     { return poolSize_; }
 
+    FrameIntervalType FrameInterval() const
+    { return frameInterval_; }
+
     /// Returns a copy of the accumulated trace statistics.
     Data::BaselinerMetrics TraceStats() const
     {
-        return TraceStatsImpl();
+        auto result = TraceStatsImpl();
+        result.frameInterval = frameInterval_;
+        return result;
     }
 
     void AddMetrics(const Data::BaselinerMetrics& stats)
     {
         AddMetricsImpl(stats);
+
+        // Assume that stats are received in contiguous frame intervals.
+        assert(AreOrderedAdjacent(frameInterval_, stats.frameInterval));
+        frameInterval_ = Hull(frameInterval_, stats.frameInterval);
     }
 
     void Reset()
     {
-        return ResetImpl();
+        ResetImpl();
+        frameInterval_.Clear();
     }
 
 private:
@@ -84,6 +96,7 @@ private:
 private:
     uint32_t poolId_;
     unsigned int poolSize_;  // Number of lanes in this pool.
+    FrameIntervalType frameInterval_ {};
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

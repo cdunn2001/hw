@@ -60,6 +60,7 @@ struct TestBaselineStatsAggregator : public ::testing::Test
                                          int laneAddition = 0, int zmwAddition = 0)
     {
         Data::BaselinerMetrics stats(poolSize, Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
+        stats.frameInterval = {0, chunkSize};
         ArrayUnion<LaneArray<float>> addVec;
         const auto lag = AutocorrAccumState::lag;
         for (uint32_t i = 0; i < laneSize; ++i)
@@ -130,6 +131,7 @@ TYPED_TEST(TestBaselineStatsAggregator, PoolMeta)
     std::unique_ptr<BaselineStatsAggregator> bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
     EXPECT_EQ(bsa->PoolId(), 7);
     EXPECT_EQ(bsa->PoolSize(), uint32_t{TestFixture::poolSize});
+    EXPECT_TRUE(bsa->FrameInterval().Empty());
 }
 
 // Make sure the aggregator has a sensible initial "empty" state
@@ -138,6 +140,7 @@ TYPED_TEST(TestBaselineStatsAggregator, EmptyAggregator)
     auto bsa = CreateAggregator<TypeParam>(7, TestFixture::poolSize);
     using LaneArr = LaneArray<float>;
     Data::BaselinerMetrics metrics = bsa->TraceStats();
+    EXPECT_TRUE(metrics.frameInterval.Empty());
     for(size_t i = 0; i < metrics.baselinerStats.Size(); ++i)
     {
         const auto& actual = metrics.baselinerStats.GetHostView()[i];
@@ -170,6 +173,7 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
     bsa->AddMetrics(generatedStats);
     using LaneArr = LaneArray<float>;
     Data::BaselinerMetrics metrics = bsa->TraceStats();
+    EXPECT_EQ(generatedStats.frameInterval, metrics.frameInterval);
     for(size_t i = 0; i < metrics.baselinerStats.Size(); ++i)
     {
         const auto& actual = metrics.baselinerStats.GetHostView()[i];
@@ -192,6 +196,7 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
     }
 
     Data::BaselinerMetrics metrics2 = bsa->TraceStats();
+    EXPECT_EQ(metrics.frameInterval, metrics2.frameInterval);
     for(size_t i = 0; i < metrics.baselinerStats.Size(); ++i)
     {
         const auto& actual   =  metrics.baselinerStats.GetHostView()[i];
@@ -215,6 +220,7 @@ TYPED_TEST(TestBaselineStatsAggregator, OneAndReset)
 
     bsa->Reset();
     Data::BaselinerMetrics metrics3 = bsa->TraceStats();
+    EXPECT_TRUE(metrics3.frameInterval.Empty());
     for(size_t j = 0; j < metrics.baselinerStats.Size(); ++j)
     {
         const auto& actual = metrics3.baselinerStats.GetHostView()[j];
@@ -267,6 +273,7 @@ TYPED_TEST(TestBaselineStatsAggregator, UniformSimple)
     for (unsigned int i = 0; i < nChunks; ++i)
     {
         auto stats = TestFixture::GenerateStats(mPar[i], s2Par[i]);
+        stats.frameInterval += i * this->chunkSize;
         bsa->AddMetrics(stats);
     }
 
@@ -295,6 +302,10 @@ TYPED_TEST(TestBaselineStatsAggregator, UniformSimple)
             EXPECT_FLOAT_EQ(s2Expect, s2[i]);
         }
     }
+
+    // Check frame interval.
+    using FrameIntervalT = BaselineStatsAggregator::FrameIntervalType;
+    EXPECT_EQ(FrameIntervalT(0, nChunks * this->chunkSize), tsPool.frameInterval);
 }
 
 // Similar to the past test, but now we'll make sure we actually
@@ -309,6 +320,7 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
     const std::vector<float> mPar {0.0f, 1.0f, 4.0f, 1.0f};
     const std::vector<float> s2Par {2.0f, 3.0f, 6.0f, 3.1f};
     ASSERT_EQ(mPar.size(), s2Par.size()) << "Number of means and variance should be equal";
+    const Data::FrameIndexType frameOffset = 42;
 
     // Feed mock data to BaselineStatsAggregator under test.
     std::vector<Data::BaselinerMetrics> simulatedStats;
@@ -318,13 +330,17 @@ TYPED_TEST(TestBaselineStatsAggregator, VariedData)
         int laneMultiplier = 2;
         int zmwAddition = 1;
         auto stats = TestFixture::GenerateStats(mPar[i], s2Par[i], laneMultiplier, zmwAddition);
+        stats.frameInterval += i * this->chunkSize + frameOffset;
         bsa->AddMetrics(stats);
         simulatedStats.push_back(std::move(stats));
     }
 
     using LaneArr = LaneArray<float>;
+    using FrameIntervalT = BaselineStatsAggregator::FrameIntervalType;
     auto lag = AutocorrAccumState::lag;
     Data::BaselinerMetrics metrics = bsa->TraceStats();
+    EXPECT_EQ(FrameIntervalT(0, mPar.size() * this->chunkSize) + frameOffset,
+              metrics.frameInterval);
     for(size_t lane = 0; lane < metrics.baselinerStats.Size(); ++lane)
     {
         Data::BaselinerStatAccumState expected{};
