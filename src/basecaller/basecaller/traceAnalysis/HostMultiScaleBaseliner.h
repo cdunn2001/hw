@@ -20,12 +20,11 @@ public:
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
     using FloatArray = Data::BaselinerStatAccumulator<ElementTypeOut>::FloatArray;
-    using Mask = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
+    using BoolArray = Data::BaselinerStatAccumulator<ElementTypeOut>::Mask;
 
 public:     // Static functions
     static void Configure(const Data::BasecallerBaselinerConfig&,
                           const Data::AnalysisConfig&);
-
 
     static void Finalize();
 
@@ -58,7 +57,11 @@ private:
     FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
 private:     // Static data
+    static float cSigmaBiasAdj_;
+    static float cMeanBiasAdj_;
+    static float meanEmaAlpha_;
     static float sigmaEmaAlpha_;
+    static float jumpTolCoeff_;
 
 private:
 
@@ -68,9 +71,9 @@ private:
         MultiScaleBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
             : msLowerOpen_(params.Strides(), params.Widths())
             , msUpperOpen_(params.Strides(), params.Widths())
+            , cMeanBias_{params.MeanBias() * std::exp2(cMeanBiasAdj_)}
+            , cSigmaBias_{params.SigmaBias() * std::exp2(cSigmaBiasAdj_)}
             , stride_(params.AggregateStride())
-            , cSigmaBias_{params.SigmaBias()}
-            , cMeanBias_{params.MeanBias()}
             , scaler_(scaler)
             , pedestal_(pedestal)
         { }
@@ -92,7 +95,7 @@ private:
                                 const LaneArray& baselineSubtractedFrames,
                                 Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
 
-        FloatArray GetSmoothedSigma(const FloatArray& sigma);
+        FloatArray GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper);
 
     private:    // Multi-stage filter
         enum class FilterType
@@ -162,21 +165,28 @@ private:
         MultiStageFilter<ElementTypeOut, FilterType::Lower> msLowerOpen_;
         MultiStageFilter<ElementTypeOut, FilterType::Upper> msUpperOpen_;
 
-        const size_t stride_;
-        const FloatArray cSigmaBias_;
         const FloatArray cMeanBias_;
-        float scaler_;  // Converts DN quantization to e- values
-        int16_t pedestal_;
+        const FloatArray cSigmaBias_;
+        // Unbiased exponential moving average used to smooth estimates of
+        // baseline mean.
+        FloatArray blMeanUemaSum_ = 0.0f;
 
-        FloatArray bgSigma_{0};
+        // Normalization factor for UEMA. See blMeanUemaSum_.
+        FloatArray blMeanUemaWeight_ = 0.0f;
+
+        // Uniformly initialized to negative value, which is used as condition to
+        // initialize when processing first trace block.
+        FloatArray blSigmaEma_ = -1.0;
+
         LaneArray latData_{0};
         LaneArray latRawData_{0};
-        Mask latLMask_{false};
-        Mask latHMask2_{false};
-        Mask latHMask1_{false};
-        FloatArray thrLow_{0};
-        FloatArray thrHigh_{0};
+        BoolArray latLMask_{false};
+        BoolArray latHMask2_{false};
+        BoolArray latHMask1_{false};
 
+        const size_t stride_;
+        float scaler_;  // Converts DN quantization to e- values
+        int16_t pedestal_;
     };  // MultiScaleBaseliner
 
 private:
