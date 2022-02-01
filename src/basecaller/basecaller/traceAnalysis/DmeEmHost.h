@@ -81,8 +81,6 @@ public:     // Static functions
 
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 
-private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
 public:
     DmeEmHost(uint32_t poolId, unsigned int poolSize);
 
@@ -131,19 +129,23 @@ private:    // Static functions
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);
 
+    static void EvolveModel(LaneDetModelHost* model) {}
+
 private:    // Functions
+    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
+
     void PrelimEstimate(const BlStatAccState& blStatAccState,
                         LaneDetModelHost *model) const;
 
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateLaneDetModel(const LaneHist& blHist,
+    // estFrameInterval is the frame interval associated with the data (trace
+    // histogram and baseliner statistics) used for the estimation.
+    void EstimateLaneDetModel(FrameIntervalType estFrameInterval,
+                              const LaneHist& blHist,
                               const BlStatAccState& blAccState,
                               LaneDetModelHost* model) const;
-
-
-
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

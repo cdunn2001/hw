@@ -53,6 +53,7 @@ public:     // Types
     using PoolBaselineStats = Data::BaselinerMetrics;
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
+    using FrameIntervalType = PoolHist::FrameIntervalType;
 
     enum ZmwStatus : uint16_t
     {

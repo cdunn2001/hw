@@ -302,10 +302,8 @@ private:
         Data::BatchDimensions bd{poolSize, static_cast<uint32_t>(totalFrames)};
         Data::BatchMetadata batchMeta{poolId, 0, static_cast<int32_t>(totalFrames), poolId};
         ctbFactory = std::make_unique<Data::CameraBatchFactory>(Cuda::Memory::SyncDirection::Symmetric);
-        auto ctb = ctbFactory->NewBatch(batchMeta, bd);
-
-        auto& traces = ctb.first;
-        auto& stats = ctb.second;
+        auto [traces, stats] = ctbFactory->NewBatch(batchMeta, bd);
+        stats.frameInterval = {0, numeric_cast<Data::FrameIndexType>(totalFrames)};
 
         std::vector<std::vector<unsigned short>> frameMode(poolSize);
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;

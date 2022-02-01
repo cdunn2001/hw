@@ -137,16 +137,22 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
     const auto blsView = metrics.baselinerStats.GetHostView();
     auto dmView = detModelPool->data.GetHostView();
 
+    // We assume that frame intervals of the trace histogram and the baseliner
+    // statistics are equal.
+    const auto& hfi = hist.frameInterval;
+    assert(hfi == metrics.frameInterval);
+
     tbb::task_arena().execute([&] {
         tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
             // Estimate parameters transcribe results back to this lane
             LaneDetModelHost detModelHost {dmView[l], detModelPool->frameInterval};
-            EstimateLaneDetModel(hView[l], blsView[l], &detModelHost);
+            EstimateLaneDetModel(hfi, hView[l], blsView[l], &detModelHost);
             detModelHost.ExportTo(&dmView[l]);
+            // TODO: assert(hfi == detModelHost.FrameInterval());
         });
     });
 
-    // TODO: Update detModel->frameInterval.
+    detModelPool->frameInterval = hfi;
 }
 
 void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
@@ -200,11 +206,14 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     model->Confidence(conf);
 }
 
-void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
+void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
+                                     const LaneHist& blHist,
                                      const BlStatAccState& blStatAccState,
                                      LaneDetModelHost* detModel) const
 {
     assert(detModel != nullptr);
+
+    // TODO: Evolve detModel to frame interval of blHist.
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
