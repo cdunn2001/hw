@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Do these first, they are quite noisy if the
+# verbosity is cranked up
+kestrelRoot=$(dirname $(realpath $0 ))
+. ${kestrelRoot}/module_setup.sh
+module list
+
 set -e
 
 if [ ${VERBOSE+x} ]; then
@@ -49,10 +55,6 @@ done
 shift $((OPTIND-1))
 
 component=$1
-
-kestrelRoot=$(dirname $(realpath $0 ))
-. ${kestrelRoot}/module_setup.sh
-module list
 
 makeTarget()
 {
