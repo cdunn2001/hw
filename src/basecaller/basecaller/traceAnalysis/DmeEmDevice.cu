@@ -1326,9 +1326,10 @@ DmeEmDevice::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm.data);
+    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats.baselinerStats, pdm.data);
     Cuda::CudaSynchronizeDefaultStream();
 
+    pdm.frameInterval = blStats.frameInterval;
     return pdm;
 }
 

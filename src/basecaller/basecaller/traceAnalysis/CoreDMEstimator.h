@@ -50,7 +50,7 @@ public:     // Types
     // similar definitions in DetectionModelEstimator.
     using LaneDetModel = Data::LaneDetectionModel<DetModelElementType>;
     using PoolDetModel = Data::DetectionModelPool<DetModelElementType>;
-    using PoolBaselineStats = Cuda::Memory::UnifiedCudaArray<Data::BaselinerStatAccumState>;
+    using PoolBaselineStats = Data::BaselinerMetrics;
     using PoolHist = Data::PoolHistogram<float, unsigned short>;
     using LaneHist = Data::LaneHistogram<float, unsigned short>;
 

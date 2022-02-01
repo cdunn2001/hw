@@ -785,11 +785,13 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
     auto pdmHost = pdm.data.GetHostView();
-    const auto& blStatsHost = blStats.GetHostView();
+    const auto& blStatsHost = blStats.baselinerStats.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
         InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
     }
+
+    pdm.frameInterval = blStats.frameInterval;
 
     return pdm;
 }
