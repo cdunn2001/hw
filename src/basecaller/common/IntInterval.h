@@ -1,0 +1,248 @@
+#ifndef mongo_common_IntInterval_H_
+#define mongo_common_IntInterval_H_
+
+// Copyright (c) 2018-2021, Pacific Biosciences of California, Inc.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE CONSTITUTES AND EMBODIES PACIFIC BIOSCIENCES' CONFIDENTIAL
+// AND PROPRIETARY INFORMATION.
+//
+// Disclosure, redistribution and use of this software is subject to the
+// terms and conditions of the applicable written agreement(s) between you
+// and Pacific Biosciences, where "you" refers to you or your company or
+// organization, as applicable.  Any other disclosure, redistribution or
+// use is prohibited.
+//
+// THIS SOFTWARE IS PROVIDED BY PACIFIC BIOSCIENCES AND ITS CONTRIBUTORS "AS
+// IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL PACIFIC BIOSCIENCES OR ITS
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  Description:
+//  Defines a type that represents an interval or range of integers.
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <limits>
+#include <type_traits>
+
+namespace PacBio::Mongo {
+
+// TODO: Eliminate the multitude of representations of the empty set?
+
+// TODO: Current design does not permit intervals that contain the largest value
+// representable by ElementType.
+
+// See _Introduction to Interval Analysis_,
+// by Ramon E. Moore, R. Baker Kearfott, and Michael J. Cloud,
+// SIAM, 2009.
+
+/// A class template that represents an interval (or range) of integers.
+template <typename IntType>
+class IntInterval
+{
+    static_assert(std::is_integral<IntType>::value && !std::is_signed<IntType>::value,
+                  "Template argument must be an unsigned integer type.");
+
+public:     // types
+    using ElementType = IntType;
+    using SizeType = std::make_unsigned_t<IntType>;
+
+public:     // structors
+    // Should be ok, but can cause error with clang 12 for default constructed
+    // const instances.
+    // IntInterval() = default;
+    IntInterval() {}
+
+    /// Create an interval [lower, upper).
+    /// Requires lower <= upper.
+    constexpr IntInterval(IntType lower, IntType upper)
+        : lower_ {lower}
+        , upper_ {upper}
+    {
+        assert(lower_ <= upper_);
+    }
+
+    // TODO: Add "deleted" constructor that takes two signed integers (to
+    // prohibit implicit signed-to-unsigned conversion mischief).
+
+public:     // const methods
+    bool Empty() const
+    {
+        assert(lower_ <= upper_);
+        return lower_ == upper_;
+    }
+
+    SizeType Size() const
+    {
+        assert(lower_ <= upper_);
+        return static_cast<SizeType>(upper_ - lower_);
+        // TODO: To avoid overflow when ElementType is signed, this would need to be
+        // a bit more complicated. For the time being, we only support unsigned
+        // integers.
+    }
+
+    /// The smallest value in the interval.
+    IntType Lower() const
+    { return lower_; }
+
+    /// One more than the largest value in the interval.
+    IntType Upper() const
+    { return upper_; }
+
+    float Center() const
+    {
+        if (Empty()) return std::nanf("");
+        // TODO: This naive definition is vulnerable to overflow.
+        return 0.5f * (Lower() + Upper() - 1);
+    }
+
+public:     // modifying methods
+    /// Like operator+=, but constrains the result to avoid overflow.
+    IntInterval& AddWithSaturation(IntType a)
+    {
+        assert(lower_ <= upper_);
+
+        // TODO: To support signed IntType:
+        // if (a < 0) return SubtractWithSaturation(-a);
+
+        constexpr auto highest = std::numeric_limits<IntType>::max();
+        lower_ = (lower_ > highest - a ? highest : lower_ + a);
+        upper_ = (upper_ > highest - a ? highest : upper_ + a);
+        return *this;
+    }
+
+    /// Like operator-=, but constrains the result to avoid overflow.
+    IntInterval& SubtractWithSaturation(IntType a)
+    {
+        assert(lower_ <= upper_);
+
+        // TODO: To support signed IntType:
+        // if (a < 0) return AddWithSaturation(-a);
+
+        constexpr auto lowest = std::numeric_limits<IntType>::min();
+        lower_ = (lower_ < lowest + a ? lowest : lower_ - a);
+        upper_ = (upper_ < lowest + a ? lowest : upper_ - a);
+        return *this;
+    }
+
+public:     // compound assignment operators
+    /// Overflow results in undefined behavior.
+    IntInterval& operator+=(const IntType a)
+    {
+        assert(lower_ <= upper_);
+        lower_ += a;
+        upper_ += a;
+        assert(lower_ <= upper_);
+        return *this;
+    }
+
+    /// Overflow results in undefined behavior.
+    IntInterval& operator-=(const IntType a)
+    {
+        assert(lower_ <= upper_);
+        lower_ -= a;
+        upper_ -= a;
+        assert(lower_ <= upper_);
+        return *this;
+    }
+
+private:
+    // The bounds of the interval.
+    IntType lower_ {};  // Inclusive lower bound
+    IntType upper_ {};  // Exclusive upper bound
+};
+
+
+//  Namespace-scope operators and relations
+
+template <typename IntType> inline
+bool operator==(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    if (a.Empty() && b.Empty()) return true;
+    return a.Lower() == b.Lower() && a.Upper() == b.Upper();
+}
+
+template <typename IntType> inline
+bool operator!=(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{ return !(a == b); }
+
+/// Is Intersection(a, b) empty?
+template <typename IntType> inline
+bool Disjoint(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    return a.Empty() || b.Empty()
+            || a.Upper() <= b.Lower()
+            || b.Upper() <= a.Lower();
+}
+
+/// Is the union of a and b connected (i.e., a single interval)?
+template <typename IntType> inline
+bool IsUnionConnected(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    if (a.Empty() || b.Empty()) return true;
+    return a.Upper() >= b.Lower() && b.Upper() >= a.Lower();
+}
+
+template <typename IntType>
+inline IntInterval<IntType>
+Intersection(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    if (Disjoint(a, b)) return IntInterval<IntType>{};
+    using std::max;
+    using std::min;
+    return IntInterval<IntType>(max(a.Lower(), b.Lower()),
+                                min(a.Upper(), b.Upper()));
+}
+
+/// The smallest interval that contains a and b.
+/// \note If IsUnionConnected(a, b), then Hull(a, b) is the union of a and b.
+template <typename IntType>
+inline IntInterval<IntType>
+Hull(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    if (a.Empty()) return b;
+    if (b.Empty()) return a;
+
+    using std::max;
+    using std::min;
+    return IntInterval<IntType>(min(a.Lower(), b.Lower()),
+                                max(a.Upper(), b.Upper()));
+}
+
+// TODO: Define conversion from IntType to IntInterval<IntType>.
+
+// TODO: Define relationships between IntType and IntInterval<IntType>.
+
+template <typename IntType>
+inline IntInterval<IntType>
+operator+(const IntInterval<IntType>& ii, IntType n)
+{
+    IntInterval<IntType> r {ii};
+    r += n;
+    return r;
+}
+
+template <typename IntType>
+inline IntInterval<IntType>
+operator+(IntType n, const IntInterval<IntType>& ii)
+{
+    IntInterval<IntType> r {ii};
+    r += n;
+    return r;
+}
+
+// TODO: Define more arithmetic operators.
+
+}   // namespace PacBio::mongo
+
+#endif // mongo_common_IntInterval_H_
