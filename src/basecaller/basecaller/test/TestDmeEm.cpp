@@ -30,6 +30,8 @@
 #include <algorithm>
 #include <memory>
 #include <random>
+#include <sstream>
+
 #include <gtest/gtest.h>
 
 #include <basecaller/traceAnalysis/ComputeDevices.h>
@@ -140,7 +142,8 @@ public:
 
         for (uint32_t i = 0; i < laneSize; ++i)
         {
-            EXPECT_NEAR(exp[i], act[i], tol[i]) << message;
+            EXPECT_NEAR(exp[i], act[i], tol[i])
+                << message << " (i = " << i << ')';
         }
     }
 
@@ -208,25 +211,32 @@ public:
             // Check detection modes.
             for (unsigned int a = 0; a < 4; ++a)
             {
+                std::ostringstream errMsg;
+
                 // Check mixture fraction.
                 const auto& rbm = resultModel.DetectionModes()[a];
                 const auto& cdbm = completeDataModel.DetectionModes()[a];
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
                 DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFrames));
-                Assert(expected, result, absErrTol, "Bad mixing fraction for analog");
+                errMsg << "Bad mixing fraction for analog " << a;
+                Assert(expected, result, absErrTol, errMsg.str());
 
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
                 absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
-                Assert(expected, result, absErrTol, "Bad pulse mean for analog");
+                errMsg.clear();
+                errMsg << "Bad mean for analog " << a;
+                Assert(expected, result, absErrTol, errMsg.str());
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
                 absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
-                Assert(expected, result, absErrTol, "Bad pulse variance for analog");
+                errMsg.clear();
+                errMsg << "Bad variance for analog " << a;
+                Assert(expected, result, absErrTol, errMsg.str());
             }
         }
     }
@@ -244,6 +254,9 @@ public: // Data
     std::unique_ptr<CompleteData> completeData;
 
     std::unique_ptr<Data::CameraBatchFactory> ctbFactory;
+
+    Logging::LogSeverityContext logLevel = Logging::LogLevel::WARN;
+
 private:
     // Constructs and initializes a fixed detection model used as an initial model for the DME.
     LaneDetectionModel MakeInitialModel(void)
