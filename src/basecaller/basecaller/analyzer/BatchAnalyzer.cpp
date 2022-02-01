@@ -321,15 +321,13 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
     // Includes computing baseline moments.
     auto baselineProfile = profiler.CreateScopedProfiler(AnalysisStages::Baseline);
     (void)baselineProfile;
-    auto baselinedTracesAndMetrics = (*baseliner_)(tbatch);
-    auto baselinedTraces = std::move(baselinedTracesAndMetrics.first);
-    auto baselinerMetrics = std::move(baselinedTracesAndMetrics.second);
+    auto [baselinedTraces, baselinerMetrics] = (*baseliner_)(tbatch);
 
     // We need an early return after baselining.  We don't want to feed the early
     // baseline info into the DME so that it's not tainted with transient startup
-    // innacuracies, and we shouldn't run the downstream filters either because
+    // inaccuracies, and we shouldn't run the downstream filters either because
     // the models aren't even sensibly initialized until the first time we hand
-    // data to the DME
+    // data to the DME.
     if (baselinedTraces.GetMeta().FirstFrame() < static_cast<int32_t>(nFramesBaselinerStartUp + poolDmeDelayFrames_))
     {
         auto emptyLabels = frameLabeler_->EmptyLabelsBatch(std::move(baselinedTraces));
@@ -337,6 +335,7 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
                                                                         emptyLabels.StorageDims());
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     }
+
     bool fullEstimation = dme_->AddBatch(baselinedTraces, baselinerMetrics, &models_, profiler);
     if (fullEstimation) fullEstimationOccured_ = true;
 
