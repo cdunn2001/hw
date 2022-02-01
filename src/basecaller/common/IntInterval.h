@@ -50,8 +50,8 @@ namespace PacBio::Mongo {
 template <typename IntType>
 class IntInterval
 {
-    static_assert(std::is_integral<IntType>::value && !std::is_signed<IntType>::value,
-                  "Template argument must be an unsigned integer type.");
+    static_assert(std::is_integral<IntType>::value,
+                  "Template argument must be an integer type.");
 
 public:     // types
     using ElementType = IntType;
@@ -107,31 +107,49 @@ public:     // const methods
     }
 
 public:     // modifying methods
+    /// Sets *this to the empty interval.
+    IntInterval& Clear() noexcept
+    {
+        lower_ = upper_ = 0;
+        return *this;
+    }
+
     /// Like operator+=, but constrains the result to avoid overflow.
+    /// If ElementType is signed, the definition uses the expression -a, which
+    /// typically causes UB if a is std::numeric_limits<ElementType>::min().
     IntInterval& AddWithSaturation(IntType a)
     {
+        if constexpr (std::is_signed_v<IntType>)
+        {
+            assert(a != std::numeric_limits<IntType>::min());
+            if (a < 0) return SubtractWithSaturation(-a);
+        }
+
         assert(lower_ <= upper_);
-
-        // TODO: To support signed IntType:
-        // if (a < 0) return SubtractWithSaturation(-a);
-
+        assert(a >= 0);
         constexpr auto highest = std::numeric_limits<IntType>::max();
         lower_ = (lower_ > highest - a ? highest : lower_ + a);
         upper_ = (upper_ > highest - a ? highest : upper_ + a);
+        assert(lower_ <= upper_);
         return *this;
     }
 
     /// Like operator-=, but constrains the result to avoid overflow.
+    /// If ElementType is signed, the definition uses the expression -a, which
+    /// typically causes UB if a is std::numeric_limits<ElementType>::min().
     IntInterval& SubtractWithSaturation(IntType a)
     {
+        if constexpr (std::is_signed_v<IntType>)
+        {
+            assert(a != std::numeric_limits<IntType>::min());
+            if (a < 0) return AddWithSaturation(-a);
+        }
+
         assert(lower_ <= upper_);
-
-        // TODO: To support signed IntType:
-        // if (a < 0) return AddWithSaturation(-a);
-
         constexpr auto lowest = std::numeric_limits<IntType>::min();
         lower_ = (lower_ < lowest + a ? lowest : lower_ - a);
         upper_ = (upper_ < lowest + a ? lowest : upper_ - a);
+        assert(lower_ <= upper_);
         return *this;
     }
 
@@ -191,6 +209,16 @@ bool IsUnionConnected(const IntInterval<IntType>& a, const IntInterval<IntType>&
 {
     if (a.Empty() || b.Empty()) return true;
     return a.Upper() >= b.Lower() && b.Upper() >= a.Lower();
+}
+
+/// Are a and b adjacent (i.e., Disjoint and IsUnionConnected are both true) and
+/// in increasing order (i.e., all elements in a are < all elements in b).
+/// If either a or b is empty, returns true.
+template <typename IntType> inline
+bool AreOrderedAdjacent(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
+{
+    if (a.Empty() || b.Empty()) return true;
+    return a.Upper() == b.Lower();
 }
 
 template <typename IntType>
