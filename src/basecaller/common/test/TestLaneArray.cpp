@@ -633,6 +633,14 @@ TEST(LaneArray, FloatOps)
             << "  cudaArr[i] is " << cudaArr[i];
     }
 
+    const auto resultAbs = abs(laneArr).ToArray();
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        EXPECT_EQ(resultAbs[i], std::abs(cudaArr[i]))
+            << "  i is " << i << '\n'
+            << "  cudaArr[i] is " << cudaArr[i];
+    }
+
     // Get rid of negatives so we can take the sqrt and log
     cudaArr = IncreasingCudaArray<float>(2.9f, 13.9f);
     laneArr = LaneArray<float, laneSize>(cudaArr);

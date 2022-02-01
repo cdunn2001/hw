@@ -302,6 +302,11 @@ public: // more friend functions (not operators)
             l, r);
     }
 
+    friend Derived abs(const Derived& a)
+    {
+        return max(a, -a);
+    }
+
     friend Derived pow2(const Derived& d)
     {
         return Derived([](auto&& x) { return x*x; }, d);
