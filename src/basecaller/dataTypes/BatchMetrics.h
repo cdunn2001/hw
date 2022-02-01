@@ -33,9 +33,12 @@
 //  be mistaken for the baseliner stats emitted by the Baseliner)
 
 #include <common/cuda/utility/CudaArray.h>
+#include <common/IntInterval.h>
 #include <common/StatAccumState.h>
 #include "BaselinerStatAccumState.h"
+#include "BasicTypes.h"
 #include "BatchData.h"
+
 
 namespace PacBio {
 namespace Mongo {
@@ -43,6 +46,8 @@ namespace Data {
 
 struct BaselinerMetrics
 {
+    using FrameIntervalType = IntInterval<FrameIndexType>;
+
     BaselinerMetrics(uint32_t lanesPerBatch,
                      Cuda::Memory::SyncDirection syncDir,
                      const Cuda::Memory::AllocationMarker& marker)
@@ -54,6 +59,7 @@ struct BaselinerMetrics
     { }
 
     Cuda::Memory::UnifiedCudaArray<BaselinerStatAccumState> baselinerStats;
+    FrameIntervalType frameInterval {};
 };
 
 struct FrameLabelerMetrics

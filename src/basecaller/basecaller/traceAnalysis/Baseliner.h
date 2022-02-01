@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <common/IntInterval.h>
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/configs/ConfigForward.h>
@@ -18,6 +19,7 @@ class Baseliner
 {
 public:     // Types
     using ElementTypeOut = Data::BaselinedTraceElement;
+    using FrameIntervalType = IntInterval<Data::FrameIndexType>;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -53,7 +55,14 @@ public:
     operator()(const Data::TraceBatchVariant& rawTrace)
     {
         assert(rawTrace.Metadata().PoolId() == poolId_);
-        return FilterBaseline(rawTrace);
+        auto result = FilterBaseline(rawTrace);
+
+        // Transcribe the frame interval to the metrics object.
+        const auto& tracemd = result.first.Metadata();
+        const FrameIntervalType fi {tracemd.FirstFrame(), tracemd.LastFrame()};
+        result.second.frameInterval = fi;
+
+        return result;
     }
 
     float Scale() const { return movieScaler_; }
