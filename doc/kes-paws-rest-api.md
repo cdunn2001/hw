@@ -161,16 +161,15 @@ Of course, using a ``.png`` shortcut for a text field is not allowed and will re
 All filenames shall be specified using proper URL syntax.  For the immediate design, the following URLs shall be supported.
 
  * ``file:/path0/path1/path2`` or ``file://host/path0/path1/path2``
-   These get translated to ``/path0/part1/path2`` etc on the command lines. For the purpose of pa-ws, `host` can be either `rt` or `icc`. Because data files on the nrt are managed by pa-ws,
-   URLS of the form file://nrt0/etc/etc are discouraged.
+   These get translated to ``/path0/part1/path2`` etc on the command lines.  Note that this URL format should *only* be used for files that are not managed by pa-ws in the `/storages` endpoint. Examples include some static configuration files (for example `file:/etc/pacbio/pa-common.json`) or files that are accessed via NFS on other host.  Practically speaking for input and output data files, `host` might be `rt` or `icc` (example `file://icc/data/icc/pa/m1234/m1234.trc.h5` for trace file output), but `nrt` is most likely a mistake. This is because data files on the `nrt` should be managed by the `/storages` endpoints.
 
  * http://pawshost/storages/m123456/files/file0
 
-   This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/file0``.
+   The `files` is a keyword that means to access the actual file named `file0` in the storage partition.  This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/file0``.
 
  * http://pawshost/storages/m123456/files/path0/filename
 
-   This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/path0/file0``.
+   The `files` is a keyword that means to access the actual file named `file0` in the storage partition.  This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/path0/file0``.
  
 If the protocol is left off, then the protocol is assumed to be `file:`. 
 
@@ -340,7 +339,7 @@ sequenceDiagram
     B->>C: /sockets/0/darkcal
 
     C->>B: GET /sockets/0/darkcal/processStatus/executionStatus
-    B->>C: RUNNING
+    B->>C: OK "RUNNING"
 
     C->>A: sensor passthrough<br/>movie number=111
 
@@ -373,9 +372,12 @@ sequenceDiagram
  
     C->> B: DELETE /postprimary/m123456
     C->> B: DELETE /sockets/0
+    
+    C : transfers all files off instrument
+
+    C->> B: POST /storage/m123456/free
     C->> B: DELETE /storage/m123456
 
-    C : transfers all files off instrument
 ```
 
 
@@ -426,7 +428,7 @@ restart the process.
 }
 ```
 
-``completeStatus`` is only valid when ``executionStatus=COMPLETE``.
+``completionStatus`` is only valid when ``executionStatus=COMPLETE``.
 
 ``exitCode`` will be 0 on success, 1 to 127 on non-signaled error exit, and 128 to 144 on signaled exit.  For example, segmentation fault is a signaled exit of 137 (128 + 11).
 
@@ -437,7 +439,8 @@ For Primary, there are to be 4 sockets, although the architecture doesn't limit 
 Sockets are indexed from 1.  Note that there is a 1:1 correspondence between Sockets and SRAs, but the mapping is determined at run time, as sockets
 may be plugged into any SRA.
 
-GET returns a sorted JSON array of the socket indices. Normally, this will return `[1,2,3,4]` for Kestrel, unless sockets are not present.
+GET returns a sorted JSON array of the socket indices. Normally, this will return `[1,2,3,4]` for Kestrel. If certain sockets are not present, this array will omit those. It is possible to return `[]` if no sockets
+are present.
 
 The GET end point will return the values previously POSTed, in addition to a "status" object.
 

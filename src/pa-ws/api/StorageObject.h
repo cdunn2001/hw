@@ -70,7 +70,7 @@ struct StorageObject : PacBio::Configuration::PBConfig<StorageObject>
 
     // TBD. The /storages/$mid/files endpoint refers to the actual files themselves. It is possible GET
     // the contents of the files. Under the hood, pa-ws will translate any references to these files into
-    // local filenames when passed to the command lines of the manages processes. For example, if postprimary is
+    // local filenames when passed to the command lines of the managed processes. For example, if postprimary is
     // posted with a setting such as "bazTempFile":"http://nrt1:23602/storages/m1234/files/foo_temp.txt", pa-ws
     // will translate this to a command line that will look something like
     // `baz2bam --tempfile /data/pa/tmp.Egf3vDs1Fc/foo_temp.txt`, where /data/pa/tmp.Egf3vDs1Fc has been allocated
