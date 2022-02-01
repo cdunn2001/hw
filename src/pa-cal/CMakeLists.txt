@@ -10,7 +10,7 @@ project (pa-ws
 enable_testing()
 
 include(../../setup-thirdparty.cmake)
-SetupProject("mongo" "${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
+SetupProject("${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 
 # TODO: Use C++17 when we have a newer version of GCC available.
 set(CMAKE_CXX_STANDARD 14)

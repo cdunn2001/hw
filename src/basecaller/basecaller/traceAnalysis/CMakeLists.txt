@@ -1,0 +1,94 @@
+
+cmake_minimum_required(VERSION 3.20)
+
+include(pacbio-eigen)
+
+add_library(libMongoBasecallerTraceAnalysis STATIC
+    Baseliner.h
+    Baseliner.cpp
+    BaselinerParams.h
+    BaselinerParams.cpp
+    BaselineStatsAggregator.h
+    BaselineStatsAggregator.cpp
+    BaselineStatsAggregatorHost.h
+    BaselineStatsAggregatorDevice.cu
+    BaselineStatsAggregatorDevice.h
+    BaselineStatsAggregatorHost.cpp
+    BlockFilterStage.h
+    BlockFilterStage.cpp
+    ComputeDevices.h
+    ComputeDevices.cpp
+    CoreDMEstimator.h
+    CoreDMEstimator.cpp
+    DetectionModelEstimator.h
+    DetectionModelEstimator.cpp
+    DetectionModelHost.h
+    DetectionModelHost.cpp
+    DeviceHFMetricsFilter.h
+    DeviceHFMetricsFilter.cu
+    DeviceMultiScaleBaseliner.h
+    DeviceMultiScaleBaseliner.cu
+    DevicePulseAccumulator.h
+    DevicePulseAccumulator.cu
+    DmeDiagnostics.h
+    DmeDiagnostics.cpp
+    DmeEmDevice.h
+    DmeEmDevice.cu
+    DmeEmHost.h
+    DmeEmHost.cpp
+    EdgeFrameClassifier.h
+    FrameLabeler.h
+    FrameLabeler.cpp
+    FrameLabelerDevice.h
+    FrameLabelerDevice.cu
+    FrameLabelerDeviceDataStructures.cuh
+    FrameLabelerDeviceDataStructures.cu
+    FrameLabelerHost.h
+    FrameLabelerHost.cpp
+    FrameLabelerKernels.cuh
+    FrameLabelerKernels.cu
+    HFMetricsFilter.h
+    HFMetricsFilter.cpp
+    HostHFMetricsFilter.h
+    HostHFMetricsFilter.cpp
+    HostMultiScaleBaseliner.h
+    HostMultiScaleBaseliner.cpp
+    HostNoOpBaseliner.h
+    HostNoOpBaseliner.cpp
+    HostPulseAccumulator.cpp
+    HostPulseAccumulator.h
+    HostSimulatedPulseAccumulator.h
+    HostSimulatedPulseAccumulator.cpp
+    MaxLikelihoodDiagnostics.h
+    PulseAccumulator.h
+    PulseAccumulator.cpp
+    RoiDevice.cuh
+    RoiDevice.cu
+    SparseMatrix.h
+    SubframeLabelManager.h
+    SubframeLabelManager.cpp
+    SubframeScorer.cpp
+    SubframeScorer.h
+    TraceAnalysisForward.h
+    TraceFilters.h
+    TraceFilters.cpp
+    TraceHistogramAccumDevice.h
+    TraceHistogramAccumDevice.cu
+    TraceHistogramAccumHost.h
+    TraceHistogramAccumHost.cpp
+    TraceHistogramAccumulator.h
+    TraceHistogramAccumulator.cpp
+    WindowBuffer.h
+)
+
+target_include_directories(libMongoBasecallerTraceAnalysis
+    PUBLIC
+        ${MONGO_PROJECT_DIR}
+)
+
+target_link_libraries(libMongoBasecallerTraceAnalysis
+    PUBLIC
+        libMongoDataTypes
+    PRIVATE
+        libEigen
+)

@@ -9,7 +9,7 @@ if(${CMAKE_CURRENT_LIST_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
   enable_testing()
 
   include(../../setup-thirdparty.cmake)
-  SetupProject("mongo" "${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
+  SetupProject("${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 endif()
 
 

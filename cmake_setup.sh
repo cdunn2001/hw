@@ -19,13 +19,10 @@ fi
 for d in \
    build/pa-ws/gcc/x86_64/Release \
    build/pa-cal/gcc/x86_64/Release \
-   build/common/gcc/x86_64/Release 
-#   build/basecaller/gcc/x86_64/Release \
-#   build/basecaller/gcc/x86_64/Debug \
-#   build/basecaller/icc/x86_64/Release \
-#   build/basecaller/icc/x86_64/Debug \
-#   build/basecaller/icc/avx512/Release \
-#   build/basecaller/icc/avx512/Debug \
+   build/common/gcc/x86_64/Release \
+   build/basecaller/gcc/x86_64/Release \
+   build/basecaller/gcc/x86_64/RelWithDebInfo \
+   build/basecaller/gcc/x86_64/Debug \
 #   build/transfer/gcc/x86_64/Release \
 #   build/transfer/gcc/x86_64/Debug \
 do

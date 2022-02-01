@@ -1,0 +1,56 @@
+function ReservePort {
+    port=$1
+    echo -n "    INFO Opening firewall port $port :"
+    firewall-cmd --permanent --zone=public --add-port=$port/tcp
+
+    if grep ${port} /proc/sys/net/ipv4/ip_local_reserved_ports > /dev/null
+    then
+      echo "    INFO port $port reserved already"
+    else
+      existing=`cat /proc/sys/net/ipv4/ip_local_reserved_ports`
+      if [ "$existing" != "" ]
+      then
+         existing="$existing,"
+      fi
+      existing="${existing}${port}"
+      echo "    INFO reserving port $existing"
+      echo $existing > /proc/sys/net/ipv4/ip_local_reserved_ports
+    fi
+}
+
+#ports="23610 23611 23612"
+#for port in $ports
+#do
+#  ReservePort $port
+#done
+#sysctl net.ipv4.ip_local_reserved_ports > /etc/sysctl.d/98-pa-kestrel.conf
+#echo -n "    INFO Reloading firewall :"
+#firewall-cmd --reload
+
+
+if [ ! -d /var/log/pacbio ]
+then
+  echo "    Creating /var/log/pacbio"
+  mkdir -p  /var/log/pacbio
+  chmod 777 /var/log/pacbio
+  chmod o+t /var/log/pacbio
+fi
+
+if [ ! -d /var/run/pacbio ]
+then
+   echo "    Creating /var/run/pacbio"
+   mkdir -p  /var/run/pacbio
+   chmod 777 /var/run/pacbio
+   chmod o+t /var/run/pacbio
+fi
+
+if [ ! -e @SYSTEMD_COMMON_JSON@ ]
+then
+   echo " Creating empty system configuration file @SYSTEMD_COMMON_JSON@"
+   echo "{}" > @SYSTEMD_COMMON_JSON@
+fi
+
+mkdir -p /etc/modulefiles/@SYSTEMD_ALIAS@
+envsubst '$RPM_INSTALL_PREFIX' < $RPM_INSTALL_PREFIX/etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@ > /etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@
+
+exit 0
