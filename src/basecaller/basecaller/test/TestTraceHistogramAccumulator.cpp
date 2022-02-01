@@ -434,6 +434,8 @@ TEST_P(Histogram, MultiLaneConstant)
     EXPECT_EQ(hists[0]->FramesAdded(), params.numFrames);
 
     const auto& histdata = hists[0]->Histogram();
+    using FrameIntervalT = TraceHistogramAccumulator::FrameIntervalType;
+    EXPECT_EQ(FrameIntervalT(0, params.numFrames), histdata.frameInterval);
     for (size_t lane = 0; lane < histdata.data.Size(); ++lane)
     {
         const auto& lanedata = histdata.data.GetHostView()[lane];
