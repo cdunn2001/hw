@@ -799,16 +799,18 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
                                  LaneDetModel& ldm) const
 {
-    const StatAccumulator<FloatVec> blsa(blStatAccState.baselineStats);
+    const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
+    const auto& baselineStats = bsa.BaselineFramesStats();
 
-    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
 
     // We're having problems with the baseline variance overflowing a half precision
     // storage.  Something is already terribly wrong if our variance is over
     // 65k, but we'll put a limiter here because having a literal infinity run
     // around is causing problems elsewhere
-    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : min(blsa.Variance(), FloatVec{60000});
-    const FloatVec& blWeight = FloatVec(blStatAccState.NumBaselineFrames()) / FloatVec(blStatAccState.fullAutocorrState.basicStats.moment0);
+    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_
+                            : min(baselineStats.Variance(), FloatVec{60000});
+    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
 
     ldm.BaselineMode().means = blMean;
     ldm.BaselineMode().vars = blVar;
@@ -824,7 +826,7 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
-        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
         aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
 
         aMode.weights = aWeight;
