@@ -68,7 +68,7 @@ public:
     // smooth the estimate of the baseline.
     // MeanEmaScaleStrides must be >= 0.
     // Internal use of single-precision floating-point sets the practical
-    // limit that MeanEmaScaleStrides should not exceed about 3.0e6.
+    // limit that MeanEmaScaleStrides should not exceed about 1500.
     PB_CONFIG_PARAM(float, MeanEmaScaleStrides, 0.0f);
 
     // The "half-life" for the exponential moving average used to smooth

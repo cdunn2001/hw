@@ -205,7 +205,6 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneAr
     static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
     const float sigmaEmaAlpha = SigmaEmaAlpha();
 
-    // TODO: Possible catastrophic loss of precision here!
     auto sigma = max((upper - lower) / cSigmaBias_, minSigma);
     auto newSigmaEma = sigmaEmaAlpha * blSigmaEma_ + (1.0f - sigmaEmaAlpha) * sigma;
 
