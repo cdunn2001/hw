@@ -4,9 +4,19 @@ info:
   description: The REST API for controlling primary analysis processes and data storage.
   version: 0.0.2
 servers:
-  - url: http://pa-dev01.lab.nanofluidics.com:23632
-    description: Optional server description, e.g. Main (production) server
+  - url: http://REPLACE_WITH_HOSTNAME:23632
+    description: The server that served this documentation file.
 paths:
+  /status:
+    get:
+      summary: Returns top level status of the pa-ws process.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PawsStatusObject'
   /sockets:
     get:
       summary: Returns a list of socket numbers.
@@ -528,65 +538,3 @@ paths:
       responses:
         '200':
           description: OK The process was stopped, and now the resource can be DELETEd.
-  /transfers:
-    get:
-      summary: Returns a list of MIDs for each transfer object
-      responses:
-        '200':    # status code
-          description: A JSON array of MIDs
-          content:
-            application/json:
-              schema: 
-                type: array
-                items: 
-                  type: string
-    post:
-      summary: Starts the transfer of artifacts (files) to a remoter location.
-      description:   "The artifacts to transfer, the transfer protocol, and the destination will be provided in the data body.  Can be refused if PA deems that there are not enough IO/compute resources to perform the transfer.  In the event of a failure, a 409 (Conflict) error code will be returned.  Further information may be provided in the response body as to why the POST was refused.  Clients (ICS) can keep calling this POST command until a success (200) response is returned.
-                     Input parameters must include:
-
-                    * movie context name (mid)"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TransferObject'             
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransferObject'                  
-  /transfers/{mid}:
-    get:
-      summary: Returns the transfer object by MID.
-      parameters:
-      - name: mid
-        in: path
-        description: The movie identifier (MID) for the transfer process
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransferObject'
-    delete:
-      summary: Deletes the transfer object by MID.
-      parameters:
-      - name: mid
-        in: path
-        description: The movie identifier (MID) for the transfer process
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: OK transfer object was deleted.
-        '409':
-          description: CONFLICT the transfer object was not stopped before deleting. The object will not be deleted. 
-                      POST to the /transfers/{mid}/stop end point first.

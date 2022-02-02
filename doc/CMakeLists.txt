@@ -19,7 +19,7 @@ add_custom_command(OUTPUT docsPaWs.o
 )
 
 # dynamically create the function that is used to access the embedded strings.
-set(FILENAME kes_wxdaemon_rest_api_html)
+set(FILENAME kes_paws_rest_api_html)
 configure_file(doc_accessor_TEMPLATE.cpp dochelp_generated.cpp)
 
 add_library(libPaWsDoc

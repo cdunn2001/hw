@@ -22,9 +22,7 @@ for d in \
    build/common/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/RelWithDebInfo \
-   build/basecaller/gcc/x86_64/Debug \
-#   build/transfer/gcc/x86_64/Release \
-#   build/transfer/gcc/x86_64/Debug \
+   build/basecaller/gcc/x86_64/Debug
 do
     rm -rf $d 
     mkdir -p $d
@@ -37,9 +35,11 @@ do
     top=../../../../..
     tc=$top/TC-${tool}-cuda-${arch}.cmake
 
-    pushd $d
+    pushd $d > /dev/null
 
-    # This script will blow away all files in the build directory (except itself) before running cmake. Unless the command line
+    fulldir=$(pwd)
+
+    # This generated script will blow away all files in the build directory (except itself) before running cmake. Unless the command line
     # arguments change, or there is severe disk corruption causing permissions problems, this local script should
     # be sufficient to start fresh with cmake.  Note that the `rm` command specifically does not use the -f force option,
     # since all files should be R/W.
@@ -50,10 +50,33 @@ do
 
     cat <<HERE > cmake_setup.sh
 #! /bin/bash
-shopt -s extglob   # allow the !(filename) glob syntax
-rm -rv !("cmake_setup.sh")
+shopt -s extglob # allow the !(filename) glob syntax
+cd ${fulldir}
+files=\$(shopt -s nullglob; echo !(cmake_setup.sh|build.ninja))
+if [[ \$files != "" ]]
+then
+    echo -n "Directory contains a build already, are you sure you want to delete all existing build files in $fulldir? (y/n)"
+    read confirmation
+    if [[ \$confirmation != "y" && \$confirmation != "yes" ]]
+    then
+        echo "not continuing"
+        exit 1
+    fi
+    cd ${fulldir} && rm -rv !("cmake_setup.sh")
+fi
 cmake "-G${generator}" --debug-trycompile -DCMAKE_CUDA_HOST_COMPILER=${compilers[$tool]} -DCMAKE_BUILD_TYPE=$type -DCMAKE_TOOLCHAIN_FILE=$tc $top/src/$proj
 HERE
     chmod +x cmake_setup.sh
-    popd
+
+    if [[ ${generator} == "Ninja" ]] ; then
+# This original ninja file is a bootstrap to create the real ninja file. Once ninja runs once, it
+# will delete this file.
+      cat <<NINJA > build.ninja
+rule run_cmake_setup
+  command = ./cmake_setup.sh > \$out
+build build.ninja : run_cmake_setup
+NINJA
+    fi
+
+    popd > /dev/null
 done

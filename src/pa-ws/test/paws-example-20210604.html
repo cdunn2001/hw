@@ -254,40 +254,4 @@ GET /storages/m123456_000001
 
 #########################################################################
 
-GET /transfers
-
-[
-    "m123456_000001",
-    "m123456_000002",
-    "m123456_000003",
-    "m123456_000004"
-]
-
-GET /transfers/m123456_000001
-
-{
-    "destination_url": "rsync://my.smrt.server.org:54321/this/experiment/m123456_000001_000001",
-    "log_level": "INFO",
-    "mid": "m123456_000001",
-    "output_log_url": "discard:",
-    "process_status": {
-        "completion_status": "UNKNOWN",
-        "execution_status": "RUNNING",
-        "exit_code": 0,
-        "timestamp": "2021-06-04T21:49:30Z"
-    },
-    "protocol": "RSYNC",
-    "status": {
-        "bytes_transferred": 0,
-        "completed_files": [],
-        "current_file": "http://localhost:23632/storages/m123456_000001/m123456_000001.ccs.bam",
-        "estimated_time_remaining": 3600.1,
-        "progress": 0.95
-    },
-    "urls_to_transfer": [
-        "http://localhost:23632/storages/m123456_000001/m123456_000001.dataset.xml",
-        "http://localhost:23632/storages/m123456_000001/m123456_000001.ccs.bam",
-        "http://localhost:23632/storages/m123456_000001/m123456_000001.baz2bam.log"
-    ]
-}
 </pre>

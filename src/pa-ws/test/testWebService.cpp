@@ -38,7 +38,6 @@
 #include <pa-ws/api/PostprimaryObject.h>
 #include <pa-ws/api/SocketObject.h>
 #include <pa-ws/api/StorageObject.h>
-#include <pa-ws/api/TransferObject.h>  
 
 #include  <pa-ws/mockup.h>
 
@@ -217,11 +216,18 @@ TEST_F(WebService_Test,Failures)
     EXPECT_EQ(HttpStatus::FORBIDDEN, client.GetHttpCode());
 }
 
-TEST_F(WebService_Test,API)
+TEST_F(WebService_Test,Doc)
+{
+    auto response = client.Get(url + "/doc");
+    EXPECT_EQ(HttpStatus::OK, client.GetHttpCode());
+    EXPECT_THAT(response, AnyOf(HasSubstr("Primary Analysis Webservice API")));
+}
+
+TEST_F(WebService_Test,Api)
 {
     auto response = client.Get(url + "/api");
     EXPECT_EQ(HttpStatus::OK, client.GetHttpCode());
-    EXPECT_THAT(response, HasSubstr("here is the API"));
+    EXPECT_THAT(response, AnyOf(HasSubstr("here is the API"),HasSubstr("Swagger")));
 }
 
 TEST_F(WebService_Test,Ping)

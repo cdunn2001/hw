@@ -24,27 +24,30 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // File Description:
-///  \brief Some declarations of mocking functions. ha ha.
+///  \brief The JSON object model for pa-ws status
 //
 // Programmer: Mark Lakata
+#ifndef PA_WS_API_PAWSSTATUSOBJECT_H
+#define PA_WS_API_PAWSSTATUSOBJECT_H
 
-#ifndef PRIMARY_PA_WS_MOCKUP_H
-#define PRIMARY_PA_WS_MOCKUP_H
+#include <pacbio/configuration/PBConfig.h>
 
-#include "api/SocketObject.h"
-#include "api/StorageObject.h"
-#include "api/PostprimaryObject.h"
+#include "ObjectTypes.h"
 
 namespace PacBio {
 namespace API {
 
-SocketObject CreateMockupOfSocketObject(int index);
+struct PawsStatusObject : PacBio::Configuration::PBConfig<PawsStatusObject>
+{
+    PB_CONFIG(PawsStatusObject);
 
-StorageObject CreateMockupOfStorageObject(int socket_number, const std::string& mid);
-
-PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid);
+    PB_CONFIG_PARAM(double, uptime, 0.0); ///< Real time seconds that pa-ws has been running
+    PB_CONFIG_PARAM(std::string, uptimeMessage, "0.0"); ///< Time that pa-ws has been running, formatted to be human readable as hours, minutes, seconds, etc
+    PB_CONFIG_PARAM(double, time, 0.0); ///< Current epoch time in seconds as seen by pa-ws (UTC)
+    PB_CONFIG_PARAM(ISO8601_Timestamp_t, timestamp, "00000101T00:00:00.000Z"); ///< ISO8601 timestamp (with milliseconds) of `time` field
+    PB_CONFIG_PARAM(std::string, version, "?"); ///< Version of software, including git hash of last commit
+};
 
 }}
 
-
-#endif // PRIMARY_PA_WS_MOCKUP_H
+#endif

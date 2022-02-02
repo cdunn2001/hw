@@ -56,6 +56,7 @@ shift $((OPTIND-1))
 
 component=$1
 
+
 makeTarget()
 {
     build_dir=$1/${BUILD_TYPE}
