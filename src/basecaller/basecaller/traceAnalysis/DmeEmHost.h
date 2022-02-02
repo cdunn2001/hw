@@ -29,6 +29,8 @@
 //  Description:
 //  Defines class DmeEmHost.
 
+#include <array>
+
 #include <pacbio/auxdata/AnalogMode.h>
 #include <common/LaneArray.h>
 #include <dataTypes/UHistogramSimd.h>
@@ -86,6 +88,7 @@ public:
 
 private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
+    using BaselinerStats = Data::BaselinerStatAccumulator<Data::RawTraceElement>;
 
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
@@ -103,6 +106,7 @@ private:    // Static data
 
     static float analogMixFracThresh0_;
     static float analogMixFracThresh1_;
+    static std::array<float, 2> confidHalfLife_;
     static float scaleSnrConfTol_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
@@ -129,7 +133,9 @@ private:    // Static functions
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);
 
-    static void EvolveModel(LaneDetModelHost* model) {}
+    static void EvolveModel(FrameIntervalType estimationFI,
+                            const BaselinerStats& blStats,
+                            LaneDetModelHost* model);
 
 private:    // Functions
     void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;

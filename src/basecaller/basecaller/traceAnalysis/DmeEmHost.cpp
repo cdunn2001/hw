@@ -74,6 +74,7 @@ float DmeEmHost::fixedBaselineVar_ = 0;
 
 float DmeEmHost::analogMixFracThresh0_ = numeric_limits<float>::quiet_NaN();
 float DmeEmHost::analogMixFracThresh1_ = numeric_limits<float>::quiet_NaN();
+std::array<float, 2> DmeEmHost::confidHalfLife_;
 float DmeEmHost::scaleSnrConfTol_ = 1.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
 float DmeEmHost::gTestFactor_ = 1.0f;
@@ -113,6 +114,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Log settings.
     analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
+    confidHalfLife_ = dmeConfig.ConfidenceHalfLife;
     scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
     emIterLimit_ = dmeConfig.EmIterationLimit;
     gTestFactor_ = dmeConfig.GTestStatFactor;
@@ -148,7 +150,7 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
             LaneDetModelHost detModelHost {dmView[l], detModelPool->frameInterval};
             EstimateLaneDetModel(hfi, hView[l], blsView[l], &detModelHost);
             detModelHost.ExportTo(&dmView[l]);
-            // TODO: assert(hfi == detModelHost.FrameInterval());
+            assert(hfi == detModelHost.FrameInterval());
         });
     });
 
@@ -213,7 +215,11 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
 {
     assert(detModel != nullptr);
 
-    // TODO: Evolve detModel to frame interval of blHist.
+    // Convert to a friendlier type.
+    const BaselinerStats bsa {blStatAccState};
+
+    // Evolve detModel to frame interval of blHist.
+    EvolveModel(estFrameInterval, bsa, detModel);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
@@ -768,6 +774,37 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
     cf[ConfFactor::G_TEST] = dmeDx.gTest.pValue;
 
     return cf;
+}
+
+// static
+void DmeEmHost::EvolveModel(const FrameIntervalType estimationFI,
+                            const BaselinerStats& blStats,
+                            LaneDetModelHost* model)
+{
+    const float tModel = model->FrameInterval().Center();
+    const float tEst = estimationFI.Center();
+
+    // Evaluate the half-life at the midpoint of tModel and tEst.
+    const float thl = 0.5f * (tModel + tEst);
+
+    // TODO: Make these configurable.
+    static const float t0 = 56160.0f;   // 50th percentile of ALP duration
+    static const float t1 = 168480.0f;  // 97.5th %-ile of ALP duration
+
+    // Compute the nominal confidence half-life.
+    const float& hl0 = confidHalfLife_[0];
+    const float& hl1 = confidHalfLife_[1];
+    const float hl = hl0 + (hl1 - hl0) * satlin(t0, t1, thl);     // frames
+
+    // TODO: Modify half-life for "pauses" in polymerization, indicated by low ACC.
+    // From Sequel ...
+    // const auto accVal = acc.Value().Autocorrelation();
+    // auto mhl = satlin(FloatVec(pauseAccThresh0_), FloatVec(pauseAccThresh1_), accVal);
+    // mhl *= confidHalfLifePauseEnhance_;
+    // mhl = hl * (1 + mhl);
+
+    // Update model.
+    model->EvolveConfidence(estimationFI, hl);
 }
 
 // static
