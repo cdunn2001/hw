@@ -22,9 +22,7 @@ for d in \
    build/common/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/RelWithDebInfo \
-   build/basecaller/gcc/x86_64/Debug \
-#   build/transfer/gcc/x86_64/Release \
-#   build/transfer/gcc/x86_64/Debug \
+   build/basecaller/gcc/x86_64/Debug
 do
     rm -rf $d 
     mkdir -p $d

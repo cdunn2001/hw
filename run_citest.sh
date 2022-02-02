@@ -56,6 +56,7 @@ shift $((OPTIND-1))
 
 component=$1
 
+
 makeTarget()
 {
     build_dir=$1/${BUILD_TYPE}
@@ -67,8 +68,7 @@ makeTarget()
     pushd ${build_dir}
     ./cmake_setup.sh
 
-    # Build targets and spare 1 CPU for better response
-    cmake --build ./ -j 7 -- $targets
+    cmake --build ./ -- $targets
     exitStatus=$?
     if [[ ${exitStatus} -ne 0 ]]; then
         exit $exitStatus
@@ -77,9 +77,6 @@ makeTarget()
 
 case ${component} in
 basecaller)
-
-    # basecaller is not supported yet, but I need to trick bamboo to pass it.
-    exit 0
 
     makeTarget build/basecaller/gcc/x86_64
 
