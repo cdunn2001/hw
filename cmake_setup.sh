@@ -51,6 +51,7 @@ do
     cat <<HERE > cmake_setup.sh
 #! /bin/bash
 shopt -s extglob # allow the !(filename) glob syntax
+cd ${fulldir}
 files=\$(shopt -s nullglob; echo !(cmake_setup.sh|build.ninja))
 if [[ \$files != "" ]]
 then
