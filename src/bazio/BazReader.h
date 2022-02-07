@@ -142,7 +142,6 @@ private:   // data
     std::unique_ptr<BazIO::FileHeaderSet> fh_;
     std::unique_ptr<BazIO::FileFooterSet> ff_;
 
-
     std::queue<ZmwSliceInfo> zmwSlices_;
 
     // I thought about pulling this out to a separate file, but it's intimately
@@ -184,10 +183,12 @@ private:   // data
         const std::vector<ZmwSliceHeader>& NextHeaders(const std::function<bool(void)>& callBackCheck=nullptr);
         void NextFile()
         {
-            assert(curFile_ + 1 < maxNumZmws_.size());
-            zmwOffset_ = currentMaxNumZmws_;
-            curFile_ = curFile_ + 1;
-            currentMaxNumZmws_ += maxNumZmws_[curFile_];
+            if (curFile_ + 1 < maxNumZmws_.size())
+            {
+                zmwOffset_ = currentMaxNumZmws_;
+                curFile_ = curFile_ + 1;
+                currentMaxNumZmws_ += maxNumZmws_[curFile_];
+            }
         }
     public:
         auto GetCurrentFilePointer()

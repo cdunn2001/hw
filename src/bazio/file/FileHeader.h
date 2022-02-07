@@ -224,6 +224,9 @@ public:
     uint32_t MetricByteSize() const
     { return metricByteSize_; }
 
+    const std::string& FileName() const
+    { return fileName_; }
+
 public:
     void BazMajorVersion(int v)
     { bazMajorVersion_ = v; }
@@ -248,6 +251,9 @@ public:
 
     void Internal(bool internal)
     { internal_ = internal; }
+
+    void FileName(const std::string& fn)
+    { fileName_ = fn; }
 
 private:
     static const uint8_t MAGICNUMBER0 = 0x02;
@@ -292,6 +298,7 @@ private:
     bool complete_ = false;
     bool truncated_ = false;
     bool internal_ = false;
+    std::string fileName_;
 
     uint32_t numSuperChunks_ = 0;
 

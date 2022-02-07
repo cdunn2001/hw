@@ -55,6 +55,7 @@ FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::shared
             throw std::runtime_error("Cannot read file header: " + fileName + "!");
 
         FileHeader fh(header.get(), headerSize);
+        fh.FileName(fileName);
 
         // Check if BAZ version is correct
         if (!(fh.BazMajorVersion() == 2 && fh.BazMinorVersion() == 0))

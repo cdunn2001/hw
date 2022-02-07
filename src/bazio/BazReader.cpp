@@ -95,7 +95,7 @@ BazReader::BazReader(const std::vector<std::string>& fileNames,
 
     numZmws_ = fh_->TotalNumZmws();
     const auto& maxNumZmws = fh_->MaxNumZmws();
-    std::partial_sum(maxNumZmws.begin(), maxNumZmws.end(), zmwIndexByBazFile_.begin());
+    std::partial_sum(maxNumZmws.begin(), maxNumZmws.end(), std::back_inserter(zmwIndexByBazFile_));
 
     std::vector<std::vector<size_t>> zmwMetaLocationsFiles_;
     zmwMetaLocationsFiles_.reserve(files_.size());
@@ -401,12 +401,13 @@ std::vector<BazReader::ZmwSliceInfo> BazReader::GetZmwSliceInfo(uint32_t startZm
 
     std::vector<BazReader::ZmwSliceInfo> byBazFile;
     uint32_t start = startZmw;
-    for (uint32_t i = startBaz; i < endBaz; i++)
+    for (uint32_t i = startBaz; i < endBaz-1; i++)
     {
         byBazFile.push_back({start, zmwIndexByBazFile_[i], fh_->NumSuperChunks()[i], files_[i].second.get()});
         start = zmwIndexByBazFile_[i];
     }
-    byBazFile.push_back({start, endZmw, fh_->NumSuperChunks()[endBaz], files_[endBaz].second.get()});
+
+    byBazFile.push_back({start, endZmw, fh_->NumSuperChunks()[endBaz-1], files_[endBaz-1].second.get()});
 
     return byBazFile;
 }
@@ -431,8 +432,6 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
 
     std::vector<ZmwByteData> batchByteData;
     batchByteData.reserve(fullSliceSize);
-    for (size_t i = 0; i < dataSizes.size(); ++i)
-        batchByteData.emplace_back(fh_->MetricByteSize(), dataSizes[i], i + fullSliceStartZmw);
 
     // Slices can contain ZMWs spanning across multiple BAZ files. We want
     // to process them in terms of BAZ files though as this guarantees they
@@ -470,6 +469,7 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
                 dataSizes[i - fullSliceStartZmw].numMBs += h.numMBs;
                 chunkToHeaderSplit[j].push_back(h);
             }
+            batchByteData.emplace_back(fh_->MetricByteSize(), dataSizes[i - fullSliceStartZmw], i + fullSliceStartZmw);
         }
 
         // Iterate over all chunks which are guaranteed to be from the same file
@@ -573,6 +573,21 @@ void BazReader::ReadFileHeaders()
     try
     {
         fh_ = std::make_unique<BazIO::FileHeaderSet>(files_);
+
+        // Re-order files based on file header set ordering.
+        std::vector<std::string> fns;
+        std::for_each(fh_->FileHeaders().begin(), fh_->FileHeaders().end(),
+                      [&fns](const auto& fh) { fns.push_back(fh.FileName()); });
+
+        decltype(files_) sorted;
+        for (const auto& fn: fns)
+        {
+            for (const auto& f : files_)
+            {
+                if (f.first == fn) sorted.push_back(f);
+            }
+        }
+        files_ = sorted;
     }
     catch (const std::exception& ex)
     {
