@@ -81,10 +81,26 @@ public:     // Static functions
     /// and properties of the background mode are preserved.
     static void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel);
 
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
+    // Initialize detection models to specified baseline statistics and
+    // reference SNR.  Uses model to define pulse signal variances.
+    // Made this public purely to support unit tests.  Not ideal, but an easy
+    // near-term solution for properly initializing models in the unit tests.
+    static void InitLaneDetModel(const FloatVec& blWeight,
+                                 const FloatVec& blMean,
+                                 const FloatVec& blVariance,
+                                 LaneDetModel* ldm);
+
+    // A convenient overload that just extracts the necessary information from
+    // blStats.
+    // This overload doesn't really need to be public, but mixing
+    // accessibility levels within an overload set seems a little awkward.
+    static void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+                                 LaneDetModel& ldm);
 
 public:
     DmeEmHost(uint32_t poolId, unsigned int poolSize);
+
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
 
 private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
@@ -138,8 +154,6 @@ private:    // Static functions
                             LaneDetModelHost* model);
 
 private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
-
     void PrelimEstimate(const BlStatAccState& blStatAccState,
                         LaneDetModelHost *model) const;
 

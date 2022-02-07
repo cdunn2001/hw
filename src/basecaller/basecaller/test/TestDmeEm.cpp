@@ -158,12 +158,7 @@ public:
     // easy to do.
     void RunTest()
     {
-        const auto& dmeConfig = testConfig.dmeConfig;
-        Filter::Configure(dmeConfig, analysisConfig);
-        // Hacky, but we have to configure the host dme regardless, since we'll
-        // use ScaleModelSNR as part of our validation
-        // TODO: Find a way for host and gpu to share the same Configure?
-        DmeEmHost::Configure(dmeConfig, analysisConfig);
+        Filter::Configure(testConfig.dmeConfig, analysisConfig);
 
         std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
         Data::DetectionModelPool<Cuda::PBHalf> models(poolSize,
@@ -191,6 +186,9 @@ public:
             LaneDetectionModelHost resultModel {models, l};
             LaneDetectionModelHost completeDataModel{*completeData->detectionModels[l]};
 
+            // Not much point in continuing if the estimation effort failed.
+            ASSERT_TRUE(all(resultModel.Confidence() > 0.0f)) << "Estimation failed.";
+
             {
                 // Check baseline modes and mixture fractions.
                 const auto& rbm = resultModel.BaselineMode();
@@ -198,50 +196,44 @@ public:
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
                 DmeEmHost::FloatVec absErrTol = 5.0f * sqrt(expected * (1.0f - expected) / numFrames);
-                Assert(expected, result, absErrTol, "Bad mixing fraction");
+                Assert(expected, result, absErrTol, "Bad mixing fraction for baseline");
 
                 // Check baseline estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
                 absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
-                Assert(expected, result, absErrTol, "Bad baseline mean");
+                Assert(expected, result, absErrTol, "Bad baseline mean for baseline");
 
                 // Check baseline estimated variance.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
                 absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
-                Assert(expected, result, absErrTol, "Bad baseline variance");
+                Assert(expected, result, absErrTol, "Bad baseline variance for baseline");
             }
 
             // Check detection modes.
             for (unsigned int a = 0; a < 4; ++a)
             {
-                std::ostringstream errMsg;
-
                 // Check mixture fraction.
                 const auto& rbm = resultModel.DetectionModes()[a];
                 const auto& cdbm = completeDataModel.DetectionModes()[a];
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
                 DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFrames));
-                errMsg << "Bad mixing fraction for analog " << a;
-                Assert(expected, result, absErrTol, errMsg.str());
+                const auto astr = std::to_string(a);
+                Assert(expected, result, absErrTol, "Bad mixing fraction for analog " + astr);
 
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
                 absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
-                errMsg.clear();
-                errMsg << "Bad mean for analog " << a;
-                Assert(expected, result, absErrTol, errMsg.str());
+                Assert(expected, result, absErrTol, "Bad mean for analog " + astr);
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
                 absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
-                errMsg.clear();
-                errMsg << "Bad variance for analog " << a;
-                Assert(expected, result, absErrTol, errMsg.str());
+                Assert(expected, result, absErrTol, "Bad variance for analog " + astr);
             }
         }
     }
@@ -266,24 +258,8 @@ private:
     // Constructs and initializes a fixed detection model used as an initial model for the DME.
     LaneDetectionModel MakeInitialModel(void)
     {
-        analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
-        Data::StaticDetModelConfig staticDetModel;
-        const auto& analogs = staticDetModel.SetupAnalogs(analysisConfig);
-
-        const float bgWeight{0.5f};
         LaneDetectionModel ldm;
-        ldm.BaselineMode().SetAllMeans(staticDetModel.baselineMean);
-        ldm.BaselineMode().SetAllVars(staticDetModel.baselineVariance);
-        ldm.BaselineMode().SetAllWeights(bgWeight);
-
-        const float amWeight = 0.25f * (1.0f - bgWeight);
-        for (size_t i = 0; i < analogs.size(); i++)
-        {
-            ldm.AnalogMode(i).SetAllMeans(analogs[i].mean);
-            ldm.AnalogMode(i).SetAllVars(analogs[i].var);
-            ldm.AnalogMode(i).SetAllWeights(amWeight);
-        }
-
+        DmeEmHost::InitLaneDetModel(0.5f, 0.0f, 50.0f, &ldm);
         return ldm;
     }
 
@@ -325,11 +301,13 @@ private:
                 const unsigned int m = a + 1;
                 const auto& dm = simModel.DetectionModes()[a];
                 const auto& mean = dm.SignalMean();
-                const auto& vars = dm.SignalCovar();
+                const auto& stdev = sqrt(dm.SignalCovar());
                 const auto nFramesM = nFrames[m];
                 for (unsigned int t = 0; t < nFramesM; ++t)
                 {
-                    DmeEmHost::FloatVec x = floorCastInt(sqrt(vars) * normDist(rng) + mean);
+                    // TODO: The rounding and casting to int seems completely
+                    // unnecessary.  Moreover, the rounding method is biased.
+                    DmeEmHost::FloatVec x = floorCastInt(stdev * normDist(rng) + mean);
                     frame.Store(x);
                     // The traces have zero baseline so the raw trace and baselined trace are the same.
                     bsa.AddSample(frame.Extract(), frame.Extract(), false);
@@ -345,10 +323,10 @@ private:
             {
                 const auto& bm = simModel.BaselineMode();
                 const auto& mean = bm.SignalMean();
-                const auto& vars = bm.SignalCovar();
+                const auto& stdev = sqrt(bm.SignalCovar());
                 for (unsigned int t = 0; t < nFramesBg; ++t)
                 {
-                    DmeEmHost::FloatVec x = floorCastInt(sqrt(vars) * normDist(rng) + mean);
+                    DmeEmHost::FloatVec x = floorCastInt(stdev * normDist(rng) + mean);
                     frame.Store(x);
                     bsa.AddSample(frame.Extract(), frame.Extract(), true);
                     cdMean.front() += x;
@@ -356,7 +334,7 @@ private:
                     frame++;
                 }
             }
-            cdMean.front() /= boost::numeric_cast<float>(nFramesBg);
+            cdMean.front() /= numeric_cast<float>(nFramesBg);
 
             // Calculate the variances of the simulated data using "complete data".
             AlignedVector<DmeEmHost::FloatVec> cdVar(nModes, 0.0f);
@@ -367,30 +345,30 @@ private:
                 cdVar.at(m) += pow2(frame.Extract() - cdMean.at(m));
                 frame++;
             }
-            cdVar.front() /= boost::numeric_cast<float>(nFramesBg - 1);
+            cdVar.front() /= numeric_cast<float>(nFramesBg - 1);
             for (unsigned int m = 1; m < nModes; ++m)
             {
                 cdVar.at(m) = (nFrames[m] < 2)
                         ? NAN
-                        : cdVar.at(m) / boost::numeric_cast<float>(nFrames[m] - 1);
+                        : cdVar.at(m) / numeric_cast<float>(nFrames[m] - 1);
             }
 
             // Set the baseline stats.
             Data::BaselinerStatAccumState& bls = stats.baselinerStats.GetHostView()[l];
             bls = bsa.GetState();
 
-            // Package the complete-data estimates as a lane detection model host.
+            // Package the complete-data estimates as a LaneDetectionModelHost.
             auto detModelCD = std::make_unique<LaneDetectionModelHost>(simModel);
             {
                 auto& bgMode = detModelCD->BaselineMode();
-                bgMode.Weight(boost::numeric_cast<float>(nFramesBg)/boost::numeric_cast<float>(totalFrames));
+                bgMode.Weight(numeric_cast<float>(nFramesBg) / numeric_cast<float>(totalFrames));
                 bgMode.SignalMean(cdMean.front());
                 bgMode.SignalCovar(cdVar.front());
                 for (unsigned int a = 0; a < nAnalogs; ++a)
                 {
                     const auto m = a + 1;
                     auto& dma = detModelCD->DetectionModes().at(a);
-                    dma.Weight(boost::numeric_cast<float>(nFrames.at(m))/boost::numeric_cast<float>(totalFrames));
+                    dma.Weight(numeric_cast<float>(nFrames.at(m)) / numeric_cast<float>(totalFrames));
                     dma.SignalMean(cdMean.at(m));
                     dma.SignalCovar(cdVar.at(m));
                 }
@@ -404,7 +382,9 @@ private:
                                                      Cuda::Memory::SyncDirection::Symmetric,
                                                      SOURCE_MARKER()};
         {
-            const auto laneDetModel = MakeInitialModel();
+            pdm.frameInterval = detModelStart->FrameInterval();
+            LaneDetectionModel laneDetModel;
+            detModelStart->ExportTo(&laneDetModel);
             auto pdmv = pdm.data.GetHostView();
             std::fill(pdmv.begin(), pdmv.end(), laneDetModel);
         }
@@ -419,15 +399,24 @@ private:
 
     void SetUp()
     {
+        analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
+
+        // Need to configure DmeEmHost regardless of whether we are testing the
+        // CPU or GPU implementation because we are using a couple static
+        // functions of that class to set up the model parameters used for trace
+        // simulation.
+        // TODO: Find a way for host and gpu to share the same Configure?
+        DmeEmHost::Configure(testConfig.dmeConfig, analysisConfig);
+
         const auto& nFrames = GetParam().nFrames;
         const auto totalFrameCount = numeric_cast<int>(std::accumulate(nFrames.begin(), nFrames.end(), 0u));
         detModelStart = std::make_unique<LaneDetectionModelHost>(MakeInitialModel(),
                                                                  Data::FrameIntervalType{0, totalFrameCount});
-        detModelStart->Confidence(DmeEmHost::FloatVec(GetParam().initModelConf));
+        detModelStart->Confidence(GetParam().initModelConf);
         const float simRefSnr = GetParam().simSnr;
         const auto startRefSnr = analysisConfig.movieInfo.refSnr;
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
-        DmeEmHost::ScaleModelSnr(DmeEmHost::FloatVec{simRefSnr/startRefSnr}, detModelSim.get());
+        DmeEmHost::ScaleModelSnr(simRefSnr/startRefSnr, detModelSim.get());
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));
     }
 };

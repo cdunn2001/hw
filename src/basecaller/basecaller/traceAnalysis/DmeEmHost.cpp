@@ -818,7 +818,7 @@ void DmeEmHost::ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel)
     {
         auto& dmi = detectionModes_[a];
         dmi.SignalMean(scale * dmi.SignalMean());
-        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
         dmi.SignalCovar(LaneDetModelHost::ModelSignalCovar(
                             cv2, dmi.SignalMean(), baselineCovar));
     }
@@ -842,12 +842,44 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
     return pdm;
 }
 
+// static
+void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
+                                 const FloatVec& blMean,
+                                 const FloatVec& blVar,
+                                 LaneDetModel* ldm)
+{
+    assert(all(blWeight >= 0.0f) && all(blWeight <= 1.0f));
+    assert(all(blVar > 0.0f));
+
+    // There's an implicit LaneArray -> CudaArray conversion here.
+    auto& bm = ldm->BaselineMode();
+    bm.weights = blWeight;
+    bm.means = blMean;
+    bm.vars = blVar;
+
+    // Distribute non-baseline weight equally among the analogs.
+    const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
+    const auto refSignal = refSnr_ * sqrt(blVar);
+    assert(numAnalogs <= analogs_.size());
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& aMode = ldm->AnalogMode(a);
+        aMode.weights = analogModeWeight;
+        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        aMode.means = aMean;
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
+        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
+    }
+}
+
+// static
 void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
-                                 LaneDetModel& ldm) const
+                                 LaneDetModel& ldm)
 {
     const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
     const auto& baselineStats = bsa.BaselineFramesStats();
 
+    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
     const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
 
     // We're having problems with the baseline variance overflowing a half precision
@@ -856,27 +888,8 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
     // around is causing problems elsewhere
     const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_
                             : min(baselineStats.Variance(), FloatVec{60000});
-    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
 
-    ldm.BaselineMode().means = blMean;
-    ldm.BaselineMode().vars = blVar;
-    ldm.BaselineMode().weights = blWeight;
-    assert(numAnalogs <= analogs_.size());
-    const auto refSignal = refSnr_ * sqrt(blVar);
-    const auto& aWeight = 0.25f * (1.0f - blWeight);
-    for (unsigned int a = 0; a < numAnalogs; ++a)
-    {
-        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
-        auto& aMode = ldm.AnalogMode(a);
-        aMode.means = aMean;
-
-        // This noise model assumes that the trace data have been converted to
-        // photoelectron units.
-        const auto cv2 = pow2(Analog(a).excessNoiseCV);
-        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
-
-        aMode.weights = aWeight;
-    }
+    InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
