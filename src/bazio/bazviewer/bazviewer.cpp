@@ -51,7 +51,7 @@
 #include <pacbio/PBException.h>
 #include <pacbio/process/OptionParser.h>
 
-#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileHeaderSet.h>
 
 #include <bazio/BazCore.h>
 #include <bazio/BazReader.h>
@@ -61,6 +61,7 @@
 #include <pacbio/primary/HDFMultiArrayIO.h>
 
 using namespace PacBio;
+using namespace PacBio::BazIO;
 using namespace PacBio::Primary;
 
 template <typename T>
@@ -78,15 +79,15 @@ private:
     DataFrame metrics_;
 
     std::vector<int> zmwNumbers_;
-    const BazReader::FileHeaders* fh_;
+    const FileHeaderSet* fhs_;
     size_t numZmw_;
 
 public:
-    MetricsAggregator(const BazReader::FileHeaders* fh)
-        : fh_(fh)
-        , numZmw_(fh->MaxNumZMWs())
+    MetricsAggregator(const FileHeaderSet* fhs)
+        : fhs_(fhs)
+        , numZmw_(fhs->TotalNumZmws())
     {
-        for (const auto metric : fh_->MetricFields())
+        for (const auto metric : fhs_->MetricFields())
         {
             const auto fieldName = metric.fieldName;
             if (metric.fieldScalingFactor != 1)
@@ -140,7 +141,7 @@ public:
     void Fill(const ZmwByteData& data)
     {
         assert(data.ZmwIndex() == zmwNumbers_.size());
-        zmwNumbers_.push_back(fh_->ZmwIndexToNumber(data.ZmwIndex()));
+        zmwNumbers_.push_back(fhs_->ZmwIndexToNumber(data.ZmwIndex()));
 
         auto FillMetric = [this](const RawMetricData& rawData, const MetricField& metric,
                                  const ZmwByteData& data, DataFrame& df)
@@ -160,8 +161,8 @@ public:
         };
 
         {
-            const auto& rawData = ParseMetricFields(fh_->MetricFields(), data.MetricByteStream());
-            for (const auto& metric : fh_->MetricFields())
+            const auto& rawData = ParseMetricFields(fhs_->MetricFields(), data.MetricByteStream());
+            for (const auto& metric : fhs_->MetricFields())
             {
                 FillMetric(rawData, metric, data, metrics_);
             }
@@ -185,16 +186,17 @@ public:
         HDFMultiArrayIO& io_;
         std::string name_;
     };
+
     void DumpToFile(const std::string& filename)
     {
         HDFMultiArrayIO h(filename, HDFMultiArrayIO::WriteOver);
 
         h.Write("ZmwNumbers", zmwNumbers_);
 
-        h.Write("ExperimentMetadata", std::vector<std::string>{Json::writeString(Json::StreamWriterBuilder{}, fh_->ExperimentMetadata())});
+        h.Write("ExperimentMetadata", std::vector<std::string>{Json::writeString(Json::StreamWriterBuilder{}, fhs_->ExperimentMetadata())});
 
-        h.CreateGroup("/HFMetrics");
-        for (const auto metric : fh_->MetricFields())
+        h.CreateGroup("/Metrics");
+        for (const auto metric : fhs_->MetricFields())
         {
             const auto fieldName = metric.fieldName;
             boost::apply_visitor(WriteVisitor(h, "/Metrics/" + fieldName.toString()), metrics_[fieldName.toString()]);
@@ -260,10 +262,10 @@ std::vector<uint32_t> ParseData(const std::string& data)
 
 using Jval = Json::Value;
 
-static void FillMetrics(const BazReader::FileHeaders* fh, const ZmwByteData& data, const bool internal, const size_t frameLimit, Json::Value& single)
+static void FillMetrics(const FileHeaderSet* fhs, const ZmwByteData& data, const bool internal, const size_t frameLimit, Json::Value& single)
 {
     single["ZMW_ID"]     = data.ZmwIndex();
-    single["ZMW_NUMBER"] = fh->ZmwIndexToNumber(data.ZmwIndex());
+    single["ZMW_NUMBER"] = fhs->ZmwIndexToNumber(data.ZmwIndex());
     single["INTERNAL"]   = internal;
 
     auto floatToJson = [](Jval& jVal, float v) {
@@ -303,14 +305,14 @@ static void FillMetrics(const BazReader::FileHeaders* fh, const ZmwByteData& dat
         }
     };
 
-    auto rawMetrics = ParseMetricFields(fh->MetricFields(), data.MetricByteStream());
-    size_t limit = std::min(data.Sizes().numMBs, frameLimit / fh->MetricFrames() + 1);
-    if (fh->MetricFields().size() == 0) limit = 0;
+    auto rawMetrics = ParseMetricFields(fhs->MetricFields(), data.MetricByteStream());
+    size_t limit = std::min(data.Sizes().numMBs, frameLimit / fhs->MetricFrames() + 1);
+    if (fhs->MetricFields().size() == 0) limit = 0;
     for (size_t i = 0; i < limit; ++i)
     {
         Jval x;
         x["ID"] = (int)i;
-        for (const auto metric : fh->MetricFields())
+        for (const auto metric : fhs->MetricFields())
         {
             FillJson(x, metric, rawMetrics, i);
         }
@@ -396,7 +398,7 @@ int main(int argc, char* argv[])
         uint32_t lastFrame = options.get("frames");
         bool filter = filterNumber || filterId || filterFirst;
         std::vector<uint32_t> whiteList;
-        auto& fh = reader.Fileheader();
+        const auto& fhs = reader.FileHeaderSet();
         if (filter)
         {
             if (filterFirst)
@@ -416,7 +418,7 @@ int main(int argc, char* argv[])
 
                 if (filterNumber)
                 {
-                    for (auto& w : whiteList) w = fh.ZmwNumberToIndex(w);
+                    for (auto& w : whiteList) w = fhs.ZmwNumberToIndex(w);
                     std::sort(whiteList.begin(), whiteList.end());
                 }
             }
@@ -424,8 +426,8 @@ int main(int argc, char* argv[])
 
         if(options.get("list"))
         {
-            auto& header = reader.Fileheader();
-            for (const auto& num : header.ZmwNumbers())
+            const auto& fhs = reader.FileHeaderSet();
+            for (const auto& num : fhs.ZmwNumbers())
             {
                 std::cout << num << "\n";
             }
@@ -434,19 +436,19 @@ int main(int argc, char* argv[])
         }
         if (options.get("checksums"))
         {
-            auto& header = reader.Fileheader();
+            const auto& fhs = reader.FileHeaderSet();
 
             while (reader.HasNext())
             {
                 auto zmwData = reader.NextSlice();
                 for (const auto& data : zmwData)
                 {
-                    uint32_t number = header.ZmwNumbers()[data.ZmwIndex()];
-                    const auto& metrics = ParseMetrics(fh.MetricFields(),
-                                                       fh.MetricFrames(),
-                                                       fh.FrameRateHz(),
-                                                       fh.RelativeAmplitudes(),
-                                                       fh.BaseMap(),
+                    uint32_t number = fhs.ZmwNumbers()[data.ZmwIndex()];
+                    const auto& metrics = ParseMetrics(fhs.MetricFields(),
+                                                       fhs.MetricFrames(),
+                                                       fhs.FrameRateHz(),
+                                                       fhs.RelativeAmplitudes(),
+                                                       fhs.BaseMap(),
                                                        data, false);
                     auto checksums = metrics.PixelChecksum().data();
                     int64_t checksum = 0;
@@ -462,7 +464,7 @@ int main(int argc, char* argv[])
         }
         if (options.get("blockchecksums"))
         {
-            auto& header = reader.Fileheader();
+            const auto& fhs = reader.FileHeaderSet();
 
             std::cout << "zmw" << "\t" << "block" << "\t" << " blockchecksum" << std::endl;
             while (reader.HasNext())
@@ -470,12 +472,12 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data : zmwData)
                 {
-                    uint32_t number = header.ZmwNumbers()[data.ZmwIndex()];
-                    const auto& metrics = ParseMetrics(fh.MetricFields(),
-                                                       fh.MetricFrames(),
-                                                       fh.FrameRateHz(),
-                                                       fh.RelativeAmplitudes(),
-                                                       fh.BaseMap(),
+                    uint32_t number = fhs.ZmwNumbers()[data.ZmwIndex()];
+                    const auto& metrics = ParseMetrics(fhs.MetricFields(),
+                                                       fhs.MetricFrames(),
+                                                       fhs.FrameRateHz(),
+                                                       fhs.RelativeAmplitudes(),
+                                                       fhs.BaseMap(),
                                                        data, false);
                     auto checksums = metrics.PixelChecksum().data();
                     uint32_t block = 0;
@@ -511,7 +513,7 @@ int main(int argc, char* argv[])
                     if (filter && std::find(whiteList.begin(), whiteList.end(), zmw.zmwIndex) == whiteList.end())
                         continue;
                     jzmw["ZMW_ID"]     = zmw.zmwIndex;
-                    jzmw["ZMW_NUMBER"] = fh.ZmwIndexToNumber(zmw.zmwIndex);
+                    jzmw["ZMW_NUMBER"] = fhs.ZmwIndexToNumber(zmw.zmwIndex);
                     jzmw["NUM_EVENTS"] = zmw.numEvents;
                     jzmw["NUM_MBS"]    = zmw.numMBs;
                     jzmw["PACKET_STREAM_BYTE_SIZE"] = zmw.packetsByteSize;
@@ -529,7 +531,7 @@ int main(int argc, char* argv[])
             auto& stitched = overviewJsonFile["STITCHED"];
             bool stop = false;
             auto packetFieldToBamIDWithOverallQV = PacketFieldMap::packetBaseFieldToBamID;
-            packetFieldToBamIDWithOverallQV[PacketFieldName::OVERALL_QV] = std::make_pair("oq", FieldType::CHAR);
+            packetFieldToBamIDWithOverallQV[Primary::PacketFieldName::OVERALL_QV] = std::make_pair("oq", FieldType::CHAR);
             while (reader.HasNext())
             {
                 if (filter)
@@ -551,7 +553,7 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data : zmwData)
                 {
-                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh.PacketGroups(), fh.PacketFields(), data));
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fhs.PacketGroups(), fhs.PacketFields(), data));
                     if (filter && std::find(whiteList.begin(), whiteList.end(), data.ZmwIndex()) == whiteList.end())
                         continue;
                     for (size_t i = 0; i < eventData.NumEvents(); ++i)
@@ -562,7 +564,7 @@ int main(int argc, char* argv[])
                         single["DATA"].append(x);
                     }
 
-                    FillMetrics(&fh, data, eventData.Internal(), lastFrame, single);
+                    FillMetrics(&fhs, data, eventData.Internal(), lastFrame, single);
 
                     stitched.append(single);
                     if (filter && data.ZmwIndex() == whiteList[whiteList.size() - 1])
@@ -585,7 +587,7 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data: zmwData)
                 {
-                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh.PacketGroups(), fh.PacketFields(), data));
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fhs.PacketGroups(), fhs.PacketFields(), data));
                     const bool hasIsBase  = !eventData.IsBase().empty();
                     for (size_t i = 0; i < eventData.NumEvents(); ++i)
                     {
@@ -606,7 +608,7 @@ int main(int argc, char* argv[])
 
         bool hdf5Mode = false;
         hdf5Mode = !options["hdf5Output"].empty();
-        MetricsAggregator metricsForHDF5(&fh);
+        MetricsAggregator metricsForHDF5(&fhs);
 
         if (options.get("metric") || hdf5Mode)
         {
@@ -633,7 +635,7 @@ int main(int argc, char* argv[])
                 auto zmwData = reader.NextSlice();
                 for (const auto& data: zmwData)
                 {
-                    const auto& eventData = BazIO::BazEventData(ParsePackets(fh.PacketGroups(), fh.PacketFields(), data));
+                    const auto& eventData = BazIO::BazEventData(ParsePackets(fhs.PacketGroups(), fhs.PacketFields(), data));
                     if (filter && std::find(whiteList.begin(), whiteList.end(), data.ZmwIndex()) == whiteList.end())
                         continue;
 
@@ -644,7 +646,7 @@ int main(int argc, char* argv[])
                     else
                     {
                         Jval single;
-                        FillMetrics(&fh, data, eventData.Internal(), lastFrame, single);
+                        FillMetrics(&fhs, data, eventData.Internal(), lastFrame, single);
                         stitched.append(single);
                     }
 

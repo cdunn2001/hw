@@ -181,8 +181,8 @@ void ConvertBaz2Bam::ParseRMD()
     try
     {
         // Parse RuntimeMetaData
-        rmd_ = MetadataParser::ParseRMD(bazReader_->Fileheader().BaseCallerVersion(),
-                                        bazReader_->Fileheader().MovieName(),
+        rmd_ = MetadataParser::ParseRMD(bazReader_->FileHeaderSet().BaseCallerVersion(),
+                                        bazReader_->FileHeaderSet().MovieName(),
                                         user_);
     }
     catch (const InvalidSequencingChemistryException&)
@@ -327,20 +327,20 @@ int ConvertBaz2Bam::Run()
             cmd_.get(),
             rmd_,
             ppaAlgoConfig_.get(),
-            bazReader_->Fileheader().MovieName(),
-            bazReader_->Fileheader().MovieTimeInHrs(),
-            bazReader_->Fileheader().BazVersion(),
-            bazReader_->Fileheader().BazWriterVersion(),
-            bazReader_->Fileheader().BaseCallerVersion(),
-            bazReader_->Fileheader().FrameRateHz(),
-            bazReader_->Fileheader().HasPacketField(BazIO::PacketFieldName::IsBase) || bazReader_->Fileheader().Internal(),
+            bazReader_->FileHeaderSet().MovieName(),
+            bazReader_->FileHeaderSet().MovieTimeInHrs(),
+            bazReader_->FileHeaderSet().BazVersion(),
+            bazReader_->FileHeaderSet().BazWriterVersion(),
+            bazReader_->FileHeaderSet().BaseCallerVersion(),
+            bazReader_->FileHeaderSet().FrameRateHz(),
+            bazReader_->FileHeaderSet().HasPacketField(BazIO::PacketFieldName::IsBase) || bazReader_->FileHeaderSet().Internal(),
             {pg},
             !user_->noStats,
             NumZmwsToProcess()));
 
     if (!abortNow_)
     {
-        hqRegionFinder_ = HQRegionFinderFactory(*user_, ppaAlgoConfig_, bazReader_->Fileheader().FrameRateHz());
+        hqRegionFinder_ = HQRegionFinderFactory(*user_, ppaAlgoConfig_, bazReader_->FileHeaderSet().FrameRateHz());
 
         insertFinder_ = InsertFinderFactory(*user_);
 
@@ -923,8 +923,8 @@ void ConvertBaz2Bam::SingleThread()
             // Result vector
             std::vector<ComplexResult> resultBufferTmp;
 
-            auto& fileHeader = bazReader_->Fileheader();
-            auto& fileFooter = bazReader_->Filefooter();
+            const auto& fhs = bazReader_->FileHeaderSet();
+            const auto& ffs = bazReader_->FileFooterSet();
 
             auto bufferList = zmwStatsFile_->GetZmwStatsBufferList();
 
@@ -940,7 +940,7 @@ void ConvertBaz2Bam::SingleThread()
                 {
                     auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
                     (void)parseProfile;
-                    auto bazEvents = BazIO::BazEventData(ParsePackets(fileHeader.PacketGroups(), fileHeader.PacketFields(), batch[i]));
+                    auto bazEvents = BazIO::BazEventData(ParsePackets(fhs.PacketGroups(), fhs.PacketFields(), batch[i]));
 
                     // Remove bursts:
                     auto insertProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::FIND_INSERTS);
@@ -949,16 +949,16 @@ void ConvertBaz2Bam::SingleThread()
 
                     auto processProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PROCESS_PACKETS);
                     (void)processProfile;
-                    const bool truncated = fileFooter.IsZmwTruncated(batch[i].ZmwIndex());
-                    return EventData(batch[i].ZmwIndex(), fileHeader.ZmwIndexToNumber(batch[i].ZmwIndex()), truncated, std::move(bazEvents), std::move(insertStates));
+                    const bool truncated = ffs.IsZmwNumberTruncated(fhs.ZmwIndexToNumber(batch[i].ZmwIndex()));
+                    return EventData(batch[i].ZmwIndex(), fhs.ZmwIndexToNumber(batch[i].ZmwIndex()), truncated, std::move(bazEvents), std::move(insertStates));
                 }();
 
                 auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
                 (void)parseProfile;
-                auto bazMetrics = ParseMetrics(fileHeader.MetricFields(), fileHeader.MetricFrames(),
-                                               fileHeader.FrameRateHz(),
-                                               fileHeader.RelativeAmplitudes(),
-                                               fileHeader.BaseMap(),
+                auto bazMetrics = ParseMetrics(fhs.MetricFields(), fhs.MetricFrames(),
+                                               fhs.FrameRateHz(),
+                                               fhs.RelativeAmplitudes(),
+                                               fhs.BaseMap(),
                                                batch[i], events.Internal());
 
                 auto hqrfProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::FIND_HQRF);
@@ -1002,9 +1002,9 @@ void ConvertBaz2Bam::SingleThread()
 
                 auto zstatsProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::ZMW_STATS);
                 (void)zstatsProfile;
-                ZmwMetrics zmwMetrics(bazReader_->Fileheader().MovieTimeInHrs(),
-                                      bazReader_->Fileheader().FrameRateHz(),
-                                      bazReader_->Fileheader().ZmwFeatures(events.ZmwIndex()),
+                ZmwMetrics zmwMetrics(bazReader_->FileHeaderSet().MovieTimeInHrs(),
+                                      bazReader_->FileHeaderSet().FrameRateHz(),
+                                      bazReader_->FileHeaderSet().ZmwFeatures(events.ZmwIndex()),
                                       regions.hqregion,
                                       regions.adapters,
                                       bazMetrics,
@@ -1039,7 +1039,7 @@ void ConvertBaz2Bam::SingleThread()
 
                 auto finProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::FINALIZE);
                 (void)finProfile;
-                bool rejected = fileHeader.IsZmwNumberRejected(events.ZmwNumber());
+                bool rejected = fhs.IsZmwNumberRejected(events.ZmwNumber());
                 for (auto& result : cutResults)
                 {
                     result.AddTagsToRecord();
@@ -1081,10 +1081,10 @@ void ConvertBaz2Bam::SingleThread()
 void ConvertBaz2Bam::LogStart()
 {
     PBLOG_INFO << "Starting Baz2bam.\t"
-               << "MovieName: " <<  bazReader_->Fileheader().MovieName()
-               << ",  BaseCallerVersion: " << bazReader_->Fileheader().BaseCallerVersion()
-               << ",  BazWriterVersion: " << bazReader_->Fileheader().BazWriterVersion()
-               << ",  BazVersion: " << bazReader_->Fileheader().BazVersion()
+               << "MovieName: " <<  bazReader_->FileHeaderSet().MovieName()
+               << ",  BaseCallerVersion: " << bazReader_->FileHeaderSet().BaseCallerVersion()
+               << ",  BazWriterVersion: " << bazReader_->FileHeaderSet().BazWriterVersion()
+               << ",  BazVersion: " << bazReader_->FileHeaderSet().BazVersion()
                << ",  OutputPrefix: " << user_->outputPrefix
                << ",  OutputPrefix: " << user_->outputPrefix
                << ",  Baz2bamVersion: " << versionString;
@@ -1195,7 +1195,7 @@ void ConvertBaz2Bam::CreateWhiteList()
 
     if (filterNumber)
     {
-        const auto& fh = bazReader_->Fileheader();
+        const auto& fh = bazReader_->FileHeaderSet();
         for (auto& w : whiteListZmwIds_) w = fh.ZmwNumberToIndex(w);
         std::sort(whiteListZmwIds_.begin(), whiteListZmwIds_.end());
     }
@@ -1213,7 +1213,7 @@ void ConvertBaz2Bam::CreateZmwStatsFile(const std::string& filename)
     (void)warnOnce;
     config.numFilters = 1;
 
-    const auto& fh = bazReader_->Fileheader();
+    const auto& fh = bazReader_->FileHeaderSet();
     config.binSize = fh.MetricFrames();
     config.mfBinSize = fh.MetricFrames();
     config.numFrames = fh.MovieLengthFrames();

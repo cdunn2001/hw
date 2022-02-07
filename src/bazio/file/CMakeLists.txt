@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.13)
 
 add_library(libBazioFile STATIC
+    FileFooterSet.h
+    FileFooterSet.cpp
     FileHeader.h
     FileHeader.cpp
+    FileHeaderSet.h
+    FileHeaderSet.cpp
     FileHeaderBuilder.h
     FileHeaderBuilder.cpp
     RunLength.h

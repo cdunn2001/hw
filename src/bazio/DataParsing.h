@@ -42,7 +42,6 @@
 
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/EncodingParams.h>
-#include <bazio/file/FileHeader.h>
 
 namespace PacBio {
 namespace Primary {

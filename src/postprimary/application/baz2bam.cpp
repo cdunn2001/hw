@@ -113,6 +113,16 @@ std::vector<uint32_t> ParseData(const std::string& data)
     return result;
 }
 
+std::vector<std::string> ReadFileList(const std::string& fileListPath)
+{
+    std::vector<std::string> inputFilePaths;
+    std::ifstream in(fileListPath);
+    std::string filePath;
+    while (std::getline(in, filePath))
+        inputFilePaths.push_back(filePath);
+    return inputFilePaths;
+}
+
 // Entry point
 int main(int argc, char* argv[])
 {
@@ -310,7 +320,7 @@ int main(int argc, char* argv[])
                 std::cerr << "ERROR: INPUT EMPTY." << std::endl;
                 problem = true;
             }
-            user->ReadFileList();
+            user->inputFilePaths = ReadFileList(user->fileListPath);
             if (user->inputFilePaths.empty())
             {
                 std::cerr << "ERROR: INPUT FILE LIST EMPTY." << std::endl;

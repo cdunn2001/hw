@@ -23,7 +23,6 @@ echo "Using simbazwriter: $(which simbazwriter)"
 echo "Using bazviewer: $(which bazviewer)"
 
 unset TERM
-fail=0
 tests="baz2bam_multiple_baz_files.t recalladapters.t bam2bam_nobc_snr_recovery.t bam2bam_nobc_rl_recovery.t baz2bam_stsh5.t bam2bamCtrl_internal.t bam2bamCtrl.t bam2bamCtrl_validate_internal.t bam2bamCtrl_validate.t bam2bam_internal.t bam2bam.t bam2bam_spider.t bam2bam_validate_internal.t bam2bam_validate.t baz2bam.t baz2bam_validate_end2end.t baz2bam_metrics.t baz2bam_startFrame.t ppa-reducestats.t adapter_correction.t wallStart_wallEnd.t baz2bam_metadatacfg.t barcoded_adapters.t"
 
 # Removed for now, as this test relies on Sequel-I data we can no longer process...

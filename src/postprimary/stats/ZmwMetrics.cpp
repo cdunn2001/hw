@@ -124,7 +124,7 @@ float ComputePulseWidth(double frameRateHz, const RegionLabel& hqRegion, const B
         pulseWidths[p] = (numPulses[p] != 0) ? (pulseWidths[p] / numPulses[p]) : numPulses[p];
     }
 
-    return static_cast<float>(Mean(pulseWidths) / frameRateHz);
+    return static_cast<float>((frameRateHz > 0) ? Mean(pulseWidths) / frameRateHz : 0);
 }
 
 AnalogMetricData<uint32_t> BasesPerChannel(const RegionLabel& hqRegion,

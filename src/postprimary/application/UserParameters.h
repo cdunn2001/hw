@@ -60,14 +60,6 @@ struct UserParameters
         originalCommandLine = ss.str();
     }
 
-    void ReadFileList()
-    {
-        std::ifstream in(fileListPath);
-        std::string filePath;
-        while (std::getline(in, filePath))
-            inputFilePaths.push_back(filePath);
-    }
-
     std::string originalCommandLine;
 
     std::vector<std::string> inputFilePaths;

@@ -41,11 +41,11 @@
 #include <numeric>
 #include <queue>
 
-#include <bazio/file/FileHeader.h>
+#include <bazio/file/FileFooterSet.h>
+#include <bazio/file/FileHeaderSet.h>
 
 #include "DataParsing.h"
 #include "ZmwSliceHeader.h"
-#include "FileFooter.h"
 
 namespace PacBio {
 namespace Primary {
@@ -53,146 +53,6 @@ namespace Primary {
 /// Reads BAZ file
 class BazReader
 {
-public:
-    struct FileHeaders
-    {
-    public:
-        FileHeaders(std::vector<std::unique_ptr<BazIO::FileHeader>>&& fhs);
-
-        // Default constructor
-        FileHeaders() = delete;
-        // Move constructor
-        FileHeaders(FileHeaders&&) = delete;
-        // Copy constructor
-        FileHeaders(const FileHeaders&) = delete;
-        // Move assignment operator
-        FileHeaders& operator=(FileHeaders&&) = delete;
-        // Copy assignment operator
-        FileHeaders& operator=(const FileHeaders&) = delete;
-        // Destructor
-        ~FileHeaders() = default;
-
-    public:
-        const std::vector<size_t>& NumZmws() const
-        { return numZmws_; }
-
-        uint32_t MaxNumZMWs() const
-        { return maxNumZmws_; }
-
-        uint32_t NumSuperChunks() const
-        { return fhs_.front()->NumSuperChunks(); }
-
-        uint32_t MetricByteSize() const
-        { return fhs_.front()->MetricByteSize();; }
-
-        uint32_t ZmwNumberToIndex(const uint32_t holeNumber) const
-        { return zmwNumbersToIndex_.at(holeNumber); }
-
-        uint32_t ZmwIndexToNumber(const uint32_t index) const
-        { return zmwNumbers_.at(index); }
-
-        const std::vector<uint32_t>& ZmwNumbers() const
-        { return zmwNumbers_; }
-
-        uint32_t ZmwFeatures(uint32_t zmwIndex) const
-        { return zmwFeatures_.at(zmwIndex); }
-
-        const std::vector<MetricField>& MetricFields() const
-        { return fhs_.front()->MetricFields(); }
-
-        const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& PacketFields() const
-        { return fhs_.front()->PacketFields(); }
-
-        const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& PacketGroups() const
-        { return fhs_.front()->PacketGroups(); }
-
-        uint32_t MetricFrames() const
-        { return fhs_.front()->MetricFrames(); }
-
-        double FrameRateHz() const
-        { return fhs_.front()->FrameRateHz(); }
-
-        const std::vector<float>& RelativeAmplitudes() const
-        { return fhs_.front()->RelativeAmplitudes(); }
-
-        const std::string& BaseMap() const
-        { return fhs_.front()->BaseMap(); }
-
-        const std::string& MovieName() const
-        { return movieName_; }
-
-        const Json::Value ExperimentMetadata() const
-        { return fhs_.front()->ExperimentMetadata(); }
-
-        const BazIO::FileHeader& FileHeaderNo(const size_t fileNo) const
-        { return *fhs_.at(fileNo); }
-
-        size_t NumHeaders() const
-        { return fhs_.size(); }
-
-        std::string BaseCallerVersion() const
-        { return fhs_.front()->BaseCallerVersion(); }
-
-        std::string BazVersion() const
-        { return fhs_.front()->BazVersion(); }
-
-        std::string BazWriterVersion() const
-        { return fhs_.front()->BazWriterVersion(); }
-
-        float MovieTimeInHrs() const
-        { return fhs_.front()->MovieTimeInHrs(); }
-
-        bool Internal() const
-        { return fhs_.front()->Internal(); }
-
-        bool HasPacketField(BazIO::PacketFieldName fieldName) const
-        { return fhs_.front()->HasPacketField(fieldName); }
-
-        bool IsZmwNumberRejected(uint32_t zmwNumber) const
-        {
-            return std::any_of(fhs_.begin(), fhs_.end(),
-                               [&](const auto& fh) { return fh->IsZmwNumberRejected(zmwNumber); });
-        }
-
-        float MovieLengthFrames() const
-        { return fhs_.front()->MovieLengthFrames(); }
-
-    private:
-        std::vector<size_t> numZmws_;
-        uint32_t maxNumZmws_ = 0;
-        uint32_t numSuperChunks_ = 0;
-        std::map<uint32_t,uint32_t> zmwNumbersToIndex_;
-        std::vector<uint32_t> zmwNumbers_;
-        std::vector<uint32_t> zmwFeatures_;
-        std::string movieName_;
-        std::vector<std::unique_ptr<BazIO::FileHeader>> fhs_;
-    };
-
-    class FileFooters
-    {
-    public:
-        FileFooters(std::vector<std::unique_ptr<FileFooter>>&& ffs, const std::vector<size_t>& numZmws);
-
-        // Default constructor
-        FileFooters() = delete;
-        // Move constructor
-        FileFooters(FileFooters&&) = delete;
-        // Copy constructor
-        FileFooters(const FileFooters&) = delete;
-        // Move assignment operator
-        FileFooters& operator=(FileFooters&&) = delete;
-        // Copy assignment operator
-        FileFooters& operator=(const FileFooters&) = delete;
-        // Destructor
-        ~FileFooters() = default;
-    public:
-        bool IsZmwTruncated(uint32_t zmwId) const
-        { return truncationMap_.find(zmwId) != truncationMap_.cend(); }
-    private:
-        std::map<uint32_t, std::vector<uint32_t>> truncationMap_;
-        std::vector<std::unique_ptr<FileFooter>> ffs_;
-    };
-
 public: // structors
     /// Reads file header and super chunk header for indexed access.
     /// The callBackCheck is used to check if an abort has
@@ -214,72 +74,76 @@ public: // structors
     // Copy assignment operator
     BazReader& operator=(const BazReader&) = delete;
     // Destructor
-    ~BazReader();
+    ~BazReader() = default;
 
 public:
-    /// Returns true if more ZMWs are available for reading.
-    bool HasNext();
-
     // Provides the ZMW ids of the next slice.
     std::vector<uint32_t> NextZmwIds();
 
     /// Provides the next slice of stitched ZMWs.
     std::vector<ZmwByteData> NextSlice(const std::function<bool(void)>& callBackCheck=nullptr);
 
-    /// Parses and provides the file headers from the file streams
-    void ReadFileHeaders();
-
-    /// Parses and provides the file footers from the file streams
-    void ReadFileFooters(const std::vector<size_t>& numZmws);
-
     // Pops next slice from the queue of ZMW slices.
     inline void SkipNextSlice()
     {
         if (!zmwSlices_.empty())
         {
-            auto& slice = zmwSlices_.front();
-            uint32_t start = std::get<0>(slice);
-            uint32_t end = std::get<1>(slice);
+            const auto& slice = zmwSlices_.front();
             zmwSlices_.pop();
 
             assert(headerReader_.HasMoreHeaders());
-            headerReader_.SkipCount(end - start);
+            headerReader_.SkipCount(slice.endZmw - slice.startZmw);
         }
     }
 
 public:
-    /// Returns reference to current file header
-    const FileHeaders& Fileheader() const
-    {
-        if (!fh_) throw PBException("Null FileHeader!");
-        return *fh_;
-    }
+    /// Returns true if more ZMWs are available for reading.
+    bool HasNext() const
+    { return !zmwSlices_.empty(); }
 
-    /// Returns reference to current file footer
-    const FileFooters& Filefooter() const
-    {
-        if (!ff_) throw PBException("Null FileFooter!");
-        return *ff_;
-    }
+    /// Returns reference to current file header set
+    const BazIO::FileHeaderSet& FileHeaderSet() const
+    { return *fh_; }
 
-    /// Number of ZMWs
-    uint32_t NumZMWs() const;
+    /// Returns reference to current file footer set
+    const BazIO::FileFooterSet& FileFooterSet() const
+    { return *ff_; }
 
-    /// Number of Superchunks
-    uint32_t NumSuperchunks() const;
+    /// Number of Zmws
+    uint32_t NumZmws() const
+    { return numZmws_; }
 
 public: // Debugging
     std::vector<std::vector<ZmwSliceHeader>> SuperChunkToZmwHeaders() const;
 
-private:   // data
-    std::vector<std::string> fileNames_;
-    std::vector<std::shared_ptr<std::FILE>> files_;
-    uint32_t            numZMWs_ = 0;
-    uint32_t            numSuperchunks_ = 0;
-    std::unique_ptr<FileHeaders> fh_;
-    std::unique_ptr<FileFooters> ff_;
+private:
 
-    std::queue<std::tuple<uint32_t, uint32_t>> zmwSlices_;
+    struct ZmwSliceInfo
+    {
+        size_t startZmw;
+        size_t endZmw;
+        uint32_t numSuperChunks;
+        std::FILE* fp;
+    };
+
+    /// Parses and provides the file headers from the file streams
+    void ReadFileHeaders();
+
+    /// Parses and provides the file footers from the file streams
+    void ReadFileFooters();
+
+    std::vector<ZmwSliceInfo> GetZmwSliceInfo(uint32_t startZmw, uint32_t endZmw) const;
+
+private:   // data
+    std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>> files_;
+    uint32_t                numZmws_ = 0;
+    std::vector<uint32_t>   zmwIndexByBazFile_;
+
+    std::unique_ptr<BazIO::FileHeaderSet> fh_;
+    std::unique_ptr<BazIO::FileFooterSet> ff_;
+
+
+    std::queue<ZmwSliceInfo> zmwSlices_;
 
     // I thought about pulling this out to a separate file, but it's intimately
     // tied to the bazreader (via metaPositions and file), so it seems best still
@@ -287,18 +151,19 @@ private:   // data
     class HeaderReader
     {
     public:
-        HeaderReader(const std::vector<std::vector<size_t>> metaPositionsFiles, const std::vector<size_t>& numZmw, const std::vector<std::shared_ptr<std::FILE>>& files,
+        HeaderReader(const std::vector<std::vector<size_t>> metaPositionsFiles,
+                     const std::vector<size_t>& maxNumZmws,
+                     const std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>>& files,
                      size_t batchSizeMB, bool silent)
             : idx_(0)
             , curFile_(0)
-            , numZmw_(numZmw)
-            , currentMaxZmw_(numZmw.front())
-            , totalZmw_(std::accumulate(numZmw.begin(), numZmw.end(), 0))
+            , maxNumZmws_(maxNumZmws)
+            , currentMaxNumZmws_(maxNumZmws.front())
+            , totalNumZmws_(std::accumulate(maxNumZmws.begin(), maxNumZmws.end(), 0))
             , batchSizeMB_(batchSizeMB)
             , silent_(silent)
             , files_(files)
             , metaPositionsFiles_(metaPositionsFiles)
-            , zmwIdxToFileIdx_(totalZmw_)
         { }
 
         HeaderReader() = default;
@@ -306,51 +171,50 @@ private:   // data
         HeaderReader(HeaderReader&&) = default;
         HeaderReader& operator=(const HeaderReader&) = delete;
         HeaderReader& operator=(HeaderReader&&) = default;
-
-        bool HasMoreHeaders() const { return idx_ < totalZmw_; }
+    public:
+        bool HasMoreHeaders() const { return idx_ < totalNumZmws_; }
         void SkipCount(size_t count)
         {
-            while (idx_ + count > currentMaxZmw_ && curFile_ < files_.size())
+            idx_ = std::min(idx_ + count, totalNumZmws_);
+            while (idx_ > currentMaxNumZmws_ && curFile_ < files_.size())
             {
               NextFile();
             }
-            idx_ = std::min(idx_ + count, totalZmw_);
         }
         const std::vector<ZmwSliceHeader>& NextHeaders(const std::function<bool(void)>& callBackCheck=nullptr);
+        void NextFile()
+        {
+            assert(curFile_ + 1 < maxNumZmws_.size());
+            zmwOffset_ = currentMaxNumZmws_;
+            curFile_ = curFile_ + 1;
+            currentMaxNumZmws_ += maxNumZmws_[curFile_];
+        }
+    public:
+        auto GetCurrentFilePointer()
+        {   assert(curFile_ < files_.size());
+            return files_[curFile_].second.get();
+        }
 
         HeaderReader Clone() const
         {
-            return HeaderReader(metaPositionsFiles_, numZmw_, files_, batchSizeMB_, silent_);
-        }
-
-        void NextFile()
-        {
-            zmwOffset_ = currentMaxZmw_;
-            curFile_++;
-            currentMaxZmw_ += numZmw_[curFile_];
-        }
-
-        size_t FileIdx(size_t zmwIndex) const
-        {
-            assert(zmwIndex < zmwIdxToFileIdx_.size());
-            return zmwIdxToFileIdx_.at(zmwIndex);
+            return HeaderReader(metaPositionsFiles_, maxNumZmws_, files_, batchSizeMB_, silent_);
         }
     private:
         void LoadNextBatch(const std::function<bool(void)>& callBackCheck=nullptr);
 
-        size_t idx_;                    // Marker for current metadata
-        size_t curFile_;                // Marker for current file
-        std::vector<size_t> numZmw_;    // Number of zmws in each file
-        size_t currentMaxZmw_;          // Maximum number of zmws based on current file being processed
-        size_t totalZmw_;               // Total number of ZMWs for all files
-        size_t batchSizeMB_;            // number of zmw metadata to load at once
-        bool silent_;                   // controls stderr output
-        std::vector<std::shared_ptr<std::FILE>> files_;       // Opened and closed by BazReader
-        std::vector<std::vector<size_t>> metaPositionsFiles_;
-        std::vector<size_t> zmwIdxToFileIdx_;   // Maps zmwIndex to fileIdx
+        size_t idx_;                        // Marker for current zmw metadata index returned
+        size_t curFile_;                    // Marker for current file pointer
+        std::vector<size_t> maxNumZmws_;    // Number of zmws in each file
+        size_t currentMaxNumZmws_;          // Maximum number of zmws based on current file being processed
+        size_t totalNumZmws_;               // Total number of ZMWs for all files
+        size_t batchSizeMB_;                // Number of zmw metadata to load at once
+        bool silent_;                       // controls stderr output
+
+        std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>> files_;  // Opened and closed by BazReader
+        std::vector<std::vector<size_t>> metaPositionsFiles_;                   // Metadata locations for each file
 
         size_t firstLoaded_ = 0;        // Index of first zmw of current batch
-        size_t zmwOffset_ = 0;
+        size_t zmwOffset_ = 0;          // Offset to compute absolute zmw index across all files
         std::vector<std::vector<ZmwSliceHeader>> loadedData_;
     };
 
