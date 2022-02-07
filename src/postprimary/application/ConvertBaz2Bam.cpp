@@ -949,6 +949,14 @@ void ConvertBaz2Bam::SingleThread()
                 (void)parseProfile;
                 auto bazMetrics = ParseMetrics(fileHeader, batch[i], events.Internal());
 
+                // Short-term bandaid, as Kestrel is relaxing some of the associations between pulses and metrics.
+                // For now this alerts us that some things have gotten out of sync.  In the longer term we're
+                // going to have to deal with the fact that prelim hq finding will drop bases that still get
+                // recorded in the metrics
+                if (std::accumulate(bazMetrics.NumPulsesAll().data().begin(),
+                                    bazMetrics.NumPulsesAll().data().end(), 0u) > events.NumEvents())
+                    throw PBException("Pulse information inconsistent with recorded metrics!");
+
                 auto hqrfProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::FIND_HQRF);
                 (void)hqrfProfile;
                 RegionLabels regions;
