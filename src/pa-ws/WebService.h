@@ -92,6 +92,23 @@ private:
     std::string rootUrl_;
 };
 
+class SocketConfig
+{
+    std::map<uint32_t, std::string> index2socketId_;
+    std::map<std::string, uint32_t> socketId2index_;
+public:
+    SocketConfig(const PaWsConfig& config);
+
+    /// Add to the map of socketIds.
+    /// 0-based boads number is the vector index.
+    /// Empty string means add nothing at that index.
+    /// Raise on any dups.
+    void AddSocketIds(const std::vector<std::string>& socketIds);
+
+    /// True iff the board index is known for this socketId.
+    bool IsValid(const std::string& socketId) const;
+};
+
 /// The GET, POST and DELETE handler for this webservice.
 class WebServiceHandler :
        public CivetHandler
@@ -153,6 +170,9 @@ public:
     void Respond(struct mg_connection* conn, PacBio::IPC::HttpStatus httpStatus, const char* contentType,
                  const std::string& respdata, const std::string& extraHeaders = "");
 
+    /// Raise if socketId does not have an assigned board index.
+    static void ValidateSocketId(const SocketConfig& socketConfig, const std::string& socketId);
+
 protected:
 
 #if 0
@@ -180,7 +200,9 @@ private:
         Json::Value SummarizeRequests();
     };
 
-    PaWsConfig config_;
+    const PaWsConfig config_;
+    SocketConfig socketConfig_;
+
     std::shared_ptr<PacBio::Threading::IThreadController> threadController_;
     WebService::SraCallback_t sraCallback_;
 

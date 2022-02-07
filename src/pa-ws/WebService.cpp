@@ -167,6 +167,7 @@ WebServiceHandler::WebServiceHandler(const PaWsConfig& config,
         std::shared_ptr<PacBio::Threading::IThreadController> threadController
 )
     : config_(config)
+    , socketConfig_(config)
     , threadController_(threadController)
     , processStartTime_(PacBio::Utilities::Time::GetMonotonicTime())
     , rootUrl_(PacBio::POSIX::gethostname() + ":" + std::to_string(config_.port))
@@ -603,8 +604,9 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
         Json::Value objects = Json::arrayValue;
         for (const auto& o : sockets_)
         {
-            assert(o.first == o.second.socketNumber);
-            objects.append(o.first);
+            assert(o.first == o.second.socketNumber); // soon will not be required
+            const auto val = std::to_string(o.second.socketNumber);
+            objects.append(val);
         }
         response.json = objects;
     }
@@ -695,6 +697,56 @@ HttpResponse WebServiceHandler::POST_Postprimaries(const std::vector<std::string
     return response;
 }
 
+SocketConfig::SocketConfig(const PaWsConfig& config)
+{
+    AddSocketIds(config.socketIds);
+}
+
+void SocketConfig::AddSocketIds(const std::vector<std::string>& socketIds)
+{
+    for (uint32_t i = 0U; i < socketIds.size(); ++i)
+    {
+        const std::string& socketId = socketIds[i];
+
+        if (IsValid(socketId))
+        {
+            throw std::logic_error("Already have socketId '" + socketId + "'");
+        }
+        socketId2index_[socketId] = i;
+
+        if (index2socketId_.find(i) != index2socketId_.end())
+        {
+            throw std::logic_error("Already have socket at index '" + std::to_string(i) + "'");
+        }
+        index2socketId_[i] = socketId;
+    }
+}
+
+bool SocketConfig::IsValid(const std::string& socketId) const
+{
+    return (socketId2index_.find(socketId) != socketId2index_.end());
+}
+
+void WebServiceHandler::ValidateSocketId(const SocketConfig& config, const std::string& socketId)
+{
+    try
+    {
+        std::stoul(socketId); // May throw. For now, must be numeric.
+
+        if (!config.IsValid(socketId))
+        {
+            throw HttpResponseException(HttpStatus::FORBIDDEN, "found out of range socket id:'" + socketId + "'");
+        }
+    }
+    catch (const std::logic_error&)
+    {
+        // Could be invalid_integer or out_of_range.
+        //   https://www.cplusplus.com/reference/string/stoul/
+
+        throw HttpResponseException(HttpStatus::FORBIDDEN, "found non-numeric socket id:'" + socketId + "'");
+    }
+}
+
 HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& args, const std::string& postData)
 {
     HttpResponse response;
@@ -719,11 +771,8 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
             }
             return response;
         }
-        uint32_t socketNumber = std::stoul(*nextArg);
-        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
-        {
-            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
-        }
+        const auto socketId = *nextArg;
+        ValidateSocketId(socketConfig_, socketId);
         nextArg++;
         if (nextArg == args.end())
         {
@@ -744,7 +793,6 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
                     response.httpStatus = HttpStatus::CREATED;
                     response.json = sbo.Serialize();
                 }
-                (void) socketNumber;
             }
             else if (*nextArg == "stop")
             {
@@ -1094,11 +1142,8 @@ HttpResponse WebServiceHandler::DELETE_Sockets(const std::vector<std::string>& a
     auto nextArg = args.begin();
     if (nextArg != args.end())
     {
-        uint32_t socketNumber = std::stoul(*nextArg);
-        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
-        {
-            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
-        }
+        const auto socketId = *nextArg;
+        ValidateSocketId(socketConfig_, socketId);
         if (config_.debug.simulationLevel == 1)
         {
             response.httpStatus = HttpStatus::OK;
@@ -1134,11 +1179,8 @@ HttpResponse WebServiceHandler::DELETE_Storages(const std::vector<std::string>& 
     auto nextArg = args.begin();
     if (nextArg != args.end())
     {
-        uint32_t socketNumber = std::stoul(*nextArg);
-        if (socketNumber < config_.firstSocket || socketNumber > config_.lastSocket)
-        {
-            throw HttpResponseException(HttpStatus::FORBIDDEN, "POST contains out of range socket number:" + std::to_string(socketNumber));
-        }
+        const auto socketId = *nextArg;
+        ValidateSocketId(socketConfig_, socketId);
         if (config_.debug.simulationLevel == 1)
         {
             response.httpStatus = HttpStatus::OK;

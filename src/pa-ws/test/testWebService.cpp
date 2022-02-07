@@ -236,3 +236,42 @@ TEST_F(WebService_Test,Ping)
     EXPECT_EQ(HttpStatus::OK, client.GetHttpCode());
     EXPECT_THAT(response, HasSubstr("ding a ling"));
 }
+
+TEST(WebServiceHandlerStatics_Test, ValidateSocketId)
+{
+    using PacBio::IPC::HttpResponseException;
+
+    {
+        Json::Value json;
+        json["socketIds"][0] = "1";
+        json["socketIds"][1] = "2";
+        PaWsConfig conf(json);
+        SocketConfig conf1(conf);
+        WebServiceHandler::ValidateSocketId(conf1, "1");
+        WebServiceHandler::ValidateSocketId(conf1, "2");
+        EXPECT_THROW({
+            try
+            {
+                WebServiceHandler::ValidateSocketId(conf1, "3");
+            }
+            catch(const PacBio::IPC::HttpResponseException& exc)
+            {
+                EXPECT_THAT(exc.what(), HasSubstr("found out of range socket id"));
+                throw;
+            }
+        }, HttpResponseException);
+
+        // For now, we require simple integers.
+        EXPECT_THROW({
+            try
+            {
+                WebServiceHandler::ValidateSocketId(conf1, "abc");
+            }
+            catch(const PacBio::IPC::HttpResponseException& exc)
+            {
+                EXPECT_THAT(exc.what(), HasSubstr("found non-numeric socket id"));
+                throw;
+            }
+        }, HttpResponseException);
+    }
+}

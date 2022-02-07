@@ -42,22 +42,19 @@ using namespace PacBio::Sensor;
 void Sequel2DefaultConfig(PaWsConfig* config)
 {
     assert(config);
-    config->firstSocket = 1;
-    config->lastSocket = 1;
+    config->socketIds = std::vector<std::string>{"1"};
 }
 
 void MongoConfig(PaWsConfig* config)
 {
     assert(config);
-    config->firstSocket = 1;
-    config->lastSocket = 4;
+    config->socketIds = std::vector<std::string>{"1", "2", "3", "4"};
 }
 
 void KestrelConfig(PaWsConfig* config)
 {
     assert(config);
-    config->firstSocket = 1;
-    config->lastSocket = 4;
+    config->socketIds = std::vector<std::string>{"1", "2", "3", "4"};
 }
 
 void FactoryConfig(PaWsConfig* config)
