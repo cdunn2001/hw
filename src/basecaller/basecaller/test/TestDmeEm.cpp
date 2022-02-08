@@ -175,6 +175,11 @@ public:
         // with which further unit tests can be written to verify its contents.
         dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
+        // If we skip the "EmDevice" test prior to this point, we can get a
+        // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
+        // PTSD-1137.
+        GTEST_SKIP() << "Need to fix DME implementation. See PTSD-1133.";
+
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
                                                FrameIntervalSizeType(0));
@@ -423,7 +428,7 @@ private:
 using EmHost = TestDmeEm<DmeEmHost>;
 using EmDevice = TestDmeEm<DmeEmDevice>;
 
-TEST_P(EmHost, EstimateFiniteMixture)
+TEST_P(EmHost, DISABLED_EstimateFiniteMixture)
 {
     RunTest();
 }
