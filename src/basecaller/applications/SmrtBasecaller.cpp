@@ -611,6 +611,12 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
+
+#if 1
+            // TODO Change this to notify pa-ws that smrt-basecaller is ready
+            PBLOG_NOTICE << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\",\"progress\":0.000}";
+            double progress  = 0.0;
+#endif
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -694,6 +700,11 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
+#if 1                        
+                    PBLOG_NOTICE << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << progress << "}";
+                    progress += (frames_ > 0) ? (framesAnalyzed / frames_) : 0.0;
+#endif
+
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
                         PacBio::Cuda::Memory::ReportAllMemoryStats();
@@ -726,10 +737,20 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
+#if 1                        
+            PBLOG_NOTICE << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0 << "}";
+#endif
         }
         catch(const std::exception& ex)
         {
             PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
+#if 1                        
+            Json::Value status;
+            status["source"]="smrt-basecaller";
+            status["message"]="EXCEPTION";
+            status["what"] = ex.what();
+            PBLOG_NOTICE << "PA_WS_STATUS " << status;
+#endif
             throw;
         }
     }

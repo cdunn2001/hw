@@ -17,8 +17,16 @@
 import h5py
 import argparse
 
+verbose = False
+
+def diagonal(frame,row,col):
+    """ The test pattern of the sensor"""
+    return (row + (col % 384)) % 256
+
 def alpha(frame,row,col):
-    """ The traditional pattern generation. The FPGA generates this pattern by default"""
+    """ The traditional pattern generation. The wolverine FPGA generates this pattern by default"""
+    if col >= 3072:
+        col -= 3072
     return (frame * 100 + row * 10 + col) % 256
 
 class MyValidator:
@@ -50,7 +58,7 @@ class MyValidator:
             maxRow = max([row,maxRow])
             minCol = min([col,minCol])
             maxCol = max([col,maxCol])
-            # print("[%d @ (%d,%d)]"  % (zmw,row,col))
+            #    print("[%d @ (%d,%d)]"  % (zmw,row,col))
             found = False
             for rect in roispec:
                 if row >= rect[0] and row < rect[0] + rect[2] and col >= rect[1] and col < rect[1] + rect[3]:
@@ -80,24 +88,37 @@ class MyValidator:
             numWrong += res[1]
 
         if args.validate_traces:
+            maxFrames = args.max_frames
+            if maxFrames > self.traces.shape[2]:
+                maxFrames = self.traces.shape[2]
+            print("Validating first %d frames" % (maxFrames))
+            if args.pattern == "alpha":
+                func = lambda f, r, c: alpha(f,r,c)
+            elif args.pattern == "diagonal1":
+                func = lambda f, r, c: diagonal(f,r,c)
+            elif args.pattern == "diagonal2":
+                func = lambda f, r, c: diagonal(f,r+4,c)
             for zmw in range(0,self.holexy.shape[0]):
-                traceValid = self.validate_trace(zmw)
+                traceValid = self.validate_trace(zmw,maxFrames,func)
                 if traceValid:
                     numValid += 1
                 else :
                     numWrong += 1
         print("valid:%d wrong:%d" % (numValid, numWrong))
 
-    def validate_trace(self,zmw):
+    def validate_trace(self,zmw,maxFrames, func):
         """validates a single trace"""
+        global verbose
         trace = self.traces[zmw,0,:]
         row = self.holexy[zmw,0]
         col = self.holexy[zmw,1]
         traceValid = True
-        for frame in range(0,100):
-            expected = alpha(frame,row,col)
+        # print(zmw)
+        # print(trace)
+        for frame in range(0,maxFrames):
+            expected = func(frame,row,col)
             valid = expected == trace[frame]
-            if not valid:
+            if not valid or verbose:
                 traceValid = False
                 print("[%d/%d @ (%d,%d)] %d != %d %s" % (zmw,frame,row,col,expected,trace[frame],valid))
         return traceValid
@@ -126,8 +147,21 @@ if __name__ == '__main__':
                        action=argparse.BooleanOptionalAction,
                        default=True,
                        help="If True, the traces are compared against the Alpha test pattern")
+    group.add_argument('--max_frames',
+                       default=100,
+                       type=int,
+                       help="Maximum number of frames to verify")
+    group.add_argument('--verbose',
+                       action=argparse.BooleanOptionalAction,
+                       default=False,
+                       help="If True, lots of details are printed")
+    group.add_argument('--pattern',
+                       default="alpha",
+                       help="Name of the test pattern: alpha or diagonal")
+
     args = parser.parse_args()
 
+    verbose=args.verbose
     f = MyValidator(args.file)
     roispec=eval(args.roi)
     f.validate(roispec,args)

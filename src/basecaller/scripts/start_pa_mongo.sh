@@ -1,10 +1,10 @@
 # Used to start smrt-basecaller with some small arguments for testing WX integration.
 # options:
-# BUILD = Release_gcc or Debug_gcc
-# GDBSERVER=1  - will run the app under gdbserver. Implies BUILD=Debug_gcc
-# GDB=1 - will run the app under gdb. Implies BUILD=Debug_gcc
+# BUILD = Release or Debug or RelWithDebInfo
+# GDBSERVER=1  - will run the app under gdbserver. Implies BUILD=Debug
+# GDB=1 - will run the app under gdb. Implies BUILD=Debug
 
-BUILD=${BUILD:-Release_gcc}
+BUILD=${BUILD:-Release}
 LOGFILTER=${LOGFILTER:-info}
 FRAMES=${FRAMES:-1024}
 RATE=${RATE:-100}
@@ -32,11 +32,11 @@ if [[ $GDBSERVER ]]
 then 
 #    cmd="/home/UNIXHOME/mlakata/clion-2020.1.1/bin/gdb/linux/bin/gdbserver localhost:2000"
     cmd="/home/UNIXHOME/mlakata/local/gdb-10.1/bin/gdbserver localhost:2000"
-    BUILD=Debug_gcc
+    BUILD=Debug
 elif [[ $GDB ]]
 then
     cmd="gdb --args"
-    BUILD=Debug_gcc
+    BUILD=Debug
 elif [[ $ECHO ]]
 then
     cmd="echo "
@@ -61,22 +61,6 @@ then
     sourceType=TRACE_FILE
 else
     sourceType=WX2
-    threadClass=$(curl localhost:23602/sras/0/status/other/threadClassName.txt)
-    if [[ $threadClass = "SraMongoThread" ]]
-    then
-      # this is what the FPGA will generate
-      fpgaPacketLanes=2
-      fpgaFramesPerPacket=$(curl localhost:23602/status/tileDimensions/0)
-      fpgaZmwsPerLane=32
-      # this is what smrt-basecaller wants
-      packetLanes=1
-      # framesPerPacket=$(curl localhost:23602/status/tileDimensions/0)
-      framesPerPacket=512
-      zmwsPerLane=64
-    else
-      echo ThreadClass $threadClass is not supported yet.
-      exit 1
-    fi
 fi
 
 # maxCallsPerZmw should be increased because packet depth is 512 frames vs 128 frames
@@ -91,12 +75,6 @@ cat <<HERE > $tmpjson
     { 
       "maxCallsPerZmw":48 
     }
-  },
-  "layout" :
-  {
-      "framesPerChunk": ${framesPerPacket},
-      "lanesPerPool" : ${packetLanes},
-      "zmwsPerLane": ${zmwsPerLane}
   },
   "source":
   {
@@ -114,6 +92,8 @@ cat <<HERE > $tmpjson
   },
   "traceSaver": 
   {
+    //"roi": [ [0,0,1536,64 ]]
+    //"roi": [ [0,0,64,1024 ]] // works
     "roi": [ [0,0,64,256 ]] // works
     //"roi": [ [0,0,1,64 ], [1,0,1,64], [2,64,1,64]] // works
     //"roi":[[0,0,6,3072]] // works
@@ -187,7 +167,7 @@ then
   export PATH=$scriptdir/build_vsc:${PATH}
 else
   # normal build dir
-  export PATH=$scriptdir/../build/x86_64/${BUILD}/applications:${PATH}
+  export PATH=$scriptdir/../../../build/basecaller/gcc/x86_64/${BUILD}/applications:${PATH}
 fi
 
 echo PATH = $PATH
