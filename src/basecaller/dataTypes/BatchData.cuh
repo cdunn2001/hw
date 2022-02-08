@@ -36,48 +36,71 @@ namespace PacBio {
 namespace Mongo {
 namespace Data {
 
-// Class for efficient access of an individual zmw on the gpu.  It
+// Classes for efficient access of an individual zmw on the gpu.  It
 // is intended that the different threads in a cuda block will create
 // views for adjacent zmw in a pacbio data block.  This way the interleaved
 // nature of the data along with the lockstep nature of warp execution
 // means we should have optimal memory access patterns.
 template <typename T>
+class StrideIterator
+{
+public:
+    __device__ StrideIterator(T* ptr, size_t stride)
+        : ptr_(ptr)
+        , stride_(stride)
+    {}
+
+    __device__ StrideIterator& operator++()
+    {
+        return *this+=1;
+    }
+    __device__ StrideIterator& operator+=(int count)
+    {
+        ptr_ += count*stride_;
+        return *this;
+    }
+    __device__ StrideIterator operator+(int count) const
+    {
+        StrideIterator ret = *this;
+        return ret += count;
+    }
+    __device__ StrideIterator& operator--()
+    {
+        return *this-=1;
+    }
+    __device__ StrideIterator& operator-=(int count)
+    {
+        ptr_ -= count*stride_;
+        return *this;
+    }
+    __device__ StrideIterator operator-(int count) const
+    {
+        StrideIterator ret = *this;
+        return ret -= count;
+    }
+
+    __device__ bool operator==(const StrideIterator& other) const
+    {
+        return ptr_ == other.ptr_;
+    }
+
+    __device__ bool operator!=(const StrideIterator& other) const
+    {
+        return ptr_ != other.ptr_;
+    }
+
+    __device__ T& operator*() { return *ptr_; }
+    __device__ const T& operator*() const { return *ptr_; }
+
+private:
+    T* ptr_;
+    size_t stride_;
+};
+
+template <typename T>
 class StridedBlockView
 {
 public:
-    // Helper iterator to allow range-based for loops.
-    template <typename U>
-    class StrideIterator
-    {
-    public:
-        __device__ StrideIterator(T* ptr, size_t stride)
-            : ptr_(ptr)
-            , stride_(stride)
-        {}
-
-        __device__ void operator++()
-        {
-            ptr_ += stride_;
-        }
-
-        __device__ bool operator==(const StrideIterator& other) const
-        {
-            return ptr_ == other.ptr_;
-        }
-
-        __device__ bool operator!=(const StrideIterator& other) const
-        {
-            return ptr_ != other.ptr_;
-        }
-
-        __device__ U& operator*() { return *ptr_; }
-        __device__ const U& operator*() const { return *ptr_; }
-
-    private:
-        T* ptr_;
-        size_t stride_;
-    };
-
     __device__ StridedBlockView(T* start, uint32_t count, uint32_t laneWidth, Cuda::Memory::detail::DataManagerKey key)
         : start_(start)
         , count_(count)

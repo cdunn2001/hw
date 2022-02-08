@@ -27,6 +27,8 @@
 #ifndef PACBIO_CUDA_SIMD_CUH
 #define PACBIO_CUDA_SIMD_CUH
 
+#include <cassert>
+
 #include <common/cuda/PBCudaSimd.h>
 
 namespace PacBio {
@@ -117,12 +119,12 @@ inline __device__ PBBool2 operator &&(PBBool2 first, PBBool2 second)
 
 // Simd logical "or" and bitwise "or" are the same thing on boolean PBShort2 values,
 // as cuda represents true as 0xFFFF an false as 0x0;
-inline __device__ PBShort2 operator ||(PBShort2 first, PBShort2 second)
+inline __device__ PBShort2 operator |(PBShort2 first, PBShort2 second)
 {
     return PBShort2::FromRaw(first.data() | second.data());
 }
 
-inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
+inline __device__ PBShort2 operator &(PBShort2 first, PBShort2 second)
 {
     return PBShort2::FromRaw(first.data() & second.data());
 }
@@ -140,10 +142,30 @@ inline __device__ PBBool2 operator |(PBBool2 first, PBBool2 second)
 inline __device__ PBBool2 operator &(PBBool2 first, PBBool2 second)
 { return first && second; }
 
-inline __device__ PBShort2 operator |(PBShort2 first, PBShort2 second)
-{ return first || second; }
-inline __device__ PBShort2 operator &(PBShort2 first, PBShort2 second)
-{ return first && second; }
+inline __device__ PBShort2 operator ||(PBShort2 first, PBShort2 second)
+{
+    // Iff these PBShort2 are the result of simd comparisons and really
+    // represent true/false, then the logical operations are the same
+    // as bitwise operations.  If they are not, then using logical
+    // operations on arbitrary integers will not work as expected.
+    assert(first.X() == 0 || first.X() == static_cast<short>(0xFFFF));
+    assert(first.Y() == 0 || first.Y() == static_cast<short>(0xFFFF));
+    assert(second.X() == 0 || second.X() == static_cast<short>(0xFFFF));
+    assert(second.Y() == 0 || second.Y() == static_cast<short>(0xFFFF));
+    return first | second;
+}
+inline __device__ PBShort2 operator &&(PBShort2 first, PBShort2 second)
+{
+    // Iff these PBShort2 are the result of simd comparisons and really
+    // represent true/false, then the logical operations are the same
+    // as bitwise operations.  If they are not, then using logical
+    // operations on arbitrary integers will not work as expected.
+    assert(first.X() == 0 || first.X() == static_cast<short>(0xFFFF));
+    assert(first.Y() == 0 || first.Y() == static_cast<short>(0xFFFF));
+    assert(second.X() == 0 || second.X() == static_cast<short>(0xFFFF));
+    assert(second.Y() == 0 || second.Y() == static_cast<short>(0xFFFF));
+    return first & second;
+}
 
 
 

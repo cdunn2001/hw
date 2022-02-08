@@ -1,4 +1,4 @@
-set (VERSION bid56)
+set (VERSION bid57)
 
 set (LOCAL_THIRD_PARTY_SCRIPTS OFF CACHE BOOL "Use local version of third party scripts" FORCE)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE STRING "Location of a local  pa-third-party repository" FORCE)

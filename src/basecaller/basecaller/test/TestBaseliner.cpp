@@ -71,6 +71,8 @@ struct TestConfig : public Configuration::PBConfig<TestConfig>
         Json::Value json;
         json["baselineConfig"]["Method"] = method.toString();
         json["baselineConfig"]["Filter"] = type.toString();
+        json["baselineConfig"]["SigmaEmaScaleStrides"] = 0;
+        
         TestConfig cfg{json};
 
         return cfg.baselineConfig;
@@ -226,7 +228,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
         analysisConfig.movieInfo.photoelectronSensitivity = scaler;
         analysisConfig.pedestal = params.pedestalValue;
         analysisConfig.encoding = params.encoding;
-        const auto baselinerConfig = TestConfig::BaselinerConfig(
+        auto baselinerConfig = TestConfig::BaselinerConfig(
                             params.method,
                             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
         if (params.method == BasecallerBaselinerConfig::MethodName::HostMultiScale)
@@ -478,7 +480,7 @@ TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
 
     Data::AnalysisConfig analysisConfig;
     analysisConfig.movieInfo.photoelectronSensitivity = scaler;
-    const auto baselinerConfig = TestConfig::BaselinerConfig(
+    auto baselinerConfig = TestConfig::BaselinerConfig(
             BasecallerBaselinerConfig::MethodName::HostMultiScale, /*ignored*/
             BasecallerBaselinerConfig::FilterTypes::TwoScaleMedium);
     Baseliner::Configure(baselinerConfig, analysisConfig);

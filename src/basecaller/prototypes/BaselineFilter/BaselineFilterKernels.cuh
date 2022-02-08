@@ -310,34 +310,45 @@ private:
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
 };
 
+struct BlSubtractParams
+{
+    PBHalf2 cSigmaBias;
+    PBHalf2 cMeanBias;
+    PBHalf2 meanEmaAlpha;
+    PBHalf2 sigmaEmaAlpha;
+    PBHalf2 jumpTolCoeff;
+    PBHalf2 scale;
+    int16_t pedestal;
+};
+
 template <size_t blockThreads, size_t lag>
 struct LatentBaselineData
 {
-    __device__ LatentBaselineData(PBHalf2 sig)
+    __device__ LatentBaselineData(PBHalf2 sig, PBHalf2 sum, PBHalf2 weight)
     {
         for (int i = 0; i < blockThreads; ++i)
         {
-            bgSigma[i] = sig;
+            blSigmaEma[i]       = sig;
+            blMeanUemaSum[i]    = sum;
+            blMeanUemaWeight[i] = weight;
         }
     }
     class LocalLatent
     {
         friend LatentBaselineData;
 
-        PBHalf2 bgSigma;
+        PBHalf2 blSigmaEma;
+        PBHalf2 blMeanUemaSum;
+        PBHalf2 blMeanUemaWeight;
         PBHalf2 latData;
         PBHalf2 latRawData;
         PBBool2 latLMask;
         PBBool2 latHMask1;
         PBBool2 latHMask2;
 
-        PBHalf2 thrHigh;
-        PBHalf2 thrLow;
-
         // TODO unify these somehow with the host multiscale implementation
         static constexpr float sigmaThrL = 4.5f;
         static constexpr float sigmaThrH = 4.5f;
-        static constexpr float alphaFactor = 0.7f;
 
         // Auto-correlation stats
         PBFloat2 m2Lag;
@@ -347,15 +358,29 @@ struct LatentBaselineData
         uint8_t bbi;        // back buffer index
 
     public:
-        __device__ PBHalf2 SmoothedSigma(PBHalf2 frameSigma)
+        __device__ PBHalf2 SmoothedBlEstimate(PBHalf2 lower, PBHalf2 upper, const BlSubtractParams& sParams)
         {
             static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
-            bgSigma = (1.0f - alphaFactor) * bgSigma + alphaFactor * max(frameSigma, minSigma);
+            PBHalf2 meanEmaAlpha  = sParams.meanEmaAlpha;
+            PBHalf2 sigmaEmaAlpha = sParams.sigmaEmaAlpha;
 
-            thrLow = bgSigma * sigmaThrL;
-            thrHigh = bgSigma * sigmaThrH;
+            auto sigma = max((upper - lower) / sParams.cSigmaBias, minSigma);
+            auto newSigmaEma = sigmaEmaAlpha * blSigmaEma + PBHalf2(1.0f - sigmaEmaAlpha) * sigma;
 
-            return bgSigma;
+            auto blEst = 0.5f * (upper + lower) + sParams.cMeanBias * newSigmaEma;
+
+            // Conditionally update EMAs of baseline mean and sigma.
+            bool mask = true; // TODO: Enable masking for jumpTolCoeff_
+
+            auto newWeight = meanEmaAlpha * blMeanUemaWeight + PBHalf2(1.0f - meanEmaAlpha);
+            auto newSum    = meanEmaAlpha * blMeanUemaSum     + PBHalf2(1.0f - meanEmaAlpha) * blEst;
+            blMeanUemaWeight = Blend(mask, newWeight, blMeanUemaWeight);
+            blMeanUemaSum    = Blend(mask, newSum, blMeanUemaSum);
+            blSigmaEma       = Blend(mask, newSigmaEma, blSigmaEma);
+
+            // assert(blMeanUemaWeight > PBHalf2(0.0f));
+
+            return blMeanUemaSum / blMeanUemaWeight;
         }
 
         __device__ void AddToBaselineStats(PBHalf2 rawTrace,
@@ -363,6 +388,9 @@ struct LatentBaselineData
                                         PBHalf2 scale,
                                         StatAccumulator<blockThreads, lag>& stats)
         {
+            PBHalf2 thrLow  = blSigmaEma * sigmaThrL;
+            PBHalf2 thrHigh = blSigmaEma * sigmaThrL;
+
             auto maskHp1 = blSubtracted < thrHigh * scale;
 
             auto mask = latHMask1 && latLMask && maskHp1;
@@ -394,7 +422,9 @@ struct LatentBaselineData
     {
         LocalLatent local;
 
-        local.bgSigma      = bgSigma[threadIdx.x];
+        local.blSigmaEma       = blSigmaEma[threadIdx.x];
+        local.blMeanUemaSum    = blMeanUemaSum[threadIdx.x];
+        local.blMeanUemaWeight = blMeanUemaWeight[threadIdx.x];
         local.latData      = latData[threadIdx.x];
         local.latRawData   = latRawData[threadIdx.x];
         local.latLMask     = latLMask[threadIdx.x];
@@ -415,7 +445,9 @@ struct LatentBaselineData
 
     __device__ void StoreLocal(LocalLatent& local)
     {
-        bgSigma[threadIdx.x]        = local.bgSigma;
+        blSigmaEma[threadIdx.x]       = local.blSigmaEma;
+        blMeanUemaSum[threadIdx.x]    = local.blMeanUemaSum;
+        blMeanUemaWeight[threadIdx.x] = local.blMeanUemaWeight;
         latData[threadIdx.x]        = local.latData;
         latRawData[threadIdx.x]     = local.latRawData;
         latLMask[threadIdx.x]       = local.latLMask;
@@ -452,7 +484,9 @@ struct LatentBaselineData
 
 private:
     // TODO init
-    Utility::CudaArray<PBHalf2, blockThreads> bgSigma;
+    Utility::CudaArray<PBHalf2, blockThreads> blSigmaEma;
+    Utility::CudaArray<PBHalf2, blockThreads> blMeanUemaSum;
+    Utility::CudaArray<PBHalf2, blockThreads> blMeanUemaWeight;
     Utility::CudaArray<PBHalf2, blockThreads> latData;
     Utility::CudaArray<PBHalf2, blockThreads> latRawData;
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
@@ -461,18 +495,10 @@ private:
     Utility::CudaArray<PBFloat2, blockThreads> m2Lag;
 };
 
-struct SubtractParams
-{
-    PBHalf2 cSigmaBias;
-    PBHalf2 cMeanBias;
-    PBHalf2 scale;
-    int16_t pedestal;
-};
-
 template <typename T, size_t blockThreads, size_t lag>
 __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
                                  size_t stride,
-                                 SubtractParams sParams,
+                                 BlSubtractParams sParams,
                                  Memory::DeviceView<LatentBaselineData<blockThreads,lag>> latent,
                                  const Mongo::Data::GpuBatchData<const T> lower,
                                  const Mongo::Data::GpuBatchData<const T> upper,
@@ -523,20 +549,17 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
     {
         PBShort2 low = lowerZmw(i);
         PBShort2 up  = upperZmw(i);
-        auto bias = (PBHalf2(up + low)) * PBHalf2(0.5f);
-        auto framebkgndSigma = (up - low) * sbInv ;
-        auto smoothedBkgndSigma = localLatent.SmoothedSigma(framebkgndSigma);
-        auto baselineEstimate = (bias + sParams.cMeanBias * smoothedBkgndSigma) * sParams.scale;
+        auto blEst = localLatent.SmoothedBlEstimate(low, up, sParams);
 
         for (int j = i*stride; j < (i+1)*stride; ++j)
         {
-            // Data scaled first
-            auto rawSignal = inZmw(j) * sParams.scale;
-            auto blSubtractedFrame = rawSignal - baselineEstimate;
+            // Data shifted and scaled
+            auto rawSignal = inZmw(j);
+            auto blSubtractedFrame = (rawSignal - blEst) * sParams.scale;
             // ... stored as output traces
             outZmw[j] = ToShort(blSubtractedFrame);
             // ... and added to statistics
-            localLatent.AddToBaselineStats(rawSignal, blSubtractedFrame, sParams.scale, stats);
+            localLatent.AddToBaselineStats(rawSignal * sParams.scale, blSubtractedFrame, sParams.scale, stats);
         }
     }
 
@@ -630,9 +653,15 @@ struct ComposedConstructArgs
 {
     int16_t pedestal;
     float scale;
+    float meanBiasAdj;
+    float sigmaBiasAdj;
+    float meanEmaAlpha;
+    float sigmaEmaAlpha;
+    float jumpTolCoeff;
     size_t numLanes;
     short val;
 };
+
 template <size_t blockThreads, size_t lag, typename T = int16_t>
 class ComposedFilter : public ComposedFilterBase
 {
@@ -686,13 +715,16 @@ public:
                             const Memory::AllocationMarker& marker,
                             Memory::StashableAllocRegistrar* registrar = nullptr)
         : numLanes_(args.numLanes)
-        , latent(registrar, marker, args.numLanes, 0.0f)
+        , latent(registrar, marker, args.numLanes, -1.0f, 0.0f, 0.0f)
     {
         const auto& widths = params.Widths();
         const auto& strides = params.Strides();
 
-        sParams_.cMeanBias = params.MeanBias();
-        sParams_.cSigmaBias = params.SigmaBias();
+        sParams_.cMeanBias     = params.MeanBias()  * std::exp2(args.meanBiasAdj);
+        sParams_.cSigmaBias    = params.SigmaBias() * std::exp2(args.sigmaBiasAdj);
+        sParams_.meanEmaAlpha  = args.meanEmaAlpha;
+        sParams_.sigmaEmaAlpha = args.sigmaEmaAlpha;
+        sParams_.jumpTolCoeff  = args.jumpTolCoeff;
         sParams_.scale = args.scale;
         sParams_.pedestal = args.pedestal;
 
@@ -792,7 +824,7 @@ private:
     Memory::DeviceOnlyArray<LatentBaselineData> latent;
     size_t numLanes_;
     size_t fullStride_;
-    SubtractParams sParams_;
+    BlSubtractParams sParams_;
 };
 
 }}
