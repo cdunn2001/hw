@@ -62,6 +62,9 @@ BazWriterBody::BazWriterBody(
     using FileHeaderBuilder = BazIO::FileHeaderBuilder;
     using ZmwInfo = BazIO::ZmwInfo;
 
+    auto fileHeaderFlags = FileHeaderBuilder::Flags();
+    fileHeaderFlags.RealTimeActivityLabels(basecallerConfig.prelimHQ.enablePreHQ);
+
     if (multipleBazFiles_)
     {
         auto ioStatsAggregator = std::make_shared<BazIO::IOStatsAggregator>(numBatches_);
@@ -121,7 +124,8 @@ BazWriterBody::BazWriterBody(
                                  metadata,
                                  basecallerConfig.Serialize().toStyledString(),
                                  zmwInfo,
-                                 metricFrames);
+                                 metricFrames,
+                                 fileHeaderFlags);
 
             fh.BaseCallerVersion("0.1");
 
@@ -143,7 +147,8 @@ BazWriterBody::BazWriterBody(
                              metadata,
                              basecallerConfig.Serialize().toStyledString(),
                              zmwInfo,
-                             metricFrames);
+                             metricFrames,
+                             fileHeaderFlags);
 
         fh.BaseCallerVersion("0.1");
 

@@ -55,7 +55,7 @@ public:
 private:
     uint32_t numThreads_;
     class Impl;
-    template <bool internal>
+    template <bool internal,bool completeMetrics>
     class ImplChild;
     std::vector<std::unique_ptr<Impl>> impl_;
 };
