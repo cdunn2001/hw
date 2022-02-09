@@ -77,7 +77,9 @@ BazReader::BazReader(const std::vector<std::string>& fileNames,
     // Init
     for (const auto& fileName : fileNames)
     {
-        files_.emplace_back(fileName,std::unique_ptr<FILE>(std::fopen(fileName.c_str(), "rb")));
+        files_.emplace_back(fileName,
+                            std::unique_ptr<std::FILE,decltype(&std::fclose)>(std::fopen(fileName.c_str(), "rb"),
+                                                                              &std::fclose));
         if (!files_.back().second) throw std::runtime_error("Can't open " + fileName + " with BazReader");
     }
 

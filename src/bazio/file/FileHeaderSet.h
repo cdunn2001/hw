@@ -40,7 +40,7 @@ namespace PacBio::BazIO
 class FileHeaderSet
 {
 public:
-    FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>>& files);
+    FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE,decltype(&std::fclose)>>>& files);
 
     // Default constructor
     FileHeaderSet() = delete;

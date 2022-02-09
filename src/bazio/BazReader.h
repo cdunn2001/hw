@@ -133,7 +133,7 @@ private:
     void ReadFileFooters();
 
 private:   // data
-    std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>> files_;
+    std::vector<std::pair<std::string,std::unique_ptr<std::FILE,decltype(&std::fclose)>>> files_;
     uint32_t                numZmws_ = 0;
     std::vector<uint32_t>   zmwIndexByBazFile_;
     size_t                  currentBazIndex_ = 0;

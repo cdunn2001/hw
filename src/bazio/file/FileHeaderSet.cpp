@@ -33,7 +33,7 @@ using namespace PacBio::Primary;
 namespace PacBio::BazIO
 {
 
-FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>>& files)
+FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE, decltype(&std::fclose)>>>& files)
 {
     for (const auto& file : files)
     {
@@ -217,11 +217,33 @@ bool FileHeaderSet::IsConsistent(const FileHeader& a, const FileHeader& b) const
         return false;
     }
 
-    // TODO:
-    // Check packet/metric fields?
-    // Check basemap and relative amplitudes?
-    // Check metric frames?
-    // Check frameRate?
+    if (a.BaseMap() != b.BaseMap())
+    {
+        PBLOG_ERROR << "FileHeader base map mismatch for files "
+                    << a.MovieName() << " and " << b.MovieName() << "!";
+        return false;
+    }
+
+    if (a.RelativeAmplitudes() != b.RelativeAmplitudes())
+    {
+        PBLOG_ERROR << "FileHeader relative amplitude mismatch for files "
+                    << a.MovieName() << " and " << b.MovieName() << "!";
+        return false;
+    }
+
+    if (a.MetricFrames() != b.MetricFrames())
+    {
+        PBLOG_ERROR << "FileHeader metric frames mismatch for files "
+                    << a.MovieName() << " and " << b.MovieName() << "!";
+        return false;
+    }
+
+    if (a.FrameRateHz() != b.FrameRateHz())
+    {
+        PBLOG_ERROR << "FileHeader frame rate mismatch for files "
+                    << a.MovieName() << " and " << b.MovieName() << "!";
+        return false;
+    }
 
     return true;
 }
