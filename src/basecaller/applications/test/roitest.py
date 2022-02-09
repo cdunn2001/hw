@@ -98,6 +98,9 @@ class MyValidator:
                 func = lambda f, r, c: diagonal(f,r,c)
             elif args.pattern == "diagonal2":
                 func = lambda f, r, c: diagonal(f,r+4,c)
+
+            else :
+                raise Exception("don't recognize pattern " + args.pattern)
             for zmw in range(0,self.holexy.shape[0]):
                 traceValid = self.validate_trace(zmw,maxFrames,func)
                 if traceValid:
@@ -157,7 +160,7 @@ if __name__ == '__main__':
                        help="If True, lots of details are printed")
     group.add_argument('--pattern',
                        default="alpha",
-                       help="Name of the test pattern: alpha or diagonal")
+                       help="Name of the test pattern: alpha or diagonal1 or diagonal2")
 
     args = parser.parse_args()
 
