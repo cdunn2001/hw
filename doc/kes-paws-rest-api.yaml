@@ -1,0 +1,539 @@
+openapi: 3.0.0
+info:
+  title: Primary Analysis Webservice (pa-ws) API
+  description: The REST API for controlling primary analysis processes and data storage.
+  version: 0.0.2
+servers:
+  - url: http://REPLACE_WITH_HOSTNAME:23632
+    description: The server that served this documentation file.
+paths:
+  /status:
+    get:
+      summary: Returns top level status of the pa-ws process.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PawsStatusObject'
+  /sockets:
+    get:
+      summary: Returns a list of socket ids.
+      description: Socket ids are not necessarily numeric strings
+      responses:
+        '200':    # status code
+          description: A JSON array of socket ids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              examples:
+                Kestrel:
+                  value: ["1", "2", "3", "4"]
+  /sockets/{sock_id}:
+    get:
+      summary: Returns the socket object indexed by the sock_id.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/reset:
+    post:
+      summary: Resets all "one shot" app resources for each of the sockets.
+      responses:
+        '200':
+          description: OK
+  /sockets/{sock_id}/reset:
+    post:
+      summary: Resets all "one shot" app resources for the socket.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/image:
+    get:
+      summary: Returns a single image from the socket
+      description: Format of image not decided (png or pgm).  TODO Still need to workout details on what image is returned.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller:
+    get:
+      summary: Returns the basecaller object indexed by the sock_id.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketBasecallerObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/start:
+    post:
+      summary: Start the basecaller process on socket {sock_id}
+      description: "A basecaller process is started with the given request body values.  Important Input parameters include:
+
+                    * movie length
+
+                    * output baz file URL
+
+                    * pixel_spread_function
+
+                    * Regions of Interest
+
+                    * Information on analogs
+
+                    Once the process is started, the `/sockets/{sock_id}/basecaller` endpoint can be polled for progress.
+                    The `process_status.execution_status` will pass through `RUNNING` and eventually `COMPLETE`."
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocketBasecallerObject'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketBasecallerObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/stop:
+    post:
+      summary: Gracefully aborts the basecalling process on socket {sock_id}. This must be called before a POST to `reset`. Note
+               The the process will not stop immediately.  The client must poll the endpoint until the
+               `process_status.execution_status` is `COMPLETE`.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/reset:
+    post:
+      summary: Resets the basecaller resource on socket {sock_id}
+      description: Resets the basecaller resource back to the "Ready" state to prepare it for another execution.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+        '409':
+          description: CONFLICT basecaller was not in the `READY` or `COMPLETE` state.
+
+  /sockets/{sock_id}/darkcal:
+    get:
+      summary: Returns the darkcal object indexed by the sock_id.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketBasecallerObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/darkcal/start:
+    post:
+      summary: Starts a dark cal process on socket {sock_id}
+      description: "Starts a dark cal process with the provided input parameters.
+
+                  Input parameters include:
+
+                  * first frame key word
+
+                  * number of frames
+
+                  * output directory url (for any internal files that might be generated)
+
+                  * darkcal output file url
+
+                  Call will fail if the darkcal resource is not in the `READY` state.  It must be reset first."
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocketDarkcalObject'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketDarkcalObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+        '409':
+          description: CONFLICT darkcal was not in the READY or COMPLETE state
+  /sockets/{sock_id}/darkcal/stop:
+    post:
+      summary: Gracefully aborts the darkcal process on socket {sock_id}
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/darkcal/reset:
+    post:
+      summary: Resets the darkcal resource on socket {sock_id}
+      description: Resets the darkcal resource back to the "Ready" state to prepare it for another execution.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+        '409':
+          description: CONFLICT Fails if darkcal is still in progress.  POST to stop first.
+
+  /sockets/{sock_id}/loadingcal:
+    get:
+      summary: Returns the loadingcal object indexed by the sock_id.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketDarkcalObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/loadingcal/start:
+    post:
+      summary: Starts a loadingcal process on socket {sock_id}
+      description: "Starts a loadingcal process with the provided input parameters.
+
+                  Input parameters include:
+
+                  * first frame key word
+
+                  * number of frames
+
+                  * output directory url (for any internal files that might be generated)
+
+                  * darkcal input file url
+
+                  Call will fail if the loadingcal resource is not in the `READY` state.  It must be reset first."
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocketLoadingcalObject'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocketLoadingcalObject'
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+        '409':
+          description: CONFLICT loadingcal was not in the READY or COMPLETE state
+  /sockets/{sock_id}/loadingcal/stop:
+    post:
+      summary: Gracefully aborts the dark cal process on socket {sock_id}
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/loadingcal/reset:
+    post:
+      summary: Resets the loadingcal resource on socket {sock_id}
+      description: Resets the loadingcal resource back to the "Ready" state to prepare it for another execution.
+      parameters:
+      - name: sock_id
+        in: path
+        description: The socket id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+        '409':
+          description: CONFLICT Fails if loadingcal is still in progress.  POST to stop first.
+
+
+  /storages:
+    get:
+      summary: Returns a list of Mids for each storage object.
+      responses:
+        '200':    # status code
+          description: A JSON array of Mids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      summary: Creates a storages resource for a movie.
+      description: The input data will include a movie context name and the socket (or partition) number.  The necessary directory (or directories) for the provided movie will be created.  If they can't be then a 4XX error response is returned.  The created resource will have the following path /storages/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageObject'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageObject'
+
+  /storages/{mid}:
+    get:
+      summary: Returns the storage object by MID.
+      description: The information provided for each resource will at a minimum contain the movie context name (mid) and the path to the root directory for the movie.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageObject'
+    delete:
+      summary: Deletes the storages resource for the provided movie context name (mid).
+      description: All files must be freed beforehand by a DELETE call to `/storages/{mid}/free`.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+        '409':
+          description: CONFLICT If all files have not been freed, the DELETE will fail.
+  /storages/{mid}/free:
+    post:
+      summary: Frees all directories and files associated with the storages resource and reclaims disk space.
+      description: Can be refused if PA deems that there are not enough IO/compute resources to perform the free.  In the event of a failure, a 409 (Conflict) error code will be returned.  Further information may be provided in the response body as to why the POST was refused.  Clients (ICS) can keep calling this POST command until a success (200) response is returned.
+                   An optional category and/or source filter may be provided in the POST payload to only free files of this category and/or source.
+                   If no files of that category and/or source exist, the call should succeed
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the storage unit
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+
+  /postprimaries:
+    get:
+      summary: Returns a list of Mids for each postprimary object
+      responses:
+        '200':    # status code
+          description: A JSON array of Mids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      summary: Starts a post primary process on the provided url's to basecalling artifacts files.
+      description: "Input parameters include:
+
+                    * movie context name (mid)
+
+                    * input file urls
+
+                    * post primary processing parameters
+
+                    * output directory url (for any internal files that might be generated)
+
+                    * dictionary of output file urls
+
+                    The created resource will have the following path /postprimaries/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header."
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostprimaryObject'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostprimaryObject'
+    delete:
+      summary: Deletes all existing postprimaries resources.
+      description: All postprimaries resources must be stopped first.
+      responses:
+        '200':
+          description: All postprimary resources were successfully deleted.
+        '409':
+          description: CONFLICT One or more of the postprimaries processes were not stopped.
+  /postprimaries/{mid}:
+    get:
+      summary: Returns the postprimariy object by MID.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostprimaryObject'
+    delete:
+      summary: Deletes the postprimary resource.
+      description: All resource must be stopped first.
+      responses:
+        '200':
+          description: The postprimary resource was successfully deleted.
+        '409':
+          description: CONFLICT The postprimaries processes were not stopped. POST to the stop endpoint first.
+  /postprimaries/{mid}/stop:
+    post:
+      summary: Gracefully aborts the postprimary process associated with mid.
+      parameters:
+      - name: mid
+        in: path
+        description: The movie identifier (MID) for the postprimary process
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK The process was stopped, and now the resource can be DELETEd.

@@ -3,11 +3,14 @@ set (VERSION bid57)
 set (LOCAL_THIRD_PARTY_SCRIPTS OFF CACHE BOOL "Use local version of third party scripts" FORCE)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE STRING "Location of a local  pa-third-party repository" FORCE)
 
-function (SetupProject projName)
+function (SetupProject nexusVersionsDirectory)
 
-list(APPEND CMAKE_MODULE_PATH
-    "${CMAKE_CURRENT_LIST_DIR}/nexus-versions"
-)
+set(projName "mongo")
+if( NOT EXISTS "${nexusVersionsDirectory}")
+    message(FATAL_ERROR "nexusVersionsDirectory=${nexusVersionsDirectory} does not exist.")
+endif()
+
+list(APPEND CMAKE_MODULE_PATH "${nexusVersionsDirectory}")
 
 if (LOCAL_THIRD_PARTY_SCRIPTS)
     include(${LOCAL_THIRD_PARTY_LOCATION}/setup.cmake)
@@ -18,7 +21,11 @@ else()
     set(REPO_URL http://nexus.pacificbiosciences.com/repository/maven-thirdparty) # TODO: use https once it is available
     set(DOWNLOAD_TIMEOUT 60) # seconds
     set(LOCK_TIMEOUT 600) # seconds
-    execute_process(COMMAND git rev-parse --show-toplevel WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR} OUTPUT_VARIABLE GIT_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND git rev-parse --show-toplevel
+      WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+      OUTPUT_VARIABLE GIT_ROOT
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # execute_process(COMMAND git rev-parse --show-toplevel OUTPUT_VARIABLE GIT_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
     set(DEPCACHE ${GIT_ROOT}/depcache)
 
     set(ROOT ${DEPCACHE}/pa-versions/${VERSION}/${projName})
@@ -73,6 +80,3 @@ else()
     message("Setting module path to: " ${CMAKE_MODULE_PATH})
 endif()
 endfunction(SetupProject)
-
-# TODO this doesn't need to be a function...
-SetupProject(mongo)

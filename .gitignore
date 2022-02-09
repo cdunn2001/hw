@@ -1,0 +1,5 @@
+**/build*/
+depcache/
+pa-third-party
+pa-common
+hw-mongo

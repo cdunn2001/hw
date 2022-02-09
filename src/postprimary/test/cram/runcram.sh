@@ -12,9 +12,9 @@ module load primary-toolkit/1.0.7
 
 if [[ "$DEBUG" == 1 ]]; then
  echo "Loading PPA Debug build"
- module load ppa-mongo/workspace/debug
+ module load ppa-kestrel/workspace/debug
 else
- module load ppa-mongo/workspace
+ module load ppa-kestrel/workspace
 fi
 
 echo "Using baz2bam: $(which baz2bam)"

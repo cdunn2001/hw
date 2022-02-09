@@ -1,0 +1,133 @@
+url := string    # e.g. "http://pa-12345:23632/storages/m123456_0000001/mylog.txt"
+
+ControlledString_t := string    # e.g. "SequEL_4.0_RTO3"
+
+ISO8601_Timestamp_t := string    # e.g. "20210101T01:23:45.678Z"
+
+ProcessStatusObject := {
+  "execution_status": "UNKNOWN" | "READY" | "RUNNING" | "COMPLETE",
+  "completion_status": "UNKNOWN" | "SUCCESS" | "FAILED" | "ABORTED",
+  "timestamp": ISO8601_Timestamp_t,
+  "exit_code": int
+}  
+
+PostprimaryStatusObject := {
+  "output_urls": [ url, url ...],
+  "progress": double,
+  "baz2bam_zmws_per_min": double,
+  "ccs_zmws_per_min": double,
+  "num_zmws": uint64_t,
+  "baz2bam_peak_rss_gb": double,
+  "ccs_peak_rss_gb": double
+}  
+
+PostprimaryObject := {
+  "mid": string,
+  "baz_file_url": url,
+  "uuid": string,
+  "output_log_url": url,
+  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR",
+  "output_prefix_url": url,
+  "output_stats_xml_url": url,
+  "output_stats_h5_url": url,
+  "output_reduce_stats_h5_url": url,
+  "chiplayout": string,
+  "subreadset_metadata_xml": string,
+  "include_kinetics": bool,
+  "ccs_on_instrument": bool,
+  "status": PostprimaryStatusObject,
+  "process_status": ProcessStatusObject
+}  
+
+SocketDarkcalObject := {
+  "process_status": ProcessStatusObject,
+  "movie_max_frames": uint64_t,
+  "movie_max_seconds": double,
+  "movie_number": uint32_t,
+  "calib_file_url": url,
+  "log_url": url,
+  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR"
+}  
+
+SocketLoadingcalObject := {
+  "process_status": ProcessStatusObject,
+  "movie_max_frames": uint64_t,
+  "movie_max_time": double,
+  "movie_number": uint32_t,
+  "calib_file_url": url,
+  "log_url": url,
+  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR"
+}  
+
+SocketBasecallerRTMetricsObject := {
+  "url": string
+}  
+
+AnalogObject := {
+  "base_label": "N" | "A" | "T" | "G" | "C",
+  "relative_amp": double,
+  "inter_pulse_distance_sec": double,
+  "excess_noise_cv": double,
+  "pulse_width_sec": double,
+  "pw_to_slow_step_ratio": double,
+  "ipd_to_slow_step_ratio": double
+}  
+
+SocketBasecallerObject := {
+  "mid": string,
+  "uuid": string,
+  "movie_max_frames": uint64_t,
+  "movie_max_seconds": double,
+  "movie_number": uint32_t,
+  "baz_url": url,
+  "trace_file_url": url,
+  "log_url": url,
+  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR",
+  "chiplayout": ControlledString_t,
+  "darkcal_url": url,
+  "pixel_spread_function": [ [ double, double ...], [ double, double ...] ... ],
+  "crosstalk_filter": [ [ double, double ...], [ double, double ...] ... ],
+  "analogs":  [ AnalogObject, AnalogObject ... ],
+  "sequencing_roi": [ [ int, int ...], [ int, int ...] ... ],
+  "trace_file_roi": [ [ int, int ...], [ int, int ...] ... ],
+  "expected_frame_rate": double,
+  "photoelectron_sensitivity": double,
+  "ref_snr": double,
+  "simulation_file_url": url,
+  "smrt_basecaller_config": string,
+  "process_status": ProcessStatusObject,
+  "rt_metrics": SocketBasecallerRTMetricsObject
+}  
+
+SocketObject := {
+  "index": int,
+  "darkcal": SocketDarkcalObject,
+  "loadingcal": SocketLoadingcalObject,
+  "basecaller": SocketBasecallerObject
+}  
+
+StorageItemObject := {
+  "url": string,
+  "timestamp": string,
+  "size": uint64_t,
+  "category": "UNKNOWN" | "BAM",
+  "source_info": string
+}  
+
+StorageDiskReport := {
+  "total_space": uint64_t,
+  "free_space": uint64_t
+}  
+
+StorageObject := {
+  "mid": string,
+  "root_url": string,
+  "linux_path": string,
+  "output_log_url": url,
+  "log_level": "DEBUG" | "INFO" | "WARN" | "ERROR",
+  "files":  [ StorageItemObject, StorageItemObject ... ],
+  "space": StorageDiskReport,
+  "process_status": ProcessStatusObject
+}  
+
+

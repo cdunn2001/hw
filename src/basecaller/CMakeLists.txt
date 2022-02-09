@@ -10,7 +10,8 @@ set(CMAKE_CUDA_ARCHITECTURES "70;80")
 
 enable_testing()
 
-include(setup-thirdparty.cmake)
+include(../../setup-thirdparty.cmake)
+SetupProject("${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

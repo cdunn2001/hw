@@ -127,7 +127,10 @@ BazWriterBody::BazWriterBody(
                                  metricFrames,
                                  fileHeaderFlags);
 
-            fh.BaseCallerVersion("0.1");
+            // TODO: This needs to be more dynamic (or at least not hard coded in the bowels
+            //       of the code) but for now this is necessary to remain compatible with
+            //       CCS
+            fh.BaseCallerVersion("5.0");
 
             bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazIO, ioStatsAggregator);
             auto openedSnapshot = ++openedFiles;
@@ -150,7 +153,10 @@ BazWriterBody::BazWriterBody(
                              metricFrames,
                              fileHeaderFlags);
 
-        fh.BaseCallerVersion("0.1");
+        // TODO: This needs to be more dynamic (or at least not hard coded in the bowels
+        //       of the code) but for now this is necessary to remain compatible with
+        //       CCS
+        fh.BaseCallerVersion("5.0");
 
         bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazIO));
     }

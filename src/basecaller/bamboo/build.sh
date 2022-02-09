@@ -12,21 +12,26 @@ esac
 
 build_basecaller(){
   (
-  cd ..
-  source module_setup.sh
+  cd ../../../
+  source ./module_setup.sh
   ./cmake_setup.sh
-  cd build/x86_64/Release_gcc
+  cd build/basecaller/gcc/x86_64/Release
+  ./cmake_setup.sh
   cmake --build . -j
   ldd applications/smrt-basecaller
 # There no longer is an Intel build, but this should be
 # revived/replaced in the near term hopefully
 #  cd -
-#  cd build/x86_64/Release
-#  ninja
+#  cd build/basecaller/icc/x86_64/Release
+#  ./cmake_setup.sh
+#  cmake --build . -j
 #  ldd applications/smrt-basecaller
   )
 }
 
+# This has bitrot, possibly to the point of being useless,
+# but is being kept around on the off chance some of the
+# bamboo stuff serves as a useful template if this is revived.
 deploy_basecaller(){
   case "$bamboo_planRepository_branchName" in
     master|release/*)

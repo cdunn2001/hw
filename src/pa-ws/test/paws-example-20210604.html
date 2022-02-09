@@ -1,0 +1,257 @@
+<pre>
+#########################################################################
+
+GET /sockets
+
+[
+    1,2,3,4
+]
+
+GET /sockets/1
+
+{
+    "basecaller": {
+        "analogs": [
+            {
+                "base_label": "A",
+                "excess_noise_cv": 0,
+                "inter_pulse_distance_sec": 0,
+                "ipd_to_slow_step_ratio": 0.15,
+                "pulse_width_sec": 0,
+                "pw_to_slow_step_ratio": 0.15,
+                "relative_amp": 0.2
+            },
+            {
+                "base_label": "C",
+                "excess_noise_cv": 0,
+                "inter_pulse_distance_sec": 0,
+                "ipd_to_slow_step_ratio": 0.15,
+                "pulse_width_sec": 0,
+                "pw_to_slow_step_ratio": 0.15,
+                "relative_amp": 0.4
+            },
+            {
+                "base_label": "G",
+                "excess_noise_cv": 0,
+                "inter_pulse_distance_sec": 0,
+                "ipd_to_slow_step_ratio": 0.15,
+                "pulse_width_sec": 0,
+                "pw_to_slow_step_ratio": 0.15,
+                "relative_amp": 0.7
+            },
+            {
+                "base_label": "T",
+                "excess_noise_cv": 0,
+                "inter_pulse_distance_sec": 0,
+                "ipd_to_slow_step_ratio": 0.15,
+                "pulse_width_sec": 0,
+                "pw_to_slow_step_ratio": 0.15,
+                "relative_amp": 1
+            }
+        ],
+        "baz_url": "http://pac1:23632/storages/m123451/m123451.baz",
+        "chiplayout": "Minesweeper",
+        "crosstalk_filter": [
+            [
+                0,0,0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0,0,0
+            ],
+            [
+                0,0,0,1,0,0,0
+            ],
+            [
+                0,0,0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0,0,0
+            ]
+        ],
+        "darkcal_url": "http://pac1:23632/storages/m123451/darkcal.h5",
+        "expected_frame_rate": 100,
+        "log_level": "INFO",
+        "log_url": "http://pac1:23632/storages/m123451/loadingcal.log",
+        "mid": "m123451",
+        "movie_max_frames": 1000000,
+        "movie_max_seconds": 10000,
+        "movie_number": 113,
+        "photoelectron_sensitivity": 1.4,
+        "pixel_spread_function": [
+            [
+                0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0
+            ],
+            [
+                0,0,1,0,0
+            ],
+            [
+                0,0,0,0,0
+            ],
+            [
+                0,0,0,0,0
+            ]
+        ],
+        "process_status": {
+            "completion_status": "UNKNOWN",
+            "execution_status": "RUNNING",
+            "exit_code": 0,
+            "timestamp": "2021-06-04T21:49:24Z"
+        },
+        "ref_snr": 15,
+        "rt_metrics": {
+            "url": "http://pac1:23632/storages/m123451/rt_metrics_20210604T214924Z.xml"
+        },
+        "sequencing_roi": [],
+        "simulation_file_url": "discard:",
+        "smrt_basecaller_config": "{}",
+        "trace_file_roi": [],
+        "trace_file_url": "discard:",
+        "uuid": "00104afe-c341-11eb-8529-0242ac130001"
+    },
+    "darkcal": {
+        "calib_file_url": "http://pac1:23632/storages/m123451/darkcal.h5",
+        "log_level": "INFO",
+        "log_url": "http://pac1:23632/storages/m123451/darkcal.log",
+        "movie_max_frames": 512,
+        "movie_max_seconds": 6,
+        "movie_number": 111,
+        "process_status": {
+            "completion_status": "FAILED",
+            "execution_status": "COMPLETE",
+            "exit_code": 137,
+            "timestamp": "20210601T 01:23:45.000Z"
+        }
+    },
+    "index": 1,
+    "loadingcal": {
+        "calib_file_url": "discard:",
+        "log_level": "INFO",
+        "log_url": "discard:",
+        "movie_max_frames": 0,
+        "movie_max_time": 0,
+        "movie_number": 0,
+        "process_status": {
+            "completion_status": "UNKNOWN",
+            "execution_status": "READY",
+            "exit_code": 0,
+            "timestamp": "20210601T 01:32:15.000Z"
+        }
+    }
+}
+
+GET /sockets/1/basecaller/process_status
+
+{
+    "completion_status": "UNKNOWN",
+    "execution_status": "RUNNING",
+    "exit_code": 0,
+    "timestamp": "2021-06-04T21:49:30Z"
+}
+
+#########################################################################
+
+GET /postprimaries
+
+[
+    "m123456_000001",
+    "m123456_000002",
+    "m123456_000003",
+    "m123456_000004"
+]
+
+GET /postprimaries/m123456_000001
+
+{
+    "baz_file_url": "http://localhost:23632/storages/m123456_000001/m123456_000001.baz",
+    "ccs_on_instrument": true,
+    "chiplayout": "Minesweeper",
+    "include_kinetics": true,
+    "log_level": "DEBUG",
+    "mid": "m123456_000001",
+    "output_log_url": "http://localhost:23632/storages/m123456_000001/m123456_000001.ppa.log",
+    "output_prefix_url": "http://localhost:23632/storages/m123456_000001/m123456_000001",
+    "output_reduce_stats_h5_url": "http://localhost:23632/storages/m123456_000001/m123456_000001.rsts.h5",
+    "output_stats_h5_url": "http://localhost:23632/storages/m123456_000001/m123456_000001.sts.h5",
+    "output_stats_xml_url": "http://localhost:23632/storages/m123456_000001/m123456_000001.stats.xml",
+    "process_status": {
+        "completion_status": "UNKNOWN",
+        "execution_status": "RUNNING",
+        "exit_code": 0,
+        "timestamp": "2021-06-04T21:49:30Z"
+    },
+    "status": {
+        "baz2bam_peak_rss_gb": 401.1,
+        "baz2bam_zmws_per_min": 100000,
+        "ccs_peak_rss_gb": 56.9,
+        "ccs_zmws_per_min": 100000,
+        "num_zmws": 18579372,
+        "output_urls": [
+            "http://localhost:23632/storages/m123456_000001/m123456_000001.dataset.xml",
+            "http://localhost:23632/storages/m123456_000001/m123456_000001.ccs.bam",
+            "http://localhost:23632/storages/m123456_000001/m123456_000001.baz2bam.log"
+        ],
+        "progress": 0.34
+    },
+    "subreadset_metadata_xml": "<pbds:SubreadSet> ... lots of XML goes here ... </pbds:SubreadSet>",
+    "uuid": "00104afe-c341-11eb-8529-0242ac130003"
+}
+
+#########################################################################
+
+GET /storages
+
+[
+    "m123456_000001",
+    "m123456_000002",
+    "m123456_000003",
+    "m123456_000004"
+]
+
+GET /storages/m123456_000001
+
+{
+    "files": [
+        {
+            "category": "BAM",
+            "size": 1230000000,
+            "source_info": "basecaller",
+            "timestamp": "2021-06-04T21:49:30Z",
+            "url": "http://pac1:23632/storages/m123456_000001/m123456_000001.baz"
+        },
+        {
+            "category": "UNKNOWN",
+            "size": 4560000000,
+            "source_info": "baz2bam",
+            "timestamp": "2021-06-04T21:49:30Z",
+            "url": "http://pac1:23632/storages/m123456_000001/m123456_000001.bam"
+        }
+    ],
+    "linux_path": "file:/data/pa/storages/m123456_000001",
+    "log_level": "INFO",
+    "mid": "m123456_000001",
+    "output_log_url": "discard:",
+    "process_status": {
+        "completion_status": "UNKNOWN",
+        "execution_status": "READY",
+        "exit_code": 0,
+        "timestamp": "00000101T00:00:00.000Z"
+    },
+    "root_url": "http://pac1:23632/storages/m123456_000001",
+    "space": {
+        "free_space": 90000000000,
+        "total_space": 100000000000
+    }
+}
+
+#########################################################################
+
+</pre>
