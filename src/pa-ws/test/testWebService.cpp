@@ -151,10 +151,18 @@ TEST_F(WebServiceHandler_Test,BasecallerEndpoint)
     auto r2 = service->POST_Sockets(args, json1);
 }
 
+// Tests GET on missing socket.
+TEST_F(WebService_Test, GetSocketNotFound)
+{
+    const PacBio::IPC::CurlPlusPlus::ContentBundle content = client.GetContentBundle(url + "/sockets/snafu");
+    EXPECT_EQ(content.httpCode, HttpStatus::NOT_FOUND);
+    EXPECT_THAT(content.data, HasSubstr("GET socket id='snafu' not found"));
+};
+
 // Tests POST/GET consistency.
 TEST_F(WebService_Test, BasecallerGetReturnsPostContents)
 {
-    SocketObject so = CreateMockupOfSocketObject(1);
+    SocketObject so = CreateMockupOfSocketObject("1");
     auto referenceJson = so.Serialize();
     referenceJson["basecaller"].removeMember("processStatus");
     referenceJson["basecaller"].removeMember("rtMetrics");
@@ -173,9 +181,13 @@ TEST_F(WebService_Test, BasecallerGetReturnsPostContents)
 };
 
 
-TEST_F(WebService_Test, BasecallerGetReturnsPostContents_Timed)
+TEST_F(WebService_Test, DISABLED_BasecallerGetReturnsPostContents_Timed)
 {
-    SocketObject so = CreateMockupOfSocketObject(1);
+    // Today, this is identical to the test above.
+    // Someday, we want to call a few times, and check that the
+    // median is fast enough. See
+    //   http://bitbucket.pacificbiosciences.com:7990/projects/SEQ/repos/pa-kestrel/pull-requests/14/overview?commentId=59887
+    SocketObject so = CreateMockupOfSocketObject("1");
     auto referenceJson = so.Serialize();
     referenceJson["basecaller"].removeMember("processStatus");
     referenceJson["basecaller"].removeMember("rtMetrics");
@@ -237,8 +249,11 @@ TEST_F(WebService_Test,Ping)
     EXPECT_THAT(response, HasSubstr("ding a ling"));
 }
 
-TEST(WebServiceHandlerStatics_Test, ValidateSocketId)
+TEST(SocketConfig_Test, ValidateSocketId)
 {
+    // ValidateSocketId is a static method on
+    //   WebServiceHandler
+    // b/c it can throw an Http exception.
     using PacBio::IPC::HttpResponseException;
 
     {
@@ -274,4 +289,15 @@ TEST(WebServiceHandlerStatics_Test, ValidateSocketId)
             }
         }, HttpResponseException);
     }
+}
+
+TEST(SocketConfig_Test, GetValid)
+{
+    Json::Value json;
+    json["socketIds"][1] = "2";
+    json["socketIds"][0] = "1";
+    PaWsConfig conf(json);
+    SocketConfig conf1(conf);
+    const std::vector<SocketConfig::SocketId> expectedids {"1", "2"};
+    EXPECT_EQ(conf1.GetValidSocketIds(), expectedids);
 }
