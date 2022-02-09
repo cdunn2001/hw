@@ -49,7 +49,6 @@
 #include "BlockActivityLabels.h"
 #include "FloatFixedCodec.h"
 #include "MetricField.h"
-#include "MetricFieldMap.h"
 
 //#define SANITY_CHECK_METRICS 1
 

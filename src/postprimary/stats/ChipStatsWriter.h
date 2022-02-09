@@ -99,18 +99,20 @@ public: // structors
 
 public:
     void WriteChip(const ChipStats& stats,
-                   const BazIO::FileHeader& fh, const std::string& schemaVersion)
+                   const std::string& movieName,
+                   float movieTimeInHrs,
+                   const std::string& schemaVersion)
     {
         WriteXMLHeader(schemaVersion);
 
         // Determine the maximum read length to use for read-length based histograms.
-        maxReadLengthBinned_ = fh.MovieTimeInHrs() * 3600 * numBasesPerSecond;
+        maxReadLengthBinned_ = movieTimeInHrs * 3600 * numBasesPerSecond;
 
         //=====================================================================
         // Movie name and movie length
 
-        xml_ << "<MovieName>" << fh.MovieName() << "</MovieName>";
-        xml_ << "<MovieLength>" << fh.MovieTimeInHrs() * 60 << "</MovieLength>";
+        xml_ << "<MovieName>" << movieName << "</MovieName>";
+        xml_ << "<MovieLength>" << movieTimeInHrs * 60 << "</MovieLength>";
 
         // # Sequencing ZMWS
         numSequencingZmws_ = std::accumulate(

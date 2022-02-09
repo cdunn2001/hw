@@ -35,7 +35,6 @@
 
 #include <bazio/MetricField.h>
 #include <bazio/MetricFieldName.h>
-#include <bazio/MetricFrequency.h>
 
 #include <json/json.h>
 
@@ -44,8 +43,6 @@
 namespace PacBio {
 namespace BazIO {
 
-class MetricFieldMap;
-
 /// Stores all BAZ file header information and provides logic 
 /// to parse a JSON header.
 class FileHeader
@@ -53,7 +50,6 @@ class FileHeader
 public:
     using MetricField = PacBio::Primary::MetricField;
     using MetricFieldName = PacBio::Primary::MetricFieldName;
-    using MetricFrequency = PacBio::Primary::MetricFrequency;
 public:
     static Json::Value ParseExperimentMetadata(const std::string& metadata);
     static bool ValidateExperimentMetadata(const Json::Value& metadata);
@@ -94,60 +90,26 @@ public:
     uint64_t BazPatchVersion() const
     { return bazPatchVersion_; }
 
-    uint32_t HFMetricByteSize() const
-    { return hFMetricByteSize_; }
-
-    uint32_t MFMetricByteSize() const
-    { return mFMetricByteSize_; }
-
-    uint32_t LFMetricByteSize() const
-    { return lFMetricByteSize_; }
-
     uint32_t OutputLengthFrames() const
     { return outputLengthFrames_; }
 
     double FrameRateHz() const
     { return frameRateHz_; }
 
-    uint32_t HFMetricFrames() const
-    { return hFMetricFrames_; }
-
-    uint32_t MFMetricFrames() const
-    { return mFMetricFrames_; }
-
-    uint32_t LFMetricFrames() const
-    { return lFMetricFrames_; }
-
-    uint32_t HFbyMFRatio() const
-    { return hFbyMFRatio_; }
-
-    uint32_t HFbyLFRatio() const
-    { return hFbyLFRatio_; }
+    uint32_t MetricFrames() const
+    { return metricFrames_; }
 
     uint64_t OffsetFirstChunk() const
     { return offsetFirstChunk_; }
 
-    std::vector<FieldParams<PacketFieldName>> PacketFields() const
-    {
-        std::vector<FieldParams<PacketFieldName>> fp;
-        for (const auto& g : encodeInfo_)
-        {
-            fp.insert(std::end(fp), g.members.begin(), g.members.end());
-        }
-        return fp;
-    }
+    const std::vector<FieldParams<PacketFieldName>>& PacketFields() const
+    { return packetFields_; }
 
     const std::vector<GroupParams<PacketFieldName>>& PacketGroups() const
     { return encodeInfo_; }
 
-    const std::vector<MetricField>& HFMetricFields() const
-    { return hFMetricFields_; }
-
-    const std::vector<MetricField>& MFMetricFields() const
-    { return mFMetricFields_; }
-
-    const std::vector<MetricField>& LFMetricFields() const
-    { return lFMetricFields_; }
+    const std::vector<MetricField>& MetricFields() const
+    { return metricFields_; }
 
     bool HasPacketField(PacketFieldName fieldName) const
     {
@@ -157,45 +119,18 @@ public:
                                          [&fieldName](const auto& fp) { return fp.name == fieldName; }); });
     }
 
-    bool HasHFMField(MetricFieldName fieldName) const
+    bool HasMetricField(MetricFieldName fieldName) const
     {
-        for (const auto& field : hFMetricFields_)
+        for (const auto& field : metricFields_)
         {
             if (field.fieldName == fieldName) return true;
         }
         return false;
     }
 
-    bool HasMFMField(MetricFieldName fieldName) const
+    int MetricFieldScaling(const MetricFieldName fieldName) const
     {
-        for (const auto& field : mFMetricFields_)
-        {
-            if (field.fieldName == fieldName) return true;
-        }
-        return false;
-    }
-
-    bool HasLFMField(MetricFieldName fieldName) const
-    {
-        for (const auto& field : lFMetricFields_)
-        {
-            if (field.fieldName == fieldName) return true;
-        }
-        return false;
-    }
-
-    int MetricFieldScaling(const MetricFieldName fieldName,
-                           const MetricFrequency fieldFrequency) const
-    {
-        const std::vector<MetricField>* fields;
-        switch (fieldFrequency)
-        {
-            case MetricFrequency::LOW:    fields = &lFMetricFields_; break;
-            case MetricFrequency::MEDIUM: fields = &mFMetricFields_; break;
-            case MetricFrequency::HIGH:   fields = &hFMetricFields_; break;
-            default: throw std::runtime_error("Unknown fieldFrequency");
-        }
-        for (const auto& field : *fields)
+        for (const auto& field : metricFields_)
             if (field.fieldName == fieldName)
                 return field.fieldScalingFactor;
         return 0;
@@ -210,10 +145,11 @@ public:
     const Json::Value& BasecallerConfig() const
     { return basecallerConfig_; }
 
-    const std::vector<float> RelativeAmplitudes() const
+    // Returned amplitudes are in the order given by BaseMap().
+    const std::vector<float>& RelativeAmplitudes() const
     { return relAmps_; }
 
-    const std::string BaseMap() const
+    const std::string& BaseMap() const
     { return baseMap_; }
 
     const Json::Value& ExperimentMetadata() const
@@ -224,12 +160,6 @@ public:
 
     uint32_t MovieLengthFrames() const
     { return movieLengthFrames_; }
-
-    uint32_t ZmwIndexToNumber(const uint32_t index) const
-    { return zmwInfo_.ZmwIndexToNumber(index); }
-
-    uint32_t ZmwNumberToIndex(const uint32_t number) const
-    { return zmwInfo_.ZmwNumberToIndex(number); }
 
     const std::vector<uint32_t>& ZmwNumbers() const
     { return zmwInfo_.HoleNumbers(); }
@@ -255,27 +185,39 @@ public:
     const std::vector<uint32_t>& ZmwNumberRejects() const
     { return zmwNumberRejects_; }
 
-    uint32_t ZmwUnitFeatures(uint32_t zmwIndex) const
-    { 
-        if (zmwIndex < zmwInfo_.NumZmws())
-            return ZmwUnitFeatures()[zmwIndex];
-        else if (ZmwUnitFeatures().size() == 0)
-            return 0; // if there are no features loaded, then send out a dummy 0.
+    uint32_t ZmwUnitFeatures(uint32_t zmwNumber) const
+    {
+        const auto& kv = zmwInfo_.ZmwNumbersToIndex().find(zmwNumber);
+        if (kv == zmwInfo_.ZmwNumbersToIndex().end())
+        {
+            PBExceptionStream() << "zmwNumber: " << zmwNumber << " not found";
+        }
         else
-            PBExceptionStream() << "zmwIndex out of range: " << zmwIndex <<" size:"  << zmwInfo_.NumZmws();
+        {
+            if (zmwInfo_.UnitFeatures().size() == 0)
+                return 0; // if there are no features loaded, then send out a dummy 0.
+            else
+                return zmwInfo_.UnitFeatures()[kv->second];
+        }
     }
 
     uint64_t FileFooterOffset() const
     { return offsetFileFooter_; }
-
-    const std::vector<uint32_t>& ZmwUnitFeatures() const
-    { return zmwInfo_.UnitFeatures(); }
 
     uint32_t NumSuperChunks() const
     { return numSuperChunks_; }
 
     bool Internal() const
     { return internal_; }
+
+    uint32_t PacketByteSize() const
+    { return packetByteSize_; }
+
+    uint32_t MetricByteSize() const
+    { return metricByteSize_; }
+
+    const std::string& FileName() const
+    { return fileName_; }
 
 public:
     void BazMajorVersion(int v)
@@ -286,12 +228,6 @@ public:
 
     void BazPatchVersion(int v)
     { bazPatchVersion_ = v; }
-
-    void HFbyMFRatio(uint32_t arg)
-    { hFbyMFRatio_ = arg; }
-
-    void HFbyLFRatio(uint32_t arg)
-    { hFbyLFRatio_ = arg; }
 
     void FrameRateHz(double arg)
     { frameRateHz_ = arg; }
@@ -308,8 +244,8 @@ public:
     void Internal(bool internal)
     { internal_ = internal; }
 
-private:
-
+    void FileName(const std::string& fn)
+    { fileName_ = fn; }
 
 private:
     static const uint8_t MAGICNUMBER0 = 0x02;
@@ -319,9 +255,8 @@ private:
 
 private:
     std::vector<GroupParams<PacketFieldName>> encodeInfo_;
-    std::vector<MetricField> hFMetricFields_;
-    std::vector<MetricField> mFMetricFields_;
-    std::vector<MetricField> lFMetricFields_;
+    std::vector<FieldParams<PacketFieldName>> packetFields_;
+    std::vector<MetricField> metricFields_;
 
     ZmwInfo zmwInfo_;
     std::vector<uint32_t> zmwNumberRejects_;
@@ -343,25 +278,19 @@ private:
     std::string movieName_;
 
     uint32_t packetByteSize_   = 0;
-    uint32_t hFMetricByteSize_ = 0;
-    uint32_t mFMetricByteSize_ = 0;
-    uint32_t lFMetricByteSize_ = 0;
+    uint32_t metricByteSize_   = 0;
 
     uint32_t outputLengthFrames_ = 0;
     double frameRateHz_ = -1;
 
-    uint32_t hFMetricFrames_ = 0;
-    uint32_t mFMetricFrames_ = 0;
-    uint32_t lFMetricFrames_ = 0;
-
-    uint32_t hFbyMFRatio_ = 0;
-    uint32_t hFbyLFRatio_ = 0;
+    uint32_t metricFrames_ = 0;
 
     uint32_t movieLengthFrames_ = 0;
 
     bool complete_ = false;
     bool truncated_ = false;
     bool internal_ = false;
+    std::string fileName_;
 
     uint32_t numSuperChunks_ = 0;
 

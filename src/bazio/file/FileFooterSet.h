@@ -1,4 +1,4 @@
-// Copyright (c) 2021, Pacific Biosciences of California, Inc.
+// Copyright (c) 2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,44 +23,49 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
-#define PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+#ifndef PACBIO_BAZIO_FILE_FILE_FOOTER_SET_H
+#define PACBIO_BAZIO_FILE_FILE_FOOTER_SET_H
 
-#include <common/graphs/GraphNodeBody.h>
+#include <map>
+#include <vector>
 
-#include <dataTypes/BatchResult.h>
-#include <dataTypes/configs/ConfigForward.h>
+namespace PacBio::BazIO
+{
 
-#include <bazio/writing/BazBuffer.h>
-
-namespace PacBio {
-namespace Application {
-
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
+class FileFooterSet
 {
 public:
-    PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
-                       const Mongo::Data::SmrtBasecallerConfig& config);
-    ~PrelimHQFilterBody();
+    FileFooterSet(const std::map<uint32_t, std::vector<uint32_t>>&& truncationMap)
+    : truncationMap_(truncationMap)
+    { }
 
-    size_t ConcurrencyLimit() const override { return numThreads_; }
-    float MaxDutyCycle() const override { return 1; }
+    // Default constructor
+    FileFooterSet() = delete;
 
-    void Process(Mongo::Data::BatchResult in) override;
+    // Move constructor
+    FileFooterSet(FileFooterSet&&) = default;
 
-    std::vector<uint32_t> GetFlushTokens() override;
+    // Copy constructor
+    FileFooterSet(const FileFooterSet&) = default;
 
-    void Flush(uint32_t token) override;
+    // Move assignment operator
+    FileFooterSet& operator=(FileFooterSet&&) = default;
+
+    // Copy assignment operator
+    FileFooterSet& operator=(const FileFooterSet&) = delete;
+
+    // Destructor
+    ~FileFooterSet() = default;
+    
+public:
+
+    bool IsZmwNumberTruncated(uint32_t zmwNumber) const
+    { return truncationMap_.find(zmwNumber) != truncationMap_.cend(); }
 
 private:
-    uint32_t numThreads_;
-    class Impl;
-    template <bool internal,bool completeMetrics>
-    class ImplChild;
-    std::vector<std::unique_ptr<Impl>> impl_;
+    std::map<uint32_t, std::vector<uint32_t>> truncationMap_;
 };
 
+} // namespace PacBio::BazIO
 
-}}
-
-#endif //PACBIO_APPLICATION_PRELIM_HQ_FILTER_H
+#endif // PACBIO_BAZIO_FILE_FILE_FOOTER_SET_H

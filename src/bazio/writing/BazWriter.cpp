@@ -342,15 +342,12 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         }
         ++iHeader;
 
-        auto slice = bazBuffer->GetSlice(zmwIdx);
-        h.offsetPacket = Ftell();
-        h.zmwIndex = zmwIdx;
-        h.packetsByteSize = slice.packets.packetByteSize;
-        h.numEvents       = slice.packets.numEvents;
-        h.numHFMBs        = 0;
-        h.numMFMBs        = slice.metrics.size();
-        // h.numMFMBs        = (hFbyMFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyMFRatio_ - 1) / hFbyMFRatio_) : 0;
-        h.numLFMBs        = 0;//(hFbyLFRatio_ > 0) ? ((slice.hfmbs.size() + hFbyLFRatio_ - 1) / hFbyLFRatio_) : 0;
+        auto slice          = bazBuffer->GetSlice(zmwIdx);
+        h.offsetPacket      = Ftell();
+        h.zmwIndex          = zmwIdx;
+        h.packetsByteSize   = slice.packets.packetByteSize;
+        h.numEvents         = slice.packets.numEvents;
+        h.numMBs            = slice.metrics.size();
 
         WriteSanity();
 
@@ -363,75 +360,37 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
             }
         }
 
-        if (h.numHFMBs == 0 && (fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() != 0))
-        {
-            //PBLOG_WARN << fh_->HFMetricByteSize() << "," << fh_->MFMetricByteSize() << "," << fh_->LFMetricByteSize();
-            //Error("kv.second->numHFMBs is zero but the metrics sizes are not zero!");
-            //continue;
-        }
-        if (h.numHFMBs != 0 && (fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() == 0))
-        {
-            //PBLOG_WARN << kv.second->numHFMBs;
-            //Error("kv.second->numHFMBs is not zero but the metrics sizes are zero!");
-            continue;
-        }
-
-
         // If there are no metrics, skip to new ZmwSlice
-        if (h.numMFMBs == 0) continue;
+        if (h.numMBs == 0) continue;
 
-        assert(fh_->HFMetricByteSize() + fh_->MFMetricByteSize() + fh_->LFMetricByteSize() != 0);
+        assert(fh_->MetricByteSize() != 0);
         // One buffer to rule them all. Minimize to one fwrite.
         // Buffer has the size for all three consecutive metric blocks
 
-        uint64_t bufferSize =
-                fh_->HFMetricByteSize() * h.numHFMBs +
-                fh_->MFMetricByteSize() * h.numMFMBs +
-                fh_->LFMetricByteSize() * h.numLFMBs;
+        uint64_t bufferSize = fh_->MetricByteSize() * h.numMBs;
+        std::vector<uint8_t> buffer(bufferSize);
+        size_t bufferCounter = 0;
 
-        if (bufferSize > 0)
-        {
-            std::vector<uint8_t> buffer(bufferSize);
-            size_t bufferCounter = 0;
+        // Write metric blocks to buffer
+        Write(fh_->MetricFields(), slice.metrics,
+              buffer, bufferCounter);
 
-            // Write high-frequency metric blocks to buffer
-            if (h.numMFMBs > 0)
-                Write(fh_->MFMetricFields(), slice.metrics,
-                      buffer, bufferCounter);
-
-            // Things are temporarily hacked to pieces.  We only
-            // write at one frequency, which is not aggregated, and
-            // isn't even guanteed consistent with the interval specified
-            // in the header.  This should all change in relatively
-            // short order once metrics handling is re-written
-
-            //// Write medium-frequency metric blocks to buffer
-            //if (h.numMFMBs > 0)
-            //    Write(fh_->MFMetricFields(), slice.hfmbs,
-            //          hFbyMFRatio_, buffer, bufferCounter);
-
-            //// Write low-frequency metric blocks to buffer
-            //if (h.numLFMBs > 0)
-            //    Write(fh_->LFMetricFields(), slice.hfmbs,
-            //          hFbyLFRatio_, buffer, bufferCounter);
-
-            // Make sure that buffer has expected size
-            assert(bufferCounter == bufferSize);
-            ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
-        }
+        // Make sure that buffer has expected size
+        assert(bufferCounter == bufferSize);
+        ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
     }
 
     Align(blocksize);
 }
 
 
-void BazWriter::Write(const std::vector<Primary::MetricField>& hFMetricFields,
+void BazWriter::Write(const std::vector<Primary::MetricField>& metricFields,
                       const MemoryBufferView<TMetric>& metricBlocks,
                       std::vector<uint8_t>& buffer, size_t& c)
 {
-    // Iterate over all HFMBlocks
+    // Iterate over all MBlocks
     for (size_t i = 0; i < metricBlocks.size(); ++i)
-        metricBlocks[i].AppendToBaz(hFMetricFields, buffer, c);
+        metricBlocks[i].AppendToBaz(metricFields, buffer, c);
 }
 
 }}

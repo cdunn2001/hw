@@ -78,7 +78,7 @@ private:
 std::unique_ptr<HQRegionFinder> HQRegionFinderFactory(
         const UserParameters& user,
         const std::shared_ptr<PpaAlgoConfig>& ppaAlgoConfig,
-        const BazIO::FileHeader& header);
+        double frameRateHz);
 
 }}} // ::PacBio::Primary::Postprimary
 

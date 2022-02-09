@@ -23,11 +23,9 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <iostream>
 #include <string>
 #include <stdexcept>
 #include <vector>
-#include <utility>
 #include <json/json.h>
 #include <json/reader.h>
 #include <pacbio/smrtdata/MetricsVerbosity.h>
@@ -40,7 +38,6 @@
 #include <bazio/SmartMemory.h>
 #include <bazio/file/FileHeader.h>
 #include <bazio/MetricFieldName.h>
-#include <bazio/MetricFrequency.h>
 
 #include <BazVersion.h>
 
@@ -54,34 +51,22 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
                                      const float frameRateHz,
                                      const uint32_t movieLengthFrames,
                                      const std::vector<GroupParams<PacketFieldName>>& pulseGroups,
-                                     const MetricsVerbosity metricsVerbosity,
                                      const std::string& experimentMetadata,
                                      const std::string& basecallerConfig,
                                      const ZmwInfo& zmwInfo,
-                                     const uint32_t hFMetricFrames,
-                                     const uint32_t mFMetricFrames,
-                                     const uint32_t sliceLengthFrames,
+                                     const uint32_t metricFrames,
                                      const Flags& flags)
     : movieName_(movieName)
-    , metricsVerbosity_(metricsVerbosity)
     , experimentMetadata_(experimentMetadata)
     , basecallerConfig_(basecallerConfig)
     , zmwInfo_(zmwInfo)
-    , sliceLengthFrames_(sliceLengthFrames)
     , frameRateHz_(frameRateHz)
-    , hFMetricFrames_(hFMetricFrames)
-    , mFMetricFrames_(mFMetricFrames)
-    , lFMetricFrames_(sliceLengthFrames)
+    , metricFrames_(metricFrames)
     , movieLengthFrames_(movieLengthFrames)
     , flags_(flags)
 {
     Default();
-
-    if (!SanityCheckMetricBlockSizes())
-    {
-        throw PBException("Bad metric block sizes configuration");
-    }
-
+    
     // Add members from group params.
     for (const auto& gp : pulseGroups)
     {
@@ -98,16 +83,6 @@ FileHeaderBuilder::FileHeaderBuilder(const std::string& movieName,
     }
 }
 
-
-bool FileHeaderBuilder::SanityCheckMetricBlockSizes()
-{
-    return (hFMetricFrames_ <= mFMetricFrames_) &&
-           (mFMetricFrames_ <= lFMetricFrames_) &&
-           (mFMetricFrames_ >0 && hFMetricFrames_ > 0) &&
-           (lFMetricFrames_ % mFMetricFrames_ == 0) &&
-           (mFMetricFrames_ % hFMetricFrames_ == 0);
-}
-
 std::string FileHeaderBuilder::CreateJSON()
 {
     Json::Value file;
@@ -122,7 +97,6 @@ std::string FileHeaderBuilder::CreateJSON()
     header["BASE_CALLER_VERSION"] = basecallerVersion_;
     header["BAZWRITER_VERSION"] = bazWriterVersion_;
     header["FRAME_RATE_HZ"] = frameRateHz_;
-    header["OUTPUT_LENGTH_FRAMES"] = sliceLengthFrames_;
     header["MOVIE_LENGTH_FRAMES"] = movieLengthFrames_;
     if(FileHeader::ValidateExperimentMetadata(FileHeader::ParseExperimentMetadata(experimentMetadata_)))
         header["EXPERIMENT_METADATA"] = experimentMetadata_;
@@ -140,9 +114,7 @@ std::string FileHeaderBuilder::CreateJSON()
     else
         header["NUM_SUPER_CHUNKS"] = numSuperChunks_;
 
-    AddMetricsToJson(header, lFMetricFields_, lFMetricFrames_, MetricFrequency::LOW);
-    AddMetricsToJson(header, mFMetricFields_, mFMetricFrames_, MetricFrequency::MEDIUM);
-    AddMetricsToJson(header, hFMetricFields_, hFMetricFrames_, MetricFrequency::HIGH);
+    AddMetricsToJson(header, metricFields_, metricFrames_);
     AddPacketsToJson(header);
 
     header[ZmwInfo::JsonKey::ZmwInfo] = zmwInfo_.ToJson();
@@ -161,24 +133,7 @@ std::vector<char> FileHeaderBuilder::CreateJSONCharVector()
     return std::vector<char>(jsonStream.begin(), jsonStream.end());
 }
 
-void FileHeaderBuilder::ClearMetricFields(const MetricFrequency& frequency)
-{
-    switch (frequency)
-    {
-        case MetricFrequency::LOW:
-            lFMetricFields_.clear();
-            break;
-        case MetricFrequency::MEDIUM:
-            mFMetricFields_.clear();
-            break;
-        case MetricFrequency::HIGH:
-            hFMetricFields_.clear();
-            break;
-    }
-}
-
-void FileHeaderBuilder::AddMetricField(const MetricFrequency& frequency,
-                                       const MetricFieldName fieldName,
+void FileHeaderBuilder::AddMetricField(const MetricFieldName fieldName,
                                        const uint8_t fieldBitSize,
                                        const bool fieldSigned,
                                        const uint16_t fieldScalingFactor)
@@ -196,26 +151,13 @@ void FileHeaderBuilder::AddMetricField(const MetricFrequency& frequency,
     // Use scale factor of 0 to indicate usage of half float.
     const auto scaleFactor = (fieldScalingFactor != 1) ? 0 : fieldScalingFactor;
 
-    switch (frequency)
-    {
-        case MetricFrequency::LOW:
-            lFMetricFields_.emplace_back(fieldName, fieldBitSize, fieldSigned, scaleFactor);
-            break;
-        case MetricFrequency::MEDIUM:
-            mFMetricFields_.emplace_back(fieldName, fieldBitSize, fieldSigned, scaleFactor);
-            break;
-        case MetricFrequency::HIGH:
-            hFMetricFields_.emplace_back(fieldName, fieldBitSize, fieldSigned, scaleFactor);
-            break;
-    }
+    metricFields_.emplace_back(fieldName, fieldBitSize, fieldSigned, scaleFactor);
 }
 
 void FileHeaderBuilder::Default()
 {
-    ClearMetricFields(MetricFrequency::LOW);
-    ClearMetricFields(MetricFrequency::MEDIUM);
-    ClearMetricFields(MetricFrequency::HIGH);
-
+    ClearMetricFields();
+    
     basecallerVersion_ = BAZ_BASECALLER_ALGO_VERSION;
     bazWriterVersion_ = BAZIO_VERSION;
     bazMajorVersion_ = BAZ_MAJOR_VERSION;
@@ -223,90 +165,76 @@ void FileHeaderBuilder::Default()
     bazPatchVersion_ = BAZ_PATCH_VERSION;
 }
 
-void FileHeaderBuilder::DefaultMetrics(MetricFrequency frequency)
+void FileHeaderBuilder::DefaultMetrics()
 {
-    AddMetricField(frequency, MetricFieldName::NUM_FRAMES, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_A, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_C, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_G, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_T, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_HALF_SANDWICHES, 8, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_SANDWICHES, 8, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_PULSE_LABEL_STUTTERS, 8, false, 1);
-    AddMetricField(frequency, MetricFieldName::PULSE_WIDTH, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::BASE_WIDTH, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_PULSES, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMAX_A, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMAX_C, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMAX_G, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMAX_T, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PULSE_DETECTION_SCORE, 16, true, 100);
-    AddMetricField(frequency, MetricFieldName::TRACE_AUTOCORR, 16, true, 10000);
-    AddMetricField(frequency, MetricFieldName::PKMID_A, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_C, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_G, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_T, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_A, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_C, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_G, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_T, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::BASELINE_SD, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::BASELINE_MEAN, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PIXEL_CHECKSUM, 16, true, 1);
-    AddMetricField(frequency, MetricFieldName::DME_STATUS, 8, false, 1);
-    AddMetricField(frequency, MetricFieldName::BPZVAR_A, 16, true, 20000);
-    AddMetricField(frequency, MetricFieldName::BPZVAR_C, 16, true, 20000);
-    AddMetricField(frequency, MetricFieldName::BPZVAR_G, 16, true, 20000);
-    AddMetricField(frequency, MetricFieldName::BPZVAR_T, 16, true, 20000);
-    AddMetricField(frequency, MetricFieldName::PKZVAR_A, 16, true, 1000);
-    AddMetricField(frequency, MetricFieldName::PKZVAR_C, 16, true, 1000);
-    AddMetricField(frequency, MetricFieldName::PKZVAR_G, 16, true, 1000);
-    AddMetricField(frequency, MetricFieldName::PKZVAR_T, 16, true, 1000);
+    AddMetricField(MetricFieldName::NUM_FRAMES, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_A, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_C, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_G, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_T, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_HALF_SANDWICHES, 8, false, 1);
+    AddMetricField(MetricFieldName::NUM_SANDWICHES, 8, false, 1);
+    AddMetricField(MetricFieldName::NUM_PULSE_LABEL_STUTTERS, 8, false, 1);
+    AddMetricField(MetricFieldName::PULSE_WIDTH, 16, false, 1);
+    AddMetricField(MetricFieldName::BASE_WIDTH, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_PULSES, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMAX_A, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMAX_C, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMAX_G, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMAX_T, 16, true, 10);
+    AddMetricField(MetricFieldName::PULSE_DETECTION_SCORE, 16, true, 100);
+    AddMetricField(MetricFieldName::TRACE_AUTOCORR, 16, true, 10000);
+    AddMetricField(MetricFieldName::PKMID_A, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_C, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_G, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_T, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_A, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_C, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_G, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_T, 16, false, 1);
+    AddMetricField(MetricFieldName::BASELINE_SD, 16, true, 10);
+    AddMetricField(MetricFieldName::BASELINE_MEAN, 16, true, 10);
+    AddMetricField(MetricFieldName::PIXEL_CHECKSUM, 16, true, 1);
+    AddMetricField(MetricFieldName::DME_STATUS, 8, false, 1);
+    AddMetricField(MetricFieldName::BPZVAR_A, 16, true, 20000);
+    AddMetricField(MetricFieldName::BPZVAR_C, 16, true, 20000);
+    AddMetricField(MetricFieldName::BPZVAR_G, 16, true, 20000);
+    AddMetricField(MetricFieldName::BPZVAR_T, 16, true, 20000);
+    AddMetricField(MetricFieldName::PKZVAR_A, 16, true, 1000);
+    AddMetricField(MetricFieldName::PKZVAR_C, 16, true, 1000);
+    AddMetricField(MetricFieldName::PKZVAR_G, 16, true, 1000);
+    AddMetricField(MetricFieldName::PKZVAR_T, 16, true, 1000);
 }
 
-void FileHeaderBuilder::DefaultMetricsRTAL(MetricFrequency frequency)
+void FileHeaderBuilder::DefaultMetricsRTAL()
 {
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_A, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_C, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_G, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_BASES_T, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PULSE_WIDTH, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::BASE_WIDTH, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::NUM_PULSES, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_A, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_C, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_G, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_T, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_A, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_C, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_G, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::PKMID_FRAMES_T, 16, false, 1);
-    AddMetricField(frequency, MetricFieldName::BASELINE_SD, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::BASELINE_MEAN, 16, true, 10);
-    AddMetricField(frequency, MetricFieldName::PIXEL_CHECKSUM, 16, true, 1);
-    AddMetricField(frequency, MetricFieldName::DME_STATUS, 8, false, 1);
-    AddMetricField(frequency, MetricFieldName::ACTIVITY_LABEL, 8, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_A, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_C, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_G, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_BASES_T, 16, false, 1);
+    AddMetricField(MetricFieldName::PULSE_WIDTH, 16, false, 1);
+    AddMetricField(MetricFieldName::BASE_WIDTH, 16, false, 1);
+    AddMetricField(MetricFieldName::NUM_PULSES, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_A, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_C, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_G, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_T, 16, true, 10);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_A, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_C, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_G, 16, false, 1);
+    AddMetricField(MetricFieldName::PKMID_FRAMES_T, 16, false, 1);
+    AddMetricField(MetricFieldName::BASELINE_SD, 16, true, 10);
+    AddMetricField(MetricFieldName::BASELINE_MEAN, 16, true, 10);
+    AddMetricField(MetricFieldName::PIXEL_CHECKSUM, 16, true, 1);
+    AddMetricField(MetricFieldName::DME_STATUS, 8, false, 1);
+    AddMetricField(MetricFieldName::ACTIVITY_LABEL, 8, false, 1);
 }
 
 void FileHeaderBuilder::AddMetricsToJson(Json::Value& header,
                                          const std::vector<MetricField>& metrics,
-                                         const int frames,
-                                         const MetricFrequency& frequency)
+                                         const uint32_t frames)
 {
-    std::string jsonField;
-    switch (frequency)
-    {
-        case MetricFrequency::LOW:
-            jsonField = "LF_METRIC";
-            break;
-        case MetricFrequency::MEDIUM:
-            jsonField = "MF_METRIC";
-            break;
-        case MetricFrequency::HIGH:
-            jsonField = "HF_METRIC";
-            break;
-    }
-    Json::Value& metricRoot = header[jsonField];
+    Json::Value& metricRoot = header["METRIC"];
     if (!metrics.empty())
     {
         Json::Value& metricFields = metricRoot["FIELDS"];

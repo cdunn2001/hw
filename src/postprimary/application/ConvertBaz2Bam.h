@@ -213,7 +213,7 @@ private: // const methods
     {
         if (!performWhiteList_)
         {
-            return bazReader_->NumZMWs();
+            return bazReader_->NumZmws();
         } else
         {
             return whiteListZmwIds_.size();

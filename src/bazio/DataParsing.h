@@ -42,7 +42,6 @@
 
 #include <bazio/encoding/FieldNames.h>
 #include <bazio/encoding/EncodingParams.h>
-#include <bazio/file/FileHeader.h>
 
 namespace PacBio {
 namespace Primary {
@@ -50,9 +49,7 @@ namespace Primary {
 struct ZmwDataCounts
 {
     size_t packetsByteSize = 0;
-    size_t numHFMBs = 0;
-    size_t numMFMBs = 0;
-    size_t numLFMBs = 0;
+    size_t numMBs = 0;
 };
 
 // Class used to aggregate the raw binary data for a given zmw.
@@ -103,11 +100,9 @@ public:
         size_t capacity_;
     };
 
-    ZmwByteData(const BazIO::FileHeader& fh, const ZmwDataCounts& expectedSizes, size_t idx)
+    ZmwByteData(uint32_t metricByteSize, const ZmwDataCounts& expectedSizes, size_t idx)
       : packetByteStream_(expectedSizes.packetsByteSize)
-      , hFMByteStream_(expectedSizes.numHFMBs * fh.HFMetricByteSize())
-      , mFMByteStream_(expectedSizes.numMFMBs * fh.MFMetricByteSize())
-      , lFMByteStream_(expectedSizes.numLFMBs * fh.LFMetricByteSize())
+      , metricByteStream_(expectedSizes.numMBs * metricByteSize)
       , sizes_(expectedSizes)
       , numEvents_(0)
       , zmwIndex_(idx)
@@ -121,17 +116,9 @@ public:
         numEvents_ += numEvents;
         return packetByteStream_.next(size);
     }
-    uint8_t * NextHFBytes(size_t size)
+    uint8_t * NextMetricBytes(size_t size)
     {
-        return hFMByteStream_.next(size);
-    }
-    uint8_t * NextMFBytes(size_t size)
-    {
-        return mFMByteStream_.next(size);
-    }
-    uint8_t * NextLFBytes(size_t size)
-    {
-        return lFMByteStream_.next(size);
+        return metricByteStream_.next(size);
     }
 
     size_t NumEvents() const { return numEvents_; }
@@ -140,44 +127,28 @@ public:
 
     size_t NumBytes() const
     {
-        return packetByteStream_.size()
-            + hFMByteStream().size()
-            + mFMByteStream().size()
-            + lFMByteStream().size();
+        return packetByteStream_.size() + metricByteStream_.size();
     }
 
     bool IsFull() const
     {
-        return packetByteStream_.IsFull()
-            && hFMByteStream_.IsFull()
-            && mFMByteStream_.IsFull()
-            && lFMByteStream_.IsFull();
+        return packetByteStream_.IsFull() && metricByteStream_.IsFull();
     }
 
     const ByteStream& packetByteStream() const
     {
         return packetByteStream_;
     }
-    const ByteStream& hFMByteStream() const
+    const ByteStream& MetricByteStream() const
     {
-        return hFMByteStream_;
-    }
-    const ByteStream& mFMByteStream() const
-    {
-        return mFMByteStream_;
-    }
-    const ByteStream& lFMByteStream() const
-    {
-        return lFMByteStream_;
+        return metricByteStream_;
     }
 
     size_t ZmwIndex() const { return zmwIndex_; }
 
 private:
     ByteStream packetByteStream_;
-    ByteStream hFMByteStream_;
-    ByteStream mFMByteStream_;
-    ByteStream lFMByteStream_;
+    ByteStream metricByteStream_;
 
     ZmwDataCounts sizes_;
     size_t numEvents_;
@@ -389,8 +360,15 @@ private:
 // Free functions, used to help parse binary data into metrics and packet
 // information
 
-BlockLevelMetrics ParseMetrics(const BazIO::FileHeader& fh, const ZmwByteData& data, bool internal);
-RawEventData ParsePackets(const BazIO::FileHeader& fh, const ZmwByteData& data);
+BlockLevelMetrics ParseMetrics(const std::vector<MetricField>& metricFields,
+                               uint32_t metricFrames,
+                               double frameRateHz,
+                               const std::vector<float> relAmps,
+                               const std::string& baseMap,
+                               const ZmwByteData& data, bool internal);
+RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& packetGroups,
+                          const std::vector<BazIO::FieldParams<BazIO::PacketFieldName>>& packetFields,
+                          const ZmwByteData& data);
 RawEventData ParsePackets(const std::vector<BazIO::GroupParams<BazIO::PacketFieldName>>& groups,
                           const uint8_t* data,
                           size_t dataSize,

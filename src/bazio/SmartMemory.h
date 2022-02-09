@@ -39,6 +39,7 @@
 
 #include <errno.h>
 #include <memory>
+#include <vector>
 #include <cstdio>
 #include <cstdlib>
 #include <pacbio/PBException.h>

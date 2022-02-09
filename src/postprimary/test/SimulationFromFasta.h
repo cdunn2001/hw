@@ -120,9 +120,8 @@ private: // data
 
     float frameRate_ = 100;
     int bps_ = 5;
-    int superChunksFrames_ = 16384/2;
-    int hFMetricsFrames = 1024;
-    int mFMetricFrames = 4096;
+    int superChunksFrames_ = 8192;
+    int metricFrames_ = 1024;
     Readout readout_;
     bool silent_;
     SimulationRNG rng;
@@ -135,7 +134,6 @@ private:
     void Simulate()
     {
         const bool internal = readout_ == Readout::PULSES;
-        const auto metricsVerbosity = internal ? MetricsVerbosity::HIGH : MetricsVerbosity::MINIMAL;
 
         int seconds_ = std::round(superChunksFrames_ / frameRate_);
         using FileHeaderBuilder = BazIO::FileHeaderBuilder;
@@ -143,13 +141,10 @@ private:
                               frameRate_,
                               frameRate_*60*60*3,
                               internal ? BazIO::InternalPulses::Params() : BazIO::ProductionPulses::Params(),
-                              metricsVerbosity,
                               generateExperimentMetadata(),
                               generateBasecallerConfig(internal),
                               Simulation::SimulateZmwInfo(zmwNumbers_),
-                              hFMetricsFrames,
-                              mFMetricFrames,
-                              superChunksFrames_,
+                              metricFrames_,
                               FileHeaderBuilder::Flags()
                                 .RealTimeActivityLabels(rtal_)
         );
@@ -182,26 +177,26 @@ private:
                 auto basecall = rng.SimulateBaseCalls(sub, &numEvents, &currentPulseFrames[z], &currentBaseFrames[z], internal);
                 if (numEvents < sub.size())
                     throw std::runtime_error("Less pulses than bases: " + std::to_string(numEvents) + " < " + std::to_string(sub.size()));
-                std::vector<SpiderMetricBlock> hfMetric = rng.SimulateHFMetrics(numMetrics);
+                std::vector<SpiderMetricBlock> metrics = rng.SimulateMetrics(numMetrics);
 
-                for (int jj = 0; jj < numMetrics; ++jj)
+                for (int i = 0; i < numMetrics; ++i)
                 {
                     auto basesPerMBlock = sub.size() / numMetrics;
-                    if (jj == -1)
+                    if (i == -1)
                         basesPerMBlock += sub.size() % numMetrics;
-                    hfMetric[jj].NumBasesA(basesPerMBlock/4);
-                    hfMetric[jj].NumBasesC(basesPerMBlock/4);
-                    hfMetric[jj].NumBasesG(basesPerMBlock/4);
-                    hfMetric[jj].NumBasesT(basesPerMBlock - basesPerMBlock/4 * 3);
+                    metrics[i].NumBasesA(basesPerMBlock / 4);
+                    metrics[i].NumBasesC(basesPerMBlock / 4);
+                    metrics[i].NumBasesG(basesPerMBlock / 4);
+                    metrics[i].NumBasesT(basesPerMBlock - basesPerMBlock / 4 * 3);
                 }
 
-                for (int jj = 0; jj < numMetrics-1; ++jj)
+                for (int i = 0; i < numMetrics - 1; ++i)
                 {
-                    hfMetric[jj].NumPulses(numEvents / numMetrics);
+                    metrics[i].NumPulses(numEvents / numMetrics);
                 }
-                hfMetric.back().NumPulses(numEvents / numMetrics + numEvents % numMetrics);
+                metrics.back().NumPulses(numEvents / numMetrics + numEvents % numMetrics);
 
-                writer.AddZmwSlice(basecall.get(), numEvents, std::move(hfMetric), z);
+                writer.AddZmwSlice(basecall.get(), numEvents, std::move(metrics), z);
             }
             // Timing::PrintTime(now, "SimulationFromFasta");
             writer.Flush();

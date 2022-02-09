@@ -32,6 +32,7 @@
 
 #include <pacbio/logging/Logger.h>
 #include <pacbio/tracefile/ScanData.h>
+#include <pacbio/text/String.h>
 
 #include <json/reader.h>
 
@@ -85,8 +86,6 @@ void FileHeader::Init(const char* header, const size_t length)
         throw std::runtime_error("Missing PACKET in BAZ header");
     if (!headerValue.isMember("FRAME_RATE_HZ"))
         throw std::runtime_error("Missing FRAME_RATE_HZ in BAZ header");
-    if (!headerValue.isMember("OUTPUT_LENGTH_FRAMES"))
-        throw std::runtime_error("Missing OUTPUT_LENGTH_FRAMES in BAZ header");
     if (!headerValue.isMember("BASE_CALLER_VERSION"))
         throw std::runtime_error("Missing BASE_CALLER_VERSION in BAZ header");
     if (!headerValue.isMember("BAZWRITER_VERSION"))
@@ -171,36 +170,12 @@ void FileHeader::Init(const char* header, const size_t length)
     // Parse packets and store them as vector of structs
     ParsePackets(headerValue, packetByteSize_);
 
-    // Parse metric nodes
-    if (headerValue.isMember("HF_METRIC"))
-        ParseMetrics(headerValue["HF_METRIC"], hFMetricFields_, hFMetricByteSize_, hFMetricFrames_);
-
-    if (headerValue.isMember("MF_METRIC"))
-        ParseMetrics(headerValue["MF_METRIC"], mFMetricFields_, mFMetricByteSize_, mFMetricFrames_);
-
-    if (headerValue.isMember("LF_METRIC"))
-        ParseMetrics(headerValue["LF_METRIC"], lFMetricFields_, lFMetricByteSize_, lFMetricFrames_);
-
-    // Check if medium- and low-frequency rate is multiple of high-frequency
-    if (hFMetricFrames_ > 0 && mFMetricFrames_ % hFMetricFrames_ != 0)
-        throw std::runtime_error("Medium-frequency is not a multiple of high-frequency.");
-    if (hFMetricFrames_ > 0 && lFMetricFrames_ % hFMetricFrames_ != 0)
-        throw std::runtime_error("Low-frequency is not a multiple of high-frequency.");
+    // Parse metric node
+    if (headerValue.isMember("METRIC"))
+        ParseMetrics(headerValue["METRIC"], metricFields_, metricByteSize_, metricFrames_);
 
     packetByteSize_ /= 8;
-    if (hFMetricByteSize_ > 0)
-        hFMetricByteSize_ /= 8;
-    if (mFMetricByteSize_ > 0)
-        mFMetricByteSize_ /= 8;
-    if (lFMetricByteSize_ > 0)
-        lFMetricByteSize_ /= 8;
-
-    // Compute ratio of hf to mf and hf to lf
-    if (hFMetricFrames_ > 0)
-    {
-        hFbyMFRatio_ = mFMetricFrames_ / hFMetricFrames_;
-        hFbyLFRatio_ = lFMetricFrames_ / hFMetricFrames_;
-    }
+    if (metricByteSize_ > 0) metricByteSize_ /= 8;
 
     // Parse ZMW INFO
     if (headerValue.isMember(ZmwInfo::JsonKey::ZmwInfo)
@@ -293,6 +268,7 @@ void FileHeader::ParsePackets(Json::Value& root,
         // Get current encoding group.
         const auto encodingGroupJson = packetArray[i];
         GroupParams<PacketFieldName> gp(encodingGroupJson);
+        packetFields_.insert(std::end(packetFields_), gp.members.begin(), gp.members.end());
         encodeInfo_.push_back(gp);
         packetByteSize += gp.totalBits;
     }

@@ -138,7 +138,13 @@ ResultWriter::ResultWriter(const UserParameters* user,
                            const PacBio::BAM::CollectionMetadata* cmd,
                            std::shared_ptr<RuntimeMetaData>& rmd,
                            const PpaAlgoConfig* ppaAlgoConfig,
-                           const FileHeader& fileHeader,
+                           const std::string& movieName,
+                           float movieTimeInHrs,
+                           const std::string& bazVersion,
+                           const std::string& bazWriterVersion,
+                           const std::string& basecallerVersion,
+                           double frameRateHz,
+                           bool internal,
                            const std::vector<ProgramInfo>& apps,
                            bool computeStats,
                            uint32_t maxNumZwms)
@@ -147,7 +153,13 @@ ResultWriter::ResultWriter(const UserParameters* user,
     cmd_(cmd),
     rmd_(rmd),
     ppaAlgoConfig_(ppaAlgoConfig),
-    fileHeader_(fileHeader),
+    movieName_(movieName),
+    movieTimeInHrs_(movieTimeInHrs),
+    bazVersion_(bazVersion),
+    bazWriterVersion_(bazWriterVersion),
+    basecallerVersion_(basecallerVersion),
+    frameRateHz_(frameRateHz),
+    internal_(internal),
     computeStats_(computeStats),
     fastaStream_(nullptr),
     fastqStream_(nullptr),
@@ -178,7 +190,7 @@ ResultWriter::ResultWriter(const UserParameters* user,
 
     if (!user_->nobam)
     {
-        CreateBams(CreateProgramInfos(fileHeader, apps));
+        CreateBams(CreateProgramInfos(apps));
         PopulateScrapTags();
     }
 
@@ -267,7 +279,7 @@ Validation ResultWriter::CloseAndValidate()
         if (computeStats_)
         {
             ChipStatsWriter csw(stsXmlFilename_, !ppaAlgoConfig_->controlFilter.disableControlFiltering);
-            csw.WriteChip(chipStats_, fileHeader_, rmd_->schemaVersion);
+            csw.WriteChip(chipStats_, movieName_, movieTimeInHrs_, rmd_->schemaVersion);
             WriteDataset();
         }
         else // bam2bam
@@ -686,7 +698,7 @@ std::string ResultWriter::CreateBam(const std::vector<ProgramInfo>& programInfos
     std::string comment = PacBio::IPC::RenderJSON(sideband.GetJsonComment());
     localHeader.AddComment(comment);
 
-    *localRG = CreateReadGroupInfo(localRgType, fileHeader_);
+    *localRG = CreateReadGroupInfo(localRgType);
     localHeader.AddReadGroup(*localRG);
 
     localBam->reset(
@@ -830,27 +842,26 @@ void ResultWriter::AddResourceFastx(const std::string& convention, const std::st
     dataset_.ExternalResources().Add(resource);
 };
 
-std::vector<ProgramInfo> ResultWriter::CreateProgramInfos(const FileHeader& fileHeader,
-                                                          const std::vector<ProgramInfo>& apps)
+std::vector<ProgramInfo> ResultWriter::CreateProgramInfos(const std::vector<ProgramInfo>& apps)
 {
     std::vector<ProgramInfo> pgs;
 
     // BAZ version
-    if (fileHeader.BazVersion().compare("0.0.0") != 0)
+    if (bazVersion_.compare("0.0.0") != 0)
     {
         ProgramInfo bazPg;
         bazPg.Name("bazformat")
-                .Version(fileHeader.BazVersion())
+                .Version(bazVersion_)
                 .Id("bazFormat");
         pgs.emplace_back(std::move(bazPg));
     }
 
     // BazWriter version
-    if (!fileHeader.BazWriterVersion().empty())
+    if (!bazWriterVersion_.empty())
     {
         ProgramInfo bazWriterPg;
         bazWriterPg.Name("bazwriter")
-                .Version(fileHeader.BazWriterVersion())
+                .Version(bazWriterVersion_)
                 .Id("bazwriter");
         pgs.emplace_back(std::move(bazWriterPg));
     }
@@ -862,8 +873,7 @@ std::vector<ProgramInfo> ResultWriter::CreateProgramInfos(const FileHeader& file
     return pgs;
 }
 
-ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
-                                                const FileHeader& fileHeader)
+ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType)
 {
     static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for ReadGroupInfo in BAM file"; return true;}();
     (void)warnOnce;
@@ -871,8 +881,8 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
     PlatformModelType type = PlatformModelType::SEQUELII;
     ReadGroupInfo group(rmd_->movieName, readType, type);
 
-    group.BasecallerVersion(fileHeader.BaseCallerVersion())
-            .FrameRateHz(std::to_string(fileHeader.FrameRateHz()));
+    group.BasecallerVersion(basecallerVersion_)
+            .FrameRateHz(std::to_string(frameRateHz_));
 
     if (!rmd_->sequencingKit.empty())
         group.SequencingKit(SanitizeBAMTag(rmd_->sequencingKit));
@@ -910,8 +920,7 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType,
     group.PulseWidthCodec(FrameCodec::RAW);
 
     // Internal tags
-    bool internal = fileHeader.HasPacketField(BazIO::PacketFieldName::IsBase) || fileHeader.Internal();
-    if(internal)
+    if(internal_)
     {
         group.BaseFeatureTag(BaseFeature::PULSE_CALL, "pc");
         group.BaseFeatureTag(BaseFeature::PRE_PULSE_FRAMES, "pd");

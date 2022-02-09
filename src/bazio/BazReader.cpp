@@ -40,27 +40,31 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <queue>
-#include <sstream>
 #include <stdexcept>
 #include <stdlib.h>
 #include <string>
 #include <typeinfo>
-#include <unordered_map>
+
+#include <boost/range/combine.hpp>
 
 #include <pacbio/logging/Logger.h>
+#include <pacbio/text/String.h>
 
 #include "BazCore.h"
+#include "FileFooter.h"
 #include "SmartMemory.h"
 #include "Timing.h"
+
+
 #include "BazReader.h"
 
 namespace PacBio {
-namespace Primary
-{
+namespace Primary {
 
 /// Reads file header and super chunk header for indexed access.
-BazReader::BazReader(const std::string& fileName,
+BazReader::BazReader(const std::vector<std::string>& fileNames,
                      size_t zmwBatchMB,
                      size_t zmwHeaderBatchMB,
                      bool silent,
@@ -69,133 +73,143 @@ BazReader::BazReader(const std::string& fileName,
     if (callBackCheck && callBackCheck()) return;
 
     const size_t zmwBatchBytes = zmwBatchMB << 20;
+
     // Init
-    file_ = fopen(fileName.c_str(), "rb");
-    if (!file_) throw std::runtime_error("Can't open " + fileName + " with BazReader");
+    for (const auto& fileName : fileNames)
+    {
+        files_.emplace_back(fileName,
+                            std::unique_ptr<std::FILE,decltype(&std::fclose)>(std::fopen(fileName.c_str(), "rb"),
+                                                                              &std::fclose));
+        if (!files_.back().second) throw std::runtime_error("Can't open " + fileName + " with BazReader");
+    }
 
     // Timing
     // auto now = std::chrono::high_resolution_clock::now();
 
-    // Read file header from file
+    // Read file headers from files
     if (callBackCheck && callBackCheck()) return;
-    fh_ = ReadFileHeader();
+    ReadFileHeaders();
     if (callBackCheck && callBackCheck()) return;
-    ff_ = ReadFileFooter();
-    if (callBackCheck && callBackCheck()) return;
-
-    // Check if BAZ version is correct
-    if (!(fh_->BazMajorVersion() == 2 && fh_->BazMinorVersion() == 0))
-    {
-        PBLOG_ERROR << "Incorrect BAZ version provided. Need version 2.0.x, provided version is "
-                    << fh_->BazVersion();
-        exit(EXIT_FAILURE);
-    }
-
-    if (!fh_->Complete())
-    {
-        PBLOG_ERROR << "Trying to read unfinished baz file " << fileName;
-        exit(EXIT_FAILURE);
-    }
-
-    if (fh_->Truncated())
-        PBLOG_INFO << "Converting truncated file " << fileName;
-
-    // Check sanity dword
-    if (!Sanity::ReadAndVerify(file_))
-    {
-        PBLOG_ERROR << "Corrupt file. Cannot read SANITY DWORD after FILE_HEADER";
-        exit(EXIT_FAILURE);
-    }
-
+    ReadFileFooters();
     if (callBackCheck && callBackCheck()) return;
 
-    numZMWs_ = fh_->MaxNumZMWs();
-    numSuperchunks_ = fh_->NumSuperChunks();
+    numZmws_ = fh_->TotalNumZmws();
+    const auto& maxNumZmws = fh_->MaxNumZmws();
+    std::partial_sum(maxNumZmws.begin(), maxNumZmws.end(), std::back_inserter(zmwIndexByBazFile_));
 
-    // Position indicator (pi) to for next chunk
-    auto pi = std::ftell(file_);
-
-    // 4k alignment of binary data start
-    if (pi % blocksize != 0)
-        pi += blocksize - pi % blocksize;
-
-    if (!silent)
+    std::vector<std::vector<size_t>> zmwMetaLocationsFiles_;
+    zmwMetaLocationsFiles_.reserve(files_.size());
+    const auto& numSuperChunks = fh_->NumSuperChunks();
+    std::vector<std::pair<std::string,std::FILE*>> filePtrs;
+    for (size_t i = 0; i < files_.size(); ++i)
     {
-        std::cerr << "Finding Metadata locations\n";
-        std::cerr.flush();
-    }
+        auto fn = files_[i].first;
+        auto fp = files_[i].second.get();
 
-    std::vector<size_t> zmwMetaLocations;
-    zmwMetaLocations.reserve(NumSuperchunks());
-    while (true)
-    {
-        if (callBackCheck && callBackCheck()) return;
-        // Seek to next super-chunk
-        fseek(file_, pi, SEEK_SET);
-        // Check sanity dword
-        int counter = 0;
-        while (!Sanity::ReadAndVerify(file_))
-        {
-            // Seek one block further
+        // Position indicator (pi) to for next chunk
+        auto pi = std::ftell(fp);
+
+        // 4k alignment of binary data start
+        if (pi % blocksize != 0)
             pi += blocksize - pi % blocksize;
-            fseek(file_, pi, SEEK_SET);
-            // Only try three times and then fail.
-            ++counter;
-            if (counter == 3)
+
+        if (!silent)
+        {
+            std::cerr << "Finding Metadata locations\n";
+            std::cerr.flush();
+        }
+
+        std::vector<size_t> zmwMetaLocations;
+        zmwMetaLocations.reserve(numSuperChunks[i]);
+        while (true)
+        {
+            if (callBackCheck && callBackCheck()) return;
+            // Seek to next super-chunk
+            fseek(fp, pi, SEEK_SET);
+            // Check sanity dword
+            int counter = 0;
+            while (!Sanity::ReadAndVerify(fp))
             {
-                PBLOG_ERROR << "Corrupt file. Cannot read SANITY DWORD before CHUNK_META";
+                // Seek one block further
+                pi += blocksize - pi % blocksize;
+                fseek(fp, pi, SEEK_SET);
+                // Only try three times and then fail.
+                ++counter;
+                if (counter == 3)
+                {
+                    PBLOG_ERROR << "Corrupt file. Cannot read SANITY DWORD before CHUNK_META";
+                    exit(EXIT_FAILURE);
+                }
+                if (callBackCheck && callBackCheck()) return;
+            }
+
+            // Read super-chunk meta information
+            SuperChunkMeta chunkMeta;
+            // Read offset
+            if (fread(&chunkMeta.offsetNextChunk, sizeof(SuperChunkMeta::offsetNextChunk), 1, fp) != 1)
+            {
+                PBLOG_ERROR << "Corrupt file. Cannot read SUPER_CHUNK_META offset";
                 exit(EXIT_FAILURE);
             }
+            // Read numZmws
+            if (fread(&chunkMeta.numZmws, sizeof(SuperChunkMeta::numZmws), 1, fp) != 1)
+            {
+                PBLOG_ERROR << "Corrupt file. Cannot read SUPER_CHUNK_META numZmws";
+                exit(EXIT_FAILURE);
+            }
+
+            // Check sanity dword
+            if (!Sanity::ReadAndVerify(fp))
+            {
+                PBLOG_ERROR << "Corrupt file. Cannot read SANITY DWORD after CHUNK_META";
+                exit(EXIT_FAILURE);
+            }
+
+            // Set pi to next super-chunk offset
+            pi = chunkMeta.offsetNextChunk;
+
+            // If next offset is zero, stop.
+            // This is used to mark EOF.
+            if (pi == 0) break;
+
+            if (!(chunkMeta.numZmws == maxNumZmws[i]))
+            {
+                std::ostringstream errMsg;
+                errMsg << "Unexpected number of ZMWs in chunk metadata "
+                       << "expected: " << maxNumZmws[i] << " but got: "
+                       << chunkMeta.numZmws;
+                PBLOG_ERROR << errMsg.str();
+                throw PBException(errMsg.str());
+            }
+            zmwMetaLocations.emplace_back(ftell(fp));
             if (callBackCheck && callBackCheck()) return;
         }
 
-        // Read super-chunk meta information
-        SuperChunkMeta chunkMeta;
-        // Read offset
-        if (fread(&chunkMeta.offsetNextChunk, sizeof(SuperChunkMeta::offsetNextChunk), 1, file_) != 1)
+        if (!(zmwMetaLocations.size() == numSuperChunks[i]))
         {
-            PBLOG_ERROR << "Corrupt file. Cannot read SUPER_CHUNK_META offset";
-            exit(EXIT_FAILURE);
-        }
-        // Read numZmws
-        if (fread(&chunkMeta.numZmws, sizeof(SuperChunkMeta::numZmws), 1, file_) != 1)
-        {
-            PBLOG_ERROR << "Corrupt file. Cannot read SUPER_CHUNK_META numZmws";
-            exit(EXIT_FAILURE);
+            std::ostringstream errMsg;
+            errMsg << "Unexpected number of ZMW metadata locations"
+                   << "expected: " << numSuperChunks[i] << " but got: "
+                   << zmwMetaLocations.size();
+            PBLOG_ERROR << errMsg.str();
+            throw PBException(errMsg.str());
         }
 
-        // Check sanity dword
-        if (!Sanity::ReadAndVerify(file_))
-        {
-            PBLOG_ERROR << "Corrupt file. Cannot read SANITY DWORD after CHUNK_META";
-            exit(EXIT_FAILURE);
-        }
-
-
-        // Set pi to next super-chunk offset
-        pi = chunkMeta.offsetNextChunk;
-
-        // If next offset is zero, stop.
-        // This is used to mark EOF.
-        if (pi == 0) break;
-
-        assert(chunkMeta.numZmws == NumZMWs());
-        zmwMetaLocations.emplace_back(ftell(file_));
-        if (callBackCheck && callBackCheck()) return;
+        zmwMetaLocationsFiles_.emplace_back(std::move(zmwMetaLocations));
+        filePtrs.emplace_back(fn, fp);
     }
-    assert(zmwMetaLocations.size() == NumSuperchunks());
 
     if (callBackCheck && callBackCheck()) return;
 
     // We're going to parse the header once upfront to figure out how large each batch
     // of reads will be.  Force silent mode to not pollute the log with extra header
     // reading messages
-    headerReader_ = HeaderReader(zmwMetaLocations, NumZMWs(), file_, zmwHeaderBatchMB, true);
+    headerReader_ = HeaderReader(zmwMetaLocationsFiles_, fh_->MaxNumZmws(), filePtrs, zmwHeaderBatchMB, true);
 
     // Store [first, last) zmw per slice
     uint32_t first = 0;
     size_t sliceBytes = 0;
-    for (size_t zmw = 0; zmw < numZMWs_; zmw++)
+    for (size_t zmw = 0; zmw < NumZmws(); zmw++)
     {
         if (callBackCheck && callBackCheck()) return;
         assert(headerReader_.HasMoreHeaders());
@@ -205,9 +219,7 @@ BazReader::BazReader(const std::string& fileName,
         for (const auto& header : headers)
         {
             zmwBytes += header.packetsByteSize;
-            zmwBytes += header.numHFMBs * fh_->HFMetricByteSize();
-            zmwBytes += header.numMFMBs * fh_->MFMetricByteSize();
-            zmwBytes += header.numLFMBs * fh_->LFMetricByteSize();
+            zmwBytes += header.numMBs * fh_->MetricByteSize();
         }
         // If the current zmw fits within our quota, add it to the slice.
         // If it doesn't fit, but it's the first one, still add it to
@@ -219,26 +231,28 @@ BazReader::BazReader(const std::string& fileName,
         static constexpr size_t maxSliceSize = 100000;
         const bool fitsInBatchBytes = sliceBytes + zmwBytes < zmwBatchBytes;
         const bool fitsInMaxSlice = (zmw - first) < maxSliceSize;
-        if ((fitsInBatchBytes && fitsInMaxSlice) || zmw == first)
+        if ((fitsInBatchBytes && fitsInMaxSlice && zmw < zmwIndexByBazFile_[currentBazIndex_]) || zmw == first)
         {
             sliceBytes += zmwBytes;
-        } else
+        }
+        else
         {
             // The current zmw does not fit in the current slice, so tie off the
-            // current slice and start accumulating a new one
+            // current slice and start accumulating a new one.
             assert(first != zmw);
-            zmwSlices_.push({first, zmw});
+            zmwSlices_.push({first, zmw, numSuperChunks[currentBazIndex_], files_[currentBazIndex_].second.get()});
             first = zmw;
             sliceBytes = zmwBytes;
+            if (zmw == zmwIndexByBazFile_[currentBazIndex_]) currentBazIndex_++;
         }
     }
     // Need to tie off the last slice.  We're guaranteed to have one in progress
-    assert(sliceBytes != 0 || numZMWs_ == 0);
-    zmwSlices_.push({first, numZMWs_});
+    assert(sliceBytes != 0 || NumZmws() == 0);
+    zmwSlices_.push({first, NumZmws(), numSuperChunks.back(), files_.back().second.get()});
 
     // Re-start the header reader, since we'll need the header information again while actually
     // reading in zmw data
-    headerReader_ = HeaderReader(zmwMetaLocations, NumZMWs(), file_, zmwHeaderBatchMB, silent);
+    headerReader_ = HeaderReader(zmwMetaLocationsFiles_, fh_->MaxNumZmws(), filePtrs, zmwHeaderBatchMB, silent);
 }
 
 const std::vector<ZmwSliceHeader>& BazReader::HeaderReader::NextHeaders(const std::function<bool(void)>& callBackCheck)
@@ -258,33 +272,42 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
     constexpr size_t sizeSingleHeader = ZmwSliceHeader::SizeOf();
     firstLoaded_ = idx_;
     // Make minimum 1 to avoid division by 0
-    size_t zmwHeadersSize = std::max(sizeSingleHeader * metaPositions_.size(), size_t(1));
+    size_t zmwHeadersSize = std::max(sizeSingleHeader * metaPositionsFiles_[curFile_].size(), size_t(1));
     // Load as many zmw as fit, but make sure we load at least one.
     size_t numLoad = std::max((batchSizeMB_ << 20) / zmwHeadersSize,
                                size_t(1u));
     size_t end = idx_ + numLoad;
-    // Need to make sure we don't walk off the end
-    if (end > numZmw_)
+
+    // Load ZMWs for a batch only up to a find boundary as those
+    // are guaranteed to have the same number of metadata locations
+    // i.e. number of superchunks.
+    bool nextFile = false;
+    if (end > currentMaxNumZmws_)
     {
-        end = numZmw_;
+        end = currentMaxNumZmws_;
         numLoad = end - firstLoaded_;
+        nextFile = true;
     }
     assert(numLoad > 0);
 
     loadedData_.resize(0);
     for (size_t i = 0; i < numLoad; ++i)
     {
-        loadedData_.emplace_back(metaPositions_.size());
+        loadedData_.emplace_back(metaPositionsFiles_[curFile_].size());
     }
 
     size_t headerId = 0;
-    for (const auto& location : metaPositions_)
+    for (const auto& location : metaPositionsFiles_[curFile_])
     {
         if (callBackCheck && callBackCheck()) return;
-        fseek(file_, location + firstLoaded_ * sizeSingleHeader, SEEK_SET);
+
+        auto fp = GetCurrentFilePointer();
+
+        // Remap the zmw file offset.
+        fseek(fp, location + (firstLoaded_ - zmwOffset_) * sizeSingleHeader, SEEK_SET);
 
         std::vector<uint8_t> chunkHeadersMemory(sizeSingleHeader * numLoad);
-        if (!fread(chunkHeadersMemory.data(), chunkHeadersMemory.size(), 1, file_))
+        if (!fread(chunkHeadersMemory.data(), chunkHeadersMemory.size(), 1, fp))
         {
             PBLOG_ERROR << "Corrupt file. Cannot read ZMW_SLICE_HEADER";
             exit(EXIT_FAILURE);
@@ -296,45 +319,55 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
             if (callBackCheck && callBackCheck()) return;
 
             ZmwSliceHeader& header = loadedData_[i][headerId];
+
             // Read package offset
             memcpy(&header.offsetPacket,
                    &chunkHeadersMemory[bytesRead],
                    sizeof(ZmwSliceHeader::offsetPacket));
             bytesRead += sizeof(ZmwSliceHeader::offsetPacket);
-            // Read ZMW ID
+
+            // Read ZMW ID which will be sequential in each BAZ file starting at 0.
+            // We will remap them so that they are sequential across BAZ files starting at 0.
             memcpy(&header.zmwIndex,
                    &chunkHeadersMemory[bytesRead],
                    sizeof(ZmwSliceHeader::zmwIndex));
-            assert(header.zmwIndex == i + firstLoaded_);
+            header.zmwIndex += zmwOffset_;
+            if (!(header.zmwIndex == i + firstLoaded_))
+            {
+                std::ostringstream errMsg;
+                errMsg << "Unexpected zmw index for header "
+                       << "expected: " << i + firstLoaded_ << " but got: "
+                       << header.zmwIndex;
+                PBLOG_ERROR << errMsg.str();
+                throw PBException(errMsg.str());
+            }
             bytesRead += sizeof(ZmwSliceHeader::zmwIndex);
+
             // Read number of byte for current packet stream
             memcpy(&header.packetsByteSize,
                    &chunkHeadersMemory[bytesRead],
                    sizeof(ZmwSliceHeader::packetsByteSize));
             bytesRead += sizeof(ZmwSliceHeader::packetsByteSize);
+
             // Read number of events (bases/pulses)
             memcpy(&header.numEvents,
                    &chunkHeadersMemory[bytesRead],
                    sizeof(ZmwSliceHeader::numEvents));
             bytesRead += sizeof(ZmwSliceHeader::numEvents);
-            // Read number of high-frequency metric blocks
-            memcpy(&header.numHFMBs,
+
+            // Read number of metric blocks
+            memcpy(&header.numMBs,
                    &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numHFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numHFMBs);
-            // Read number of medium-frequency metric blocks
-            memcpy(&header.numMFMBs,
-                   &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numMFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numMFMBs);
-            // Read number of low-frequency metric blocks
-            memcpy(&header.numLFMBs,
-                   &chunkHeadersMemory[bytesRead],
-                   sizeof(ZmwSliceHeader::numLFMBs));
-            bytesRead += sizeof(ZmwSliceHeader::numLFMBs);
+                   sizeof(ZmwSliceHeader::numMBs));
+            bytesRead += sizeof(ZmwSliceHeader::numMBs);
         }
 
         ++headerId;
+    }
+
+    if (nextFile)
+    {
+        NextFile();
     }
 
     if (!silent_)
@@ -343,25 +376,16 @@ void BazReader::HeaderReader::LoadNextBatch(const std::function<bool(void)>& cal
     PBLOG_INFO << "Finished read of next header batch";
 }
 
-// Destructor
-BazReader::~BazReader()
-{
-    fclose(file_);
-}
-
-bool BazReader::HasNext()
-{ return !zmwSlices_.empty(); }
-
 std::vector<uint32_t> BazReader::NextZmwIds()
 {
     // Get first ZMW for current slice
-    size_t startZmw = zmwSlices_.front().first;
-    size_t end = zmwSlices_.front().second;
+    const auto& slice = zmwSlices_.front();
 
     std::vector<uint32_t> list;
-    list.reserve(end - startZmw);
+    list.reserve(slice.endZmw - slice.startZmw);
 
-    while (startZmw < end)
+    size_t startZmw = slice.startZmw;
+    while (startZmw < slice.endZmw)
         list.push_back(startZmw++);
 
     std::sort(list.begin(), list.end());
@@ -376,8 +400,10 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
     // auto now3 = std::chrono::high_resolution_clock::now();
 
     // Get first ZMW for current slice
-    size_t startZmw = zmwSlices_.front().first;
-    size_t end = zmwSlices_.front().second;
+    size_t startZmw = zmwSlices_.front().startZmw;
+    size_t end = zmwSlices_.front().endZmw;
+    uint32_t numSuperChunks = zmwSlices_.front().numSuperChunks;
+    std::FILE* fp = zmwSlices_.front().fp;
     size_t sliceSize = end - startZmw;
 
     zmwSlices_.pop();
@@ -385,8 +411,8 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
     std::vector<ZmwDataCounts> dataSizes(sliceSize);
 
     std::vector<std::vector<ZmwSliceHeader>> chunkToHeaderSplit;
-    chunkToHeaderSplit.reserve(NumSuperchunks());
-    for (size_t i = 0; i < NumSuperchunks(); ++i)
+    chunkToHeaderSplit.reserve(numSuperChunks);
+    for (size_t i = 0; i < numSuperChunks; ++i)
     {
         chunkToHeaderSplit.emplace_back();
         chunkToHeaderSplit.back().reserve(sliceSize);
@@ -399,14 +425,13 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
         assert(headerReader_.HasMoreHeaders());
         const auto& zmwHeaders = headerReader_.NextHeaders(callBackCheck);
         if (callBackCheck && callBackCheck()) return std::vector<ZmwByteData>{};
-        for (size_t j = 0; j < NumSuperchunks(); ++j)
+        assert(zmwHeaders.size() == numSuperChunks);
+        for (size_t j = 0; j < numSuperChunks; ++j)
         {
             const auto& h = zmwHeaders[j];
             assert(i == h.zmwIndex);
             dataSizes[i - startZmw].packetsByteSize += h.packetsByteSize;
-            dataSizes[i - startZmw].numHFMBs += h.numHFMBs;
-            dataSizes[i - startZmw].numMFMBs += h.numMFMBs;
-            dataSizes[i - startZmw].numLFMBs += h.numLFMBs;
+            dataSizes[i - startZmw].numMBs += h.numMBs;
             chunkToHeaderSplit[j].push_back(h);
         }
     }
@@ -414,11 +439,11 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
     std::vector<ZmwByteData> batchByteData;
     batchByteData.reserve(sliceSize);
     for (size_t i = 0; i < dataSizes.size(); ++i)
-        batchByteData.emplace_back(*fh_, dataSizes[i], i + startZmw);
+        batchByteData.emplace_back(fh_->MetricByteSize(), dataSizes[i], i + startZmw);
 
-    // Iterate over all chunks
+    // Iterate over all chunks which are guaranteed to be from the same file
     // super-chunk id -> ZmwSliceHeader
-    for (const auto& singleChunk : chunkToHeaderSplit)
+    for (const auto& singleChunk: chunkToHeaderSplit)
     {
         if (callBackCheck && callBackCheck()) return std::vector<ZmwByteData>{};
 
@@ -426,7 +451,7 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
         if (singleChunk.empty()) continue;
 
         // Seek to first ZmwSlice
-        auto seekResult = fseek(file_, singleChunk[0].offsetPacket, SEEK_SET);
+        auto seekResult = fseek(fp, singleChunk[0].offsetPacket, SEEK_SET);
         if (seekResult != 0)
             throw std::runtime_error("(" + std::to_string(seekResult)
                                      + ")Cannot seek ahead to : " + std::to_string(singleChunk[0].offsetPacket));
@@ -435,12 +460,11 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
         uint64_t bytesRead = 0;
         // Number of spacer bytes to jump
         int64_t jump = -1;
-        // Position of the last ZMW offset 
+        // Position of the last ZMW offset
         uint64_t oldPos = 0;
         // Iterate over all ZMWs of this slice in this chunk
-        for (const auto& h : singleChunk)
+        for (const auto& h: singleChunk)
         {
-
             // Calculate padding bytes to jump
             if (oldPos != 0)
             {
@@ -451,14 +475,14 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
                     switch (jump)
                     {
                         case 3:
-                            std::fgetc(file_);
+                            std::fgetc(fp);
                         case 2:
-                            std::fgetc(file_);
+                            std::fgetc(fp);
                         case 1:
-                            std::fgetc(file_);
+                            std::fgetc(fp);
                             break;
                         default:
-                            auto pos = fseek(file_, h.offsetPacket, SEEK_SET);
+                            auto pos = fseek(fp, h.offsetPacket, SEEK_SET);
                             if (pos != 0)
                                 throw std::runtime_error("(" + std::to_string(pos)
                                                          + ")Cannot seek ahead to : " +
@@ -469,7 +493,7 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
             }
             oldPos = h.offsetPacket;
             // Check sanity dword
-            if (!Sanity::ReadAndVerify(file_))
+            if (!Sanity::ReadAndVerify(fp))
                 throw std::runtime_error("Cannot find SANITY DWORD before ZMW chunk");
             bytesRead += 4;
 
@@ -482,40 +506,19 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
                 // Packets and pulse extensions are stored in consective memory
                 auto* data = s.NextPacketBytes(h.packetsByteSize, h.numEvents);
                 assert(data != nullptr);
-                auto readResult = fread(data, 1, h.packetsByteSize, file_);
+                auto readResult = fread(data, 1, h.packetsByteSize, fp);
                 if (readResult != h.packetsByteSize)
                     throw std::runtime_error("Error reading");
                 bytesRead += h.packetsByteSize;
             }
-            if (h.numHFMBs > 0)
+            if (h.numMBs > 0)
             {
-                // For high-frequency metric blocks
-                auto* data = s.NextHFBytes(h.numHFMBs * fh_->HFMetricByteSize());
+                auto* data = s.NextMetricBytes(h.numMBs * fh_->MetricByteSize());
                 assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->HFMetricByteSize() * h.numHFMBs, file_);
-                if (readResult != fh_->HFMetricByteSize() * h.numHFMBs)
+                auto readResult = fread(data, 1, fh_->MetricByteSize() * h.numMBs, fp);
+                if (readResult != fh_->MetricByteSize() * h.numMBs)
                     throw std::runtime_error("Error reading");
-                bytesRead += fh_->HFMetricByteSize() * h.numHFMBs;
-            }
-            if (h.numMFMBs > 0)
-            {
-                // For medium-frequency metric blocks
-                auto* data = s.NextMFBytes(h.numMFMBs * fh_->MFMetricByteSize());
-                assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->MFMetricByteSize() * h.numMFMBs, file_);
-                if (readResult != fh_->MFMetricByteSize() * h.numMFMBs)
-                    throw std::runtime_error("Error reading");
-                bytesRead += fh_->MFMetricByteSize() * h.numMFMBs;
-            }
-            if (h.numLFMBs > 0)
-            {
-                // For low-frequency metric blocks
-                auto* data = s.NextLFBytes(h.numLFMBs * fh_->LFMetricByteSize());
-                assert(data != nullptr);
-                auto readResult = fread(data, 1, fh_->LFMetricByteSize() * h.numLFMBs, file_);
-                if (readResult != fh_->LFMetricByteSize() * h.numLFMBs)
-                    throw std::runtime_error("Error reading");
-                bytesRead += fh_->LFMetricByteSize() * h.numLFMBs;
+                bytesRead += fh_->MetricByteSize() * h.numMBs;
             }
         }
     }
@@ -527,93 +530,109 @@ std::vector<ZmwByteData> BazReader::NextSlice(const std::function<bool(void)>& c
     // such a file should really throw an exception and terminate instead.
     // May need to refactor the code to remove the `Error` function, and
     // update tests accordingly
-    if (NumSuperchunks() == 0)
+    if (numSuperChunks == 0)
         return std::vector<ZmwByteData>{};
 
     return batchByteData;
 }
 
-std::unique_ptr<BazIO::FileHeader> BazReader::ReadFileHeader()
+void BazReader::ReadFileHeaders()
 {
-    // Seek for SANITY block and last position of the file header
-    uint64_t headerSize = Sanity::FindAndVerify(file_);
+    try
+    {
+        fh_ = std::make_unique<BazIO::FileHeaderSet>(files_);
 
-    // Wrap header into smrt pointer
-    auto header = SmartMemory::AllocMemPtr<char>(headerSize + 1);
+        // Re-order files based on file header set ordering.
+        std::vector<std::string> fns;
+        std::for_each(fh_->FileHeaders().begin(), fh_->FileHeaders().end(),
+                      [&fns](const auto& fh) { fns.push_back(fh.FileName()); });
 
-    // Set position indicator to beginning
-    std::rewind(file_);
-
-    // Read file header
-    size_t result = std::fread(header.get(), 1, headerSize, file_);
-    if (result != headerSize)
-        throw std::runtime_error("Cannot read file header!");
-
-    // Let FileHeader parse JSON header
-    return std::unique_ptr<BazIO::FileHeader>(new BazIO::FileHeader(header.get(), headerSize));
+        std::sort(files_.begin(), files_.end(),
+                  [&fns](const auto& a, const auto& b)
+                  {
+                      const auto& aiter = std::find_if(fns.begin(), fns.end(),
+                                                       [&a](const std::string& fn) { return fn == a.first; });
+                      const auto& biter = std::find_if(fns.begin(), fns.end(),
+                                                       [&b](const std::string& fn) { return fn == b.first; });
+                      return std::distance(fns.begin(), aiter) < std::distance(fns.begin(), biter);
+                  });
+    }
+    catch (const std::exception& ex)
+    {
+        PBLOG_ERROR << "Error reading BAZ file headers!";
+        exit(EXIT_FAILURE);
+    }
 }
 
-std::unique_ptr<FileFooter> BazReader::ReadFileFooter()
+void BazReader::ReadFileFooters()
 {
-    if (!fh_ || fh_->FileFooterOffset() == 0)
-        return std::unique_ptr<FileFooter>(new FileFooter());
+    PBLOG_WARN << "File footers currently not populated!";
 
-    auto pi = std::ftell(file_);
+    std::map<uint32_t, std::vector<uint32_t>> truncationMap;
 
-    // Go to last Footer
-    const auto fileFooterOffset = fh_->FileFooterOffset();
-    fseek(file_, fileFooterOffset, SEEK_SET);
+    for (const auto& t : boost::combine(fh_->FileHeaders(), files_))
+    {
+        const auto& fh = t.get<0>();
+        const auto& file = t.get<1>().second;
 
-    // Seek for SANITY block and last position of the file header
-    uint64_t footerEnd = Sanity::FindAndVerify(file_);
-    int64_t footerSize = static_cast<int64_t>(footerEnd) - static_cast<int64_t>(fh_->FileFooterOffset());
+        if (!fh.FileFooterOffset())
+        {
+            auto pi = std::ftell(file.get());
 
-    // Wrap footer into smrt pointer
-    auto footer = SmartMemory::AllocMemPtr<char>(footerSize + 1);
+            // Go to last Footer
+            const auto fileFooterOffset = fh.FileFooterOffset();
+            fseek(file.get(), fileFooterOffset, SEEK_SET);
 
-    // Set position indicator to beginning of footer
-    fseek(file_, fileFooterOffset, SEEK_SET);
+            // Seek for SANITY block and last position of the file header
+            uint64_t footerEnd = Sanity::FindAndVerify(file.get());
+            int64_t footerSize = static_cast<int64_t>(footerEnd) - static_cast<int64_t>(fh.FileFooterOffset());
 
-    // Read file footer
-    size_t result = std::fread(footer.get(), 1, footerSize, file_);
-    if (result != static_cast<uint64_t>(footerSize))
-        throw std::runtime_error("Cannot read file footer!");
+            // Wrap footer into smrt pointer
+            auto footer = SmartMemory::AllocMemPtr<char>(footerSize + 1);
 
-    fseek(file_, pi, SEEK_SET);
+            // Set position indicator to beginning of footer
+            fseek(file.get(), fileFooterOffset, SEEK_SET);
 
-    // Let Filefooter parse JSON footer
-    return std::unique_ptr<FileFooter>(new FileFooter(footer.get(), footerSize));
+            // Read file footer
+            size_t result = std::fread(footer.get(), 1, footerSize, file.get());
+            if (result != static_cast<uint64_t>(footerSize))
+                throw std::runtime_error("Cannot read file footer!");
+
+            fseek(file.get(), pi, SEEK_SET);
+
+            // Let Filefooter parse JSON footer
+            FileFooter ff(footer.get(), footerSize);
+
+            for (const auto& kv: ff.TruncationMap())
+            {
+                // Map to zmw number as that is unique.
+                const auto zmwNumber = fh.ZmwInformation().ZmwIndexToNumber(kv.first);
+                truncationMap[zmwNumber].insert(std::end(truncationMap[zmwNumber]),
+                                                kv.second.begin(), kv.second.end());
+            }
+        }
+    }
+
+    ff_ = std::make_unique<BazIO::FileFooterSet>(std::move(truncationMap));
 }
-
-const BazIO::FileHeader& BazReader::Fileheader()
-{
-    if (!fh_) throw PBException("null Fileheader");
-    return *fh_;
-}
-
-std::unique_ptr<FileFooter>& BazReader::Filefooter()
-{ return ff_; }
-
-uint32_t BazReader::NumZMWs() const
-{ return numZMWs_; }
-
-uint32_t BazReader::NumSuperchunks() const
-{ return numSuperchunks_; }
 
 std::vector<std::vector<ZmwSliceHeader>> BazReader::SuperChunkToZmwHeaders() const
 {
-    std::vector<std::vector<ZmwSliceHeader>> ret(NumSuperchunks());
-    for (size_t i = 0; i < NumSuperchunks(); ++i)
-        ret[i].resize(NumZMWs());
+    // This method is only called by bazviewer so we assume that only a single BAZ file will be called with it.
+    const auto& numSuperChunks = fh_->NumSuperChunks().front();
+    const auto& numZmws = fh_->MaxNumZmws().front();
+    std::vector<std::vector<ZmwSliceHeader>> ret(numSuperChunks);
+    for (size_t i = 0; i < numSuperChunks; ++i)
+        ret[i].resize(numZmws);
 
     auto headers = headerReader_.Clone();
 
     size_t i = 0;
     while (headers.HasMoreHeaders())
     {
-        assert(i < NumZMWs());
+        assert(i < numZmws);
         const auto& zmwHeaders = headers.NextHeaders();
-        for (size_t j = 0; j < NumSuperchunks(); ++j)
+        for (size_t j = 0; j < numSuperChunks; ++j)
         {
             ret[j][i] = zmwHeaders[j];
         }
@@ -622,4 +641,4 @@ std::vector<std::vector<ZmwSliceHeader>> BazReader::SuperChunkToZmwHeaders() con
     return ret;
 }
 
-}} // namespace
+}} // namespace PacBio::Primary

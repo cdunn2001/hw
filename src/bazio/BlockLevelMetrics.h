@@ -40,7 +40,6 @@
 
 #include "MetricData.h"
 #include "RegionLabel.h"
-#include "MetricFrequency.h"
 
 #include <bazio/file/FileHeader.h>
 
@@ -128,27 +127,19 @@ class MetricRegion
     size_t startBlock_;
     size_t endBlock_;
 
-    // Just stored as a hook to help guide things when we start allowing different
-    // metrics to be stored at different frequencies.
-    MetricFrequency freq_;
 public:
-    MetricRegion(size_t startBlock, size_t endBlock, MetricFrequency freq)
+    MetricRegion(size_t startBlock, size_t endBlock)
       : startBlock_(startBlock)
       , endBlock_(endBlock)
-      , freq_(freq)
     {}
 
-    size_t Start(MetricFrequency frequency) const
+    size_t Start() const
     {
-        (void)frequency;
-        assert(frequency == freq_);
         return startBlock_;
     }
 
-    size_t End(MetricFrequency frequency) const
+    size_t End() const
     {
-        (void)frequency;
-        assert(frequency == freq_);
         return endBlock_;
     }
 };
@@ -169,9 +160,8 @@ public:
 
     Metric() = default;
 
-    Metric(Data_T&& data, MetricFrequency frequency, float frameRate, size_t framesPerBlock)
+    Metric(Data_T&& data, float frameRate, size_t framesPerBlock)
          : data_(std::move(data))
-         , frequency_(frequency)
          , frameRate_(frameRate)
          , framesPerBlock_(framesPerBlock)
     {}
@@ -181,19 +171,17 @@ public:
         return framesPerBlock_ / frameRate_;
     }
 
-    const View_T GetRegion(const MetricRegion& region) const { return GetRegion(region.Start(frequency_), region.End(frequency_)); }
-    const View_T GetRegionBefore(const MetricRegion& region) const { return GetRegion(0, region.Start(frequency_)); }
-    const View_T GetRegionAfter(const MetricRegion& region) const { return GetRegion(region.End(frequency_), data_.size()); }
+    const View_T GetRegion(const MetricRegion& region) const { return GetRegion(region.Start(), region.End()); }
+    const View_T GetRegionBefore(const MetricRegion& region) const { return GetRegion(0, region.Start()); }
+    const View_T GetRegionAfter(const MetricRegion& region) const { return GetRegion(region.End(), data_.size()); }
     const View_T GetRegion(size_t start, size_t end) const { return detail::CreateView(data_, start, end); }
 
     const Data_T& data() const { return data_; }
     size_t size() const { return data_.size(); }
     bool empty() const { return data_.empty(); }
 
-    MetricFrequency Frequency() const { return frequency_; }
 private:
     Data_T data_;
-    MetricFrequency frequency_;
     float frameRate_;
     size_t framesPerBlock_;
 };
@@ -228,8 +216,10 @@ public:
     // TODO: Once metrics computation has been refactored, remove `internal`
     //       flag from this class.
     BlockLevelMetrics(const RawMetricData& rawMetrics,
-                      const BazIO::FileHeader& fh,
-                      MetricFrequency frequency,
+                      uint32_t metricFrames,
+                      double frameRateHz,
+                      const std::vector<float> relAmps,
+                      const std::string& baseMap,
                       bool internal);
 
     /* const accessors */
@@ -282,18 +272,12 @@ public:
     float StartTime(const RegionLabel& region) const
     {
         auto blockIdxs = GetMetricRegion(region);
-        // TODO for now any metric works, because they are all at the same
-        // frequency.  However once ActivityLabel is introduced, that
-        // will be the one appropriate here:
-        return blockIdxs.Start(numPulsesAll_.Frequency()) * numPulsesAll_.BlockTime();
+        return blockIdxs.Start() * numPulsesAll_.BlockTime();
     }
     float StopTime(const RegionLabel& region) const
     {
         auto blockIdxs = GetMetricRegion(region);
-        // TODO for now any metric works, because they are all at the same
-        // frequency.  However once ActivityLabel is introduced, that
-        // will be the one appropriate here:
-        auto idx = blockIdxs.End(numPulsesAll_.Frequency());
+        auto idx = blockIdxs.End();
         return idx * numPulsesAll_.BlockTime();
     }
 private:
@@ -346,7 +330,7 @@ private:
     // remove this once metrics are refactored (and all HQ region stuff happens
     // at the same time)
     mutable std::pair<std::pair<int, int>, MetricRegion> cachedMap_ =
-            std::make_pair(std::make_pair(0, 0), MetricRegion(0, 0, MetricFrequency::MEDIUM));
+            std::make_pair(std::make_pair(0, 0), MetricRegion(0, 0));
     mutable bool mapSet_ = false;
 };
 

@@ -57,7 +57,7 @@ static const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash()
 
 using namespace PacBio::Primary::Postprimary;
 
-uint32_t ConvertString2Int(const std::string& str)
+static uint32_t ConvertString2Int(const std::string& str)
 {
     std::stringstream ss(str);
     uint32_t x;
@@ -69,7 +69,7 @@ uint32_t ConvertString2Int(const std::string& str)
     return x;
 }
 
-std::vector<std::string> SplitStringToArray(const std::string& str, char splitter)
+static std::vector<std::string> SplitStringToArray(const std::string& str, char splitter)
 {
     std::vector<std::string> tokens;
     std::stringstream ss(str);
@@ -81,7 +81,7 @@ std::vector<std::string> SplitStringToArray(const std::string& str, char splitte
     return tokens;
 }
 
-std::vector<uint32_t> ParseData(const std::string& data)
+static std::vector<uint32_t> ParseData(const std::string& data)
 {
     std::vector<std::string> tokens = SplitStringToArray(data, ',');
 
@@ -113,6 +113,16 @@ std::vector<uint32_t> ParseData(const std::string& data)
     return result;
 }
 
+static std::vector<std::string> ReadFileList(const std::string& fileListPath)
+{
+    std::vector<std::string> inputFilePaths;
+    std::ifstream in(fileListPath);
+    std::string filePath;
+    while (std::getline(in, filePath))
+        inputFilePaths.push_back(filePath);
+    return inputFilePaths;
+}
+
 // Entry point
 int main(int argc, char* argv[])
 {
@@ -133,6 +143,7 @@ int main(int argc, char* argv[])
         parser.add_option_group(groupMand);
 
         auto groupOpt = PacBio::Process::OptionGroup(parser, "Optional parameters");
+        groupOpt.add_option("--filelist").dest("filelist").help("Text file containing full paths to BAZ files, one per line");
         groupOpt.add_option("--uuid").help("If this is specified, it must"
                                             " compare to the UUID of the subreadset within the metadata XML. pa-ws "
                                             " will set this option for sanity checking.  baz2bam will return "
@@ -144,7 +155,7 @@ int main(int argc, char* argv[])
         groupOpt.add_option("-b --bamThreads").type_int().set_default(4).dest("bamthreads").help(
             "Number of threads for parallel BAM compression. Note due to technical reasons, out-of-line pbi indexing "
             "will use 2x these threads (one set for each bam file), and inline pbi indexing will use 4x (inline indexing "
-            "requires a separate and simultanous decompressing read)");
+            "requires a separate and simultaneous decompressing read)");
         groupOpt.add_option("--inlinePbi").action_store_true().help(
             "Generate pbindex inline with BAM writing");
         groupOpt.add_option("--silent").action_store_true().help("No progress output.");
@@ -299,12 +310,22 @@ int main(int argc, char* argv[])
 
         if (args.size() >= 1)
         {
-            user->inputFilePath = args[0];
+            user->inputFilePaths.insert(std::end(user->inputFilePaths), args.begin(), args.end());
         }
         else
         {
-            std::cerr << "ERROR: INPUT EMPTY." << std::endl;
-            problem = true;
+            user->fileListPath = options["filelist"];
+            if ("" == user->fileListPath)
+            {
+                std::cerr << "ERROR: INPUT EMPTY." << std::endl;
+                problem = true;
+            }
+            user->inputFilePaths = ReadFileList(user->fileListPath);
+            if (user->inputFilePaths.empty())
+            {
+                std::cerr << "ERROR: INPUT FILE LIST EMPTY." << std::endl;
+                problem = true;
+            }
         }
 
         user->outputPrefix = options["output"];
