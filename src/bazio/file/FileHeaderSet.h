@@ -40,7 +40,7 @@ namespace PacBio::BazIO
 class FileHeaderSet
 {
 public:
-    FileHeaderSet(const std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>>& files);
+    FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>>& files);
 
     // Default constructor
     FileHeaderSet() = delete;
@@ -64,9 +64,11 @@ public:
     const auto& FileHeaders() const
     { return fhs_; }
 
+    // Returns the maximum number of ZMWs for each BAZ file.
     const std::vector<size_t>& MaxNumZmws() const
     { return maxNumZmws_; }
 
+    // Returns the total number of ZMWs across all BAZ files.
     uint32_t TotalNumZmws() const
     { return totalNumZmws_; }
 

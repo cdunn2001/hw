@@ -132,12 +132,11 @@ private:
     /// Parses and provides the file footers from the file streams
     void ReadFileFooters();
 
-    std::vector<ZmwSliceInfo> GetZmwSliceInfo(uint32_t startZmw, uint32_t endZmw) const;
-
 private:   // data
-    std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>> files_;
+    std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>> files_;
     uint32_t                numZmws_ = 0;
     std::vector<uint32_t>   zmwIndexByBazFile_;
+    size_t                  currentBazIndex_ = 0;
 
     std::unique_ptr<BazIO::FileHeaderSet> fh_;
     std::unique_ptr<BazIO::FileFooterSet> ff_;
@@ -152,7 +151,7 @@ private:   // data
     public:
         HeaderReader(const std::vector<std::vector<size_t>> metaPositionsFiles,
                      const std::vector<size_t>& maxNumZmws,
-                     const std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>>& files,
+                     const std::vector<std::pair<std::string,std::FILE*>>& files,
                      size_t batchSizeMB, bool silent)
             : idx_(0)
             , curFile_(0)
@@ -191,9 +190,9 @@ private:   // data
             }
         }
     public:
-        auto GetCurrentFilePointer()
+        std::FILE* GetCurrentFilePointer()
         {   assert(curFile_ < files_.size());
-            return files_[curFile_].second.get();
+            return files_[curFile_].second;
         }
 
         HeaderReader Clone() const
@@ -211,8 +210,8 @@ private:   // data
         size_t batchSizeMB_;                // Number of zmw metadata to load at once
         bool silent_;                       // controls stderr output
 
-        std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>> files_;  // Opened and closed by BazReader
-        std::vector<std::vector<size_t>> metaPositionsFiles_;                   // Metadata locations for each file
+        std::vector<std::pair<std::string,std::FILE*>> files_;  // Opened and closed by BazReader
+        std::vector<std::vector<size_t>> metaPositionsFiles_;   // Metadata locations for each file
 
         size_t firstLoaded_ = 0;        // Index of first zmw of current batch
         size_t zmwOffset_ = 0;          // Offset to compute absolute zmw index across all files

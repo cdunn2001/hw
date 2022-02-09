@@ -158,7 +158,7 @@ public:
                               generateExperimentMetadata(),
                               generateBasecallerConfig(),
                               SimulateZmwInfo(zmwNumbers_),
-                              4096,
+                              1024,
                               FileHeaderBuilder::Flags()
                                 .RealTimeActivityLabels(realtimeActivityLabels_)
         );

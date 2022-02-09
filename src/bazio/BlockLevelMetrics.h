@@ -40,7 +40,6 @@
 
 #include "MetricData.h"
 #include "RegionLabel.h"
-#include "MetricFrequency.h"
 
 #include <bazio/file/FileHeader.h>
 

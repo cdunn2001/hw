@@ -342,12 +342,12 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         }
         ++iHeader;
 
-        auto slice = bazBuffer->GetSlice(zmwIdx);
-        h.offsetPacket = Ftell();
-        h.zmwIndex = zmwIdx;
-        h.packetsByteSize = slice.packets.packetByteSize;
-        h.numEvents       = slice.packets.numEvents;
-        h.numMBs        = slice.metrics.size();
+        auto slice          = bazBuffer->GetSlice(zmwIdx);
+        h.offsetPacket      = Ftell();
+        h.zmwIndex          = zmwIdx;
+        h.packetsByteSize   = slice.packets.packetByteSize;
+        h.numEvents         = slice.packets.numEvents;
+        h.numMBs            = slice.metrics.size();
 
         WriteSanity();
 
@@ -368,21 +368,16 @@ void BazWriter::WriteChunkData(std::unique_ptr<BazBuffer>& bazBuffer,
         // Buffer has the size for all three consecutive metric blocks
 
         uint64_t bufferSize = fh_->MetricByteSize() * h.numMBs;
+        std::vector<uint8_t> buffer(bufferSize);
+        size_t bufferCounter = 0;
 
-        if (bufferSize > 0)
-        {
-            std::vector<uint8_t> buffer(bufferSize);
-            size_t bufferCounter = 0;
+        // Write metric blocks to buffer
+        Write(fh_->MetricFields(), slice.metrics,
+              buffer, bufferCounter);
 
-            // Write metric blocks to buffer
-            if (h.numMBs > 0)
-                Write(fh_->MetricFields(), slice.metrics,
-                      buffer, bufferCounter);
-
-            // Make sure that buffer has expected size
-            assert(bufferCounter == bufferSize);
-            ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
-        }
+        // Make sure that buffer has expected size
+        assert(bufferCounter == bufferSize);
+        ioStats_.metricsBytes +=  Fwrite(buffer.data(), bufferSize);
     }
 
     Align(blocksize);

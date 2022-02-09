@@ -33,7 +33,7 @@ using namespace PacBio::Primary;
 namespace PacBio::BazIO
 {
 
-FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::shared_ptr<std::FILE>>>& files)
+FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique_ptr<std::FILE>>>& files)
 {
     for (const auto& file : files)
     {
@@ -112,7 +112,8 @@ FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::shared
                            fh.ZmwNumbers().begin(), fh.ZmwNumbers().end());
 
         zmwFeatures_.insert(std::end(zmwFeatures_),
-                            fh.ZmwUnitFeatures().begin(), fh.ZmwUnitFeatures().end());
+                            fh.ZmwInformation().UnitFeatures().begin(),
+                            fh.ZmwInformation().UnitFeatures().end());
 
         maxNumZmws_.push_back(fh.MaxNumZMWs());
         numSuperChunks_.push_back(fh.NumSuperChunks());

@@ -168,7 +168,7 @@ EventData SimulateEventData(const ReadConfig& config)
 
     const auto& fh = config.GenerateHeader();
     return EventData(
-            0, fh.ZmwIndexToNumber(0), false,
+            0, fh.ZmwInformation().ZmwIndexToNumber(0), false,
             BazIO::BazEventData(fields, {}),
             std::move(states));
 }
@@ -188,7 +188,7 @@ ZmwMetrics RunMetrics(const EventData& events,
     ProductivityMetrics prodClassifier(4, minEmptyTime, emptyOutlierTime);
     auto prod = prodClassifier.ComputeProductivityInfo(hqRegion, metrics, true);
 
-    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwIndex()),
+    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwNumber()),
                       hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
 }
 

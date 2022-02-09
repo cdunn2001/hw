@@ -120,7 +120,8 @@ private: // data
 
     float frameRate_ = 100;
     int bps_ = 5;
-    int metricFrames_ = 4096;
+    int superChunksFrames_ = 8192;
+    int metricFrames_ = 1024;
     Readout readout_;
     bool silent_;
     SimulationRNG rng;
@@ -134,7 +135,7 @@ private:
     {
         const bool internal = readout_ == Readout::PULSES;
 
-        int seconds_ = std::round(metricFrames_ / frameRate_);
+        int seconds_ = std::round(superChunksFrames_ / frameRate_);
         using FileHeaderBuilder = BazIO::FileHeaderBuilder;
         FileHeaderBuilder fhb("m00001_052415_013000",
                               frameRate_,

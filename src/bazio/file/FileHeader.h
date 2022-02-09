@@ -35,7 +35,6 @@
 
 #include <bazio/MetricField.h>
 #include <bazio/MetricFieldName.h>
-#include <bazio/MetricFrequency.h>
 
 #include <json/json.h>
 
@@ -43,8 +42,6 @@
 
 namespace PacBio {
 namespace BazIO {
-
-class MetricFieldMap;
 
 /// Stores all BAZ file header information and provides logic 
 /// to parse a JSON header.
@@ -72,8 +69,6 @@ public:
     ~FileHeader() = default;
 
 public:
-    bool IsConsistent(const FileHeader& other) const;
-
     std::string BazVersion() const
     { 
         return std::to_string(bazMajorVersion_) + "." + 
@@ -166,12 +161,6 @@ public:
     uint32_t MovieLengthFrames() const
     { return movieLengthFrames_; }
 
-    uint32_t ZmwIndexToNumber(const uint32_t index) const
-    { return zmwInfo_.ZmwIndexToNumber(index); }
-
-    uint32_t ZmwNumberToIndex(const uint32_t number) const
-    { return zmwInfo_.ZmwNumberToIndex(number); }
-
     const std::vector<uint32_t>& ZmwNumbers() const
     { return zmwInfo_.HoleNumbers(); }
 
@@ -196,21 +185,24 @@ public:
     const std::vector<uint32_t>& ZmwNumberRejects() const
     { return zmwNumberRejects_; }
 
-    uint32_t ZmwUnitFeatures(uint32_t zmwIndex) const
-    { 
-        if (zmwIndex < zmwInfo_.NumZmws())
-            return ZmwUnitFeatures()[zmwIndex];
-        else if (ZmwUnitFeatures().size() == 0)
-            return 0; // if there are no features loaded, then send out a dummy 0.
+    uint32_t ZmwUnitFeatures(uint32_t zmwNumber) const
+    {
+        const auto& kv = zmwInfo_.ZmwNumbersToIndex().find(zmwNumber);
+        if (kv == zmwInfo_.ZmwNumbersToIndex().end())
+        {
+            PBExceptionStream() << "zmwNumber: " << zmwNumber << " not found";
+        }
         else
-            PBExceptionStream() << "zmwIndex out of range: " << zmwIndex <<" size:"  << zmwInfo_.NumZmws();
+        {
+            if (zmwInfo_.UnitFeatures().size() == 0)
+                return 0; // if there are no features loaded, then send out a dummy 0.
+            else
+                return zmwInfo_.UnitFeatures()[kv->second];
+        }
     }
 
     uint64_t FileFooterOffset() const
     { return offsetFileFooter_; }
-
-    const std::vector<uint32_t>& ZmwUnitFeatures() const
-    { return zmwInfo_.UnitFeatures(); }
 
     uint32_t NumSuperChunks() const
     { return numSuperChunks_; }

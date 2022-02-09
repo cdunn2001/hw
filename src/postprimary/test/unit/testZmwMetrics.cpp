@@ -169,7 +169,7 @@ TEST(zmwMetrics, ProductivityReadMetrics)
     EXPECT_EQ(ProductivityClass::PRODUCTIVE, prod.productivity);
     EXPECT_EQ(ReadTypeClass::PARTIALHQREAD1, prod.readType);
 
-    ReadMetrics readMetrics(fh.MovieTimeInHrs(), fh.ZmwUnitFeatures(events.ZmwIndex()),
+    ReadMetrics readMetrics(fh.MovieTimeInHrs(), fh.ZmwUnitFeatures(events.ZmwNumber()),
                             hqRegion, events, prod);
 
     EXPECT_EQ(0, readMetrics.UnitFeatures());
