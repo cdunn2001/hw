@@ -114,7 +114,7 @@ Test Spider RTAL BAZ:
   $ spider_baz_size=$(ls -s out_spider.baz|cut -d' ' -f1)
   $ spiderrtal_baz_size=$(ls -s out_spiderrtal.baz|cut -d' ' -f1)
   $ echo "scale=2; $spiderrtal_baz_size/$spider_baz_size" | bc
-  .79
+  .8[45] (re)
 
   $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_spiderrtal_n2.subreadset.xml
-  457
+  467
