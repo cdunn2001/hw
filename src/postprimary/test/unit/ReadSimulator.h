@@ -41,7 +41,7 @@ struct ReadConfig
 
     // In frames
     int32_t numFrames = 5242880; 
-    int32_t mnf = 4096;
+    int32_t metricFrames = 4096;
     int32_t seqstart = 100;
     int32_t seqend = numFrames;
 
@@ -80,7 +80,7 @@ struct ReadConfig
     uint32_t numAnalogs = 4;
     uint32_t numFilters = 2;
 
-    uint32_t nmb() const { return (numFrames  + mnf - 1) / mnf; }
+    uint32_t NumberMetricBlocks() const { return (numFrames + metricFrames - 1) / metricFrames; }
 
     FileHeader GenerateHeader() const
     {
@@ -92,7 +92,7 @@ struct ReadConfig
                 generateExperimentMetadata(),
                 "{}", // basecaller config
                 Simulation::SimulateZmwInfo(std::vector<uint32_t>(1, 4194368)),
-                mnf);
+                metricFrames);
 
         auto charVec = builder.CreateJSONCharVector();
         return FileHeader(charVec.data(), charVec.size());

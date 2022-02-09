@@ -57,7 +57,7 @@ static const std::string versionString = cmakeGitBranch() + "_" + cmakeGitHash()
 
 using namespace PacBio::Primary::Postprimary;
 
-uint32_t ConvertString2Int(const std::string& str)
+static uint32_t ConvertString2Int(const std::string& str)
 {
     std::stringstream ss(str);
     uint32_t x;
@@ -69,7 +69,7 @@ uint32_t ConvertString2Int(const std::string& str)
     return x;
 }
 
-std::vector<std::string> SplitStringToArray(const std::string& str, char splitter)
+static std::vector<std::string> SplitStringToArray(const std::string& str, char splitter)
 {
     std::vector<std::string> tokens;
     std::stringstream ss(str);
@@ -81,7 +81,7 @@ std::vector<std::string> SplitStringToArray(const std::string& str, char splitte
     return tokens;
 }
 
-std::vector<uint32_t> ParseData(const std::string& data)
+static std::vector<uint32_t> ParseData(const std::string& data)
 {
     std::vector<std::string> tokens = SplitStringToArray(data, ',');
 
@@ -113,7 +113,7 @@ std::vector<uint32_t> ParseData(const std::string& data)
     return result;
 }
 
-std::vector<std::string> ReadFileList(const std::string& fileListPath)
+static std::vector<std::string> ReadFileList(const std::string& fileListPath)
 {
     std::vector<std::string> inputFilePaths;
     std::ifstream in(fileListPath);

@@ -143,6 +143,10 @@ private: // data
     bool realtimeActivityLabels_;
     std::vector<float> relativeAmplitudes_;
     bool summarize_;
+    const uint32_t metricFrames = 1024;
+    const uint32_t superChunkFrames = 16384;
+    const uint16_t numMetrics = superChunkFrames / metricFrames;
+
 public:
 
     BazIO::FileHeaderBuilder GetFileHeaderBuilder(const Readout readout)
@@ -158,7 +162,7 @@ public:
                               generateExperimentMetadata(),
                               generateBasecallerConfig(),
                               SimulateZmwInfo(zmwNumbers_),
-                              1024,
+                              metricFrames,
                               FileHeaderBuilder::Flags()
                                 .RealTimeActivityLabels(realtimeActivityLabels_)
         );
@@ -167,7 +171,6 @@ public:
     void SimulateTrivial()
     {
         const Readout readout = Readout::BASES_WITHOUT_QVS;
-        const uint16_t numMetrics = 16;
         const auto numEvents = static_cast<uint32_t>(bps_ * seconds_);
         auto basecall = std::make_unique<SimPulse[]>(numEvents);
         int currentFrame = 0;
@@ -305,12 +308,12 @@ public:
 
     void SimulateBases()
     {
-        Simulate(Readout::BASES, 16);
+        Simulate(Readout::BASES, numMetrics);
     }
 
     void SimulatePulses()
     {
-        Simulate(Readout::PULSES, 16);
+        Simulate(Readout::PULSES, numMetrics);
     }
 
     void SimulateBasesNoMetrics()

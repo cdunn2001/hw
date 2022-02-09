@@ -22,7 +22,7 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     {
         fields = fh.MetricFields();
         metricFrames = fh.MetricFrames();
-        numMetricBlocks = config.nmb();
+        numMetricBlocks = config.NumberMetricBlocks();
     }
     else
     {
@@ -206,7 +206,7 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
 {
     auto fh = std::make_unique<PacBio::BazIO::FileHeader>(readconfig.GenerateHeader());
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
-    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.nmb()};
+    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.NumberMetricBlocks()};
     using Platform = PacBio::Primary::Postprimary::Platform;
     Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);

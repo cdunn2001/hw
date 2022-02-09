@@ -179,20 +179,20 @@ private:
                     throw std::runtime_error("Less pulses than bases: " + std::to_string(numEvents) + " < " + std::to_string(sub.size()));
                 std::vector<SpiderMetricBlock> metrics = rng.SimulateMetrics(numMetrics);
 
-                for (int jj = 0; jj < numMetrics; ++jj)
+                for (int i = 0; i < numMetrics; ++i)
                 {
                     auto basesPerMBlock = sub.size() / numMetrics;
-                    if (jj == -1)
+                    if (i == -1)
                         basesPerMBlock += sub.size() % numMetrics;
-                    metrics[jj].NumBasesA(basesPerMBlock/4);
-                    metrics[jj].NumBasesC(basesPerMBlock/4);
-                    metrics[jj].NumBasesG(basesPerMBlock/4);
-                    metrics[jj].NumBasesT(basesPerMBlock - basesPerMBlock/4 * 3);
+                    metrics[i].NumBasesA(basesPerMBlock / 4);
+                    metrics[i].NumBasesC(basesPerMBlock / 4);
+                    metrics[i].NumBasesG(basesPerMBlock / 4);
+                    metrics[i].NumBasesT(basesPerMBlock - basesPerMBlock / 4 * 3);
                 }
 
-                for (int jj = 0; jj < numMetrics-1; ++jj)
+                for (int i = 0; i < numMetrics - 1; ++i)
                 {
-                    metrics[jj].NumPulses(numEvents / numMetrics);
+                    metrics[i].NumPulses(numEvents / numMetrics);
                 }
                 metrics.back().NumPulses(numEvents / numMetrics + numEvents % numMetrics);
 
