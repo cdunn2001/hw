@@ -79,8 +79,7 @@ struct PaWsConfig : PacBio::Configuration::PBConfig<PaWsConfig>
 
     PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::UNKNOWN);
 
-    PB_CONFIG_PARAM(uint32_t, firstSocket, 1); ///< Socket number (1 based) of the first socket). 0 means no sockets are available
-    PB_CONFIG_PARAM(uint32_t, lastSocket, 4); ///< Socket number (1 based of the last socket). 0 means no sockets are available
+    PB_CONFIG_OBJECT(std::vector<std::string>, socketIds, std::vector<std::string>{}); ///< Arbitrary socket ids, typically "1" thru "4". If empty, no sockets are available.
     PB_CONFIG_PARAM(double, pollingInternalSeconds, 1.0); ///< Interval between housekeeping events
     PB_CONFIG_PARAM(bool, logHttpGets, false); ///< Whether or not incoming http GETs are logged (could be very noisy)
     PB_CONFIG_PARAM(uint16_t, port, PORT_REST_PAWS); ///< The dedicated REST port.
@@ -99,11 +98,6 @@ void FactoryConfig(PaWsConfig* config);
 /// \param config An out pointer to a PB Config struct that will be 
 /// written with default values suitable for Spider, aka Sequel2
 void Spider2Config(PaWsConfig* config);
-
-/// \param config An out pointer to a PB Config struct that will be 
-/// written with default values suitable for Mongo, aka four parallel Sequel2
-/// instances.
-void MongoConfig(PaWsConfig* config);
 
 /// \param config An out pointer to a PB Config struct that will be 
 /// written with default values suitable for Kestrel.

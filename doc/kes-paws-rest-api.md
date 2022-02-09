@@ -13,7 +13,7 @@ markdown2extras: wiki-tables
 
 <img src=webservice.png height=150>
 
-The Primary Analysis Webservice API is for controlling the ``pa-ws`` service. The service acts as a controller for all 
+The Primary Analysis Webservice API is for controlling the ``pa-ws`` service. The service acts as a controller for all
 primary analysis applications, such as basecalling, calibration
 and postprimary processing.
 
@@ -39,7 +39,7 @@ movie
 the "recording" of the live SMRT sequencing observations, but it has been extended to include the lifetime of processing the recording all the way to final basecalls.  Other synonyms for "movie" are "acquisition" and "subreadset" (which is the name used in the run design metadata XML).
 
 pawnee
-: An acroynym for "PAWs Nrt Execution Engine". This program runs all of the NRT postprimary applications. From the perspective of pa-ws, 
+: An acroynym for "PAWs Nrt Execution Engine". This program runs all of the NRT postprimary applications. From the perspective of pa-ws,
 pawnee *is* postprimary, regardless of the postprimary workflow.
 
 pa-ws
@@ -52,7 +52,7 @@ sensor
 : A collective term for both the physical CMOS sensor that is mounted to a stage as well as the PCB known as the "sensor board" that connects the CMOS sensor to the Aurora data link, through an FPGA.  Because the name is vague in general, it should not be used without additional wording, such as "sensor chip" (the consumable item) vs "sensor board" (the PCB with the FPGAs) vs "sensor stage" (the mounting platform for the sensor chip) or "sensor socket" (the electrical connector to the sensor chip). The "sensors" are numbered starting at 1.
 
 socket
-: A place where the sensor chip is mounted. The sockets are fixed in position inside the instrument.  The sensor boards attached to the sockets and each sensor board is giving a unique "socket number" and this number is used to identify where the sensor chips are placed.
+: A place where the sensor chip is mounted. The sockets are fixed in position inside the instrument.  The sensor boards attached to the sockets and each sensor board is giving a unique "socket id" and this string is used to identify where the sensor chips are placed.
 
 SRA
 : acronym for Sensor Resource Allocation. A logical grouping of hardware and software resources.  See section below for details. For the purpose of the API, an SRA is identified by the ``socket``.  As this is a heavily used software concept and used in arrays and vectors, SRAs are indexed at 0. Ideally, the pa-ws API does not expose SRA indices.
@@ -72,7 +72,7 @@ retrieving a single JSON field as just plain text.
 
 A binary format would be justified for transmitting a full chip image of the dark frame for example.
 
-The http payloads are controlled via the ``accepted`` and ``context-type`` HTTP header fields. The following 
+The http payloads are controlled via the ``accepted`` and ``context-type`` HTTP header fields. The following
 media types will be accepted as input and output:
 
 | Media name                   | Shortcut  | Use         | Reference |
@@ -93,7 +93,7 @@ For example, to request that the response be in PNG format, the http header must
 
     accepted: image/png
 
-For example, to install a dark frame using a PGM file, the http 
+For example, to install a dark frame using a PGM file, the http
 content would have a header and body that looks something like this:
 
     content-type: image/x-portable-graymap
@@ -118,7 +118,7 @@ All field names shall use lower case.
 All fields shall use "camelCase" for multiword names, which
 concatenates the names with following words capitalized in the first lett.  For example,
 ``currentFrameIndex``. If this document contains non-camelCase words (for example
-snake_case), then this document is incorrect and should be fixed. This document is 
+snake_case), then this document is incorrect and should be fixed. This document is
 manually managed and I manually changed the naming convention after an early draft.
 
 ## Endpoint paths
@@ -170,8 +170,8 @@ All filenames shall be specified using proper URL syntax.  For the immediate des
  * http://pawshost/storages/m123456/files/path0/filename
 
    The `files` is a keyword that means to access the actual file named `file0` in the storage partition.  This gets translated to a local file by concantenating the value of ``/storages/m123456/linuxPath`` with ``filename``. For example, if the m123456 storage object is on ``/data/pa/tmp.fab73c90``, then the URL is translated to ``/data/pa/tmp.fab73c90/path0/file0``.
- 
-If the protocol is left off, then the protocol is assumed to be `file:`. 
+
+If the protocol is left off, then the protocol is assumed to be `file:`.
 
 ### All API calls start with
 
@@ -197,12 +197,12 @@ Illegal state transitions will result in FORBIDDEN
 
 #### 404 Not Found
 
-Endpoint not found. This can happen both for top level end point paths not existing, as well as index 
+Endpoint not found. This can happen both for top level end point paths not existing, as well as index
 values being out of range.
 
 #### 500 Internal Server Error
 
-There was a problem processing the request due to a problem internal to the server and not due to 
+There was a problem processing the request due to a problem internal to the server and not due to
 the actual underlying applications. For example, if the webservices run out of memory or
 an exception is unhandled.
 
@@ -237,7 +237,7 @@ graph TB;
    sbc --> output(BAZ or BAM file)
 ```
 
-# Software Model 
+# Software Model
 
 Each SRA is a state machine.  Immediately after construction,
 each SRA is in the "offline" state.  The SRA has not connected
@@ -250,7 +250,7 @@ sensor board and notified via the Aurora link, it will
 transition to the "idle" state automatically. While in the idle
 state, it may receive metadata, such as frame headers which are
 monitored through the REST API, but otherwise all data is
-ignored and discarded.  
+ignored and discarded.
 The sensor board number will be available in the REST API in
 this state.
 
@@ -294,7 +294,7 @@ stateDiagram
 ```
 
 Not shown in diagram are reset requests from other states
-besides "error".  
+besides "error".
 This type of reset is not anticipated, but it is allowed.  A
 reset should only been done from the error state.
 
@@ -346,7 +346,7 @@ sequenceDiagram
     loop Confirm "SUCCESS"
       C->>+B: GET {{url_base}}/sockets/0/darkcal/processStatus/completionStatus
       B-->>-C: OK "SUCCESS"
-    end  
+    end
 
 
     C->>B: POST /sockets/0/basecaller/start
@@ -360,7 +360,7 @@ sequenceDiagram
     loop Confirm "SUCCESS"
       C->>+B: GET {{url_base}}/sockets/0/basecaller/processStatus/completionStatus
       B-->>-C: OK "SUCCESS"
-    end  
+    end
 
     C->>B: POST /postprimary/m123456
     B->>C: /postprimary/m123456
@@ -368,11 +368,11 @@ sequenceDiagram
     loop Confirm "SUCCESS"
       C->>+B: GET {{url_base}}/postprimary/m123456/processStatus/completionStatus
       B-->>-C: OK "SUCCESS"
-    end  
- 
+    end
+
     C->> B: DELETE /postprimary/m123456
     C->> B: DELETE /sockets/0
-    
+
     C : transfers all files off instrument
 
     C->> B: POST /storage/m123456/free
@@ -396,7 +396,7 @@ will query the other end points (/sensors, /status)
 
 ## GET /doc
 
-Returns the document you are currently reading.  The markdown file is rendered into pretty HTML and 
+Returns the document you are currently reading.  The markdown file is rendered into pretty HTML and
 contained within the pa-ws binary.
 
 ## GET /api
@@ -463,7 +463,7 @@ traceFileRoi and traceFileUrl
 ## sockets/N/darkcal
 
 The end point for controlling kes-cal to obtain dark calibration files. The only required fields are
-the movieMaxFrames and the destination URL.  Note that the interface is very similar to `loadingcal`. 
+the movieMaxFrames and the destination URL.  Note that the interface is very similar to `loadingcal`.
 
 ## sockets/N/loadingcal
 
@@ -480,5 +480,5 @@ only difference is that this requires a darkcal file URL.
 1.1:
 * complete review of everything. the /transfer endpoints were removed.
 
-    
+
 
