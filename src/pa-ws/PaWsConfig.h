@@ -100,11 +100,6 @@ void FactoryConfig(PaWsConfig* config);
 void Spider2Config(PaWsConfig* config);
 
 /// \param config An out pointer to a PB Config struct that will be 
-/// written with default values suitable for Mongo, aka four parallel Sequel2
-/// instances.
-void MongoConfig(PaWsConfig* config);
-
-/// \param config An out pointer to a PB Config struct that will be 
 /// written with default values suitable for Kestrel.
 void KestrelConfig(PaWsConfig* config);
 

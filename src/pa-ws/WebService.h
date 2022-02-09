@@ -100,7 +100,7 @@ public:
     SocketConfig(const PaWsConfig& config);
 
     /// Add to the map of socketIds.
-    /// 0-based boads number is the vector index.
+    /// 0-based board number is the vector index.
     /// Empty string means add nothing at that index.
     /// Raise on any dups.
     void AddSocketIds(const std::vector<std::string>& socketIds);
