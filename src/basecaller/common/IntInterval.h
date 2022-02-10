@@ -35,6 +35,8 @@
 #include <limits>
 #include <type_traits>
 
+#include <boost/numeric/conversion/cast.hpp>
+
 namespace PacBio::Mongo {
 
 // TODO: Eliminate the multitude of representations of the empty set?
@@ -53,6 +55,11 @@ class IntInterval
     static_assert(std::is_integral<IntType>::value,
                   "Template argument must be an integer type.");
 
+    // This constraint is primarily motivated by a desire to keep the definition
+    // of Center() simple (for now).
+    static_assert(sizeof(IntType) <= 4u,
+                  "IntInterval only supports types up to four bytes in size.");
+
 public:     // types
     using ElementType = IntType;
     using SizeType = std::make_unsigned_t<IntType>;
@@ -63,17 +70,24 @@ public:     // structors
     // IntInterval() = default;
     IntInterval() {}
 
-    /// Create an interval [lower, upper).
-    /// Requires lower <= upper.
-    constexpr IntInterval(IntType lower, IntType upper)
+    IntInterval(const IntType& lower, const IntType& upper)
         : lower_ {lower}
         , upper_ {upper}
     {
         assert(lower_ <= upper_);
     }
 
-    // TODO: Add "deleted" constructor that takes two signed integers (to
-    // prohibit implicit signed-to-unsigned conversion mischief).
+    /// Create an interval [lower, upper).
+    /// Requires lower <= upper.
+    template <typename T>
+    explicit IntInterval(const T& lower, const T& upper)
+        : lower_ {boost::numeric_cast<IntType>(lower)}
+        , upper_ {boost::numeric_cast<IntType>(upper)}
+    {
+        static_assert(std::is_integral_v<T>,
+                      "Argument type must be integral.");
+        assert(lower_ <= upper_);
+    }
 
 public:     // const methods
     bool Empty() const
@@ -85,10 +99,10 @@ public:     // const methods
     SizeType Size() const
     {
         assert(lower_ <= upper_);
-        return static_cast<SizeType>(upper_ - lower_);
-        // TODO: To avoid overflow when ElementType is signed, this would need to be
-        // a bit more complicated. For the time being, we only support unsigned
-        // integers.
+        // Assumes two's complement representation of signed integers.
+        const auto lu = static_cast<SizeType>(lower_);
+        const auto uu = static_cast<SizeType>(upper_);
+        return uu - lu;
     }
 
     /// The smallest value in the interval.
@@ -99,11 +113,14 @@ public:     // const methods
     IntType Upper() const
     { return upper_; }
 
-    float Center() const
+    // TODO: Would be nice to make this more generic and more airtight.
+    double Center() const
     {
-        if (Empty()) return std::nanf("");
-        // TODO: This naive definition is vulnerable to overflow.
-        return 0.5f * (Lower() + Upper() - 1);
+        if (Empty()) return std::nan("");
+        // Possible loss of precision here.
+        const double ld = Lower();
+        const double um1d = Upper() - 1;
+        return 0.5 * (ld + um1d);
     }
 
 public:     // modifying methods

@@ -70,8 +70,9 @@ TYPED_TEST(TestIntInterval, Basic)
     const auto ii1 = this->ii1;
     const auto ii2 = this->ii2;
     const auto shift = TestFixture::shift;
-    using IntType = typename TestFixture::IntervalT::ElementType;
-    using SizeType = typename TestFixture::IntervalT::SizeType;
+    using IntervalType = typename TestFixture::IntervalT;
+    using IntType = typename IntervalType::ElementType;
+    using SizeType = typename IntervalType::SizeType;
 
     EXPECT_TRUE(ii0.Empty());
     EXPECT_EQ(SizeType{0}, ii0.Size());
@@ -84,6 +85,16 @@ TYPED_TEST(TestIntInterval, Basic)
     EXPECT_FALSE(ii2.Empty());
     EXPECT_EQ(IntType{2} + shift, ii2.Lower());
     EXPECT_EQ(IntType{5} + shift, ii2.Upper());
+    EXPECT_EQ(SizeType{3}, ii2.Size());
+
+    // Check corner case of Size().
+    if constexpr (std::is_signed_v<IntType>)
+    {
+        const auto mx = std::numeric_limits<IntType>::max();
+        const auto mn = std::numeric_limits<IntType>::min();
+        const IntervalType big {mn + 1, mx - 1};
+        EXPECT_EQ(std::numeric_limits<SizeType>::max() - 2, big.Size());
+    }
 }
 
 TYPED_TEST(TestIntInterval, Compare)
@@ -135,10 +146,10 @@ TYPED_TEST(TestIntInterval, Center)
     const auto shift = TestFixture::shift;
 
     EXPECT_TRUE(std::isnan(this->ii0.Center()));
-    EXPECT_EQ(1.0f + shift, this->ii1.Center());
-    EXPECT_EQ(3.0f + shift, this->ii2.Center());
-    EXPECT_EQ(5.0f + shift, this->ii3.Center());
-    EXPECT_EQ(4.5f + shift, this->ii4.Center());
+    EXPECT_EQ(1.0 + shift, this->ii1.Center());
+    EXPECT_EQ(3.0 + shift, this->ii2.Center());
+    EXPECT_EQ(5.0 + shift, this->ii3.Center());
+    EXPECT_EQ(4.5 + shift, this->ii4.Center());
 }
 
 TYPED_TEST(TestIntInterval, Disjoint)

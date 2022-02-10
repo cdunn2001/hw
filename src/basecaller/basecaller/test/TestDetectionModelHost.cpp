@@ -117,12 +117,12 @@ TEST(TestDetectionModelHost, LaneDetectionModelConversion)
 
 TEST(TestDetectionModelHost, EvolveConfidence)
 {
-    DetModelHost dm {MockLaneDetectionModel<Cuda::PBHalf>(), {0u, 100u}};
+    DetModelHost dm {MockLaneDetectionModel<Cuda::PBHalf>(), {0, 100}};
     dm.Confidence(1.0f);
-    dm.EvolveConfidence({100u, 200u}, 100.0f);
+    dm.EvolveConfidence({100, 200}, 100.0f);
     EXPECT_TRUE(all(dm.Confidence() == 0.5f));
 
-    dm.EvolveConfidence({200u, 300u}, 200.f);
+    dm.EvolveConfidence({200, 300}, 200.f);
     const float expect = 0.5f * std::sqrt(0.5f);
     EXPECT_TRUE(all(abs(dm.Confidence() - expect) < 1.0e-6f * expect));
 }
