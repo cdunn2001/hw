@@ -68,6 +68,10 @@ class MyValidator:
                 numFound += 1
             else :
                 numLost += 1
+                global verbose
+                if verbose:
+                    for rect in roispec:
+                        print("zmw:%d %d,%d not found in %d:%d, %d:%d" % (zmw,row,col,rect[0],rect[0] + rect[2], rect[1], rect[1] + rect[3]))
         print("bounding box:[%d,%d,%d,%d]" % ( minRow, minCol, maxRow - minRow+1, maxCol - minCol+1))                
         return (numFound, numLost, )
 
@@ -137,7 +141,7 @@ if __name__ == '__main__':
     group = parser.add_argument_group('Data Verification')
     group.add_argument('--roi',
                        help="ROI specification in JSON format, e.g. [[0,0,64,256]]",
-                       default='[[0,0,4096,3072]]')
+                       default='[[0,0,4096,6144]]')
     group.add_argument('--file',
                        help="trc.h5 filename",
                        default='')

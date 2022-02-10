@@ -6,6 +6,7 @@
 
 BUILD=${BUILD:-Release}
 LOGFILTER=${LOGFILTER:-info}
+LOGOUTPUT=${LOGOUTPUT:-/var/log/pacbio/pa-smrtbasecaller/pa-smrtbasecaller}
 FRAMES=${FRAMES:-1024}
 RATE=${RATE:-100}
 TRACE_OUTPUT=${TRACE_OUTPUT:-}
@@ -16,6 +17,7 @@ MAXPOPLOOPS=${MAXPOPLOOPS:-10}
 TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
 LOOPBACK=${LOOPBACK:-false}
 SRA_INDEX=${SRA_INDEX:-0}  # 0 to 3
+ROI=${ROI:-[[0,0,64,256]]}  # don't use spaces. This can also be a filename to a JSON file that contains the ROI.
 
 # append this directory to the PATH
 scriptdir=$(dirname $(realpath $0))
@@ -89,15 +91,6 @@ cat <<HERE > $tmpjson
          "tilePoolFactor" : ${TILEPOOLFACTOR},
          "loopback": ${LOOPBACK}
     }
-  },
-  "traceSaver": 
-  {
-    //"roi": [ [0,0,1536,64 ]]
-    //"roi": [ [0,0,64,1024 ]] // works
-    "roi": [ [0,0,64,256 ]] // works
-    //"roi": [ [0,0,1,64 ], [1,0,1,64], [2,64,1,64]] // works
-    //"roi":[[0,0,6,3072]] // works
-    //"roi":[[0,0,24,3072]] // ??
   }
 } 
 HERE
@@ -168,10 +161,18 @@ then
 else
   # normal build dir
   export PATH=$scriptdir/../../../build/basecaller/gcc/x86_64/${BUILD}/applications:${PATH}
+  echo PATH is $PATH
+fi
+if [[ $LOGOUTPUT != "" && $LOGOUTPUT != "none" ]]
+then
+    logoutput="--logoutput $LOGOUTPUT"
+else
+    logoutput=""
 fi
 
 echo PATH = $PATH
 
 set -x
 pwd
-$cmd smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output}
+$cmd smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} --config traceSaver.roi=${ROI}
+
