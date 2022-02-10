@@ -98,7 +98,8 @@ struct __align__(128) LaneModelParameters
         {
             analogs_[i].ParallelAssign(other.analogs_[i]);
         }
-        confidence_ = other.confidence_;  // TODO: Should this be parallelized?
+        assert(blockDim.x == laneWidth);
+        confidence_[threadIdx.x] = other.confidence_[threadIdx.x];
         return *this;
     }
 #endif
