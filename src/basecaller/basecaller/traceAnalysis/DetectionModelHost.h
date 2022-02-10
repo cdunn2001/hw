@@ -178,17 +178,6 @@ public:     // Non-const interface
         return *this;
     }
 
-    /// Sets the frame interval.
-    /// fi[0] < f[1].
-    /// \returns *this.
-    DetectionModelHost& FrameInterval(const FrameIntervalType& fi)
-    {
-        // TODO: Temporarily disabled this assertion statement until the dust settles.
-        // assert (!fi.Empty());
-        frameInterval_ = fi;
-        return *this;
-    }
-
     /// Non-const reference to the baseline mode of the model
     SignalModeHost<FloatVec>& BaselineMode()
     { return baselineMode_; }
@@ -208,10 +197,18 @@ public:     // Non-const interface
         const float t1 = newInterval.Center();
         const auto m = exp2(-abs(t1-t0)/confHalfLife);
         confid_ *= m;
-        FrameInterval(newInterval);
+        SetNonemptyFrameInterval(newInterval);
     }
 
 private:
+    /// Sets the frame interval.
+    /// \returns *this.
+    DetectionModelHost& SetNonemptyFrameInterval(const FrameIntervalType& fi)
+    {
+        assert (!fi.Empty());
+        frameInterval_ = fi;
+        return *this;
+    }
 
     /// Updates *this with the SIMD weighted average
     /// "\a fraction * other + (1 - \a fraction) * *this".

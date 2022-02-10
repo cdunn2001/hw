@@ -190,7 +190,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
     default: throw PBException("DetectionModel: Bad update method id.");
     }
 
-    FrameInterval(other.FrameInterval());
+    SetNonemptyFrameInterval(other.FrameInterval());
 
     // Do not update confidence.
 
@@ -202,18 +202,14 @@ template <typename VF>
 DetectionModelHost<VF>&
 DetectionModelHost<VF>::Update(const DetectionModelHost& other)
 {
+    // It might be useful to replace NaNs in either confidence with 0.
     assert (this->FrameInterval() == other.FrameInterval());
-
-    // TODO: Remove this temporary hack.
-    confid_ = Blend(isnan(confid_), 0.0f, confid_);
-    const auto oc = Blend(isnan(other.Confidence()), 0.0f, other.Confidence());
-
     assert (all(this->Confidence() >= 0.0f));
-    assert (all(oc >= 0.0f));
+    assert (all(other.Confidence() >= 0.0f));
 
-    const auto confSum = this->Confidence() + oc;
+    const auto confSum = this->Confidence() + other.Confidence();
     const VF fraction = Blend(confSum > 0.0f,
-                              oc / confSum, FloatVec(0.0f));
+                              other.Confidence() / confSum, FloatVec(0.0f));
 
     assert (all(fraction >= 0.0f));
     assert (all(fraction <= 1.0f));
