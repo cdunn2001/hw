@@ -776,117 +776,51 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
     auto nextArg = args.begin();
     const auto json = PacBio::IPC::ParseJSON(postData);
 
-    if (nextArg != args.end())
-    {   
-        if (*nextArg == "reset")
+    if (nextArg == args.end())
+    {
+        throw HttpResponseException(HttpStatus::NOT_FOUND, "need socket number");
+    }
+    if (*nextArg == "reset")
+    {
+        // TODO
+        // for(auto& socket: sockets_)
+        // {
+        //    socket.reset();  this is pseudocode
+        // }
+        if (config_.debug.simulationLevel == 1)
         {
-            // TODO
-            // for(auto& socket: sockets_)
-            // {
-            //    socket.reset();  this is pseudocode
-            // }
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
+        }
+        return response;
+    }
+    const auto socketId = *nextArg;
+    ValidateSocketId(socketConfig_, socketId);
+    nextArg++;
+    if (nextArg == args.end())
+    {
+        throw HttpResponseException(HttpStatus::NOT_FOUND, "POST must include final app name: basecaller, darkcal, loadingcal or reset");
+    }
+
+    if (*nextArg == "basecaller")
+    {
+        nextArg++;
+        if (nextArg == args.end() || *nextArg == "start")
+        {
+            if (postData == "")
+            {
+                throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+            }
+            SocketBasecallerObject sbo(json);
             if (config_.debug.simulationLevel == 1)
             {
-                response.httpStatus = HttpStatus::OK;
-                response.json = "tbd";
-            }
-            return response;
-        }
-        const auto socketId = *nextArg;
-        ValidateSocketId(socketConfig_, socketId);
-        nextArg++;
-        if (nextArg == args.end())
-        {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST must include final app name: basecaller, darkcal, loadingcal or reset");
-        }
-        if (*nextArg == "basecaller")
-        {
-            nextArg++;
-            if (nextArg == args.end() || *nextArg == "start")
-            {
-                if (postData == "")
-                {
-                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
-                }
-                SocketBasecallerObject sbo(json);
-                if (config_.debug.simulationLevel == 1)
-                {
-                    response.httpStatus = HttpStatus::CREATED;
-                    response.json = sbo.Serialize();
-                }
-            }
-            else if (*nextArg == "stop")
-            {
-                // do something
-                if (config_.debug.simulationLevel == 1)
-                {
-                    response.httpStatus = HttpStatus::OK;
-                    response.json = "tbd";
-                }
-            }
-            else
-            {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to basecaller contains unknown command:" + *nextArg);
+                response.httpStatus = HttpStatus::CREATED;
+                response.json = sbo.Serialize();
             }
         }
-        else if (*nextArg == "darkcal")
+        else if (*nextArg == "stop")
         {
-            nextArg++;
-            if (nextArg == args.end() || *nextArg == "start")
-            {
-                if (postData == "")
-                {
-                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
-                }
-                SocketDarkcalObject sdco(json);
-                if (config_.debug.simulationLevel == 1)
-                {
-                    response.httpStatus = HttpStatus::CREATED;
-                    response.json = sdco.Serialize();
-                }
-            }
-            else if (*nextArg == "stop")
-            {
-                // do something
-                if (config_.debug.simulationLevel == 1)
-                {
-                    response.httpStatus = HttpStatus::OK;
-                    response.json = "tbd";
-                }
-            }
-            else
-            {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to darkcal contains unknown command:" + *nextArg);
-            }
-        }
-        else if (*nextArg == "loadingcal")
-        {
-            nextArg++;
-            if (nextArg == args.end() || *nextArg == "start")
-            {
-                if (postData == "")
-                {
-                    throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
-                }
-                SocketLoadingcalObject slco(json);
-                if (config_.debug.simulationLevel == 1)
-                {
-                    response.httpStatus = HttpStatus::CREATED;
-                    response.json = slco.Serialize();
-                }
-            }
-            else if (*nextArg == "stop")
-            {
-                // do something
-            }
-            else
-            {
-                throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to loadingcal contains unknown command:" + *nextArg);
-            }
-        }
-        else if (*nextArg == "reset")
-        {
-            // TODO
+            // do something
             if (config_.debug.simulationLevel == 1)
             {
                 response.httpStatus = HttpStatus::OK;
@@ -895,12 +829,76 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
         }
         else
         {
-            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST URL must include final app name: basecaller, darkcal, loadingcal or reset");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to basecaller contains unknown command:" + *nextArg);
+        }
+    }
+    else if (*nextArg == "darkcal")
+    {
+        nextArg++;
+        if (nextArg == args.end() || *nextArg == "start")
+        {
+            if (postData == "")
+            {
+                throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+            }
+            SocketDarkcalObject sdco(json);
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::CREATED;
+                response.json = sdco.Serialize();
+            }
+        }
+        else if (*nextArg == "stop")
+        {
+            // do something
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::OK;
+                response.json = "tbd";
+            }
+        }
+        else
+        {
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to darkcal contains unknown command:" + *nextArg);
+        }
+    }
+    else if (*nextArg == "loadingcal")
+    {
+        nextArg++;
+        if (nextArg == args.end() || *nextArg == "start")
+        {
+            if (postData == "")
+            {
+                throw HttpResponseException(HttpStatus::BAD_REQUEST, "POST contained empty data payload (JSON)");
+            }
+            SocketLoadingcalObject slco(json);
+            if (config_.debug.simulationLevel == 1)
+            {
+                response.httpStatus = HttpStatus::CREATED;
+                response.json = slco.Serialize();
+            }
+        }
+        else if (*nextArg == "stop")
+        {
+            // do something
+        }
+        else
+        {
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "POST to loadingcal contains unknown command:" + *nextArg);
+        }
+    }
+    else if (*nextArg == "reset")
+    {
+        // TODO
+        if (config_.debug.simulationLevel == 1)
+        {
+            response.httpStatus = HttpStatus::OK;
+            response.json = "tbd";
         }
     }
     else
     {
-        throw HttpResponseException(HttpStatus::NOT_FOUND, "need socket number");
+        throw HttpResponseException(HttpStatus::NOT_FOUND, "POST URL must include final app name: basecaller, darkcal, loadingcal or reset");
     }
 
     return response;
