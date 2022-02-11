@@ -882,12 +882,18 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
     const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
     const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
 
+    FloatVec blVar = fixedBaselineParams_ ? fixedBaselineVar_
+                                          : baselineStats.Variance();
+
     // We're having problems with the baseline variance overflowing a half precision
     // storage.  Something is already terribly wrong if our variance is over
     // 65k, but we'll put a limiter here because having a literal infinity run
     // around is causing problems elsewhere
-    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_
-                            : min(baselineStats.Variance(), FloatVec{60000});
+    blVar = min(blVar, 60000.0f);
+
+    // Also, constrain variance to be no less than the "quantization" limit.
+    const float blVarMin = std::max(movieScaler_, 1.0f) / 12.0f;
+    blVar = max(blVar, blVarMin);
 
     InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }
