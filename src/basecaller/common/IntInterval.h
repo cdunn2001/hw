@@ -49,6 +49,7 @@ namespace PacBio::Mongo {
 // SIAM, 2009.
 
 /// A class template that represents an interval (or range) of integers.
+/// Arithmetic operators represent elementwise arithmetic.
 template <typename IntType>
 class IntInterval
 {
@@ -131,46 +132,8 @@ public:     // modifying methods
         return *this;
     }
 
-    /// Like operator+=, but constrains the result to avoid overflow.
-    /// If ElementType is signed, the definition uses the expression -a, which
-    /// typically causes UB if a is std::numeric_limits<ElementType>::min().
-    IntInterval& AddWithSaturation(IntType a)
-    {
-        if constexpr (std::is_signed_v<IntType>)
-        {
-            assert(a != std::numeric_limits<IntType>::min());
-            if (a < 0) return SubtractWithSaturation(-a);
-        }
-
-        assert(lower_ <= upper_);
-        assert(a >= 0);
-        constexpr auto highest = std::numeric_limits<IntType>::max();
-        lower_ = (lower_ > highest - a ? highest : lower_ + a);
-        upper_ = (upper_ > highest - a ? highest : upper_ + a);
-        assert(lower_ <= upper_);
-        return *this;
-    }
-
-    /// Like operator-=, but constrains the result to avoid overflow.
-    /// If ElementType is signed, the definition uses the expression -a, which
-    /// typically causes UB if a is std::numeric_limits<ElementType>::min().
-    IntInterval& SubtractWithSaturation(IntType a)
-    {
-        if constexpr (std::is_signed_v<IntType>)
-        {
-            assert(a != std::numeric_limits<IntType>::min());
-            if (a < 0) return AddWithSaturation(-a);
-        }
-
-        assert(lower_ <= upper_);
-        constexpr auto lowest = std::numeric_limits<IntType>::min();
-        lower_ = (lower_ < lowest + a ? lowest : lower_ - a);
-        upper_ = (upper_ < lowest + a ? lowest : upper_ - a);
-        assert(lower_ <= upper_);
-        return *this;
-    }
-
 public:     // compound assignment operators
+    /// The interval defined by adding \a a to all the elements in this interval.
     /// Overflow results in undefined behavior.
     IntInterval& operator+=(const IntType a)
     {
@@ -181,6 +144,8 @@ public:     // compound assignment operators
         return *this;
     }
 
+    /// The interval defined by subtracting \a a from all the elements in this
+    /// interval.
     /// Overflow results in undefined behavior.
     IntInterval& operator-=(const IntType a)
     {
@@ -264,10 +229,9 @@ Hull(const IntInterval<IntType>& a, const IntInterval<IntType>& b)
                                 max(a.Upper(), b.Upper()));
 }
 
-// TODO: Define conversion from IntType to IntInterval<IntType>.
+// TODO: Could define conversion from IntType to IntInterval<IntType>.
 
-// TODO: Define relationships between IntType and IntInterval<IntType>.
-
+/// The interval defined by adding \a n to all the elements in \a ii.
 template <typename IntType>
 inline IntInterval<IntType>
 operator+(const IntInterval<IntType>& ii, IntType n)
@@ -277,6 +241,7 @@ operator+(const IntInterval<IntType>& ii, IntType n)
     return r;
 }
 
+/// The interval defined by adding \a n to all the elements in \a ii.
 template <typename IntType>
 inline IntInterval<IntType>
 operator+(IntType n, const IntInterval<IntType>& ii)

@@ -313,7 +313,6 @@ TYPED_TEST(TestIntInterval, Add)
     const auto ii1 = this->ii1;
     const auto ii2 = this->ii2;
     const auto ii3 = this->ii3;
-    const auto ii4 = this->ii4;
     using IntervalT = typename TestFixture::IntervalT;
     using IntType = typename IntervalT::ElementType;
 
@@ -327,8 +326,6 @@ TYPED_TEST(TestIntInterval, Add)
         i0 += a;
         EXPECT_TRUE(i0.Empty());
         EXPECT_TRUE((ii0 + a).Empty());
-        i0.AddWithSaturation(a);
-        EXPECT_TRUE(i0.Empty());
 
         // Check += and AddWithSaturation w/o actual saturation.
         for (const auto& iix : {ii1, ii2, ii3})
@@ -339,10 +336,6 @@ TYPED_TEST(TestIntInterval, Add)
             EXPECT_EQ(s, i.Size());
             EXPECT_EQ(iix.Lower() + a, i.Lower());
             EXPECT_EQ(iix.Upper() + a, i.Upper());
-
-            IntervalT j {iix};
-            j.AddWithSaturation(a);     // Expect no saturation here.
-            EXPECT_EQ(i, j);
         }
 
         // Check integer + interval + integer.
@@ -354,40 +347,6 @@ TYPED_TEST(TestIntInterval, Add)
             EXPECT_EQ(iix.Upper() + 2u*a, i.Upper());
         }
     }
-
-    // Check AddWithSaturation w/ actual saturation.
-    constexpr auto mx = std::numeric_limits<IntType>::max();
-    {
-        IntervalT i {ii2};
-        auto b = mx - ii2.Upper();
-        // Expect no saturation.
-        i.AddWithSaturation(b);
-        EXPECT_EQ(ii2.Size(), i.Size());
-        EXPECT_EQ(ii2.Lower() + b, i.Lower());
-        EXPECT_EQ(ii2.Upper() + b, i.Upper());
-
-        i = ii2;
-        b = (i.Lower() + i.Upper())/IntType(2);
-        ASSERT_LT(b, ii2.Upper());
-        ASSERT_GT(b, ii2.Lower());
-        ASSERT_GE(b, IntType(0))
-            << "Test error: next statement would cause integer overflow.";
-        b = mx - b;
-        // Expect saturation of Upper only.
-        i.AddWithSaturation(b);
-        EXPECT_LT(i.Size(), ii2.Size());
-        EXPECT_EQ(ii2.Lower() + b, i.Lower());
-        EXPECT_EQ(mx, i.Upper());
-
-        i = ii4;
-        b = i.Lower();
-        ASSERT_GE(b, IntType(0))
-            << "Test error: next statement would cause integer overflow.";
-        b = mx - b;
-        // Expect saturation of Lower and Upper.
-        i.AddWithSaturation(b);
-        EXPECT_TRUE(i.Empty());
-    }
 }
 
 TYPED_TEST(TestIntInterval, Subtract)
@@ -397,7 +356,6 @@ TYPED_TEST(TestIntInterval, Subtract)
     const auto ii1 = this->ii1;
     const auto ii2 = this->ii2;
     const auto ii3 = this->ii3;
-    const auto shift = TestFixture::shift;
     using IntervalT = typename TestFixture::IntervalT;
     using IntType = typename IntervalT::ElementType;
 
@@ -411,8 +369,6 @@ TYPED_TEST(TestIntInterval, Subtract)
         IntervalT i0 {ii0};
         i0 -= a;
         EXPECT_TRUE(i0.Empty());
-        i0.SubtractWithSaturation(a);
-        EXPECT_TRUE(i0.Empty());
 
         // Here only use test intervals for which Lower() - a >= mn.
         for (const auto& iix : {ii1, ii2, ii3})
@@ -425,45 +381,7 @@ TYPED_TEST(TestIntInterval, Subtract)
             EXPECT_EQ(s, i.Size());
             EXPECT_EQ(iix.Lower() - a, i.Lower());
             EXPECT_EQ(iix.Upper() - a, i.Upper());
-
-            IntervalT j {iix};
-            j.SubtractWithSaturation(a);     // Expect no saturation here.
-            EXPECT_EQ(i, j);
         }
-    }
-
-    // Note that for signed integers, typically min = -max - 1, and -min overflows.
-    // Split mn into two parts.
-    constexpr auto mnh1 = mn/2;
-    constexpr auto mnh2 = mn - mnh1;
-    ASSERT_EQ(mn, mnh1 + mnh2) << "Test error.";
-    {
-        IntervalT i {ii2};
-        auto b = ii2.Lower();
-        // Expect no saturation.
-        i.SubtractWithSaturation(b - mnh1);
-        i.SubtractWithSaturation(-mnh2);
-        EXPECT_EQ(ii2.Size(), i.Size());
-        EXPECT_EQ(mn, i.Lower());
-        EXPECT_EQ(mn + ii2.Size(), i.Upper());
-
-        i = ii2;
-        b = IntType(3) + shift;
-        ASSERT_LT(b, ii2.Upper());
-        ASSERT_GT(b, ii2.Lower());
-        // Expect saturation of Lower only.
-        i.SubtractWithSaturation(b - mnh1);
-        i.SubtractWithSaturation(-mnh2);
-        EXPECT_LT(i.Size(), ii2.Size());
-        EXPECT_EQ(mn, i.Lower());
-        EXPECT_EQ(mn + ii2.Upper() - b, i.Upper());
-
-        i = ii2;
-        b = ii2.Upper();
-        // Expect saturation of Lower and Upper.
-        i.SubtractWithSaturation(b - mnh1);
-        i.SubtractWithSaturation(-mnh2);
-        EXPECT_TRUE(i.Empty());
     }
 }
 
