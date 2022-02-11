@@ -38,6 +38,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
 namespace PacBio {
 namespace Primary {

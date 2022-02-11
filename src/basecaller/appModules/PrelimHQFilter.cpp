@@ -60,7 +60,7 @@ public:
     virtual std::unique_ptr<BazBuffer> Flush() = 0;
 };
 
-template <bool internal>
+template <bool internal,bool completeMetrics>
 class PrelimHQFilterBody::ImplChild : public PrelimHQFilterBody::Impl
 {
 private:
@@ -69,7 +69,7 @@ private:
     static constexpr size_t expectedBytesPerBase = internal
             ? InternalPulses::nominalBytes : ProductionPulses::nominalBytes;
     using Serializer = std::conditional_t<internal, InternalPulses, ProductionPulses>;
-    using BazAggregatorT = std::conditional_t<internal,
+    using BazAggregatorT = std::conditional_t<completeMetrics,
                             BazAggregator<CompleteMetricsGroup::MetricT,
                                           CompleteMetricsGroup::MetricAggregatedT>,
                             BazAggregator<ProductionMetricsGroup::MetricT,
@@ -236,27 +236,57 @@ PrelimHQFilterBody::PrelimHQFilterBody(
         for (const auto& kv : poolDims)
         {
             if (config.internalMode)
-                impl_.push_back(std::make_unique<ImplChild<true>>(kv.second.ZmwsPerBatch(), 1,
-                                                                  chunksPerMetric, kv.first,
-                                                                  config.multipleBazFiles,
-                                                                  config.prelimHQ));
+            {
+                if (config.prelimHQ.enablePreHQ)
+                    impl_.push_back(std::make_unique<ImplChild<true,false>>(kv.second.ZmwsPerBatch(), 1,
+                                                                            chunksPerMetric, kv.first,
+                                                                            config.multipleBazFiles,
+                                                                            config.prelimHQ));
+                else
+                    impl_.push_back(std::make_unique<ImplChild<true,true>>(kv.second.ZmwsPerBatch(), 1,
+                                                                           chunksPerMetric, kv.first,
+                                                                           config.multipleBazFiles,
+                                                                           config.prelimHQ));
+            }
             else
-                impl_.push_back(std::make_unique<ImplChild<false>>(kv.second.ZmwsPerBatch(), 1,
-                                                                   chunksPerMetric, kv.first,
-                                                                   config.multipleBazFiles,
-                                                                   config.prelimHQ));
+            {
+                if (config.prelimHQ.enablePreHQ)
+                    impl_.push_back(std::make_unique<ImplChild<false,false>>(kv.second.ZmwsPerBatch(), 1,
+                                                                             chunksPerMetric, kv.first,
+                                                                             config.multipleBazFiles,
+                                                                             config.prelimHQ));
+                else
+                    impl_.push_back(std::make_unique<ImplChild<false,true>>(kv.second.ZmwsPerBatch(), 1,
+                                                                            chunksPerMetric, kv.first,
+                                                                            config.multipleBazFiles,
+                                                                            config.prelimHQ));
+            }
         }
     }
     else
     {
         if (config.internalMode)
-            impl_.push_back(std::make_unique<ImplChild<true>>(numZmws, poolDims.size(),
-                                                              chunksPerMetric, 0,
-                                                              config.multipleBazFiles, config.prelimHQ));
+        {
+            if (config.prelimHQ.enablePreHQ)
+                impl_.push_back(std::make_unique<ImplChild<true,false>>(numZmws, poolDims.size(),
+                                                                        chunksPerMetric, 0,
+                                                                        config.multipleBazFiles, config.prelimHQ));
+            else
+                impl_.push_back(std::make_unique<ImplChild<true,true>>(numZmws, poolDims.size(),
+                                                                       chunksPerMetric, 0,
+                                                                       config.multipleBazFiles, config.prelimHQ));
+        }
         else
-            impl_.push_back(std::make_unique<ImplChild<false>>(numZmws, poolDims.size(),
-                                                               chunksPerMetric, 0,
-                                                               config.multipleBazFiles, config.prelimHQ));
+        {
+            if (config.prelimHQ.enablePreHQ)
+                impl_.push_back(std::make_unique<ImplChild<false,false>>(numZmws, poolDims.size(),
+                                                                         chunksPerMetric, 0,
+                                                                         config.multipleBazFiles, config.prelimHQ));
+            else
+                impl_.push_back(std::make_unique<ImplChild<false,true>>(numZmws, poolDims.size(),
+                                                                        chunksPerMetric, 0,
+                                                                        config.multipleBazFiles, config.prelimHQ));
+        }
     }
 }
 

@@ -47,10 +47,7 @@ add_library(libBazio
         MetricBlock.h
         MetricData.h
         MetricField.h
-        MetricFieldMap.cpp
-        MetricFieldMap.h
         MetricFieldName.h
-        MetricFrequency.h
         PacketField.h
         PacketFieldMap.cpp
         PacketFieldMap.h

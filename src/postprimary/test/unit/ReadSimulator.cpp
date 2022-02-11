@@ -16,32 +16,16 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
     int metricFrames = 0;
     int numMetricBlocks = 0;
     std::vector<MetricField> fields;
-    MetricFrequency frequency = MetricFrequency::HIGH;
 
-    const PacBio::BazIO::FileHeader& fh = config.GenerateHeader();
-    if (!fh.HFMetricFields().empty())
+    const auto& fh = config.GenerateHeader();
+    if (!fh.MetricFields().empty())
     {
-        assert(fh.MFMetricFields().empty());
-        assert(fh.LFMetricFields().empty());
-        fields = fh.HFMetricFields();
-        metricFrames = fh.HFMetricFrames();
-        numMetricBlocks = config.nhfb();
-        frequency = MetricFrequency::HIGH;
-    } else if (!fh.MFMetricFields().empty()) {
-        assert(fh.HFMetricFields().empty());
-        assert(fh.LFMetricFields().empty());
-        fields = fh.MFMetricFields();
-        metricFrames = fh.MFMetricFrames();
-        numMetricBlocks = config.nmfb();
-        frequency = MetricFrequency::MEDIUM;
-    } else if (!fh.LFMetricFields().empty()) {
-        assert(fh.HFMetricFields().empty());
-        assert(fh.MFMetricFields().empty());
-        fields = fh.LFMetricFields();
-        metricFrames = fh.LFMetricFrames();
-        numMetricBlocks = config.nlfb();
-        frequency = MetricFrequency::LOW;
-    } else {
+        fields = fh.MetricFields();
+        metricFrames = fh.MetricFrames();
+        numMetricBlocks = config.NumberMetricBlocks();
+    }
+    else
+    {
         assert(false);
     }
 
@@ -143,7 +127,9 @@ BlockLevelMetrics SimulateMetrics(const ReadConfig& config)
         rawMetrics.UIntMetric(MetricFieldName::NUM_FRAMES).push_back(metricFrames);
     }
 
-    return BlockLevelMetrics(rawMetrics, fh, frequency, true);
+    return BlockLevelMetrics(rawMetrics,
+                             metricFrames, fh.FrameRateHz(), fh.RelativeAmplitudes(), fh.BaseMap(),
+                             true);
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
 // arguments to function parameters
@@ -182,7 +168,7 @@ EventData SimulateEventData(const ReadConfig& config)
 
     const auto& fh = config.GenerateHeader();
     return EventData(
-            fh, 0, false,
+            0, fh.ZmwInformation().ZmwIndexToNumber(0), false,
             BazIO::BazEventData(fields, {}),
             std::move(states));
 }
@@ -202,7 +188,8 @@ ZmwMetrics RunMetrics(const EventData& events,
     ProductivityMetrics prodClassifier(4, minEmptyTime, emptyOutlierTime);
     auto prod = prodClassifier.ComputeProductivityInfo(hqRegion, metrics, true);
 
-    return ZmwMetrics(fh, hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
+    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwNumber()),
+                      hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
 }
 
 
@@ -219,10 +206,9 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
 {
     auto fh = std::make_unique<PacBio::BazIO::FileHeader>(readconfig.GenerateHeader());
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
-    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters,
-                                  readconfig.nlfb()};
+    PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.NumberMetricBlocks()};
     using Platform = PacBio::Primary::Postprimary::Platform;
-    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, *fh, hqRegion, zmwMetrics, events, metrics,
+    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);
     return std::make_tuple(zmw, std::move(fh));
 }

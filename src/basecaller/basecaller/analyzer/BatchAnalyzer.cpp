@@ -351,13 +351,6 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
     auto pulses = std::move(pulsesAndMetrics.first);
     auto pulseDetectorMetrics = std::move(pulsesAndMetrics.second);
 
-    auto metricsProfile = profiler.CreateScopedProfiler(AnalysisStages::Metrics);
-    (void)metricsProfile;
-    auto basecallingMetrics = (*hfMetrics_)(pulses, baselinerMetrics,
-                                            models_.data,
-                                            frameLabelerMetrics,
-                                            pulseDetectorMetrics);
-
     // TODO: What is the "schedule" pattern of producing metrics.
     // Do not need to be aligned over pools (or lanes).
 
@@ -370,6 +363,11 @@ DynamicEstimateBatchAnalyzer::AnalyzeImpl(const Data::TraceBatchVariant& tbatch)
         return BatchResult(std::move(emptyPulsesAndMetrics.first), nullptr);
     } else
     {
+        auto metricsProfile = profiler.CreateScopedProfiler(AnalysisStages::Metrics);
+        (void)metricsProfile;
+        auto basecallingMetrics = (*hfMetrics_)(pulses, baselinerMetrics, models_.data,
+                                                frameLabelerMetrics, pulseDetectorMetrics);
+
         return BatchResult(std::move(pulses), std::move(basecallingMetrics));
     }
 }

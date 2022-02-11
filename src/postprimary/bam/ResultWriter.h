@@ -117,7 +117,13 @@ public: // structors
                  const PacBio::BAM::CollectionMetadata* cmd,
                  std::shared_ptr<RuntimeMetaData>& rmd,
                  const PpaAlgoConfig* ppaAlgoConfig,
-                 const FileHeader& fileHeader,
+                 const std::string& movieName,
+                 float movieTimeInHrs,
+                 const std::string& bazVersion,
+                 const std::string& bazWriterVersion,
+                 const std::string& basecallerVersion,
+                 double frameRateHz,
+                 bool internal,
                  const std::vector<PacBio::BAM::ProgramInfo>& apps,
                  bool computeStats,
                  uint32_t maxNumZmws);
@@ -201,9 +207,14 @@ private: // data
     const PacBio::BAM::CollectionMetadata* cmd_;
     std::shared_ptr<RuntimeMetaData> rmd_;
     const PpaAlgoConfig* ppaAlgoConfig_;
+    const std::string movieName_;
+    const float movieTimeInHrs_;
+    const std::string bazVersion_;
+    const std::string bazWriterVersion_;
+    const std::string basecallerVersion_;
+    const double frameRateHz_;
+    const bool internal_;
 
-    //const
-    FileHeader fileHeader_;
     const PacBio::BAM::DataSet* ds_;
 
     bool computeStats_;
@@ -361,10 +372,9 @@ private: // Create output files and open streams
 
     void AddResourceFastx(const std::string& convention, const std::string& filename);
 
-    std::vector<PacBio::BAM::ProgramInfo> CreateProgramInfos(const FileHeader& fileHeader,
-                                                             const std::vector<PacBio::BAM::ProgramInfo>& apps);
+    std::vector<PacBio::BAM::ProgramInfo> CreateProgramInfos(const std::vector<PacBio::BAM::ProgramInfo>& apps);
 
-    PacBio::BAM::ReadGroupInfo CreateReadGroupInfo(const std::string& readType, const FileHeader& fileHeader);
+    PacBio::BAM::ReadGroupInfo CreateReadGroupInfo(const std::string& readType);
 
 
 private: // init

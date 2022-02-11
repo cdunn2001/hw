@@ -43,12 +43,14 @@ namespace PacBio {
 namespace Primary {
 
 BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
-                                     const BazIO::FileHeader& fh,
-                                     MetricFrequency frequency,
+                                     uint32_t metricFrames,
+                                     double frameRateHz,
+                                     const std::vector<float> relAmps,
+                                     const std::string& baseMap,
                                      bool internal)
 {
     internal_ = internal;
-    assert(fh.MetricFieldScaling(MetricFieldName::NUM_PULSES, frequency) == 1);
+    //assert(fh.MetricFieldScaling(MetricFieldName::NUM_PULSES, frequency) == 1);
 
     // The below assumes that the metrics are all of the same size.
     const size_t expectedSize = [&]() -> size_t
@@ -71,20 +73,8 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     // We technically allow empty metrics right now, but this should be changed.
     if (rawMetrics.Empty()) return;
 
-    size_t framesPerBlock = 0;
-    switch (frequency)
-    {
-    case MetricFrequency::HIGH:
-        framesPerBlock = fh.HFMetricFrames();
-        break;
-    case MetricFrequency::MEDIUM:
-        framesPerBlock = fh.MFMetricFrames();
-        break;
-    case MetricFrequency::LOW:
-        framesPerBlock = fh.LFMetricFrames();
-        break;
-    }
-    const auto frameRate = static_cast<float>(fh.FrameRateHz());
+    size_t framesPerBlock = metricFrames;
+    const auto frameRate = static_cast<float>(frameRateHz);
 
     const auto toFloatVec = [](const auto& data) {
         std::vector<float> ret;
@@ -96,41 +86,41 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     if (rawMetrics.HasMetric(MetricFieldName::NUM_FRAMES))
     {
         numFrames_             = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::NUM_FRAMES),
-                                                        frequency, frameRate, framesPerBlock);
+                                                        frameRate, framesPerBlock);
     }
     else
     {
         numFrames_             = SingleMetric<uint32_t>(std::vector<uint32_t>(expectedSize, framesPerBlock),
-                                                        frequency, frameRate, framesPerBlock);
+                                                        frameRate, framesPerBlock);
     }
 
     numPulsesAll_          = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::NUM_PULSES),
-                                                    frequency, frameRate, framesPerBlock);
+                                                    frameRate, framesPerBlock);
     pulseWidth_            = SingleMetric<float>(toFloatVec(rawMetrics.UIntMetric(MetricFieldName::PULSE_WIDTH)),
-                                                    frequency, frameRate, framesPerBlock);
+                                                 frameRate, framesPerBlock);
     baseWidth_             = SingleMetric<float>(toFloatVec(rawMetrics.UIntMetric(MetricFieldName::BASE_WIDTH)),
-                                                    frequency, frameRate, framesPerBlock);
+                                                 frameRate, framesPerBlock);
 
     if (rawMetrics.HasMetric(MetricFieldName::NUM_SANDWICHES))
         numSandwiches_         = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::NUM_SANDWICHES),
-                                                        frequency, frameRate, framesPerBlock);
+                                                        frameRate, framesPerBlock);
     if (rawMetrics.HasMetric(MetricFieldName::NUM_HALF_SANDWICHES))
         numHalfSandwiches_     = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::NUM_HALF_SANDWICHES),
-                                                        frequency, frameRate, framesPerBlock);
+                                                        frameRate, framesPerBlock);
     if (rawMetrics.HasMetric(MetricFieldName::NUM_PULSE_LABEL_STUTTERS))
         numPulseLabelStutters_ = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::NUM_PULSE_LABEL_STUTTERS),
-                                                        frequency, frameRate, framesPerBlock);
+                                                        frameRate, framesPerBlock);
     if (rawMetrics.HasMetric(MetricFieldName::PULSE_DETECTION_SCORE))
         pulseDetectionScore_   = SingleMetric<float>(rawMetrics.FloatMetric(MetricFieldName::PULSE_DETECTION_SCORE),
-                                                     frequency, frameRate, framesPerBlock);
+                                                     frameRate, framesPerBlock);
     if (rawMetrics.HasMetric(MetricFieldName::TRACE_AUTOCORR))
         traceAutocorr_         = SingleMetric<float>(rawMetrics.FloatMetric(MetricFieldName::TRACE_AUTOCORR),
-                                                     frequency, frameRate, framesPerBlock);
+                                                     frameRate, framesPerBlock);
 
     pixelChecksum_ = SingleMetric<int32_t>(rawMetrics.IntMetric(MetricFieldName::PIXEL_CHECKSUM),
-                                           frequency, frameRate, framesPerBlock);
+                                           frameRate, framesPerBlock);
     dmeStats_      = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::DME_STATUS),
-                                           frequency, frameRate, framesPerBlock);
+                                            frameRate, framesPerBlock);
 
     // pkzvar and bpzvar below can contain NaNs. We set those to 0 instead
     // as the HQRF downstream expects them to be 0 and not NaN.
@@ -150,7 +140,7 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
         replaceNaNWithZero(adata.G);
         adata.T = rawMetrics.FloatMetric(MetricFieldName::PKZVAR_T);
         replaceNaNWithZero(adata.T);
-        pkzvar_ = AnalogMetric<float>(std::move(adata), frequency, frameRate, framesPerBlock);
+        pkzvar_ = AnalogMetric<float>(std::move(adata), frameRate, framesPerBlock);
     }
 
     if (rawMetrics.HasMetric(MetricFieldName::BPZVAR_A))
@@ -163,7 +153,7 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
         replaceNaNWithZero(adata.G);
         adata.T = rawMetrics.FloatMetric(MetricFieldName::BPZVAR_T);
         replaceNaNWithZero(adata.T);
-        bpzvar_ = AnalogMetric<float>(std::move(adata), frequency, frameRate, framesPerBlock);
+        bpzvar_ = AnalogMetric<float>(std::move(adata), frameRate, framesPerBlock);
     }
 
     if (rawMetrics.HasMetric(MetricFieldName::PKMAX_A))
@@ -172,21 +162,21 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
         adata.C = rawMetrics.FloatMetric(MetricFieldName::PKMAX_C);
         adata.G = rawMetrics.FloatMetric(MetricFieldName::PKMAX_G);
         adata.T = rawMetrics.FloatMetric(MetricFieldName::PKMAX_T);
-        pkMax_ = AnalogMetric<float>(std::move(adata), frequency, frameRate, framesPerBlock);
+        pkMax_ = AnalogMetric<float>(std::move(adata), frameRate, framesPerBlock);
     }
 
     adata.A = rawMetrics.FloatMetric(MetricFieldName::PKMID_A);
     adata.C = rawMetrics.FloatMetric(MetricFieldName::PKMID_C);
     adata.G = rawMetrics.FloatMetric(MetricFieldName::PKMID_G);
     adata.T = rawMetrics.FloatMetric(MetricFieldName::PKMID_T);
-    pkMid_ = AnalogMetric<float>(std::move(adata), frequency, frameRate, framesPerBlock);
+    pkMid_ = AnalogMetric<float>(std::move(adata), frameRate, framesPerBlock);
 
     AnalogMetricData<std::vector<uint32_t>> bdata;
     bdata.A = rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_A);
     bdata.C = rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_C);
     bdata.G = rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_G);
     bdata.T = rawMetrics.UIntMetric(MetricFieldName::PKMID_FRAMES_T);
-    pkMidFrames_ = AnalogMetric<uint32_t>(std::move(bdata), frequency, frameRate, framesPerBlock);
+    pkMidFrames_ = AnalogMetric<uint32_t>(std::move(bdata), frameRate, framesPerBlock);
 
     bdata.A = rawMetrics.UIntMetric(MetricFieldName::NUM_BASES_A);
     bdata.C = rawMetrics.UIntMetric(MetricFieldName::NUM_BASES_C);
@@ -197,13 +187,13 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     {
         basesSum[i] = bdata.A[i] + bdata.G[i] + bdata.C[i] +bdata.T[i];
     }
-    numBases_ = AnalogMetric<uint32_t>(std::move(bdata), frequency, frameRate, framesPerBlock);
-    numBasesAll_ = SingleMetric<uint32_t>(std::move(basesSum), frequency, frameRate, framesPerBlock);
+    numBases_ = AnalogMetric<uint32_t>(std::move(bdata), frameRate, framesPerBlock);
+    numBasesAll_ = SingleMetric<uint32_t>(std::move(basesSum), frameRate, framesPerBlock);
 
-    const float relampA = fh.RelativeAmplitudes()[fh.BaseMap().find('A')];
-    const float relampC = fh.RelativeAmplitudes()[fh.BaseMap().find('C')];
-    const float relampG = fh.RelativeAmplitudes()[fh.BaseMap().find('G')];
-    const float relampT = fh.RelativeAmplitudes()[fh.BaseMap().find('T')];
+    const float relampA = relAmps[baseMap.find('A')];
+    const float relampC = relAmps[baseMap.find('C')];
+    const float relampG = relAmps[baseMap.find('G')];
+    const float relampT = relAmps[baseMap.find('T')];
     const float minamp = std::min({relampA, relampC, relampG, relampT});
 
     // These differ depending on if we're Spider or Sequel.  For now at least,
@@ -216,7 +206,7 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     {
         fdata.red = rawMetrics.FloatMetric(MetricFieldName::BASELINE_RED_SD);
         fdata.green = rawMetrics.FloatMetric(MetricFieldName::BASELINE_GREEN_SD);
-        baselineSD_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        baselineSD_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         for (size_t i = 0; i < numBasesAll_.size(); ++i)
         {
@@ -248,23 +238,23 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
                 fdata.green.push_back(0.0);
             }
         }
-        channelMinSNR_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        channelMinSNR_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         fdata.red = rawMetrics.FloatMetric(MetricFieldName::BASELINE_RED_MEAN);
         fdata.green = rawMetrics.FloatMetric(MetricFieldName::BASELINE_GREEN_MEAN);
-        baselineMean_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        baselineMean_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         fdata.red = rawMetrics.FloatMetric(MetricFieldName::ANGLE_RED);
         fdata.green = rawMetrics.FloatMetric(MetricFieldName::ANGLE_GREEN);
-        angle_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        angle_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
     } else {
         fdata.red = fdata.green = rawMetrics.FloatMetric(MetricFieldName::BASELINE_SD);
-        baselineSD_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        baselineSD_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         if (rawMetrics.HasMetric(MetricFieldName::ACTIVITY_LABEL))
         {
             activityLabels_ = SingleMetric<uint32_t>(rawMetrics.UIntMetric(MetricFieldName::ACTIVITY_LABEL),
-                                                    frequency, frameRate, framesPerBlock);
+                                                     frameRate, framesPerBlock);
         }
 
         for (size_t i = 0; i < numBasesAll_.size(); ++i)
@@ -286,13 +276,13 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
             }
         }
         fdata.green = fdata.red;
-        channelMinSNR_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        channelMinSNR_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         fdata.red = fdata.green = rawMetrics.FloatMetric(MetricFieldName::BASELINE_MEAN);
-        baselineMean_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        baselineMean_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
 
         fdata.red = fdata.green = std::vector<float>(expectedSize, -1.0f);
-        angle_ = FilterMetric<float>(std::move(fdata), frequency, frameRate, framesPerBlock);
+        angle_ = FilterMetric<float>(std::move(fdata), frameRate, framesPerBlock);
     }
 
     // Compute some derived metrics (not explicitly in baz file)
@@ -315,7 +305,7 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
         adata.C = GetAnalogBaseRate(numBases_.data().C, blockTime),
         adata.G = GetAnalogBaseRate(numBases_.data().G, blockTime),
         adata.T = GetAnalogBaseRate(numBases_.data().T, blockTime);
-        basesVsTime_ = AnalogMetric<float>(std::move(adata), frequency, frameRate, framesPerBlock);
+        basesVsTime_ = AnalogMetric<float>(std::move(adata), frameRate, framesPerBlock);
     }
 
     if (!pkMax_.empty())
@@ -370,9 +360,9 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
             pkMaxNorms.push_back(std::max({maxSnrA, maxSnrC, maxSnrG, maxSnrT}));
         }
 
-        blockMinSNR_ = SingleMetric<float>(std::move(minSnr), frequency, frameRate, framesPerBlock);
-        blockLowSNR_ = SingleMetric<float>(std::move(lowSnr), frequency, frameRate, framesPerBlock);
-        maxPkMaxNorms_ = SingleMetric<float>(std::move(pkMaxNorms), frequency, frameRate, framesPerBlock);
+        blockMinSNR_ = SingleMetric<float>(std::move(minSnr), frameRate, framesPerBlock);
+        blockLowSNR_ = SingleMetric<float>(std::move(lowSnr), frameRate, framesPerBlock);
+        maxPkMaxNorms_ = SingleMetric<float>(std::move(pkMaxNorms), frameRate, framesPerBlock);
     }
 
     std::vector<float> pkzNorms;
@@ -387,13 +377,13 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
         bpzNorms.push_back((bpzvar_.data().A[i] + bpzvar_.data().C[i] + bpzvar_.data().T[i]) / 3.0f);
     }
 
-    pkzVarNorms_ = SingleMetric<float>(std::move(pkzNorms), frequency, frameRate, framesPerBlock);
-    bpzVarNorms_ = SingleMetric<float>(std::move(bpzNorms), frequency, frameRate, framesPerBlock);
+    pkzVarNorms_ = SingleMetric<float>(std::move(pkzNorms), frameRate, framesPerBlock);
+    bpzVarNorms_ = SingleMetric<float>(std::move(bpzNorms), frameRate, framesPerBlock);
 }
 
 MetricRegion BlockLevelMetrics::GetFullRegion() const
 {
-    return MetricRegion(0, numPulsesAll_.size(), numPulsesAll_.Frequency());
+    return MetricRegion(0, numPulsesAll_.size());
 }
 
 MetricRegion BlockLevelMetrics::GetMetricRegion(const RegionLabel& region) const
@@ -401,7 +391,7 @@ MetricRegion BlockLevelMetrics::GetMetricRegion(const RegionLabel& region) const
     // Short circuit, to handle the default empty range that other code produces
     // when no HQ is found.
     if (region.pulseBegin == 0 && region.pulseEnd == 0)
-        return MetricRegion(0, 0, numPulsesAll_.Frequency());
+        return MetricRegion(0, 0);
 
     // Check if we've already done this particular computation.  Ideally this
     // will go away in the near future, when all the HQ metrics/regions/etc are
@@ -447,7 +437,7 @@ MetricRegion BlockLevelMetrics::GetMetricRegion(const RegionLabel& region) const
     size_t startBlock = FindMetricBlock(eventData, region.pulseBegin);
     size_t endBlock = FindMetricBlock(eventData, region.pulseEnd);
 
-    MetricRegion ret(startBlock, endBlock, numPulsesAll_.Frequency());
+    MetricRegion ret(startBlock, endBlock);
     cachedMap_.second = ret;
     return ret;
 }

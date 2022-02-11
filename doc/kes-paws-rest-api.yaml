@@ -19,99 +19,98 @@ paths:
                 $ref: '#/components/schemas/PawsStatusObject'
   /sockets:
     get:
-      summary: Returns a list of socket numbers.
-      description: Under production circumstances, this will return the inclusive list of integers from
-                   `firstSocket` to `lastSocket`, defined in the pa-ws configuration space.
+      summary: Returns a list of socket ids.
+      description: Socket ids are not necessarily numeric strings
       responses:
         '200':    # status code
-          description: A JSON array of socket numbers
+          description: A JSON array of socket ids
           content:
             application/json:
-              schema: 
+              schema:
                 type: array
-                items: 
-                  type: integer
+                items:
+                  type: string
               examples:
                 Kestrel:
-                  value: [ 1, 2, 3, 4]
-  /sockets/{socknum}:
+                  value: ["1", "2", "3", "4"]
+  /sockets/{sock_id}:
     get:
-      summary: Returns the socket object indexed by the socknum.
+      summary: Returns the socket object indexed by the sock_id.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketObject'                  
+                $ref: '#/components/schemas/SocketObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
   /sockets/reset:
     post:
       summary: Resets all "one shot" app resources for each of the sockets.
       responses:
         '200':
           description: OK
-  /sockets/{socknum}/reset:
+  /sockets/{sock_id}/reset:
     post:
       summary: Resets all "one shot" app resources for the socket.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/image:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/image:
     get:
       summary: Returns a single image from the socket
       description: Format of image not decided (png or pgm).  TODO Still need to workout details on what image is returned.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/basecaller:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller:
     get:
-      summary: Returns the basecaller object indexed by the socknum.
+      summary: Returns the basecaller object indexed by the sock_id.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketBasecallerObject'                  
+                $ref: '#/components/schemas/SocketBasecallerObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/basecaller/start:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/start:
     post:
-      summary: Start the basecaller process on socket {socknum}
+      summary: Start the basecaller process on socket {sock_id}
       description: "A basecaller process is started with the given request body values.  Important Input parameters include:
 
                     * movie length
@@ -124,88 +123,88 @@ paths:
 
                     * Information on analogs
 
-                    Once the process is started, the `/sockets/{socknum}/basecaller` endpoint can be polled for progress.
+                    Once the process is started, the `/sockets/{sock_id}/basecaller` endpoint can be polled for progress.
                     The `process_status.execution_status` will pass through `RUNNING` and eventually `COMPLETE`."
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SocketBasecallerObject'             
+              $ref: '#/components/schemas/SocketBasecallerObject'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketBasecallerObject'             
+                $ref: '#/components/schemas/SocketBasecallerObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/basecaller/stop:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/stop:
     post:
-      summary: Gracefully aborts the basecalling process on socket {socknum}. This must be called before a POST to `reset`. Note
-               The the process will not stop immediately.  The client must poll the endpoint until the 
+      summary: Gracefully aborts the basecalling process on socket {sock_id}. This must be called before a POST to `reset`. Note
+               The the process will not stop immediately.  The client must poll the endpoint until the
                `process_status.execution_status` is `COMPLETE`.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/basecaller/reset:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/basecaller/reset:
     post:
-      summary: Resets the basecaller resource on socket {socknum}
-      description: Resets the basecaller resource back to the "Ready" state to prepare it for another execution. 
+      summary: Resets the basecaller resource on socket {sock_id}
+      description: Resets the basecaller resource back to the "Ready" state to prepare it for another execution.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range     
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
         '409':
           description: CONFLICT basecaller was not in the `READY` or `COMPLETE` state.
 
-  /sockets/{socknum}/darkcal:
+  /sockets/{sock_id}/darkcal:
     get:
-      summary: Returns the darkcal object indexed by the socknum.
+      summary: Returns the darkcal object indexed by the sock_id.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketBasecallerObject'                  
+                $ref: '#/components/schemas/SocketBasecallerObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/darkcal/start:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/darkcal/start:
     post:
-      summary: Starts a dark cal process on socket {socknum}
-      description: "Starts a dark cal process with the provided input parameters. 
+      summary: Starts a dark cal process on socket {sock_id}
+      description: "Starts a dark cal process with the provided input parameters.
 
                   Input parameters include:
 
@@ -219,85 +218,85 @@ paths:
 
                   Call will fail if the darkcal resource is not in the `READY` state.  It must be reset first."
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SocketDarkcalObject'             
+              $ref: '#/components/schemas/SocketDarkcalObject'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketDarkcalObject'             
+                $ref: '#/components/schemas/SocketDarkcalObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
         '409':
           description: CONFLICT darkcal was not in the READY or COMPLETE state
-  /sockets/{socknum}/darkcal/stop:
+  /sockets/{sock_id}/darkcal/stop:
     post:
-      summary: Gracefully aborts the darkcal process on socket {socknum}
+      summary: Gracefully aborts the darkcal process on socket {sock_id}
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/darkcal/reset:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/darkcal/reset:
     post:
-      summary: Resets the darkcal resource on socket {socknum}
-      description: Resets the darkcal resource back to the "Ready" state to prepare it for another execution. 
+      summary: Resets the darkcal resource on socket {sock_id}
+      description: Resets the darkcal resource back to the "Ready" state to prepare it for another execution.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
         '409':
           description: CONFLICT Fails if darkcal is still in progress.  POST to stop first.
 
-  /sockets/{socknum}/loadingcal:
+  /sockets/{sock_id}/loadingcal:
     get:
-      summary: Returns the loadingcal object indexed by the socknum.
+      summary: Returns the loadingcal object indexed by the sock_id.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketDarkcalObject'                  
+                $ref: '#/components/schemas/SocketDarkcalObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/loadingcal/start:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/loadingcal/start:
     post:
-      summary: Starts a loadingcal process on socket {socknum}
-      description: "Starts a loadingcal process with the provided input parameters. 
+      summary: Starts a loadingcal process on socket {sock_id}
+      description: "Starts a loadingcal process with the provided input parameters.
 
                   Input parameters include:
 
@@ -311,90 +310,90 @@ paths:
 
                   Call will fail if the loadingcal resource is not in the `READY` state.  It must be reset first."
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SocketLoadingcalObject'             
+              $ref: '#/components/schemas/SocketLoadingcalObject'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SocketLoadingcalObject'             
+                $ref: '#/components/schemas/SocketLoadingcalObject'
         '404':
-          description: NOT_FOUND The socket number was out of range        
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
         '409':
           description: CONFLICT loadingcal was not in the READY or COMPLETE state
-  /sockets/{socknum}/loadingcal/stop:
+  /sockets/{sock_id}/loadingcal/stop:
     post:
-      summary: Gracefully aborts the dark cal process on socket {socknum}
+      summary: Gracefully aborts the dark cal process on socket {sock_id}
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range        
-  /sockets/{socknum}/loadingcal/reset:
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
+  /sockets/{sock_id}/loadingcal/reset:
     post:
-      summary: Resets the loadingcal resource on socket {socknum}
-      description: Resets the loadingcal resource back to the "Ready" state to prepare it for another execution. 
+      summary: Resets the loadingcal resource on socket {sock_id}
+      description: Resets the loadingcal resource back to the "Ready" state to prepare it for another execution.
       parameters:
-      - name: socknum
+      - name: sock_id
         in: path
-        description: The socket number
+        description: The socket id
         required: true
         schema:
-          type: integer
+          type: string
       responses:
         '200':
           description: OK
         '404':
-          description: NOT_FOUND The socket number was out of range
+          description: NOT_FOUND The socket id was not found in the list of attached sensor FPGA boards
         '409':
           description: CONFLICT Fails if loadingcal is still in progress.  POST to stop first.
 
-          
+
   /storages:
     get:
-      summary: Returns a list of MIDs for each storage object.
+      summary: Returns a list of Mids for each storage object.
       responses:
         '200':    # status code
-          description: A JSON array of MIDs
+          description: A JSON array of Mids
           content:
             application/json:
-              schema: 
+              schema:
                 type: array
-                items: 
+                items:
                   type: string
     post:
       summary: Creates a storages resource for a movie.
-      description: The input data will include a movie context name and the socket (or partition) number.  The necessary directory (or directories) for the provided movie will be created.  If they can't be then a 4XX error response is returned.  The created resource will have the following path /storages/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header.            
+      description: The input data will include a movie context name and the socket (or partition) number.  The necessary directory (or directories) for the provided movie will be created.  If they can't be then a 4XX error response is returned.  The created resource will have the following path /storages/{mid} where mid is the movie context name.  If the resource already exists then a 4XX error response is returned.  The new resource path will be returned in the Location field of the response header.
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StorageObject'             
+              $ref: '#/components/schemas/StorageObject'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageObject'                  
+                $ref: '#/components/schemas/StorageObject'
 
   /storages/{mid}:
     get:
@@ -413,7 +412,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StorageObject'                  
+                $ref: '#/components/schemas/StorageObject'
     delete:
       summary: Deletes the storages resource for the provided movie context name (mid).
       description: All files must be freed beforehand by a DELETE call to `/storages/{mid}/free`.
@@ -433,7 +432,7 @@ paths:
     post:
       summary: Frees all directories and files associated with the storages resource and reclaims disk space.
       description: Can be refused if PA deems that there are not enough IO/compute resources to perform the free.  In the event of a failure, a 409 (Conflict) error code will be returned.  Further information may be provided in the response body as to why the POST was refused.  Clients (ICS) can keep calling this POST command until a success (200) response is returned.
-                   An optional category and/or source filter may be provided in the POST payload to only free files of this category and/or source. 
+                   An optional category and/or source filter may be provided in the POST payload to only free files of this category and/or source.
                    If no files of that category and/or source exist, the call should succeed
       parameters:
       - name: mid
@@ -448,15 +447,15 @@ paths:
 
   /postprimaries:
     get:
-      summary: Returns a list of MIDs for each postprimary object
+      summary: Returns a list of Mids for each postprimary object
       responses:
         '200':    # status code
-          description: A JSON array of MIDs
+          description: A JSON array of Mids
           content:
             application/json:
-              schema: 
+              schema:
                 type: array
-                items: 
+                items:
                   type: string
     post:
       summary: Starts a post primary process on the provided url's to basecalling artifacts files.
@@ -484,14 +483,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PostprimaryObject'             
+              $ref: '#/components/schemas/PostprimaryObject'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostprimaryObject'                  
+                $ref: '#/components/schemas/PostprimaryObject'
     delete:
       summary: Deletes all existing postprimaries resources.
       description: All postprimaries resources must be stopped first.
@@ -516,7 +515,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PostprimaryObject'                  
+                $ref: '#/components/schemas/PostprimaryObject'
     delete:
       summary: Deletes the postprimary resource.
       description: All resource must be stopped first.

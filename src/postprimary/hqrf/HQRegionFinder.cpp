@@ -96,11 +96,11 @@ RegionLabel HQRegionFinder::FindAndAnnotateHQRegion(
 std::unique_ptr<HQRegionFinder> HQRegionFinderFactory(
         const UserParameters& user,
         const std::shared_ptr<PpaAlgoConfig>& ppaAlgoConfig,
-        const PacBio::BazIO::FileHeader& header)
+        double frameRateHz)
 {
     HQRFMethod hqrfMethod = CoeffLookup(ppaAlgoConfig);
 
-    auto frameRate = static_cast<float>(header.FrameRateHz());
+    auto frameRate = static_cast<float>(frameRateHz);
     auto snrThresh = ppaAlgoConfig->inputFilter.minSnr;
     auto ignoreBazAL = user.ignoreBazAL;
 

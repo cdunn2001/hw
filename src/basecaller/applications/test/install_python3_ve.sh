@@ -4,8 +4,8 @@
 # or it has been properly installed. It then installs or updates the
 # python modules it needs. To completely install the virtual environment
 # from scratch, please do `rm -rf python_ve` before sourcing this script.
-source ../../../module_setup.sh
 module purge
+module use /mnt/software/modulefiles
 module unload python
 module load   python/3.9.6
 if [ ! -e python_ve ]; then

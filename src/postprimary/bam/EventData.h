@@ -54,26 +54,13 @@ using namespace PacBio::Primary;
 // immutable.
 class EventData
 {
-private:
-    // Private delegating ctor, to unify the two separate exposed constructors
-    // necessary for baz2bam and bam2bam
+public:
+
     EventData(size_t zmwIdx,
               size_t zmwNum,
               bool truncated,
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states);
-public:
-    EventData(const BazIO::FileHeader& fh,
-              size_t zmwIdx,
-              bool truncated,
-              BazIO::BazEventData&& events,
-              std::vector<InsertState>&& states)
-        : EventData(zmwIdx,
-                    fh.ZmwIndexToNumber(zmwIdx),
-                    truncated,
-                    std::move(events),
-                    std::move(states))
-    {}
 
     // Special constructor for Bam2Bam.  ZmwIndex() will be invalid (0), but
     // bam2bam doesn't need to know it anyway

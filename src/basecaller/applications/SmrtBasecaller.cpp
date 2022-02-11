@@ -58,6 +58,9 @@
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
 
+#include <boost/iostreams/device/file_descriptor.hpp>
+#include <boost/iostreams/stream.hpp>
+
 #include <git-rev.h>
 
 using namespace PacBio::Cuda::Memory;
@@ -107,6 +110,7 @@ public:
         frames_ = options.get("maxFrames");
         // TODO need validation or something, as this is probably a trace file input specific option
         nop_ = options.get("nop");
+        statusFileDescriptor_ = options.get("statusfiledescriptor");
 
         if (nop_ == 1)
         {
@@ -579,6 +583,11 @@ private:
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
                                                         config_.layout.framesPerChunk;
 
+        namespace io = boost::iostreams;
+        io::stream<io::file_descriptor_sink> statusStream(
+            io::file_descriptor_sink( statusFileDescriptor_, io::never_close_handle ) );
+        statusStream << "PA_WS_STATUS { \"source\":\"smrt-basecaller\", \"message\": \"started\"}" << std::endl;
+
         try
         {
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
@@ -611,6 +620,12 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
+
+#if 1
+            // TODO Change this to notify pa-ws that smrt-basecaller is ready
+            double progress  = 0.0;
+            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\"}" << std::endl;
+#endif
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -694,6 +709,17 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
+#if 1                        
+                    Json::Value status;
+                    status["source"]="smrt-basecaller";
+                    status["message"]="BUSY";
+                    status["frames"]=frames_;
+                    status["framesAnalyzed"]=framesAnalyzed;
+                    status["progress"]=progress;
+                    statusStream << "PA_WS_STATUS " << status << std::endl;
+                    progress = (frames_ > 0) ? (framesAnalyzed * 1.0 / frames_) : 0.0;
+#endif
+
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
                         PacBio::Cuda::Memory::ReportAllMemoryStats();
@@ -726,10 +752,20 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
+#if 1                        
+            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0 << "}" << std::endl;
+#endif
         }
         catch(const std::exception& ex)
         {
             PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
+#if 1                        
+            Json::Value status;
+            status["source"]="smrt-basecaller";
+            status["message"]="EXCEPTION";
+            status["what"] = ex.what();
+            statusStream << "PA_WS_STATUS " << status << std::endl;
+#endif
             throw;
         }
     }
@@ -744,6 +780,7 @@ private:
     int nop_ = 0; ///< 0 = normal. 1 = don't process any SensorPackets at all. 2 =dont instantiate the basecaller, but allow repacker and tracesaver
     std::string outputTrcFileName_;
     std::unique_ptr<TraceFile> outputTrcFile_;
+    int statusFileDescriptor_ = 1;
 };
 
 int main(int argc, char* argv[])
@@ -778,6 +815,7 @@ int main(int argc, char* argv[])
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
         parser.add_option("--maxFrames").type_int().set_default(0).help("Specifies maximum number of frames to run. 0 means unlimited");
+        parser.add_option("--statusfiledescriptor").action_store_true().type_int().set_default(1).help("Write status messages to this file description. Default 1 (stdout)");
 
         auto group1 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");

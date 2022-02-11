@@ -15,4 +15,4 @@ then
 fi
 source e2e_ve/bin/activate
 pip3 install --upgrade pip
-pip3 install h5py junit_xml lxml requests simplejson pyyaml
+pip3 install --isolated h5py junit_xml lxml requests simplejson pyyaml

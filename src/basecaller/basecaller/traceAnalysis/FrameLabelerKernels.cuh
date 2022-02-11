@@ -51,7 +51,7 @@ using Subframe::numStates;
 
 /// Transforms a loglikelihood to a normalized probability distribution.
 ///
-/// \param[in, out] vec    A loglikilhood for each of the stats on input, and a
+/// \param[in, out] vec    A log-likelihood for each of the stats on input, and a
 ///                        normalized probability on output
 __device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
 {
