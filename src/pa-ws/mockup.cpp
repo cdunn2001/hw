@@ -47,11 +47,12 @@ std::string CompressedISO8601()
     return s2;
 }
 
-SocketObject CreateMockupOfSocketObject(int socketNumber)
+SocketObject CreateMockupOfSocketObject(const std::string& socketId)
 {
-    std::string mid = "m12345" + std::to_string(socketNumber);
+    std::string mid = "m12345" + socketId;
+    // "The actual movie identifier looks more like "m" + machine serial number + "_" + date code."
     SocketObject so;
-    so.socketNumber = socketNumber;
+    so.socketId = socketId;
     so.darkcal.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::COMPLETE;
     so.darkcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::FAILED;
     so.darkcal.processStatus.exitCode = 137; // sig_segv
@@ -74,7 +75,8 @@ SocketObject CreateMockupOfSocketObject(int socketNumber)
     so.basecaller.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::RUNNING;
     so.basecaller.processStatus.timestamp = PacBio::Utilities::ISO8601::TimeString();
     so.basecaller.mid = mid;
-    so.basecaller.uuid = "00104afe-c341-11eb-8529-0242ac13000" + std::to_string(socketNumber);
+    so.basecaller.uuid = "00104afe-c341-11eb-8529-0242ac13000" + socketId;
+    // "I took a valid UUID, removed the last digit and added the socketNumber."
     so.basecaller.movieMaxFrames = 1000000;
     so.basecaller.movieMaxSeconds = 10000;
     so.basecaller.movieNumber = 113;
@@ -107,7 +109,7 @@ SocketObject CreateMockupOfSocketObject(int socketNumber)
     return so;
 }
 
-StorageObject CreateMockupOfStorageObject(int socketNumber, const std::string& mid)
+StorageObject CreateMockupOfStorageObject(const std::string& /*socketId*/, const std::string& mid)
 {
     StorageObject so;
 

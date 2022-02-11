@@ -94,19 +94,28 @@ private:
 
 class SocketConfig
 {
-    std::map<uint32_t, std::string> index2socketId_;
-    std::map<std::string, uint32_t> socketId2index_;
 public:
+    using SocketId = std::string;
+
     SocketConfig(const PaWsConfig& config);
 
-    /// Add to the map of socketIds.
+    /// Set the map of socketIds.
     /// 0-based board number is the vector index.
-    /// Empty string means add nothing at that index.
     /// Raise on any dups.
-    void AddSocketIds(const std::vector<std::string>& socketIds);
+    void SetSocketIds(const std::vector<SocketId>& socketIds);
 
     /// True iff the board index is known for this socketId.
-    bool IsValid(const std::string& socketId) const;
+    bool IsValid(const SocketId& socketId) const;
+
+    /// This is the number in use, not counting Boards that
+    /// happen to be powered off.
+    uint32_t GetNumBoards() const;
+
+    std::vector<SocketId> GetValidSocketIds() const;
+
+private:
+    // Key-sorting is helpful for tests, so avoid hashmap.
+    std::set<SocketId> socketId2index_;
 };
 
 /// The GET, POST and DELETE handler for this webservice.

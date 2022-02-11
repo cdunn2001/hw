@@ -38,9 +38,9 @@
 namespace PacBio {
 namespace API {
 
-SocketObject CreateMockupOfSocketObject(int index);
+SocketObject CreateMockupOfSocketObject(const std::string& socketId);
 
-StorageObject CreateMockupOfStorageObject(int socket_number, const std::string& mid);
+StorageObject CreateMockupOfStorageObject(const std::string& socketId, const std::string& mid);
 
 PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid);
 

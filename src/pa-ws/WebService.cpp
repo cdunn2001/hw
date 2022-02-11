@@ -278,7 +278,7 @@ bool WebServiceHandler::handleGet(CivetServer* server, struct mg_connection* con
         contentType = response.contentType;
         if (httpStatus != HttpStatus::OK)
         {
-            PBLOG_ERROR << "From: " << inet_ntos(req_info->remote_ip) << ":" << req_info->remote_port
+            PBLOG_ERROR << "Returning non-OK status for GET From: " << inet_ntos(req_info->remote_ip) << ":" << req_info->remote_port
                         << " " << response.json;
         }
         if (contentType == "application/json")
@@ -291,7 +291,7 @@ bool WebServiceHandler::handleGet(CivetServer* server, struct mg_connection* con
                 repackagedJson["httpCode"] = static_cast<int>(httpStatus);
                 repackagedJson["errorType"] = httpStatus.toString();
                 response.json = repackagedJson;
-                PBLOG_ERROR << response.json;
+                PBLOG_ERROR << "application/json response:" << response.json;
             }
             respdata = PacBio::IPC::RenderJSON(response.json);
         }
@@ -592,11 +592,12 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
     HttpResponse response;
     response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
 
-    std::map<int,PacBio::API::SocketObject> sockets_;
+    std::map<SocketConfig::SocketId, PacBio::API::SocketObject> sockets_;
+
     if (config_.debug.simulationLevel == 1)
     {
         response.httpStatus = HttpStatus::OK;
-        for(uint32_t i=1; i<= 4; i++) sockets_[i] = PacBio::API::CreateMockupOfSocketObject(i);
+        for(const auto id : socketConfig_.GetValidSocketIds()) sockets_[id] = PacBio::API::CreateMockupOfSocketObject(id);
     }
 
     if (args.size() == 0)
@@ -604,16 +605,20 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
         Json::Value objects = Json::arrayValue;
         for (const auto& o : sockets_)
         {
-            assert(o.first == o.second.socketNumber); // soon will not be required
-            const auto val = std::to_string(o.second.socketNumber);
+            assert(o.first == o.second.socketId);
+            const auto val = o.second.socketId;
             objects.append(val);
         }
         response.json = objects;
     }
     else
     {
-        auto index = std::stoi(args[0]);
-        response.json = sockets_[index].Serialize();
+        const SocketConfig::SocketId id = args[0];
+        if (sockets_.find(id) == sockets_.end())
+        {
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "GET socket id='" + id + "' not found");
+        }
+        response.json = sockets_[id].Serialize();
 
         // reformat the URL, changing slashes to dots, then
         // use Jsoncpp path feature.
@@ -633,15 +638,18 @@ HttpResponse WebServiceHandler::GET_Storages(const std::vector<std::string>& arg
     HttpResponse response;
     response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
 
+    const auto ids = socketConfig_.GetValidSocketIds();
+
     if (config_.debug.simulationLevel == 1)
     {
         response.httpStatus = HttpStatus::OK;
         if (args.size() == 0)
         {
             Json::Value objects = Json::arrayValue;
-            for(int i=1;i<=4;i++)
+            for(const auto id : ids)
             {
-                auto so = PacBio::API::CreateMockupOfStorageObject(i,"m123456_00000" + std::to_string(i));
+                const auto so = PacBio::API::CreateMockupOfStorageObject(id, "m123456_00000" + id);
+                // Note: id is appended only for a uniq value in our test.
                 objects.append(so.mid);
                 //objects[so.mid] = so.Serialize();
             }
@@ -649,9 +657,12 @@ HttpResponse WebServiceHandler::GET_Storages(const std::vector<std::string>& arg
         }
         else
         {
-            std::string mid = args[0];
-            int i = mid.back() - '0';
-            auto so = PacBio::API::CreateMockupOfStorageObject(i,mid);
+            const std::string mid(args[0]);
+            const char lastLetter = mid.back();
+            // Note: This is by convention in our test.
+            // "ICS is planning on encoding the socket number somehow in the mid, but leave that to them. It's just an arbitrary string to us."
+            const SocketConfig::SocketId id(1, lastLetter);
+            const auto so = PacBio::API::CreateMockupOfStorageObject(id, mid);
             response.json = so.Serialize();
         }
     }
@@ -699,32 +710,42 @@ HttpResponse WebServiceHandler::POST_Postprimaries(const std::vector<std::string
 
 SocketConfig::SocketConfig(const PaWsConfig& config)
 {
-    AddSocketIds(config.socketIds);
+    SetSocketIds(config.socketIds);
 }
 
-void SocketConfig::AddSocketIds(const std::vector<std::string>& socketIds)
+void SocketConfig::SetSocketIds(const std::vector<std::string>& socketIds)
 {
-    for (uint32_t i = 0U; i < socketIds.size(); ++i)
+    socketId2index_.clear();
+
+    for (const auto& socketId : socketIds)
     {
-        const std::string& socketId = socketIds[i];
-
-        if (IsValid(socketId))
+        const auto inserted = socketId2index_.insert(socketId);
+        if (!inserted.second)
         {
-            throw std::logic_error("Already have socketId '" + socketId + "'");
+            throw std::logic_error("Duplicate socketId '" + socketId + "'");
         }
-        socketId2index_[socketId] = i;
-
-        if (index2socketId_.find(i) != index2socketId_.end())
-        {
-            throw std::logic_error("Already have socket at index '" + std::to_string(i) + "'");
-        }
-        index2socketId_[i] = socketId;
     }
 }
 
 bool SocketConfig::IsValid(const std::string& socketId) const
 {
     return (socketId2index_.find(socketId) != socketId2index_.end());
+}
+
+std::vector<SocketConfig::SocketId> SocketConfig::GetValidSocketIds() const
+{
+    std::vector<SocketId> result;
+    result.reserve(4);
+    for (const auto it : socketId2index_)
+    {
+        result.push_back(it);
+    }
+    return result;
+}
+
+uint32_t SocketConfig::GetNumBoards() const
+{
+    return socketId2index_.size();
 }
 
 void WebServiceHandler::ValidateSocketId(const SocketConfig& config, const std::string& socketId)

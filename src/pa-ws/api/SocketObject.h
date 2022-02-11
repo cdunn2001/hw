@@ -128,8 +128,7 @@ struct SocketObject : PacBio::Configuration::PBConfig<SocketObject>
 {
     PB_CONFIG(SocketObject);
 
-    PB_CONFIG_PARAM(int, socketNumber, -1); ///< The socket number, counting from 1. If used, this is limited to the number of configured sockets.  EXAMPLE(2)
-    PB_CONFIG_PARAM(std::string, socketId, "-1"); ///< The socket identifier. EXAMPLE("2")
+    PB_CONFIG_PARAM(std::string, socketId, "-1"); ///< The socket identifier, typically "1" thru "4". EXAMPLE("2")
 
     PB_CONFIG_OBJECT(SocketDarkcalObject, darkcal);
     PB_CONFIG_OBJECT(SocketLoadingcalObject, loadingcal);
