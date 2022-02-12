@@ -31,7 +31,7 @@
 #include "FileHeader.h"
 
 #include <pacbio/logging/Logger.h>
-#include <pacbio/tracefile/ScanData.h>
+#include <pacbio/file/ScanData.h>
 #include <pacbio/text/String.h>
 
 #include <json/reader.h>
@@ -52,7 +52,7 @@ Json::Value FileHeader::ParseExperimentMetadata(const std::string& metadata)
 
 bool FileHeader::ValidateExperimentMetadata(const Json::Value& metadata)
 {
-    return PacBio::TraceFile::ScanData::Data(metadata).Validate();
+    return PacBio::File::ScanData::Data(metadata).Validate();
 }
 
 void FileHeader::Init(const char* header, const size_t length)

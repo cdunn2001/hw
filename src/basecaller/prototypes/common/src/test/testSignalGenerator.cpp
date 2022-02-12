@@ -5,12 +5,12 @@
 
 #include <common/ZmwDataManager.h>
 #include <common/DataGenerators/SignalGenerator.h>
-#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/file/TraceFile.h>
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Data;
 using namespace PacBio::Cuda::Memory;
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 
 TEST(SignalGeneratorTest, Construct)
 {
@@ -49,7 +49,7 @@ TEST(SignalGeneratorTest, CompareData)
     std::mt19937 eng(rd());
     std::uniform_int_distribution<> distr(0, dataParams.kernelLanes);
 
-    const PacBio::TraceFile::TraceFile traceFile{traceParams.traceFileName};
+    const TraceFile traceFile{traceParams.traceFileName};
     std::vector<int16_t> truth(dataParams.laneWidth * dataParams.blockLength);
 
     while (manager.MoreData())

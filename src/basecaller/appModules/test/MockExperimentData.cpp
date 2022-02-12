@@ -24,11 +24,11 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include <pacbio/tracefile/ScanData.h>
+#include <pacbio/file/ScanData.h>
 
 #include "MockExperimentData.h"
 
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 
 ScanData::Data MockExperimentData(size_t psfSize, size_t xtalkSize)
 {

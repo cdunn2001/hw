@@ -32,7 +32,7 @@
 
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/SensorPacketsChunk.h>
-#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/file/TraceFile.h>
 
 #include <common/BatchDataSource.h>
 
@@ -178,7 +178,7 @@ private:
 
 private:
     std::string filename_;
-    TraceFile::TraceFile traceFile_;
+    File::TraceFile traceFile_;
     size_t numTraceZmws_;
     size_t numTraceFrames_;
     std::vector<uint32_t> selectedTraceLanes_;

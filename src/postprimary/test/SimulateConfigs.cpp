@@ -23,7 +23,7 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <pacbio/tracefile/ScanData.h>
+#include <pacbio/file/ScanData.h>
 #include <dataTypes/configs/SmrtBasecallerConfig.h>
 
 #include "SimulateConfigs.h"
@@ -33,7 +33,7 @@ namespace PacBio::Primary::Postprimary
 
 std::string generateExperimentMetadata(size_t psfSize, size_t xtalkSize)
 {
-    using ScanData = PacBio::TraceFile::ScanData;
+    using ScanData = PacBio::File::ScanData;
     ScanData::Data expMetadata;
 
     auto& runInfo = expMetadata.runInfo;

@@ -9,7 +9,7 @@
 
 #include <vector_types.h>
 
-#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/file/TraceFile.h>
 #include <pacbio/PBException.h>
 
 namespace PacBio {
@@ -98,7 +98,7 @@ private:
     }
 
 private:
-    TraceFile::TraceFile traceFile_;
+    File::TraceFile traceFile_;
     size_t zmwsPerLane_;
     size_t framesPerChunk_;
     size_t numFrames_;

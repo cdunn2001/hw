@@ -37,7 +37,7 @@
 #include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/sensor/RectangularROI.h>
 #include <pacbio/sensor/SparseROI.h>
-#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/file/TraceFile.h>
 #include <vector>
 
 #include "MockExperimentData.h"
@@ -50,7 +50,7 @@ using namespace PacBio::Sensor;
 using namespace PacBio::Application;
 using namespace PacBio::Mongo::Data;
 using namespace PacBio::DataSource;
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 
 const auto DefaultImagePsfSize = 5;
 const auto DefaultXtalkSize = 7;
@@ -218,7 +218,7 @@ TYPED_TEST(TestTraceSaver, TestA)
         }
     }
     {
-        PacBio::TraceFile::TraceFile reader(traceFile);
+        TraceFile reader(traceFile);
         EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
                         expMetadata.chipInfo.imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);
@@ -357,7 +357,7 @@ TEST(Sanity,ROI)
                                   MockAnalysisConfig());
     }
     {
-        PacBio::TraceFile::TraceFile reader(traceFileName);
+        TraceFile reader(traceFileName);
         EXPECT_EQ(reader.Scan().ChipInfo().imagePsf.num_elements(), expMetadata.chipInfo.imagePsf.num_elements());
         EXPECT_FLOAT_EQ(reader.Scan().ChipInfo().imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2],
                         expMetadata.chipInfo.imagePsf[DefaultImagePsfSize/2][DefaultImagePsfSize/2]);

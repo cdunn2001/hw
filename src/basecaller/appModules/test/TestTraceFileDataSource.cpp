@@ -37,7 +37,7 @@
 
 using namespace PacBio::Application;
 using namespace PacBio::DataSource;
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 using namespace PacBio::Memory;
 using namespace PacBio::Mongo;
 

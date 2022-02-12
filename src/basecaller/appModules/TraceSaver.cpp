@@ -25,8 +25,8 @@
 
 #include <appModules/TraceSaver.h>
 
-#include <pacbio/tracefile/TraceFile.h>
-#include <pacbio/tracefile/TraceData.h>
+#include <pacbio/file/TraceFile.h>
+#include <pacbio/file/TraceData.h>
 
 #include <dataTypes/configs/AnalysisConfig.h>
 
@@ -34,7 +34,7 @@ namespace PacBio {
 namespace Application {
 
 using namespace PacBio::DataSource;
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 
 using namespace Mongo;
 using namespace Mongo::Data;
@@ -45,11 +45,11 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                DataSource::DataSourceBase::LaneSelector laneSelector,
                                const uint64_t frameBlockingSize,
                                const uint64_t zmwBlockingSize,
-                               TraceFile::TraceDataType dataType,
+                               File::TraceDataType dataType,
                                const std::vector<uint32_t>& holeNumbers,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                                const std::vector<uint32_t>& batchIds,
-                               const TraceFile::ScanData::Data& experimentMetadata,
+                               const File::ScanData::Data& experimentMetadata,
                                const Mongo::Data::AnalysisConfig& analysisConfig)
     : laneSelector_(std::move(laneSelector))
     , file_(
@@ -59,8 +59,8 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         ([&](){
             if (frameBlockingSize > numFrames) throw PBException("frameBlockingSize must not be more than numFrames");
             if (zmwBlockingSize > holeNumbers.size()) throw PBException("zmwBlockingSize must not be more than numZmws (holeNumbers.size())");
-            PacBio::TraceFile::TraceData::SetDefaultChunkZmwDim(zmwBlockingSize);
-            PacBio::TraceFile::TraceData::SetDefaultChunkFrameDim(frameBlockingSize);
+            PacBio::File::TraceData::SetDefaultChunkZmwDim(zmwBlockingSize);
+            PacBio::File::TraceData::SetDefaultChunkFrameDim(frameBlockingSize);
             return filename;
         }()),
         dataType,
@@ -140,8 +140,8 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
             }
 #endif
 
-            // The TraceFile::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
-            // work with the API.  TODO: perform this transpose inside the TraceFile::Traces() class.
+            // The File::Traces API uses transposed blocks of data. The traceBatch data needs to be transposed to
+            // work with the API.  TODO: perform this transpose inside the File::Traces() class.
             boost::const_multi_array_ref<T, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 

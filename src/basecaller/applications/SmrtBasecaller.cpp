@@ -77,7 +77,7 @@ using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
-using namespace PacBio::TraceFile;
+using namespace PacBio::File;
 
 // ^^^^
 ///////
