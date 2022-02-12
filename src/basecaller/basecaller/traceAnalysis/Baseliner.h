@@ -57,10 +57,12 @@ public:
         assert(rawTrace.Metadata().PoolId() == poolId_);
         auto result = FilterBaseline(rawTrace);
 
-        // Transcribe the frame interval to the metrics object.
+        // Frame interval metadata in the two elements of the pair should be the
+        // same for now.  It's conceivable but unlikely that this might not be
+        // exactly true for some future implementation.
         const auto& tracemd = result.first.Metadata();
-        const FrameIntervalType fi {tracemd.FirstFrame(), tracemd.LastFrame()};
-        result.second.frameInterval = fi;
+        const FrameIntervalType tracefi {tracemd.FirstFrame(), tracemd.LastFrame()};
+        assert(tracefi == result.second.frameInterval);
 
         return result;
     }
