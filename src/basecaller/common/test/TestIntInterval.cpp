@@ -152,6 +152,34 @@ TYPED_TEST(TestIntInterval, Center)
     EXPECT_EQ(4.5 + shift, this->ii4.Center());
 }
 
+TYPED_TEST(TestIntInterval, CenterInt)
+{
+    using IntervalT = typename TestFixture::IntervalT;
+    using IntT = typename IntervalT::ElementType;
+    const auto shift = TestFixture::shift;
+
+    EXPECT_EQ(1 + shift, this->ii1.CenterInt());
+    EXPECT_EQ(3 + shift, this->ii2.CenterInt());
+    EXPECT_EQ(5 + shift, this->ii3.CenterInt());
+    EXPECT_EQ(5 + shift, this->ii4.CenterInt());
+
+    // Test an extreme example.
+    const auto mx = std::numeric_limits<IntT>::max();
+    if constexpr (std::is_signed_v<IntT>)
+    {
+        const auto mn = std::numeric_limits<IntT>::min();
+        const IntervalT ii {mn + 2, mx};
+        ASSERT_EQ(-ii.Lower(), ii.Upper() - 1);
+        EXPECT_EQ(0, ii.CenterInt());
+    }
+    else {
+        const auto mxm3 = mx - 3;
+        ASSERT_EQ(0, mxm3 % 4);
+        const IntervalT ii {mxm3 / 2, mxm3 + 1};
+        EXPECT_EQ(3*(mxm3/4), ii.CenterInt());
+    }
+}
+
 TYPED_TEST(TestIntInterval, Disjoint)
 {
     // Making local copies to avoid the tedious need for `this->`.

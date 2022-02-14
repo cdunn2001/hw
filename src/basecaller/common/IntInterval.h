@@ -115,6 +115,7 @@ public:     // const methods
     { return upper_; }
 
     // TODO: Would be nice to make this more generic and more airtight.
+    // Eliminating this function would allow IntType to be wider than 4 bytes.
     double Center() const
     {
         if (Empty()) return std::nan("");
@@ -122,6 +123,13 @@ public:     // const methods
         const double ld = Lower();
         const double um1d = Upper() - 1;
         return 0.5 * (ld + um1d);
+    }
+
+    /// Smallest integer >= the real center of a non-empty interval.
+    IntType CenterInt() const
+    {
+        assert(!Empty());
+        return Lower() + static_cast<IntType>(Size()/2u);
     }
 
 public:     // modifying methods
