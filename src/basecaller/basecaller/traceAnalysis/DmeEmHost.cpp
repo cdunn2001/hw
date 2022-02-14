@@ -781,11 +781,11 @@ void DmeEmHost::EvolveModel(const FrameIntervalType estimationFI,
                             const BaselinerStats& blStats,
                             LaneDetModelHost* model)
 {
-    const float tModel = model->FrameInterval().Center();
-    const float tEst = estimationFI.Center();
+    const auto tModel = model->FrameInterval().CenterInt();
+    const auto tEst = estimationFI.CenterInt();
 
     // Evaluate the half-life at the midpoint of tModel and tEst.
-    const float thl = 0.5f * (tModel + tEst);
+    const float thl = 0.5f * numeric_cast<float>(tModel + tEst);
 
     // TODO: Make these configurable.
     static const float t0 = 56160.0f;   // 50th percentile of ALP duration

@@ -193,9 +193,10 @@ public:     // Non-const interface
         using std::abs;
         using std::exp2;
         // Use interval midpoints.
-        const float t0 = FrameInterval().Center();
-        const float t1 = newInterval.Center();
-        const auto m = exp2(-abs(t1-t0)/confHalfLife);
+        const auto t0 = FrameInterval().CenterInt();
+        const auto t1 = newInterval.CenterInt();
+        const float tDiff = static_cast<float>(t1 - t0);
+        const auto m = exp2(-abs(tDiff)/confHalfLife);
         confid_ *= m;
         SetNonemptyFrameInterval(newInterval);
     }
