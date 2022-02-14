@@ -851,6 +851,9 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
     assert(all(blWeight >= 0.0f) && all(blWeight <= 1.0f));
     assert(all(blVar > 0.0f));
 
+    // Assign some small nominal confidence.
+    ldm->Confidence() = 0.1f;
+
     // There's an implicit LaneArray -> CudaArray conversion here.
     auto& bm = ldm->BaselineMode();
     bm.weights = blWeight;

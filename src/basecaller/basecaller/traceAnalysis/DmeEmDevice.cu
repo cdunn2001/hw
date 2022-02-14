@@ -1301,6 +1301,9 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]
     };
 
+    // Set the confidence to a small nominal value.
+    model.Confidence()[threadIdx.x] = 0.1f;
+
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);
     model.BaselineMode().means[threadIdx.x] = blMean;
