@@ -56,11 +56,6 @@ class IntInterval
     static_assert(std::is_integral<IntType>::value,
                   "Template argument must be an integer type.");
 
-    // This constraint is primarily motivated by a desire to keep the definition
-    // of Center() simple (for now).
-    static_assert(sizeof(IntType) <= 4u,
-                  "IntInterval only supports types up to four bytes in size.");
-
 public:     // types
     using ElementType = IntType;
     using SizeType = std::make_unsigned_t<IntType>;

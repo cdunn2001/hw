@@ -30,6 +30,7 @@
 #include <common/IntInterval.h>
 
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -60,7 +61,7 @@ template <typename IntT>
 const IntT TestIntInterval<IntT>::shift = 0;
 template<> const int TestIntInterval<int>::shift = -3;
 
-using IntegerTypes = ::testing::Types<unsigned int, int>;
+using IntegerTypes = ::testing::Types<unsigned int, int, int64_t>;
 TYPED_TEST_SUITE(TestIntInterval, IntegerTypes);
 
 TYPED_TEST(TestIntInterval, Basic)
