@@ -27,13 +27,13 @@
 #ifndef mongo_dataTypes_configs_BasecallerDmeConfig_H_
 #define mongo_dataTypes_configs_BasecallerDmeConfig_H_
 
+#include <array>
 #include <limits>
+#include <sstream>
 
 #include <pacbio/configuration/PBConfig.h>
 
 #include <basecaller/traceAnalysis/ComputeDevices.h>
-
-using std::numeric_limits;
 
 
 namespace PacBio {
@@ -53,6 +53,8 @@ class FixedDmeConfig : public Configuration::PBConfig<FixedDmeConfig>
 
 class BasecallerDmeConfig : public Configuration::PBConfig<BasecallerDmeConfig>
 {
+    using ArrayFloat2 = std::array<float, 2>;
+
 public:
     PB_CONFIG(BasecallerDmeConfig);
 
@@ -186,15 +188,14 @@ public:
     PB_CONFIG_PARAM(float, LaserPowerChangeReduceConfidence, -1.0f);
 
     // Half-life of confidence decay of dection model in units of frames.
-    // Only used by 1C4A (Spider).
-    // If LaserPowerChangeReduceConfidence < 0,
-    // half-life is ConfidenceHalfLife0 until a fixed number of frames that
+    // Half-life is ConfidenceHalfLife[0] until a fixed number of frames that
     // is defined to approximate the median of ALP duration.
-    // Then half-life ramps to ConfidenceHalfLife1 at a frame count that
+    // Then half-life ramps to ConfidenceHalfLife[1] at a frame count that
     // is defined to approximate the 97.5-th percentile of ALP duration.
-    // Typically, ConfidenceHalfLife0 < ConfidenceHalfLife1.
-    PB_CONFIG_PARAM(unsigned int, ConfidenceHalfLife0, 4096);
-    PB_CONFIG_PARAM(unsigned int, ConfidenceHalfLife1, 12000);
+    // Both elements must be non-negative.
+    // Typically, ConfidenceHalfLife[0] < ConfidenceHalfLife[1].
+    static constexpr ArrayFloat2 ConfidenceHalfLifeDefault {4096, 12000};
+    PB_CONFIG_PARAM(ArrayFloat2, ConfidenceHalfLife, ConfidenceHalfLifeDefault);
 
     // Term to enhance the confidence half-life when the trace data exhibit
     // no sign of polymerization activity (e.g., low trace autocorrelation).
@@ -239,6 +240,17 @@ inline void ValidateConfig<BasecallerDmeConfig>(const BasecallerDmeConfig& dmeCo
     if (!(isfinite(amft[0]) && (amft[0] <= amft[1])))
     {
         results->AddError("Incorrect lower bound: must be finite and <= upper one");
+    }
+
+    {   // Check ConfidenceHalfLife.
+        const auto& chl = dmeConfig.ConfidenceHalfLife;
+        if (chl[0] < 0.0f || chl[1] < 0.0f)
+        {
+            std::ostringstream msg;
+            msg << "ConfidenceHalfLife = [" << chl[0] << ", " << chl[1] << "]."
+                << "  Neither element of ConfidenceHalfLife may be negative.";
+            results->AddError(msg.str());
+        }
     }
 }
 

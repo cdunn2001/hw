@@ -46,6 +46,9 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 
             statsView[laneIdx] = baselinerStats.GetState();
         }
+        
+        const auto& tracemd = out.first.Metadata();
+        out.second.frameInterval = {tracemd.FirstFrame(), tracemd.LastFrame()};
 
         return out;
     }, batch.Data());

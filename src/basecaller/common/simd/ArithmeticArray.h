@@ -302,6 +302,12 @@ public: // more friend functions (not operators)
             l, r);
     }
 
+    friend Derived abs(const Derived& a)
+    {
+        if constexpr (std::is_signed_v<ScalarType<T>>) return max(a, -a);
+        else return a;
+    }
+
     friend Derived pow2(const Derived& d)
     {
         return Derived([](auto&& x) { return x*x; }, d);

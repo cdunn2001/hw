@@ -13,6 +13,7 @@ add_library(libMongoCommon STATIC
     AutocorrAccumState.h
     AutocorrAccumState.cpp
     CircularArray.h
+    IntInterval.h
     LaneArray.h
     LaneArray.cpp
     MongoConstants.h

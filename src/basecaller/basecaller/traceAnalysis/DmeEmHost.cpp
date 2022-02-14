@@ -74,6 +74,7 @@ float DmeEmHost::fixedBaselineVar_ = 0;
 
 float DmeEmHost::analogMixFracThresh0_ = numeric_limits<float>::quiet_NaN();
 float DmeEmHost::analogMixFracThresh1_ = numeric_limits<float>::quiet_NaN();
+std::array<float, 2> DmeEmHost::confidHalfLife_;
 float DmeEmHost::scaleSnrConfTol_ = 1.0f;
 unsigned short DmeEmHost::emIterLimit_ = 0;
 float DmeEmHost::gTestFactor_ = 1.0f;
@@ -113,6 +114,7 @@ void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     // TODO: Log settings.
     analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
+    confidHalfLife_ = dmeConfig.ConfidenceHalfLife;
     scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
     emIterLimit_ = dmeConfig.EmIterationLimit;
     gTestFactor_ = dmeConfig.GTestStatFactor;
@@ -135,14 +137,24 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
 
     const auto& hView = hist.data.GetHostView();
     const auto blsView = metrics.baselinerStats.GetHostView();
-    auto dmView = detModelPool->GetHostView();
+    auto dmView = detModelPool->data.GetHostView();
+
+    // We assume that frame intervals of the trace histogram and the baseliner
+    // statistics are equal.
+    const auto& hfi = hist.frameInterval;
+    assert(hfi == metrics.frameInterval);
 
     tbb::task_arena().execute([&] {
         tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
             // Estimate parameters transcribe results back to this lane
-            EstimateLaneDetModel(hView[l], blsView[l], &dmView[l]);
+            LaneDetModelHost detModelHost {dmView[l], detModelPool->frameInterval};
+            EstimateLaneDetModel(hfi, hView[l], blsView[l], &detModelHost);
+            detModelHost.ExportTo(&dmView[l]);
+            assert(hfi == detModelHost.FrameInterval());
         });
     });
+
+    detModelPool->frameInterval = hfi;
 }
 
 void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
@@ -196,24 +208,29 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     model->Confidence(conf);
 }
 
-void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
+void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
+                                     const LaneHist& blHist,
                                      const BlStatAccState& blStatAccState,
-                                     LaneDetModel *detModel) const
+                                     LaneDetModelHost* detModel) const
 {
     assert(detModel != nullptr);
 
-    LaneDetModelHost model0(*detModel);
+    // Convert to a friendlier type.
+    const BaselinerStats bsa {blStatAccState};
+
+    // Evolve detModel to frame interval of blHist.
+    EvolveModel(estFrameInterval, bsa, detModel);
 
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
-    LaneDetModelHost workModel = model0;
+    LaneDetModelHost workModel = *detModel;
     PrelimEstimate(blStatAccState, &workModel);
 
     // TODO: Until further works completed, this update causes unit test failures
-    // model0.Update(workModel);
+    // detModel->Update(workModel);
 
     // Make a working copy of the detection model.
-    workModel = model0;
+    workModel = *detModel;
 
     // EstimateFiniteMixture below
     // The term "mode" refers to a component of the mixture model.
@@ -283,7 +300,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     const FloatVec sExpect = s / scaleFactor;
 
     // sExpectWeight is the inverse of the variance of the normal prior for s.
-    const FloatVec sExpectWeight = model0.Confidence() * pulseAmpRegCoeff_;
+    const FloatVec sExpectWeight = detModel->Confidence() * pulseAmpRegCoeff_;
 
     // Log likelihood--really a posterior since we've added a prior for s.
     FloatVec logLike {numeric_limits<float>::lowest()};
@@ -550,7 +567,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     else assert(all(dmeDx.gTest.pValue == 1.0f));
 
     // Compute confidence score.
-    dmeDx.confidFactors = ComputeConfidence(dmeDx, model0, workModel);
+    dmeDx.confidFactors = ComputeConfidence(dmeDx, *detModel, workModel);
     {
         using std::min;  using std::max;
         FloatVec conf = 1.0f;
@@ -568,10 +585,7 @@ void DmeEmHost::EstimateLaneDetModel(const LaneHist& blHist,
     //    }
 
     // Blend the estimate into the output model.
-    model0.Update(workModel);
-
-    // Transcribe results back into model
-    model0.ExportTo(detModel);
+    detModel->Update(workModel);
 }
 
 
@@ -763,6 +777,37 @@ DmeEmHost::ComputeConfidence(const DmeDiagnostics<FloatVec>& dmeDx,
 }
 
 // static
+void DmeEmHost::EvolveModel(const FrameIntervalType estimationFI,
+                            const BaselinerStats& blStats,
+                            LaneDetModelHost* model)
+{
+    const auto tModel = model->FrameInterval().CenterInt();
+    const auto tEst = estimationFI.CenterInt();
+
+    // Evaluate the half-life at the midpoint of tModel and tEst.
+    const float thl = 0.5f * numeric_cast<float>(tModel + tEst);
+
+    // TODO: Make these configurable.
+    static const float t0 = 56160.0f;   // 50th percentile of ALP duration
+    static const float t1 = 168480.0f;  // 97.5th %-ile of ALP duration
+
+    // Compute the nominal confidence half-life.
+    const float& hl0 = confidHalfLife_[0];
+    const float& hl1 = confidHalfLife_[1];
+    const float hl = hl0 + (hl1 - hl0) * satlin(t0, t1, thl);     // frames
+
+    // TODO: Modify half-life for "pauses" in polymerization, indicated by low ACC.
+    // From Sequel ...
+    // const auto accVal = acc.Value().Autocorrelation();
+    // auto mhl = satlin(FloatVec(pauseAccThresh0_), FloatVec(pauseAccThresh1_), accVal);
+    // mhl *= confidHalfLifePauseEnhance_;
+    // mhl = hl * (1 + mhl);
+
+    // Update model.
+    model->EvolveConfidence(estimationFI, hl);
+}
+
+// static
 void DmeEmHost::ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel)
 {
     assert (all(scale > 0.0f));
@@ -773,7 +818,7 @@ void DmeEmHost::ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel)
     {
         auto& dmi = detectionModes_[a];
         dmi.SignalMean(scale * dmi.SignalMean());
-        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
         dmi.SignalCovar(LaneDetModelHost::ModelSignalCovar(
                             cv2, dmi.SignalMean(), baselineCovar));
     }
@@ -785,49 +830,75 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
-    auto pdmHost = pdm.GetHostView();
-    const auto& blStatsHost = blStats.GetHostView();
+    auto pdmHost = pdm.data.GetHostView();
+    const auto& blStatsHost = blStats.baselinerStats.GetHostView();
     for (unsigned int lane = 0; lane < PoolSize(); ++lane)
     {
         InitLaneDetModel(blStatsHost[lane], pdmHost[lane]);
     }
 
+    pdm.frameInterval = blStats.frameInterval;
+
     return pdm;
 }
 
-void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
-                                 LaneDetModel& ldm) const
+// static
+void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
+                                 const FloatVec& blMean,
+                                 const FloatVec& blVar,
+                                 LaneDetModel* ldm)
 {
-    const StatAccumulator<FloatVec> blsa(blStatAccState.baselineStats);
+    assert(all(blWeight >= 0.0f) && all(blWeight <= 1.0f));
+    assert(all(blVar > 0.0f));
 
-    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : blsa.Mean();
+    // Assign some small nominal confidence.
+    ldm->Confidence() = 0.1f;
+
+    // There's an implicit LaneArray -> CudaArray conversion here.
+    auto& bm = ldm->BaselineMode();
+    bm.weights = blWeight;
+    bm.means = blMean;
+    bm.vars = blVar;
+
+    // Distribute non-baseline weight equally among the analogs.
+    const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
+    const auto refSignal = refSnr_ * sqrt(blVar);
+    assert(numAnalogs <= analogs_.size());
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& aMode = ldm->AnalogMode(a);
+        aMode.weights = analogModeWeight;
+        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        aMode.means = aMean;
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
+        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
+    }
+}
+
+// static
+void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
+                                 LaneDetModel& ldm)
+{
+    const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
+    const auto& baselineStats = bsa.BaselineFramesStats();
+
+    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
+    const FloatVec& blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
+
+    FloatVec blVar = fixedBaselineParams_ ? fixedBaselineVar_
+                                          : baselineStats.Variance();
 
     // We're having problems with the baseline variance overflowing a half precision
     // storage.  Something is already terribly wrong if our variance is over
     // 65k, but we'll put a limiter here because having a literal infinity run
     // around is causing problems elsewhere
-    const FloatVec& blVar = fixedBaselineParams_ ? fixedBaselineVar_ : min(blsa.Variance(), FloatVec{60000});
-    const FloatVec& blWeight = FloatVec(blStatAccState.NumBaselineFrames()) / FloatVec(blStatAccState.fullAutocorrState.basicStats.moment0);
+    blVar = min(blVar, 60000.0f);
 
-    ldm.BaselineMode().means = blMean;
-    ldm.BaselineMode().vars = blVar;
-    ldm.BaselineMode().weights = blWeight;
-    assert(numAnalogs <= analogs_.size());
-    const auto refSignal = refSnr_ * sqrt(blVar);
-    const auto& aWeight = 0.25f * (1.0f - blWeight);
-    for (unsigned int a = 0; a < numAnalogs; ++a)
-    {
-        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
-        auto& aMode = ldm.AnalogMode(a);
-        aMode.means = aMean;
+    // Also, constrain variance to be no less than the "quantization" limit.
+    const float blVarMin = std::max(movieScaler_, 1.0f) / 12.0f;
+    blVar = max(blVar, blVarMin);
 
-        // This noise model assumes that the trace data have been converted to
-        // photoelectron units.
-        const auto cv2 = pow2(FloatVec(Analog(a).excessNoiseCV));
-        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
-
-        aMode.weights = aWeight;
-    }
+    InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

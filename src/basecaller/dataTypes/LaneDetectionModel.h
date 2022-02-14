@@ -34,7 +34,9 @@
 #include <common/cuda/CudaFunctionDecorators.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 
+#include <common/IntInterval.h>
 #include <common/MongoConstants.h>
+#include <dataTypes/BasicTypes.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -96,6 +98,8 @@ struct __align__(128) LaneModelParameters
         {
             analogs_[i].ParallelAssign(other.analogs_[i]);
         }
+        assert(blockDim.x == laneWidth);
+        confidence_[threadIdx.x] = other.confidence_[threadIdx.x];
         return *this;
     }
 #endif
@@ -119,19 +123,48 @@ struct __align__(128) LaneModelParameters
         return analogs_[i];
     }
 
+    CUDA_ENABLED const Cuda::Utility::CudaArray<T, laneWidth>& Confidence() const
+    {
+        return confidence_;
+    }
+
+    CUDA_ENABLED Cuda::Utility::CudaArray<T, laneWidth>& Confidence()
+    {
+        return confidence_;
+    }
+
 private:
     Cuda::Utility::CudaArray<LaneAnalogMode<T, laneWidth>, numAnalogs> analogs_;
     LaneAnalogMode<T, laneWidth> baseline_;
+    Cuda::Utility::CudaArray<T, laneWidth> confidence_;
 };
 
-static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*(5*3), "Unexpected size");
-static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*(5*3), "Unexpected size");
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf, 64>) == 128*(5*3 + 1), "Unexpected size");
+static_assert(sizeof(LaneModelParameters<Cuda::PBHalf2, 32>) == 128*(5*3 + 1), "Unexpected size");
 
 /// A bundle of model parameters for a normal mixture representing the
 /// baselined trace data for a lane of ZMWs.
 /// \tparam T is the elemental data type (e.g., float).
 template <typename T>
 using LaneDetectionModel = LaneModelParameters<T, laneSize>;
+
+
+template <typename T>
+struct IntervalData
+{
+    IntervalData(size_t count,
+               Cuda::Memory::SyncDirection syncDir,
+               const Cuda::Memory::AllocationMarker& allocMarker)
+        : data {count, syncDir, allocMarker}
+        , frameInterval {}
+    { }
+
+    Cuda::Memory::UnifiedCudaArray<T> data;
+    IntInterval<FrameIndexType> frameInterval;
+};
+
+template <typename T>
+using DetectionModelPool = IntervalData<LaneDetectionModel<T>>;
 
 
 /// Creates a mostly arbitrary instance of LaneDetectionModel<T>.
@@ -158,6 +191,8 @@ LaneDetectionModel<T> MockLaneDetectionModel()
         am.SetAllMeans(mean.at(i));
         am.SetAllVars(var.at(i));
     }
+
+    ldm.Confidence() = 0.0f;
 
     return ldm;
 }

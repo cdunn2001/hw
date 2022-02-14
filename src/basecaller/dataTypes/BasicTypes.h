@@ -9,8 +9,7 @@ namespace Data {
 
 using RawTraceElement =  int16_t;
 using BaselinedTraceElement = int16_t;
-
-
+using FrameIndexType = int32_t;
 
 }}}     // namespace PacBio::Mongo::Data
 

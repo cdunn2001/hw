@@ -1,9 +1,11 @@
 #ifndef mongo_dataTypes_PoolHistogram_H_
 #define mongo_dataTypes_PoolHistogram_H_
 
+#include <common/IntInterval.h>
 #include <common/MongoConstants.h>
 #include <common/cuda/utility/CudaArray.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
+#include <dataTypes/BasicTypes.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -50,8 +52,11 @@ struct LaneHistogram
 template <typename DataT, typename CountT>
 struct PoolHistogram
 {
+    using FrameIntervalType = IntInterval<FrameIndexType>;
+
     Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> data;
     uint32_t poolId;
+    FrameIntervalType frameInterval;
 
     PoolHistogram(uint32_t aPoolId, Cuda::Memory::UnifiedCudaArray<LaneHistogram<DataT, CountT>> aData)
         : data(std::move(aData))

@@ -1253,7 +1253,8 @@ void DmeEmDevice::EstimateImpl(const PoolHist &hist,
                                const Data::BaselinerMetrics& metrics,
                                PoolDetModel *detModel) const
 {
-    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)(hist.data, metrics.baselinerStats, *detModel);
+    Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)
+                    (hist.data, metrics.baselinerStats, detModel->data);
     Cuda::CudaSynchronizeDefaultStream();
 }
 
@@ -1300,6 +1301,9 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]
     };
 
+    // Set the confidence to a small nominal value.
+    model.Confidence()[threadIdx.x] = 0.1f;
+
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);
     model.BaselineMode().means[threadIdx.x] = blMean;
@@ -1325,9 +1329,10 @@ DmeEmDevice::InitDetectionModels(const PoolBaselineStats& blStats) const
 {
     PoolDetModel pdm (PoolSize(), Cuda::Memory::SyncDirection::HostReadDeviceWrite, SOURCE_MARKER());
 
-    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats, pdm);
+    Cuda::PBLauncher(InitModel, PoolSize(), laneSize/2)(blStats.baselinerStats, pdm.data);
     Cuda::CudaSynchronizeDefaultStream();
 
+    pdm.frameInterval = blStats.frameInterval;
     return pdm;
 }
 

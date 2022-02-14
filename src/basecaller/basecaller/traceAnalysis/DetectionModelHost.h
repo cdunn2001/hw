@@ -29,33 +29,21 @@
 //  Description:
 //  Defines classes DetectionModelHost, SignalModeHost, and related types.
 
-#include <array>
-
 #include <common/AlignedVector.h>
+#include <common/IntInterval.h>
 #include <common/simd/SimdConvTraits.h>
 #include <common/simd/SimdTypeTraits.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 
-namespace PacBio {
-namespace Mongo {
-namespace Data {
+namespace PacBio::Mongo::Data {
 
 // Defined below.
 template <typename VF>
 class SignalModeHost;
 
-/// The integer type used to refer to a specific data frame.
-using FrameIndexType = uint32_t;
-
-/// The array type used to refer to an interval of data frames.
-/// The first element is the index of the first frame in the interval.
-/// The second element is the index of one past the last frame in the interval.
-using FrameIntervalType = std::array<FrameIndexType, 2>;
-
-/// The integer type used to represent the number of data frames in an interval.
-using FrameIntervalSizeType = uint32_t;
-
+// TODO: Is there a better home for this type alias?
+using FrameIntervalType = IntInterval<FrameIndexType>;
 
 ///  A type that represents the detection model parameters with an interface
 /// that is friendly to the host implementation for detection model estimation.
@@ -90,8 +78,16 @@ public:     // Structors and assignment
     DetectionModelHost(DetectionModelHost&& other) = default;
     ~DetectionModelHost() = default;
 
+    /// Frame interval needs to be specified separately because it is tracked at
+    /// the pool level and is not included in LaneDetectionModel.
     template <typename FloatT>
-    DetectionModelHost(const LaneDetectionModel<FloatT>& ldm);
+    DetectionModelHost(const LaneDetectionModel<FloatT>& ldm,
+                       const FrameIntervalType& fi);
+    
+    template <typename FloatT>
+    DetectionModelHost(const DetectionModelPool<FloatT>& dmp, size_t i)
+        : DetectionModelHost(dmp.data.GetHostView()[i], dmp.frameInterval)
+    { }
 
     DetectionModelHost& operator=(const DetectionModelHost&) = default;
     DetectionModelHost& operator=(DetectionModelHost&&) = default;
@@ -102,7 +98,7 @@ public:     // Copy scalar slice
 
 public:     // Operators
     /// Equality is determined by comparing baseline mode and detection modes.
-    /// Other metadata (e.g., Updated()) are ignored.
+    /// Confidence score and frame interval are ignored.
     BoolVec operator==(const DetectionModelHost& rhs) const
     {
         if (detectionModes_.size() != rhs.detectionModes_.size())
@@ -115,8 +111,6 @@ public:     // Operators
         {
             r &= (detectionModes_[i] == rhs.detectionModes_[i]);
         }
-
-        // Do not compare other metadata (the stuff modified by ClearMetadata()).
 
         // Do not compare confidence and frame interval.
 
@@ -141,11 +135,6 @@ public:     // Const interface
         assert(IsInitialized());
         return detectionModes_;
     }
-
-    /// Vector of booleans indicated whether the model for each
-    /// unit cell was updated.
-    BoolVec Updated() const
-    { return updated_; }
 
     /// The heuristic confidence score for the model for each unit cell.
     /// 0 indicates no confidence; 1, utmost confidence from a single
@@ -189,16 +178,6 @@ public:     // Non-const interface
         return *this;
     }
 
-    /// Sets the frame interval.
-    /// fi[0] < f[1].
-    /// \returns *this.
-    DetectionModelHost& FrameInterval(const FrameIntervalType& fi)
-    {
-        assert (fi[0] < fi[1]);
-        frameInterval_ = fi;
-        return *this;
-    }
-
     /// Non-const reference to the baseline mode of the model
     SignalModeHost<FloatVec>& BaselineMode()
     { return baselineMode_; }
@@ -213,16 +192,24 @@ public:     // Non-const interface
     {
         using std::abs;
         using std::exp2;
-        const auto& fi0 = FrameInterval();
         // Use interval midpoints.
-        const float t0 = 0.5f * (fi0[0] + fi0[1]);
-        const float t1 = 0.5f * (newInterval[0] + newInterval[1]);
-        const auto m = exp2(-abs(t1-t0)/confHalfLife);
+        const auto t0 = FrameInterval().CenterInt();
+        const auto t1 = newInterval.CenterInt();
+        const float tDiff = static_cast<float>(t1 - t0);
+        const auto m = exp2(-abs(tDiff)/confHalfLife);
         confid_ *= m;
-        FrameInterval(newInterval);
+        SetNonemptyFrameInterval(newInterval);
     }
 
 private:
+    /// Sets the frame interval.
+    /// \returns *this.
+    DetectionModelHost& SetNonemptyFrameInterval(const FrameIntervalType& fi)
+    {
+        assert (!fi.Empty());
+        frameInterval_ = fi;
+        return *this;
+    }
 
     /// Updates *this with the SIMD weighted average
     /// "\a fraction * other + (1 - \a fraction) * *this".
@@ -252,10 +239,6 @@ private:    // Members
 
     // Heuristic indicator of confidence in model.
     FloatVec confid_ {0.0f};
-
-    // Indicates whether the model for each unit cell has been updated by the
-    // most recent estimation.
-    BoolVec updated_;
 
     // Frame interval associated with estimateConfid_.
     FrameIntervalType frameInterval_ {0, 1};
@@ -292,6 +275,7 @@ public:     // Structors
 public:     // Vectorized comparisons
     BoolVec operator==(const SignalModeHost& other) const
     {
+        // TODO: Should we compare weights?
         BoolVec r = (mean_ == other.mean_);
         r &= (var_ == other.var_);
         return r;
@@ -344,6 +328,6 @@ private:    // Data
     FloatVec var_;
 };
 
-}}}     // namespace PacBio::Mongo::Data
+}   // namespace PacBio::Mongo::Data
 
 #endif  // mongo_dataTypes_DetectionModelHost_H_

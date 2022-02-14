@@ -9,6 +9,7 @@ include(pacbio-eigen)
 add_library(libMongoCommonTest OBJECT
     TestAutocorrAccumulator.cpp
     TestCircularArray.cpp
+    TestIntInterval.cpp
     TestLaneArray.cpp
     TestGraphAPI.cpp
     TestBatchDataSource.cpp

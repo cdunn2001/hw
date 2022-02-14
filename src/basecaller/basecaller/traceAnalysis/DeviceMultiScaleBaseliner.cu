@@ -82,6 +82,9 @@ DeviceMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& rawTrac
 
     filter_->RunBaselineFilter(rawTrace, out.first, out.second.baselinerStats);
 
+    const auto& tracemd = out.first.Metadata();
+    out.second.frameInterval = {tracemd.FirstFrame(), tracemd.LastFrame()};
+
     return out;
 }
 

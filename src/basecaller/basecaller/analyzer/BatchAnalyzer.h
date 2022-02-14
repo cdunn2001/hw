@@ -95,7 +95,7 @@ protected:
     // Same as FrameLabeler::PoolModelParameters
     // Same as HFMetricsFilter::ModelsBatchT
     // Same as HFMetricsFilter::Process(... UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>> ... )
-    Cuda::Memory::UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, laneSize>> models_;
+    Data::DetectionModelPool<Cuda::PBHalf> models_;
 
 
 private:

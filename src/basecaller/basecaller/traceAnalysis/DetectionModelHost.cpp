@@ -35,11 +35,7 @@
 
 #include "DmeEmHost.h"
 
-using PacBio::Simd::MakeUnion;
-
-namespace PacBio {
-namespace Mongo {
-namespace Data {
+namespace PacBio::Mongo::Data {
 
 // Static configuration parameters
 template <typename VF>
@@ -47,9 +43,9 @@ uint32_t DetectionModelHost<VF>::updateMethod_ = 0;
 
 template <typename VF>
 template <typename VF2>
-DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
+DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm,
+                                           const FrameIntervalType& fi)
     : baselineMode_ (ldm.BaselineMode())
-    , updated_ (false)  // TODO: Is this right?
 {
     static_assert(numAnalogs == LaneDetectionModel<VF2>::numAnalogs, "Mismatch in number of analogs.");
     detectionModes_.reserve(numAnalogs);
@@ -58,9 +54,8 @@ DetectionModelHost<VF>::DetectionModelHost(const LaneDetectionModel<VF2>& ldm)
         detectionModes_.emplace_back(ldm.AnalogMode(a));
     }
 
-    // TODO: What about confid_ and frameInterval_?
-    // Note: If this TODO is fixed, the ZmwDetectionModel defined in DmeEmDevice
-    //       will probably need a similar update.
+    confid_ = ldm.Confidence();
+    frameInterval_ = fi;
 }
 
 template <typename VF>
@@ -187,9 +182,6 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
 {
     assert (all((fraction >= 0.0f) & (fraction <= 1.0f)));
 
-    const auto mask = (fraction > 0.0f);
-    updated_ |= mask;
-
     switch (updateMethod_)
     {
     case 0: Update0(other, fraction); break;
@@ -198,7 +190,7 @@ DetectionModelHost<VF>::Update(const DetectionModelHost& other, VF fraction)
     default: throw PBException("DetectionModel: Bad update method id.");
     }
 
-    FrameInterval(other.FrameInterval());
+    SetNonemptyFrameInterval(other.FrameInterval());
 
     // Do not update confidence.
 
@@ -210,6 +202,7 @@ template <typename VF>
 DetectionModelHost<VF>&
 DetectionModelHost<VF>::Update(const DetectionModelHost& other)
 {
+    // It might be useful to replace NaNs in either confidence with 0.
     assert (this->FrameInterval() == other.FrameInterval());
     assert (all(this->Confidence() >= 0.0f));
     assert (all(other.Confidence() >= 0.0f));
@@ -238,7 +231,10 @@ void DetectionModelHost<VF>::ExportTo(LaneDetectionModel<VF2>* ldm) const
     {
         detectionModes_[a].ExportTo(&ldm->AnalogMode(a));
     }
-    // TODO: What about confid_, updated_, and frameInterval_?
+    ldm->Confidence() = confid_;
+
+    // Note that LaneDetectionModel does not include frame interval, which is
+    // tracked at the pool level.
 }
 
 // static
@@ -287,8 +283,9 @@ void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
 
 // Explicit instantiation
 template class DetectionModelHost<LaneArray<float>>;
-template DetectionModelHost<LaneArray<float>>::DetectionModelHost(const LaneDetectionModel<Cuda::PBHalf>& ldm);
+template DetectionModelHost<LaneArray<float>>::DetectionModelHost(const LaneDetectionModel<Cuda::PBHalf>& ldm,
+                                                                  const FrameIntervalType& fi);
 template void DetectionModelHost<LaneArray<float>>::ExportTo(LaneDetectionModel<Cuda::PBHalf>* ldm) const;
 template SignalModeHost<LaneArray<float>>::SignalModeHost(const LaneAnalogMode<Cuda::PBHalf, laneSize>& lam);
 
-}}}     // namespace PacBio::Mongo::Data
+}   // namespace PacBio::Mongo::Data

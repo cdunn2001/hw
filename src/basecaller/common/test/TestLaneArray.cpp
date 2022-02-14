@@ -633,6 +633,14 @@ TEST(LaneArray, FloatOps)
             << "  cudaArr[i] is " << cudaArr[i];
     }
 
+    const auto resultAbs = abs(laneArr).ToArray();
+    for (size_t i = 0; i < laneSize; ++i)
+    {
+        EXPECT_EQ(resultAbs[i], std::abs(cudaArr[i]))
+            << "  i is " << i << '\n'
+            << "  cudaArr[i] is " << cudaArr[i];
+    }
+
     // Get rid of negatives so we can take the sqrt and log
     cudaArr = IncreasingCudaArray<float>(2.9f, 13.9f);
     laneArr = LaneArray<float, laneSize>(cudaArr);
@@ -707,9 +715,20 @@ TEST(LaneArray, IntOps)
 {
     auto a = IncreasingLaneArray<int>(12, 23);
     auto b = IncreasingLaneArray<int>(3, 15);
+    const auto c = IncreasingLaneArray<int>(-12, 1);
 
     EXPECT_TRUE(ValidateOp<std::bit_or<int>>(a | b, a, b));
     EXPECT_TRUE(ValidateOp<std::modulus<int>>(a % b, a, b));
+
+    {   // Test for abs.
+        const auto result = abs(c);
+        const auto cArr = c.ToArray();
+        const auto rArr = result.ToArray();
+        for (unsigned int i = 0; i < cArr.size(); ++i)
+        {
+            EXPECT_EQ(std::abs(cArr[i]), rArr[i]);
+        }
+    }
 }
 
 // Our unsigned int class supports various bitwise operations,

@@ -64,30 +64,39 @@ public:     // Const functions
     const StatAccumulator<FloatArray>& BaselineFramesStats() const
     { return baselineSubtractedStats_; }
 
+    FloatArray TotalFrameCount() const
+    { return baselineSubtractedCorr_.Count(); }
+
     const LaneArray& TraceMin() const
     { return traceMin; }
 
     const LaneArray& TraceMax() const
     { return traceMax; }
 
+    const FloatArray& BaselineFrameCount() const
+    { return baselineSubtractedStats_.Count(); }
+
     const FloatArray& RawBaselineSum() const
     { return rawBaselineSum_; }
+
+    const FloatArray RawBaselineMean() const
+    { return rawBaselineSum_ / baselineSubtractedStats_.Count(); }
 
 public:     // Non-const functions
     BaselinerStatAccumulator& Merge(const BaselinerStatAccumulator& other);
 
 private:
-    // Trace statistics after baseline estimate has been subtracted
+    // Statistics associated with _all_ added data (regardless of whether
+    // they were flagged as baseline).
     AutocorrAccumulator<FloatArray> baselineSubtractedCorr_;
+    LaneArray traceMin {std::numeric_limits<T>::max()};
+    LaneArray traceMax {std::numeric_limits<T>::lowest()};
 
-    LaneArray traceMin{std::numeric_limits<T>::max()};
-    LaneArray traceMax{std::numeric_limits<T>::lowest()};
-
-    // Baseline frames statistics after baseline estimate has been subtracted
+    // Statistics associated with only the data flagged as baseline.
     StatAccumulator<FloatArray> baselineSubtractedStats_;
 
-    // Sum of baseline frames _prior_ to baseline subtraction
-    FloatArray rawBaselineSum_{0};
+    // This is the only member associated with the "rawTrace" data.
+    FloatArray rawBaselineSum_ {0};
 };
 
 }}}     // namespace PacBio::Mongo::Data

@@ -29,6 +29,8 @@
 //  Description:
 //  Defines class DmeEmHost.
 
+#include <array>
+
 #include <pacbio/auxdata/AnalogMode.h>
 #include <common/LaneArray.h>
 #include <dataTypes/UHistogramSimd.h>
@@ -79,15 +81,30 @@ public:     // Static functions
     /// and properties of the background mode are preserved.
     static void ScaleModelSnr(const FloatVec& scale, LaneDetModelHost* detModel);
 
-    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
+    // Initialize detection models to specified baseline statistics and
+    // reference SNR.  Uses model to define pulse signal variances.
+    // Made this public purely to support unit tests.  Not ideal, but an easy
+    // near-term solution for properly initializing models in the unit tests.
+    static void InitLaneDetModel(const FloatVec& blWeight,
+                                 const FloatVec& blMean,
+                                 const FloatVec& blVariance,
+                                 LaneDetModel* ldm);
 
-private:    // Functions
-    void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats, LaneDetModel& ldm) const;
+    // A convenient overload that just extracts the necessary information from
+    // blStats.
+    // This overload doesn't really need to be public, but mixing
+    // accessibility levels within an overload set seems a little awkward.
+    static void InitLaneDetModel(const Data::BaselinerStatAccumState& blStats,
+                                 LaneDetModel& ldm);
+
 public:
     DmeEmHost(uint32_t poolId, unsigned int poolSize);
 
+    PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
+
 private:    // Types
     using LaneHistSimd = Data::UHistogramSimd<typename LaneHist::DataType, typename LaneHist::CountType>;
+    using BaselinerStats = Data::BaselinerStatAccumulator<Data::RawTraceElement>;
 
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
@@ -105,6 +122,7 @@ private:    // Static data
 
     static float analogMixFracThresh0_;
     static float analogMixFracThresh1_;
+    static std::array<float, 2> confidHalfLife_;
     static float scaleSnrConfTol_;
     static unsigned short emIterLimit_;
     static float gTestFactor_;
@@ -131,6 +149,10 @@ private:    // Static functions
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);
 
+    static void EvolveModel(FrameIntervalType estimationFI,
+                            const BaselinerStats& blStats,
+                            LaneDetModelHost* model);
+
 private:    // Functions
     void PrelimEstimate(const BlStatAccState& blStatAccState,
                         LaneDetModelHost *model) const;
@@ -138,12 +160,12 @@ private:    // Functions
     // Use the trace histogram and the input detection model to compute a new
     // estimate for the detection model. Mix the new estimate with the input
     // model, weighted by confidence scores. That result is returned in detModel.
-    void EstimateLaneDetModel(const LaneHist& blHist,
+    // estFrameInterval is the frame interval associated with the data (trace
+    // histogram and baseliner statistics) used for the estimation.
+    void EstimateLaneDetModel(FrameIntervalType estFrameInterval,
+                              const LaneHist& blHist,
                               const BlStatAccState& blAccState,
-                              LaneDetModel* model) const;
-
-
-
+                              LaneDetModelHost* model) const;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

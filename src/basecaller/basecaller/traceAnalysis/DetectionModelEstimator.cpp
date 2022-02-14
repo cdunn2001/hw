@@ -111,7 +111,7 @@ bool DetectionModelEstimator::AddBatch(const Data::TraceBatch<int16_t>& traces,
     if (poolStatus_ != PoolStatus::SEQUENCING)
     {
         const auto runningStats = baselineAggregator_->TraceStats();
-        *models = coreEstimator_->InitDetectionModels(runningStats.baselinerStats);
+        *models = coreEstimator_->InitDetectionModels(runningStats);
     }
 
     bool ranEstimation = false;

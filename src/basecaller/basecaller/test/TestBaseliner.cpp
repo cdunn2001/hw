@@ -288,12 +288,13 @@ TEST_P(MultiScaleBaseliner, StatsAndSubtraction)
          // ACTION
          const auto& meta = batch.Metadata();
          auto& baseliner = *baseliners[meta.PoolId()];
-         auto cameraBatch = baseliner(batch);
+         const auto [traces, stats] = baseliner(batch);
+
+         EXPECT_EQ(traces.Metadata().FirstFrame(), stats.frameInterval.Lower());
+         EXPECT_EQ(traces.Metadata().LastFrame(), stats.frameInterval.Upper());
 
          if (batch.Metadata().FirstFrame() < static_cast<int32_t>(burnInFrames)) continue;
 
-         auto traces = std::move(cameraBatch.first);
-         auto stats = std::move(cameraBatch.second);
          for (size_t laneIdx = 0; laneIdx < traces.LanesPerBatch(); laneIdx++)
          {
              const auto& baselinerStatAccumState = stats.baselinerStats.GetHostView()[laneIdx];

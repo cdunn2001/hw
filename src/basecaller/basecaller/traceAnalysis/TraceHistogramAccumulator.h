@@ -58,7 +58,8 @@ public:     // Types
     using LaneHistType = Data::LaneHistogram<HistDataType, HistCountType>;
     using PoolHistType = Data::PoolHistogram<HistDataType, HistCountType>;
     using LaneDetModel = Data::LaneDetectionModel<Cuda::PBHalf>;
-    using PoolDetModel = Cuda::Memory::UnifiedCudaArray<LaneDetModel>;
+    using PoolDetModel = Data::DetectionModelPool<Cuda::PBHalf>;
+    using FrameIntervalType = PoolHistType::FrameIntervalType;
 
 public:     // Structors and assignment
     TraceHistogramAccumulator(uint32_t poolId, unsigned int poolSize);
@@ -69,10 +70,16 @@ public:     // Const functions
     size_t FramesAdded() const
     { return frameCount_; }
 
+    /// Interval of frame indexes added via AddBatch.
+    const FrameIntervalType FrameInterval() const
+    { return frameInterval_; }
+
     /// Returns a copy of the accumulated trace histogram
     PoolHistType Histogram() const
     {
-        return HistogramImpl();
+        PoolHistType h = HistogramImpl();
+        h.frameInterval = FrameInterval();
+        return h;
     }
 
     /// The ZMW pool associated with this instance.
@@ -94,7 +101,16 @@ public:     // Non-const functions
                               "before calling Reset with the desired histogram bounds");
         assert (traces.GetMeta().PoolId() == poolId_);
         AddBatchImpl(traces, detModel);
-        frameCount_ += traces.NumFrames();
+
+        frameCount_ += traces.NumFrames();  // TODO: Eliminate frameCount_.
+
+        const auto& tmd = traces.Metadata();
+        FrameIntervalType tracesFrameInterval {tmd.FirstFrame(), tmd.LastFrame()};
+
+        // Assume that data are added in contiguous frame intervals.
+        assert(AreOrderedAdjacent(frameInterval_, tracesFrameInterval));
+        frameInterval_ = Hull(frameInterval_, tracesFrameInterval);
+        assert(frameInterval_.Size() == frameCount_);
     }
 
     // Clears out current histogram data and resets histogram with given bounds
@@ -102,6 +118,7 @@ public:     // Non-const functions
     {
         initialized_ = true;
         frameCount_ = 0;
+        frameInterval_.Clear();
         ResetImpl(bounds);
     }
 
@@ -111,19 +128,21 @@ public:     // Non-const functions
     {
         initialized_ = true;
         frameCount_ = 0;
+        frameInterval_.Clear();
         ResetImpl(metrics);
     }
 
 private:    // Data
     size_t frameCount_ = 0;  // Total number of frames added via AddBatch.
+    FrameIntervalType frameInterval_ {};
     uint32_t poolId_;
     unsigned int poolSize_;  // Number of lanes in this pool.
     bool initialized_ = false; // Do we have histogram bounds yet?
 
 private:    // Customizable implementation.
     // Bins frames in traces and updates poolHist_.
-  virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
-                            const PoolDetModel& detModel) = 0;
+    virtual void AddBatchImpl(const Data::TraceBatch<DataType>& traces,
+                              const PoolDetModel& detModel) = 0;
 
     // Clears out current histogram data and resets histogram with given bounds
     virtual void ResetImpl(const Cuda::Memory::UnifiedCudaArray<LaneHistBounds>& bounds) = 0;
