@@ -141,17 +141,6 @@ TYPED_TEST(TestIntInterval, Clear)
     EXPECT_TRUE(i.Clear().Empty());
 }
 
-TYPED_TEST(TestIntInterval, Center)
-{
-    const auto shift = TestFixture::shift;
-
-    EXPECT_TRUE(std::isnan(this->ii0.Center()));
-    EXPECT_EQ(1.0 + shift, this->ii1.Center());
-    EXPECT_EQ(3.0 + shift, this->ii2.Center());
-    EXPECT_EQ(5.0 + shift, this->ii3.Center());
-    EXPECT_EQ(4.5 + shift, this->ii4.Center());
-}
-
 TYPED_TEST(TestIntInterval, CenterInt)
 {
     using IntervalT = typename TestFixture::IntervalT;
