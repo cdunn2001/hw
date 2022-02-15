@@ -106,7 +106,7 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
     PB_CONFIG_PARAM(url, logUrl, "discard:"); ///< Destination URL for the log file EXAMPLE("http://localhost:23632/storages/m123456_987654/basecaller.log")
     PB_CONFIG_PARAM(LogLevel_t, logLevel, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("DEBUG")
     PB_CONFIG_PARAM(ControlledString_t, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout EXAMPLE("Minesweeper1.0") 
-    PB_CONFIG_PARAM(url, darkcalUrl, ""); ///< Source URL for the dark calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
+    PB_CONFIG_PARAM(url, darkcalFileUrl, ""); ///< Source URL for the dark calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, pixelSpreadFunction, 0); ///< This is required and a function of the sensor NFC tag EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, crosstalkFilter, 0); ///< Optional kernel definition of the crosstalk deconvolution.  THe pixelSpreadFunction is used to automatically calculate one if this is not specified. EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<AnalogObject>, analogs, 0); ///< List of Analog objects, one analog for each nucleotide. Must be 4 elements for ATGC (order does not matter)

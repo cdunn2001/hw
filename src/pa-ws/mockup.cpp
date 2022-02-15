@@ -83,7 +83,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.basecaller.bazUrl = "http://pac1:23632/storages/" + mid + "/" + mid + ".baz";
     so.basecaller.logUrl = "http://pac1:23632/storages/" + mid + "/loadingcal.log";
     so.basecaller.chiplayout = "Minesweeper";
-    so.basecaller.darkcalUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
+    so.basecaller.darkcalFileUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
     so.basecaller.pixelSpreadFunction.resize(5);
     for (auto& r : so.basecaller.pixelSpreadFunction) r.resize(5);
     so.basecaller.pixelSpreadFunction[2][2] = 1.0;
