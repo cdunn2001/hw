@@ -47,8 +47,8 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
     PB_CONFIG(SocketDarkcalObject);
 
     PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
-    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(500)
-    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Movie length in seconds.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(6.0)
+    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimite the start and end EXAMPLE(1)
     PB_CONFIG_PARAM(url, calibFileUrl, "discard:"); ///< Destination URL of the calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(url, logUrl, "discard:"); ///< Destination URL of the log file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.log")
@@ -60,8 +60,8 @@ struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcal
     PB_CONFIG(SocketLoadingcalObject);
     
     PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
-    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames. The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(500)
-    PB_CONFIG_PARAM(double, movieMaxTime, 0); ///< Maximum movie length in seconds.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(6.0)
+    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames. The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Maximum movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimit the start and end of a calibration frame set EXAMPLE(2)
     PB_CONFIG_PARAM(url, darkFrameFileUrl, "discard:"); ///< Source URL of the dark_frame calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(url, calibFileUrl, "discard:"); ///< Destination URL of the calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/loadingcal.h5")

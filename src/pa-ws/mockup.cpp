@@ -67,7 +67,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.loadingcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::UNKNOWN;
     so.loadingcal.processStatus.timestamp = "20210601T 01:32:15.000Z";
     so.loadingcal.movieMaxFrames = 0;
-    so.loadingcal.movieMaxTime = 0;
+    so.loadingcal.movieMaxSeconds = 0;
     so.loadingcal.movieNumber = 0;
     so.loadingcal.calibFileUrl = "discard:";
     so.loadingcal.logUrl = "discard:";
