@@ -172,7 +172,18 @@ WebServiceHandler::WebServiceHandler(const PaWsConfig& config,
     , processStartTime_(PacBio::Utilities::Time::GetMonotonicTime())
     , rootUrl_(PacBio::POSIX::gethostname() + ":" + std::to_string(config_.port))
 {
-    PBLOG_INFO << "WebServiceHandler constructor. Port:" << config_.port;
+    const auto numBoards = socketConfig_.GetNumBoards();
+    PBLOG_INFO << "WebServiceHandler constructor. Port:" << config_.port
+        << ", NumBoards:" << numBoards;
+
+    if (config_.debug.simulationLevel == 1)
+    {
+        PBLOG_WARN << "Mocking " << numBoards << " Sockets.";
+        for (const auto id : socketConfig_.GetValidSocketIds())
+        {
+            sockets_[id] = PacBio::API::CreateMockupOfSocketObject(id);
+        }
+    }
 }
 
 WebServiceHandler::~WebServiceHandler()
@@ -592,14 +603,6 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
     HttpResponse response;
     response.httpStatus = HttpStatus::NOT_IMPLEMENTED;
 
-    std::map<SocketConfig::SocketId, PacBio::API::SocketObject> sockets_;
-
-    if (config_.debug.simulationLevel == 1)
-    {
-        response.httpStatus = HttpStatus::OK;
-        for(const auto id : socketConfig_.GetValidSocketIds()) sockets_[id] = PacBio::API::CreateMockupOfSocketObject(id);
-    }
-
     if (args.size() == 0)
     {
         Json::Value objects = Json::arrayValue;
@@ -610,6 +613,7 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
             objects.append(val);
         }
         response.json = objects;
+        response.httpStatus = HttpStatus::OK;
     }
     else
     {
@@ -627,6 +631,7 @@ HttpResponse WebServiceHandler::GET_Sockets(const std::vector<std::string>& args
         PBLOG_INFO << "grabbing " << path0;
         Json::Path path1(path0);
         response.json = path1.resolve(response.json, Json::nullValue);
+        response.httpStatus = HttpStatus::OK;
     }
 
     return response;

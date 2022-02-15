@@ -40,6 +40,7 @@
 #include <common/HttpHelpers.h>
 #include <common/ThreadController.h>
 
+#include "api/SocketObject.h"
 #include "PaWsConfig.h"
 #if 0
 #include "SharedMemoryApiObject.h"
@@ -223,6 +224,7 @@ private:
     double summarizeHttpRequestsTime_ = 0;
     double processStartTime_ = 0;
     std::string rootUrl_;
+    std::map<SocketConfig::SocketId, PacBio::API::SocketObject> sockets_;
 
     std::string GuessContentTypeFromExtension(const std::string& uri);
 
