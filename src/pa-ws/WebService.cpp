@@ -761,7 +761,7 @@ void WebServiceHandler::ValidateSocketId(const SocketConfig& config, const std::
 
         if (!config.IsValid(socketId))
         {
-            throw HttpResponseException(HttpStatus::FORBIDDEN, "found out of range socket id:'" + socketId + "'");
+            throw HttpResponseException(HttpStatus::NOT_FOUND, "found out of range socket id:'" + socketId + "'");
         }
     }
     catch (const std::logic_error&)
@@ -783,7 +783,7 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
 
     if (nextArg == args.end())
     {
-        throw HttpResponseException(HttpStatus::NOT_FOUND, "need socket number");
+        throw HttpResponseException(HttpStatus::NOT_FOUND, "need socket number (or /sockets/reset)");
     }
     if (*nextArg == "reset")
     {
@@ -795,7 +795,7 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
         if (config_.debug.simulationLevel == 1)
         {
             response.httpStatus = HttpStatus::OK;
-            response.json = "tbd";
+            response.json = "discard:";
         }
         return response;
     }
@@ -894,11 +894,10 @@ HttpResponse WebServiceHandler::POST_Sockets(const std::vector<std::string>& arg
     }
     else if (*nextArg == "reset")
     {
-        // TODO
         if (config_.debug.simulationLevel == 1)
         {
             response.httpStatus = HttpStatus::OK;
-            response.json = "tbd";
+            response.json = sockets_[socketId].Serialize();
         }
     }
     else
