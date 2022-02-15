@@ -57,6 +57,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.darkcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::FAILED;
     so.darkcal.processStatus.exitCode = 137; // sig_segv
     so.darkcal.processStatus.timestamp = "20210601T 01:23:45.000Z";
+    so.darkcal.mid = mid;
     so.darkcal.movieMaxFrames = 512;
     so.darkcal.movieMaxSeconds = 6;
     so.darkcal.movieNumber = 111;
@@ -66,6 +67,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.loadingcal.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::READY;
     so.loadingcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::UNKNOWN;
     so.loadingcal.processStatus.timestamp = "20210601T 01:32:15.000Z";
+    so.loadingcal.mid = mid;
     so.loadingcal.movieMaxFrames = 0;
     so.loadingcal.movieMaxSeconds = 0;
     so.loadingcal.movieNumber = 0;

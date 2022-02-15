@@ -46,7 +46,8 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
 {
     PB_CONFIG(SocketDarkcalObject);
 
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
+    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
     PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(500)
     PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimite the start and end EXAMPLE(1)
@@ -58,8 +59,9 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
 struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcalObject>
 {
     PB_CONFIG(SocketLoadingcalObject);
-    
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
+
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
+    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
     PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames. The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(500)
     PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Maximum movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimit the start and end of a calibration frame set EXAMPLE(2)
@@ -95,6 +97,7 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
 {
     PB_CONFIG(SocketBasecallerObject);
 
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
     PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
     PB_CONFIG_PARAM(std::string, uuid, ""); ///< subreadset UUID EXAMPLE("123e4567-e89b-12d3-a456-426614174000")
 
@@ -120,7 +123,6 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
     PB_CONFIG_PARAM(url, simulationFileUrl, "discard:"); ///< Source URL for the file to use for transmission of simulated data. Only local files are supported currently. EXAMPLE("file://localhost/data/pa/sample_file.trc.h5")
     PB_CONFIG_PARAM(std::string, smrtBasecallerConfig, "{}"); ///< SmrtBasecallerConfig. Passed to smrt_basecaller --config. TODO: This will be a JSON object, but is a string here as a placeholder.
 
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
     PB_CONFIG_OBJECT(SocketBasecallerRTMetricsObject, rtMetrics);
 };
 
