@@ -34,6 +34,7 @@
 #include <appModules/TraceSaver.h>
 #include <pacbio/ipc/JSON.h>
 #include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/sensor/RectangularROI.h>
 #include <pacbio/sensor/SparseROI.h>
 #include <pacbio/tracefile/TraceFile.h>
@@ -123,9 +124,10 @@ TYPED_TEST(TestTraceSaver, TestA)
         size_t k=0;
         for(const DataSourceBase::LaneIndex lane : lanes)
         {
-            for(uint32_t j =0;j<laneWidth; j++)
+            for(uint32_t j = 0; j < laneWidth; j++)
             {
-                roiFeatures[k].flags = 0;
+                roiFeatures[k].flags = ZmwFeatures::Sequencing;
+                roiFeatures[k].type = 0;
                 roiFeatures[k].x = (lane ==0) ? 0 : 1;
                 roiFeatures[k].y = (lane ==0) ? j : j;
                 holeNumbers[k] = k;
@@ -236,6 +238,13 @@ TYPED_TEST(TestTraceSaver, TestA)
         const auto& holeNumber = reader.Traces().HoleNumber();
         ASSERT_EQ(holeNumber.size(), numSelectedZmws);
 
+        const auto& holeType = reader.Traces().HoleType();
+        EXPECT_TRUE(std::all_of(holeType.begin(), holeType.end(), [](uint8_t holeType) { return holeType == 0; }));
+
+        const auto& holeFeaturesMask = reader.Traces().HoleFeaturesMask();
+        EXPECT_TRUE(std::all_of(holeFeaturesMask.begin(), holeFeaturesMask.end(),
+                                [](uint32_t holeFeaturesMask) { return holeFeaturesMask == ZmwFeatures::Sequencing; }));
+
         const auto& batchIds = reader.Traces().AnalysisBatch();
         ASSERT_EQ(batchIds.size(), numSelectedZmws);
         int failures = 0;
@@ -295,9 +304,10 @@ TEST(Sanity,ROI)
     size_t k=0;
     for(const DataSourceBase::LaneIndex lane : blocks)
     {
-        for(uint32_t j =0;j<laneSize;j++)
+        for(uint32_t j = 0; j < laneSize; j++)
         {
-            roiFeatures[k].flags = 0;;
+            roiFeatures[k].flags = ZmwFeatures::Sequencing;
+            roiFeatures[k].type = 0;
             roiFeatures[k].x = (lane == 0) ? 0 : 2;
             roiFeatures[k].y = (lane == 0) ? j : j;
             holeNumbers[k] = k;
@@ -341,10 +351,14 @@ TEST(Sanity,ROI)
         const auto& holexy = reader.Traces().HoleXY();
         const auto& holeNumbers = reader.Traces().HoleNumber();
         const auto& batchIds = reader.Traces().AnalysisBatch();
+        const auto& holeType = reader.Traces().HoleType();
+        const auto& holeFeaturesMask = reader.Traces().HoleFeaturesMask();
         for(uint32_t i=0;i<numZmws;i++)
         {
             EXPECT_EQ(holexy[i][0],i<64 ? 0 : 2);
             EXPECT_EQ(holexy[i][1],i%64);
+            EXPECT_EQ(holeType[i], 0);
+            EXPECT_EQ(holeFeaturesMask[i], ZmwFeatures::Sequencing);
             EXPECT_EQ(holeNumbers[i], i);
             EXPECT_EQ(batchIds[i], 6);
         }

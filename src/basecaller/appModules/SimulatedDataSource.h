@@ -27,6 +27,7 @@
 #define PACBIO_APPLICATION_SIMULATED_DATA_SOURCE_H
 
 #include <pacbio/datasource/DataSourceBase.h>
+#include <pacbio/datasource/ZmwFeatures.h>
 
 #include <common/BatchDataSource.h>
 
@@ -90,7 +91,10 @@ public:
 
     std::vector<UnitCellProperties> GetUnitCellProperties() const override
     {
-        return std::vector<UnitCellProperties>(NumZmw()); // note that all coordinates are reported as (0,0).
+        return std::vector<UnitCellProperties>(NumZmw(),
+                                               UnitCellProperties{DataSource::ZmwFeatures::Sequencing,
+                                                                  0,
+                                                                  0, 0}); // note that all coordinates are reported as (0,0)
     }
 
     std::vector<uint32_t> UnitCellIds() const override

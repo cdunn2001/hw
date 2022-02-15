@@ -25,6 +25,7 @@
 
 #include <gtest/gtest.h>
 
+#include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/logging/Logger.h>
 
 #include <common/MongoConstants.h>
@@ -506,6 +507,9 @@ TEST(SimDataSourceAPI, ZmwInfo)
 
     // Should check the values, but we've not actually defined what the UnitCellFeature values are yet
     EXPECT_EQ(source.GetUnitCellProperties().size(), totalZmw);
+    EXPECT_TRUE(std::all_of(source.GetUnitCellProperties().cbegin(),
+                            source.GetUnitCellProperties().cend(),
+                            [](const auto& uc){ return uc.flags == ZmwFeatures::Sequencing; }));
 
     // ID's should have one unique value for each zmw
     auto ids = source.UnitCellIds();

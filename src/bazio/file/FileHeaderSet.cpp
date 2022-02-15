@@ -158,22 +158,14 @@ bool FileHeaderSet::IsConsistent(const FileHeader& a, const FileHeader& b) const
         return false;
     }
 
-    if (a.ZmwInformation().HoleFeatureMap().size() != b.ZmwInformation().HoleFeatureMap().size()
-        || !std::equal(a.ZmwInformation().HoleFeatureMap().begin(),
-                       a.ZmwInformation().HoleFeatureMap().end(), b.ZmwInformation().HoleFeatureMap().begin(),
-                       [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
-                       { return a.first == b.first && a.second == b.second; }))
+    if (a.ZmwInformation().HoleFeatureMap() != b.ZmwInformation().HoleFeatureMap())
     {
         PBLOG_ERROR << "FileHeader Hole Feature map mismatch for files "
                     << a.MovieName() << " and " << b.MovieName() << "!";
         return false;
     }
 
-    if (a.ZmwInformation().HoleTypesMap().size() != b.ZmwInformation().HoleTypesMap().size()
-        || !std::equal(a.ZmwInformation().HoleTypesMap().begin(),
-                       a.ZmwInformation().HoleTypesMap().end(), b.ZmwInformation().HoleTypesMap().begin(),
-                       [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
-                       { return a.first == b.first && a.second == b.second; }))
+    if (a.ZmwInformation().HoleTypesMap() != b.ZmwInformation().HoleTypesMap())
     {
         PBLOG_ERROR << "FileHeader Hole Types map mismatch for files "
                     << a.MovieName() << " and " << b.MovieName() << "!";

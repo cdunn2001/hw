@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/datasource/MallocAllocator.h>
+#include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/dev/TemporaryDirectory.h>
 
 #include <appModules/TraceFileDataSource.h>
@@ -66,7 +67,8 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
     for (size_t i = 0; i < numZmw; ++i)
     {
         params.holeNumbers[i] = i*3;
-        params.properties[i].flags = 0;
+        params.properties[i].flags = ZmwFeatures::Sequencing;
+        params.properties[i].type = 0;
         params.properties[i].x = i;
         params.properties[i].y = 2*i;
     }
@@ -165,6 +167,11 @@ TEST(TraceFileDataSourceMisc, Replication)
         auto expectIds = std::vector<uint32_t>(ids.size());
         std::iota(expectIds.begin(), expectIds.end(), 0);
         EXPECT_TRUE(std::equal(ids.begin(), ids.end(), expectIds.begin()));
+
+        const auto& props = source.GetUnitCellProperties();
+        EXPECT_TRUE(std::all_of(props.begin(), props.end(),
+                                [](const auto& uc) { return uc.flags == ZmwFeatures::Sequencing &&
+                                                            uc.type == 0; }));
     }
 
     // The layouts need to accurately span the specified number of ZMW
@@ -264,6 +271,9 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
                                [](const auto& v1, const auto& v2) { return v1.x == v2.x; }));
         EXPECT_TRUE(std::equal(props.begin(), props.end(), params.properties.begin(),
                                [](const auto& v1, const auto& v2) { return v1.y == v2.y; }));
+        EXPECT_TRUE(std::all_of(props.begin(), props.end(),
+                                [](const auto& uc) { return uc.flags == ZmwFeatures::Sequencing &&
+                                                            uc.type == 0; }));
     }
 
     // Make sure the reported layouts span all ZMW
@@ -389,6 +399,9 @@ TEST(TraceFileDataSourceMisc, ReanalysisWithWhitelist)
                                [](const auto& v1, const auto& v2) {return v1.x == v2.x;}));
         EXPECT_TRUE(std::equal(props.end() - laneSize, props.end(), params.properties.end() - laneSize,
                                [](const auto& v1, const auto& v2) {return v1.y == v2.y;}));
+        EXPECT_TRUE(std::all_of(props.begin(), props.end(),
+                                [](const auto& uc) { return uc.flags == ZmwFeatures::Sequencing &&
+                                                            uc.type == 0; }));
     }
 
     const auto& layouts = source.PacketLayouts();

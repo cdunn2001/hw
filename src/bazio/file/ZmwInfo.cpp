@@ -25,16 +25,22 @@
 
 #include <sstream>
 
+#include <pacbio/datasource/ZmwFeatures.h>
+#include <pacbio/logging/Logger.h>
+#include <pacbio/text/String.h>
 #include <pacbio/PBException.h>
+
 
 #include "ZmwInfo.h"
 
 namespace PacBio::BazIO
 {
 
+
+
 ZmwInfo::ZmwInfo(const Data& zmwData,
-                 const std::map<std::string, uint32_t>& holeTypesMap,
-                 const std::map<std::string, uint32_t>& holeFeaturesMap)
+                 const std::string& holeTypesMap,
+                 const std::string& holeFeaturesMap)
     : zmwData_(zmwData)
     , holeTypesMap_(holeTypesMap)
     , holeFeaturesMap_(holeFeaturesMap)
@@ -46,6 +52,12 @@ ZmwInfo::ZmwInfo(const Data& zmwData,
                                   zmwData_.holeFeatures.size() };
     if(!std::all_of(vecSizes.begin()+1, vecSizes.end(), [&](const size_t s) { return s == vecSizes.front(); }))
         throw PBException("ZmwData does not contain equal sizes for all datasets!");
+}
+
+ZmwInfo::ZmwInfo(const Data& zmwData)
+    : ZmwInfo(zmwData, "1=SEQUENCING", DataSource::ZmwFeatures::csvMapString())
+{
+    PBLOG_WARN << "Default ZmwInfo unit types currently mocked out";
 }
 
 void ZmwInfo::FromJson(const Json::Value& zmwInfo)
@@ -69,6 +81,10 @@ void ZmwInfo::FromJson(const Json::Value& zmwInfo)
 
     holeTypesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwTypeMap);
     holeFeaturesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwUnitFeatureMap);
+    if (!DataSource::ZmwFeatures::validateCsvMapString(holeFeaturesMap_))
+    {
+        throw PBException("Incompatible hole features map with current ZMW features!");
+    }
 }
 
 Json::Value ZmwInfo::ToJson() const
@@ -132,25 +148,31 @@ std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, con
     }
 }
 
-std::map<std::string, uint32_t> ZmwInfo::ParseJsonMap(const Json::Value& node, const std::string& field) const
+std::string ZmwInfo::ParseJsonMap(const Json::Value& node, const std::string& field) const
 {
-    std::map<std::string,uint32_t> data;
+    auto cmp = [](const std::string& a, const std::string& b) {
+        return
+            atoi(PacBio::Text::String::Split(a, '=').front().c_str()) <
+            atoi(PacBio::Text::String::Split(b, '=').front().c_str());
+    };
+    std::set<std::string, decltype(cmp)> data(cmp);
     if (node.isMember(field) && node[field].isObject())
     {
-        for (const auto& id : node[field].getMemberNames())
+        for (const auto& id: node[field].getMemberNames())
         {
-            data[id] = node[field][id].asUInt();
+            data.insert(id + "=" + node[field][id].asString());
         }
     }
-    return data;
+    return PacBio::Text::String::Join(data.begin(), data.end(), ',');
 }
 
-Json::Value ZmwInfo::EncodeMapJson(const std::map<std::string, uint32_t>& map) const
+Json::Value ZmwInfo::EncodeMapJson(const std::string& strMap) const
 {
     Json::Value jsonMap;
-    for (const auto& [k,v] : map)
+    for (const auto& v: PacBio::Text::String::Split(strMap, ','))
     {
-        jsonMap[k] = v;
+        const auto& vals = PacBio::Text::String::Split(v, '=');
+        jsonMap[vals.front()] = vals.back();
     }
     return jsonMap;
 }

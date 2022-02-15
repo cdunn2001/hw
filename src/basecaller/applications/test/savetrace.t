@@ -6,6 +6,7 @@
 # The original trace had 256 ZMW, but we only selected 192 via the ROI
   $ h5ls ${TRCOUT}/TraceData
   AnalysisBatch            Dataset {192}
+  HoleFeaturesMask         Dataset {192}
   HoleNumber               Dataset {192}
   HoleType                 Dataset {192}
   HoleXY                   Dataset {192, 2}
@@ -125,6 +126,7 @@
 
   $ h5ls ${TRCOUT}/TraceData
   AnalysisBatch            Dataset {192}
+  HoleFeaturesMask         Dataset {192}
   HoleNumber               Dataset {192}
   HoleType                 Dataset {192}
   HoleXY                   Dataset {192, 2}
@@ -183,6 +185,7 @@
 
   $ h5ls ${TRCOUT}/TraceData
   AnalysisBatch            Dataset {192}
+  HoleFeaturesMask         Dataset {192}
   HoleNumber               Dataset {192}
   HoleType                 Dataset {192}
   HoleXY                   Dataset {192, 2}

@@ -90,12 +90,10 @@ public:
 public:
 
     ZmwInfo(const Data& zmwData,
-            const std::map<std::string, uint32_t>& holeTypesMap,
-            const std::map<std::string, uint32_t>& holeFeaturesMap);
+            const std::string& holeTypesMap,
+            const std::string& holeFeaturesMap);
 
-    ZmwInfo(const Data& zmwData)
-        : ZmwInfo(zmwData, {}, {})
-    { }
+    ZmwInfo(const Data& zmwData);
 
     ZmwInfo() = default;
     ZmwInfo(ZmwInfo&&) = default;
@@ -128,10 +126,10 @@ public:
     const std::map<uint32_t,uint32_t>& ZmwNumbersToIndex() const
     { return zmwNumbersToIndex_; }
 
-    const std::map<std::string,uint32_t>& HoleTypesMap() const
+    const std::string& HoleTypesMap() const
     { return holeTypesMap_; }
 
-    const std::map<std::string,uint32_t>& HoleFeatureMap() const
+    const std::string& HoleFeatureMap() const
     { return holeFeaturesMap_; }
 
     uint32_t ZmwIndexToNumber(const uint32_t index) const
@@ -158,14 +156,14 @@ private:
 
     std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const;
     std::vector<uint32_t> ParseJsonRLESameHexArray(const Json::Value& node, const std::string& field) const;
-    std::map<std::string, uint32_t> ParseJsonMap(const Json::Value& node, const std::string& field) const;
-    Json::Value EncodeMapJson(const std::map<std::string, uint32_t>& map) const;
+    std::string ParseJsonMap(const Json::Value& node, const std::string& field) const;
+    Json::Value EncodeMapJson(const std::string& strMap) const;
 
 private:
     Data                            zmwData_;
     std::map<uint32_t,uint32_t>     zmwNumbersToIndex_;
-    std::map<std::string, uint32_t> holeTypesMap_;
-    std::map<std::string, uint32_t> holeFeaturesMap_;
+    std::string                     holeTypesMap_;
+    std::string                     holeFeaturesMap_;
 };
 
 
