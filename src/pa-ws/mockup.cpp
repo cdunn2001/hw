@@ -149,7 +149,7 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     std::string root = "http://localhost:23632/storages/" + mid + "/";
     po.bazFileUrl =  root + mid + ".baz";
     po.uuid = "00104afe-c341-11eb-8529-0242ac130003";
-    po.outputLogUrl = root + mid + ".ppa.log";
+    po.logUrl = root + mid + ".ppa.log";
     po.logLevel = LogLevel_t::DEBUG;
     po.outputPrefixUrl = root + mid;
     po.outputStatsXmlUrl = root + mid + ".stats.xml";
@@ -167,10 +167,10 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     po.status.outputUrls.push_back(root + mid + ".ccs.bam");
     po.status.outputUrls.push_back(root + mid + ".baz2bam.log");
     po.status.baz2bamZmwsPerMin = 1.0e5;
-    po.status.ccsZmwsPerMin = 1.0e5;
+    po.status.ccs2bamZmwsPerMin = 1.0e5;
     po.status.numZmws = 18579372;
     po.status.baz2bamPeakRssGb = 401.1;
-    po.status.ccsPeakRssGb = 56.9;
+    po.status.ccs2bamPeakRssGb = 56.9;
     return po;
 }
 
