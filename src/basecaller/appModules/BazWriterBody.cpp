@@ -93,9 +93,7 @@ BazWriterBody::BazWriterBody(
         const auto& zmwTypes = zmwInfo.HoleTypes();
         const auto& zmwX = zmwInfo.HoleX();
         const auto& zmwY = zmwInfo.HoleY();
-        const auto& zmwFeatures = zmwInfo.UnitFeatures();
-        const auto& zmwTypesMap = zmwInfo.HoleTypesMap();
-        const auto& zmwFeaturesMap = zmwInfo.HoleFeatureMap();
+        const auto& zmwFeatures = zmwInfo.HoleFeaturesMask();
 
         bazWriters_.resize(numBatches_);
         std::atomic<uint32_t> openedFiles = 0;
@@ -114,9 +112,7 @@ BazWriterBody::BazWriterBody(
                                   std::vector<uint16_t>(poolZmwXStart, poolZmwXStart + batchNumZmw[b]),
                                   std::vector<uint16_t>(poolZmwYStart, poolZmwYStart + batchNumZmw[b]),
                                   std::vector<uint32_t>(poolZmwFeaturesStart, poolZmwFeaturesStart + batchNumZmw[b])
-                                ),
-                             zmwTypesMap,
-                             zmwFeaturesMap);
+                                ));
             FileHeaderBuilder fh(multiBazName,
                                  100.0f,
                                  expectedFrames,

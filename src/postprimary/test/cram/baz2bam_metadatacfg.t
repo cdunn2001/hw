@@ -1,6 +1,6 @@
 
 Run with minSnr from metadata.xml
-  $ bazFile="/pbi/dept/primary/sim/kestrel/kestrel-test-metrics/prod.baz"
+  $ bazFile="/pbi/dept/primary/sim/kestrel/kestrel-zmw-features/prod.baz"
   $ baz2bam --metadata $TESTDIR/data/testcfg.metadata.xml -o default --whitelistZmwId=0-199 ${bazFile} --silent > /dev/null 2>&1
   $ grep PPAAlgoConfig default.baz2bam_1.log | awk -F'=' '{print $2}' | jq '.inputFilter.minSnr'
   1.5

@@ -1,4 +1,4 @@
-  $ testdir=/pbi/dept/primary/sim/kestrel/kestrel-multiple-baz-files
+  $ testdir=/pbi/dept/primary/sim/kestrel/kestrel-multiple-baz-files-zmw-features
 
 # Test production BAZ files
   $ baz2bam $testdir/prod.baz -j8 --fasta --fastq --fullHQ -o single_prod -m $TESTDIR/data/metadata.xml --silent --enableBarcodedAdapters=False

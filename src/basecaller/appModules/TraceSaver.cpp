@@ -90,11 +90,11 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
     // traces
     boost::multi_array<int16_t, 2> holexy(boost::extents[numZmw][2]);
     std::vector<uint8_t> holeType(numZmw);
+    std::vector<uint32_t> holeFeaturesMask(numZmw);
     for (size_t i = 0; i < numZmw; ++i)
     {
-        // TODO: a conversion from "flags" to "holeType". The connection needs to be made here:
-        //holetype[i] = properties[i].flags;
-        holeType[i] = 0;
+        holeType[i] = properties[i].type;
+        holeFeaturesMask[i] = properties[i].flags;
         // TODO change UnitCellProperties.x and y to be 16 bits to get rid of these casts
         holexy[i][0] = static_cast<int16_t>(properties[i].x);
         holexy[i][1] = static_cast<int16_t>(properties[i].y);
@@ -102,6 +102,7 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
     file_.Traces().Pedestal(analysisConfig.pedestal);
     file_.Traces().HoleXY(holexy);
     file_.Traces().HoleType(holeType);
+    file_.Traces().HoleFeaturesMask(holeFeaturesMask);
     file_.Traces().HoleNumber(holeNumbers);
     file_.Traces().AnalysisBatch(batchIds);
 }

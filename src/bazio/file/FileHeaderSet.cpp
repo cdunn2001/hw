@@ -112,8 +112,8 @@ FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique
                            fh.ZmwNumbers().begin(), fh.ZmwNumbers().end());
 
         zmwFeatures_.insert(std::end(zmwFeatures_),
-                            fh.ZmwInformation().UnitFeatures().begin(),
-                            fh.ZmwInformation().UnitFeatures().end());
+                            fh.ZmwInformation().HoleFeaturesMask().begin(),
+                            fh.ZmwInformation().HoleFeaturesMask().end());
 
         maxNumZmws_.push_back(fh.MaxNumZMWs());
         numSuperChunks_.push_back(fh.NumSuperChunks());
@@ -154,28 +154,6 @@ bool FileHeaderSet::IsConsistent(const FileHeader& a, const FileHeader& b) const
     if (a.BaseCallerVersion() != b.BaseCallerVersion())
     {
         PBLOG_ERROR << "FileHeader BaseCaller versions mismatch for files "
-                    << a.MovieName() << " and " << b.MovieName() << "!";
-        return false;
-    }
-
-    if (a.ZmwInformation().HoleFeatureMap().size() != b.ZmwInformation().HoleFeatureMap().size()
-        || !std::equal(a.ZmwInformation().HoleFeatureMap().begin(),
-                       a.ZmwInformation().HoleFeatureMap().end(), b.ZmwInformation().HoleFeatureMap().begin(),
-                       [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
-                       { return a.first == b.first && a.second == b.second; }))
-    {
-        PBLOG_ERROR << "FileHeader Hole Feature map mismatch for files "
-                    << a.MovieName() << " and " << b.MovieName() << "!";
-        return false;
-    }
-
-    if (a.ZmwInformation().HoleTypesMap().size() != b.ZmwInformation().HoleTypesMap().size()
-        || !std::equal(a.ZmwInformation().HoleTypesMap().begin(),
-                       a.ZmwInformation().HoleTypesMap().end(), b.ZmwInformation().HoleTypesMap().begin(),
-                       [](const std::pair<std::string,uint32_t>& a, const std::pair<std::string,uint32_t>& b)
-                       { return a.first == b.first && a.second == b.second; }))
-    {
-        PBLOG_ERROR << "FileHeader Hole Types map mismatch for files "
                     << a.MovieName() << " and " << b.MovieName() << "!";
         return false;
     }

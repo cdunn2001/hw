@@ -25,25 +25,25 @@
 
 #include <sstream>
 
+#include <pacbio/datasource/ZmwFeatures.h>
+#include <pacbio/logging/Logger.h>
+#include <pacbio/text/String.h>
 #include <pacbio/PBException.h>
+
 
 #include "ZmwInfo.h"
 
 namespace PacBio::BazIO
 {
 
-ZmwInfo::ZmwInfo(const Data& zmwData,
-                 const std::map<std::string, uint32_t>& holeTypesMap,
-                 const std::map<std::string, uint32_t>& holeFeaturesMap)
+ZmwInfo::ZmwInfo(const Data& zmwData)
     : zmwData_(zmwData)
-    , holeTypesMap_(holeTypesMap)
-    , holeFeaturesMap_(holeFeaturesMap)
 {
     std::vector<size_t> vecSizes{ zmwData_.holeNumbers.size(),
                                   zmwData_.holeTypes.size(),
                                   zmwData_.holeX.size(),
                                   zmwData_.holeY.size(),
-                                  zmwData_.holeFeatures.size() };
+                                  zmwData_.holeFeaturesMask.size() };
     if(!std::all_of(vecSizes.begin()+1, vecSizes.end(), [&](const size_t s) { return s == vecSizes.front(); }))
         throw PBException("ZmwData does not contain equal sizes for all datasets!");
 }
@@ -51,7 +51,7 @@ ZmwInfo::ZmwInfo(const Data& zmwData,
 void ZmwInfo::FromJson(const Json::Value& zmwInfo)
 {
     zmwData_.holeNumbers = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwNumberLut);
-    zmwData_.holeFeatures = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwUnitFeatureLut);
+    zmwData_.holeFeaturesMask = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwFeatureLut);
     std::vector<uint32_t> holeTypes = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwTypeLut);
     std::vector<uint32_t> holeX = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwX);
     std::vector<uint32_t> holeY = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwY);
@@ -67,8 +67,17 @@ void ZmwInfo::FromJson(const Json::Value& zmwInfo)
         zmwNumbersToIndex_[zmwData_.holeNumbers[i]] = i;
     }
 
-    holeTypesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwTypeMap);
-    holeFeaturesMap_ = ParseJsonMap(zmwInfo, JsonKey::ZmwUnitFeatureMap);
+    if (zmwInfo.isMember(JsonKey::ZmwFeatureMap))
+    {
+        if (!DataSource::ZmwFeatures::validateCsvMapString(zmwInfo[JsonKey::ZmwFeatureMap].asString()))
+        {
+            throw PBException("Incompatible hole features map with current ZMW features!");
+        }
+    }
+    else
+    {
+        throw PBException("Missing " + std::string(JsonKey::ZmwFeatureMap) + " in BAZ header!");
+    }
 }
 
 Json::Value ZmwInfo::ToJson() const
@@ -77,9 +86,8 @@ Json::Value ZmwInfo::ToJson() const
     zmwInfo[JsonKey::ZmwNumberLut] = ZmwNumberLut();
     zmwInfo[JsonKey::ZmwTypeLut] = ZmwTypeLut();
     zmwInfo[JsonKey::ZmwXYLut] = ZmwXYLut();
-    zmwInfo[JsonKey::ZmwUnitFeatureLut] = ZmwUnitFeatureLut();
-    zmwInfo[JsonKey::ZmwTypeMap] = ZmwHoleTypeMap();
-    zmwInfo[JsonKey::ZmwUnitFeatureMap] = ZmwFeatureTypeMap();
+    zmwInfo[JsonKey::ZmwFeatureLut] = ZmwFeatureLut();
+    zmwInfo[JsonKey::ZmwFeatureMap] = DataSource::ZmwFeatures::csvMapString();
     return zmwInfo;
 }
 
@@ -105,19 +113,9 @@ Json::Value ZmwInfo::ZmwXYLut() const
     return holeXY;
 }
 
-Json::Value ZmwInfo::ZmwUnitFeatureLut() const
+Json::Value ZmwInfo::ZmwFeatureLut() const
 {
-    return RunLengthEncLUTHexJson(RunLengthEncLUT(zmwData_.holeFeatures));
-}
-
-Json::Value ZmwInfo::ZmwHoleTypeMap() const
-{
-    return EncodeMapJson(holeTypesMap_);
-}
-
-Json::Value ZmwInfo::ZmwFeatureTypeMap() const
-{
-    return EncodeMapJson(holeFeaturesMap_);
+    return RunLengthEncLUTHexJson(RunLengthEncLUT(zmwData_.holeFeaturesMask));
 }
 
 std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const
@@ -130,29 +128,6 @@ std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, con
     {
         throw PBException("BAZ header doesn't contain field: " + field);
     }
-}
-
-std::map<std::string, uint32_t> ZmwInfo::ParseJsonMap(const Json::Value& node, const std::string& field) const
-{
-    std::map<std::string,uint32_t> data;
-    if (node.isMember(field) && node[field].isObject())
-    {
-        for (const auto& id : node[field].getMemberNames())
-        {
-            data[id] = node[field][id].asUInt();
-        }
-    }
-    return data;
-}
-
-Json::Value ZmwInfo::EncodeMapJson(const std::map<std::string, uint32_t>& map) const
-{
-    Json::Value jsonMap;
-    for (const auto& [k,v] : map)
-    {
-        jsonMap[k] = v;
-    }
-    return jsonMap;
 }
 
 } // PacBio::BazIO

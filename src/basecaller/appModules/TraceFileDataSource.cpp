@@ -403,7 +403,8 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
     const auto& holexy = traceFile_.Traces().HoleXY();
     const auto& holeType = traceFile_.Traces().HoleType();
-    for(uint32_t i=0; i < features.size(); i++)
+    const auto& holeFeaturesMask = traceFile_.Traces().HoleFeaturesMask();
+    for(uint32_t i = 0; i < features.size(); i++)
     {
         // i is ZMW position in chunk.
         // The chunk is filled with lanes from the tracefile, modulo the size of the trace file. It is
@@ -421,7 +422,8 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         {
             throw PBException("internally calculated traceZmw position is larger than trace file dimension");
         }
-        features[i].flags = holeType[traceZmw];
+        features[i].flags = holeFeaturesMask[traceZmw];
+        features[i].type = holeType[traceZmw];
         features[i].x = holexy[traceZmw][0];
         features[i].y = holexy[traceZmw][1];
 
