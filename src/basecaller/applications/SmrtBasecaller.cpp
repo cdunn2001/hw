@@ -542,12 +542,7 @@ private:
             transform(props.begin(), props.end(), back_inserter(unitFeatures),
                       [](DataSourceBase::UnitCellProperties x){ return static_cast<uint32_t>(x.flags); });
 
-            // TODO: Unit types should need to be plugged in.
-            std::string unitTypesMap = "1=Sequencing";
-            std::string unitFeaturesMap = ZmwFeatures::csvMapString();
-
-            ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures),
-                            unitTypesMap, unitFeaturesMap);
+            ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures));
 
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),

@@ -272,7 +272,7 @@ TEST(TraceFileDataSourceMisc, Reanalysis)
         EXPECT_TRUE(std::equal(props.begin(), props.end(), params.properties.begin(),
                                [](const auto& v1, const auto& v2) { return v1.y == v2.y; }));
         EXPECT_TRUE(std::all_of(props.begin(), props.end(),
-                                [](const auto& uc) { return uc.flags == ZmwFeatures::Sequencing &&
+                                [](const auto& uc) { return uc.flags == static_cast<uint32_t>(ZmwFeatures::Sequencing) &&
                                                             uc.type == 0; }));
     }
 

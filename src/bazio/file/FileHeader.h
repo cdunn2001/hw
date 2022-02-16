@@ -194,10 +194,10 @@ public:
         }
         else
         {
-            if (zmwInfo_.UnitFeatures().size() == 0)
+            if (zmwInfo_.HoleFeaturesMask().size() == 0)
                 return 0; // if there are no features loaded, then send out a dummy 0.
             else
-                return zmwInfo_.UnitFeatures()[kv->second];
+                return zmwInfo_.HoleFeaturesMask()[kv->second];
         }
     }
 

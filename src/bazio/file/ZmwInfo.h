@@ -38,10 +38,10 @@ namespace PacBio::BazIO
 
 /// This class is meant to store the following information for each ZMW:
 ///
-/// HoleNumber
-/// HoleType        These are specific to a particular chip layout
-/// HoleXY          X-Y coordinates of ZMW with respect to the chip
-/// UnitFeature     Bitmask of various physical features of the ZMW
+/// HoleNumber          ZMW hole number
+/// HoleType            These are specific to a particular chip layout
+/// HoleXY              X-Y coordinates of ZMW with respect to the chip
+/// HoleFeaturesMask    Bitmask of various physical features of the ZMW
 ///
 
 class ZmwInfo
@@ -54,13 +54,12 @@ public:
         // JSON keys for the various datasets
         static constexpr auto ZmwInfo = "ZMW_INFO";
         static constexpr auto ZmwNumberLut = "ZMW_NUMBER_LUT";
-        static constexpr auto ZmwUnitFeatureLut = "ZMW_UNIT_FEATURE_LUT";
+        static constexpr auto ZmwFeatureLut = "ZMW_FEATURE_LUT";
         static constexpr auto ZmwTypeLut = "ZMW_TYPE_LUT";
         static constexpr auto ZmwXYLut = "ZMW_XY_LUT";
         static constexpr auto ZmwX = "X";
         static constexpr auto ZmwY = "Y";
-        static constexpr auto ZmwTypeMap = "ZMW_TYPE_MAP";
-        static constexpr auto ZmwUnitFeatureMap = "ZMW_UNIT_FEATURE_MAP";
+        static constexpr auto ZmwFeatureMap = "ZMW_FEATURE_MAP";
     };
 
 public:
@@ -72,26 +71,24 @@ public:
 
         Data(const std::vector<uint32_t>& hns, const std::vector<uint8_t>& hts,
              const std::vector<uint16_t>& hxs, const std::vector<uint16_t>& hys,
-             const std::vector<uint32_t>& hfs)
+             const std::vector<uint32_t>& hfms)
             : holeNumbers(hns)
             , holeTypes(hts)
             , holeX(hxs)
             , holeY(hys)
-            , holeFeatures(hfs)
+            , holeFeaturesMask(hfms)
         { }
 
         std::vector<uint32_t>   holeNumbers;
         std::vector<uint8_t>    holeTypes;
         std::vector<uint16_t>   holeX;
         std::vector<uint16_t>   holeY;
-        std::vector<uint32_t>   holeFeatures;
+        std::vector<uint32_t>   holeFeaturesMask;
     };
 
 public:
 
-    ZmwInfo(const Data& zmwData,
-            const std::string& holeTypesMap,
-            const std::string& holeFeaturesMap);
+    ZmwInfo(const Data& zmwData, const std::string& holeFeaturesMap);
 
     ZmwInfo(const Data& zmwData);
 
@@ -120,17 +117,11 @@ public:
     const std::vector<uint16_t> HoleY() const
     { return zmwData_.holeY; }
 
-    const std::vector<uint32_t>& UnitFeatures() const
-    { return zmwData_.holeFeatures; }
+    const std::vector<uint32_t>& HoleFeaturesMask() const
+    { return zmwData_.holeFeaturesMask; }
 
     const std::map<uint32_t,uint32_t>& ZmwNumbersToIndex() const
     { return zmwNumbersToIndex_; }
-
-    const std::string& HoleTypesMap() const
-    { return holeTypesMap_; }
-
-    const std::string& HoleFeatureMap() const
-    { return holeFeaturesMap_; }
 
     uint32_t ZmwIndexToNumber(const uint32_t index) const
     { return zmwData_.holeNumbers.at(index); }
@@ -148,22 +139,16 @@ public:
     Json::Value ZmwNumberLut() const;
     Json::Value ZmwTypeLut() const;
     Json::Value ZmwXYLut() const;
-    Json::Value ZmwUnitFeatureLut() const;
-    Json::Value ZmwHoleTypeMap() const;
-    Json::Value ZmwFeatureTypeMap() const;
+    Json::Value ZmwFeatureLut() const;
 
 private:
 
     std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const;
     std::vector<uint32_t> ParseJsonRLESameHexArray(const Json::Value& node, const std::string& field) const;
-    std::string ParseJsonMap(const Json::Value& node, const std::string& field) const;
-    Json::Value EncodeMapJson(const std::string& strMap) const;
 
 private:
     Data                            zmwData_;
     std::map<uint32_t,uint32_t>     zmwNumbersToIndex_;
-    std::string                     holeTypesMap_;
-    std::string                     holeFeaturesMap_;
 };
 
 

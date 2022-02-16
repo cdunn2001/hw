@@ -126,10 +126,11 @@ TYPED_TEST(TestTraceSaver, TestA)
         {
             for(uint32_t j = 0; j < laneWidth; j++)
             {
-                roiFeatures[k].flags = ZmwFeatures::Sequencing;
+                roiFeatures[k].flags |= (k % 2) ? ZmwFeatures::Sequencing : ZmwFeatures::PorSequencing;
+                roiFeatures[k].flags |= (k % 3) ? ZmwFeatures::LaserPower0p0x : ZmwFeatures::LaserPower2p0x;
                 roiFeatures[k].type = 0;
-                roiFeatures[k].x = (lane ==0) ? 0 : 1;
-                roiFeatures[k].y = (lane ==0) ? j : j;
+                roiFeatures[k].x = (lane == 0) ? 0 : 1;
+                roiFeatures[k].y = (lane == 0) ? j : j;
                 holeNumbers[k] = k;
                 k++;
             }
@@ -242,8 +243,27 @@ TYPED_TEST(TestTraceSaver, TestA)
         EXPECT_TRUE(std::all_of(holeType.begin(), holeType.end(), [](uint8_t holeType) { return holeType == 0; }));
 
         const auto& holeFeaturesMask = reader.Traces().HoleFeaturesMask();
-        EXPECT_TRUE(std::all_of(holeFeaturesMask.begin(), holeFeaturesMask.end(),
-                                [](uint32_t holeFeaturesMask) { return holeFeaturesMask == ZmwFeatures::Sequencing; }));
+        for (size_t i = 0; i < holeNumber.size(); i++)
+        {
+            if (holeNumber[i] % 2)
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::Sequencing);
+            }
+            else
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::PorSequencing);
+            }
+
+            if (holeNumber[i] % 3)
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::LaserPower0p0x);
+            }
+            else
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::LaserPower2p0x);
+
+            }
+        }
 
         const auto& batchIds = reader.Traces().AnalysisBatch();
         ASSERT_EQ(batchIds.size(), numSelectedZmws);
@@ -306,7 +326,7 @@ TEST(Sanity,ROI)
     {
         for(uint32_t j = 0; j < laneSize; j++)
         {
-            roiFeatures[k].flags = ZmwFeatures::Sequencing;
+            roiFeatures[k].flags |= (k % 2) ? ZmwFeatures::Sequencing : ZmwFeatures::LaserScatter;
             roiFeatures[k].type = 0;
             roiFeatures[k].x = (lane == 0) ? 0 : 2;
             roiFeatures[k].y = (lane == 0) ? j : j;
@@ -353,12 +373,19 @@ TEST(Sanity,ROI)
         const auto& batchIds = reader.Traces().AnalysisBatch();
         const auto& holeType = reader.Traces().HoleType();
         const auto& holeFeaturesMask = reader.Traces().HoleFeaturesMask();
-        for(uint32_t i=0;i<numZmws;i++)
+        for(uint32_t i = 0; i < numZmws; i++)
         {
             EXPECT_EQ(holexy[i][0],i<64 ? 0 : 2);
             EXPECT_EQ(holexy[i][1],i%64);
             EXPECT_EQ(holeType[i], 0);
-            EXPECT_EQ(holeFeaturesMask[i], ZmwFeatures::Sequencing);
+            if (holeNumbers[i] % 2)
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::Sequencing);
+            }
+            else
+            {
+                EXPECT_TRUE(holeFeaturesMask[i] & ZmwFeatures::LaserScatter);
+            }
             EXPECT_EQ(holeNumbers[i], i);
             EXPECT_EQ(batchIds[i], 6);
         }

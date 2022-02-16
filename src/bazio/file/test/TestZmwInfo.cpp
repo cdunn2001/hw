@@ -73,7 +73,7 @@ TEST(ZmwInfo, Construct)
    EXPECT_TRUE(std::all_of(zmwTypes.begin(), zmwTypes.end(),
                [&setHoleType](const uint8_t ht) { return ht == setHoleType; }));
 
-   const auto& zmwFeatures = zi.UnitFeatures();
+   const auto& zmwFeatures = zi.HoleFeaturesMask();
    EXPECT_TRUE(std::all_of(zmwFeatures.begin(), zmwFeatures.end(),
                             [&setHoleFeature](const uint32_t hf) { return hf == setHoleFeature; }));
 }
@@ -97,8 +97,8 @@ TEST(ZmwInfo, Deserialize)
                 && json[ZmwInfo::JsonKey::ZmwXYLut][ZmwInfo::JsonKey::ZmwX].isArray());
     EXPECT_TRUE(json[ZmwInfo::JsonKey::ZmwXYLut].isMember(ZmwInfo::JsonKey::ZmwY)
                 && json[ZmwInfo::JsonKey::ZmwXYLut][ZmwInfo::JsonKey::ZmwY].isArray());
-    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwUnitFeatureLut)
-                && json[ZmwInfo::JsonKey::ZmwUnitFeatureLut].isArray());
+    EXPECT_TRUE(json.isMember(ZmwInfo::JsonKey::ZmwFeatureLut)
+                && json[ZmwInfo::JsonKey::ZmwFeatureLut].isArray());
 
     ZmwInfo zi2;
     zi2.FromJson(zi1.ToJson());

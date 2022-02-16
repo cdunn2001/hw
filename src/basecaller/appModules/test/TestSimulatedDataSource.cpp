@@ -509,7 +509,7 @@ TEST(SimDataSourceAPI, ZmwInfo)
     EXPECT_EQ(source.GetUnitCellProperties().size(), totalZmw);
     EXPECT_TRUE(std::all_of(source.GetUnitCellProperties().cbegin(),
                             source.GetUnitCellProperties().cend(),
-                            [](const auto& uc){ return uc.flags == ZmwFeatures::Sequencing; }));
+                            [](const auto& uc){ return uc.flags == static_cast<uint32_t>(ZmwFeatures::Sequencing); }));
 
     // ID's should have one unique value for each zmw
     auto ids = source.UnitCellIds();

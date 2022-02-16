@@ -112,8 +112,8 @@ FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique
                            fh.ZmwNumbers().begin(), fh.ZmwNumbers().end());
 
         zmwFeatures_.insert(std::end(zmwFeatures_),
-                            fh.ZmwInformation().UnitFeatures().begin(),
-                            fh.ZmwInformation().UnitFeatures().end());
+                            fh.ZmwInformation().HoleFeaturesMask().begin(),
+                            fh.ZmwInformation().HoleFeaturesMask().end());
 
         maxNumZmws_.push_back(fh.MaxNumZMWs());
         numSuperChunks_.push_back(fh.NumSuperChunks());
@@ -154,20 +154,6 @@ bool FileHeaderSet::IsConsistent(const FileHeader& a, const FileHeader& b) const
     if (a.BaseCallerVersion() != b.BaseCallerVersion())
     {
         PBLOG_ERROR << "FileHeader BaseCaller versions mismatch for files "
-                    << a.MovieName() << " and " << b.MovieName() << "!";
-        return false;
-    }
-
-    if (a.ZmwInformation().HoleFeatureMap() != b.ZmwInformation().HoleFeatureMap())
-    {
-        PBLOG_ERROR << "FileHeader Hole Feature map mismatch for files "
-                    << a.MovieName() << " and " << b.MovieName() << "!";
-        return false;
-    }
-
-    if (a.ZmwInformation().HoleTypesMap() != b.ZmwInformation().HoleTypesMap())
-    {
-        PBLOG_ERROR << "FileHeader Hole Types map mismatch for files "
                     << a.MovieName() << " and " << b.MovieName() << "!";
         return false;
     }
