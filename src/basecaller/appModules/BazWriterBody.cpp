@@ -47,7 +47,7 @@ BazWriterBody::BazWriterBody(
         const BazIO::ZmwInfo& zmwInfo,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
-        const PacBio::TraceFile::ScanData::Data& experimentMetadata)
+        const PacBio::File::ScanData::Data& experimentMetadata)
     : numThreads_(basecallerConfig.system.ioConcurrency)
     , numBatches_(poolDims.size())
     , multipleBazFiles_(basecallerConfig.multipleBazFiles)

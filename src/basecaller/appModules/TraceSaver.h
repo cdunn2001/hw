@@ -29,7 +29,7 @@
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
-#include <pacbio/tracefile/TraceFile.h>
+#include <pacbio/file/TraceFile.h>
 #include <pacbio/logging/Logger.h>
 
 #include <common/graphs/GraphNodeBody.h>
@@ -64,11 +64,11 @@ public:
                    DataSource::DataSourceBase::LaneSelector laneSelector,
                    const uint64_t frameBlockingSize,
                    const uint64_t zmwBlockingSize,
-                   TraceFile::TraceDataType dataType,
+                   File::TraceDataType dataType,
                    const std::vector<uint32_t>& holeNumbers,
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                    const std::vector<uint32_t>& batchIds,
-                   const TraceFile::ScanData::Data& experimentMetadata,
+                   const File::ScanData::Data& experimentMetadata,
                    const Mongo::Data::AnalysisConfig& analysisConfig);
 
     TraceSaverBody(const TraceSaverBody&) = delete;
@@ -87,11 +87,11 @@ private:
                            const std::vector<uint32_t>& batchIds,
                            const Mongo::Data::AnalysisConfig& analysisConfig);
 
-    void PopulateScanData(const TraceFile::ScanData::Data& experimentMetadata);
+    void PopulateScanData(const File::ScanData::Data& experimentMetadata);
 
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
     PacBio::DataSource::PacketLayout packetLayout_;
-    TraceFile::TraceFile file_;
+    File::TraceFile file_;
 };
 
 }}

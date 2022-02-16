@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include <pacbio/tracefile/ScanData.h>
+#include <pacbio/file/ScanData.h>
 
 #include <bazio/file/ZmwInfo.h>
 #include <bazio/writing/BazWriter.h>
@@ -63,7 +63,7 @@ public:
                   const BazIO::ZmwInfo& zmwInfo,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
-                  const PacBio::TraceFile::ScanData::Data& experimentMetadata);
+                  const PacBio::File::ScanData::Data& experimentMetadata);
 
     ~BazWriterBody();
 

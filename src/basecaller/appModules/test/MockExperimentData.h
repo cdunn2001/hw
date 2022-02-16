@@ -29,7 +29,8 @@
 #ifndef PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H
 #define PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H
 
+#include <pacbio/file/ScanData.h>
 
-PacBio::TraceFile::ScanData::Data MockExperimentData(size_t psfSize=1, size_t xtalkSize=1);
+PacBio::File::ScanData::Data MockExperimentData(size_t psfSize=1, size_t xtalkSize=1);
 
 #endif // PACBIO_APPLICATION_TEST_MOCK_EXPERIMENTDATA_H

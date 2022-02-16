@@ -30,7 +30,6 @@
 #include <boost/multi_array.hpp>
 
 #include <pacbio/datasource/MallocAllocator.h>
-#include <pacbio/tracefile/ScanData.h>
 
 #include <common/MongoConstants.h>
 

@@ -79,16 +79,16 @@ size_t ComputeTraceChunks(size_t numTraceFrames, size_t blockLen, size_t framesR
 ///         if the settings may result in an int16_t to uint8_t data
 ///         truncation, a warning is issued
 PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType requestedType,
-                                             TraceFile::TraceDataType storageType)
+                                             File::TraceDataType storageType)
 {
     PacketLayout::EncodingFormat ret;
     switch (requestedType)
     {
     case PacBio::Mongo::Data::TraceInputType::Natural:
     {
-        if (storageType == TraceFile::TraceDataType::INT16)
+        if (storageType == File::TraceDataType::INT16)
             ret = PacketLayout::INT16;
-        else if (storageType == TraceFile::TraceDataType::UINT8)
+        else if (storageType == File::TraceDataType::UINT8)
             ret = PacketLayout::UINT8;
         else
             throw PBException("Unexpected request for trace data type");
@@ -108,7 +108,7 @@ PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType
         throw PBException("Unexpected request for trace data type");
     }
 
-    if (storageType == TraceFile::TraceDataType::INT16
+    if (storageType == File::TraceDataType::INT16
         && ret == PacketLayout::UINT8)
     {
         PBLOG_WARN << "Trace data is 16 bit but we are configured to produce 8 bit data.  "
@@ -126,7 +126,7 @@ PacketLayout::EncodingFormat ComputeEncoding(PacBio::Mongo::Data::TraceInputType
 ///                   This is to prevent loading and caching more data than we'll
 ///                   actually use.  A value of 0 indicates that we will load all
 ///                   lanes present in the traceFile, modulo any whitelist specification
-std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
+std::vector<uint32_t> SelectedTraceLanes(const File::TraceFile& traceFile,
                                          const std::vector<uint32_t>& whitelist,
                                          size_t maxLanes = 0)
 {
@@ -170,7 +170,7 @@ std::vector<uint32_t> SelectedTraceLanes(const TraceFile::TraceFile& traceFile,
 /// \param traceFile     A handle for the actual tracefile, which will be
 ///                      examined for things like the batchIds
 std::map<uint32_t, size_t> ComputeSparsePools(const std::vector<uint32_t>& selectedLanes,
-                                              const TraceFile::TraceFile& traceFile)
+                                              const File::TraceFile& traceFile)
 {
     std::map<uint32_t, size_t> ret;
     if (!traceFile.Traces().HasAnalysisBatch())
