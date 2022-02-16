@@ -62,22 +62,19 @@ using namespace PacBio::Logging;
 using namespace PacBio::Utilities;
 using namespace PacBio::Sensor;
 
-namespace PacBio {
-namespace Primary {
-namespace Calibration {
+namespace PacBio::Calibration {
 
+// BENTODO init config from cli
 PaCalProcess::PaCalProcess()
-  : paCalConfig_(Platform(Platform::Kestrel))
-  {
-
-  }
+    : paCalConfig_()
+{}
 
 PaCalProcess::~PaCalProcess()
 {
     Abort();
     Join();
-}  
-  
+}
+
 OptionParser PaCalProcess::CreateOptionParser()
 {
     OptionParser parser = ProcessBase::OptionParserFactory();
@@ -90,53 +87,90 @@ OptionParser PaCalProcess::CreateOptionParser()
     parser.description(ss.str());
     parser.version(std::string(SHORT_VERSION_STRING) + "." + cmakeGitHash());
 
-    parser.epilog("Ports: \n"
-    );
-
     parser.add_option("--config").action_append().help("Loads JSON configuration. Can be file name or inline JSON object, e.g. \"{ ... }\"");
-    parser.add_option("--strict").action_store_true().help("Strictly check all configuration options. Do not allow unrecognized configuration options");
     parser.add_option("--showconfig").action_store_true().help("Shows the entire configuration namespace with current values and exits");
-    parser.add_option("--listports").action_store_true().help("Echoes all network ports to the console and exits.");
-
-    const std::string execPath = PacBio::POSIX::GetCurrentExecutablePath();
 
     parser.add_option("--nowatchdog").action_store_true().type_bool().set_default(false).help("Disable watchdog");
 
+    parser.add_option("--sra").type_int().set_default(0).help("Which SRA to use when connecting to wxdaemon");
+    parser.add_option("--movieNum").type_int().set_default(0).help("The expected movie number, which should agree with what "
+                                                                   "comes over the wire via the Wolverine");
+    parser.add_option("--numFrames").type_int().set_default(512).help("Number of frames to use during the collection. "
+                                                                      "Note: Currently only the specific value of 512 is supported,"
+                                                                      "presumably this may be relaxed in the future");
+
+    parser.add_option("--timeoutSeconds").type_double().set_default(60*5).help("pa-cal will self abort if this timeout expires");
+
+    parser.add_option("--inputDarkCalFile").type_string().help("Optional dark cal file to be loaded, necessary for "
+                                                               "dynamic loading workflows");
+
+    parser.add_option("--outputFile").type_string().help("Destination file, containing the collected frame mean/variance information");
     return parser;
 }
 
-void PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
+bool PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
 {
-    enableWatchdog_ = ! options.get("nowatchdog");
-
-    Json::Value json = MergeConfigs(options.all("config"));
-    PBLOG_DEBUG << json; // this does NOT work with --showconfig
-    paCalConfig_ = PaCalConfig(json);
-    FactoryConfig(&paCalConfig_);
-    paCalConfig_.Update(json);
-    auto validation = paCalConfig_.Validate();
-    if (validation.ErrorCount() > 0)
+    try
     {
-        validation.PrintErrors();
-        throw PBException("Json validation failed");
-    }
+        enableWatchdog_ = ! options.get("nowatchdog");
 
-    if (options.get("showconfig"))
-    {
-        std::cout << paCalConfig_.Serialize() << std::endl;
-        exit(0);
-    }
+        std::vector<std::string> cliValidationErrors;
+        sra_ = options.get("sra");
+        if (sra_ < 0) cliValidationErrors.push_back("--sra cannot be negative");
 
-    if (options.get("listports"))
+        movieNum_ = options.get("movieNum");
+        if (movieNum_ < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
+
+        numFrames_ = options.get("numFrames");
+        if (numFrames_ != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
+
+        timeoutSeconds_ = options.get("timeoutSeconds");
+        if (timeoutSeconds_ <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
+
+        inputDarkCalFile_ = options["inputDarkCalFile"];
+
+        outputFile_ = options["outputFile"];
+        if (outputFile_.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
+
+        Json::Value json = MergeConfigs(options.all("config"));
+        paCalConfig_ = PaCalConfig(json);
+        auto jsonValidation = paCalConfig_.Validate();
+        if (jsonValidation.ErrorCount() > 0)
+        {
+            jsonValidation.PrintErrors();
+        }
+
+        for (const auto& err : cliValidationErrors)
+        {
+            PBLOG_ERROR << err;
+        }
+
+        if (cliValidationErrors.size() + jsonValidation.ErrorCount() > 0)
+        {
+            return false;
+        }
+
+        if (options.get("showconfig"))
+        {
+            std::cout << paCalConfig_.Serialize() << std::endl;
+            exit(0);
+        }
+
+        PBLOG_INFO << paCalConfig_.Serialize();
+        return true;
+    } catch(std::exception& e)
     {
-        std::cout << std::endl;
-        exit(0);
+        PBLOG_ERROR << "Caught exception while parsing options: " << e.what();
+    } catch(...)
+    {
+        PBLOG_ERROR << "Caught unexpected exception type while parsing options";
     }
+    return false;
 
 #if 0
 // TODO fix logging. I want to see the thread ID (or preferably a symbolic thread name)
 // along with the rest of the default columns. This experiment failed in a big way.
-// this makes a mess. Somehow the output of the logger is getting captured by the stdout capture class, and then 
+// this makes a mess. Somehow the output of the logger is getting captured by the stdout capture class, and then
 // recursively relogging every line.
     const std::string DEFAULT_PB_LOG_FORMAT = ">|> %TimeStamp% -|- %Severity% -|- %Channel% -|- %HostName%|P:%PBProcessID%|T:%PBThreadID% -|- %Message%";
     const std::string DEFAULT_PB_LOG_FILE_SETTINGS = "[Sinks.MySink]\nDestination=Console\nAutoFlush=true\nAsynchronous=true\nFormat=\"" + DEFAULT_PB_LOG_FORMAT + "\"\n";
@@ -253,8 +287,8 @@ int PaCalProcess::Main(int argc, const char *argv[])
         Values &options = parser.parse_args(argc, argv);
         vector<string> args = parser.args();
         HandleGlobalOptions(options);
-        HandleLocalOptions(options);
-        exitCode = Run();
+        bool parseSuccess = HandleLocalOptions(options);
+        exitCode = parseSuccess ? Run() : ExitCode::CommandParsingException;
     }
     // These top level exception handlers should never be called, but are here to prevent an exception leak
     // from calling `terminate()`. They also do not write to the logger.
@@ -264,6 +298,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
         {
             std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << endl;
             exitCode = ex.code().value();
+            exitCode = ExitCode::StdException;
         }
         else
         {
@@ -273,12 +308,12 @@ int PaCalProcess::Main(int argc, const char *argv[])
     catch (const std::exception &ex)
     {
         std::cerr << "std::exception caught at main(): " << ex.what() << endl;
-        exitCode = ExitCode::CommandParsingException;
+        exitCode = ExitCode::StdException;
     }
     catch (...)
     {
         std::cerr << "Unknown Exception caught at main(): " << endl;
-        exitCode = ExitCode::CommandParsingException;
+        exitCode = ExitCode::DefaultUnknownFailure;
     }
     return exitCode;
 }
@@ -297,4 +332,4 @@ void PaCalProcess::SendException(const std::exception& ex)
     PBLOG_DEBUG << "PaCalProcess std::exception caught:" << ex.what();
 }
 
-}}} //namespace
+} // namespace PacBio::Calibration

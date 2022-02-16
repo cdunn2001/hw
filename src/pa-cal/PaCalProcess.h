@@ -37,9 +37,7 @@
 
 #include "PaCalConfig.h"
 
-namespace PacBio {
-namespace Primary {
-namespace Calibration {
+namespace PacBio::Calibration {
 
 class WebService;
 
@@ -71,10 +69,10 @@ protected:
     PacBio::Process::OptionParser CreateOptionParser();
 
     /// Converts the options into local flags
-    void HandleLocalOptions(PacBio::Process::Values& options);
+    bool HandleLocalOptions(PacBio::Process::Values& options);
 
     /// Starts the daemon, and when the daemon exits, returns a Linux process exit code.
-    /// Values in the range [0,127] are normal exit codes. See ExitCodes.h for the definitions. 
+    /// Values in the range [0,127] are normal exit codes. See ExitCodes.h for the definitions.
     /// 0 means a successful exit with no errors. This is returned on a normal systemd service shutdown.
     /// Values > 0 indicate some sort of software caught problem.
     /// Values in the range [128,255] indicate the system caught a signal and ended the process. These values
@@ -96,6 +94,12 @@ protected:
     bool runBist_ = false;
 private:
     PaCalConfig  paCalConfig_;
+    int32_t sra_ = 0;
+    int32_t movieNum_ = 0;
+    int32_t numFrames_ = 0;
+    double timeoutSeconds_ = 0.0;
+    std::string inputDarkCalFile_;
+    std::string outputFile_;
 };
 
 /// I'm playing around with an interface class that allows threads to
@@ -105,8 +109,8 @@ class PaCalThreadController :  public PacBio::Threading::IThreadController
 {
 public:
     PaCalThreadController(PaCalProcess& process) : process_(process) {}
-    bool ExitRequested() override 
-    { 
+    bool ExitRequested() override
+    {
         return process_.ExitRequested();
     }
     void RequestExit() override
@@ -116,7 +120,6 @@ public:
     PaCalProcess& process_;
 };
 
-
-}}}
+} // namespace PacBio::Calibration
 
 #endif // PA_WS_PROCESS_H

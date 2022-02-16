@@ -30,52 +30,45 @@
 #ifndef KES_CAL_CONFIG_H
 #define KES_CAL_CONFIG_H
 
-#include <stdint.h>
-#include <stdlib.h>
-
-#include <array>
-
-// pa-common includes
 #include <pacbio/configuration/PBConfig.h>
-#include <pacbio/sensor/Platform.h>
+#include <pacbio/configuration/types/Variant.h>
 
-// local includes
+namespace PacBio::Calibration {
 
-namespace PacBio {
-namespace Primary {
-namespace Calibration {
+// Config primarily for test, that fabricates it's own data
+struct SimInputConfig : PacBio::Configuration::PBConfig<SimInputConfig>
+{
+    PB_CONFIG(SimInputConfig);
 
-using PacBio::Configuration::DefaultFunc;
+    PB_CONFIG_PARAM(uint32_t, nRows, 1000);
+    PB_CONFIG_PARAM(uint32_t, nCols, 1000);
+
+    // TODO add params to control characteristics of simulated data?
+
+    // The minimum time it will take to produce the chunk of data for
+    // processing.  Intended to be used for testing to make sure
+    // data generation doesn't take trivial time and that things
+    // that are intended to be concurrent can be tested as such.
+    PB_CONFIG_PARAM(double, minInputDelaySeconds, 1.0);
+};
+
+// Temporary stub, until we integrate with the hw-mongo library
+struct WXIPCDataSourceConfig : PacBio::Configuration::PBConfig<WXIPCDataSourceConfig>
+{
+    PB_CONFIG(WXIPCDataSourceConfig);
+};
 
 struct PaCalConfig : PacBio::Configuration::PBConfig<PaCalConfig>
 {
     PB_CONFIG(PaCalConfig);
 
-    /// This is a convenient ctor for use in unit tests where one wants to hardcode the platform type
-    /// using strict enum types, rather than feed in a JSON object.
-    explicit PaCalConfig(PacBio::Sensor::Platform p) 
-       : PaCalConfig( [p](){ 
-           Json::Value x;
-           x["platform"]=p.toString();
-           return x;
-         }() ) 
-    {}
-    explicit PaCalConfig(PacBio::Sensor::Platform::RawEnum p) 
-        : PaCalConfig(PacBio::Sensor::Platform(p))
-    {}  
+    PB_CONFIG_VARIANT(source, WXIPCDataSourceConfig, SimInputConfig);
 
-    PB_CONFIG_PARAM(PacBio::Sensor::Platform, platform, PacBio::Sensor::Platform::UNKNOWN);
-
-    PB_CONFIG_PARAM(double, pollingInternalSeconds, 1.0); ///< Interval between housekeeping events
+    // TODO configs to enable/configure some form of BIST?
+    // TODO config for injecting a signal after some time?
 };
 
-void FactoryConfig(PaCalConfig* c);
-void Spider2Config(PaCalConfig* c);
-void MongoConfig(PaCalConfig* c);
-void KestrelConfig(PaCalConfig* c);
-
-
-}}} // namespace
+} // namespace PacBio::Calibration
 
 
 #endif // WXDAEMON_CONFIG_H

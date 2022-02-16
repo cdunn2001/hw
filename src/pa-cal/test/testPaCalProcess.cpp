@@ -30,9 +30,8 @@
 #include <pa-cal/PaCalProcess.h>
 #include <pa-cal/ExitCodes.h>
 
-using namespace PacBio::Primary::Calibration;
+using namespace PacBio::Calibration;
 using namespace testing;
-using namespace PacBio::Sensor;
 
 /// This class exposes protected members for the purpose of white box testing.
 class PaCalProcessEx : public PaCalProcess
@@ -69,7 +68,7 @@ TEST(PaCalProcess,BadArg)
     int argc = 2;
     const char* argv[] = {"./binary", "--badArg", nullptr};
     EXPECT_EXIT(process.Main(argc, argv),
-        ExitedWithCode(2), 
+        ExitedWithCode(2),
         R"(error: no such option: --badArg)");
 }
 
@@ -77,9 +76,10 @@ TEST(PaCalProcess,OptionParser)
 {
     PaCalProcessEx process;
     auto parser = process.CreateOptionParser();
-    EXPECT_THAT(parser.description(), HasSubstr("Primary calibration application")); 
+    EXPECT_THAT(parser.description(), HasSubstr("Primary calibration application"));
 }
 
+// BENTODO test rework cli
 TEST(PaCalProcess,LocalOptions)
 {
     PaCalProcessEx process;
@@ -87,14 +87,15 @@ TEST(PaCalProcess,LocalOptions)
 
     auto parser = process.CreateOptionParser();
     int argc = 3;
-    const char* argv[] = {"./binary", "--nowatchdog", 
+    const char* argv[] = {"./binary", "--nowatchdog",
         "--config=platform=Kestrel", nullptr};
     auto options = parser.parse_args(argc, argv);
 
     process.HandleLocalOptions(options);
-    EXPECT_FALSE(process.enableWatchdog_);
 
-    EXPECT_EQ(Platform::Kestrel, process.GetPaCalConfig().platform);
+    // TODO lift the option handling out of the PaCalProcess class.
+    // We shouldn't have to expose
+    EXPECT_FALSE(process.enableWatchdog_);
 }
 
 
