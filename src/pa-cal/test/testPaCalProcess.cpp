@@ -38,11 +38,7 @@ class PaCalProcessEx : public PaCalProcess
 {
 public:
     using PaCalProcess::PaCalProcess;
-    using PaCalProcess::enableWatchdog_;
-    using PaCalProcess::CreateOptionParser;
-    using PaCalProcess::HandleLocalOptions;
     using PaCalProcess::Run;
-    using PaCalProcess::GetPaCalConfig;
 };
 
 
@@ -74,28 +70,52 @@ TEST(PaCalProcess,BadArg)
 
 TEST(PaCalProcess,OptionParser)
 {
-    PaCalProcessEx process;
-    auto parser = process.CreateOptionParser();
+    auto parser = PaCalProcess::CreateOptionParser();
     EXPECT_THAT(parser.description(), HasSubstr("Primary calibration application"));
 }
 
-// BENTODO test rework cli
 TEST(PaCalProcess,LocalOptions)
 {
-    PaCalProcessEx process;
-    EXPECT_TRUE(process.enableWatchdog_);
+    PacBio::Logging::LogSeverityContext ls(PacBio::Logging::LogLevel::FATAL);
+    auto parser = PaCalProcess::CreateOptionParser();
 
-    auto parser = process.CreateOptionParser();
-    int argc = 3;
-    const char* argv[] = {"./binary", "--nowatchdog",
-        "--config=platform=Kestrel", nullptr};
-    auto options = parser.parse_args(argc, argv);
+    auto parseCli = [&parser](std::vector<const char*> args)
+    {
+        args.insert(args.begin(), "./binary");
+        args.insert(args.end(), nullptr);
+        auto options = parser.parse_args(args.size()-1, args.data());
 
-    process.HandleLocalOptions(options);
+        return PaCalProcess::HandleLocalOptions(options);
+    };
 
-    // TODO lift the option handling out of the PaCalProcess class.
-    // We shouldn't have to expose
-    EXPECT_FALSE(process.enableWatchdog_);
+    auto settings = parseCli({"--nowatchdog"});
+    // We've failed to set a mandatory argument
+    EXPECT_FALSE(settings.has_value());
+
+    settings = parseCli({"--nowatchdog", "--outputFile=location"});
+    EXPECT_TRUE(settings.has_value());
+    if (settings.has_value())
+    {
+        EXPECT_FALSE(settings->enableWatchdog_);
+        EXPECT_EQ(settings->outputFile_, "location");
+    }
+
+    settings = parseCli({"--nowatchdog", "--outputFile=location", "--movieNum=-4"});
+    // Now we've set things with an invalid value
+    EXPECT_FALSE(settings.has_value());
+
+    // A more comprehensive setting
+    settings = parseCli({"--nowatchdog", "--outputFile=location", "--movieNum=4",
+                         "--sra=2", "--timeoutSeconds=80.2"});
+    EXPECT_TRUE(settings.has_value());
+    if (settings.has_value())
+    {
+        EXPECT_FALSE(settings->enableWatchdog_);
+        EXPECT_EQ(settings->outputFile_, "location");
+        EXPECT_EQ(settings->movieNum_, 4);
+        EXPECT_EQ(settings->sra_, 2);
+        EXPECT_DOUBLE_EQ(settings->timeoutSeconds_, 80.2);
+    }
 }
 
 

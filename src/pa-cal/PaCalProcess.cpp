@@ -64,11 +64,6 @@ using namespace PacBio::Sensor;
 
 namespace PacBio::Calibration {
 
-// BENTODO init config from cli
-PaCalProcess::PaCalProcess()
-    : paCalConfig_()
-{}
-
 PaCalProcess::~PaCalProcess()
 {
     Abort();
@@ -108,33 +103,34 @@ OptionParser PaCalProcess::CreateOptionParser()
     return parser;
 }
 
-bool PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
+std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
 {
+    Settings ret;
     try
     {
-        enableWatchdog_ = ! options.get("nowatchdog");
+        ret.enableWatchdog_ = ! options.get("nowatchdog");
 
         std::vector<std::string> cliValidationErrors;
-        sra_ = options.get("sra");
-        if (sra_ < 0) cliValidationErrors.push_back("--sra cannot be negative");
+        ret.sra_ = options.get("sra");
+        if (ret.sra_ < 0) cliValidationErrors.push_back("--sra cannot be negative");
 
-        movieNum_ = options.get("movieNum");
-        if (movieNum_ < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
+        ret.movieNum_ = options.get("movieNum");
+        if (ret.movieNum_ < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
 
-        numFrames_ = options.get("numFrames");
-        if (numFrames_ != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
+        ret.numFrames_ = options.get("numFrames");
+        if (ret.numFrames_ != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
 
-        timeoutSeconds_ = options.get("timeoutSeconds");
-        if (timeoutSeconds_ <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
+        ret.timeoutSeconds_ = options.get("timeoutSeconds");
+        if (ret.timeoutSeconds_ <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
 
-        inputDarkCalFile_ = options["inputDarkCalFile"];
+        ret.inputDarkCalFile_ = options["inputDarkCalFile"];
 
-        outputFile_ = options["outputFile"];
-        if (outputFile_.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
+        ret.outputFile_ = options["outputFile"];
+        if (ret.outputFile_.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
 
         Json::Value json = MergeConfigs(options.all("config"));
-        paCalConfig_ = PaCalConfig(json);
-        auto jsonValidation = paCalConfig_.Validate();
+        ret.paCalConfig_ = PaCalConfig(json);
+        auto jsonValidation = ret.paCalConfig_.Validate();
         if (jsonValidation.ErrorCount() > 0)
         {
             jsonValidation.PrintErrors();
@@ -147,17 +143,17 @@ bool PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
 
         if (cliValidationErrors.size() + jsonValidation.ErrorCount() > 0)
         {
-            return false;
+            return {};
         }
 
         if (options.get("showconfig"))
         {
-            std::cout << paCalConfig_.Serialize() << std::endl;
+            std::cout << ret.paCalConfig_.Serialize() << std::endl;
             exit(0);
         }
 
-        PBLOG_INFO << paCalConfig_.Serialize();
-        return true;
+        PBLOG_INFO << ret.paCalConfig_.Serialize();
+        return ret;
     } catch(std::exception& e)
     {
         PBLOG_ERROR << "Caught exception while parsing options: " << e.what();
@@ -165,7 +161,7 @@ bool PaCalProcess::HandleLocalOptions(PacBio::Process::Values &options)
     {
         PBLOG_ERROR << "Caught unexpected exception type while parsing options";
     }
-    return false;
+    return {};
 
 #if 0
 // TODO fix logging. I want to see the thread ID (or preferably a symbolic thread name)
@@ -287,8 +283,15 @@ int PaCalProcess::Main(int argc, const char *argv[])
         Values &options = parser.parse_args(argc, argv);
         vector<string> args = parser.args();
         HandleGlobalOptions(options);
-        bool parseSuccess = HandleLocalOptions(options);
-        exitCode = parseSuccess ? Run() : ExitCode::CommandParsingException;
+        auto settings = HandleLocalOptions(options);
+        if (settings.has_value())
+        {
+            settings_ = settings.value();
+            exitCode = Run();
+        } else
+        {
+            exitCode = ExitCode::CommandParsingException;
+        }
     }
     // These top level exception handlers should never be called, but are here to prevent an exception leak
     // from calling `terminate()`. They also do not write to the logger.
