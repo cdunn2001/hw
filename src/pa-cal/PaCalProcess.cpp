@@ -111,29 +111,29 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
     Settings ret;
     try
     {
-        ret.enableWatchdog_ = ! options.get("nowatchdog");
+        ret.enableWatchdog = ! options.get("nowatchdog");
 
         std::vector<std::string> cliValidationErrors;
-        ret.sra_ = options.get("sra");
-        if (ret.sra_ < 0) cliValidationErrors.push_back("--sra cannot be negative");
+        ret.sra = options.get("sra");
+        if (ret.sra < 0) cliValidationErrors.push_back("--sra cannot be negative");
 
-        ret.movieNum_ = options.get("movieNum");
-        if (ret.movieNum_ < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
+        ret.movieNum = options.get("movieNum");
+        if (ret.movieNum < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
 
-        ret.numFrames_ = options.get("numFrames");
-        if (ret.numFrames_ != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
+        ret.numFrames = options.get("numFrames");
+        if (ret.numFrames != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
 
-        ret.timeoutSeconds_ = options.get("timeoutSeconds");
-        if (ret.timeoutSeconds_ <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
+        ret.timeoutSeconds = options.get("timeoutSeconds");
+        if (ret.timeoutSeconds <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
 
-        ret.inputDarkCalFile_ = options["inputDarkCalFile"];
+        ret.inputDarkCalFile = options["inputDarkCalFile"];
 
-        ret.outputFile_ = options["outputFile"];
-        if (ret.outputFile_.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
+        ret.outputFile = options["outputFile"];
+        if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
 
         Json::Value json = MergeConfigs(options.all("config"));
-        ret.paCalConfig_ = PaCalConfig(json);
-        auto jsonValidation = ret.paCalConfig_.Validate();
+        ret.paCalConfig = PaCalConfig(json);
+        auto jsonValidation = ret.paCalConfig.Validate();
         if (jsonValidation.ErrorCount() > 0)
         {
             jsonValidation.PrintErrors();
@@ -151,11 +151,11 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 
         if (options.get("showconfig"))
         {
-            std::cout << ret.paCalConfig_.Serialize() << std::endl;
+            std::cout << ret.paCalConfig.Serialize() << std::endl;
             exit(0);
         }
 
-        PBLOG_INFO << ret.paCalConfig_.Serialize();
+        PBLOG_INFO << ret.paCalConfig.Serialize();
         return ret;
     } catch(std::exception& e)
     {
@@ -207,8 +207,8 @@ void PaCalProcess::RunAllThreads()
     {
         try
         {
-            auto source = CreateSource(settings_.paCalConfig_);
-            bool success = AnalyzeSourceInput(std::move(source), dtc, settings_.movieNum_, settings_.outputFile_);
+            auto source = CreateSource(settings_.paCalConfig);
+            bool success = AnalyzeSourceInput(std::move(source), dtc, settings_.movieNum, settings_.outputFile);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
         } catch (const std::exception& ex)
@@ -225,7 +225,7 @@ void PaCalProcess::RunAllThreads()
     while(!ExitRequested())
     {
         std::this_thread::sleep_for(chrono::seconds{1});
-        if (timer.GetElapsedMilliseconds() > settings_.timeoutSeconds_*1000)
+        if (timer.GetElapsedMilliseconds() > settings_.timeoutSeconds*1000)
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
             RequestExit();

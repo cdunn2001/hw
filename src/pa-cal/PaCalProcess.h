@@ -48,15 +48,14 @@ class PaCalProcess : public PacBio::Process::ThreadedProcessBase
 public:
     struct Settings
     {
-        bool enableWatchdog_ = true;
-        bool runBist_ = false;
-        PaCalConfig  paCalConfig_;
-        int32_t sra_ = 0;
-        int32_t movieNum_ = 0;
-        int32_t numFrames_ = 0;
-        double timeoutSeconds_ = 0.0;
-        std::string inputDarkCalFile_;
-        std::string outputFile_;
+        bool enableWatchdog = true;
+        PaCalConfig  paCalConfig;
+        int32_t sra = 0;
+        int32_t movieNum = 0;
+        int32_t numFrames = 0;
+        double timeoutSeconds = 0.0;
+        std::string inputDarkCalFile;
+        std::string outputFile;
     };
 
 public:

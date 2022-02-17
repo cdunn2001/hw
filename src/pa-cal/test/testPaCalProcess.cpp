@@ -96,8 +96,8 @@ TEST(PaCalProcess,LocalOptions)
     EXPECT_TRUE(settings.has_value());
     if (settings.has_value())
     {
-        EXPECT_FALSE(settings->enableWatchdog_);
-        EXPECT_EQ(settings->outputFile_, "location");
+        EXPECT_FALSE(settings->enableWatchdog);
+        EXPECT_EQ(settings->outputFile, "location");
     }
 
     settings = parseCli({"--nowatchdog", "--outputFile=location", "--movieNum=-4"});
@@ -110,11 +110,11 @@ TEST(PaCalProcess,LocalOptions)
     EXPECT_TRUE(settings.has_value());
     if (settings.has_value())
     {
-        EXPECT_FALSE(settings->enableWatchdog_);
-        EXPECT_EQ(settings->outputFile_, "location");
-        EXPECT_EQ(settings->movieNum_, 4);
-        EXPECT_EQ(settings->sra_, 2);
-        EXPECT_DOUBLE_EQ(settings->timeoutSeconds_, 80.2);
+        EXPECT_FALSE(settings->enableWatchdog);
+        EXPECT_EQ(settings->outputFile, "location");
+        EXPECT_EQ(settings->movieNum, 4);
+        EXPECT_EQ(settings->sra, 2);
+        EXPECT_DOUBLE_EQ(settings->timeoutSeconds, 80.2);
     }
 }
 
