@@ -34,6 +34,7 @@
 
 // library includes
 #include <pacbio/configuration/MergeConfigs.h>
+#include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/POSIX.h>
 #include <pacbio/process/OptionParser.h>
@@ -45,6 +46,7 @@
 
 // local includes
 #include "ExitCodes.h"
+#include "FrameAnalyzer.h"
 #include "PaCalConfig.h"
 #include "PaCalConstants.h"
 
@@ -57,6 +59,7 @@
 using namespace std;
 using namespace PacBio;
 using namespace PacBio::Configuration;
+using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Logging;
 using namespace PacBio::Utilities;
@@ -178,6 +181,16 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 #endif
 }
 
+std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg)
+{
+    // TODO actually create datasources...
+    //      Should be handled by PTSD-1107 and PTSD-1113
+    return cfg.source.Visit(
+        [](const SimInputConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; },
+        [](const WXIPCDataSourceConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; }
+    );
+}
+
 void PaCalProcess::RunAllThreads()
 {
 #if 0
@@ -190,12 +203,34 @@ void PaCalProcess::RunAllThreads()
     std::shared_ptr<PaCalThreadController> dtc =
         std::make_shared<PaCalThreadController>(*this);
 
-    PBLOG_INFO << "PaCalProcess entering event loop";
+    CreateThread("Analysis", [this, dtc]()
+    {
+        try
+        {
+            auto source = CreateSource(settings_.paCalConfig_);
+            bool success = AnalyzeSourceInput(std::move(source), dtc, settings_.movieNum_, settings_.outputFile_);
+            if (success) PBLOG_INFO << "Main analysis has completed";
+            else PBLOG_INFO << "Main analysis not successful";
+        } catch (const std::exception& ex)
+        {
+            PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
+            PBLOG_ERROR << "Analysis thread will now terminate early";
+            dtc->RequestExit();
+        }
+        PBLOG_INFO << "Analysis Thread Complete";
+    });
+
+    PBLOG_INFO << "PaCalProcess waiting to complete analysis";
+    Dev::QuietAutoTimer timer;
     while(!ExitRequested())
     {
-        PacBio::POSIX::Sleep(1.0);
+        std::this_thread::sleep_for(chrono::seconds{1});
+        if (timer.GetElapsedMilliseconds() > settings_.timeoutSeconds_*1000)
+        {
+            PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
+            RequestExit();
+        }
     }
-    PBLOG_INFO << "PaCalProcess exiting event loop.";
 
     PBLOG_INFO << "Joining...";
     Join();
