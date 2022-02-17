@@ -41,6 +41,7 @@ enum ExitCode
     StdException = 5,
     UncaughtException = 6,
     CommandParsingException = 7,
+    Timeout = 8,
     DefaultUnknownFailure = 9
 };
 

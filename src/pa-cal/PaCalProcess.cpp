@@ -191,7 +191,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg)
     );
 }
 
-void PaCalProcess::RunAllThreads()
+ExitCode PaCalProcess::RunAllThreads()
 {
 #if 0
     {
@@ -202,7 +202,8 @@ void PaCalProcess::RunAllThreads()
 
     std::shared_ptr<Threading::IThreadController> threadController = Threading::MakeThreadController(*this);
 
-    CreateThread("Analysis", [this, threadController]()
+    enum ExitCode ret;
+    CreateThread("Analysis", [this, threadController, &ret]()
     {
         try
         {
@@ -215,6 +216,7 @@ void PaCalProcess::RunAllThreads()
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
             PBLOG_ERROR << "Analysis thread will now terminate early";
             threadController->RequestExit();
+            ret = ExitCode::StdException;
         }
         PBLOG_INFO << "Analysis Thread Complete";
     });
@@ -228,12 +230,15 @@ void PaCalProcess::RunAllThreads()
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
             RequestExit();
+            ret = ExitCode::Timeout;
         }
     }
 
     PBLOG_INFO << "Joining...";
     Join();
     PBLOG_INFO << "All threads joined";
+
+    return ret;
 }
 
 int PaCalProcess::Run()
@@ -266,8 +271,7 @@ int PaCalProcess::Run()
     PBLOG_INFO << "Testing 'info' level logging";
     try
     {
-        RunAllThreads();
-        exitCode = ExitCode::DefaultUnknownFailure;
+        exitCode = RunAllThreads();
         PBLOG_INFO << "main: RunAllThreads() normal exit, code:" << exitCode;
     }
     catch (const std::exception& ex)

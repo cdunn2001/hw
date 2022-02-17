@@ -37,7 +37,8 @@
 
 #include <common/ThreadController.h>
 
-#include "PaCalConfig.h"
+#include <pa-cal/PaCalConfig.h>
+#include <pa-cal/ExitCodes.h>
 
 namespace PacBio::Calibration {
 
@@ -102,7 +103,7 @@ protected:
 
     /// Launches all of the threads and waits for them to complete.
     /// \returns process exit code
-    void RunAllThreads();
+    ExitCode RunAllThreads();
 private:
     std::vector<std::string> commandLine_;
     Settings settings_;
