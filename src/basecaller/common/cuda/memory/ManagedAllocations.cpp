@@ -82,6 +82,8 @@ public:
     {
         return std::exchange(past_, {past_.peakBytes, currentBytes_, currentBytes_});
     }
+
+    size_t CurrentBytes() const { return currentBytes_; }
 private:
     size_t currentBytes_{0};
     PastUsage past_;
@@ -121,7 +123,18 @@ struct PinnedAllocator
 
     void* allocate(size_t size)
     {
-        return CudaRawMallocHost(size);
+        try
+        {
+            return CudaRawMallocHost(size);
+        }
+        // Specifically *only* catching memory allocation failures.  Other exceptions
+        // that we're not equiped to handle may be thrown, due the asynchronous nature
+        // of cuda error reporting, and those we'll just let bubble upwards.
+        catch (const CudaMemException& ex)
+        {
+            PBLOG_ERROR << "Error allocating pinned memory of size: " << size;
+            throw;
+        }
     }
     void deallocate(void* ptr)
     {
@@ -149,7 +162,27 @@ public:
 
     void* allocate(size_t size)
     {
-        return slicer_.Allocate(size);
+        try
+        {
+            return slicer_.Allocate(size);
+        }
+        // Specifically *only* catching memory allocation failures.  Other exceptions
+        // that we're not equiped to handle may be thrown, due the asynchronous nature
+        // of cuda error reporting, and those we'll just let bubble upwards.
+        catch (const CudaMemException& ex)
+        {
+            PBLOG_ERROR << "SharedHugePinnedAllocator failed to satisify an allocation request. ";
+            PBLOG_ERROR << "Requested allocation size in bytes was: " << size;
+            PBLOG_ERROR << "Dumping current usage information for the AllocationSlicer...";
+            const auto& storage = slicer_.PeekStorage();
+            for (const auto& kv : storage)
+            {
+                PBLOG_ERROR << "Base Address: " << kv.first;
+                PBLOG_ERROR << "    Capacity/Size: " << kv.second.capacity() << " / " << kv.second.size();
+                PBLOG_ERROR << "    Active Allocation Count" << kv.second.ActiveCount();
+            }
+            throw;
+        }
     }
 
     void deallocate(void* ptr)
@@ -176,11 +209,20 @@ private:
                 throw PBException("Implementation bug!  SharedMemoryAllocator "
                                   "was expected to return a 1GB aligned allocation");
 
-            // This function both page-locks the allocation,
-            // and registers the address range with the cuda
-            // runtime
-            CudaHostRegister(ptr, size);
-            return ptr;
+            try
+            {
+                // This function both page-locks the allocation,
+                // and registers the address range with the cuda
+                // runtime
+                CudaHostRegister(ptr, size);
+                return ptr;
+            }
+            catch (const CudaMemException& ex)
+            {
+                PBLOG_ERROR << "Failed to register address with cuda runtime.  Addr - count: " << ptr << " - " << size;
+                PBLOG_ERROR << "SharedMemoryAllocator usage information" << sharedAlloc_->ReportStatus();
+                throw;
+            }
         }
 
         void Free(void* ptr)
@@ -204,7 +246,18 @@ struct GpuAllocator
 
     void* allocate(size_t size)
     {
-        return CudaRawMalloc(size);
+        try
+        {
+            return CudaRawMalloc(size);
+        }
+        // Specifically *only* catching memory allocation failures.  Other exceptions
+        // that we're not equiped to handle may be thrown, due the asynchronous nature
+        // of cuda error reporting, and those we'll just let bubble upwards.
+        catch (const CudaMemException& ex)
+        {
+            PBLOG_ERROR << "Error allocating gpu memory of size: " << size;
+            throw;
+        }
     }
     void deallocate(void* ptr)
     {
@@ -335,8 +388,20 @@ public:
             cacheStats_.DeallocationSize(size);
             return alloc.release();
         } else {
-            return allocator_.allocate(size);
+            try
+            {
+                return allocator_.allocate(size);
+            } catch (const CudaMemException& ex)
+            {
+                PBLOG_ERROR << "Cuda runtime had an error while allocating memory.";
+                PBLOG_ERROR << "Current total mem usage, including cache, is " << cacheStats_.CurrentBytes() + fullStats_.CurrentBytes();
+                PBLOG_ERROR << "Current usage report for this AllocationManager:";
+                Logging::LogStream ls(Logging::LogLevel::ERROR);;
+                ls << ReportImpl();
+                throw;
+            }
         }
+
     }
 
     void ReturnAlloc(void* ptr, size_t size, size_t allocID)
@@ -545,50 +610,50 @@ public:
         auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostAllocate);
         (void)tmp;
         return PacBio::Memory::SmartAllocation{size,
-            // Storing hostManager_ as a weak pointer in these lambdas to help
-            // sniff out lifetime issues.  It's a bit of cautious paranoia
-            // for the first lambda, since the current implementation
-            // evaluates it immediately, but it's more important for the second.
-            // If any allocations are returned after the manager is already
-            // destroyed then we will (try to) log the issue and explicitly
-            // leak the memory.  Since a likely cause for this scenario is that
-            // someone used the allocation inside a static object, we may well
-            // be in the static teardown phase after main exits, and there isn't
-            // much more we can reliably do, especially since if we try to free
-            // any cuda allocations after the cuda runtime is destroyed, we'll
-            // probably get a hard crash
-            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
-             &marker](size_t sz){
-                auto manager = mngr.lock();
-                if (manager)
-                    return manager->GetAlloc(sz, marker);
-                else
-                    return static_cast<void*>(nullptr);
-            },
-            [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
-             size,
-             id = marker.AsHash()]
-            (void* ptr){
-                static thread_local size_t counter = 0;
-                counter++;
-                auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
-                Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
-                auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
-                (void)tmp;
+           // Storing hostManager_ as a weak pointer in these lambdas to help
+           // sniff out lifetime issues.  It's a bit of cautious paranoia
+           // for the first lambda, since the current implementation
+           // evaluates it immediately, but it's more important for the second.
+           // If any allocations are returned after the manager is already
+           // destroyed then we will (try to) log the issue and explicitly
+           // leak the memory.  Since a likely cause for this scenario is that
+           // someone used the allocation inside a static object, we may well
+           // be in the static teardown phase after main exits, and there isn't
+           // much more we can reliably do, especially since if we try to free
+           // any cuda allocations after the cuda runtime is destroyed, we'll
+           // probably get a hard crash
+           [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
+            &marker](size_t sz){
+               auto manager = mngr.lock();
+               if (manager)
+                   return manager->GetAlloc(sz, marker);
+               else
+                   return static_cast<void*>(nullptr);
+           },
+           [mngr = std::weak_ptr<AllocationManager<HostAllocator>>{hostManager_},
+            size,
+            id = marker.AsHash()]
+           (void* ptr){
+               static thread_local size_t counter = 0;
+               counter++;
+               auto mode = (counter < 1000) ? Profiler::Mode::IGNORE : Profiler::Mode::OBSERVE;
+               Profiler prof(mode, 6.0f, std::numeric_limits<float>::max());
+               auto tmp = prof.CreateScopedProfiler(ManagedAllocations::HostDeallocate);
+               (void)tmp;
 
-                auto m = mngr.lock();
-                if (m)
-                {
-                    m->ReturnAlloc(ptr, size, id);
-                } else {
-                    // Logging might be risky to do??  Tossing in an assert to at least
-                    // give a convenient breakpoint for a debugger before we do anything
-                    // blatantly UB.
-                    assert(false);
-                    PBLOG_ERROR << "No allocation manager, things are torn down?"
-                                << " Intentionally leaking allocation...";
-                }
-            }};
+               auto m = mngr.lock();
+               if (m)
+               {
+                   m->ReturnAlloc(ptr, size, id);
+               } else {
+                   // Logging might be risky to do??  Tossing in an assert to at least
+                   // give a convenient breakpoint for a debugger before we do anything
+                   // blatantly UB.
+                   assert(false);
+                   PBLOG_ERROR << "No allocation manager, things are torn down?"
+                               << " Intentionally leaking allocation...";
+               }
+           }};
     }
 
     SmartDeviceAllocation GetDeviceAllocation(size_t size, const AllocationMarker& marker) override

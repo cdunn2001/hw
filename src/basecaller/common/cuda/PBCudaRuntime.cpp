@@ -47,7 +47,14 @@ void cudaCheckErrors(T&& result)
     {
         std::stringstream ss;
         ss << "Cuda failure, error code: " << cudaGetErrorName(result);
-        throw PBException(ss.str());
+        if (result == cudaErrorMemoryAllocation)
+        {
+            throw PBExceptionCust(ss.str(), CudaMemException);
+        }
+        else
+        {
+            throw PBException(ss.str());
+        }
     }
 }
 
