@@ -46,9 +46,10 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
 {
     PB_CONFIG(SocketDarkcalObject);
 
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
-    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(500)
-    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Movie length in seconds.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(6.0)
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
+    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
+    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount. EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimite the start and end EXAMPLE(1)
     PB_CONFIG_PARAM(url, calibFileUrl, "discard:"); ///< Destination URL of the calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(url, logUrl, "discard:"); ///< Destination URL of the log file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.log")
@@ -58,10 +59,11 @@ struct SocketDarkcalObject : PacBio::Configuration::PBConfig<SocketDarkcalObject
 struct SocketLoadingcalObject : PacBio::Configuration::PBConfig<SocketLoadingcalObject>
 {
     PB_CONFIG(SocketLoadingcalObject);
-    
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
-    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames. The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(500)
-    PB_CONFIG_PARAM(double, movieMaxTime, 0); ///< Maximum movie length in seconds.  The values movieMaxFrames and movieMaxTime should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(6.0)
+
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
+    PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
+    PB_CONFIG_PARAM(uint64_t, movieMaxFrames, 0); ///< Movie length in frames. The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(500)
+    PB_CONFIG_PARAM(double, movieMaxSeconds, 0); ///< Maximum movie length in seconds.  The values movieMaxFrames and movieMaxSeconds should be similar, but not exactly the same, depending on whether true elapsed time or accurate frame count is desired. One value should be the desired amount and the other value should be an emergency stop amount.  EXAMPLE(6.0)
     PB_CONFIG_PARAM(uint32_t, movieNumber, 0); ///< Arbitrary movie number to delimit the start and end of a calibration frame set EXAMPLE(2)
     PB_CONFIG_PARAM(url, darkFrameFileUrl, "discard:"); ///< Source URL of the dark_frame calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(url, calibFileUrl, "discard:"); ///< Destination URL of the calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/loadingcal.h5")
@@ -95,6 +97,7 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
 {
     PB_CONFIG(SocketBasecallerObject);
 
+    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);
     PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID used to create this object EXAMPLE("m123456_987654")
     PB_CONFIG_PARAM(std::string, uuid, ""); ///< subreadset UUID EXAMPLE("123e4567-e89b-12d3-a456-426614174000")
 
@@ -106,7 +109,7 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
     PB_CONFIG_PARAM(url, logUrl, "discard:"); ///< Destination URL for the log file EXAMPLE("http://localhost:23632/storages/m123456_987654/basecaller.log")
     PB_CONFIG_PARAM(LogLevel_t, logLevel, LogLevel_t::INFO); ///< log severity threshold EXAMPLE("DEBUG")
     PB_CONFIG_PARAM(ControlledString_t, chiplayout, ""); ///< controlled name of the sensor chip unit cell layout EXAMPLE("Minesweeper1.0") 
-    PB_CONFIG_PARAM(url, darkcalUrl, ""); ///< Source URL for the dark calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
+    PB_CONFIG_PARAM(url, darkcalFileUrl, ""); ///< Source URL for the dark calibration file EXAMPLE("http://localhost:23632/storages/m123456_987654/darkcal.h5")
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, pixelSpreadFunction, 0); ///< This is required and a function of the sensor NFC tag EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<std::vector<double>>, crosstalkFilter, 0); ///< Optional kernel definition of the crosstalk deconvolution.  THe pixelSpreadFunction is used to automatically calculate one if this is not specified. EXAMPLE([[0.0,0.1,0.0],[0.1,0.6,0.1],[0.0,0.1,0.0]])
     PB_CONFIG_PARAM(std::vector<AnalogObject>, analogs, 0); ///< List of Analog objects, one analog for each nucleotide. Must be 4 elements for ATGC (order does not matter)
@@ -120,7 +123,6 @@ struct SocketBasecallerObject : PacBio::Configuration::PBConfig<SocketBasecaller
     PB_CONFIG_PARAM(url, simulationFileUrl, "discard:"); ///< Source URL for the file to use for transmission of simulated data. Only local files are supported currently. EXAMPLE("file://localhost/data/pa/sample_file.trc.h5")
     PB_CONFIG_PARAM(std::string, smrtBasecallerConfig, "{}"); ///< SmrtBasecallerConfig. Passed to smrt_basecaller --config. TODO: This will be a JSON object, but is a string here as a placeholder.
 
-    PB_CONFIG_OBJECT(ProcessStatusObject, processStatus);       
     PB_CONFIG_OBJECT(SocketBasecallerRTMetricsObject, rtMetrics);
 };
 

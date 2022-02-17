@@ -57,6 +57,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.darkcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::FAILED;
     so.darkcal.processStatus.exitCode = 137; // sig_segv
     so.darkcal.processStatus.timestamp = "20210601T 01:23:45.000Z";
+    so.darkcal.mid = mid;
     so.darkcal.movieMaxFrames = 512;
     so.darkcal.movieMaxSeconds = 6;
     so.darkcal.movieNumber = 111;
@@ -66,8 +67,9 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.loadingcal.processStatus.executionStatus = ProcessStatusObject::ExecutionStatus_t::READY;
     so.loadingcal.processStatus.completionStatus = ProcessStatusObject::CompletionStatus_t::UNKNOWN;
     so.loadingcal.processStatus.timestamp = "20210601T 01:32:15.000Z";
+    so.loadingcal.mid = mid;
     so.loadingcal.movieMaxFrames = 0;
-    so.loadingcal.movieMaxTime = 0;
+    so.loadingcal.movieMaxSeconds = 0;
     so.loadingcal.movieNumber = 0;
     so.loadingcal.calibFileUrl = "discard:";
     so.loadingcal.logUrl = "discard:";
@@ -83,7 +85,7 @@ SocketObject CreateMockupOfSocketObject(const std::string& socketId)
     so.basecaller.bazUrl = "http://pac1:23632/storages/" + mid + "/" + mid + ".baz";
     so.basecaller.logUrl = "http://pac1:23632/storages/" + mid + "/loadingcal.log";
     so.basecaller.chiplayout = "Minesweeper";
-    so.basecaller.darkcalUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
+    so.basecaller.darkcalFileUrl = "http://pac1:23632/storages/" + mid + "/darkcal.h5";
     so.basecaller.pixelSpreadFunction.resize(5);
     for (auto& r : so.basecaller.pixelSpreadFunction) r.resize(5);
     so.basecaller.pixelSpreadFunction[2][2] = 1.0;
@@ -147,7 +149,7 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     std::string root = "http://localhost:23632/storages/" + mid + "/";
     po.bazFileUrl =  root + mid + ".baz";
     po.uuid = "00104afe-c341-11eb-8529-0242ac130003";
-    po.outputLogUrl = root + mid + ".ppa.log";
+    po.logUrl = root + mid + ".ppa.log";
     po.logLevel = LogLevel_t::DEBUG;
     po.outputPrefixUrl = root + mid;
     po.outputStatsXmlUrl = root + mid + ".stats.xml";
@@ -165,10 +167,10 @@ PostprimaryObject CreateMockupOfPostprimaryObject(const std::string& mid)
     po.status.outputUrls.push_back(root + mid + ".ccs.bam");
     po.status.outputUrls.push_back(root + mid + ".baz2bam.log");
     po.status.baz2bamZmwsPerMin = 1.0e5;
-    po.status.ccsZmwsPerMin = 1.0e5;
+    po.status.ccs2bamZmwsPerMin = 1.0e5;
     po.status.numZmws = 18579372;
     po.status.baz2bamPeakRssGb = 401.1;
-    po.status.ccsPeakRssGb = 56.9;
+    po.status.ccs2bamPeakRssGb = 56.9;
     return po;
 }
 

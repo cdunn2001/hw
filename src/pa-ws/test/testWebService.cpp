@@ -159,6 +159,16 @@ TEST_F(WebService_Test, GetSocketNotFound)
     EXPECT_THAT(content.data, HasSubstr("GET socket id='snafu' not found"));
 };
 
+// Tests POST
+TEST_F(WebService_Test, PostReset)
+{
+    const auto response = client.Post(url + "/sockets/reset", Json::Value());
+    EXPECT_THAT(response, HasSubstr("discard:"));
+
+    const auto code = client.GetHttpCode();
+    EXPECT_EQ(code, HttpStatus::OK);
+};
+
 // Tests POST/GET consistency.
 TEST_F(WebService_Test, BasecallerGetReturnsPostContents)
 {
@@ -205,7 +215,7 @@ TEST_F(WebService_Test, DISABLED_BasecallerGetReturnsPostContents_Timed)
     EXPECT_EQ(PacBio::IPC::RenderJSON(readbackJson),  PacBio::IPC::RenderJSON(referenceJson));
 };
 
-TEST_F(WebService_Test,Failures)
+TEST_F(WebService_Test, Failures)
 {
     PacBio::Logging::LogSeverityContext context(PacBio::Logging::LogLevel::FATAL);
 
@@ -216,6 +226,10 @@ TEST_F(WebService_Test,Failures)
     EXPECT_EQ(HttpStatus::NOT_FOUND, client.GetHttpCode());
 
     // missing app name (e.g. "basecaller")
+    // Really, this should be
+    //   405 Method Not Allowed
+    // but then we would have to include an Allow header to specify 'GET'.
+    // It is simpler to consider this as a missing path.
     client.Post(url + "/sockets/1", Json::Value());
     EXPECT_EQ(HttpStatus::NOT_FOUND, client.GetHttpCode());
 
@@ -225,7 +239,11 @@ TEST_F(WebService_Test,Failures)
 
     // out of range resource number
     client.Post(url + "/sockets/99/basecaller", Json::Value() );
-    EXPECT_EQ(HttpStatus::FORBIDDEN, client.GetHttpCode());
+    EXPECT_EQ(HttpStatus::NOT_FOUND, client.GetHttpCode());
+
+    // out of range resource number
+    client.Post(url + "/sockets/99/reset", Json::Value());
+    EXPECT_EQ(HttpStatus::NOT_FOUND, client.GetHttpCode());
 }
 
 TEST_F(WebService_Test,Doc)
