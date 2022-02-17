@@ -1294,8 +1294,8 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         return Blend(mom0 > 1.0f, var, nan);
     };
 
-    const PBHalf2& blMean =  half2Mean(blsa);
-    const PBHalf2& blVar  = half2Variance(blsa);
+    PBHalf2 blMean =  half2Mean(blsa);
+    PBHalf2 blVar  = half2Variance(blsa);
     const PBHalf2 blWeight = {
         blsa.moment0[2*threadIdx.x] / basicStats.moment0[2*threadIdx.x],
         blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]
@@ -1303,6 +1303,12 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
 
     // Set the confidence to a small nominal value.
     model.Confidence()[threadIdx.x] = 0.1f;
+
+    // If baseline frame count is insufficient, blMean and blVar can be NaN.
+    // In this case, just adopt some semi-arbitrary fallback value.
+    // TODO: Use static fallback values defined in CoreDMEstimator.
+    blMean = Blend(isnan(blMean), 0, blMean);
+    blVar = Blend(isnan(blVar), 100.0f, blVar);
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);

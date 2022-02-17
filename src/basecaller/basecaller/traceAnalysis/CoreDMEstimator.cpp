@@ -17,6 +17,10 @@ constexpr float CoreDMEstimator::shotVarCoeff;
 // static
 PacBio::Logging::PBLogger CoreDMEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
 
+// static
+const float CoreDMEstimator::fallbackBaselineMean_ = 0.0f;
+const float CoreDMEstimator::fallbackBaselineVariance_ = 100.0f;
+
 CoreDMEstimator::CoreDMEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
     , poolSize_ (poolSize)

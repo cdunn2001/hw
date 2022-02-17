@@ -76,6 +76,17 @@ public:     // Static constants
     /// Matlab using data read from an arbitrary Spider trace file
     static constexpr float shotVarCoeff = 1.2171f;
 
+public:     // Static functions
+    /// Mean used for the baseline signal distribution when sample statistics
+    /// are insufficient.
+    static float FallbackBaselineMean()
+    { return fallbackBaselineMean_; }
+
+    /// Variance used for the baseline signal distribution when sample
+    /// statistics are insufficient.
+    static float FallbackBaselineVariance()
+    { return fallbackBaselineVariance_; }
+
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
     virtual ~CoreDMEstimator() = default;
@@ -101,6 +112,10 @@ public:     // Functions
 
 protected:
     static PacBio::Logging::PBLogger logger_;
+
+private:    // Static data
+    static const float fallbackBaselineMean_;
+    static const float fallbackBaselineVariance_;
 
 private:
     uint32_t poolId_;
