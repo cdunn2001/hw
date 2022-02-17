@@ -108,24 +108,6 @@ private:
     Settings settings_;
 };
 
-/// I'm playing around with an interface class that allows threads to
-/// query or control the class through a minimal API. This may or may not
-/// stay.
-class PaCalThreadController :  public PacBio::Threading::IThreadController
-{
-public:
-    PaCalThreadController(PaCalProcess& process) : process_(process) {}
-    bool ExitRequested() override
-    {
-        return process_.ExitRequested();
-    }
-    void RequestExit() override
-    {
-        process_.RequestExit();
-    }
-    PaCalProcess& process_;
-};
-
 } // namespace PacBio::Calibration
 
 #endif // PA_WS_PROCESS_H

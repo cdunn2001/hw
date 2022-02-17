@@ -200,22 +200,21 @@ void PaCalProcess::RunAllThreads()
     }
 #endif
 
-    std::shared_ptr<PaCalThreadController> dtc =
-        std::make_shared<PaCalThreadController>(*this);
+    std::shared_ptr<Threading::IThreadController> threadController = Threading::MakeThreadController(*this);
 
-    CreateThread("Analysis", [this, dtc]()
+    CreateThread("Analysis", [this, threadController]()
     {
         try
         {
             auto source = CreateSource(settings_.paCalConfig);
-            bool success = AnalyzeSourceInput(std::move(source), dtc, settings_.movieNum, settings_.outputFile);
+            bool success = AnalyzeSourceInput(std::move(source), threadController, settings_.movieNum, settings_.outputFile);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
         } catch (const std::exception& ex)
         {
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
             PBLOG_ERROR << "Analysis thread will now terminate early";
-            dtc->RequestExit();
+            threadController->RequestExit();
         }
         PBLOG_INFO << "Analysis Thread Complete";
     });
