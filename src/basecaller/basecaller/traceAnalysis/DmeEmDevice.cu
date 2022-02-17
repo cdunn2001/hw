@@ -329,6 +329,8 @@ DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
 void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                             const Data::AnalysisConfig &analysisConfig)
 {
+    CoreDMEstimator::Configure(analysisConfig);
+
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
@@ -1309,6 +1311,10 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     // TODO: Use static fallback values defined in CoreDMEstimator.
     blMean = Blend(isnan(blMean), 0, blMean);
     blVar = Blend(isnan(blVar), 100.0f, blVar);
+
+    // Constraint variance to a minimum value.
+    // TODO: Would be nice to use CoreDMEstimator::BaselineVarianceMin() here.
+    blVar = max(blVar, std::max(staticConfig.movieScaler_, 1.0f) / 12.0f);
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);

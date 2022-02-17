@@ -66,7 +66,6 @@ namespace Basecaller {
 Cuda::Utility::CudaArray<PacBio::AuxData::AnalogMode, numAnalogs>
 DmeEmHost::analogs_;
 float DmeEmHost::refSnr_;
-float DmeEmHost::movieScaler_ = 1.0f;
 bool DmeEmHost::fixedModel_ = false;
 bool DmeEmHost::fixedBaselineParams_ = false;
 float DmeEmHost::fixedBaselineMean_ = 0;
@@ -94,8 +93,8 @@ DmeEmHost::DmeEmHost(uint32_t poolId, unsigned int poolSize)
 void DmeEmHost::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::AnalysisConfig &analysisConfig)
 {
+    CoreDMEstimator::Configure(analysisConfig);
     refSnr_ = analysisConfig.movieInfo.refSnr;
-    movieScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
     for (size_t i = 0; i < analysisConfig.movieInfo.analogs.size(); i++)
     {
         analogs_[i] = analysisConfig.movieInfo.analogs[i];
@@ -499,7 +498,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         using std::min;  using std::max;
 
         static const float minSnr = 0.5f;
-        const float minPulseMean = max(1.0f, movieScaler_);
+        const float minPulseMean = max(1.0f, SignalScaler());
         const auto sMin = max(minSnr * sqrt(var[0]), minPulseMean) / rpa.minCoeff();
 
         // Constrain s > sMin.
@@ -901,9 +900,8 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
     // around is causing problems elsewhere
     blVar = min(blVar, 60000.0f);
 
-    // Constrain variance to be no less than the "quantization" limit.
-    const float blVarMin = std::max(movieScaler_, 1.0f) / 12.0f;
-    blVar = max(blVar, blVarMin);
+    // Constrain variance to a minimum value.
+    blVar = max(blVar, BaselineVarianceMin());
 
     InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }

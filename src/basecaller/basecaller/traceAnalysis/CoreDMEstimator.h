@@ -77,6 +77,8 @@ public:     // Static constants
     static constexpr float shotVarCoeff = 1.2171f;
 
 public:     // Static functions
+    static void Configure(const Data::AnalysisConfig& analysisConfig);
+
     /// Mean used for the baseline signal distribution when sample statistics
     /// are insufficient.
     static float FallbackBaselineMean()
@@ -86,6 +88,16 @@ public:     // Static functions
     /// statistics are insufficient.
     static float FallbackBaselineVariance()
     { return fallbackBaselineVariance_; }
+
+    /// Baseline variance is constrained to be no smaller than this.
+    static float BaselineVarianceMin()
+    { return std::max(signalScaler_, 1.0f) / 12.0f; }
+
+    /// The scale factor applied to the raw trace signal values.
+    /// In current practice, the conversion from DN to photoelectron units
+    /// (a.k.a. photoelectron sensitivity)
+    static float SignalScaler()
+    { return signalScaler_; }
 
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
@@ -116,6 +128,7 @@ protected:
 private:    // Static data
     static const float fallbackBaselineMean_;
     static const float fallbackBaselineVariance_;
+    static float signalScaler_;     // photoelectronSensitivity (e-/DN)
 
 private:
     uint32_t poolId_;
