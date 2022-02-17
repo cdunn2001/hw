@@ -63,6 +63,7 @@ struct StorageObject : PacBio::Configuration::PBConfig<StorageObject>
     PB_CONFIG(StorageObject);
 
     PB_CONFIG_PARAM(std::string, mid, ""); ///< Movie context ID EXAMPLE("m123456_987654")
+    PB_CONFIG_PARAM(std::string, socketId, ""); ///< The socket identifier, typically "1" thru "4". EXAMPLE("2")
     PB_CONFIG_PARAM(std::string, rootUrl, ""); ///< symbolic link to storage directory which points back to this StorageObject EXAMPLE("http://localhost:23632/storages/m123456_987654")
     PB_CONFIG_PARAM(std::string, linuxPath, ""); ///< physical path to storage directory (should only be used for debugging and logging) EXAMPLE("file:/data/pa/m123456_987654")
     PB_CONFIG_PARAM(url, logUrl, "discard:"); ///< Destination URL for the log file. Logging happens during construction and freeing. EXAMPLE("http://localhost:23632/storages/m123456_987654/storage.log")
