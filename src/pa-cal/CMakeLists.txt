@@ -51,6 +51,8 @@ generate_config_header(PaCalHeader.h PaCalHeader)
 add_library(lib-pa-cal
     STATIC
         ExitCodes.h
+        FrameAnalyzer.h
+        FrameAnalyzer.cpp
         PaCalConfig.h
         PaCalConfig.cpp
         PaCalConstants.h
