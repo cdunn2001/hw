@@ -104,7 +104,7 @@ protected:
 
     /// Launches all of the threads and waits for them to complete.
     /// \returns process exit code
-    ExitCode RunAllThreads();
+    int RunAllThreads();
 private:
     std::vector<std::string> commandLine_;
     Settings settings_;

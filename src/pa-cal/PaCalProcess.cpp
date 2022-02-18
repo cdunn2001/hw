@@ -191,7 +191,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg)
     );
 }
 
-ExitCode PaCalProcess::RunAllThreads()
+int PaCalProcess::RunAllThreads()
 {
 #if 0
     {
