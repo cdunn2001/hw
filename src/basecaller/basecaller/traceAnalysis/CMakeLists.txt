@@ -64,6 +64,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     PulseAccumulator.cpp
     RoiDevice.cuh
     RoiDevice.cu
+    RoiHost.h
+    RoiHost.cpp
     SparseMatrix.h
     SubframeLabelManager.h
     SubframeLabelManager.cpp
