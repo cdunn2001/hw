@@ -88,7 +88,7 @@ TEST(PaCalProcess,LocalOptions)
         return PaCalProcess::HandleLocalOptions(options);
     };
 
-    auto settings = parseCli({"--nowatchdog"});
+    std::optional<PaCalProcess::Settings> settings = parseCli({"--nowatchdog"});
     // We've failed to set a mandatory argument
     EXPECT_FALSE(settings.has_value());
 

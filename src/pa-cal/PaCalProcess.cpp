@@ -339,7 +339,6 @@ int PaCalProcess::Main(int argc, const char *argv[])
         {
             std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << endl;
             exitCode = ex.code().value();
-            exitCode = ExitCode::StdException;
         }
         else
         {

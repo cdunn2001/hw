@@ -82,7 +82,8 @@ public:
     /// Creates the command line parser that will parse argv
     static PacBio::Process::OptionParser CreateOptionParser();
 
-    /// Converts the options into a PaCalProcess::Settings struct.
+    /// Converts the options into a PaCalProcess::Settings struct.  Any validation
+    /// errors will be logged.
     ///
     /// \param options a Values class holding the CLI options
     /// \return std::optional<Settings> that is either empty if there were
