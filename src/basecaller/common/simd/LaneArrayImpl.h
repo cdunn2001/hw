@@ -207,6 +207,11 @@ public:
                          l, r);
     }
 
+    friend LaneArray operator|(const LaneArray& l, const LaneArray& r)
+    {
+        return LaneArray([](auto&& l2, auto&& r2){ return l2 | r2; },
+                         l, r);
+    }
 };
 
 template <size_t ScalarCount>

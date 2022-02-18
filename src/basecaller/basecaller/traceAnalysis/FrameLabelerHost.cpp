@@ -32,10 +32,14 @@
 #include <common/AlignedVector.h>
 #include <common/cuda/memory/UnifiedCudaArray.h>
 #include <common/LaneArray.h>
-#include <basecaller/traceAnalysis/SubframeLabelManager.h>
-#include <basecaller/traceAnalysis/SubframeScorer.h>
+
 #include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
+
+#include <basecaller/traceAnalysis/SubframeLabelManager.h>
+#include <basecaller/traceAnalysis/SubframeScorer.h>
+#include <basecaller/traceAnalysis/RoiHost.h>
+
 
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Memory;
@@ -46,15 +50,18 @@ using namespace PacBio::Mongo::Data;
 
 namespace {
 
-template <size_t laneWidth>
+template <typename RFT>
 struct __align__(128) LatentViterbi
 {
-    using ModelParams = LaneModelParameters<PBHalf, laneWidth>;
-    using LaneLabel = LaneArray<int16_t, laneWidth>;
+    static_assert(std::is_base_of<IRoiFilter, RFT>::value, "RFT must inherit from IRoiFilter");
+
  public:
     LatentViterbi()
-        : boundary_(0)
+        : labelsBoundary_(0)
+        , roiBoundary_(0)
     {
+        for (auto& val : latentTrc_) val = 0;
+
         // I'm a little uncertain how to initialize this model.  I'm tryin to
         // make it work with latent data that we are guaranteed to be all zeroes,
         // and needs to produce baseline labels.
@@ -74,18 +81,36 @@ struct __align__(128) LatentViterbi
         }
     }
 
-    void SetBoundary(const LaneLabel& boundary) { boundary_ = boundary; }
-    const LaneLabel& GetBoundary() const { return boundary_; }
+    void SetLabelBoundary(const FrameLabelerHost::LabelArray& boundary) { labelsBoundary_ = boundary; }
+    const FrameLabelerHost::LabelArray& GetLabelBoundary() const { return labelsBoundary_; }
 
-    const ModelParams& GetModel() const { return oldModel; }
-    void SetModel(const ModelParams& model)
+    void SetRoiBoundary(const FrameLabelerHost::UShortArray& boundary) { roiBoundary_ = boundary; }
+    const FrameLabelerHost::UShortArray& GetRoiBoundary() const { return roiBoundary_; }
+
+    const FrameLabelerHost::LaneModelParameters& GetModel() const { return oldModel; }
+    void SetModel(const FrameLabelerHost::LaneModelParameters& model)
     {
         oldModel = model;
     }
 
+    const CudaArray<typename RFT::LabelArray, RFT::lookBack>& GetLatentTraces() const
+    {
+        return latentTrc_;
+    }
+
+    void SetLatentTraces(BlockView<const int16_t>::ConstIterator trIt)
+    {
+        for (int idx = RFT::lookBack - 1; idx >= 0; --idx, ++trIt)
+        {
+            latentTrc_[idx] = trIt.Extract();
+        }
+    }
+
 private:
-    ModelParams oldModel;
-    LaneLabel boundary_;
+    FrameLabelerHost::LaneModelParameters oldModel;
+    FrameLabelerHost::LabelArray labelsBoundary_;
+    FrameLabelerHost::UShortArray roiBoundary_;
+    CudaArray<typename RFT::LabelArray, RFT::lookBack> latentTrc_;
 };
 
 // Class that stores compressed "traceback" information for use during
@@ -95,8 +120,7 @@ private:
 template <size_t laneWidth, size_t numLabels>
 class PackedLabels
 {
-    // Give each ZMW a 32 bit work for storing compressed
-    // data
+    // Give each ZMW a 32 bit work for storing compressed data
     using PackedWord = LaneArray<uint32_t, laneWidth>;
     using LabelLane = LaneArray<uint16_t, laneWidth>;
 public:
@@ -172,9 +196,10 @@ CudaArray<VF, numStates> Normalize(CudaArray<VF, numStates> vec)
         vec[i] = exp(vec[i] - maxVal);
         sum += vec[i];
     }
+    auto invSum = 1 / sum;
     for (uint32_t i = 0; i < numStates; ++i)
     {
-        vec[i] /= sum;
+        vec[i] *= invSum;
     }
     return vec;
 }
@@ -185,20 +210,19 @@ CudaArray<VF, numStates> Normalize(CudaArray<VF, numStates> vec)
 // Here we do some template magic to iterate over a sparse matrix where the sparsity pattern is
 // known at compile time.  It's a bit complicated, but it does come with significant performance
 // savings.
-template <typename PackedLabels, typename VF, typename VI, typename Scorer, typename TransT, class... Rows>
+template <typename PackedLabels, typename VF, typename VI, typename VU, typename Scorer, typename TransT, class... Rows>
 void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike, const Scorer& scorer,
-               const SparseMatrix<TransT, Rows...>& trans, VI data)
+               const SparseMatrix<TransT, Rows...>& trans, VI data, VU isRoi)
 {
     CudaArray<VF, Subframe::numStates> logAccum;
-    auto AddRow = [&](const VF& score,
-                      const float* rowData,
-                      auto* row)
+    auto AddRow = [&](const VF& score, const float* rowData, auto* row)
     {
         // row parameter just used to extract the Row type.
         // I wouldn't even give it a name save we need to use
         // decltype to extract the type information within a lambda.
         using Row = std::remove_pointer_t<decltype(row)>;
         constexpr auto firstIdx = Row::firstIdx;
+        constexpr auto nextState = Row::rowIdx;
 
         // Currently only handle Rows with a single Segment.  This can be
         // generalized to handle an arbitrary number of Segments, but here
@@ -219,8 +243,11 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
             maxVal = Blend(cond, val, maxVal);
             maxIdx = Blend(cond, prevState, maxIdx);
         }
-        constexpr auto nextState = Row::rowIdx;
-        logAccum[nextState] = maxVal;
+
+        // If we're not in the ROI, then all non-baseline states suffer
+        // a "penalty" that should make them effectively impossible
+        auto penalty = Blend((nextState == 0) | (isRoi != VU(0)), VF(0), VF(std::numeric_limits<float>::infinity()));
+        logAccum[nextState] = maxVal - penalty;
 
         labels.SetSlot(nextState, maxIdx);
     };
@@ -236,28 +263,77 @@ void Recursion(PackedLabels& labels, CudaArray<VF, Subframe::numStates>& logLike
     logLike = logAccum;
 }
 
+// Performs the algorithm that determins if each frame is within the
+// ROI.  The main gist of things are as follows:
+//  * For each frame, we look at some window of baseline sigma normalized
+//    traces to determine a value for that frame.  The precise window and
+//    function used is controlled by the RoiFilter template parameter
+//  * If the produced value is above the "high" threshold, then it is
+//    determined to be ROI
+//  * If the produced value is between the "high" and "low" thresholds, then
+//    it is determined to be ROI *IFF* one of its neighbors is also ROI
+//  * Since we might need to know if the next point is ROI before we can tell
+//    if the curent point is ROI, we have to do both a forwards and backwards
+//    traversal over the data.  On the forward pass we determine who is ROI from
+//    the high threshold, and who is maybe ROI from the low threshold.  On the
+//    backwards pass we then have enough information to make the final ROI
+//    determination.
+//  * The effect is that all consecutive frames above the low threshold are
+//    ROI, as long as at least one of those points is also above the high threshold
+template <typename RFT>
+static void ComputeRoi(const CudaArray<typename RFT::LabelArray, RFT::lookBack>& latentTraces,
+                       const FrameLabelerHost::UShortArray& roiBC,
+                       BlockView<int16_t>& traces1,
+                       const BlockView<const int16_t>& traces2,
+                       const FrameLabelerHost::FloatArray& invSigma1,
+                       const FrameLabelerHost::FloatArray& invSigma2,
+                       BlockView<uint16_t>& roi)
+{
+    assert(roi.NumFrames() == traces1.NumFrames() + traces2.NumFrames() - RFT::lookForward);
+
+    auto trIt1 = traces1.Begin() + RFT::lookForward;
+    Roi::ForwardRecursion<RFT> forward(latentTraces, traces1, invSigma1, roiBC, roi);
+    for (size_t i = RFT::lookForward; i < traces1.NumFrames(); ++i, ++trIt1)
+    {
+        forward.ProcessNextFrame(trIt1.Extract() * invSigma1);
+    }
+
+    auto trIt2 = traces2.CBegin();
+    for (size_t i = 0; i < traces2.NumFrames(); ++i, ++trIt2)
+    {
+        forward.ProcessNextFrame(trIt2.Extract() * invSigma2);
+    }
+
+    Roi::BackwardRecursion<RFT> backward(roi);
+    while (backward.FramesRemaining() > 0) backward.PopRoiState();
+}
+
 // Serial function that produces lane labels for a block of data.
-LaneArray<float, laneSize>
-LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
+template <typename RFT>
+FrameLabelerHost::FloatArray
+LabelBlock(const FrameLabeler::LaneModelParameters& model,
            const Subframe::TransitionMatrix<float>& trans,
-           const BlockView<const int16_t> input,
-           LatentViterbi<laneSize>& latentData,
+           const BlockView<const int16_t> traceData,
+           LatentViterbi<RFT>& latentData,
            BlockView<int16_t> prevLat,
            BlockView<int16_t> nextLat,
+           BlockView<uint16_t> roiWorkspace,
            BlockView<int16_t> output)
 {
-    using VF = LaneArray<float, laneSize>;
-    using VI = LaneArray<uint16_t, laneSize>;
+    using VF = FrameLabelerHost::FloatArray;
+    using VI = FrameLabelerHost::UShortArray;
     // When/if this changes, some of this kernel is going to have to be udpated or generalized
     static_assert(Subframe::numStates == 13,
                   "LabelBlock currently hard coded to only handle 13 states");
     using namespace Subframe;
 
-    BlockStateSubframeScorer<LaneArray<float, laneSize>> scorer;
+    BlockStateSubframeScorer<VF> scorer;
 
     // Initial setup
-    CudaArray<VF, numStates> logLike;
-    auto bc = latentData.GetBoundary();
+    CudaArray<VF, numStates> scratch;
+    auto& logLike = scratch;
+    auto bc = latentData.GetLabelBoundary();
+    const auto numLatent = prevLat.NumFrames();
     const VF zero(0.0f);
     const VF ninf(-std::numeric_limits<float>::infinity());
     for (int i = 0; i < numStates; ++i)
@@ -265,27 +341,49 @@ LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
         logLike[i] = Blend(bc == i, zero, ninf);
     }
 
-    auto labels = std::vector<PackedLabels<laneSize, numStates>>(input.NumFrames() + ViterbiStitchLookback);
+    // We need to have enough space to compute the ROI for all frames we will emit in this block,
+    // plus enough extra to cover the viterbi lookback process, *plus* yet a little more extdra
+    // so handle the viterbi stitching process (which really is just having a few extra frames
+    // to lessen the impact of an arbitrary RHS boundary condition)
+    assert(roiWorkspace.NumFrames() == traceData.NumFrames() + ViterbiStitchLookback + RFT::stitchFrames);
+    ComputeRoi<RFT>(latentData.GetLatentTraces(),
+                    latentData.GetRoiBoundary(),
+                    prevLat,
+                    traceData,
+                    1 / sqrt(VF::FromArray(latentData.GetModel().BaselineMode().vars)),
+                    1 / sqrt(VF::FromArray(model.BaselineMode().vars)),
+                    roiWorkspace
+    );
+
+    auto labels = std::vector<PackedLabels<laneSize, numStates>>(traceData.NumFrames() + ViterbiStitchLookback);
 
     // Forward recursion on latent data
-    auto frame = 0;
+    auto latIt = prevLat.Begin();
+    auto roiIt = roiWorkspace.Begin();
     scorer.Setup(latentData.GetModel());
-    for (auto itr = prevLat.Begin(); itr != prevLat.End(); ++itr, ++frame)
+    for (size_t frame = 0; frame < numLatent; ++latIt, ++roiIt, ++frame)
     {
-        Recursion(labels[frame], logLike, scorer, trans, itr.Extract());
+        Recursion(labels[frame], logLike, scorer, trans, latIt.Extract(), roiIt.Extract());
     }
 
     // Forward recursion on this block's data
-    scorer.Setup(models);
-    const int numFrames = input.NumFrames();
-    decltype(logLike) anchorLogLike;
-    for (auto itr = input.CBegin(); itr != input.CEnd(); ++itr, ++frame)
+    scorer.Setup(model);
+    auto trIt = traceData.CBegin();
+    const size_t numFrames = traceData.NumFrames();
+    const size_t anchor = numFrames - numLatent;
+    for (size_t frame = 0; frame < anchor; ++trIt, ++roiIt, ++frame)
     {
-        Recursion(labels[frame], logLike, scorer, trans, itr.Extract());
-        if (frame == numFrames-1) anchorLogLike = logLike;
+        Recursion(labels[frame + numLatent], logLike, scorer, trans, trIt.Extract(), roiIt.Extract());
     }
 
-    // Compute the probabilities of the possible end states.  Propagate
+    decltype(logLike) anchorLogLike = logLike;
+
+    for (size_t frame = anchor; frame < anchor + ViterbiStitchLookback; ++trIt, ++roiIt, ++frame)
+    {
+        Recursion(labels[frame + numLatent], logLike, scorer, trans, trIt.Extract(), roiIt.Extract());
+    }
+
+    // Compute the probabilities of the possible end states. Propagate
     // them backwards a few frames, as some paths may converge and we
     // can have a more certain estimate.
     auto prob = Normalize(logLike);
@@ -322,21 +420,23 @@ LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
     // Traceback
     auto traceState = anchorState;
     auto outItr = output.End() - 1;
-    for (int frame = numFrames - 1; frame >= 0; --frame, --outItr)
+    for (int frame = int(numFrames - 1); frame >= 0; --frame, --outItr)
     {
         outItr.Store(traceState);
         traceState = labels[frame].GetSlot(traceState);
     }
 
     // Update latent data
-    latentData.SetBoundary(anchorState);
-    latentData.SetModel(models);
+    latentData.SetRoiBoundary((roiWorkspace.CBegin() + numFrames - 1).Extract());
+    latentData.SetLabelBoundary(anchorState);
+    latentData.SetModel(model);
+    latentData.SetLatentTraces(traceData.CBegin() + anchor - 1);
 
-    auto latItr = nextLat.Begin();
-    auto inItr = input.CEnd() - ViterbiStitchLookback;
-    for (uint32_t i = 0; i < ViterbiStitchLookback; ++i, latItr++, inItr++)
+    latIt = nextLat.Begin();
+    trIt = traceData.CBegin() + anchor;
+    for (size_t i = 0; i < numLatent; ++i, latIt++, trIt++)
     {
-        latItr.Store(inItr.Extract());
+        latIt.Store(trIt.Extract());
     }
 
     VF ret;
@@ -348,38 +448,42 @@ LabelBlock(const LaneModelParameters<PBHalf, laneSize>& models,
     return ret;
 }
 
-
 }
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class FrameLabelerHost::Impl
+struct FrameLabelerHost::ILabelImpl
 {
+    virtual void ProcessBatch(const PoolModelParameters& models,
+                              const BatchData<int16_t>& traceData,
+                              BatchData<int16_t>& latOut,
+                              BatchData<int16_t>& output,
+                              FrameLabelerMetrics& metricsOutput) = 0;
+
+    virtual ~ILabelImpl() = default;
+};
+
+static Subframe::TransitionMatrix<float> transHost;
+extern RoiThresholds roiThreshHost;
+
+template <typename RFT>
+class LabelerImpl : public FrameLabelerHost::ILabelImpl
+{
+    static_assert(std::is_base_of<IRoiFilter, RFT>::value, "RFT must inherit from IRoiFilter");
+
     static BatchDimensions LatBatchDims(size_t lanesPerPool)
     {
         BatchDimensions ret;
-        ret.framesPerBatch = ViterbiStitchLookback;
+        ret.framesPerBatch = ViterbiStitchLookback + RFT::lookForward + RFT::stitchFrames;
         ret.laneWidth = laneSize;
         ret.lanesPerBatch = lanesPerPool;
         return ret;
     }
 
 public:
-
-    static void Configure(const std::array<AuxData::AnalogMode,4>& analogs,
-                          const BasecallerFrameLabelerConfig& labelerConfig,
-                          double frameRate)
-    {
-        trans = Subframe::TransitionMatrix<float>(analogs, labelerConfig.viterbi, frameRate);
-    }
-
-public:
-    static void Finalize() {}
-
-public:
-    Impl(size_t lanesPerPool)
+    LabelerImpl(size_t lanesPerPool)
         : latent_(lanesPerPool, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER())
         , prevLat_(LatBatchDims(lanesPerPool), SyncDirection::HostWriteDeviceRead, SOURCE_MARKER())
         , numLanes_(lanesPerPool)
@@ -395,29 +499,35 @@ public:
         });
     }
 
-    Impl(const Impl&) = delete;
-    Impl(Impl&&) = default;
-    Impl& operator=(const Impl&) = delete;
-    Impl& operator=(Impl&&) = default;
+    LabelerImpl(const LabelerImpl&) = delete;
+    LabelerImpl(LabelerImpl&&) = default;
+    LabelerImpl& operator=(const LabelerImpl&) = delete;
+    LabelerImpl& operator=(LabelerImpl&&) = default;
 
-
-   void ProcessBatch(const UnifiedCudaArray<LaneModelParameters>& models,
-                     const BatchData<int16_t>& input,
-                     BatchData<int16_t>& latOut,
-                     BatchData<int16_t>& output,
-                     FrameLabelerMetrics& metricsOutput)
+    void ProcessBatch(const FrameLabelerHost::PoolModelParameters& models,
+                      const BatchData<int16_t>& traceData,
+                      BatchData<int16_t>& latOut,
+                      BatchData<int16_t>& output,
+                      FrameLabelerMetrics& metricsOutput)
     {
-        auto metricsView = metricsOutput.viterbiScore.GetHostView();
         auto modelView = models.GetHostView();
+        auto metricsView = metricsOutput.viterbiScore.GetHostView();
+
+        BatchDimensions roiDims;
+        roiDims.lanesPerBatch  = traceData.LanesPerBatch();
+        roiDims.framesPerBatch = traceData.NumFrames() + ViterbiStitchLookback + RFT::stitchFrames;
+
+        Data::BatchData<uint16_t> roiWorkspace(roiDims, SyncDirection::HostWriteDeviceRead, SOURCE_MARKER());
 
         tbb::task_arena().execute([&] {
             tbb::parallel_for((uint32_t) {0}, numLanes_, [&](unsigned int lane) {
-                metricsView[lane] = LabelBlock(modelView[lane],
-                                               trans,
-                                               input.GetBlockView(lane),
+                metricsView[lane] = LabelBlock<RFT>(modelView[lane],
+                                               transHost,
+                                               traceData.GetBlockView(lane),
                                                latent_.GetHostView()[lane],
                                                prevLat_.GetBlockView(lane),
                                                latOut.GetBlockView(lane),
+                                               roiWorkspace.GetBlockView(lane),
                                                output.GetBlockView(lane));
             });
         });
@@ -425,37 +535,63 @@ public:
     }
 
 private:
-    UnifiedCudaArray<LatentViterbi<laneSize>, true> latent_;
+    UnifiedCudaArray<LatentViterbi<RFT>, true> latent_;
     BatchData<int16_t> prevLat_;
-
-    static Subframe::TransitionMatrix<float> trans;
     uint32_t numLanes_;
 };
-
-Subframe::TransitionMatrix<float> FrameLabelerHost::Impl::trans;
 
 void FrameLabelerHost::Configure(const Data::AnalysisConfig& analysisConfig,
                                  const Data::BasecallerFrameLabelerConfig& labelerConfig)
 {
+    auto roiLatency = 0;
+    roiType = labelerConfig.roi.filterType;
+    switch(roiType)
+    {
+        case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::Default:
+        {
+            roiLatency = RoiFilterDefault::lookForward
+                       + RoiFilterDefault::stitchFrames;
+            break;
+        }
+        case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::NoOp:
+        {
+            roiLatency = RoiFilterNoOp::lookForward
+                       + RoiFilterNoOp::stitchFrames;
+            break;
+        }
+        default:
+            throw PBException("Unsupported roi filter type");
+    }
     const auto hostExecution = true;
-    InitFactory(hostExecution, ViterbiStitchLookback);
+    InitFactory(hostExecution, ViterbiStitchLookback + roiLatency);
 
-    Impl::Configure(analysisConfig.movieInfo.analogs,
-                    labelerConfig,
-                    analysisConfig.movieInfo.frameRate);
+    auto movieInfo = analysisConfig.movieInfo;
+    transHost = Subframe::TransitionMatrix<float>(movieInfo.analogs, labelerConfig.viterbi, movieInfo.frameRate);
+    roiThreshHost.upperThreshold = FloatArray(labelerConfig.roi.upperThreshold);
+    roiThreshHost.lowerThreshold = FloatArray(labelerConfig.roi.lowerThreshold);
 }
 
 void FrameLabelerHost::Finalize()
 {
-    Impl::Finalize();
 }
 
 FrameLabelerHost::FrameLabelerHost(uint32_t poolId,
                                    uint32_t lanesPerPool)
     : FrameLabeler(poolId)
-    , impl_(std::make_unique<Impl>(lanesPerPool))
 {
+    switch(roiType)
+    {
+        case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::Default:
+            labeler_ = std::make_unique<LabelerImpl<RoiFilterDefault>>(lanesPerPool);
+            break;
+        case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::NoOp:
+            labeler_ = std::make_unique<LabelerImpl<RoiFilterNoOp>>(lanesPerPool);
+            break;
+        default:
+            throw PBException("Unsupported roi filter type");
+    }
 }
+
 FrameLabelerHost::~FrameLabelerHost() {}
 
 std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
@@ -464,14 +600,14 @@ FrameLabelerHost::Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
 {
     auto ret = batchFactory_->NewBatch(std::move(trace));
 
-    impl_->ProcessBatch(models,
+    labeler_->ProcessBatch(models,
                         ret.first.TraceData(),
                         ret.first.LatentTrace(),
                         ret.first,
                         ret.second);
 
     // Update the trace data so downstream filters can't see the held back portion
-    ret.first.TraceData().SetFrameLimit(ret.first.NumFrames() - ViterbiStitchLookback);
+    ret.first.TraceData().SetFrameLimit(ret.first.NumFrames() - ret.first.LatentTrace().NumFrames());
 
     return ret;
 }

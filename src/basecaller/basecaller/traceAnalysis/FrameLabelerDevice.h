@@ -63,11 +63,7 @@ public:
                        Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
     ~FrameLabelerDevice() override;
 
-    // public so we can derive children
-    struct Impl;
-
-private:     // Static data
-    static Data::BasecallerRoiConfig::RoiFilterType roiType;
+    struct Impl; // Processing interface
 
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
