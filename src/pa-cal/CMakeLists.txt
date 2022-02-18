@@ -12,8 +12,7 @@ enable_testing()
 include(../../setup-thirdparty.cmake)
 SetupProject("${CMAKE_CURRENT_LIST_DIR}/nexus-versions")
 
-# TODO: Use C++17 when we have a newer version of GCC available.
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -30,15 +29,12 @@ include(pacbio-cmake-config-vars)
 generate_config_header(kestrel-config.h PrimaryConfig)
 
 add_subdirectory(../common common)
-add_subdirectory(../../doc doc)
-
-
 
 project (pa-cal)
 
 # The SOFTWARE_VERSION is used to create the RPM and installation directory, and it is reported
 # by the application and logged.
-set(SOFTWARE_VERSION "0.0.0")
+set(SOFTWARE_VERSION "0.1.0")
 
 add_subdirectory(test)
 
@@ -55,23 +51,20 @@ generate_config_header(PaCalHeader.h PaCalHeader)
 add_library(lib-pa-cal
     STATIC
         ExitCodes.h
+        FrameAnalyzer.h
+        FrameAnalyzer.cpp
         PaCalConfig.h
         PaCalConfig.cpp
         PaCalConstants.h
         PaCalProcess.h
         PaCalProcess.cpp
-
-        # this file doesn't exist but is necessary to put here to force refreshing the git-rev.h file
-        git-rev-pseudo-header.h
 )
 
 target_link_libraries(lib-pa-cal
     PUBLIC
         libBoost
         libPacbioCplusplusApi
-#        libWxDaemonDoc
-#        libWxDaemonDashboard
-       curl
+        GitVersionInfo
 )
 
 add_executable(pa-cal

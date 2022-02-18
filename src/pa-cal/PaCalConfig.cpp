@@ -23,54 +23,5 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// File Description:
-///  \brief Defines platform dependent defaults for the configuration.
-
 
 #include "PaCalConfig.h"
-#include <assert.h>
-
-namespace PacBio {
-namespace Primary {
-namespace Calibration {
-
-using namespace PacBio::Sensor;
-
-// static size_t GiB = 0x4000'0000ULL;
-
-void Sequel2DefaultConfig(PaCalConfig* config)
-{
-    assert(config);
-}
-
-void MongoConfig(PaCalConfig* config)
-{
-    assert(config);
-}
-
-void KestrelConfig(PaCalConfig* config)
-{
-    assert(config);
-}
-
-void FactoryConfig(PaCalConfig* config)
-{
-    assert(config);
-    switch(config->platform)
-    {
-        case Platform::Sequel2Lvl1: 
-        case Platform::Sequel2Lvl2: 
-            Sequel2DefaultConfig(config); 
-            break;
-        case Platform::Mongo: 
-            MongoConfig(config); 
-            break;
-        case Platform::Kestrel: 
-            KestrelConfig(config); 
-            break;
-        default:
-        PBLOG_WARN << "Can't do a factory reset for platform:" << config->platform.toString();
-    }
-}
-
-}}} // namespace

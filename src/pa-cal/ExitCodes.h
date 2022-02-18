@@ -29,9 +29,7 @@
 #ifndef EXIT_CODES_H
 #define EXIT_CODES_H
 
-namespace PacBio {
-namespace Primary {
-namespace Calibration {
+namespace PacBio::Calibration {
 
 /// Linux process exit codes.
 enum ExitCode
@@ -43,9 +41,10 @@ enum ExitCode
     StdException = 5,
     UncaughtException = 6,
     CommandParsingException = 7,
+    Timeout = 8,
     DefaultUnknownFailure = 9
 };
 
-}}} //namespaces
+} //namespace PacBio::Calibration
 
 #endif // EXIT_CODES_H

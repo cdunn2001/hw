@@ -29,6 +29,7 @@
 #ifndef APP_COMMON_THREAD_CONTROLLER_H
 #define APP_COMMON_THREAD_CONTROLLER_H
 
+#include <memory>
 #include <string>
 
 namespace PacBio {
@@ -49,6 +50,27 @@ public:
     /// \note Must be thread safe to call at any time.
     virtual void RequestExit() = 0;
 };
+
+template <typename Process>
+std::shared_ptr<IThreadController> MakeThreadController(Process& p)
+{
+    class ThreadController :  public PacBio::Threading::IThreadController
+    {
+    public:
+        ThreadController(Process& process) : process_(process) {}
+        bool ExitRequested() override
+        {
+            return process_.ExitRequested();
+        }
+        void RequestExit() override
+        {
+            process_.RequestExit();
+        }
+        Process& process_;
+    };
+
+    return std::make_shared<ThreadController>(p);
+}
 
 
 }}

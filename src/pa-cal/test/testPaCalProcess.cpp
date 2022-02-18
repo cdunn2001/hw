@@ -30,20 +30,15 @@
 #include <pa-cal/PaCalProcess.h>
 #include <pa-cal/ExitCodes.h>
 
-using namespace PacBio::Primary::Calibration;
+using namespace PacBio::Calibration;
 using namespace testing;
-using namespace PacBio::Sensor;
 
 /// This class exposes protected members for the purpose of white box testing.
 class PaCalProcessEx : public PaCalProcess
 {
 public:
     using PaCalProcess::PaCalProcess;
-    using PaCalProcess::enableWatchdog_;
-    using PaCalProcess::CreateOptionParser;
-    using PaCalProcess::HandleLocalOptions;
     using PaCalProcess::Run;
-    using PaCalProcess::GetPaCalConfig;
 };
 
 
@@ -69,32 +64,58 @@ TEST(PaCalProcess,BadArg)
     int argc = 2;
     const char* argv[] = {"./binary", "--badArg", nullptr};
     EXPECT_EXIT(process.Main(argc, argv),
-        ExitedWithCode(2), 
+        ExitedWithCode(2),
         R"(error: no such option: --badArg)");
 }
 
 TEST(PaCalProcess,OptionParser)
 {
-    PaCalProcessEx process;
-    auto parser = process.CreateOptionParser();
-    EXPECT_THAT(parser.description(), HasSubstr("Primary calibration application")); 
+    auto parser = PaCalProcess::CreateOptionParser();
+    EXPECT_THAT(parser.description(), HasSubstr("Primary calibration application"));
 }
 
 TEST(PaCalProcess,LocalOptions)
 {
-    PaCalProcessEx process;
-    EXPECT_TRUE(process.enableWatchdog_);
+    PacBio::Logging::LogSeverityContext ls(PacBio::Logging::LogLevel::FATAL);
+    auto parser = PaCalProcess::CreateOptionParser();
 
-    auto parser = process.CreateOptionParser();
-    int argc = 3;
-    const char* argv[] = {"./binary", "--nowatchdog", 
-        "--config=platform=Kestrel", nullptr};
-    auto options = parser.parse_args(argc, argv);
+    auto parseCli = [&parser](std::vector<const char*> args)
+    {
+        args.insert(args.begin(), "./binary");
+        args.insert(args.end(), nullptr);
+        auto options = parser.parse_args(args.size()-1, args.data());
 
-    process.HandleLocalOptions(options);
-    EXPECT_FALSE(process.enableWatchdog_);
+        return PaCalProcess::HandleLocalOptions(options);
+    };
 
-    EXPECT_EQ(Platform::Kestrel, process.GetPaCalConfig().platform);
+    std::optional<PaCalProcess::Settings> settings = parseCli({"--nowatchdog"});
+    // We've failed to set a mandatory argument
+    EXPECT_FALSE(settings.has_value());
+
+    settings = parseCli({"--nowatchdog", "--outputFile=location"});
+    EXPECT_TRUE(settings.has_value());
+    if (settings.has_value())
+    {
+        EXPECT_FALSE(settings->enableWatchdog);
+        EXPECT_EQ(settings->outputFile, "location");
+    }
+
+    settings = parseCli({"--nowatchdog", "--outputFile=location", "--movieNum=-4"});
+    // Now we've set things with an invalid value
+    EXPECT_FALSE(settings.has_value());
+
+    // A more comprehensive setting
+    settings = parseCli({"--nowatchdog", "--outputFile=location", "--movieNum=4",
+                         "--sra=2", "--timeoutSeconds=80.2"});
+    EXPECT_TRUE(settings.has_value());
+    if (settings.has_value())
+    {
+        EXPECT_FALSE(settings->enableWatchdog);
+        EXPECT_EQ(settings->outputFile, "location");
+        EXPECT_EQ(settings->movieNum, 4);
+        EXPECT_EQ(settings->sra, 2);
+        EXPECT_DOUBLE_EQ(settings->timeoutSeconds, 80.2);
+    }
 }
 
 

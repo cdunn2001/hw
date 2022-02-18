@@ -30,7 +30,7 @@
 
 #include "PaCalProcess.h"
 
-using namespace PacBio::Primary::Calibration;
+using namespace PacBio::Calibration;
 
 int main(int argc, const char* argv[])
 {
