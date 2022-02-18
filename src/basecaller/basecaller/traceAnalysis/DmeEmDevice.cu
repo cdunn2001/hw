@@ -99,6 +99,12 @@ __device__ float satlin(float a, float b, float x)
     return min(max(r, 0.f), 1.f);
 }
 
+// Variance associated with quantization at resolution max(q, 1).
+__device__ float quantizationVar(float q)
+{
+    return max(q*q, 1.0f) / 12.0f;
+}
+
 using LaneDetModel = Data::LaneModelParameters<PBHalf2, laneSize/2>;
 
 __device__ const AnalogMode& Analog(int i)
@@ -742,13 +748,17 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     const float blWeight    = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
-    float nBaselineMin(2.0f);
+    float nBaselineMin(3.0f);
     auto mask = nBlFrames >= nBaselineMin;
     ZmwAnalogMode& m0blm = model->baseline;
     const StatAccumState& blsa  = blStatAccState.baselineStats;
 
     auto blMean = mask ? Mean(blsa)     : m0blm.mean;
     auto blVar  = mask ? Variance(blsa) : m0blm.var;
+
+    // TODO: Would be nice to use CoreDMEstimator::BaselineVarianceMin() here.
+    const float blVarMin = quantizationVar(staticConfig.movieScaler_);
+    blVar = max(blVar, blVarMin);
 
     auto& detectionModes = model->analogs;
 
@@ -1312,9 +1322,10 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     blMean = Blend(isnan(blMean), 0, blMean);
     blVar = Blend(isnan(blVar), 100.0f, blVar);
 
-    // Constraint variance to a minimum value.
+    // Constrain variance to a minimum value.
     // TODO: Would be nice to use CoreDMEstimator::BaselineVarianceMin() here.
-    blVar = max(blVar, std::max(staticConfig.movieScaler_, 1.0f) / 12.0f);
+    const float blVarMin = quantizationVar(staticConfig.movieScaler_);
+    blVar = max(blVar, blVarMin);
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);

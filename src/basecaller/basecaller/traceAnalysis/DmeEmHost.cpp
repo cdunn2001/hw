@@ -171,12 +171,13 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     const FloatVec blWeight = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
-    constexpr float nBaselineMin = 2.0f;
+    constexpr float nBaselineMin = 3.0f;
     const BoolVec mask = nBlFrames >= nBaselineMin;
     const Data::SignalModeHost<FloatVec>& m0blm = model->BaselineMode();
     const StatAccumulator<FloatVec>& blsa = blStatAccState.baselineStats;
 
     auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
+    blVar = max(blVar, BaselineVarianceMin());
     auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
     assert(all(isfinite(blMean)));
     assert(all(isfinite(blVar)) && all(blVar > 0.0f));

@@ -30,6 +30,7 @@
 #define mongo_basecaller_traceAnalysis_CoreDMEstimator_H_
 
 #include <common/cuda/PBCudaSimd.h>
+#include <common/NumericUtil.h>
 
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BaselinerStatAccumState.h>
@@ -91,7 +92,7 @@ public:     // Static functions
 
     /// Baseline variance is constrained to be no smaller than this.
     static float BaselineVarianceMin()
-    { return std::max(signalScaler_, 1.0f) / 12.0f; }
+    { return std::max(pow2(signalScaler_), 1.0f) / 12.0f; }
 
     /// The scale factor applied to the raw trace signal values.
     /// In current practice, the conversion from DN to photoelectron units
