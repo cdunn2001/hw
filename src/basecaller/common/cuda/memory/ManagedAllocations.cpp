@@ -132,7 +132,7 @@ struct PinnedAllocator
         // of cuda error reporting, and those we'll just let bubble upwards.
         catch (const CudaMemException& ex)
         {
-            PBLOG_ERROR << "Error allocating pinned memory of size: " << size;
+            PBLOG_ERROR << "CudaRawMallocHost(size= " << size << ");";
             throw;
         }
     }
@@ -255,7 +255,7 @@ struct GpuAllocator
         // of cuda error reporting, and those we'll just let bubble upwards.
         catch (const CudaMemException& ex)
         {
-            PBLOG_ERROR << "Error allocating gpu memory of size: " << size;
+            PBLOG_ERROR << "CudaRawMalloc(size= " << size << ");";
             throw;
         }
     }
