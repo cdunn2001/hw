@@ -100,7 +100,7 @@ struct __align__(128) LatentViterbi
 
     void SetLatentTraces(BlockView<const int16_t>::ConstIterator trIt)
     {
-        for (int idx = RFT::lookBack - 1; idx >= 0; --idx, ++trIt)
+        for (int idx = RFT::lookBack - 1; idx >= 0; --idx, --trIt)
         {
             latentTrc_[idx] = trIt.Extract();
         }
@@ -291,17 +291,17 @@ static void ComputeRoi(const CudaArray<typename RFT::LabelArray, RFT::lookBack>&
 {
     assert(roi.NumFrames() == traces1.NumFrames() + traces2.NumFrames() - RFT::lookForward);
 
-    auto trIt1 = traces1.Begin() + RFT::lookForward;
+    auto trIt1 = traces1.Begin();
     Roi::ForwardRecursion<RFT> forward(latentTraces, traces1, invSigma1, roiBC, roi);
-    for (size_t i = RFT::lookForward; i < traces1.NumFrames(); ++i, ++trIt1)
+    for (size_t i = RFT::lookForward; i < traces1.NumFrames(); ++i)
     {
-        forward.ProcessNextFrame(trIt1.Extract() * invSigma1);
+        forward.ProcessNextFrame((trIt1 + i).Extract() * invSigma1);
     }
 
     auto trIt2 = traces2.CBegin();
-    for (size_t i = 0; i < traces2.NumFrames(); ++i, ++trIt2)
+    for (size_t i = 0; i < traces2.NumFrames(); ++i)
     {
-        forward.ProcessNextFrame(trIt2.Extract() * invSigma2);
+        forward.ProcessNextFrame((trIt2 + i).Extract() * invSigma2);
     }
 
     Roi::BackwardRecursion<RFT> backward(roi);
@@ -466,7 +466,7 @@ struct FrameLabelerHost::ILabelImpl
 };
 
 static Subframe::TransitionMatrix<float> transHost;
-extern RoiThresholds roiThreshHost;
+extern RoiThresholdsHost roiThreshHost;
 
 template <typename RFT>
 class LabelerImpl : public FrameLabelerHost::ILabelImpl
@@ -545,7 +545,7 @@ void FrameLabelerHost::Configure(const Data::AnalysisConfig& analysisConfig,
 {
     auto roiLatency = 0;
     roiType = labelerConfig.roi.filterType;
-    switch(roiType)
+    switch (roiType)
     {
         case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::Default:
         {
@@ -579,7 +579,7 @@ FrameLabelerHost::FrameLabelerHost(uint32_t poolId,
                                    uint32_t lanesPerPool)
     : FrameLabeler(poolId)
 {
-    switch(roiType)
+    switch (roiType)
     {
         case Data::BasecallerRoiConfig::RoiFilterType::RawEnum::Default:
             labeler_ = std::make_unique<LabelerImpl<RoiFilterDefault>>(lanesPerPool);

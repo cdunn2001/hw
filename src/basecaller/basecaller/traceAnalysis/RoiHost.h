@@ -47,12 +47,12 @@ using namespace Cuda;
 // Some configuration data for the whole process. Needs to
 // be initialized before using (currently handled by the
 // FrameLabelerDevice configuration process)
-struct RoiThresholds
+struct RoiThresholdsHost
 {
     FrameLabelerHost::FloatArray upperThreshold = FrameLabelerHost::FloatArray(0);
     FrameLabelerHost::FloatArray lowerThreshold = FrameLabelerHost::FloatArray(0);
 };
-extern RoiThresholds roiThreshHost;
+extern RoiThresholdsHost roiThreshHost;
 
 // Implementations must provide three constexpr definitions:
 // lookForward  : The number of frames needed to be examined

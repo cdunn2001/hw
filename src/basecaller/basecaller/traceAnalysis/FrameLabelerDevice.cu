@@ -67,7 +67,7 @@ void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig,
                                                analysisConfig.movieInfo.frameRate);
     CudaCopyToSymbol(&trans, &transHost);
 
-    RoiThresholds thresh;
+    RoiThresholdsDevice thresh;
     thresh.upperThreshold = labelerConfig.roi.upperThreshold;
     thresh.lowerThreshold = labelerConfig.roi.lowerThreshold;
     CudaCopyToSymbol(&roiThresh, &thresh);

@@ -29,9 +29,9 @@
 
 #include "FrameLabeler.h"
 
+#include <dataTypes/BasicTypes.h>
 #include <dataTypes/configs/AnalysisConfig.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
-#include <dataTypes/BasicTypes.h>
 
 #include <common/cuda/memory/DeviceAllocationStash.h>
 

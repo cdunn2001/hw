@@ -30,6 +30,8 @@
 #include "FrameLabeler.h"
 
 #include <dataTypes/BasicTypes.h>
+#include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 namespace PacBio {
 namespace Mongo {
