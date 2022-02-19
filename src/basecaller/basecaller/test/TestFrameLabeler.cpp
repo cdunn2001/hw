@@ -82,7 +82,7 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLab
     Json::Value json;
     json["labeler"]["Method"] = method.toString();
     TestConfig cfg{json};
-    switch(method)
+    switch (method)
     {
     case BasecallerFrameLabelerConfig::MethodName::Device:
         return CreateAndConfigure<FrameLabelerDevice>(analysisConfig, cfg.labeler, lanesPerPool, numPools);

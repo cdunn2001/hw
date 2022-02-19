@@ -24,10 +24,13 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include <basecaller/traceAnalysis/RoiDevice.cuh>
+#include <basecaller/traceAnalysis/RoiHost.h>
 
 namespace PacBio::Mongo::Basecaller {
 
-__constant__ RoiThresholdsDevice roiThresh;
+RoiThresholdsHost roiThreshHost;
+
+FrameLabelerHost::UShortArray Roi::roiBit = FrameLabelerHost::UShortArray(0x1);
+FrameLabelerHost::UShortArray Roi::midBit = FrameLabelerHost::UShortArray(0x2);
 
 }

@@ -30,6 +30,8 @@
 #include "FrameLabeler.h"
 
 #include <dataTypes/BasicTypes.h>
+#include <dataTypes/configs/AnalysisConfig.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -41,6 +43,10 @@ namespace Basecaller {
 /// in the future.
 class FrameLabelerHost : public FrameLabeler
 {
+public:  // types
+    using UShortArray = LaneArray<uint16_t>;
+    using LabelArray = LaneArray<int16_t>;
+    using FloatArray = LaneArray<float>;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -55,13 +61,14 @@ public:
                      uint32_t lanesPerPool);
     ~FrameLabelerHost() override;
 
+    struct ILabelImpl; // Processing interface
+
 private:    // Customizable implementation
     std::pair<Data::LabelsBatch, Data::FrameLabelerMetrics>
     Process(Data::TraceBatch<Data::BaselinedTraceElement> trace,
             const PoolModelParameters& models) override;
 
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    std::unique_ptr<ILabelImpl> labeler_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -31,6 +31,8 @@ namespace Mongo {
 namespace Basecaller {
 
 std::unique_ptr<Data::LabelsBatchFactory> FrameLabeler::batchFactory_;
+Data::BasecallerRoiConfig::RoiFilterType FrameLabeler::roiType = Data::BasecallerRoiConfig::RoiFilterType::RawEnum::Default;
+
 
 // static
 void FrameLabeler::Configure()

@@ -97,12 +97,11 @@ struct __align__(128) LatentViterbi
     // Accepts an iterator to the last frame emitted during an analysis.
     // This iterator will be *decremented* to extract/store as much latent
     // data as is necessary to enable the roi computation of the next block
-    __device__ void SetLatentTraces(Data::StrideIterator<const PBShort2> trc)
+    __device__ void SetLatentTraces(Data::StrideIterator<const PBShort2> trIt)
     {
-        for (int idx = latentFrames - 1; idx >= 0; --idx)
+        for (int idx = latentFrames - 1; idx >= 0; --idx, --trIt)
         {
-            latentTrc_[idx] = *trc;
-            --trc;
+            latentTrc_[idx] = *trIt;
         }
     }
 

@@ -31,9 +31,10 @@
 
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/BatchMetrics.h>
-#include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
+#include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
+
 
 namespace PacBio {
 namespace Mongo {
@@ -42,9 +43,9 @@ namespace Basecaller {
 class FrameLabeler
 {
 public:  // types
+    using ElementType = Data::BaselinedTraceElement;
     using LaneModelParameters = Data::LaneModelParameters<Cuda::PBHalf, laneSize>;
     using PoolModelParameters = Cuda::Memory::UnifiedCudaArray<LaneModelParameters>;
-    using ElementType = Data::BaselinedTraceElement;
 
 public:     // Static functions
     static void Configure();
@@ -54,6 +55,7 @@ public:     // Static functions
 
 protected: // static members
     static std::unique_ptr<Data::LabelsBatchFactory> batchFactory_;
+    static Data::BasecallerRoiConfig::RoiFilterType roiType;
 
 public:
     FrameLabeler(uint32_t poolId);
