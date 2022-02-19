@@ -34,7 +34,6 @@
 #include <dataTypes/LabelsBatch.h>
 #include <dataTypes/LaneDetectionModel.h>
 #include <dataTypes/configs/BasecallerFrameLabelerConfig.h>
-#include <dataTypes/configs/ConfigForward.h>
 
 
 namespace PacBio {

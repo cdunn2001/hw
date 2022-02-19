@@ -28,7 +28,7 @@
 
 namespace PacBio::Mongo::Basecaller {
 
-RoiThresholds roiThreshHost;
+RoiThresholdsHost roiThreshHost;
 
 FrameLabelerHost::UShortArray Roi::roiBit = FrameLabelerHost::UShortArray(0x1);
 FrameLabelerHost::UShortArray Roi::midBit = FrameLabelerHost::UShortArray(0x2);

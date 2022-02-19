@@ -28,6 +28,6 @@
 
 namespace PacBio::Mongo::Basecaller {
 
-__constant__ RoiThresholds roiThresh;
+__constant__ RoiThresholdsDevice roiThresh;
 
 }
