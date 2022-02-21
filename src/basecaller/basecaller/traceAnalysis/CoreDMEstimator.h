@@ -64,6 +64,21 @@ public:     // Types
         VLOW_SIGNAL     = 1u << 2
     };
 
+    struct Configuration
+    {
+        float fallbackBaselineMean;
+        float fallbackBaselineVariance;
+        float signalScaler;     // photoelectronSensitivity (e-/DN)
+
+        CUDA_ENABLED float BaselineVarianceMin() const
+        {
+            constexpr auto oneTwelfth = 1.0f / 12.0f;
+            const auto ss = std::max(signalScaler, 1.0f);
+            return ss * ss * oneTwelfth;
+        }
+
+    };
+
 public:     // Static constants
     /// Number of free model parameters.
     /// Five mixture fractions, background mean, background variance, and
@@ -80,25 +95,29 @@ public:     // Static constants
 public:     // Static functions
     static void Configure(const Data::AnalysisConfig& analysisConfig);
 
+    /// The current configuration.
+    static const Configuration& Config()
+    { return config_; }
+
     /// Mean used for the baseline signal distribution when sample statistics
     /// are insufficient.
     static float FallbackBaselineMean()
-    { return fallbackBaselineMean_; }
+    { return config_.fallbackBaselineMean; }
 
     /// Variance used for the baseline signal distribution when sample
     /// statistics are insufficient.
     static float FallbackBaselineVariance()
-    { return fallbackBaselineVariance_; }
+    { return config_.fallbackBaselineVariance; }
 
     /// Baseline variance is constrained to be no smaller than this.
     static float BaselineVarianceMin()
-    { return std::max(pow2(signalScaler_), 1.0f) / 12.0f; }
+    { return config_.BaselineVarianceMin(); }
 
     /// The scale factor applied to the raw trace signal values.
     /// In current practice, the conversion from DN to photoelectron units
     /// (a.k.a. photoelectron sensitivity)
     static float SignalScaler()
-    { return signalScaler_; }
+    { return config_.signalScaler; }
 
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
@@ -127,9 +146,7 @@ protected:
     static PacBio::Logging::PBLogger logger_;
 
 private:    // Static data
-    static const float fallbackBaselineMean_;
-    static const float fallbackBaselineVariance_;
-    static float signalScaler_;     // photoelectronSensitivity (e-/DN)
+    static Configuration config_;
 
 private:
     uint32_t poolId_;

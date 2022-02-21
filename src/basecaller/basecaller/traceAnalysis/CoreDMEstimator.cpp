@@ -20,9 +20,7 @@ constexpr float CoreDMEstimator::shotVarCoeff;
 PacBio::Logging::PBLogger CoreDMEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
 
 // static
-const float CoreDMEstimator::fallbackBaselineMean_ = 0.0f;
-const float CoreDMEstimator::fallbackBaselineVariance_ = 100.0f;
-float CoreDMEstimator::signalScaler_ = 1.0f;
+CoreDMEstimator::Configuration CoreDMEstimator::config_;
 
 CoreDMEstimator::CoreDMEstimator(uint32_t poolId, unsigned int poolSize)
     : poolId_ (poolId)
@@ -33,8 +31,12 @@ CoreDMEstimator::CoreDMEstimator(uint32_t poolId, unsigned int poolSize)
 // static
 void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
 {
-    signalScaler_ = analysisConfig.movieInfo.photoelectronSensitivity;
-    assert(std::isfinite(signalScaler_) && signalScaler_ > 0.0f);
+    config_.fallbackBaselineMean = 0.0f;
+    config_.fallbackBaselineVariance = 100.0f;
+
+    const float ss = analysisConfig.movieInfo.photoelectronSensitivity;
+    assert(std::isfinite(ss) && ss > 0.0f);
+    config_.signalScaler = ss;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
