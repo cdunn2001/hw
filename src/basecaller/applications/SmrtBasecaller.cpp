@@ -623,6 +623,7 @@ private:
                     PBLOG_INFO << "Analyzing chunk frames = ["
                         + std::to_string(chunk.StartFrame()) + ","
                         + std::to_string(chunk.StopFrame()) + ")";
+                    PacBio::Dev::QuietAutoTimer t;
                     if (nop_ == 1)
                     {
                         int16_t expectedPixel = 123;
@@ -646,7 +647,6 @@ private:
                     }
                     else
                     {
-                        PacBio::Dev::QuietAutoTimer t;
                         for (auto& batch : chunk)
                         {
 #if 0
@@ -692,8 +692,8 @@ private:
                             << report.avgOccupancy << "\n";
                         }
                         PacBio::Logging::LogStream(PacBio::Logging::LogLevel::INFO) << ss.str();
-                        PBLOG_INFO << t.GetElapsedMilliseconds() / 1000 << " seconds to process chunk";
                     }
+                    PBLOG_INFO << t.GetElapsedMilliseconds() / 1000 << " seconds to process chunk";
                     numChunksAnalyzed++;
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();

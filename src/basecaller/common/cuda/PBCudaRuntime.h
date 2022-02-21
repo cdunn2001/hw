@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 
+#include <pacbio/PBException.h>
+
 // This file serves two purposes.  The first is to be a firewall between the
 // rest of our code and the cuda_runtime, to avoid including their large
 // header everywhere.  The other to to help enforce good error checking.
@@ -15,6 +17,14 @@
 
 namespace PacBio {
 namespace Cuda {
+
+struct CudaMemException : public std::runtime_error {
+    CudaMemException(const std::string& str)
+        : std::runtime_error{str}
+    {}
+};
+// Should probably elevate this to pa-common at some point
+#define PBExceptionCust(msg, Type)    PacBio::PBExceptionEx<Type>(msg,__FILE__,__LINE__, __FUNCTION__, PB_TRACEBACK() );
 
 size_t RequiredRegisterCount(const void* func);
 size_t AvailableRegistersPerBlock();

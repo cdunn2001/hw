@@ -39,12 +39,12 @@ using namespace Cuda;
 // Some configuration data for the whole process.  Needs to
 // be initialized before using (currently handled by the
 // FrameLabelerDevice configuration process)
-struct RoiThresholds
+struct RoiThresholdsDevice
 {
     float upperThreshold = 0;
     float lowerThreshold = 0;
 };
-extern __constant__ RoiThresholds roiThresh;
+extern __constant__ RoiThresholdsDevice roiThresh;
 
 using RoiFilterType = Data::BasecallerRoiConfig::RoiFilterType::RawEnum;
 

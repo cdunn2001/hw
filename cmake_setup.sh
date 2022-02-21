@@ -19,6 +19,8 @@ fi
 for d in \
    build/pa-ws/gcc/x86_64/Release \
    build/pa-cal/gcc/x86_64/Release \
+   build/pa-cal/gcc/x86_64/RelWithDebInfo \
+   build/pa-cal/gcc/x86_64/Debug \
    build/common/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/Release \
    build/basecaller/gcc/x86_64/RelWithDebInfo \

@@ -1,4 +1,4 @@
-// Copyright (c) 2021, Pacific Biosciences of California, Inc.
+// Copyright (c) 2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -23,18 +23,14 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// File Description:
-///  \brief main entry point to pa-cal
-//
-// Programmer: Mark Lakata
 
-#include "PaCalProcess.h"
+#include <basecaller/traceAnalysis/RoiHost.h>
 
-using namespace PacBio::Calibration;
+namespace PacBio::Mongo::Basecaller {
 
-int main(int argc, const char* argv[])
-{
-    PaCalProcess PaCalProcess;
-    auto exitCode = PaCalProcess.Main(argc, argv);
-    return exitCode;
+RoiThresholdsHost roiThreshHost;
+
+FrameLabelerHost::UShortArray Roi::roiBit = FrameLabelerHost::UShortArray(0x1);
+FrameLabelerHost::UShortArray Roi::midBit = FrameLabelerHost::UShortArray(0x2);
+
 }

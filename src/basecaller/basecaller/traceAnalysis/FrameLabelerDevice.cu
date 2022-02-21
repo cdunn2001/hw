@@ -37,8 +37,6 @@ using namespace PacBio::Mongo::Data;
 
 namespace PacBio::Mongo::Basecaller {
 
-Data::BasecallerRoiConfig::RoiFilterType FrameLabelerDevice::roiType = RoiFilterType::Default;
-
 void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig,
                                    const Data::BasecallerFrameLabelerConfig& labelerConfig)
 {
@@ -69,7 +67,7 @@ void FrameLabelerDevice::Configure(const Data::AnalysisConfig& analysisConfig,
                                                analysisConfig.movieInfo.frameRate);
     CudaCopyToSymbol(&trans, &transHost);
 
-    RoiThresholds thresh;
+    RoiThresholdsDevice thresh;
     thresh.upperThreshold = labelerConfig.roi.upperThreshold;
     thresh.lowerThreshold = labelerConfig.roi.lowerThreshold;
     CudaCopyToSymbol(&roiThresh, &thresh);
@@ -93,7 +91,7 @@ class ImplChild : public FrameLabelerDevice::Impl
 {
     static constexpr size_t BlockThreads = laneSize/2;
     using RoiFilter = RoiFilter<roiFilterType>;
-    using LaneModelParameters = FrameLabelerDevice::LaneModelParameters;
+    using LaneModelParameters = FrameLabeler::LaneModelParameters;
 
     static BatchDimensions LatBatchDims(size_t lanesPerPool)
     {
