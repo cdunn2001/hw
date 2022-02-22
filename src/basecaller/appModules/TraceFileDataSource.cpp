@@ -27,7 +27,9 @@
 
 #include <numeric>
 
+#include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/logging/Logger.h>
+
 
 #include <common/MongoConstants.h>
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
@@ -403,7 +405,19 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
     const auto& holexy = traceFile_.Traces().HoleXY();
     const auto& holeType = traceFile_.Traces().HoleType();
-    const auto& holeFeaturesMask = traceFile_.Traces().HoleFeaturesMask();
+    const auto& holeFeaturesMask = [&](){
+        if (traceFile_.Traces().HasHoleFeaturesMask())
+        {
+            return traceFile_.Traces().HoleFeaturesMask();
+        }
+        else
+        {
+            PBLOG_WARN << "Trace file does not contain hole features mask dataset"
+                       << " setting all ZMWs as Sequencing";
+            return std::vector<uint32_t>(traceFile_.Traces().NumZmws(), DataSource::ZmwFeatures::Sequencing);
+        }
+    }();
+
     for(uint32_t i = 0; i < features.size(); i++)
     {
         // i is ZMW position in chunk.
