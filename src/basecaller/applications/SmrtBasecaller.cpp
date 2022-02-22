@@ -58,6 +58,7 @@
 #include <pacbio/text/String.h>
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
+#include <pacbio/utilities/ISO8601.h>
 
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -575,7 +576,8 @@ private:
         namespace io = boost::iostreams;
         io::stream<io::file_descriptor_sink> statusStream(
             io::file_descriptor_sink( statusFileDescriptor_, io::never_close_handle ) );
-        statusStream << "PA_WS_STATUS { \"source\":\"smrt-basecaller\", \"message\": \"started\"}" << std::endl;
+        statusStream << "PA_WS_STATUS { \"source\":\"smrt-basecaller\", \"message\": \"started\", \"timestamp\":\"" 
+             << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
 
         try
         {
@@ -613,7 +615,8 @@ private:
 #if 1
             // TODO Change this to notify pa-ws that smrt-basecaller is ready
             double progress  = 0.0;
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\"}" << std::endl;
+            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\","
+                << "\"timestamp\":\"" << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
 #endif
             while (source->IsActive())
             {
@@ -705,6 +708,7 @@ private:
                     status["frames"]=frames_;
                     status["framesAnalyzed"]=framesAnalyzed;
                     status["progress"]=progress;
+                    status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
                     statusStream << "PA_WS_STATUS " << status << std::endl;
                     progress = (frames_ > 0) ? (framesAnalyzed * 1.0 / frames_) : 0.0;
 #endif
@@ -742,7 +746,8 @@ private:
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
 #if 1                        
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0 << "}" << std::endl;
+            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0
+                << ",\"timestamp\":\"" << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
 #endif
         }
         catch(const std::exception& ex)
@@ -781,7 +786,6 @@ int main(int argc, char* argv[])
         {
             cliArgs << argv[i] << " ";
         }
-        PBLOG_INFO << cliArgs.str();
 
         auto parser = ProcessBase::OptionParserFactory();
         std::stringstream ss;
@@ -823,13 +827,14 @@ int main(int argc, char* argv[])
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));
-        PBLOG_DEBUG << json; // this does NOT work with --showconfig
         SmrtBasecallerConfig configs(json);
         if (options.get("showconfig"))
         {
             std::cout << configs.Serialize() << std::endl;
             return 0;
         }
+        PBLOG_INFO << cliArgs.str();
+        PBLOG_DEBUG << json; // this does NOT work with --showconfig
 
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
