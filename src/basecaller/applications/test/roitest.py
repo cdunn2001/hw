@@ -92,10 +92,13 @@ class MyValidator:
             numWrong += res[1]
 
         if args.validate_traces:
-            maxFrames = args.max_frames
-            if maxFrames > self.traces.shape[2]:
-                maxFrames = self.traces.shape[2]
-            print("Validating first %d frames" % (maxFrames))
+            frameStart = args.frame_start
+            frameStop = frameStart + args.max_frames
+            if frameStart > self.traces.shape[2]:
+                frameStart = self.traces.shape[2]
+            if frameStop > self.traces.shape[2]:
+                frameStop = self.traces.shape[2]
+            print("Validating frames %d to %d" % (frameStart, frameStop))
             if args.pattern == "alpha":
                 func = lambda f, r, c: alpha(f,r,c)
             elif args.pattern == "diagonal1":
@@ -106,14 +109,14 @@ class MyValidator:
             else :
                 raise Exception("don't recognize pattern " + args.pattern)
             for zmw in range(0,self.holexy.shape[0]):
-                traceValid = self.validate_trace(zmw,maxFrames,func)
+                traceValid = self.validate_trace(zmw,frameStart,frameStop,func)
                 if traceValid:
                     numValid += 1
                 else :
                     numWrong += 1
         print("valid:%d wrong:%d" % (numValid, numWrong))
 
-    def validate_trace(self,zmw,maxFrames, func):
+    def validate_trace(self,zmw,frameStart, frameStop, func):
         """validates a single trace"""
         global verbose
         trace = self.traces[zmw,0,:]
@@ -122,7 +125,7 @@ class MyValidator:
         traceValid = True
         # print(zmw)
         # print(trace)
-        for frame in range(0,maxFrames):
+        for frame in range(frameStart,frameStop):
             expected = func(frame,row,col)
             valid = expected == trace[frame]
             if not valid or verbose:
@@ -154,6 +157,10 @@ if __name__ == '__main__':
                        action=argparse.BooleanOptionalAction,
                        default=True,
                        help="If True, the traces are compared against the Alpha test pattern")
+    group.add_argument('--frame_start',
+                       default=0,
+                       type=int,
+                       help="Start frame to validate")
     group.add_argument('--max_frames',
                        default=100,
                        type=int,
