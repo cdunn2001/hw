@@ -197,6 +197,8 @@ inline __device__ PBBool2 operator > (PBHalf2 l, PBHalf2 r) { return PBBool2(__h
 inline __device__ PBBool2 operator >=(PBHalf2 l, PBHalf2 r) { return PBBool2(__hgeu2(l.data(), r.data())); }
 inline __device__ PBBool2 operator ==(PBHalf2 l, PBHalf2 r) { return PBBool2(l.data() == r.data()); }
 
+inline __device__ PBBool2 isnan(PBHalf2 h)  { return __hisnan2(h.data()); }
+
 inline __device__ PBHalf2 pow2(PBHalf2 h) { return PBHalf2(h.data() * h.data()); }
 inline __device__ PBHalf2 log(PBHalf2 h) { return PBHalf2(h2log(h.data())); }
 inline __device__ PBHalf2 sqrt(PBHalf2 h) { return PBHalf2(h2sqrt(h.data())); }
