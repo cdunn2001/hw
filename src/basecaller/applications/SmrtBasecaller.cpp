@@ -387,24 +387,17 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(config_.traceSaver.roi);
-            const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
-            const auto sourceLaneWidth = sampleLayout.BlockWidth();
-
-            if (!(sourceLaneWidth % laneSize == 0
-                  || laneSize % sourceLaneWidth == 0))
-            {
-                throw PBException("Cannot handle incoming sensor lane width of " + std::to_string(sourceLaneWidth) + ". "
-                                  "It is neither a multiple nor a even divisor of the analysis lane width of "
-                                  + std::to_string(laneSize));
-            }
+            auto selection = ConvertToLaneWidth(dataSource, config_.traceSaver.roi, laneSize);
+            const auto actualZmw = selection.size() * laneSize;
 
             std::vector<uint32_t> fullBatchIds;
             fullBatchIds.reserve(dataSource.NumZmw());
             PBLOG_DEBUG << "poolDims.size:" << poolDims.size();
             for (const auto& kv : poolDims)
             {
-                PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch() << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch << "," << kv.second.framesPerBatch;
+                PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch()
+                            << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch
+                            << "," << kv.second.framesPerBatch;
                 fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
             }
             if(fullBatchIds.size() != dataSource.NumZmw())
@@ -412,40 +405,6 @@ private:
                 throw PBException("fullBatchIds.size():" + std::to_string(fullBatchIds.size()) 
                     + " != dataSource.NumZmw():" + std::to_string(dataSource.NumZmw()));
             }
-
-            // conversion of source lanes (DataSource) into destination lanes (For the TraceFile).
-            // The lane widths may be different.  Depending on the incoming lane width, the
-            // resulting ROI may have more ZMW, as selecting one ZMW from a lane gives you the
-            // entire 64 ZMW lane.
-            std::set<DataSourceBase::LaneIndex> destLaneSeen;
-            {
-                // curate the features of the ROI ZMWs
-                for(const auto laneOffset : sourceLaneOffsets)
-                {
-                    const uint64_t zmwIndex = laneOffset * sourceLaneWidth;
-                    for (size_t i = zmwIndex; i < zmwIndex + sourceLaneWidth; i += laneSize)
-                    {
-                        destLaneSeen.insert(i / laneSize);
-                    }
-                }
-            }
-#if 0
-            // I need this to continue debugging MTL
-            destLaneSeen.insert(0);
-#endif            
-
-            const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
-            const auto actualZmw = destLaneSeen.size() * laneSize;
-            if (actualZmw < requestedZmw)
-                throw PBException("Error handling the trace roi lane selection");
-            else if (actualZmw > requestedZmw)
-            {
-                PBLOG_WARN << "Saving " << actualZmw << " ZMW when only " << requestedZmw << " were requested.";
-                PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
-            }
-
-            std::vector<DataSourceBase::LaneIndex> destLanes(destLaneSeen.begin(), destLaneSeen.end());
-            DataSourceBase::LaneSelector selection(std::move(destLanes));
 
             const auto& fullHoleIds = dataSource.UnitCellIds();
             const auto& fullProperties = dataSource.GetUnitCellProperties();
@@ -467,14 +426,11 @@ private:
 
                     currZmw++;
                     idx++;
-#if 0
-                    // I need this to continue debugging MTL
-                    PBLOG_NOTICE << "select/lane: currZmw" << currZmw << " " << idx;
-#endif
                 }
             }
             assert(idx == actualZmw);
 
+            const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
             auto dataType = TraceDataType::INT16;
             if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
             {
@@ -555,6 +511,31 @@ private:
             return std::make_unique<NoopBazWriterBody>();
 
         }
+    }
+
+    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    CreateRealTimeMetrics(const DataSourceRunner& dataSource)
+    {
+        /*
+        auto selection = ConvertToLaneWidth(dataSource, config_.realTimeMetrics.roi, laneSize);
+        const auto actualZmw = selection.size() * laneSize;
+
+        const auto& fullProperties = dataSource.GetUnitCellProperties();
+        std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
+
+        size_t idx = 0;
+        for (const auto& lane : selection)
+        {
+            size_t currZmw = lane*laneSize;
+            for (size_t i = 0; i < laneSize; ++i)
+            {
+                assert(idx < actualZmw);
+                properties[idx] = fullProperties[currZmw];
+                currZmw++;
+                idx++;
+            }
+        }
+        */
     }
 
     void RunAnalyzer()
@@ -757,6 +738,51 @@ private:
 #endif
             throw;
         }
+    }
+
+    DataSourceBase::LaneSelector ConvertToLaneWidth(const DataSourceRunner& dataSource, const std::vector<std::vector<int>>& roi, uint laneSize)
+    {
+        auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(roi);
+        const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
+        const auto sourceLaneWidth = sampleLayout.BlockWidth();
+
+        if (!(sourceLaneWidth % laneSize == 0
+              || laneSize % sourceLaneWidth == 0))
+        {
+            throw PBException("Cannot handle incoming sensor lane width of " + std::to_string(sourceLaneWidth) + ". "
+                              "It is neither a multiple nor a even divisor of the analysis lane width of "
+                              + std::to_string(laneSize));
+        }
+
+        // Conversion of source lanes (DataSource) into lanes with given size.
+        // The lane widths may be different.  Depending on the incoming lane width, the
+        // resulting ROI may have more ZMW, as selecting one ZMW from a lane gives you the
+        // entire zmw lane.
+        std::set<DataSourceBase::LaneIndex> destLaneSeen;
+        {
+            for(const auto laneOffset : sourceLaneOffsets)
+            {
+                const uint64_t zmwIndex = laneOffset * sourceLaneWidth;
+                for (size_t i = zmwIndex; i < zmwIndex + sourceLaneWidth; i += laneSize)
+                {
+                    destLaneSeen.insert(i / laneSize);
+                }
+            }
+        }
+
+        const auto requestedZmw = sourceLaneOffsets.size() * sourceLaneWidth;
+        const auto actualZmw = destLaneSeen.size() * laneSize;
+        if (actualZmw < requestedZmw)
+            throw PBException("Error handling the roi lane selection");
+        else if (actualZmw > requestedZmw)
+        {
+            PBLOG_WARN << "Saving " << actualZmw << " ZMW when only " << requestedZmw << " were requested.";
+            PBLOG_WARN << "This can happen if the ROI is modulo hardware tile sizes but not modulo lane sizes";
+        }
+
+        std::vector<DataSourceBase::LaneIndex> destLanes(destLaneSeen.begin(), destLaneSeen.end());
+        DataSourceBase::LaneSelector selection(destLanes);
+        return selection;
     }
 
 private:
