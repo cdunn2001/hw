@@ -14,14 +14,16 @@ set(CMAKE_CXX_FLAGS "-fdiagnostics-color=always -Wall -msse4.2 -Wno-missing-fiel
 set(CMAKE_CXX_FLAGS_DEBUG           "-O0 -g" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE         "-O3 -DNDEBUG "    CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-O3 -g " CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_DEBUGCPU        "${CMAKE_CXX_FLAGS_DEBUG}" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_ASAN            "-O0 -g -fsanitize=address -fno-omit-frame-pointer" CACHE STRING "" FORCE)
 
 set(CMAKE_CUDA_FLAGS                "--expt-relaxed-constexpr --default-stream per-thread -t 0\
                                      --compiler-options=\"${CMAKE_CXX_FLAGS}\""
                                     CACHE STRING "" FORCE)
-set(CMAKE_CUDA_FLAGS_RELEASE        "-O3 -DNDEBUG -lineinfo" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_DEBUG          "-O0 -g -G" CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS_RELEASE        "-O3 -DNDEBUG -lineinfo" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -g -lineinfo" CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS_DEBUGCPU       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}" CACHE STRING "" FORCE)
 set(CMAKE_CUDA_FLAGS_ASAN           "${CMAKE_CUDA_FLAGS_DEBUG}" CACHE STRING "" FORCE)
 
 set(CMAKE_EXE_LINKER_FLAGS_ASAN -fsanitize=address CACHE STRING "" FORCE)
