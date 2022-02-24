@@ -27,6 +27,7 @@
 #include <appModules/BazWriterBody.h>
 #include <appModules/BlockRepacker.h>
 #include <appModules/PrelimHQFilter.h>
+#include <appModules/RealTimeMetrics.h>
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
@@ -380,7 +381,7 @@ private:
         return expMetadata;
     }
 
-    std::unique_ptr <LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
+    std::unique_ptr<LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
                                                                          const std::map<uint32_t, Data::BatchDimensions>& poolDims,
                                                                          const AnalysisConfig& analysisConfig,
                                                                          const ScanData::Data& experimentMetadata)
@@ -461,7 +462,7 @@ private:
         }
     }
 
-    std::unique_ptr <TransformBody<const TraceBatchVariant, BatchResult>>
+    std::unique_ptr<TransformBody<const TraceBatchVariant, BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims, const AnalysisConfig& analysisConfig) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
@@ -513,29 +514,37 @@ private:
         }
     }
 
-    std::unique_ptr <LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    std::unique_ptr<LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreateRealTimeMetrics(const DataSourceRunner& dataSource)
     {
-        /*
-        auto selection = ConvertToLaneWidth(dataSource, config_.realTimeMetrics.roi, laneSize);
-        const auto actualZmw = selection.size() * laneSize;
-
-        const auto& fullProperties = dataSource.GetUnitCellProperties();
-        std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
-
-        size_t idx = 0;
-        for (const auto& lane : selection)
+        if (!config_.realTimeMetrics.disable)
         {
-            size_t currZmw = lane*laneSize;
-            for (size_t i = 0; i < laneSize; ++i)
+            auto selection = ConvertToLaneWidth(dataSource, config_.realTimeMetrics.roi, laneSize);
+            const auto actualZmw = selection.size() * laneSize;
+
+            const auto& fullProperties = dataSource.GetUnitCellProperties();
+            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
+
+            size_t idx = 0;
+            for (const auto& lane: selection)
             {
-                assert(idx < actualZmw);
-                properties[idx] = fullProperties[currZmw];
-                currZmw++;
-                idx++;
+                size_t currZmw = lane * laneSize;
+                for (size_t i = 0; i < laneSize; ++i)
+                {
+                    assert(idx < actualZmw);
+                    properties[idx] = fullProperties[currZmw];
+                    currZmw++;
+                    idx++;
+                }
             }
+            assert(idx == actualZmw);
+
+            return std::make_unique<RealTimeMetrics>();
         }
-        */
+        else
+        {
+            return std::make_unique<NoopRealTimeMetrics>();
+        }
     }
 
     void RunAnalyzer()
