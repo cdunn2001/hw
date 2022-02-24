@@ -388,7 +388,7 @@ private:
     {
         if (outputTrcFileName_ != "")
         {
-            auto selection = ConvertToLaneWidth(dataSource, config_.traceSaver.roi, laneSize);
+            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
             const auto actualZmw = selection.size() * laneSize;
 
             std::vector<uint32_t> fullBatchIds;
@@ -517,9 +517,9 @@ private:
     std::unique_ptr<LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreateRealTimeMetrics(const DataSourceRunner& dataSource)
     {
-        if (!config_.realTimeMetrics.disable)
+        if (!config_.realTimeMetrics.roi.empty())
         {
-            auto selection = ConvertToLaneWidth(dataSource, config_.realTimeMetrics.roi, laneSize);
+            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.realTimeMetrics.roi, laneSize);
             const auto actualZmw = selection.size() * laneSize;
 
             const auto& fullProperties = dataSource.GetUnitCellProperties();
@@ -749,7 +749,7 @@ private:
         }
     }
 
-    DataSourceBase::LaneSelector ConvertToLaneWidth(const DataSourceRunner& dataSource, const std::vector<std::vector<int>>& roi, uint laneSize)
+    DataSourceBase::LaneSelector SelectedBasecallerLanesWithinROI(const DataSourceRunner& dataSource, const std::vector<std::vector<int>>& roi, uint laneSize)
     {
         auto sourceLaneOffsets = dataSource.SelectedLanesWithinROI(roi);
         const auto sampleLayout = dataSource.PacketLayouts().begin()->second;

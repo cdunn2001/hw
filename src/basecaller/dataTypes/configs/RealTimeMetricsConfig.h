@@ -24,8 +24,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#ifndef mongo_dataTypes_configs_RealTimeMetricsConfig_H_
-#define mongo_dataTypes_configs_RealTimeMetricsConfig_H_
+#ifndef basecaller_dataTypes_configs_RealTimeMetricsConfig_H_
+#define basecaller_dataTypes_configs_RealTimeMetricsConfig_H_
 
 #include <pacbio/configuration/PBConfig.h>
 
@@ -36,10 +36,9 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
 {
     PB_CONFIG(RealTimeMetricsConfig);
 
-    PB_CONFIG_PARAM(bool, disable, true);
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
 };
 
 } // namespace PacBio::Mongo::Data
 
-#endif // mongo_dataTypes_configs_RealTimeMetricsConfig_H_
+#endif // basecaller_dataTypes_configs_RealTimeMetricsConfig_H_

@@ -23,9 +23,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <common/cuda/utility/CudaArray.h>
-#include <common/MongoConstants.h>
-
 #include "RealTimeMetrics.h"
 
 using namespace PacBio::DataSource;
@@ -40,10 +37,10 @@ std::vector<LaneMask<>> RealTimeMetrics::SelectedLanesWithFeatures(const std::ve
     LaneArray<uint32_t> fm {featuresMask};
     std::vector<LaneMask<>> laneMasks;
 
+    assert(features.size() % laneSize == 0);
     for (size_t i = 0; i < features.size(); i += laneSize)
     {
-        Cuda::Utility::CudaArray<uint32_t,laneSize> lf;
-        std::copy(features.data()+i, features.data()+i+laneSize, lf.data());
+        LaneArray<uint32_t> lf(MemoryRange<uint32_t,laneSize>(features.data()+i));
         laneMasks.emplace_back((fm & LaneArray<uint32_t>(lf)) == fm);
     }
 

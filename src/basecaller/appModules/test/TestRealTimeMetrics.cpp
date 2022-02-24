@@ -27,6 +27,7 @@
 
 #include <pacbio/datasource/ZmwFeatures.h>
 #include <common/simd/SimdConvTraits.h>
+#include <common/MongoConstants.h>
 
 #include <appModules/RealTimeMetrics.h>
 
