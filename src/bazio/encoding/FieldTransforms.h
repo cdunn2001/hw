@@ -148,6 +148,16 @@ struct NoOp
     }
 };
 
+// A simple fixed point representation for floating point input.  It is an error to use this
+// function with values that are out of range, due to:
+// * Handing in a literal inf/nan input
+// * Handing in a scale parameter that causes the value to not fit in the bounds of a
+//   (potentially signed) 64 bit integer
+// * Handing in a negative value while `storeSigned` is false.
+//
+// Any violations of these pre-conditions will technically result in undefined behavior, and
+// if your input is at risk then you should consider using the alternate FloatFixedCodec
+// implementation provided below.
 struct FixedPoint
 {
     BAZ_CUDA static uint64_t Apply(float f, StoreSigned storeSigned, FixedPointScale scale)
@@ -188,6 +198,92 @@ struct FixedPoint
         tp.params = params;
         return tp;
     }
+};
+
+// A slightly more robust codec for floats using a fixed point representation but also handling
+// special values.  All float inputs are valid.  Inf/Nan values are preserved, and if a fixed
+// point representation doesn't fit within the specified number of bytes, it will be stored as
+// an infinity.
+struct FloatFixedCodec
+{
+    BAZ_CUDA static uint64_t Apply(float f, StoreSigned storeSigned, FixedPointScale scale, NumBytes bytes)
+    {
+        assert(bytes <= 8);
+
+        auto scaled = roundf(f*scale);
+        // Check if we are in bounds.  We unfortunately have to handle signed and unsigned representations
+        // separately in order to correctly handle the sign bit, despite the fact that the below code looks
+        // like it's nearly duplicated.
+        if (storeSigned)
+        {
+            const auto max = static_cast<int64_t>((1ull << (8 * bytes - 1)) - 1 - offset);
+            // Note: max is about to be cast by float (made explicit for clarity, but it would happen anyway)
+            //       It's possible that neither max nor scaled are finite, but that is fine and these
+            //       conditionals were crafted with that in mind.  That will cause us to fail
+            //       this conditional and fall back to the special case handling below
+            if (static_cast<float>(-max) <= scaled && static_cast<float>(max) >= scaled)
+            {
+                if (scaled >= 0) scaled += offset;
+                // Need to cast to a signed type first to make sure we handle negatives correctly.
+                // Casting a signed to an unsigned works fine as long as you assume 2s complement
+                // (which we do), but casting a float to an int is undefined if the value is out of
+                // range.
+                return static_cast<uint64_t>(static_cast<int64_t>(scaled));
+            }
+        } else {
+            const auto max = ((1ull << (8 * bytes)) - 1 - offset);
+            // Note: max is about to be cast by float (made explicit for clarity, but it would happen anyway)
+            //       It's possible that neither max nor scaled are finite, but that is fine and these
+            //       conditionals were crafted with that in mind.  That will cause us to fail
+            //       this conditional and fall back to the special case handling below
+            if (0 <= scaled && static_cast<float>(max) >= scaled)
+            {
+                scaled += offset;
+                return static_cast<uint64_t>(scaled);
+            }
+        }
+        if (std::isnan(f)) return nan;
+        if (scaled < 0) return ninf;
+        else return inf;
+    }
+
+    template <typename Ret>
+    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned storeSigned, FixedPointScale scale)
+    {
+        static_assert(std::is_same<Ret, float>::value,"");
+
+        if (val == nan) return std::numeric_limits<Ret>::quiet_NaN();
+        if (val == inf) return std::numeric_limits<Ret>::infinity();
+        if (val == ninf) return -std::numeric_limits<Ret>::infinity();
+
+        if (storeSigned)
+        {
+            auto signedVal = static_cast<int64_t>(val);
+            if (signedVal >= 0) signedVal -= offset;
+            return static_cast<float>(signedVal) / scale;
+        }
+        else
+        {
+            return static_cast<float>(val - offset) / scale;
+        }
+    }
+
+    static TransformsParams Params(FixedPointScale scale, NumBytes numBytes)
+    {
+        TransformsParams tp;
+        FloatFixedCodecParams params;
+        params.scale = scale;
+        params.numBytes = numBytes;
+        tp.params = params;
+        return tp;
+    }
+
+    static constexpr uint64_t nan = 0x0;
+    static constexpr uint64_t inf = nan+1;
+    static constexpr uint32_t ninf = inf+1;
+    // Offset positive values need to be shifted by, to make room for
+    // the special values just defined
+    static constexpr uint32_t offset = ninf+1;
 };
 
 // Some algebra to make the below bit twiddles make a bit more sense
