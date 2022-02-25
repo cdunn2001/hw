@@ -68,6 +68,126 @@ TEST(BazTransform, FixedPoint)
     EXPECT_FLOAT_EQ(FixedPoint::Revert<float>(static_cast<uint64_t>(-94), StoreSigned{true}, FixedPointScale{30}), -3.13333333);
 }
 
+TEST(BazTransform, FloatFixedCodec)
+{
+    auto roundTrip = [](float input, StoreSigned storeSigned, FixedPointScale scale, NumBytes numBytes)
+    {
+        auto transformed = FloatFixedCodec::Apply(input, storeSigned, scale, numBytes);
+        return FloatFixedCodec::Revert<float>(transformed, storeSigned, scale);
+    };
+
+    // First make sure we can handle the same vanilla cases as the FixedPoint transform
+    EXPECT_FLOAT_EQ(roundTrip(3.125412, StoreSigned{false}, FixedPointScale{10}, NumBytes{2}), 3.1);
+    EXPECT_FLOAT_EQ(roundTrip(3.125412, StoreSigned{false}, FixedPointScale{100}, NumBytes{2}), 3.13);
+    EXPECT_FLOAT_EQ(roundTrip(3.125412, StoreSigned{false}, FixedPointScale{1000}, NumBytes{2}), 3.125);
+    EXPECT_FLOAT_EQ(roundTrip(3.125412, StoreSigned{false}, FixedPointScale{30}, NumBytes{2}), 3.13333333);
+
+    EXPECT_FLOAT_EQ(roundTrip(-3.125412, StoreSigned{true}, FixedPointScale{10}, NumBytes{2}), -3.1);
+    EXPECT_FLOAT_EQ(roundTrip(-3.125412, StoreSigned{true}, FixedPointScale{100}, NumBytes{2}), -3.13);
+    EXPECT_FLOAT_EQ(roundTrip(-3.125412, StoreSigned{true}, FixedPointScale{1000}, NumBytes{2}), -3.125);
+    EXPECT_FLOAT_EQ(roundTrip(-3.125412, StoreSigned{true}, FixedPointScale{30}, NumBytes{2}), -3.13333333);
+
+    const auto nan = std::numeric_limits<float>::quiet_NaN();
+    const auto inf = std::numeric_limits<float>::infinity();
+    const auto ninf = -std::numeric_limits<float>::infinity();
+
+    // Now try a bunch of settings with literal nan input
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{10},  NumBytes{1})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{100}, NumBytes{1})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{10},  NumBytes{1})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{100}, NumBytes{1})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{10},  NumBytes{4})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{100}, NumBytes{4})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{10},  NumBytes{4})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{100}, NumBytes{8})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{10},  NumBytes{8})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{false}, FixedPointScale{100}, NumBytes{8})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{10},  NumBytes{8})));
+    EXPECT_TRUE(std::isnan(roundTrip(nan, StoreSigned{true},  FixedPointScale{100}, NumBytes{8})));
+
+    // Now try a bunch of settings with literal infinity input
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{10},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{100}, NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{10},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{100}, NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{10},  NumBytes{4}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{100}, NumBytes{4}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{10},  NumBytes{4}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{100}, NumBytes{8}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{10},  NumBytes{8}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{false}, FixedPointScale{100}, NumBytes{8}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{10},  NumBytes{8}), inf);
+    EXPECT_EQ(roundTrip(inf, StoreSigned{true},  FixedPointScale{100}, NumBytes{8}), inf);
+
+    // Now try a bunch of settings with literal negative infinity input
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{10},  NumBytes{1}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{100}, NumBytes{1}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{10},  NumBytes{1}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{100}, NumBytes{1}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{10},  NumBytes{4}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{100}, NumBytes{4}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{10},  NumBytes{4}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{100}, NumBytes{8}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{10},  NumBytes{8}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{false}, FixedPointScale{100}, NumBytes{8}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{10},  NumBytes{8}), ninf);
+    EXPECT_EQ(roundTrip(ninf, StoreSigned{true},  FixedPointScale{100}, NumBytes{8}), ninf);
+
+    // A couple more checks, this time adding a finite input, but with a scale that makes
+    // our rescaled value infinite.  Technically we could round trip a larger dynamic range
+    // if we did some careful "long form" multiplication, but that would be both more
+    // complex and slower, so this implementation just opts to go infinite instead.
+    auto val = std::numeric_limits<float>::max() - 1000;
+    EXPECT_EQ(roundTrip(val, StoreSigned{false}, FixedPointScale{2},  NumBytes{8}), inf);
+    EXPECT_FLOAT_EQ(roundTrip(val, StoreSigned{false}, FixedPointScale{1},  NumBytes{8}), val);
+    EXPECT_EQ(roundTrip(val, StoreSigned{true}, FixedPointScale{2},  NumBytes{8}), inf);
+    EXPECT_FLOAT_EQ(roundTrip(val, StoreSigned{true}, FixedPointScale{1},  NumBytes{8}), val);
+
+    val = std::numeric_limits<float>::lowest() + 1000;
+    EXPECT_EQ(roundTrip(val, StoreSigned{false}, FixedPointScale{2},  NumBytes{8}), ninf);
+    EXPECT_FLOAT_EQ(roundTrip(val, StoreSigned{false}, FixedPointScale{1},  NumBytes{8}), ninf);
+    EXPECT_EQ(roundTrip(val, StoreSigned{true}, FixedPointScale{2},  NumBytes{8}), ninf);
+    EXPECT_FLOAT_EQ(roundTrip(val, StoreSigned{true}, FixedPointScale{1},  NumBytes{8}), val);
+
+    // This is borderline testing the implementation, but the implementation reserves a few
+    // bit patterns near zero to represent special values.  Here we use those special values
+    // as an edge case test, to make sure we don't clobber real values.
+    EXPECT_EQ(roundTrip(FloatFixedCodec::nan,  StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::nan);
+    EXPECT_EQ(roundTrip(FloatFixedCodec::inf,  StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::inf);
+    EXPECT_EQ(roundTrip(FloatFixedCodec::ninf, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::ninf);
+    EXPECT_EQ(roundTrip(FloatFixedCodec::nan,  StoreSigned{true},  FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::nan);
+    EXPECT_EQ(roundTrip(FloatFixedCodec::inf,  StoreSigned{true},  FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::inf);
+    EXPECT_EQ(roundTrip(FloatFixedCodec::ninf, StoreSigned{true},  FixedPointScale{1},  NumBytes{1}), FloatFixedCodec::ninf);
+
+    // Now that we've handled literal float infinities, make sure that the mechanism for
+    // setting a maximum number of bytes is functional.  The round trip value should appear
+    // infinite if we don't allow enough storage bytes in the transformed value.
+    EXPECT_EQ(roundTrip(256, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(255, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(254, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(253, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(252, StoreSigned{false}, FixedPointScale{1},  NumBytes{1}), 252);
+
+    EXPECT_EQ(roundTrip(252, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(127, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(126, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(125, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), inf);
+    EXPECT_EQ(roundTrip(124, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), 124);
+
+    EXPECT_EQ(roundTrip(-127, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), ninf);
+    EXPECT_EQ(roundTrip(-124, StoreSigned{true}, FixedPointScale{1},  NumBytes{1}), -124);
+
+    // A couple more random checks...
+    EXPECT_EQ(roundTrip(7623.531, StoreSigned{false}, FixedPointScale{10}, NumBytes{2}), inf);
+    EXPECT_NEAR(roundTrip(7623.531, StoreSigned{false}, FixedPointScale{10}, NumBytes{3}), 7623.5, 1e-2);
+
+    EXPECT_EQ(roundTrip(3623.531, StoreSigned{true}, FixedPointScale{10}, NumBytes{2}), inf);
+    EXPECT_NEAR(roundTrip(3623.531, StoreSigned{true}, FixedPointScale{10}, NumBytes{3}), 3623.5, 1e-2);
+
+    EXPECT_EQ(roundTrip(-3623.531, StoreSigned{true}, FixedPointScale{10}, NumBytes{2}), ninf);
+    EXPECT_NEAR(roundTrip(-3623.531, StoreSigned{true}, FixedPointScale{10}, NumBytes{3}), -3623.5, 1e-2);
+}
+
 TEST(BazTransform, Codec)
 {
     auto VerifyToCode = [](NumBits mainBits, NumBits groupBits)

@@ -78,7 +78,8 @@ namespace {
             std::move(noop),
             std::move(codec),
             std::move(delta),
-            [&](const BazIO::FixedPointParams&) -> std::vector<TOut> { throw PBException("Datatype does not support FixedPoint format"); }
+            [&](const BazIO::FixedPointParams&) -> std::vector<TOut> { throw PBException("Datatype does not support FixedPoint format"); },
+            [&](const BazIO::FloatFixedCodecParams&) -> std::vector<TOut> { throw PBException("Datatype does not support FloatFixedCodec format"); }
         );
     }
 
@@ -92,15 +93,23 @@ namespace {
     {
         static_assert(std::is_floating_point<TOut>::value, "Output type should be integral");
 
-        auto func = [&](const BazIO::FixedPointParams& params) {
+        auto fixedPoint = [&](const BazIO::FixedPointParams& params) {
             std::vector<TOut> ret;
             ret.reserve(raw.size());
             for (const auto& val : raw)
                 ret.push_back(BazIO::FixedPoint::Revert<TOut>(val, storeSigned, BazIO::FixedPointScale{params.scale}));
             return ret;
         };
+        auto floatFixedCodec = [&](const BazIO::FloatFixedCodecParams& params) {
+            std::vector<TOut> ret;
+            ret.reserve(raw.size());
+            for (const auto& val : raw)
+                ret.push_back(BazIO::FloatFixedCodec::Revert<TOut>(val, storeSigned, BazIO::FixedPointScale{params.scale}));
+            return ret;
+        };
         return info.params.Visit(
-            std::move(func),
+            std::move(fixedPoint),
+            std::move(floatFixedCodec),
             [&](const auto&) -> std::vector<TOut> { throw PBException("Datatype only supports FixedPoint format"); }
         );
     }
