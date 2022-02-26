@@ -60,7 +60,7 @@ class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBat
 {
 public:
     TraceSaverBody(const std::string& filename,
-                   size_t numFrames,
+                   uint64_t numFrames, // TODO numFrames is 64 bits but the frame indices are returned as signed 32 bit ints.
                    DataSource::DataSourceBase::LaneSelector laneSelector,
                    const uint64_t frameBlockingSize,
                    const uint64_t zmwBlockingSize,
@@ -92,6 +92,7 @@ private:
     PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
     PacBio::DataSource::PacketLayout packetLayout_;
     File::TraceFile file_;
+    uint64_t numFrames_;
 };
 
 }}
