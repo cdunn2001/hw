@@ -206,7 +206,10 @@ struct FixedPoint
 // an infinity.
 struct FloatFixedCodec
 {
-    BAZ_CUDA static uint64_t Apply(float f, StoreSigned storeSigned, FixedPointScale scale, NumBytes bytes)
+    BAZ_CUDA static uint64_t Apply(float f,
+                                   StoreSigned storeSigned,
+                                   FixedPointScale scale,
+                                   NumBytes bytes)
     {
         assert(bytes <= 8);
 
@@ -248,7 +251,12 @@ struct FloatFixedCodec
     }
 
     template <typename Ret>
-    BAZ_CUDA static Ret Revert(uint64_t val, StoreSigned storeSigned, FixedPointScale scale)
+    BAZ_CUDA static Ret Revert(uint64_t val,
+                               StoreSigned storeSigned,
+                               FixedPointScale scale,
+                               // Only present for symmetry of arguments between serialization and deserialization.
+                               // Not actually used in production, but some test code currently needs it
+                               NumBytes /*unused*/ = NumBytes{0})
     {
         static_assert(std::is_same<Ret, float>::value,"");
 

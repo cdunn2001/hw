@@ -355,6 +355,127 @@ TEST(PulseToBaz, KestrelLosslessCompact)
     Validate();
 }
 
+TEST(PulseToBaz, InternalMode)
+{
+    using Test = InternalPulses;
+
+    UnifiedCudaArray<Pulse>  pulsesIn{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<Pulse> pulsesOut{8, SyncDirection::Symmetric, SOURCE_MARKER()};
+    UnifiedCudaArray<bool> Overrun{1, SyncDirection::Symmetric, SOURCE_MARKER()};
+
+    {
+        auto pulsesInV = pulsesIn.GetHostView();
+        pulsesInV[0].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[1].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[2].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[3].Label(Pulse::NucleotideLabel::T);
+        pulsesInV[4].Label(Pulse::NucleotideLabel::A);
+        pulsesInV[5].Label(Pulse::NucleotideLabel::C);
+        pulsesInV[6].Label(Pulse::NucleotideLabel::G);
+        pulsesInV[7].Label(Pulse::NucleotideLabel::T);
+
+        pulsesInV[0].Width(4);
+        pulsesInV[1].Width(120);
+        pulsesInV[2].Width(55);
+        pulsesInV[3].Width(32);
+        pulsesInV[4].Width(182);
+        pulsesInV[5].Width(5);
+        pulsesInV[6].Width(1);
+        pulsesInV[7].Width(300);
+
+        uint32_t start = 0;
+        pulsesInV[0].Start(start += 14);
+        pulsesInV[1].Start(start += pulsesInV[0].Width() + 130);
+        pulsesInV[2].Start(start += pulsesInV[1].Width() + 5);
+        pulsesInV[3].Start(start += pulsesInV[2].Width() + 18);
+        pulsesInV[4].Start(start += pulsesInV[3].Width() + 22);
+        pulsesInV[5].Start(start += pulsesInV[4].Width() + 500);
+        pulsesInV[6].Start(start += pulsesInV[5].Width() + 64);
+        pulsesInV[7].Start(start += pulsesInV[6].Width() + 33);
+
+        pulsesInV[0].MaxSignal(128.45);
+        pulsesInV[1].MaxSignal(423.2);
+        pulsesInV[2].MaxSignal(223.645);
+        pulsesInV[3].MaxSignal(623.24);
+        pulsesInV[4].MaxSignal(std::numeric_limits<float>::quiet_NaN());
+        pulsesInV[5].MaxSignal(2123.12);
+        pulsesInV[6].MaxSignal(3613.36);
+        pulsesInV[7].MaxSignal(std::numeric_limits<float>::infinity());
+
+        pulsesInV[0].MeanSignal(423.2);
+        pulsesInV[1].MeanSignal(223.645);
+        pulsesInV[2].MeanSignal(623.24);
+        pulsesInV[3].MeanSignal(std::numeric_limits<float>::quiet_NaN());
+        pulsesInV[4].MeanSignal(2123.12);
+        pulsesInV[5].MeanSignal(3613.36);
+        pulsesInV[6].MeanSignal(std::numeric_limits<float>::infinity());
+        pulsesInV[7].MeanSignal(128.45);
+
+        pulsesInV[0].MidSignal(223.645);
+        pulsesInV[1].MidSignal(623.24);
+        pulsesInV[2].MidSignal(std::numeric_limits<float>::quiet_NaN());
+        pulsesInV[3].MidSignal(2123.12);
+        pulsesInV[4].MidSignal(3613.36);
+        pulsesInV[5].MidSignal(std::numeric_limits<float>::infinity());
+        pulsesInV[6].MidSignal(128.45);
+        pulsesInV[7].MidSignal(423.2);
+
+        pulsesInV[0].SignalM2(623.24);
+        pulsesInV[1].SignalM2(std::numeric_limits<float>::quiet_NaN());
+        pulsesInV[2].SignalM2(4123.12);
+        pulsesInV[3].SignalM2(6613.36);
+        pulsesInV[4].SignalM2(std::numeric_limits<float>::infinity());
+        pulsesInV[5].SignalM2(128.45);
+        pulsesInV[6].SignalM2(423.2);
+        pulsesInV[7].SignalM2(223.645);
+    }
+
+    auto Validate = [&]()
+    {
+        // Helper, since float values have a number of special conditions that need to
+        // be checked, which I don't want to repeat several times
+        auto checkFloatVal = [](float truth, float check, float maxVal, int iteration)
+        {
+            if (std::isnan(truth))
+                EXPECT_TRUE(std::isnan(check)) << iteration;
+            else if (truth < maxVal)
+                EXPECT_NEAR(truth, check, 0.1) << iteration;
+            else
+                EXPECT_FALSE(std::isfinite(check)) << iteration;
+        };
+
+        auto pulsesInV = pulsesIn.GetHostView();
+        auto pulsesOutV = pulsesOut.GetHostView();
+        for (size_t i = 0; i < pulsesIn.Size(); ++i)
+        {
+            EXPECT_EQ(pulsesInV[i].Label(), pulsesOutV[i].Label()) << i;
+            EXPECT_EQ(pulsesInV[i].Width(), pulsesOutV[i].Width()) << i;
+            EXPECT_EQ(pulsesInV[i].Start(), pulsesOutV[i].Start()) << i;
+
+            checkFloatVal(pulsesInV[i].MaxSignal(), pulsesOutV[i].MaxSignal(),
+                       std::numeric_limits<int16_t>::max()/10.0f, i);
+            checkFloatVal(pulsesInV[i].MeanSignal(), pulsesOutV[i].MeanSignal(),
+                       std::numeric_limits<int16_t>::max()/10.0f, i);
+            checkFloatVal(pulsesInV[i].MidSignal(), pulsesOutV[i].MidSignal(),
+                       std::numeric_limits<int16_t>::max()/10.0f, i);
+            // Note: This metric is stored as unsigned.
+            checkFloatVal(pulsesInV[i].SignalM2(), pulsesOutV[i].SignalM2(),
+                       std::numeric_limits<uint16_t>::max()/10.0f, i);
+        }
+    };
+
+    // empirical value.  It was too data dependent to bother calculating a priori
+    static constexpr size_t expectedLen = 92;
+
+    //    PacBio::Cuda::PBLauncher(RunGpuTest<Test, expectedLen>, 1, 1)(pulsesIn, pulsesOut, Overrun);
+    //    EXPECT_FALSE(Overrun.GetHostView()[0]);
+    //    Validate();
+
+    TestPulseToBaz<Test, expectedLen>(pulsesIn.GetHostView(), pulsesOut.GetHostView(), Overrun.GetHostView());
+    EXPECT_FALSE(Overrun.GetHostView()[0]);
+    Validate();
+}
+
 TEST(PulseToBaz, Params)
 {
     auto pp_params = ProductionPulses::Params();
@@ -405,7 +526,7 @@ TEST(PulseToBaz, Params)
     EXPECT_EQ(gp.numBits.front(), gp.totalBits);
     EXPECT_TRUE(gp.members[0].storeSigned);
     EXPECT_TRUE(gp.members[0].transform[0].params.Visit(
-            [](const FixedPointParams& v) { return v.scale == 10; },
+            [](const FloatFixedCodecParams& v) { return v.scale == 10 && v.numBytes == 2; },
             [](const auto& v) { return false; }
     ));
     EXPECT_TRUE(gp.members[0].serialize.params.Visit(
@@ -418,7 +539,7 @@ TEST(PulseToBaz, Params)
     EXPECT_EQ(1, gp.numBits.size());
     EXPECT_EQ(gp.numBits.front(), gp.totalBits);
     EXPECT_TRUE(gp.members[0].transform[0].params.Visit(
-            [](const FixedPointParams& v) { return v.scale == 10; },
+            [](const FloatFixedCodecParams& v) { return v.scale == 10 && v.numBytes == 2; },
             [](const auto& v) { return false; }
     ));
     EXPECT_TRUE(gp.members[0].serialize.params.Visit(
