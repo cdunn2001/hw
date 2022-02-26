@@ -573,12 +573,26 @@ private:
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
                                                         config_.layout.framesPerChunk;
 
+#if 1
         namespace io = boost::iostreams;
         io::stream<io::file_descriptor_sink> statusStream(
             io::file_descriptor_sink( statusFileDescriptor_, io::never_close_handle ) );
-        statusStream << "PA_WS_STATUS { \"source\":\"smrt-basecaller\", \"message\": \"started\", \"timestamp\":\"" 
-             << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
 
+        {
+            Json::Value status;
+            status["state"]="progress";
+            status["ready"]=false;
+            status["stageNumber"]=0;
+            status["stageName"]="basecalling";
+            status["counter"]=0;
+            status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
+            status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
+            status["stageWeights"] = Json::arrayValue;
+            status["stageWeights"].resize(1);
+            status["stageWeights"][0]=1;
+            statusStream << "SBC_STATUS_REPORT " << status << std::endl;
+        }
+#endif
         try
         {
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
@@ -613,10 +627,22 @@ private:
             source->Start();
 
 #if 1
-            // TODO Change this to notify pa-ws that smrt-basecaller is ready
             double progress  = 0.0;
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\","
-                << "\"timestamp\":\"" << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
+            {
+                Json::Value status;
+                status["state"]="progress";
+                status["ready"]=true;
+                status["stageNumber"]=0;
+                status["stageName"]="basecalling";
+                status["counter"]=0;
+                status["counterMax"]=frames_;
+                status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
+                status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
+                status["stageWeights"] = Json::arrayValue;
+                status["stageWeights"].resize(1);
+                status["stageWeights"][0]=1;
+                statusStream << "SBC_STATUS_REPORT " << status << std::endl;
+            }
 #endif
             while (source->IsActive())
             {
@@ -702,15 +728,24 @@ private:
                     framesAnalyzed += chunk.NumFrames();
 
 #if 1                        
-                    Json::Value status;
-                    status["source"]="smrt-basecaller";
-                    status["message"]="BUSY";
-                    status["frames"]=frames_;
-                    status["framesAnalyzed"]=framesAnalyzed;
-                    status["progress"]=progress;
-                    status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-                    statusStream << "PA_WS_STATUS " << status << std::endl;
                     progress = (frames_ > 0) ? (framesAnalyzed * 1.0 / frames_) : 0.0;
+                    if (progress > 1.0) progress = 1.0; // this can happen because the frames_ can be anything, but the framesAnalyzed is rounded up to multiple of the chunk size
+                    {
+                        Json::Value status;
+                        status["state"]="progress";
+                        status["ready"]=true;
+                        status["stageNumber"]=0;
+                        status["stageName"]="basecalling";
+                        status["counter"]=framesAnalyzed;
+                        status["counterMax"]=frames_;
+                        status["progress"]=progress;
+                        status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
+                        status["timeToNextStatus"]=50.0; // chunks are 5 seconds apart, so this is generous timeout
+                        status["stageWeights"] = Json::arrayValue;
+                        status["stageWeights"].resize(1);
+                        status["stageWeights"][0]=1;
+                        statusStream << "SBC_STATUS_REPORT " << status << std::endl;
+                    }
 #endif
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
@@ -731,10 +766,18 @@ private:
             }
             inputNode->FlushNode();
 
-            PBLOG_INFO << "All chunks analyzed.";
-            PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
-                    << " out of " << source->NumFrames() << " requested from source. ("
-                    << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
+            PBLOG_INFO << "Exited chunk analysis loop.";
+            const double framePercentage =  (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1);
+            if (framePercentage != 100.0)
+            {
+                PBLOG_WARN << "Not all Frames analyzed = " << framesAnalyzed
+                        << " out of " << source->NumFrames() << " requested from source. ("
+                        << framePercentage << "%)";
+            }
+            else
+            {
+                PBLOG_INFO << "All frames analyzed = " << framesAnalyzed;
+            }
             if (nop_ == 1)
             {
                 PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
@@ -745,20 +788,35 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
-#if 1                        
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0
-                << ",\"timestamp\":\"" << PacBio::Utilities::ISO8601::TimeString() << "\"}" << std::endl;
+#if 1
+            progress  = 1.0;
+            {
+                Json::Value status;
+                status["state"]="progress";
+                status["ready"]=true;
+                status["stageNumber"]=0;
+                status["stageName"]="basecalling";
+                status["counter"]=framesAnalyzed;
+                status["counterMax"]=frames_;
+                status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
+                status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
+                status["stageWeights"] = Json::arrayValue;
+                status["stageWeights"].resize(1);
+                status["stageWeights"][0]=1;
+                statusStream << "SBC_STATUS_REPORT " << status << std::endl;
+            }
 #endif
+
         }
         catch(const std::exception& ex)
         {
             PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
 #if 1                        
             Json::Value status;
-            status["source"]="smrt-basecaller";
-            status["message"]="EXCEPTION";
-            status["what"] = ex.what();
-            statusStream << "PA_WS_STATUS " << status << std::endl;
+            status["state"]="EXCEPTION";
+            status["message"] = ex.what();
+            status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
+            statusStream << "SBC_STATUS_REPORT " << status << std::endl;
 #endif
             throw;
         }
