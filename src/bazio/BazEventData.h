@@ -81,6 +81,10 @@ public: // const data accesors
 
     const std::vector<float>& PkMids() const { return pkmid_; }
 
+    const std::vector<float>& PkMaxs() const { return pkmax_; }
+
+    const std::vector<float>& PkVars() const { return pkvar_; }
+
     size_t NumEvents() const { return numEvents_; }
     bool Internal() const { return internal_; }
     bool StartFramesAreExact() const { return exactStartFrames_; }
