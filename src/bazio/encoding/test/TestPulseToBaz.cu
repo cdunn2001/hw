@@ -393,7 +393,7 @@ TEST(PulseToBaz, InternalMode)
         pulsesInV[6].Start(start += pulsesInV[5].Width() + 64);
         pulsesInV[7].Start(start += pulsesInV[6].Width() + 33);
 
-        pulsesInV[0].MaxSignal(128.45);
+        pulsesInV[0].MaxSignal(0);
         pulsesInV[1].MaxSignal(423.2);
         pulsesInV[2].MaxSignal(223.645);
         pulsesInV[3].MaxSignal(623.24);
@@ -409,7 +409,7 @@ TEST(PulseToBaz, InternalMode)
         pulsesInV[4].MeanSignal(2123.12);
         pulsesInV[5].MeanSignal(3613.36);
         pulsesInV[6].MeanSignal(std::numeric_limits<float>::infinity());
-        pulsesInV[7].MeanSignal(128.45);
+        pulsesInV[7].MeanSignal(0);
 
         pulsesInV[0].MidSignal(223.645);
         pulsesInV[1].MidSignal(623.24);
@@ -417,7 +417,7 @@ TEST(PulseToBaz, InternalMode)
         pulsesInV[3].MidSignal(2123.12);
         pulsesInV[4].MidSignal(3613.36);
         pulsesInV[5].MidSignal(std::numeric_limits<float>::infinity());
-        pulsesInV[6].MidSignal(128.45);
+        pulsesInV[6].MidSignal(0);
         pulsesInV[7].MidSignal(423.2);
 
         pulsesInV[0].SignalM2(623.24);
@@ -425,21 +425,62 @@ TEST(PulseToBaz, InternalMode)
         pulsesInV[2].SignalM2(4123.12);
         pulsesInV[3].SignalM2(6613.36);
         pulsesInV[4].SignalM2(std::numeric_limits<float>::infinity());
-        pulsesInV[5].SignalM2(128.45);
+        pulsesInV[5].SignalM2(0);
         pulsesInV[6].SignalM2(423.2);
         pulsesInV[7].SignalM2(223.645);
     }
+
+    // Extract information about the expected transformation for
+    // each float field
+    std::map<PacketFieldName, float> maxMap;
+    std::map<PacketFieldName, float> scaleMap;
+    auto param = Test::Params();
+    for (const auto& g : param)
+    {
+        for (const auto& f : g.members)
+        {
+            switch(f.name)
+            {
+            case PacketFieldName::Pkmax:
+            case PacketFieldName::Pkmean:
+            case PacketFieldName::Pkmid:
+            case PacketFieldName::Pkvar:
+            {
+                uint32_t scale = f.transform[0].params.Visit(
+                        [](const FloatFixedCodecParams& params) {
+                            if (params.numBytes != 2) throw PBException("Unexpected transform config");
+                            return params.scale;
+                        },
+                        [](const auto&) -> uint32_t { throw PBException("Unexpected transform\n");}
+                );
+                float maxVal = f.storeSigned
+                    ? static_cast<float>(std::numeric_limits<int16_t>::max())
+                    : static_cast<float>(std::numeric_limits<uint16_t>::max());
+                maxMap[f.name] = maxVal / scale;
+                scaleMap[f.name] = scale;
+                break;
+            }
+            default:
+                {
+                    // Do nothing
+                }
+            }
+        }
+    }
+    ASSERT_EQ(scaleMap.size(), 4);
+    ASSERT_EQ(maxMap.size(), 4);
 
     auto Validate = [&]()
     {
         // Helper, since float values have a number of special conditions that need to
         // be checked, which I don't want to repeat several times
-        auto checkFloatVal = [](float truth, float check, float maxVal, int iteration)
+        auto checkFloatVal = [&](float truth, float check, PacketFieldName name, int iteration)
         {
+            float maxVal = maxMap[name];
             if (std::isnan(truth))
                 EXPECT_TRUE(std::isnan(check)) << iteration;
             else if (truth < maxVal)
-                EXPECT_NEAR(truth, check, 0.1) << iteration;
+                EXPECT_NEAR(truth, check, 1.0 / scaleMap[name]) << iteration;
             else
                 EXPECT_FALSE(std::isfinite(check)) << iteration;
         };
@@ -452,20 +493,16 @@ TEST(PulseToBaz, InternalMode)
             EXPECT_EQ(pulsesInV[i].Width(), pulsesOutV[i].Width()) << i;
             EXPECT_EQ(pulsesInV[i].Start(), pulsesOutV[i].Start()) << i;
 
-            checkFloatVal(pulsesInV[i].MaxSignal(), pulsesOutV[i].MaxSignal(),
-                       std::numeric_limits<int16_t>::max()/10.0f, i);
-            checkFloatVal(pulsesInV[i].MeanSignal(), pulsesOutV[i].MeanSignal(),
-                       std::numeric_limits<int16_t>::max()/10.0f, i);
-            checkFloatVal(pulsesInV[i].MidSignal(), pulsesOutV[i].MidSignal(),
-                       std::numeric_limits<int16_t>::max()/10.0f, i);
-            // Note: This metric is stored as unsigned.
-            checkFloatVal(pulsesInV[i].SignalM2(), pulsesOutV[i].SignalM2(),
-                       std::numeric_limits<uint16_t>::max()/10.0f, i);
+            checkFloatVal(pulsesInV[i].MaxSignal(), pulsesOutV[i].MaxSignal(), PacketFieldName::Pkmax, i);
+            checkFloatVal(pulsesInV[i].MeanSignal(), pulsesOutV[i].MeanSignal(), PacketFieldName::Pkmean, i);
+            checkFloatVal(pulsesInV[i].MidSignal(), pulsesOutV[i].MidSignal(), PacketFieldName::Pkmid, i);
+            // Note: This is an outstanding bug...  SignalM2 isn't actually Pkvar...
+            checkFloatVal(pulsesInV[i].SignalM2(), pulsesOutV[i].SignalM2(), PacketFieldName::Pkvar, i);
         }
     };
 
     // empirical value.  It was too data dependent to bother calculating a priori
-    static constexpr size_t expectedLen = 92;
+    static constexpr size_t expectedLen = 86;
 
     //    PacBio::Cuda::PBLauncher(RunGpuTest<Test, expectedLen>, 1, 1)(pulsesIn, pulsesOut, Overrun);
     //    EXPECT_FALSE(Overrun.GetHostView()[0]);
