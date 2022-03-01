@@ -70,6 +70,9 @@ DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfi
 
     currChunk_ = SensorPacketsChunk(0, framesPerBlock);
     currChunk_.SetZmwRange(0, numZmw);
+
+    int delayMs = simCfg_.minInputDelaySeconds * 1000;
+    waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
 }
 
 std::map<uint32_t, PacketLayout> DataSourceSimulator::PacketLayouts() const
@@ -128,14 +131,15 @@ MovieInfo DataSourceSimulator::MovieInformation() const
 
 SensorPacket DataSourceSimulator::GenerateBatch()
 {
+    assert(!layouts_.empty());
+
     const auto& layout  = layouts_[batchIdx_];
     auto numBlocks      = layout.NumBlocks();
     auto zmwPerBlock    = layout.BlockWidth();
     auto framesPerBlock = layout.NumFrames();
-    auto zmwPerBatch    = layout.NumZmw();
 
-    auto startZmw       = batchIdx_ * zmwPerBatch;
-    auto startFrame     = chunkIdx_ * framesPerBlock;
+    auto startZmw       = batchIdx_ * layouts_[0].NumZmw();
+    auto startFrame     = chunkIdx_ * layouts_[0].NumFrames();
     SensorPacket batchData(layout, batchIdx_, startZmw, startFrame, *GetConfig().allocator);
     for (size_t i = 0; i < numBlocks; ++i)
     {
@@ -144,13 +148,12 @@ SensorPacket DataSourceSimulator::GenerateBatch()
             boost::extents[zmwPerBlock][framesPerBlock],
             boost::fortran_storage_order());
 
-        for (size_t zmw = 0; zmw < zmwPerBlock; ++zmw)
+        for (size_t z = 0; z < zmwPerBlock; ++z)
         {
-            size_t zmwIdx = startZmw + i * zmwPerBlock + zmw;
+            size_t zmwIdx = startZmw + i * zmwPerBlock + z;
             auto [ mean, std ] = Id2Norm(zmwIdx);
             std::normal_distribution<> dist(mean, std);
-            auto rfunc = std::bind(dist, gnr_);
-            std::generate(blkData[zmw].begin(), blkData[zmw].end(), rfunc);
+            std::generate(blkData[z].begin(), blkData[z].end(), std::bind(dist, gnr_));
         }
 
         auto ma_clamp = std::bind(std::clamp<int16_t>, std::placeholders::_1, 
@@ -165,21 +168,32 @@ SensorPacket DataSourceSimulator::GenerateBatch()
 
 void DataSourceSimulator::ContinueProcessing()
 {
-    const auto& layout = layouts_[batchIdx_];
+    assert(!layouts_.empty());
 
+    PacketLayout nominalLayout = layouts_[0];
     currChunk_.AddPacket(GenerateBatch());
 
     batchIdx_++;
     auto numZmw = NumZmw();
-    auto startZmw   = batchIdx_ * layout.NumZmw();
+    auto startZmw = (batchIdx_-1)*nominalLayout.NumZmw() + layouts_[batchIdx_-1].NumZmw();
     if (startZmw == numZmw)
     {
         chunkIdx_++;
         batchIdx_ = 0;
+        while (std::chrono::system_clock::now() < waitTill_)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        } 
+
         this->PushChunk(std::move(currChunk_));
-        currChunk_ = SensorPacketsChunk(chunkIdx_ * layout.NumFrames(),
-                                        (chunkIdx_ + 1) * layout.NumFrames());
+
+        int delayMs = simCfg_.minInputDelaySeconds * 1000;
+        waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
+
+        currChunk_ = SensorPacketsChunk(chunkIdx_ * nominalLayout.NumFrames(),
+                                        (chunkIdx_ + 1) * nominalLayout.NumFrames());
         currChunk_.SetZmwRange(0, numZmw);
+
     }
     if (startZmw > numZmw)
         throw PBException("Bookkeeping error in SimulatedDataSource!");

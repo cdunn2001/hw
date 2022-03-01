@@ -38,7 +38,8 @@
 #include "PaCalConstants.h"
 #include "SignalSimulator.h"
 
-typedef Eigen::Matrix<int16_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXs;
+// Eigen::Matrix has fortran memory layout by default
+typedef Eigen::Matrix<int16_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 
 using namespace testing;
 
@@ -50,18 +51,18 @@ struct TestingParams
     size_t framesPerBlock;
     size_t lanesPerPool;
     size_t totalFrames;
-    size_t numZmw;
     size_t nRows = 0;
     size_t nCols = 0;
+    double delay = 0;
 
     // Need this so gtest prints something sensible on test failure
     friend std::ostream& operator<<(std::ostream& os, const TestingParams& param)
     {
         os << std::endl;
         os << std::endl << "chip size:         " << param.nRows << " x " << param.nCols;
+        os << std::endl << "delay:             " << param.delay;
         os << std::endl << "framesPerBlock:    " << param.framesPerBlock;
         os << std::endl << "lanesPerPool:      " << param.lanesPerPool;
-        os << std::endl << "numZmw:            " << param.numZmw;
         os << std::endl << "totalFrames:       " << param.totalFrames;
         os << std::endl;
         return os;
@@ -69,18 +70,17 @@ struct TestingParams
 
 };
 
-class SimDataSourceTest : public testing::TestWithParam<TestingParams> {};
+class DataSourceSimTest : public testing::TestWithParam<TestingParams> {};
 
-TEST_P(SimDataSourceTest, Constant)
+TEST_P(DataSourceSimTest, Chip)
 {
     SimInputConfig simConf;
 
     auto params = GetParam();
-    params.nRows = params.nRows != 0 ? params.nRows : simConf.nRows;
-    params.nCols = params.nCols != 0 ? params.nCols : simConf.nCols;
-
-    simConf.nRows = params.nRows;
-    simConf.nCols = params.nCols;
+    simConf.nRows = params.nRows != 0 ? params.nRows : simConf.nRows;
+    simConf.nCols = params.nCols != 0 ? params.nCols : simConf.nCols;
+    simConf.minInputDelaySeconds
+                  = params.delay != 0 ? params.delay : simConf.minInputDelaySeconds;
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16,
                         {params.lanesPerPool, params.framesPerBlock, laneSize});
@@ -108,20 +108,19 @@ TEST_P(SimDataSourceTest, Constant)
             {
                 size_t startZmw       = packet.StartZmw();
                 PacketLayout pkLayout = packet.Layout();
-
-                size_t blkFrames     = pkLayout.NumFrames();
-                size_t zmwPerBlock   = pkLayout.BlockWidth();
+                size_t framesPerBlock = pkLayout.NumFrames();
+                size_t zmwPerBlock    = pkLayout.BlockWidth();
                 for (size_t i = 0; i < pkLayout.NumBlocks(); ++i)
                 {
                     SensorPacket::DataView blockView = packet.BlockData(i);
                     auto dataPtr = reinterpret_cast<int16_t*>(blockView.Data());
-                    Eigen::Map<MatrixXs> mapView(dataPtr, blkFrames, zmwPerBlock);
+                    Eigen::Map<MatrixXs> mapView(dataPtr, zmwPerBlock, framesPerBlock);
                     Eigen::MatrixXf blkm = mapView.cast<float>();
 
-                    auto blkMean = blkm.colwise().mean();
-                    auto blkVar1  = (blkm.rowwise() - blkMean).array().square().colwise().sum();
-                    auto blkVar = blkVar1 / (blkFrames - 1);
-                    assert(size_t(blkMean.cols()) == zmwPerBlock);
+                    auto blkMean = blkm.rowwise().mean();
+                    auto blkVar1 = (blkm.colwise() - blkMean).array().square().rowwise().sum();
+                    auto blkVar = blkVar1 / (framesPerBlock - 1);
+                    assert(size_t(blkMean.rows()) == zmwPerBlock);
 
                     for (size_t z = 0; z < zmwPerBlock; ++z)
                     {
@@ -129,8 +128,8 @@ TEST_P(SimDataSourceTest, Constant)
                         auto [ expMean, expStd ] = source.Id2Norm(zmwIdx);
                         auto [ actMean, actVar ] = std::make_pair(blkMean(z), blkVar(z));
 
-                        EXPECT_NEAR(actMean, expMean, 3*std::sqrt(actVar / blkFrames));
-                        EXPECT_NEAR(actVar,  expStd*expStd, 3*expStd);
+                        EXPECT_NEAR(actMean, expMean, 4*std::sqrt(actVar / framesPerBlock));
+                        EXPECT_NEAR(actVar,  expStd*expStd, 4*expStd);
                     }
                 }
 
@@ -145,49 +144,52 @@ TEST_P(SimDataSourceTest, Constant)
 #if 0
 // For debugging purposes
 INSTANTIATE_TEST_SUITE_P(TinyBlock,
-                         SimDataSourceTest,
+                         DataSourceSimTest,
                          testing::Values(TestingParams{
-                                 48,   /* framesPerBlock */
-                                 1,    /* lanesPerPool   */
-                                 48,   /* totalFrames    */
-                                 24,   /* numZmw         */
-                                 8, 8  /* nRown x nCols */
+                                32,             /* framesPerBlock */
+                                1,              /* lanesPerPool   */
+                                32,             /* totalFrames    */
+                                8, 8,           /* nRown x nCols  */
+                                0.001           /* delay          */
 }));
-#endif
+#endif // 0
 
 INSTANTIATE_TEST_SUITE_P(SingleBlock,
-                         SimDataSourceTest,
+                         DataSourceSimTest,
                          testing::Values(TestingParams{
-                                 512,  /* framesPerBlock */
-                                 1,    /* lanesPerPool   */
-                                 512,  /* totalFrames    */
-                                 64,   /* numZmw         */
+                                512,            /* framesPerBlock */
+                                1,              /* lanesPerPool   */
+                                512,            /* totalFrames    */
+                                4, 16,          /* nRown x nCols  */
+                                0.001           /* delay          */
 }));
 
-INSTANTIATE_TEST_SUITE_P(QuadBlocks,
-                         SimDataSourceTest,
+INSTANTIATE_TEST_SUITE_P(ThreeBlocks,
+                         DataSourceSimTest,
                          testing::Values(TestingParams{
-                                 512,  /* framesPerBlock */
-                                 1,    /* lanesPerPool   */
-                                 512,  /* totalFrames    */
-                                 256,  /* numZmw         */
+                                512,            /* framesPerBlock */
+                                1,              /* lanesPerPool   */
+                                512,            /* totalFrames    */
+                                12, 16,         /* nRown x nCols  */
+                                0.001           /* delay          */
 }));
 
-// upgrade to a single batch, which will contain 4 blocks
-INSTANTIATE_TEST_SUITE_P(SingleBatch,
-                         SimDataSourceTest,
+INSTANTIATE_TEST_SUITE_P(SingleBatch,           /* i.e. 4 blocks  */
+                         DataSourceSimTest,
                          testing::Values(TestingParams{
-                                 512,  /* framesPerBlock */
-                                 4,    /* lanesPerPool   */
-                                 512,  /* totalFrames    */
-                                 256 , /* numZmw         */
+                                512,            /* framesPerBlock */
+                                4,              /* lanesPerPool   */
+                                512,            /* totalFrames    */
+                                32, 8,          /* nRown x nCols  */
+                                0.001           /* delay          */
 }));
 
 INSTANTIATE_TEST_SUITE_P(MultiChunkMultiBatch,
-                         SimDataSourceTest,
+                         DataSourceSimTest,
                          testing::Values(TestingParams{
-                                 512,  /* framesPerBlock */
-                                 4,    /* lanesPerPool */
-                                 1024, /* totalFrames */
-                                 256 , /* numZmw */
+                                512,            /* framesPerBlock */
+                                4,              /* lanesPerPool   */
+                                1024,           /* totalFrames    */
+                                51, 53,         /* nRown x nCols  */
+                                0.001           /* delay          */
 }));

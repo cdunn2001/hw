@@ -26,8 +26,9 @@
 #ifndef PACBIO_SIGNAL_SIMULATOR_H
 #define PACBIO_SIGNAL_SIMULATOR_H
 
-#include <array>
+#include <map>
 #include <string>
+#include <chrono>
 
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/SensorPacket.h>
@@ -99,15 +100,16 @@ public:
     }
 
 private:
+    size_t chunkIdx_  = 0;
+    size_t batchIdx_  = 0;
+    size_t numFrames_ = 0;
     DataSource::SensorPacketsChunk currChunk_;
     std::map<uint32_t, DataSource::PacketLayout> layouts_;
-    std::default_random_engine gnr_;
-
-    size_t numFrames_ = 0;
-    size_t batchIdx_  = 0;
-    size_t chunkIdx_  = 0;
 
     SimInputConfig simCfg_;
+
+    std::default_random_engine gnr_;
+    std::chrono::time_point<std::chrono::system_clock> waitTill_;
 };
 
 } // namespace PacBio::Calibration

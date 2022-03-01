@@ -1,5 +1,5 @@
-distclean=${distclean:-0}  # set to 1 if you want to obliterate all previous build artifacts
-generator=${generator:-Ninja}
+distclean=${distclean:-0}     # set to 1 if you want to obliterate all previous build artifacts
+generator=${generator:-Ninja} # "Unix Makefiles"
 declare -A compilers
 compilers["gcc"]=gcc
 compilers["icc"]=icpc
@@ -10,31 +10,33 @@ then
     rm -rf depcache
 fi
 
+bld_dirs=\
+"
+   build/pa-ws/gcc/x86_64/Release
+   build/pa-cal/gcc/x86_64/Release
+   build/pa-cal/gcc/x86_64/RelWithDebInfo
+   build/pa-cal/gcc/x86_64/Debug
+   build/common/gcc/x86_64/Release
+   build/basecaller/gcc/x86_64/Release
+   build/basecaller/gcc/x86_64/RelWithDebInfo
+   build/basecaller/gcc/x86_64/Debug
+   build/basecaller/gcc/x86_64/DebugCpu
+"
 
 # the build directories must be 5 elements deep, with the convention:
 #
 #  build/$app/$toolkit/$arch/$type
 #
 
-for d in \
-   build/pa-ws/gcc/x86_64/Release \
-   build/pa-cal/gcc/x86_64/Release \
-   build/pa-cal/gcc/x86_64/RelWithDebInfo \
-   build/pa-cal/gcc/x86_64/Debug \
-   build/common/gcc/x86_64/Release \
-   build/basecaller/gcc/x86_64/Release \
-   build/basecaller/gcc/x86_64/RelWithDebInfo \
-   build/basecaller/gcc/x86_64/Debug \
-   build/basecaller/gcc/x86_64/DebugCpu
+for d in $bld_dirs
 do
-    rm -rf $d 
-    mkdir -p $d
+    rm -rf $d && mkdir -p $d
     elems=(${d//\// })  # split the path into the constituent elements
     proj=${elems[1]}
     tool=${elems[2]}
     arch=${elems[3]}
     type=${elems[4]}
-    echo ${elems[0]} proj: $proj tool: $tool arch: $arch type: $type
+    echo ${elems[0]} proj: $proj $'\t' tool: $tool arch: $arch type: $type
     top=../../../../..
     tc=$top/TC-${tool}-cuda-${arch}.cmake
 
