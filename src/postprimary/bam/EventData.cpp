@@ -148,7 +148,26 @@ EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
         std::vector<uint32_t> intVec;
         intVec.reserve(vec.size());
         int bamFixedPointFactor = 10;
-        for (const auto& v : vec) intVec.push_back(static_cast<uint32_t>(std::round(v * bamFixedPointFactor)));
+        // Need to be careful.  static_cast<uint32_t>(static_cast<float>(UINT_MAX));
+        // is UB because UINT_MAX is not perfectly representable in single precision and gets
+        // rounded up to a value outside the range of uint32_t.
+        const float maxVal = std::nextafterf(static_cast<float>(std::numeric_limits<uint32_t>::max()), 0.0f);
+        std::transform(vec.begin(), vec.end(), std::back_inserter(intVec),
+                       [&](float val) {
+                           auto fixedPoint = std::round(val * bamFixedPointFactor);
+
+                           // TODO: Might need to eventually support nan values and negative.  For now,
+                           //       none are expected to come through, so I've added an assert
+                           //       to validate that assumption, and used conditionals below that
+                           //       at least avoid a UB cast from float to uint32_t
+                           // Large values get pegged at UINT_MAX as well (and possibly to  a lower value
+                           // later during processing), but this is pre-existing behavior
+                           assert(!std::isnan(fixedPoint));
+                           assert(fixedPoint >= 0);
+                           if (std::isnan(fixedPoint) || fixedPoint > maxVal) return std::numeric_limits<uint32_t>::max();
+                           if (fixedPoint < 0) return 0u;
+                           return static_cast<uint32_t>(fixedPoint);
+                       });
         ret.push_back(std::make_pair(tag, convertData(intVec, filter, type, pulseBegin, pulseEnd)));
     };
     if (Internal())
