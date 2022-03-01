@@ -255,6 +255,17 @@ while(<>)
             push @fields, $f;
             push @{$objects{$currentStruct}}, $f;
         }
+        elsif (/PB_CONFIG_OBJECT_WITH_DEF\(\s*(\S+),\s*(\S+),\s*(\S+),\s*\);/)
+        {
+            my ($class, $name, $def) = ($1,$2);
+
+            my $f = [ ];
+
+            $f->[0] = $name;
+            $f->[1] = $class;
+            push @fields, $f;
+            push @{$objects{$currentStruct}}, $f;
+        }
         elsif (/^\s*$/)
         {
             # blank line
