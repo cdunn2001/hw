@@ -212,7 +212,7 @@ TEST(BazRoundTrip, InternalMode)
     pulsesIn[6].Start(start += pulsesIn[5].Width() + 64);
     pulsesIn[7].Start(start += pulsesIn[6].Width() + 33);
 
-    pulsesIn[0].MaxSignal(128.45);
+    pulsesIn[0].MaxSignal(0);
     pulsesIn[1].MaxSignal(423.2);
     pulsesIn[2].MaxSignal(223.645);
     pulsesIn[3].MaxSignal(623.24);
@@ -228,7 +228,7 @@ TEST(BazRoundTrip, InternalMode)
     pulsesIn[4].MeanSignal(2123.12);
     pulsesIn[5].MeanSignal(3613.36);
     pulsesIn[6].MeanSignal(std::numeric_limits<float>::infinity());
-    pulsesIn[7].MeanSignal(128.45);
+    pulsesIn[7].MeanSignal(0);
 
     pulsesIn[0].MidSignal(223.645);
     pulsesIn[1].MidSignal(623.24);
@@ -236,7 +236,7 @@ TEST(BazRoundTrip, InternalMode)
     pulsesIn[3].MidSignal(2123.12);
     pulsesIn[4].MidSignal(3613.36);
     pulsesIn[5].MidSignal(std::numeric_limits<float>::infinity());
-    pulsesIn[6].MidSignal(128.45);
+    pulsesIn[6].MidSignal(0);
     pulsesIn[7].MidSignal(423.2);
 
     pulsesIn[0].SignalM2(623.24);
@@ -244,7 +244,7 @@ TEST(BazRoundTrip, InternalMode)
     pulsesIn[2].SignalM2(4123.12);
     pulsesIn[3].SignalM2(6613.36);
     pulsesIn[4].SignalM2(std::numeric_limits<float>::infinity());
-    pulsesIn[5].SignalM2(128.45);
+    pulsesIn[5].SignalM2(0);
     pulsesIn[6].SignalM2(423.2);
     pulsesIn[7].SignalM2(223.645);
 
@@ -252,7 +252,7 @@ TEST(BazRoundTrip, InternalMode)
     size_t len = 0;
     for (const auto& p : pulsesIn) len += serializer.BytesRequired(p);
 
-    EXPECT_EQ(len, 92);
+    EXPECT_EQ(len, 86);
     auto data = std::make_unique<uint8_t[]>(len);
 
     serializer = Serializer{};
@@ -263,14 +263,55 @@ TEST(BazRoundTrip, InternalMode)
     BazEventData events(ParsePackets(Serializer::Params(), data.get(), len, pulsesIn.size()));
     ASSERT_EQ(events.NumEvents(), pulsesIn.size());
 
+    // Extract information about the expected transformation for
+    // each float field
+    std::map<PacketFieldName, float> maxMap;
+    std::map<PacketFieldName, float> scaleMap;
+    auto param = Serializer::Params();
+    for (const auto& g : param)
+    {
+        for (const auto& f : g.members)
+        {
+            switch(f.name)
+            {
+            case PacketFieldName::Pkmax:
+            case PacketFieldName::Pkmean:
+            case PacketFieldName::Pkmid:
+            case PacketFieldName::Pkvar:
+            {
+                uint32_t scale = f.transform[0].params.Visit(
+                        [](const FloatFixedCodecParams& params) {
+                            if (params.numBytes != 2) throw PBException("Unexpected transform config");
+                            return params.scale;
+                        },
+                        [](const auto&) -> uint32_t { throw PBException("Unexpected transform\n");}
+                );
+                float maxVal = f.storeSigned
+                    ? static_cast<float>(std::numeric_limits<int16_t>::max())
+                    : static_cast<float>(std::numeric_limits<uint16_t>::max());
+                maxMap[f.name] = maxVal / scale;
+                scaleMap[f.name] = scale;
+                break;
+            }
+            default:
+                {
+                    // Do nothing
+                }
+            }
+        }
+    }
+    ASSERT_EQ(scaleMap.size(), 4);
+    ASSERT_EQ(maxMap.size(), 4);
+
     // Helper, since float values have a number of special conditions that need to
     // be checked, which I don't want to repeat several times
-    auto checkFloatVal = [](float truth, float check, float maxVal, int iteration)
+    auto checkFloatVal = [&](float truth, float check, PacketFieldName name, int iteration)
     {
+        float maxVal = maxMap[name];
         if (std::isnan(truth))
             EXPECT_TRUE(std::isnan(check)) << iteration;
         else if (truth < maxVal)
-            EXPECT_NEAR(truth, check, 0.1) << iteration;
+            EXPECT_NEAR(truth, check, 1.0 / scaleMap[name]) << iteration;
         else
             EXPECT_FALSE(std::isfinite(check)) << iteration;
     };
@@ -280,15 +321,10 @@ TEST(BazRoundTrip, InternalMode)
         EXPECT_EQ(pulsesIn[i].Width(), events.PulseWidths()[i]) << i;
         EXPECT_EQ(pulsesIn[i].Start(), events.StartFrames()[i]) << i;
 
-        checkFloatVal(pulsesIn[i].MaxSignal(), events.PkMaxs()[i],
-                   std::numeric_limits<int16_t>::max()/10.0f, i);
-        checkFloatVal(pulsesIn[i].MeanSignal(), events.PkMeans()[i],
-                   std::numeric_limits<int16_t>::max()/10.0f, i);
-        checkFloatVal(pulsesIn[i].MidSignal(), events.PkMids()[i],
-                   std::numeric_limits<int16_t>::max()/10.0f, i);
-        // Note: This metric is stored as unsigned.
-        checkFloatVal(pulsesIn[i].SignalM2(), events.PkVars()[i],
-                   std::numeric_limits<uint16_t>::max()/10.0f, i);
-
+        checkFloatVal(pulsesIn[i].MaxSignal(), events.PkMaxs()[i], PacketFieldName::Pkmax, i);
+        checkFloatVal(pulsesIn[i].MeanSignal(), events.PkMeans()[i], PacketFieldName::Pkmean, i);
+        checkFloatVal(pulsesIn[i].MidSignal(), events.PkMids()[i], PacketFieldName::Pkmid, i);
+        // Note: This is an outstanding bug...  SignalM2 isn't actually Pkvar...
+        checkFloatVal(pulsesIn[i].SignalM2(), events.PkVars()[i], PacketFieldName::Pkvar, i);
     }
 }
