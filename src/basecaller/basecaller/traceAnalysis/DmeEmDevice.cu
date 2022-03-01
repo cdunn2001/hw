@@ -66,6 +66,8 @@ struct AnalogMode
     float ipd2SlowStepRatio;
 };
 
+__constant__ CoreDMEstimator::Configuration baseConfig;
+
 // Wrapping all the static configurations into a single struct,
 // as that will be easier to upload to the GPU.
 struct StaticConfig
@@ -84,7 +86,6 @@ struct StaticConfig
     float successConfThresh_;
     uint32_t updateMethod_;
     float refSnr_;       // Expected SNR for analog with relative amplitude of 1
-    float movieScaler_;  // photoelectronSensitivity scaling gain factor
 };
 
 __constant__ StaticConfig staticConfig;
@@ -329,6 +330,9 @@ DmeEmDevice::DmeEmDevice(uint32_t poolId, unsigned int poolSize)
 void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                             const Data::AnalysisConfig &analysisConfig)
 {
+    CoreDMEstimator::Configure(analysisConfig);
+    Cuda::CudaCopyToSymbol(&baseConfig, &CoreDMEstimator::Config());
+
     // TODO: Validate values.
     // TODO: Log settings.
     StaticConfig config;
@@ -358,7 +362,6 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.updateMethod_   = dmeConfig.ModelUpdateMethod;
     config.refSnr_ = movieInfo.refSnr;
-    config.movieScaler_ = movieInfo.photoelectronSensitivity;
 
     Cuda::CudaCopyToSymbol(&staticConfig, &config);
 }
@@ -740,13 +743,15 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     const float blWeight    = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
-    float nBaselineMin(2.0f);
+    float nBaselineMin(3.0f);
     auto mask = nBlFrames >= nBaselineMin;
     ZmwAnalogMode& m0blm = model->baseline;
     const StatAccumState& blsa  = blStatAccState.baselineStats;
 
     auto blMean = mask ? Mean(blsa)     : m0blm.mean;
     auto blVar  = mask ? Variance(blsa) : m0blm.var;
+
+    blVar = max(blVar, baseConfig.signalScaler);
 
     auto& detectionModes = model->analogs;
 
@@ -1150,7 +1155,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
         // The minimum bound for the pulse-amplitude scale parameter.
         static const float minSnr = 0.5f;
-        const float minPulseMean = max(1.0f, staticConfig.movieScaler_);
+        const float minPulseMean = max(1.0f, baseConfig.signalScaler);
         auto rpaMin = rpa[0]; for (int i = 1; i < rpa.size(); ++i) rpaMin = min(rpaMin, rpa[i]);
         const auto sMin = max(minSnr * sqrt(var[0]), minPulseMean) / rpaMin;
 
@@ -1294,8 +1299,8 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         return Blend(mom0 > 1.0f, var, nan);
     };
 
-    const PBHalf2& blMean =  half2Mean(blsa);
-    const PBHalf2& blVar  = half2Variance(blsa);
+    PBHalf2 blMean =  half2Mean(blsa);
+    PBHalf2 blVar  = half2Variance(blsa);
     const PBHalf2 blWeight = {
         blsa.moment0[2*threadIdx.x] / basicStats.moment0[2*threadIdx.x],
         blsa.moment0[2*threadIdx.x+1] / basicStats.moment0[2*threadIdx.x+1]
@@ -1303,6 +1308,14 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
 
     // Set the confidence to a small nominal value.
     model.Confidence()[threadIdx.x] = 0.1f;
+
+    // If baseline frame count is insufficient, blMean and blVar can be NaN.
+    // In this case, just adopt some semi-arbitrary fallback value.
+    blMean = Blend(isnan(blMean), baseConfig.fallbackBaselineMean, blMean);
+    blVar = Blend(isnan(blVar), baseConfig.fallbackBaselineVariance, blVar);
+
+    // Constrain variance to a minimum value.
+    blVar = max(blVar, baseConfig.BaselineVarianceMin());
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);

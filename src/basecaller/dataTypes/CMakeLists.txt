@@ -27,6 +27,8 @@ set(CPP_LIST
     configs/ConfigForward.h
     configs/PrelimHQConfig.cpp
     configs/PrelimHQConfig.h
+    configs/RealTimeMetricsConfig.cpp
+    configs/RealTimeMetricsConfig.h
     configs/SimulatedFaults.h
     configs/SmrtBasecallerConfig.cpp
     configs/SmrtBasecallerConfig.h

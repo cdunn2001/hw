@@ -1,11 +1,10 @@
-set (VERSION bid57)
+set (VERSION bid58)
 
 set (LOCAL_THIRD_PARTY_SCRIPTS OFF CACHE BOOL "Use local version of third party scripts" FORCE)
 set (LOCAL_THIRD_PARTY_LOCATION ${CMAKE_CURRENT_LIST_DIR}/pa-third-party CACHE STRING "Location of a local  pa-third-party repository" FORCE)
 
 function (SetupProject nexusVersionsDirectory)
 
-set(projName "mongo")
 if( NOT EXISTS "${nexusVersionsDirectory}")
     message(FATAL_ERROR "nexusVersionsDirectory=${nexusVersionsDirectory} does not exist.")
 endif()
@@ -28,10 +27,9 @@ else()
     # execute_process(COMMAND git rev-parse --show-toplevel OUTPUT_VARIABLE GIT_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
     set(DEPCACHE ${GIT_ROOT}/depcache)
 
-    set(ROOT ${DEPCACHE}/pa-versions/${VERSION}/${projName})
-    FILE(MAKE_DIRECTORY ${DEPCACHE}/pa-versions/${VERSION})
+    set(ROOT ${DEPCACHE}/pa-versions/${VERSION})
 
-    set(DEP_ARCHIVE_FILE pacbio-pa-third-party-${projName}-versions-${VERSION}-noarch.tar.gz)
+    set(DEP_ARCHIVE_FILE pacbio-pa-third-party-versions-${VERSION}-noarch.tar.gz)
     set(DEP_ARCHIVE ${DEPCACHE}/pa-versions/${DEP_ARCHIVE_FILE})
     set(DEP_LOCK_FILE ${DEPCACHE}/pa-versions.lock)
     FILE(LOCK ${DEP_LOCK_FILE} TIMEOUT ${LOCK_TIMEOUT})
@@ -68,7 +66,7 @@ else()
         COMMAND ${CMAKE_COMMAND} -E tar xzf ${DEP_ARCHIVE}
         WORKING_DIRECTORY ${DEPCACHE}/pa-versions
       )
-      FILE(RENAME ${DEPCACHE}/pa-versions/pacbio-pa-third-party-${projName}-versions-${VERSION}-noarch ${ROOT})
+      FILE(RENAME ${DEPCACHE}/pa-versions/pacbio-pa-third-party-versions-${VERSION}-noarch ${ROOT})
     ENDIF(NOT EXISTS "${ROOT}")
     FILE(LOCK "${DEP_LOCK_FILE}" RELEASE)
     IF(NOT EXISTS "${ROOT}")

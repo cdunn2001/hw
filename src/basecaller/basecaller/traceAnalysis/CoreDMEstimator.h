@@ -30,6 +30,7 @@
 #define mongo_basecaller_traceAnalysis_CoreDMEstimator_H_
 
 #include <common/cuda/PBCudaSimd.h>
+#include <common/NumericUtil.h>
 
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BaselinerStatAccumState.h>
@@ -63,6 +64,21 @@ public:     // Types
         VLOW_SIGNAL     = 1u << 2
     };
 
+    struct Configuration
+    {
+        float fallbackBaselineMean;
+        float fallbackBaselineVariance;
+        float signalScaler;     // photoelectronSensitivity (e-/DN)
+
+        CUDA_ENABLED float BaselineVarianceMin() const
+        {
+            constexpr auto oneTwelfth = 1.0f / 12.0f;
+            const auto ss = std::max(signalScaler, 1.0f);
+            return ss * ss * oneTwelfth;
+        }
+
+    };
+
 public:     // Static constants
     /// Number of free model parameters.
     /// Five mixture fractions, background mean, background variance, and
@@ -75,6 +91,33 @@ public:     // Static constants
     /// Cross-talk correction value. This value was pre-computed in
     /// Matlab using data read from an arbitrary Spider trace file
     static constexpr float shotVarCoeff = 1.2171f;
+
+public:     // Static functions
+    static void Configure(const Data::AnalysisConfig& analysisConfig);
+
+    /// The current configuration.
+    static const Configuration& Config()
+    { return config_; }
+
+    /// Mean used for the baseline signal distribution when sample statistics
+    /// are insufficient.
+    static float FallbackBaselineMean()
+    { return config_.fallbackBaselineMean; }
+
+    /// Variance used for the baseline signal distribution when sample
+    /// statistics are insufficient.
+    static float FallbackBaselineVariance()
+    { return config_.fallbackBaselineVariance; }
+
+    /// Baseline variance is constrained to be no smaller than this.
+    static float BaselineVarianceMin()
+    { return config_.BaselineVarianceMin(); }
+
+    /// The scale factor applied to the raw trace signal values.
+    /// In current practice, the conversion from DN to photoelectron units
+    /// (a.k.a. photoelectron sensitivity)
+    static float SignalScaler()
+    { return config_.signalScaler; }
 
 public:     // Structors and assignment
     CoreDMEstimator(uint32_t poolId, unsigned int poolSize);
@@ -101,6 +144,9 @@ public:     // Functions
 
 protected:
     static PacBio::Logging::PBLogger logger_;
+
+private:    // Static data
+    static Configuration config_;
 
 private:
     uint32_t poolId_;
