@@ -82,6 +82,16 @@ while(<>)
             push @fields, $f;
 
         }
+        elsif (/PB_CONFIG_OBJECT_WITH_DEF\(\s*(\S+),\s*(\S+),\s*(\S+),\s*\);/)
+        {
+            my ($class, $name, $def) = ($1,$2);
+
+            my $f = "  " x $indent;
+
+            $f .= "\"$name\": $class";
+            push @fields, $f;
+
+        }
         elsif (/^\s*$/)
         {
             # blank line
