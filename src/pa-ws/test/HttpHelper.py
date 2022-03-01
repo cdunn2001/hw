@@ -1,11 +1,12 @@
 import logging
+import sys
 from time import sleep
 import requests
 
 class HttpException(Exception):
     pass
 
-class HttpHelper(object):
+class SafeHttpClient(object):
     def __init__(self):
         pass
 
@@ -13,6 +14,7 @@ class HttpHelper(object):
         # logging.info('GET - %s', url)
         try:
             response = requests.get(url)
+            logging.debug("Raw response:%s", response.text)
             r = response.json()
             if response.status_code / 100 != 2:
                 raise HttpException('status_code:' + str(response.status_code) + str(r))
@@ -78,7 +80,7 @@ if __name__ == '__main__':
                 exit(1)
             logging.info("Server loop running in thread:", server_thread.name)
 
-            hh = HttpHelper()
+            hh = SafeHttpClient()
             hh.checkedGet("http://localhost:%d/dummy.json" % port)
             try :
                 hh.checkedGet("http://localhost:%d/failure" % port)
@@ -104,9 +106,11 @@ if __name__ == '__main__':
             logging.info("shut down")
             server_thread.join()
 
-            print("PASS")
+            print("HttpHelper:PASS")
+            sys.exit(0)
     except Exception as ex:
         logging.error("failed with exception %s" % format(ex))
-        print("FAIL")
+        print("HttpHelper:FAIL")
+        sys.exit(1)
 
 

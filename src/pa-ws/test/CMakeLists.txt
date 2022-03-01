@@ -23,4 +23,12 @@ target_link_libraries(testPaWs
     libTestPaWs
     )
 
-add_test(testPaWs testPaWs --gtest_output=xml:testPaWs.xml)
+add_test(
+    NAME testPaWs 
+    COMMAND testPaWs --gtest_output=xml:testPaWs.xml)
+
+add_test(
+    NAME testPythonUnits 
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/runPythonTests.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+)
