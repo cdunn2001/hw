@@ -156,16 +156,16 @@ EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
                        [&](float val) {
                            auto fixedPoint = std::round(val * bamFixedPointFactor);
 
-                           // TODO: Might need to eventually support nan values and negative.  For now,
-                           //       none are expected to come through, so I've added an assert
-                           //       to validate that assumption, and used conditionals below that
-                           //       at least avoid a UB cast from float to uint32_t
-                           // Large values get pegged at UINT_MAX as well (and possibly to  a lower value
-                           // later during processing), but this is pre-existing behavior
-                           assert(!std::isnan(fixedPoint));
-                           assert(fixedPoint >= 0);
-                           if (std::isnan(fixedPoint) || fixedPoint > maxVal) return std::numeric_limits<uint32_t>::max();
-                           if (fixedPoint < 0) return 0u;
+                           // Note: NaN values are being pegged to zero, since that keeps us compatible
+                           //       with what we've traditionlly done in Sequel.  There baz serialization
+                           //       converted NaN's to 0, but now that Kestrel serialization preserves
+                           //       NaN/inf, then we need to handle that here before inserting into the
+                           //       baz file.
+                           // Note: negative numbers are *not* expected, but we'll peg them to zero as
+                           //       well just in case, so we avoid any UB when casting the float.
+                           assert(std::isnan(fixedPoint) || fixedPoint >= 0);
+                           if (fixedPoint > maxVal) return std::numeric_limits<uint32_t>::max();
+                           if (std::isnan(fixedPoint) || fixedPoint < 0) return 0u;
                            return static_cast<uint32_t>(fixedPoint);
                        });
         ret.push_back(std::make_pair(tag, convertData(intVec, filter, type, pulseBegin, pulseEnd)));
