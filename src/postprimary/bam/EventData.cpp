@@ -148,7 +148,26 @@ EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
         std::vector<uint32_t> intVec;
         intVec.reserve(vec.size());
         int bamFixedPointFactor = 10;
-        for (const auto& v : vec) intVec.push_back(static_cast<uint32_t>(std::round(v * bamFixedPointFactor)));
+        // Need to be careful.  static_cast<uint32_t>(static_cast<float>(UINT_MAX));
+        // is UB because UINT_MAX is not perfectly representable in single precision and gets
+        // rounded up to a value outside the range of uint32_t.
+        const float maxVal = std::nextafterf(static_cast<float>(std::numeric_limits<uint32_t>::max()), 0.0f);
+        std::transform(vec.begin(), vec.end(), std::back_inserter(intVec),
+                       [&](float val) {
+                           auto fixedPoint = std::round(val * bamFixedPointFactor);
+
+                           // Note: NaN values are being pegged to zero, since that keeps us compatible
+                           //       with what we've traditionlly done in Sequel.  There baz serialization
+                           //       converted NaN's to 0, but now that Kestrel serialization preserves
+                           //       NaN/inf, then we need to handle that here before inserting into the
+                           //       baz file.
+                           // Note: negative numbers are *not* expected, but we'll peg them to zero as
+                           //       well just in case, so we avoid any UB when casting the float.
+                           assert(std::isnan(fixedPoint) || fixedPoint >= 0);
+                           if (fixedPoint > maxVal) return std::numeric_limits<uint32_t>::max();
+                           if (std::isnan(fixedPoint) || fixedPoint < 0) return 0u;
+                           return static_cast<uint32_t>(fixedPoint);
+                       });
         ret.push_back(std::make_pair(tag, convertData(intVec, filter, type, pulseBegin, pulseEnd)));
     };
     if (Internal())
