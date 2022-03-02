@@ -65,7 +65,7 @@ class BasecallerFrameLabelerConfig : public Configuration::PBConfig<BasecallerFr
 public:
     PB_CONFIG(BasecallerFrameLabelerConfig);
 
-    SMART_ENUM(MethodName, NoOp, Device, Host)
+    SMART_ENUM(MethodName, NoOp, Device, Host);
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {
