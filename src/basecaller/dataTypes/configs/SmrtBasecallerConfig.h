@@ -68,7 +68,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     /// Minimum duration (in frames) between intermediate reports
     /// for both memory and compute statistics.  Reports will happen
     /// only on chunk boundaries
-    PB_CONFIG_OBJECT_WITH_DEF(size_t, monitoringReportInterval, 8192);
+    PB_CONFIG_PARAM(size_t, monitoringReportInterval, 8192);
 };
 
 }}}     // namespace PacBio::Mongo::Data
