@@ -200,10 +200,19 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames)
 {
     // TODO actually create datasources...
-    //      Should be handled by PTSD-1107 and PTSD-1113
+    //      Should be handled by PTSD-1107
     return cfg.source.Visit(
         [](const SimInputConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; },
-        [](const WXIPCDataSourceConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; }
+        [&](const WXIPCDataSourceConfig& ipcConfig) -> std::unique_ptr<DataSourceBase>
+        {
+            auto allo = Acquisition::DataSource::WXIPCDataSource::CreateAllocator(ipcConfig);
+            // Note: This layout is pretty arbitrary.  Feel free to adjust if there is cause
+            PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, {4096, numFrames, 64}};
+            DataSource::DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
+            sourceCfg.numFrames = numFrames;
+            auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
+            return source;
+        }
     );
 }
 
