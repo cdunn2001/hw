@@ -45,6 +45,9 @@ DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfi
     , simCfg_(std::move(simConfig))
 {
     auto& cfg = GetConfig();
+    if (simCfg_.nRows * simCfg_.nCols % 64 != 0)
+        throw PBException("Incorrect chip dimension. Should be 64 based.");
+
     const auto& reqLayout = cfg.requestedLayout;
 
     size_t zmwPerBlock    = reqLayout.BlockWidth();
@@ -129,22 +132,23 @@ MovieInfo DataSourceSimulator::MovieInformation() const
     return DataSource::MockMovieInfo();
 }
 
-SensorPacket DataSourceSimulator::GenerateBatch()
+template<typename T>
+SensorPacket DataSourceSimulator::GenerateBatch() const
 {
     assert(!layouts_.empty());
 
-    const auto& layout  = layouts_[batchIdx_];
+    const auto& layout  = layouts_.at(batchIdx_); // preserves const modifier
     auto numBlocks      = layout.NumBlocks();
     auto zmwPerBlock    = layout.BlockWidth();
     auto framesPerBlock = layout.NumFrames();
 
-    auto startZmw       = batchIdx_ * layouts_[0].NumZmw();
-    auto startFrame     = chunkIdx_ * layouts_[0].NumFrames();
+    auto startZmw       = batchIdx_ * layouts_.at(0).NumZmw();
+    auto startFrame     = chunkIdx_ * layouts_.at(0).NumFrames();
     SensorPacket batchData(layout, batchIdx_, startZmw, startFrame, *GetConfig().allocator);
     for (size_t i = 0; i < numBlocks; ++i)
     {
-        boost::multi_array_ref<int16_t, 2> blkData(
-            reinterpret_cast<int16_t*>(batchData.BlockData(i).Data()),
+        boost::multi_array_ref<T, 2> blkData(
+            reinterpret_cast<T*>(batchData.BlockData(i).Data()),
             boost::extents[zmwPerBlock][framesPerBlock],
             boost::fortran_storage_order());
 
@@ -155,12 +159,6 @@ SensorPacket DataSourceSimulator::GenerateBatch()
             std::normal_distribution<> dist(mean, std);
             std::generate(blkData[z].begin(), blkData[z].end(), std::bind(dist, gnr_));
         }
-
-        auto ma_clamp = std::bind(std::clamp<int16_t>, std::placeholders::_1, 
-                                              std::numeric_limits<int16_t>::lowest(), 
-                                              std::numeric_limits<int16_t>::max());
-        auto rangeStart = blkData.data(), rangeEnd = (blkData.data() + blkData.num_elements());
-        std::transform(rangeStart, rangeEnd, rangeStart, ma_clamp);
     }
 
     return batchData;
@@ -171,7 +169,9 @@ void DataSourceSimulator::ContinueProcessing()
     assert(!layouts_.empty());
 
     PacketLayout nominalLayout = layouts_[0];
-    currChunk_.AddPacket(GenerateBatch());
+    auto batch = nominalLayout.Encoding() == PacketLayout::UINT8 ? 
+        GenerateBatch<uint8_t>() : GenerateBatch<int16_t>();
+    currChunk_.AddPacket(std::move(batch));
 
     batchIdx_++;
     auto numZmw = NumZmw();

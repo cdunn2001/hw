@@ -74,13 +74,21 @@ public:
     void ContinueProcessing() override;
 
 public:
-    // Helpers
     static size_t RoundUp(size_t count, size_t batch)
     {
         return (count + batch - 1) / batch * batch;
     }
 
-    DataSource::SensorPacket GenerateBatch();
+    std::pair<int16_t, int16_t> Id2Norm(size_t zmwId) const
+    {
+        return simCfg_.dataType == 0 ? 
+            Id2NormInt16(zmwId) : Id2NormInt8(zmwId);
+    }
+
+private:
+    // Helpers
+    template<typename T>
+    DataSource::SensorPacket GenerateBatch() const;
 
     std::pair<int16_t, int16_t> Id2Coords(size_t zmwId) const
     { 
@@ -88,14 +96,27 @@ public:
         return { zmwId / lda, zmwId % lda };
     }
 
-    std::pair<int16_t, int16_t> Id2Norm(size_t zmwId) const
+    std::pair<int16_t, int16_t> Id2NormInt16(size_t zmwId) const
     {
-        auto [y, x] = Id2Coords(zmwId);
-
-        int16_t mring = 2048, sring = 128;
+        int16_t sring = 43;
         int32_t lda = simCfg_.nCols, off = simCfg_.Pedestal;
-        int16_t mean = 10 * std::abs<int16_t>(x - y) % mring;
-        int16_t std  = 5 * std::abs<int16_t>(lda - y + x) % sring + 5;
+
+        auto [y, x] = Id2Coords(zmwId);
+        int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
+        int mring = INT16_MAX - 10*std;
+        int16_t mean = 3 * std::abs<int16_t>(x - y) % mring + 5*std;
+        return { mean + off, std };
+    }
+
+    std::pair<int16_t, int16_t> Id2NormInt8(size_t zmwId) const
+    {
+        int16_t sring = 5;
+        int32_t lda = simCfg_.nCols, off = simCfg_.Pedestal;
+
+        auto [y, x] = Id2Coords(zmwId);
+        int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
+        int mring = INT8_MAX - 10*std;
+        int16_t mean =  std::abs<int16_t>(x - y) % mring + 5*std;
         return { mean + off, std };
     }
 
