@@ -58,7 +58,6 @@
 
 #include <PaCalHeader.h>
 
-using namespace std;
 using namespace PacBio;
 using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
@@ -227,7 +226,7 @@ int PaCalProcess::RunAllThreads()
     Dev::QuietAutoTimer timer;
     while(!ExitRequested())
     {
-        std::this_thread::sleep_for(chrono::seconds{1});
+        std::this_thread::sleep_for(std::chrono::seconds{1});
         if (timer.GetElapsedMilliseconds() > settings_.timeoutSeconds*1000)
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
@@ -260,7 +259,7 @@ int PaCalProcess::Run()
         PBLOG_INFO << "git status: " << file;
     }
 
-    stringstream ss;
+    std::stringstream ss;
     for (auto arg : commandLine_)
     {
         ss << arg << " ";
@@ -321,7 +320,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
 
         auto parser = CreateOptionParser();
         Values &options = parser.parse_args(argc, argv);
-        vector<string> args = parser.args();
+        std::vector<std::string> args = parser.args();
         HandleGlobalOptions(options);
         auto settings = HandleLocalOptions(options);
         if (settings.has_value())
@@ -339,7 +338,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
     {
         if (ex.code().value() != 0)
         {
-            std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << endl;
+            std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << std::endl;
             exitCode = ex.code().value();
         }
         else
@@ -349,12 +348,12 @@ int PaCalProcess::Main(int argc, const char *argv[])
     }
     catch (const std::exception &ex)
     {
-        std::cerr << "std::exception caught at main(): " << ex.what() << endl;
+        std::cerr << "std::exception caught at main(): " << ex.what() << std::endl;
         exitCode = ExitCode::StdException;
     }
     catch (...)
     {
-        std::cerr << "Unknown Exception caught at main(): " << endl;
+        std::cerr << "Unknown Exception caught at main(): " << std::endl;
         exitCode = ExitCode::DefaultUnknownFailure;
     }
     return exitCode;
