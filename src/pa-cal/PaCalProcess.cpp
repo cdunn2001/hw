@@ -44,6 +44,8 @@
 #include <pacbio/utilities/Finally.h>
 #include <pacbio/utilities/StdThread.h>
 
+#include <acquisition/wxipcdatasource/WXIPCDataSource.h>
+
 // local includes
 #include "ExitCodes.h"
 #include "FrameAnalyzer.h"

@@ -33,6 +33,8 @@
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/configuration/types/Variant.h>
 
+#include <acquisition/wxipcdatasource/WXIPCDataSourceConfig.h>
+
 namespace PacBio::Calibration {
 
 // Config primarily for test, that fabricates it's own data
@@ -52,11 +54,7 @@ struct SimInputConfig : PacBio::Configuration::PBConfig<SimInputConfig>
     PB_CONFIG_PARAM(double, minInputDelaySeconds, 1.0);
 };
 
-// Temporary stub, until we integrate with the hw-mongo library
-struct WXIPCDataSourceConfig : PacBio::Configuration::PBConfig<WXIPCDataSourceConfig>
-{
-    PB_CONFIG(WXIPCDataSourceConfig);
-};
+using WXIPCDataSourceConfig = PacBio::Acquisition::DataSource::WXIPCDataSourceConfig;
 
 struct PaCalConfig : PacBio::Configuration::PBConfig<PaCalConfig>
 {
