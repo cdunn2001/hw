@@ -39,6 +39,8 @@
 #include "SignalSimulator.h"
 
 // Eigen::Matrix has fortran memory layout by default
+// Unsigned one byte data is interpreted as _signed_ int8 to simplify 
+// conversion to and comparison with floating point results
 typedef Eigen::Matrix<int16_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 typedef Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic>  MatrixXb;
 
@@ -70,16 +72,6 @@ struct TestingParams
         return os;
     }
 };
-
-float convS2Float(int16_t v)
-{
-    return v;
-}
-float convS2Float(int8_t v)
-{
-    int8_t vi = v - UINT8_MAX - 1;
-    return vi;
-}
 
 Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXs>& map)
 {
@@ -118,10 +110,8 @@ void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packe
             auto [ expMean, expStd ] = source.Id2Norm(zmwIdx);
             auto [ actMean, actStd ] = std::make_pair(blkMean(z), sqrt(blkVar(z)));
 
-            float expMeanF = convS2Float(expMean), expStdF = convS2Float(expStd);
-
-            EXPECT_NEAR(actMean, expMeanF, 3*expStdF*std::sqrt(framesPerBlock));
-            EXPECT_NEAR(actStd*actStd,  expStdF*expStdF, 3*expStdF);
+            EXPECT_NEAR(actMean, expMean, 3*expStd*std::sqrt(framesPerBlock));
+            EXPECT_NEAR(actStd*actStd,  expStd*expStd, 3*expStd);
         }
     }
 }
@@ -185,7 +175,6 @@ INSTANTIATE_TEST_SUITE_P(TinyBlock,
                                 8
 }));
 #endif // 0
-
 
 const auto simSweep08 = ::testing::Values(
     /* framesPerBlock  lanesPerPool  totalFrames  nRown x nCols bits */

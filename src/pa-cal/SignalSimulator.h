@@ -106,7 +106,7 @@ private:
 
         auto [y, x] = Id2Coords(zmwId);
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
-        int mring = INT16_MAX - 10*std;
+        int mring = INT16_MAX - 10*std; // Rebound 6 sigmas from the data borders
         int16_t mean = 3 * std::abs<int16_t>(x - y) % mring + 5*std;
         return { mean + off, std };
     }
@@ -118,7 +118,7 @@ private:
 
         auto [y, x] = Id2Coords(zmwId);
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
-        int mring = INT8_MAX - 10*std;
+        int mring = INT8_MAX - 10*std;  // Rebound 6 sigmas from the data borders
         int16_t mean =  std::abs<int16_t>(x - y) % mring + 5*std;
         return { mean + off, std };
     }
