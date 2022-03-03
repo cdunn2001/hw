@@ -207,3 +207,8 @@ const auto simSweep16 = ::testing::Values(
 );
 INSTANTIATE_TEST_SUITE_P(BlockSuite16, DataSourceSimTest, simSweep16);
 
+const auto simSweepTO = ::testing::Values(
+    /* framesPerBlock  lanesPerPool  totalFrames  nRown x nCols bits sec */
+    TestingParams { 512,     1,      512,      4, 16,    16,    2 }
+);
+INSTANTIATE_TEST_SUITE_P(SimulateTimeout, DataSourceSimTest, simSweepTO);

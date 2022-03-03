@@ -133,7 +133,6 @@ private:
     SimInputConfig simCfg_;
 
     std::default_random_engine gnr_;
-    std::chrono::time_point<std::chrono::system_clock> waitTill_;
 };
 
 } // namespace PacBio::Calibration

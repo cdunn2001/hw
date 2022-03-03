@@ -43,7 +43,6 @@ using namespace PacBio::DataSource;
 DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfig, SimInputConfig simConfig)
     : DataSourceBase(std::move(baseConfig))
     , simCfg_(std::move(simConfig))
-    , waitTill_(std::chrono::system_clock::now())
 {
     auto& cfg = GetConfig();
     if (simCfg_.nRows * simCfg_.nCols % 64 != 0)
@@ -166,6 +165,12 @@ void DataSourceSimulator::ContinueProcessing()
 {
     assert(!layouts_.empty());
 
+    if (currChunk_.HasFullPacketCoverage())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return;
+    }
+
     PacketLayout nominalLayout = layouts_[0];
     auto batch = nominalLayout.Encoding() == PacketLayout::UINT8 ? 
         GenerateBatch<uint8_t>() : GenerateBatch<int16_t>();
@@ -178,15 +183,7 @@ void DataSourceSimulator::ContinueProcessing()
     {
         chunkIdx_++;
         batchIdx_ = 0;
-        while (std::chrono::system_clock::now() < waitTill_)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
-        } 
-
         this->PushChunk(std::move(currChunk_));
-
-        int delayMs = simCfg_.minInputDelaySeconds * 1000;
-        waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
 
         currChunk_ = SensorPacketsChunk(chunkIdx_ * nominalLayout.NumFrames(),
                                         (chunkIdx_ + 1) * nominalLayout.NumFrames());
@@ -207,5 +204,5 @@ void DataSourceSimulator::ContinueProcessing()
 void DataSourceSimulator::vStart()
 {
     int delayMs = simCfg_.minInputDelaySeconds * 1000;
-    waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
+    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
 }
