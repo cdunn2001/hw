@@ -43,6 +43,7 @@ using namespace PacBio::DataSource;
 DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfig, SimInputConfig simConfig)
     : DataSourceBase(std::move(baseConfig))
     , simCfg_(std::move(simConfig))
+    , waitTill_(std::chrono::system_clock::now())
 {
     auto& cfg = GetConfig();
     if (simCfg_.nRows * simCfg_.nCols % 64 != 0)
@@ -73,9 +74,6 @@ DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfi
 
     currChunk_ = SensorPacketsChunk(0, framesPerBlock);
     currChunk_.SetZmwRange(0, numZmw);
-
-    int delayMs = simCfg_.minInputDelaySeconds * 1000;
-    waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
 }
 
 std::map<uint32_t, PacketLayout> DataSourceSimulator::PacketLayouts() const
@@ -204,4 +202,10 @@ void DataSourceSimulator::ContinueProcessing()
     {
         SetDone();
     }
+}
+
+void DataSourceSimulator::vStart()
+{
+    int delayMs = simCfg_.minInputDelaySeconds * 1000;
+    waitTill_ = std::chrono::system_clock::now() + std::chrono::milliseconds(delayMs);
 }

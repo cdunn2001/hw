@@ -153,6 +153,8 @@ TEST_P(DataSourceSimTest, Chip)
 
     SensorPacketsChunk chunk;
     size_t expNextStartFrame = 0;
+
+    source.Start();
     while (source.IsRunning())
     {
         source.ContinueProcessing();

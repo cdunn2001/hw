@@ -73,6 +73,9 @@ public:
 
     void ContinueProcessing() override;
 
+private:
+    void vStart() override;
+
 public:
     static size_t RoundUp(size_t count, size_t batch)
     {
