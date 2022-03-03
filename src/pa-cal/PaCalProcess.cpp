@@ -250,6 +250,7 @@ int PaCalProcess::RunAllThreads()
             bool success = AnalyzeSourceInput(std::move(source), threadController, settings_.movieNum, settings_.outputFile);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
+            threadController->RequestExit();
         } catch (const std::exception& ex)
         {
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
