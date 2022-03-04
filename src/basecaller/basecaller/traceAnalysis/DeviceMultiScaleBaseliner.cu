@@ -93,7 +93,8 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      uint32_t lanesPerPool,
                                                      StashableAllocRegistrar* registrar)
     : Baseliner(poolId)
-    , startupLatency_(params.LatentSize())
+    , latency_(params.LatentSize())
+    , framesPerStride_(params.AggregateStride())
 {
     Cuda::ComposedConstructArgs args;
     args.pedestal = pedestal_;
