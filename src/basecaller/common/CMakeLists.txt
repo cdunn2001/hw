@@ -31,6 +31,8 @@ add_library(libMongoCommon STATIC
     graphs/GraphNodeBody.cpp
     utility/Overload.h
     utility/Overload.cpp
+    utility/ProgressMessage.h
+    utility/ProgressMessage.cpp
     utility/StrongTypedef.h
 )
 
