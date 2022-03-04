@@ -153,7 +153,7 @@ private:    // Static functions
                             LaneDetModelHost* model);
 
 private:    // Functions
-    void PrelimEstimate(const BlStatAccState& blStatAccState,
+    void PrelimEstimate(const BaselinerStats& baselinerStats,
                         LaneDetModelHost *model) const;
 
     // Use the trace histogram and the input detection model to compute a new
