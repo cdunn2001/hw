@@ -100,10 +100,6 @@ cat <<HERE > $tmpjson
          "loopback": ${LOOPBACK},
          "primerScaler": ${PRIMERSCALER}
     }
-  },
-  "system":
-  {
-    "maxPermGpuDataMB":17000
   }
 } 
 HERE
