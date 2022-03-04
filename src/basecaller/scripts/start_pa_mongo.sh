@@ -34,22 +34,18 @@ fi
 
 if [[ $GDBSERVER ]]
 then 
-#    cmd="/home/UNIXHOME/mlakata/clion-2020.1.1/bin/gdb/linux/bin/gdbserver localhost:2000"
-    cmd="/home/UNIXHOME/mlakata/local/gdb-10.1/bin/gdbserver localhost:2000"
+    export OPTIONAL_DEBUGGER="/home/UNIXHOME/mlakata/local/gdb-10.1/bin/gdbserver localhost:2000"
     BUILD=Debug
 elif [[ $GDB ]]
 then
-    cmd="gdb --args"
+    export OPTIONAL_DEBUGGER="gdb --args"
     BUILD=Debug
 elif [[ $ECHO ]]
 then
-    cmd="echo "
+    # useful for just displaying the constructed command line, for hard core debugging.
+    export OPTIONAL_DEBUGGER="echo "
 else
-    cmd=""
-    GPU_ID=0
-    NUMA_NODE=0
-    export CUDA_VISIBLE_DEVICES=${GPU_ID}
-    cmd="numactl --cpubind ${NUMA_NODE} --membind ${NUMA_NODE}"
+    export OPTIONAL_DEBUGGER=""
 fi
 
 if [[ $TRACE_OUTPUT != "" ]]
@@ -207,5 +203,5 @@ echo PATH = $PATH
 
 set -x
 pwd
-$cmd smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output}
+smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output}
 
