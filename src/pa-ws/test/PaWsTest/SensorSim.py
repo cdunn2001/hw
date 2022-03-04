@@ -1,19 +1,15 @@
+from datetime import datetime
 import logging
+from lxml import etree  # type: ignore
+from subprocess import check_call, check_output
 import tempfile
-import time
+from time import sleep, monotonic
 import unittest
 
-from datetime import datetime
-from subprocess import check_call, check_output
-from time import sleep
-from typing import List
-
-from junit_xml import TestSuite, TestCase  # type: ignore
-from lxml import etree  # type: ignore
 
 import HttpHelper
 import ProgressHelper
-from Helpers import *
+from Helpers import RealtimeException
 
 class SensorSim(HttpHelper.SafeHttpClient):
 #    """Simulates a sensor, using loopback from wx-daemon. Communication is with wx-daemon via REST calls"""
@@ -79,10 +75,10 @@ class SensorSim(HttpHelper.SafeHttpClient):
         logging.info("SensorSim.WaitUntilPreloaded: ")
 
         timeout = 600 # 10 minutes
-        t0 = time.monotonic()
+        t0 = monotonic()
         while self.GetTransmitStatus() == "PRELOADING":
             self.progresser.SetProgress("preloading" )
-            t = time.monotonic()
+            t = monotonic()
             if t - t0 > timeout :
                 raise RealtimeException("waiting for preloading state to change timed out, waited for %f seconds" %
                                         timeout)

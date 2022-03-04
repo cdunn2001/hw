@@ -1,7 +1,6 @@
 import logging
-import sys
-from time import sleep
 import requests
+from time import sleep
 import unittest
 
 class HttpException(Exception):

@@ -4,9 +4,10 @@ import threading
 import socketserver
 import logging
 import time
-import HttpHelper
 import json
 import unittest
+
+import HttpHelper
 
 wsGetDict = {}
 wsPostDict = {}

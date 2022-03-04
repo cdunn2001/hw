@@ -1,12 +1,12 @@
 
-import sys
 import threading
 import socketserver
 import logging
-import HttpHelper
 import json
 import time
 import unittest
+
+import HttpHelper
 
 pawsGetDict = {}
 pawsPostDict = {}

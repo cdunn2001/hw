@@ -1,13 +1,11 @@
 import logging
-import datetime
+from datetime import datetime
 import os
-import sys
 import tempfile
 import unittest
 
-from datetime import datetime
 
-from Helpers import *
+from Helpers import slurp
 
 class ProgressManager:
     def __init__(self, filename):

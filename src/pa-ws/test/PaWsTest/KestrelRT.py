@@ -1,11 +1,11 @@
 import logging
 import tempfile
-import sys
 from time import monotonic, sleep
+import unittest
 
 import HttpHelper
-from ProgressHelper import *
-from Acquisition import *
+import ProgressHelper
+import Acquisition
 
 class RT(HttpHelper.SafeHttpClient):
     def __init__(self, progressMonitor):
@@ -230,10 +230,11 @@ class TestKestrelRT(unittest.TestCase):
     def test_one(self):  
         import WxDaemonSim
         import PaWsSim
+#        from . import ProgressHelper
 
         td = tempfile.TemporaryDirectory()
         fn = td.name + "/progress.txt"
-        progresser = ProgressManager(fn)
+        progresser = ProgressHelper.ProgressManager(fn)
 
         wxdaemon = WxDaemonSim.WxDaemonSim()
         wxdaemon.Run()
@@ -251,7 +252,7 @@ class TestKestrelRT(unittest.TestCase):
         rt.Init()
         rt.Reset("1")
         rt.WaitForState("1","basecaller","UNKNOWN")
-        acq = Acquisition("m1234")
+        acq = Acquisition.Acquisition("m1234")
         rt.StartBasecaller("1", acq, 100)
         rt.WaitForState("1","basecaller","READY")
         rt.WaitForState("1","basecaller","RUNNING")

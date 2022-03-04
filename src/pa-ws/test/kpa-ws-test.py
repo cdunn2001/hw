@@ -16,37 +16,32 @@
 # the rest is python
 
 import argparse
+from datetime import datetime
 import getpass
 import glob
 import json
+import h5py  # type: ignore
+from junit_xml import TestSuite, TestCase  # type: ignore
 import logging
+from lxml import etree  # type: ignore
+import numpy  # type: ignore
 import os
-import random
-import re
+import requests
 import signal
 import string
+from subprocess import check_call, check_output
 import sys
 import tempfile
-import time
-import traceback
-from datetime import datetime
-from subprocess import check_call, check_output
 from time import sleep
+import traceback
 from typing import List
 
-import h5py  # type: ignore
-import numpy  # type: ignore
-import requests
-from junit_xml import TestSuite, TestCase  # type: ignore
-from lxml import etree  # type: ignore
-
-from Helpers import *
-from HttpHelper import *
-from ProgressHelper import *
-from SensorSim import *
-from KestrelRT import *
-from Acquisition import *
-from PaWsSim import *  # note: this script does not use the simulation directly, but importing it will let the unittests run
+sys.path.append(sys.path[0] + "/PaWsTest")
+import Acquisition
+from Helpers import RealtimeException, TerminateNamedProcess
+# from HttpHelper import SafeHttpClient
+from KestrelRT import RT
+from ProgressHelper import ProgressManager, ProgressScope
 
 # Globals
 testSuite = TestSuite('kpa-ws test suite', [])
@@ -185,7 +180,7 @@ class EndToEnd:
 #            self.rt.DeleteFiles()
 
             acquisitions = []
-            acquisitions.append( Acquisition("m1234"))
+            acquisitions.append( Acquisition.Acquisition("m1234"))
 
             logging.info("%d acquisitions are all configured", len(acquisitions))
 
@@ -197,7 +192,6 @@ class EndToEnd:
                 except Exception as ex:
                     if args.keepgoing:
                         logging.warning("continuing after exception \"%s\"", ex)
-                        run.exception = True
                         self.overallresult= 'FAIL'
                     else:
                         raise
@@ -690,11 +684,12 @@ if __name__ == '__main__':
 
         td = tempfile.TemporaryDirectory()
         if args.bist:
-            import WxDaemonSim
-            import PaWsSim
-            wxdaemon = WxDaemonSim.WxDaemonSim()
+            from PaWsSim import PaWsSim
+            from SensorSim import SensorSim
+            from WxDaemonSim import WxDaemonSim
+            wxdaemon = WxDaemonSim()
             wxdaemon.Run()
-            paws = PaWsSim.PaWsSim()
+            paws = PaWsSim()
             paws.Run()
             args.sensorurl = wxdaemon.GetUrl()
             args.wxurl = wxdaemon.GetUrl()
