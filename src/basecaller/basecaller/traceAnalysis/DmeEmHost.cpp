@@ -202,7 +202,8 @@ void DmeEmHost::PrelimEstimate(const BaselinerStats& baselinerStats,
     model->BaselineMode().SignalMean(blMean);
     model->BaselineMode().SignalCovar(blVar);
 
-    // Frame interval is not updated since it is not exported
+    // We assume that the frame interval associated with the baseliner
+    // statistics is the same as that of the detection model being updated.
 
     FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBlFrames - nBaselineMin);
     model->Confidence(conf);
@@ -226,8 +227,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     LaneDetModelHost workModel = *detModel;
     PrelimEstimate(bsa, &workModel);
 
-    // TODO: Until further works completed, this update causes unit test failures
-    // detModel->Update(workModel);
+    detModel->Update(workModel);
 
     // Make a working copy of the detection model.
     workModel = *detModel;
