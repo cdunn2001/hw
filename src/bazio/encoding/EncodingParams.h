@@ -59,11 +59,18 @@ struct FixedPointParams : Configuration::PBConfig<FixedPointParams>
 
     PB_CONFIG_PARAM(uint32_t, scale, 0);
 };
+struct FloatFixedCodecParams : Configuration::PBConfig<FloatFixedCodecParams>
+{
+    PB_CONFIG(FloatFixedCodecParams);
+
+    PB_CONFIG_PARAM(uint32_t, scale, 0);
+    PB_CONFIG_PARAM(uint32_t, numBytes, 4);
+};
 struct TransformsParams : Configuration::PBConfig<TransformsParams>
 {
     PB_CONFIG(TransformsParams);
 
-    PB_CONFIG_VARIANT(params, NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams);
+    PB_CONFIG_VARIANT(params, NoOpTransformParams, CodecParams, FixedPointParams, DeltaCompressionParams, FloatFixedCodecParams);
 };
 
 struct TruncateParams : Configuration::PBConfig<TruncateParams>

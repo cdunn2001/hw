@@ -19,6 +19,8 @@ add_library(libAppModules STATIC
         BlockRepacker.cpp
         PrelimHQFilter.h
         PrelimHQFilter.cpp
+        RealTimeMetrics.h
+        RealTimeMetrics.cpp
         Repacker.h
         Repacker.cpp
         TrivialRepacker.h

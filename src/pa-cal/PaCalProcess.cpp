@@ -44,6 +44,8 @@
 #include <pacbio/utilities/Finally.h>
 #include <pacbio/utilities/StdThread.h>
 
+#include <acquisition/wxipcdatasource/WXIPCDataSource.h>
+
 // local includes
 #include "ExitCodes.h"
 #include "FrameAnalyzer.h"
@@ -56,7 +58,6 @@
 
 #include <PaCalHeader.h>
 
-using namespace std;
 using namespace PacBio;
 using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
@@ -90,7 +91,7 @@ OptionParser PaCalProcess::CreateOptionParser()
 
     parser.add_option("--nowatchdog").action_store_true().type_bool().set_default(false).help("Disable watchdog");
 
-    parser.add_option("--sra").type_int().set_default(0).help("Which SRA to use when connecting to wxdaemon");
+    parser.add_option("--sra").type_int().help("Which SRA to use when connecting to wxdaemon");
     parser.add_option("--movieNum").type_int().set_default(0).help("The expected movie number, which should agree with what "
                                                                    "comes over the wire via the Wolverine");
     parser.add_option("--numFrames").type_int().set_default(512).help("Number of frames to use during the collection. "
@@ -114,14 +115,18 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         ret.enableWatchdog = ! options.get("nowatchdog");
 
         std::vector<std::string> cliValidationErrors;
-        ret.sra = options.get("sra");
-        if (ret.sra < 0) cliValidationErrors.push_back("--sra cannot be negative");
+        if (!options.is_set_by_user("sra")) cliValidationErrors.push_back("--sra must be specified");
+        else
+        {
+            ret.sra = options.get("sra");
+            if (ret.sra < 0) cliValidationErrors.push_back("--sra cannot be negative");
+        }
 
         ret.movieNum = options.get("movieNum");
         if (ret.movieNum < 0) cliValidationErrors.push_back("--movieNum cannot be negative");
 
         ret.numFrames = options.get("numFrames");
-        if (ret.numFrames != 512) cliValidationErrors.push_back("--numFrames currently only accepts a value of 512");
+        if (ret.numFrames <= 0) cliValidationErrors.push_back("--numFrames must be strictly positive");
 
         ret.timeoutSeconds = options.get("timeoutSeconds");
         if (ret.timeoutSeconds <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
@@ -132,7 +137,24 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
 
         Json::Value json = MergeConfigs(options.all("config"));
+        if (json["source"].isMember("WXIPCDataSourceConfig") && json["souce"]["WXIPCDataSourceConfig"].isMember("sraIndex"))
+        {
+            PBLOG_WARN << "Setting the json configuration member source.WXIPCDataSourceConfig.sraIndex "
+                       << "does nothing, and the supplied value is overwritten by the --sra flag.";
+        }
         ret.paCalConfig = PaCalConfig(json);
+
+        ret.paCalConfig.source.Visit([](const SimInputConfig&){},
+                                     [&](WXIPCDataSourceConfig& cfg){
+                                         cfg.sraIndex = ret.sra;
+                                     });
+
+        if (options.get("showconfig"))
+        {
+            std::cout << ret.paCalConfig.Serialize() << std::endl;
+            exit(0);
+        }
+
         auto jsonValidation = ret.paCalConfig.Validate();
         if (jsonValidation.ErrorCount() > 0)
         {
@@ -147,12 +169,6 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (cliValidationErrors.size() + jsonValidation.ErrorCount() > 0)
         {
             return {};
-        }
-
-        if (options.get("showconfig"))
-        {
-            std::cout << ret.paCalConfig.Serialize() << std::endl;
-            exit(0);
         }
 
         PBLOG_INFO << ret.paCalConfig.Serialize();
@@ -181,13 +197,22 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 #endif
 }
 
-std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg)
+std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames)
 {
     // TODO actually create datasources...
-    //      Should be handled by PTSD-1107 and PTSD-1113
+    //      Should be handled by PTSD-1107
     return cfg.source.Visit(
         [](const SimInputConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; },
-        [](const WXIPCDataSourceConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; }
+        [&](const WXIPCDataSourceConfig& ipcConfig) -> std::unique_ptr<DataSourceBase>
+        {
+            auto allo = Acquisition::DataSource::WXIPCDataSource::CreateAllocator(ipcConfig);
+            // Note: This layout is pretty arbitrary.  Feel free to adjust if there is cause
+            PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, {4096, numFrames, 64}};
+            DataSource::DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
+            sourceCfg.numFrames = numFrames;
+            auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
+            return source;
+        }
     );
 }
 
@@ -207,10 +232,25 @@ int PaCalProcess::RunAllThreads()
     {
         try
         {
-            auto source = CreateSource(settings_.paCalConfig);
+            auto source = CreateSource(settings_.paCalConfig, settings_.numFrames);
+            // The current implementation has some limitations, mainly that we expect to only
+            // process a single chunk.  Let's validate those assumptions
+            {
+                if (source->NumFrames() != static_cast<size_t>(settings_.numFrames))
+                    PBLOG_WARN << "DataSource implementation changed frame count from "
+                               << settings_.numFrames << " to " << source->NumFrames();
+                const auto framesPerChunk = source->PacketLayouts().begin()->second.NumFrames();
+                if (framesPerChunk != source->NumFrames())
+                {
+                    throw PBException("Implementation does not support multiple chunks. A chunk is "
+                                      + std::to_string(framesPerChunk) + ", but "
+                                      + std::to_string(source->NumFrames()) + " frames are expected");
+                }
+            }
             bool success = AnalyzeSourceInput(std::move(source), threadController, settings_.movieNum, settings_.outputFile);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
+            threadController->RequestExit();
         } catch (const std::exception& ex)
         {
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
@@ -225,7 +265,7 @@ int PaCalProcess::RunAllThreads()
     Dev::QuietAutoTimer timer;
     while(!ExitRequested())
     {
-        std::this_thread::sleep_for(chrono::seconds{1});
+        std::this_thread::sleep_for(std::chrono::seconds{1});
         if (timer.GetElapsedMilliseconds() > settings_.timeoutSeconds*1000)
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
@@ -258,7 +298,7 @@ int PaCalProcess::Run()
         PBLOG_INFO << "git status: " << file;
     }
 
-    stringstream ss;
+    std::stringstream ss;
     for (auto arg : commandLine_)
     {
         ss << arg << " ";
@@ -319,7 +359,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
 
         auto parser = CreateOptionParser();
         Values &options = parser.parse_args(argc, argv);
-        vector<string> args = parser.args();
+        std::vector<std::string> args = parser.args();
         HandleGlobalOptions(options);
         auto settings = HandleLocalOptions(options);
         if (settings.has_value())
@@ -337,7 +377,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
     {
         if (ex.code().value() != 0)
         {
-            std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << endl;
+            std::cerr << "exit_exception at main(): " << ex.what() << ", exit code" << ex.code().value() << std::endl;
             exitCode = ex.code().value();
         }
         else
@@ -347,12 +387,12 @@ int PaCalProcess::Main(int argc, const char *argv[])
     }
     catch (const std::exception &ex)
     {
-        std::cerr << "std::exception caught at main(): " << ex.what() << endl;
+        std::cerr << "std::exception caught at main(): " << ex.what() << std::endl;
         exitCode = ExitCode::StdException;
     }
     catch (...)
     {
-        std::cerr << "Unknown Exception caught at main(): " << endl;
+        std::cerr << "Unknown Exception caught at main(): " << std::endl;
         exitCode = ExitCode::DefaultUnknownFailure;
     }
     return exitCode;
