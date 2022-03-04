@@ -41,7 +41,7 @@ using namespace Mongo::Data;
  
 
 TraceSaverBody::TraceSaverBody(const std::string& filename,
-                               size_t numFrames,
+                               uint64_t numFrames,
                                DataSource::DataSourceBase::LaneSelector laneSelector,
                                const uint64_t frameBlockingSize,
                                const uint64_t zmwBlockingSize,
@@ -66,6 +66,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         dataType,
         laneSelector_.size() * laneSize,
         numFrames)
+    , numFrames_(numFrames)    
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
     PopulateScanData(experimentMetadata);
@@ -122,8 +123,9 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
     {
         using T = typename std::remove_reference_t<decltype(traceBatch)>::HostType;
 
+        if (traceBatch.Metadata().FirstFrame() < 0) throw PBException("First frame can not be negative");
         const auto zmwOffset = traceBatch.Metadata().FirstZmw();
-        const auto frameOffset = traceBatch.Metadata().FirstFrame();
+        const uint32_t frameOffset = traceBatch.Metadata().FirstFrame();
         const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
         const DataSourceBase::LaneIndex laneEnd = laneBegin + traceBatch.LanesPerBatch();
 
@@ -146,29 +148,43 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
             typedef boost::multi_array<T, 2> array_ref;
-            array_ref transpose {boost::extents[blockView.LaneWidth()][blockView.NumFrames()]};
-            for (uint32_t iframe = 0; iframe < blockView.NumFrames(); iframe++)
+            uint64_t traceBlockFrames = blockView.NumFrames();
+            if (frameOffset > numFrames_)
             {
-                for (uint32_t izmw = 0; izmw < blockView.LaneWidth(); izmw++)
-                {
-                    transpose[izmw][iframe] = data[iframe][izmw];
-                }
+                PBLOG_ERROR << "The frameOffset=" << frameOffset << " of the current chunk lies past the end of the trace file,"
+                    << " numFrames:" << numFrames_ << ". Skipping this chunk";
+                traceBlockFrames = 0;
+            } 
+            else if (frameOffset + traceBlockFrames > numFrames_)
+            {
+                // limit the frames to the original requested size
+                traceBlockFrames = numFrames_ - frameOffset;
             }
+            if (traceBlockFrames>0)
+            {
+                array_ref transpose {boost::extents[blockView.LaneWidth()][traceBlockFrames]};
+                for (uint32_t iframe = 0; iframe < traceBlockFrames; iframe++)
+                {
+                    for (uint32_t izmw = 0; izmw < blockView.LaneWidth(); izmw++)
+                    {
+                        transpose[izmw][iframe] = data[iframe][izmw];
+                    }
+                }
 
-            // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
-            // the trace file. TODO
-            // (MTL) I think this would better be implemented by having the laneSelector_.SelectedLanes() return a
-            // std::pair<int,int> where the first index is the index within the selected lanes container, and the second
-            // is the actual lane.  Then the `traceFileLane` just below is `iterator->first`, and `laneIdx = iterator->second`.
-            // This will allow laneSelector_.SelectedLanes() to randomly interate.
-            auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
-            const int64_t traceFileLane = position - laneSelector_.begin();
+                // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
+                // the trace file. TODO
+                // (MTL) I think this would better be implemented by having the laneSelector_.SelectedLanes() return a
+                // std::pair<int,int> where the first index is the index within the selected lanes container, and the second
+                // is the actual lane.  Then the `traceFileLane` just below is `iterator->first`, and `laneIdx = iterator->second`.
+                // This will allow laneSelector_.SelectedLanes() to randomly interate.
+                auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
+                const int64_t traceFileLane = position - laneSelector_.begin();
 
-            const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
-            boost::array<typename array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
-            transpose.reindex(bases);
-            file_.Traces().WriteTraceBlock<T>(transpose);
-
+                const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
+                boost::array<typename array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
+                transpose.reindex(bases);
+                file_.Traces().WriteTraceBlock<T>(transpose);
+            }
         }
     };
 
