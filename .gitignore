@@ -1,5 +1,20 @@
+# Git, CMake and build
 **/build*/
+**/.cache/clangd/
+**/.clangd
+.clang-format
 depcache/
+
+# IDE and editors
+.vs
+.vscode
+.idea
+
+# Dependencies
+.gitmodules
 pa-third-party
 pa-common
 hw-mongo
+
+# Logs
+*.log
