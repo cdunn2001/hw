@@ -77,17 +77,13 @@ class ProgressManager:
         self.SetProgress("POP")
 
 
+from contextlib import contextmanager
 
-class ProgressScope(object):
-    def __init__(self, progressManager, name):
-        self.progressManager = progressManager
-        self.name = name
-
-    def __enter__(self):
-        self.progressManager.PushProgress(self.name)
-
-    def __exit__(self, exceptionType, exceptionValue, tb):
-        self.progressManager.PopProgress()
+@contextmanager
+def ProgressScope(progressManager, name):
+  progressManager.PushProgress(name)
+  yield
+  progressManager.PopProgress()
 
 class TestProgressHelper(unittest.TestCase):
     def test_one(self):

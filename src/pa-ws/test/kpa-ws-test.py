@@ -31,7 +31,6 @@ import signal
 import string
 from subprocess import check_call, check_output
 import sys
-import tempfile
 from time import sleep
 import traceback
 from typing import List
@@ -291,50 +290,51 @@ class EndToEnd:
         exitCode = 0 if self.overallresult == 'PASS' else 1
         return exitCode
 
-    def _checkCalibrationFile(self, filename, dname, expval, expstartframe):
-        global args
-        if os.path.isfile(filename):
-            logging.info("EndToEnd._checkCalibration: filename = %s, dname = %s", filename, dname)
-            f = h5py.File(filename, 'r')
-            dset = f[dname]
-            # There should be a REST endpoint that returns the configured ROI, instead of this sill
-            # guessing game.
-            # FIXME
-            platform = self.rt.GetPlatform()
-            if 'Sequel1' in platform:
-                val = numpy.average(dset[32:32+1080, 64:64+1920])
-            elif 'Benchy' in platform:
-                val = numpy.average(dset[0:1360, 0:1440])
-            elif 'Sequel2' in platform:
-                    val = numpy.average(dset[0:2756, 0:2912])
-            else:
-                raise Exception('platform ' + platform + ' not supported in _checkCalibrationFile')
+    # TODO port this code for Kestrel
+    # def _checkCalibrationFile(self, filename, dname, expval, expstartframe):
+    #     global args
+    #     if os.path.isfile(filename):
+    #         logging.info("EndToEnd._checkCalibration: filename = %s, dname = %s", filename, dname)
+    #         f = h5py.File(filename, 'r')
+    #         dset = f[dname]
+    #         # There should be a REST endpoint that returns the configured ROI, instead of this sill
+    #         # guessing game.
+    #         # FIXME
+    #         platform = self.rt.GetPlatform()
+    #         if 'Sequel1' in platform:
+    #             val = numpy.average(dset[32:32+1080, 64:64+1920])
+    #         elif 'Benchy' in platform:
+    #             val = numpy.average(dset[0:1360, 0:1440])
+    #         elif 'Sequel2' in platform:
+    #             val = numpy.average(dset[0:2756, 0:2912])
+    #         else:
+    #             raise Exception('platform ' + platform + ' not supported in _checkCalibrationFile')
 
-            startFrame = dset.attrs['Frame_StartIndex']
-            expIsClose = (abs(val - expval) / (expval + 0.0000001)) <= 0.05
-            frameMatches = startFrame == expstartframe
-            if expIsClose:
-                logging.info("EndToEnd._checkCalibration: val= %f, expval= %f", val, expval)
-            else:
-                logging.error("EndToEnd._checkCalibration: val= %f, expval %f", val, expval)
-            if frameMatches:
-                logging.info("EndToEnd._checkCalibration: startFrame= %s, expstartframe= %s", startFrame, expstartframe)
-            else:
-                logging.error("EndToEnd._checkCalibration: startFrame= %s, expstartframe= %s", startFrame, expstartframe)
-            reason = "pattern(%s vs %s) startFrame(%s vs %s)" % (val, expval, startFrame, expstartframe)
+    #         startFrame = dset.attrs['Frame_StartIndex']
+    #         expIsClose = (abs(val - expval) / (expval + 0.0000001)) <= 0.05
+    #         frameMatches = startFrame == expstartframe
+    #         if expIsClose:
+    #             logging.info("EndToEnd._checkCalibration: val= %f, expval= %f", val, expval)
+    #         else:
+    #             logging.error("EndToEnd._checkCalibration: val= %f, expval %f", val, expval)
+    #         if frameMatches:
+    #             logging.info("EndToEnd._checkCalibration: startFrame= %s, expstartframe= %s", startFrame, expstartframe)
+    #         else:
+    #             logging.error("EndToEnd._checkCalibration: startFrame= %s, expstartframe= %s", startFrame, expstartframe)
+    #         reason = "pattern(%s vs %s) startFrame(%s vs %s)" % (val, expval, startFrame, expstartframe)
 
-            if args.waiver >= 1 and not expIsClose :
-                expIsClose = True
-                logging.info("waiving expIsClose match!")
-            if args.waiver >= 2 and not frameMatches :
-                frameMatches = True
-                logging.info("waiving exp frame match!")
-            return expIsClose and frameMatches, reason
+    #         if args.waiver >= 1 and not expIsClose :
+    #             expIsClose = True
+    #             logging.info("waiving expIsClose match!")
+    #         if args.waiver >= 2 and not frameMatches :
+    #             frameMatches = True
+    #             logging.info("waiving exp frame match!")
+    #         return expIsClose and frameMatches, reason
 
-        else :
-            logging.info("EndToEnd._checkCalibration: filename = %s does not exist, " + 
-                         "might be a different machine, skipping test", filename)
-            return True, "skipping test because calibration file not found"
+    #     else :
+    #         logging.info("EndToEnd._checkCalibration: filename = %s does not exist, " + 
+    #                      "might be a different machine, skipping test", filename)
+    #         return True, "skipping test because calibration file not found"
 
     def DoCalibrations(self, acq):
         global args
@@ -682,7 +682,6 @@ if __name__ == '__main__':
 
         SetupLogging()
 
-        td = tempfile.TemporaryDirectory()
         if args.bist:
             from PaWsSim import PaWsSim
             from SensorSim import SensorSim
@@ -694,7 +693,6 @@ if __name__ == '__main__':
             args.sensorurl = wxdaemon.GetUrl()
             args.wxurl = wxdaemon.GetUrl()
             args.pawsurl = paws.GetUrl()
-            args.progressfile = td.name + "/progress.txt"
 
         if args.failure is None:
             args.failure = [ ]
