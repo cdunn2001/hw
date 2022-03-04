@@ -768,11 +768,19 @@ private:
 
             PBLOG_INFO << "Exited chunk analysis loop.";
             const double framePercentage =  (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1);
-            if (framePercentage != 100.0)
+            // As this is all integer math, I'm not worried about round off error to 99.99 or something silly like that.
+            // Note that the framesAnalyzed *might* exceed the requested frames if the last chunk is not truncated correctly.
+            if (framePercentage < 100.0)
             {
                 PBLOG_WARN << "Not all Frames analyzed = " << framesAnalyzed
                         << " out of " << source->NumFrames() << " requested from source. ("
                         << framePercentage << "%)";
+            }
+            else if (framePercentage > 100.0)
+            {
+                PBLOG_NOTICE << "Slightly concerned that the number of framesAnalyzed (" << framesAnalyzed << ") exceeded the requested number ("
+                    << source->NumFrames() << ") but not concerned enough to do something about it. Just passively-aggressively pointing it out."
+                    << " You do realize that is not supposed to happen, right?";
             }
             else
             {
@@ -892,7 +900,6 @@ int main(int argc, char* argv[])
             return 0;
         }
         PBLOG_INFO << cliArgs.str();
-        PBLOG_DEBUG << json; // this does NOT work with --showconfig
 
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
