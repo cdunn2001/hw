@@ -50,7 +50,7 @@ class RTMetricsRegion : public Configuration::PBConfig<RTMetricsRegion>
 
 class RTMetricsRegionNew : public Configuration::PBConfig<RTMetricsRegionNew>
 {
-    PB_CONFIG(RTMetricsRegionNew)
+    PB_CONFIG(RTMetricsRegionNew);
 
     SMART_ENUM(zmwType, SEQUENCING, PORSEQUENCING,
                LASERSCATTER, LPTITRATION2P0X, LPTITRATION1P5X, LPTITRATION0P5X, LPTITRATION0P0X);

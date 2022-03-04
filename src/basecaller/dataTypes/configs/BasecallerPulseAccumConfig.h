@@ -69,7 +69,7 @@ class BasecallerPulseAccumConfig : public Configuration::PBConfig<BasecallerPuls
 public:
     PB_CONFIG(BasecallerPulseAccumConfig);
 
-    SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses)
+    SMART_ENUM(MethodName, NoOp, HostSimulatedPulses, HostPulses, GpuPulses);
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {

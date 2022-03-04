@@ -524,7 +524,7 @@ SMART_ENUM(
         FULL_QUEUE,
         READ_DATA,
         SEND_DATA
-)
+);
 
 using DiskProfiler = PacBio::Dev::Profile::ScopedProfilerChain<READ_PROFILES>;
 

@@ -51,7 +51,7 @@ struct TraceReanalysis : public Configuration::PBConfig<TraceReanalysis>
 SMART_ENUM(TraceInputType, Natural, INT16, UINT8);
 struct TraceReplication : public Configuration::PBConfig<TraceReplication>
 {
-    PB_CONFIG(TraceReplication)
+    PB_CONFIG(TraceReplication);
 
     PB_CONFIG_PARAM(std::string, traceFile, "");
 
