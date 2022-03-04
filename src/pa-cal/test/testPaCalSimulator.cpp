@@ -182,7 +182,7 @@ const auto simSweep08 = ::testing::Values(
     TestingParams { 512,     1,      512,     12, 16,     8 },
     TestingParams { 512,     4,      512,     32,  8,     8 },
     TestingParams { 512,    32,     1024,     64, 64,     8 },
-    TestingParams { 512,   512,     2048,   256, 256,     8 }
+    TestingParams { 512,   2048,    2048,   256, 256,     8 }
 );
 INSTANTIATE_TEST_SUITE_P(BlockSuite08, DataSourceSimTest, simSweep08);
 
@@ -192,7 +192,7 @@ const auto simSweep16 = ::testing::Values(
     TestingParams { 512,     1,      512,     12, 16,    16 },
     TestingParams { 512,     4,      512,     32,  8,    16 },
     TestingParams { 512,    32,     1024,     64, 64,    16 },
-    TestingParams { 512,   512,     2048,   256, 256,    16 }
+    TestingParams { 512,   4096,    2048,   256, 256,    16 }
 );
 INSTANTIATE_TEST_SUITE_P(BlockSuite16, DataSourceSimTest, simSweep16);
 

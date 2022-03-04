@@ -93,18 +93,22 @@ private:
     template<typename T>
     DataSource::SensorPacket GenerateBatch() const;
 
+    // Converts 1D coordinate to 2D coordinate
     std::pair<int16_t, int16_t> Id2Coords(size_t zmwId) const
     { 
         auto lda = simCfg_.nCols;
-        return { zmwId / lda, zmwId % lda };
+        return { zmwId % lda, zmwId / lda };
     }
 
+    // Functions Id2Norm* calculate parameters of normal distribution
+    // for the respective data type
     std::pair<int16_t, int16_t> Id2NormInt16(size_t zmwId) const
     {
         int16_t sring = 43;
-        int32_t lda = simCfg_.nCols, off = simCfg_.Pedestal;
+        int32_t lda = simCfg_.nCols;
+        int32_t off = simCfg_.Pedestal;
 
-        auto [y, x] = Id2Coords(zmwId);
+        auto [x, y] = Id2Coords(zmwId);
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
         int mring = INT16_MAX - 10*std; // Rebound 6 sigmas from the data borders
         int16_t mean = 3 * std::abs<int16_t>(x - y) % mring + 5*std;
@@ -114,9 +118,10 @@ private:
     std::pair<int16_t, int16_t> Id2NormInt8(size_t zmwId) const
     {
         int16_t sring = 5;
-        int32_t lda = simCfg_.nCols, off = simCfg_.Pedestal;
+        int32_t lda = simCfg_.nCols;
+        int32_t off = simCfg_.Pedestal;
 
-        auto [y, x] = Id2Coords(zmwId);
+        auto [x, y] = Id2Coords(zmwId);
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
         int mring = INT8_MAX - 10*std;  // Rebound 6 sigmas from the data borders
         int16_t mean =  std::abs<int16_t>(x - y) % mring + 5*std;

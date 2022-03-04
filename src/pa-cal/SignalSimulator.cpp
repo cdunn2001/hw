@@ -88,8 +88,8 @@ std::vector<DataSourceBase::UnitCellProperties> DataSourceSimulator::GetUnitCell
     for (size_t i = 0; i < retProps.size(); ++i)
     {
         auto coord = Id2Coords(i);
-        retProps[i].x = coord.second;
-        retProps[i].y = coord.first;
+        retProps[i].x = coord.first;
+        retProps[i].y = coord.second;
     }
 
     return retProps;
@@ -178,7 +178,7 @@ void DataSourceSimulator::ContinueProcessing()
 
     batchIdx_++;
     auto numZmw = NumZmw();
-    auto startZmw = (batchIdx_-1)*nominalLayout.NumZmw() + layouts_[batchIdx_-1].NumZmw();
+    auto startZmw = (currChunk_.cend() - 1)->StopZmw();
     if (startZmw == numZmw)
     {
         chunkIdx_++;
@@ -188,7 +188,6 @@ void DataSourceSimulator::ContinueProcessing()
         currChunk_ = SensorPacketsChunk(chunkIdx_ * nominalLayout.NumFrames(),
                                         (chunkIdx_ + 1) * nominalLayout.NumFrames());
         currChunk_.SetZmwRange(0, numZmw);
-
     }
     if (startZmw > numZmw)
         throw PBException("Bookkeeping error in SimulatedDataSource!");
