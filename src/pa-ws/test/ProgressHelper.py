@@ -3,6 +3,7 @@ import datetime
 import os
 import sys
 import tempfile
+import unittest
 
 from datetime import datetime
 
@@ -90,56 +91,43 @@ class ProgressScope(object):
     def __exit__(self, exceptionType, exceptionValue, tb):
         self.progressManager.PopProgress()
 
+class TestProgressHelper(unittest.TestCase):
+    def test_one(self):
+        td = tempfile.TemporaryDirectory()
+        fn = td.name + "/progress.txt"
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.WARN)
-
-    td = tempfile.TemporaryDirectory()
-    fn = td.name + "/progress.txt"
-    try:
         pm = ProgressManager(fn)
         pm.SetProgress("starting")
         s = slurp(fn)
         logging.debug(s)
-        if not "starting" in s:
-            raise Exception("bad progress file state")
-        if not "time:" in s:
-            raise Exception("bad progress file state")
-
+        self.assertIn("starting", s)
+        self.assertIn("time:", s)
 
         with ProgressScope(pm, "constructor") as pp:
             s = slurp(fn)
             logging.debug(s)
-            if not "constructor" in s:
-                raise Exception("bad progress file state")
+            self.assertIn("constructor", s)
+            self.assertIn("PUSH", s)
                 
-            if not "PUSH" in s:
-                raise Exception("bad progress file state")
             pm.SetProgress("running")
             s = slurp(fn)
             logging.debug(s)
-            if not "running" in s:
-                raise Exception("bad progress file state")
-            if not "time:" in s:
-                raise Exception("bad progress file state")
+            self.assertIn("running", s)
+            self.assertIn("time:", s)
 
         s = slurp(fn)
         logging.debug(s)
-        if "constructor" in s:
-            raise Exception("bad progress file state")
-        if "running" in s:
-            raise Exception("bad progress file state")
-        if not "POP" in s:
-            raise Exception("bad progress file state")
-        if not "time:" in s:
-            raise Exception("bad progress file state")
+        self.assertNotIn("constructor" , s)
+        self.assertNotIn("running" , s)
+        self.assertIn("POP" , s)
+        self.assertIn("time" , s)
 
         pm.SetProgress("done")
         s = slurp(fn)
         logging.debug(s)
         print("ProgressHelper:PASS")
-        sys.exit(0)
-    except Exception as ex:
-        print("ProgressHelper:FAIL")
-        logging.error("Exception :%s",format(ex))
-        sys.exit(1)
+        td.cleanup()
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.WARN)
+    unittest.main()

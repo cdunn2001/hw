@@ -28,7 +28,13 @@ add_test(
     COMMAND testPaWs --gtest_output=xml:testPaWs.xml)
 
 add_test(
-    NAME testPythonUnits 
-    COMMAND ${CMAKE_CURRENT_LIST_DIR}/runPythonTests.sh
+    NAME testPythonUnits
+    COMMAND e2e_ve/bin/python3 -m unittest -v ${CMAKE_CURRENT_LIST_DIR}/kpa-ws-test.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+)
+
+add_test(
+    NAME testPaWsWithPythonBist
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/kpa-ws-test.py --bist
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
 )

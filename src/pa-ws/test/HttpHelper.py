@@ -2,6 +2,7 @@ import logging
 import sys
 from time import sleep
 import requests
+import unittest
 
 class HttpException(Exception):
     pass
@@ -28,28 +29,28 @@ class SafeHttpClient(object):
         logging.info('POST - %s, %s', url, str(payload)[0:100] + " ...")
         logging.debug('POST - %s, %s', url, payload)
         # debugging REST calls, not needed now:
-        #        if payload is str:
-        #            logging.info("payload is string")
-        #        else:
-        #            print(type(payload))
-        #            logging.info("payload is not string")
-        response = requests.post(url, json=payload, timeout=timeout)
+        if type(payload) is str:
+            logging.info("payload is string")
+            response = requests.post(url, json=payload, timeout=timeout)
+        elif type(payload) is dict:
+            logging.info("payload is dict")
+            response = requests.post(url, json=payload, timeout=timeout)
+#            response = requests.post(url, data=payload, timeout=timeout)
+        else:
+            print(type(payload))
+            raise Exception("payload is not string")
         r = response.json()
         if response.status_code / 100 != 2 :
             raise HttpException('status_code:' + str(response.status_code) + str(r))
         return r
 
-if __name__ == '__main__':
-    import threading
-    import http.server
-    import socketserver
-    import socket
+class TestHttpHelper(unittest.TestCase):
+    def test_one(self):
+        import threading
+        import http.server
+        import socketserver
+        import socket
 
-    logging.disable(logging.ERROR)
-    # logging.basicConfig(level=logging.INFO)
-
-    try:
- 
         class PaWsHandlers(socketserver.BaseRequestHandler):
 
             def handle(self):
@@ -75,42 +76,27 @@ if __name__ == '__main__':
             server_thread = threading.Thread(target=httpd.serve_forever)
             server_thread.daemon = True
             server_thread.start()
-            if not server_thread.is_alive():
-                print("server is not alive")
-                exit(1)
+            self.assertTrue(server_thread.is_alive())
+
             logging.info("Server loop running in thread:", server_thread.name)
 
             hh = SafeHttpClient()
             hh.checkedGet("http://localhost:%d/dummy.json" % port)
-            try :
+            logging.disable(logging.ERROR)
+            with self.assertRaises(HttpException):
                 hh.checkedGet("http://localhost:%d/failure" % port)
-                raise Exception("Excepted 404 failure did not fail")
-            except HttpException:
-                pass # expected exception
-            except :
-                raise
 
             hh.checkedPost("http://localhost:%d/blackhole" % port, {"foo":123})
-            try :
+            with self.assertRaises(HttpException):
                 hh.checkedPost("http://localhost:%d/failure" % port, "{}")
-                raise Exception("Excepted 404 failure did not fail")
-            except HttpException:
-                pass # expected exception
-            except :
-                raise
-
-
 
             logging.info("shutting down")
             httpd.shutdown()
             logging.info("shut down")
             server_thread.join()
 
-            print("HttpHelper:PASS")
-            sys.exit(0)
-    except Exception as ex:
-        logging.error("failed with exception %s" % format(ex))
-        print("HttpHelper:FAIL")
-        sys.exit(1)
+if __name__ == '__main__':
+    logging.disable(logging.ERROR)
+    # logging.basicConfig(level=logging.INFO)
 
-
+    unittest.main()

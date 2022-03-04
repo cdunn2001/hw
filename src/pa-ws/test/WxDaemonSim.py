@@ -3,49 +3,75 @@ import sys
 import threading
 import socketserver
 import logging
+import time
 import HttpHelper
 import json
+import unittest
 
-pawsGetDict = {}
-pawsPostDict = {}
-pawsGetDict["/status"] = {"platform":"Kestrel"}
-pawsGetDict["/sras/0/status"] = {"state":"bar"}
-pawsGetDict["/sras/0/status/state"] = "online"
-pawsGetDict["/status/wolverine/frameLatency"] = 0
-pawsGetDict["/sras/0/status/transmitter/state"] = "idle"
+wsGetDict = {}
+wsPostDict = {}
+wsGetDict["/status"] = {"platform":"Kestrel"}
+wsGetDict["/status/platform"] = "Kestrel"
+wsGetDict["/sras/0/status"] = {"state":"bar"}
+wsGetDict["/sras/0/status/state"] = "online"
+wsGetDict["/status/wolverine/frameLatency"] = 0
+wsGetDict["/sras/0/status/transmitter/state"] = "IDLE"
+wsGetDict["/sras/0/status/transmitter/frameIndex"] = 0 # TODO. have this increment
+wsGetDict["/sras/0/status/transmitter/frameOffset"] = 0 # TODO. have this increment
 
-#            "frameIndex": uint64 of the frame that was last transmitted,
-#            "frameOffset": uint64 offset into the simulated file or pattern,
-#            "numFrames": total number of frames in the simulated file or pattern,
-#            "state" : state of the movie transmitter
-#            {
-#                "idle",
-#                "preloading",
-#                "transmitting"
-#            }
+def TransmitterSim(payload):
+    global wsGetDict
+    ep = "/sras/0/status/transmitter/state"
+    logging.info("TransmitterSim PRELOADING %s",payload)
+    tconfig = json.loads(payload)
+    period = 1.0 / float(tconfig["rate"])
+    wsGetDict[ep] = "PRELOADING"
+    wsGetDict["/sras/0/status/transmitter/frameIndex"] = 0
+    wsGetDict["/sras/0/status/transmitter/numFrames"] = tconfig["frames"]
+    wsGetDict["/sras/0/status/transmitter/frameOffset"] = 0
+    time.sleep(1)
+    wsGetDict[ep] = "TRANSMITTING"
+    logging.info("TransmitterSim TRANSMITTING")
+    for i in range(0,wsGetDict["/sras/0/status/transmitter/numFrames"]):
+        wsGetDict["/sras/0/status/transmitter/frameIndex"] += 1
+        time.sleep(period)
 
-pawsPostDict["/sras/0/transmit"] = lambda : logging.info("TRANSMITTING!")
+    logging.info("TransmitterSim IDLE")
+    wsGetDict[ep] = "IDLE"
 
-class PaWsHandler(socketserver.BaseRequestHandler):
+def ChangeTransmitterState(payload):
+    if True:
+        t = threading.Thread(target=TransmitterSim,name="TransmitterSim",args=[payload])
+        t.start()
+
+wsPostDict["/sras/0/transmit"] = lambda payload : ChangeTransmitterState(payload)
+
+    
+
+class WsHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
-        global pawsDict
+        global wsDict
         try:
             req = str(self.request.recv(1024), 'ascii')
-            logging.debug("PaWsHandler req:%s" % req)
-            req0,url,other = req.split(None, maxsplit=2)
+            logging.debug("wsHandler req:%s" % req)
+            header,payload, = req.split("\r\n\r\n", maxsplit=2)
+            req0,url,theRest = header.split(None, maxsplit=2)
+
             if req0 == "GET":
-                if url in pawsGetDict:
+                if url in wsGetDict:
                     code="200 OK"
-                    response = pawsGetDict[url]
+                    response = wsGetDict[url]
                 else:
                     code="404 NOT FOUND"
                     response="URL " + url + " not found"    
             elif req0 == "POST":
-                if url in pawsPostDict:
+                if payload == "":
+                    payload = str(self.request.recv(1024), "ascii")
+                if url in wsPostDict:
                     code="200 OK"
-                    f = pawsPostDict[url]
-                    f()
+                    f = wsPostDict[url]
+                    f(payload)
                     response = {"message":"ok"}
                 else:
                     code="404 NOT FOUND"
@@ -61,9 +87,10 @@ class PaWsHandler(socketserver.BaseRequestHandler):
         logging.debug("handler:response:%s" % response)
         self.request.sendall(response)
 
+
 class WxDaemonSim:
     def Run(self):
-        self.server = socketserver.TCPServer(("", 0), PaWsHandler)
+        self.server = socketserver.TCPServer(("", 0), WsHandler)
         self.ip, self.port = self.server.server_address
         logging.info("serving at %s" % self.GetUrl())
         self.server_thread = threading.Thread(target=self.server.serve_forever,name="wxDaemonSim")
@@ -79,23 +106,43 @@ class WxDaemonSim:
 
     def Shutdown(self):
         self.server.shutdown()
+        self.server.server_close()
         self.server_thread.join()
 
-if __name__ == '__main__':
-    logging.disable(logging.DEBUG)
-    #logging.basicConfig(level=logging.DEBUG)
-
-    try:
+class TestWxDaemonSim(unittest.TestCase):
+    def test_one(self):
         wx = WxDaemonSim()
         wx.Run()
         url = wx.GetUrl()
         client = HttpHelper.SafeHttpClient()
-        logging.info (str(client.checkedGet(url +"/status")))
-        logging.info (str(client.checkedPost(url +"/sras/0/transmit",{"go":"now"})))
+        self.assertIn("platform",str(client.checkedGet(url +"/status")))
         wx.Shutdown()
-        print("WxDaemonSim:PASS")
-        sys.exit(0)
-    except Exception as ex:
-        logging.error("exception " + format(ex))
-        print("WxDaemonSim:FAIL")
-        sys.exit(1)
+
+    def test_transmitter(self):
+        wx = WxDaemonSim()
+        wx.Run()
+        url = wx.GetUrl()
+        client = HttpHelper.SafeHttpClient()
+        self.assertEqual("IDLE",str(client.checkedGet(url + "/sras/0/status/transmitter/state")))
+        self.assertEqual("0",str(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex")))
+
+        self.assertIn("{",str(client.checkedPost(url +"/sras/0/transmit",{"rate":100.0,"frames":1000})))  # TODO, add tighter assert
+        t0=time.monotonic()
+        frameIndexLast = 0
+        while time.monotonic() - t0 < 11.0:
+            time.sleep(1)
+            frameIndex = int(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex"))
+            logging.info("frameIndex:%d" % frameIndex)
+            self.assertGreater(frameIndex, frameIndexLast)
+            frameIndexLast = frameIndex
+            if frameIndex >= 1000:
+                break
+
+        wx.Shutdown()
+
+
+if __name__ == '__main__':
+    # logging.disable(logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+    unittest.main()
+
