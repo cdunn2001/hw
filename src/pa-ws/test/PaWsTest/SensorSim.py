@@ -1,10 +1,10 @@
 from datetime import datetime
 import logging
 from lxml import etree  # type: ignore
+import pytest
 from subprocess import check_call, check_output
 import tempfile
 from time import sleep, monotonic
-import unittest
 
 
 import HttpHelper
@@ -121,19 +121,15 @@ class SensorSim(HttpHelper.SafeHttpClient):
         return s['platform']
 
 
-class TestSensorSim(unittest.TestCase):
-    def test_one(self):    
-        import WxDaemonSim
+def test_SensorSim():    
+    import WxDaemonSim
 
-        td = tempfile.TemporaryDirectory()
-        fn = td.name + "/progress.txt"
-        progressor = ProgressHelper.ProgressManager(fn)
+    td = tempfile.TemporaryDirectory()
+    fn = td.name + "/progress.txt"
+    progressor = ProgressHelper.ProgressManager(fn)
 
-        wxdaemon = WxDaemonSim.WxDaemonSim()
-        wxdaemon.Run()
-        ss = SensorSim(wxdaemon.GetUrl(), progressor)
-        wxdaemon.Shutdown()
-        td.cleanup()
-
-if __name__ == '__main__':
-    unittest.main()
+    wxdaemon = WxDaemonSim.WxDaemonSim()
+    wxdaemon.Run()
+    ss = SensorSim(wxdaemon.GetUrl(), progressor)
+    wxdaemon.Shutdown()
+    td.cleanup()

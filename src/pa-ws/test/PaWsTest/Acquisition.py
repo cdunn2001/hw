@@ -1,5 +1,5 @@
 from xml.dom import minidom
-import unittest
+import pytest
 
 class Acquisition:
     def __init__(self, mid):
@@ -39,9 +39,9 @@ class Acquisition:
             "logLevel": "INFO"
         }
 
-class TestAcquisition(unittest.TestCase):
-    def test_one(self):  
-        pass
-
-if __name__ == '__main__':
-    unittest.main()
+def test_Acquisition():  
+    acq = Acquisition("m1234")
+    assert acq.GenerateBasecallerJsonPayload()["mid"] == "m1234"
+    assert acq.GenerateDarkcalJsonPayload()["mid"] == "m1234"
+    assert "m1234" in acq.GenerateDarkcalJsonPayload()["calibFileUrl"]
+    assert acq.GenerateLoadingcalJsonPayload()["mid"] == "m1234"

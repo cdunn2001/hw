@@ -29,8 +29,8 @@ add_test(
 
 add_test(
     NAME testPythonUnits
-    COMMAND e2e_ve/bin/python3 -m unittest -v ${CMAKE_CURRENT_LIST_DIR}/kpa-ws-test.py
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    COMMAND ${CMAKE_CURRENT_LIST_DIR}/PaWsTest/runPythonTests.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/PaWsTest
 )
 
 add_test(

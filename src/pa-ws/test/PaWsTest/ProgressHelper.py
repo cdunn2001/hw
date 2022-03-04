@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
+import pytest
 import os
 import tempfile
-import unittest
 
 
 from Helpers import slurp
@@ -85,43 +85,38 @@ def ProgressScope(progressManager, name):
   yield
   progressManager.PopProgress()
 
-class TestProgressHelper(unittest.TestCase):
-    def test_one(self):
-        td = tempfile.TemporaryDirectory()
-        fn = td.name + "/progress.txt"
+def test_ProgressHelper():
+    td = tempfile.TemporaryDirectory()
+    fn = td.name + "/progress.txt"
 
-        pm = ProgressManager(fn)
-        pm.SetProgress("starting")
+    pm = ProgressManager(fn)
+    pm.SetProgress("starting")
+    s = slurp(fn)
+    logging.debug(s)
+    assert "starting" in s
+    assert "time:" in s
+
+    with ProgressScope(pm, "constructor") as pp:
         s = slurp(fn)
         logging.debug(s)
-        self.assertIn("starting", s)
-        self.assertIn("time:", s)
-
-        with ProgressScope(pm, "constructor") as pp:
-            s = slurp(fn)
-            logging.debug(s)
-            self.assertIn("constructor", s)
-            self.assertIn("PUSH", s)
-                
-            pm.SetProgress("running")
-            s = slurp(fn)
-            logging.debug(s)
-            self.assertIn("running", s)
-            self.assertIn("time:", s)
-
+        assert "constructor" in s
+        assert "PUSH" in s
+            
+        pm.SetProgress("running")
         s = slurp(fn)
         logging.debug(s)
-        self.assertNotIn("constructor" , s)
-        self.assertNotIn("running" , s)
-        self.assertIn("POP" , s)
-        self.assertIn("time" , s)
+        assert "running" in s
+        assert "time:" in s
 
-        pm.SetProgress("done")
-        s = slurp(fn)
-        logging.debug(s)
-        print("ProgressHelper:PASS")
-        td.cleanup()
+    s = slurp(fn)
+    logging.debug(s)
+    assert not "constructor" in s
+    assert not "running" in s
+    assert "POP" in s
+    assert "time" in s
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.WARN)
-    unittest.main()
+    pm.SetProgress("done")
+    s = slurp(fn)
+    logging.debug(s)
+    print("ProgressHelper:PASS")
+    td.cleanup()

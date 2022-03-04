@@ -1,7 +1,8 @@
 import logging
+import pytest
 import tempfile
 from time import monotonic, sleep
-import unittest
+
 
 import HttpHelper
 import ProgressHelper
@@ -226,42 +227,37 @@ class RT(HttpHelper.SafeHttpClient):
         r = self.checkedGet(self.wxdaemon + '/sras/0/status/currentFrameIndex.json')
         return r
 
-class TestKestrelRT(unittest.TestCase):
-    def test_one(self):  
-        import WxDaemonSim
-        import PaWsSim
+def test_KestrelRT():  
+    import WxDaemonSim
+    import PaWsSim
 #        from . import ProgressHelper
 
-        td = tempfile.TemporaryDirectory()
-        fn = td.name + "/progress.txt"
-        progresser = ProgressHelper.ProgressManager(fn)
+    td = tempfile.TemporaryDirectory()
+    fn = td.name + "/progress.txt"
+    progresser = ProgressHelper.ProgressManager(fn)
 
-        wxdaemon = WxDaemonSim.WxDaemonSim()
-        wxdaemon.Run()
-        paws = PaWsSim.PaWsSim()
-        paws.Run()
+    wxdaemon = WxDaemonSim.WxDaemonSim()
+    wxdaemon.Run()
+    paws = PaWsSim.PaWsSim()
+    paws.Run()
 
-        rt = RT(progresser)
-        # for testing, the port numbers are arbitrary assigned by the system, so we don't use 23602 or 23632
-        rt.wxdaemon = wxdaemon.GetUrl()
-        rt.paws = paws.GetUrl()
-        logging.info("wx daemon running on %s",rt.wxdaemon)
-        rt.VerifyPipelineIsUp()
-        self.assertEqual(rt.GetPlatform() , "Kestrel")
+    rt = RT(progresser)
+    # for testing, the port numbers are arbitrary assigned by the system, so we don't use 23602 or 23632
+    rt.wxdaemon = wxdaemon.GetUrl()
+    rt.paws = paws.GetUrl()
+    logging.info("wx daemon running on %s",rt.wxdaemon)
+    rt.VerifyPipelineIsUp()
+    assert rt.GetPlatform() == "Kestrel"
 
-        rt.Init()
-        rt.Reset("1")
-        rt.WaitForState("1","basecaller","UNKNOWN")
-        acq = Acquisition.Acquisition("m1234")
-        rt.StartBasecaller("1", acq, 100)
-        rt.WaitForState("1","basecaller","READY")
-        rt.WaitForState("1","basecaller","RUNNING")
-        rt.WaitForState("1","basecaller","COMPLETE")
+    rt.Init()
+    rt.Reset("1")
+    rt.WaitForState("1","basecaller","UNKNOWN")
+    acq = Acquisition.Acquisition("m1234")
+    rt.StartBasecaller("1", acq, 100)
+    rt.WaitForState("1","basecaller","READY")
+    rt.WaitForState("1","basecaller","RUNNING")
+    rt.WaitForState("1","basecaller","COMPLETE")
 
-        wxdaemon.Shutdown()
-        paws.Shutdown()
-        td.cleanup()
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.WARN)
-    unittest.main()
+    wxdaemon.Shutdown()
+    paws.Shutdown()
+    td.cleanup()

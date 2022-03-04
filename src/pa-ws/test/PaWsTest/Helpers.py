@@ -1,4 +1,4 @@
-import unittest
+import pytest
 
 class RealtimeException(Exception):
     def __init__(self, message):
@@ -23,10 +23,6 @@ def slurp(filename):
     with open(filename) as x: f = x.read()
     return f
 
-class TestHelpers(unittest.TestCase):
-    def test_one(self):  
-        with self.assertRaises(RealtimeException):
-            raise RealtimeException("haha")
-
-if __name__ == '__main__':
-    unittest.main()
+def test_Helpers():  
+    with pytest.raises(RealtimeException):
+        raise RealtimeException("haha")

@@ -8,7 +8,7 @@
 "echo" "running from $SCRIPTPATH"
 "which" "python"
 "python" "--version"
-"." "$SCRIPTPATH/install_python3.sh"
+"." "$SCRIPTPATH/install_python3_ve.sh"
 "which" "python"
 "python" "--version"
 "exec" "python3" "$SCRIPT" "$@"

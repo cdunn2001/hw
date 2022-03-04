@@ -3,9 +3,10 @@ import sys
 import threading
 import socketserver
 import logging
+import pytest
 import time
 import json
-import unittest
+
 
 import HttpHelper
 
@@ -110,40 +111,26 @@ class WxDaemonSim:
         self.server.server_close()
         self.server_thread.join()
 
-class TestWxDaemonSim(unittest.TestCase):
-    def test_one(self):
-        wx = WxDaemonSim()
-        wx.Run()
-        url = wx.GetUrl()
-        client = HttpHelper.SafeHttpClient()
-        self.assertIn("platform",str(client.checkedGet(url +"/status")))
-        wx.Shutdown()
+def test_WxDaemonSim():
+    wx = WxDaemonSim()
+    wx.Run()
+    url = wx.GetUrl()
+    client = HttpHelper.SafeHttpClient()
+    assert "platform" in str(client.checkedGet(url +"/status"))
+    assert "IDLE" == str(client.checkedGet(url + "/sras/0/status/transmitter/state"))
+    assert "0" == str(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex"))
 
-    def test_transmitter(self):
-        wx = WxDaemonSim()
-        wx.Run()
-        url = wx.GetUrl()
-        client = HttpHelper.SafeHttpClient()
-        self.assertEqual("IDLE",str(client.checkedGet(url + "/sras/0/status/transmitter/state")))
-        self.assertEqual("0",str(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex")))
+    assert "{" in str(client.checkedPost(url +"/sras/0/transmit",{"rate":100.0,"frames":1000}))  # TODO, add tighter assert
+    t0=time.monotonic()
+    frameIndexLast = 0
+    while time.monotonic() - t0 < 11.0:
+        time.sleep(1)
+        frameIndex = int(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex"))
+        logging.info("frameIndex:%d" % frameIndex)
+        assert frameIndex > frameIndexLast
+        frameIndexLast = frameIndex
+        if frameIndex >= 1000:
+            break
 
-        self.assertIn("{",str(client.checkedPost(url +"/sras/0/transmit",{"rate":100.0,"frames":1000})))  # TODO, add tighter assert
-        t0=time.monotonic()
-        frameIndexLast = 0
-        while time.monotonic() - t0 < 11.0:
-            time.sleep(1)
-            frameIndex = int(client.checkedGet(url + "/sras/0/status/transmitter/frameIndex"))
-            logging.info("frameIndex:%d" % frameIndex)
-            self.assertGreater(frameIndex, frameIndexLast)
-            frameIndexLast = frameIndex
-            if frameIndex >= 1000:
-                break
-
-        wx.Shutdown()
-
-
-if __name__ == '__main__':
-    # logging.disable(logging.DEBUG)
-    logging.basicConfig(level=logging.INFO)
-    unittest.main()
+    wx.Shutdown()
 

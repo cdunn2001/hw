@@ -3,8 +3,8 @@ import threading
 import socketserver
 import logging
 import json
+import pytest
 import time
-import unittest
 
 import HttpHelper
 
@@ -166,28 +166,20 @@ class PaWsSim:
         self.server.server_close()
         self.server_thread.join()
 
-class TestPaWsSim(unittest.TestCase):
-    def test_one(self):
+def test_one():
+    paws = PaWsSim()
+    paws.Run()
+    url = paws.GetUrl()
+    client = HttpHelper.SafeHttpClient()
+    assert "platform" in str(client.checkedGet(url +"/status"))
+    assert "{" in str(client.checkedPost(url + "/sockets/1/basecaller/reset",payload={},timeout=60))
+    assert "UNKNOWN" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
+    assert "{" in str(client.checkedPost(url +"/sockets/1/basecaller/start",payload={"mid":"m1234"},timeout=60))
+    assert "READY" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
+    time.sleep(1.1)
+    assert "RUNNING" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
+    time.sleep(1.1)
+    assert "COMPLETE" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
 
-        paws = PaWsSim()
-        paws.Run()
-        url = paws.GetUrl()
-        client = HttpHelper.SafeHttpClient()
-        self.assertIn("platform", str(client.checkedGet(url +"/status")))
-        self.assertIn("{", str(client.checkedPost(url + "/sockets/1/basecaller/reset",payload={},timeout=60)))
-        self.assertIn("UNKNOWN", str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus")))
-        self.assertIn("{", str(client.checkedPost(url +"/sockets/1/basecaller/start",payload={"mid":"m1234"},timeout=60)))
-        self.assertIn("READY", str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus")))
-        time.sleep(1.1)
-        self.assertIn("RUNNING", str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus")))
-        time.sleep(1.1)
-        self.assertIn("COMPLETE", str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus")))
-
-        paws.Shutdown()
-
-
-if __name__ == '__main__':
-    # logging.disable(logging.DEBUG)
-    logging.basicConfig(level=logging.WARN)
-    unittest.main()
+    paws.Shutdown()
 
