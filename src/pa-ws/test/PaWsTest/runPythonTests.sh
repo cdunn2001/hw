@@ -5,7 +5,9 @@ pwd
 
 if [[ ! -f ../e2e_ve/bin/activate ]]
 then
-  . ../install_python3_ve.sh
+    pushd ..
+    . ./install_python3_ve.sh
+    popd
 fi
 . ../e2e_ve/bin/activate
 
