@@ -3,3 +3,5 @@ depcache/
 pa-third-party
 pa-common
 hw-mongo
+.vscode/
+__pycache__/
