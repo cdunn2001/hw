@@ -25,6 +25,7 @@ include_directories(
 
 include(pacbio-cplusplus-api)
 include(pacbio-cmake-config-vars)
+include(pacbio-hw-mongo)
 
 generate_config_header(kestrel-config.h PrimaryConfig)
 
@@ -35,6 +36,17 @@ project (pa-cal)
 # The SOFTWARE_VERSION is used to create the RPM and installation directory, and it is reported
 # by the application and logged.
 set(SOFTWARE_VERSION "0.1.0")
+
+# temporary hack, to work around some accidentally visible version strings in the hw-mongo
+set(SOFTWARE_MAJOR_VERSION 0)
+set(SOFTWARE_MINOR_VERSION 1)
+set(SOFTWARE_REVISION_VERSION 0)
+set(SOFTWARE_VERSION "${SOFTWARE_MAJOR_VERSION}.${SOFTWARE_MINOR_VERSION}.${SOFTWARE_REVISION_VERSION}")
+add_definitions(
+    -DSOFTWARE_MAJOR_VERSION=${SOFTWARE_MAJOR_VERSION}
+    -DSOFTWARE_MINOR_VERSION=${SOFTWARE_MINOR_VERSION}
+    -DSOFTWARE_REVISION_VERSION=${SOFTWARE_REVISION_VERSION}
+)
 
 add_subdirectory(test)
 
@@ -66,6 +78,7 @@ target_link_libraries(lib-pa-cal
     PUBLIC
         libBoost
         libPacbioCplusplusApi
+        libPacbioHwAcquisition
         GitVersionInfo
 )
 

@@ -10,6 +10,7 @@ LOGOUTPUT=${LOGOUTPUT:-/var/log/pacbio/pa-smrtbasecaller/pa-smrtbasecaller}
 FRAMES=${FRAMES:-1024}
 RATE=${RATE:-100}
 TRACE_OUTPUT=${TRACE_OUTPUT:-}
+BAZ_OUTPUT=${BAZ_OUTPUT:-}
 INPUT=${INPUT:-alpha}
 VSC=${VSC:-0}
 NOP=${NOP:-0}
@@ -18,6 +19,7 @@ TILEPOOLFACTOR=${TILEPOOLFACTOR:-3.0}
 LOOPBACK=${LOOPBACK:-false}
 SRA_INDEX=${SRA_INDEX:-0}  # 0 to 3
 ROI=${ROI:-[[0,0,64,256]]}  # don't use spaces. This can also be a filename to a JSON file that contains the ROI.
+PRIMERSCALER=${PRIMERSCALER:-2.0}
 
 # append this directory to the PATH
 scriptdir=$(dirname $(realpath $0))
@@ -32,18 +34,18 @@ fi
 
 if [[ $GDBSERVER ]]
 then 
-#    cmd="/home/UNIXHOME/mlakata/clion-2020.1.1/bin/gdb/linux/bin/gdbserver localhost:2000"
-    cmd="/home/UNIXHOME/mlakata/local/gdb-10.1/bin/gdbserver localhost:2000"
+    export OPTIONAL_DEBUGGER="/home/UNIXHOME/mlakata/local/gdb-10.1/bin/gdbserver localhost:2000"
     BUILD=Debug
 elif [[ $GDB ]]
 then
-    cmd="gdb --args"
+    export OPTIONAL_DEBUGGER="gdb --args"
     BUILD=Debug
 elif [[ $ECHO ]]
 then
-    cmd="echo "
+    # useful for just displaying the constructed command line, for hard core debugging.
+    export OPTIONAL_DEBUGGER="echo "
 else
-    cmd=""
+    export OPTIONAL_DEBUGGER=""
 fi
 
 if [[ $TRACE_OUTPUT != "" ]]
@@ -55,6 +57,12 @@ then
     fi
     trc_output="--outputtrcfile $TRACE_OUTPUT"
     rm -f $TRACE_OUTPUT
+fi
+if [[ $BAZ_OUTPUT != "" ]]
+then
+  baz_output="--outputbazfile $BAZ_OUTPUT"
+else
+  baz_output=""
 fi
 nop_option="--nop=${NOP}"
 
@@ -89,11 +97,13 @@ cat <<HERE > $tmpjson
          "simulatedInputFile": "${INPUT}",
          "sleepDebug": 600,
          "tilePoolFactor" : ${TILEPOOLFACTOR},
-         "loopback": ${LOOPBACK}
+         "loopback": ${LOOPBACK},
+         "primerScaler": ${PRIMERSCALER}
     }
   }
 } 
 HERE
+
 
 cat <<HERE > $acqconfig
 {
@@ -169,10 +179,25 @@ then
 else
     logoutput=""
 fi
+if [[ -f $ROI ]]
+then
+  if ! grep traceSaver $ROI
+  then
+     echo "The $ROI file needs to be written in a JSON object that looks like"
+     echo "  { \"traceSaver\": { \"roi\": "
+     cat   $ROI 
+     echo "  } }"
+     exit 1
+  fi
+  roi_spec="--config $ROI"
+else
+  roi_spec="--config traceSaver.roi=$ROI"
+fi
+
 
 echo PATH = $PATH
 
 set -x
 pwd
-$cmd smrt-basecaller --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} --config traceSaver.roi=${ROI}
+smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output}
 

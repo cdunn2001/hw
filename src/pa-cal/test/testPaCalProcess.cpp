@@ -92,7 +92,7 @@ TEST(PaCalProcess,LocalOptions)
     // We've failed to set a mandatory argument
     EXPECT_FALSE(settings.has_value());
 
-    settings = parseCli({"--nowatchdog", "--outputFile=location"});
+    settings = parseCli({"--nowatchdog", "--outputFile=location", "--sra=1"});
     EXPECT_TRUE(settings.has_value());
     if (settings.has_value())
     {
