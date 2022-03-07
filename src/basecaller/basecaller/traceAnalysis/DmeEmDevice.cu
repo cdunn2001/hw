@@ -1239,11 +1239,11 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     //        this->dmeDumpCollector_->CollectRawEstimate1D(*dtbs.front(), hist, dmeDx, *workModel);
     //    }
 
-    // Transcribe results back into model
-    if (threadIdx.x%2 == 0)
-        UpdateTo<0>(workModel, detModel, threadIdx.x/2, staticConfig.updateMethod_);
-    else
-        UpdateTo<1>(workModel, detModel, threadIdx.x/2, staticConfig.updateMethod_);
+    // Update the current model, model0.
+    UpdateModel(workModel, &model0);
+
+    // Transcribe back to *detModel.
+    model0.Export(threadIdx.x/2, threadIdx.x%2, detModel);
 }
 
 __global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
