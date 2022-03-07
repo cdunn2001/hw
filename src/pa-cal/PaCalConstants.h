@@ -32,6 +32,7 @@
 #include <stdint.h>
 
 const uint16_t PORT_BASE_PACAL = 23610;                    ///< the base TCP/IP port window
+static constexpr unsigned int laneSize = 64u;
 
 
 #endif // PA_WS_CONSTANTS_H
