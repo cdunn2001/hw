@@ -68,6 +68,8 @@ using namespace PacBio::Sensor;
 
 namespace PacBio::Calibration {
 
+SMART_ENUM(CalibrationWorkflow, Dark, Loading);
+
 PaCalProcess::~PaCalProcess()
 {
     Abort();
@@ -95,8 +97,16 @@ OptionParser PaCalProcess::CreateOptionParser()
     parser.add_option("--movieNum").type_int().set_default(0).help("The expected movie number, which should agree with what "
                                                                    "comes over the wire via the Wolverine");
     parser.add_option("--numFrames").type_int().set_default(512).help("Number of frames to use during the collection. "
-                                                                      "Note: Currently only the specific value of 512 is supported,"
-                                                                      "presumably this may be relaxed in the future");
+                                                                      "Note: Currently only single chunk analysis is supported,"
+                                                                      "and some data sources will put additional constraints of what "
+                                                                      "frame counts are valid.  Presumably this may be relaxed in the future");
+    auto darkStr = CalibrationWorkflow::toString(CalibrationWorkflow::Dark);
+    auto loadStr = CalibrationWorkflow::toString(CalibrationWorkflow::Loading);
+    parser.add_option("--cal").set_default(darkStr)
+                              .help("Selects between dark calibration and dynamic loading workflows.  The "
+                                    " payload in the resulting file is the same regardless, this just controls "
+                                    " the naming convention for HDF5 groups/datasets.  Valid values are "
+                                    + darkStr + " and " + loadStr + ", with the first being the default");
 
     parser.add_option("--timeoutSeconds").type_double().set_default(60*5).help("pa-cal will self abort if this timeout expires");
 
@@ -132,6 +142,15 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (ret.timeoutSeconds <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
 
         ret.inputDarkCalFile = options["inputDarkCalFile"];
+        std::string workflow = options["cal"];
+        try
+        {
+            auto workflowEnum = CalibrationWorkflow::fromString(workflow);
+            ret.createDarkCalFile = (workflowEnum == CalibrationWorkflow::Dark);
+        } catch (const CalibrationWorkflow::Exception&)
+        {
+            cliValidationErrors.push_back(workflow + " is not a valid option for --cal");
+        }
 
         ret.outputFile = options["outputFile"];
         if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
@@ -197,8 +216,14 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 #endif
 }
 
-std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames)
+std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames, const std::string& darkCalFileName)
 {
+    std::unique_ptr<DarkFrame> darkFrame;
+    if (!darkCalFileName.empty())
+    {
+        darkFrame = std::make_unique<DarkFrame>();
+        darkFrame->darkCalFileName = darkCalFileName;
+    }
     // TODO actually create datasources...
     //      Should be handled by PTSD-1107
     return cfg.source.Visit(
@@ -210,6 +235,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numF
             PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, {4096, numFrames, 64}};
             DataSource::DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
             sourceCfg.numFrames = numFrames;
+            sourceCfg.darkFrame = std::move(darkFrame);
             auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
             return source;
         }
@@ -232,7 +258,7 @@ int PaCalProcess::RunAllThreads()
     {
         try
         {
-            auto source = CreateSource(settings_.paCalConfig, settings_.numFrames);
+            auto source = CreateSource(settings_.paCalConfig, settings_.numFrames, settings_.inputDarkCalFile);
             // The current implementation has some limitations, mainly that we expect to only
             // process a single chunk.  Let's validate those assumptions
             {
@@ -247,7 +273,9 @@ int PaCalProcess::RunAllThreads()
                                       + std::to_string(source->NumFrames()) + " frames are expected");
                 }
             }
-            bool success = AnalyzeSourceInput(std::move(source), threadController, settings_.movieNum, settings_.outputFile);
+            bool success = AnalyzeSourceInput(std::move(source), threadController,
+                                              settings_.movieNum, settings_.outputFile,
+                                              settings_.createDarkCalFile);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
             threadController->RequestExit();
