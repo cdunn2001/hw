@@ -97,7 +97,7 @@ private:
     std::pair<int16_t, int16_t> Id2Coords(size_t zmwId) const
     { 
         auto lda = simCfg_.nCols;
-        return { zmwId % lda, zmwId / lda };
+        return { zmwId / lda, zmwId % lda };
     }
 
     // Functions Id2Norm* calculate parameters of normal distribution
@@ -125,7 +125,7 @@ private:
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
         int mring = INT8_MAX - 10*std;  // Rebound 6 sigmas from the data borders
         int16_t mean =  std::abs<int16_t>(x - y) % mring + 5*std;
-        return { mean + off, std };
+        return { std::clamp(mean + off, 0, 255), std };
     }
 
 private:
