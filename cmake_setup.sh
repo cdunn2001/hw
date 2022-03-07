@@ -4,8 +4,7 @@ declare -A compilers
 compilers["gcc"]=gcc
 compilers["icc"]=icpc
 
-if [[ $distclean != 0 ]]
-then
+if [[ $distclean != 0 ]]; then
     echo Removing depcache
     rm -rf depcache
 fi
@@ -28,8 +27,7 @@ bld_dirs=\
 #  build/$app/$toolkit/$arch/$type
 #
 
-for d in $bld_dirs
-do
+for d in $bld_dirs ; do
     rm -rf $d && mkdir -p $d
     elems=(${d//\// })  # split the path into the constituent elements
     proj=${elems[1]}
@@ -58,12 +56,10 @@ do
 shopt -s extglob # allow the !(filename) glob syntax
 cd ${fulldir}
 files=\$(shopt -s nullglob; echo !(cmake_setup.sh|build.ninja))
-if [[ \$files != "" ]]
-then
+if [[ \$files != "" ]]; then
     echo -n "Directory contains a build already, are you sure you want to delete all existing build files in $fulldir? (y/n)"
     read confirmation
-    if [[ \$confirmation != "y" && \$confirmation != "yes" ]]
-    then
+    if [[ \$confirmation != "y" && \$confirmation != "yes" ]]; then
         echo "not continuing"
         exit 1
     fi
@@ -73,7 +69,7 @@ cmake "-G${generator}" --debug-trycompile -DCMAKE_CUDA_HOST_COMPILER=${compilers
 HERE
     chmod +x cmake_setup.sh
 
-    if [[ ${generator} == "Ninja" ]] ; then
+    if [[ ${generator} == "Ninja" ]]; then
 # This original ninja file is a bootstrap to create the real ninja file. Once ninja runs once, it
 # will delete this file.
       cat <<NINJA > build.ninja
