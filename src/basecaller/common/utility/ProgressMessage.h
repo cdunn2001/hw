@@ -52,43 +52,52 @@ public:
 
 public:
     ProgressMessage(const Table& stages, const std::string& header, int statusFd)
-        : stages_(stages)
+        : stageInfo_(stages)
         , header_(header)
         , stream_(boost::iostreams::stream<boost::iostreams::file_descriptor_sink>(statusFd,
                                                                                    boost::iostreams::never_close_handle))
     {
-        const auto& asv = Stages::allValuesAsStrings();
-        if (stages_.size() != asv.size())
         {
-            throw PBException("Number of stages doesn't match number of values in stage enum!");
-        }
-
-        for (const auto& s : Stages::allValuesAsStrings())
-        {
-            const auto& st = stages_.find(s);
-            if (st == stages_.end())
+            // Validate the SMART_ENUM against the stage names.
+            const auto& asv = Stages::allValuesAsStrings();
+            if (stageInfo_.size() != asv.size())
             {
-                throw PBException("Stage name not found in stage enum!");
+                throw PBException("Number of stages doesn't match number of values in stage enum!");
+            }
+
+            for (const auto& s : asv)
+            {
+                const auto& st = stageInfo_.find(s);
+                if (st == stageInfo_.end())
+                {
+                    throw PBException("Stage name not found in stage enum!");
+                }
             }
         }
-        std::vector<int> stageNumbers;
-        std::vector<int> sw;
-        for (const auto& kv : stages_)
+
         {
-            stageNumbers.push_back(kv.second.stageNumber);
-            sw.push_back(kv.second.stageWeight);
+            // Stages are stored in the table as std::map
+            // so we have to pull out the stage weights and make sure
+            // they are ordered based on the stage numbers.
+            std::vector<int> stageNumbers;
+            std::vector<int> sw;
+            for (const auto& kv: stageInfo_)
+            {
+                stageNumbers.push_back(kv.second.stageNumber);
+                sw.push_back(kv.second.stageWeight);
+            }
+            std::vector<int> sn = stageNumbers;
+            std::sort(sn.begin(), sn.end());
+            auto last = std::unique(sn.begin(), sn.end());
+            if (std::distance(sn.begin(), last) != static_cast<int>(stageNumbers.size()))
+            {
+                throw PBException("Stage numbers not unique!");
+            }
+            std::vector<size_t> idx(sw.size());
+            std::iota(idx.begin(), idx.end(), 0);
+            std::sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return stageNumbers[a] < stageNumbers[b]; });
+            for (const auto& i: idx) stageWeights_.push_back(sw[i]);
         }
-        std::vector<int> sn = stageNumbers;
-        std::sort(sn.begin(), sn.end());
-        auto last = std::unique(sn.begin(), sn.end());
-        if (std::distance(sn.begin(), last) != static_cast<int>(stageNumbers.size()))
-        {
-            throw PBException("Stage numbers not unique!");
-        }
-        std::vector<size_t> idx(sw.size());
-        std::iota(idx.begin(), idx.end(), 0);
-        std::sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return stageNumbers[a] < stageNumbers[b]; });
-        for (const auto& i : idx) stageWeights.push_back(sw[i]);
     }
 
 public:
@@ -100,19 +109,35 @@ public:
     ~ProgressMessage() = default;
 
 public:
-    void Message(const Stages& s, uint64_t counter, uint64_t counterMax, double timeoutForNextStatus)
+    ProgressMessage& Message(const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
     {
-        Output o;
-        const auto& it = stages_.find(Stages::toString(s));
-        o.ready = it->second.ready;
-        o.stageNumber = it->second.stageNumber;
-        o.stageName = it->first;
-        o.stageWeights = stageWeights;
-        o.counter = counter;
-        o.counterMax = counterMax;
-        o.timeoutForNextStatus = timeoutForNextStatus;
-        o.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " " << o.Serialize() << std::endl;
+        const auto& it = stageInfo_.find(Stages::toString(s));
+        // No need to check it, we've already validated things in the constructor.
+        currentStage_.stageName = it->first;
+        currentStage_.stageNumber = it->second.stageNumber;
+        currentStage_.ready = it->second.ready;
+        currentStage_.stageWeights = stageWeights_;
+        currentStage_.counterMax = counterMax;
+        currentStage_.timeoutForNextStatus = timeoutForNextStatus;
+        return *this;
+    }
+
+    ProgressMessage& UpdateCounter(uint64_t counter)
+    {
+        currentStage_.counter = counter;
+        return *this;
+    }
+
+    ProgressMessage& UpdateCounterToMax()
+    {
+        currentStage_.counter = currentStage_.counterMax;
+        return *this;
+    }
+
+    void Send()
+    {
+        currentStage_.timeStamp = Utilities::ISO8601::TimeString();
+        stream_ << header_ << " " << currentStage_.Serialize() << std::endl;
     }
 
     void Exception(const std::string& what)
@@ -122,6 +147,37 @@ public:
         o.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " " << o.Serialize() << std::endl;
     }
+
+public:
+    class StageReporter
+    {
+    public:
+        StageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
+            : pm_(pm)
+        {
+            pm_->Message(s, counterMax, timeoutForNextStatus).Send();
+        }
+
+        StageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
+            : pm_(pm)
+        {
+            pm_->Message(s, 1, timeoutForNextStatus).Send();
+        }
+
+        void UpdateStatus(uint64_t counter=1)
+        {
+           pm_->UpdateCounter(counter).Send();
+        }
+
+        void Done()
+        {
+            pm_->UpdateCounterToMax().Send();
+        }
+
+    private:
+        ProgressMessage *pm_;
+    };
+
 
 private:
     struct Output : Configuration::PBConfig<Output>
@@ -146,10 +202,11 @@ private:
         PB_CONFIG_PARAM(std::string, state, "exception");
     };
 private:
-    Table stages_;
-    std::vector<int> stageWeights;
+    Table stageInfo_;
+    std::vector<int> stageWeights_;
     std::string header_;
     boost::iostreams::stream<boost::iostreams::file_descriptor_sink> stream_;
+    Output currentStage_;
 };
 
 } // namespace PacBio::Utility

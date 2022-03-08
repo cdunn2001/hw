@@ -90,9 +90,7 @@ class SmrtBasecaller : public ThreadedProcessBase
 public:
     SmrtBasecaller(const SmrtBasecallerConfig& config)
         : config_(config)
-    {
-
-    }
+    {}
 
     ~SmrtBasecaller()
     {
@@ -118,7 +116,7 @@ public:
         nop_ = options.get("nop");
         statusFileDescriptor_ = options.get("statusfd");
         progressMessage_ = std::make_unique<SmrtBasecallerProgressMessage>(stages,
-                                                                           "PA_WS_STATUS", statusFileDescriptor_);
+                                                                           "PA_BASECALLER_STATUS", statusFileDescriptor_);
 
         if (nop_ == 1)
         {
@@ -183,6 +181,7 @@ private:
     // TODO fix this up. It is too specialized for WX2 or TraceFile datasources.
     std::unique_ptr<DataSourceRunner> CreateSource()
     {
+
         std::array<size_t, 3> layoutDims;
         layoutDims[0] = config_.layout.lanesPerPool;
         layoutDims[1] = config_.layout.framesPerChunk;
@@ -554,16 +553,12 @@ private:
 
     void RunAnalyzer()
     {
-        progressMessage_->Message(SmrtBasecallerStages::Start, 0, 0, 0);
+        SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
 
         // Names for the various graph stages
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
-
-        progressMessage_->Message(SmrtBasecallerStages::CreateSource, 0, 1, 30);
         auto source = CreateSource();
-        progressMessage_->Message(SmrtBasecallerStages::CreateSource, 1, 1, 30);
-
         AnalysisConfig analysisConfig;
         analysisConfig.movieInfo = source->MovieInformation();
         analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
@@ -579,35 +574,20 @@ private:
         {
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
             // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
-            progressMessage_->Message(SmrtBasecallerStages::CreateRepacker, 0, 1, 30);
+
             auto repacker = CreateRepacker(source->PacketLayouts(), source->NumZmw());
-            progressMessage_->Message(SmrtBasecallerStages::CreateRepacker, 1, 1, 30);
             auto poolDims = repacker->BatchLayouts();
 
             auto experimentData = CreateExperimentMetadata(*source, analysisConfig);
 
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
-            progressMessage_->Message(SmrtBasecallerStages::CreateTraceSaver, 0, 1, 30);
-            auto tracesaver = CreateTraceSaver(*source, poolDims, analysisConfig, experimentData);
-            progressMessage_->Message(SmrtBasecallerStages::CreateTraceSaver, 1, 1, 30);
-            inputNode->AddNode(std::move(tracesaver), GraphProfiler::SAVE_TRACE);
+            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
-                progressMessage_->Message(SmrtBasecallerStages::CreateBasecaller, 0, 1, 30);
-                auto basecaller = CreateBasecaller(poolDims, analysisConfig);
-                progressMessage_->Message(SmrtBasecallerStages::CreateBasecaller, 1, 1, 30);
-                auto* analyzer = inputNode->AddNode(std::move(basecaller), GraphProfiler::ANALYSIS);
-
-                progressMessage_->Message(SmrtBasecallerStages::CreatePrelimHQFilter, 0, 1, 30);
-                auto prelimhqfilter = CreatePrelimHQFilter(source->NumZmw(), poolDims);
-                progressMessage_->Message(SmrtBasecallerStages::CreatePrelimHQFilter, 1, 1, 30);
-                auto* preHQ = analyzer->AddNode(std::move(prelimhqfilter), GraphProfiler::PRE_HQ);
-
-                progressMessage_->Message(SmrtBasecallerStages::CreateBazSaver, 0, 1, 30);
-                auto bazsaver = CreateBazSaver(*source, poolDims, experimentData);
-                progressMessage_->Message(SmrtBasecallerStages::CreateBazSaver, 1, 1, 30);
-                preHQ->AddNode(std::move(bazsaver), GraphProfiler::BAZWRITER);
+                auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
+                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
@@ -621,10 +601,10 @@ private:
             uint64_t framesAnalyzed = 0;
             uint64_t framesSinceBigReports = 0;
 
-            progressMessage_->Message(SmrtBasecallerStages::SourceReady, 0, 1, 30);
             source->Start();
-            progressMessage_->Message(SmrtBasecallerStages::SourceReady, 1, 1, 30);
+            startUpRpt.Done();
 
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -708,7 +688,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-                    progressMessage_->Message(SmrtBasecallerStages::Analyze, framesAnalyzed, frames_, 30);
+                    analyzeStageRpt.UpdateStatus(framesAnalyzed);
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
@@ -726,11 +706,10 @@ private:
                     break;
                 }
             }
-            progressMessage_->Message(SmrtBasecallerStages::Analyze, frames_, frames_, 30);
+            analyzeStageRpt.Done();
 
-            progressMessage_->Message(SmrtBasecallerStages::FlushOutput, 0, 1, 30);
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
             inputNode->FlushNode();
-            progressMessage_->Message(SmrtBasecallerStages::FlushOutput, 1, 1, 30);
 
             PBLOG_INFO << "All chunks analyzed.";
             PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
@@ -746,6 +725,9 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
+
+
+            shutdownRpt.Done();
         }
         catch(const std::exception& ex)
         {

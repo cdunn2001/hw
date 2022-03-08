@@ -32,30 +32,17 @@ namespace PacBio::Utility
 {
 
 SMART_ENUM(SmrtBasecallerStages,
-        Start,
-        CreateSource,
-        CreateRepacker,
-        CreateTraceSaver,
-        CreateBasecaller,
-        CreatePrelimHQFilter,
-        CreateBazSaver,
-        SourceReady,
+        StartUp,
         Analyze,
-        FlushOutput);
+        Shutdown);
 
 using SmrtBasecallerProgressMessage = PacBio::Utility::ProgressMessage<SmrtBasecallerStages>;
+using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
 
 SmrtBasecallerProgressMessage::Table stages = {
-        { "Start",                      { 0, 0, 1} },
-        { "CreateSource",       { 0, 1, 20  } },
-        { "CreateRepacker",     { 0, 2, 5   } },
-        { "CreateTraceSaver",   { 0, 3, 10  } },
-        { "CreateBasecaller",   { 0, 4, 10  } },
-        { "CreatePrelimHQFilter",   { 0, 5, 10  } },
-        { "CreateBazSaver",       { 0, 6, 20  } },
-        { "SourceReady",       { 1, 7, 20  } },
-        { "Analyze",       { 1, 8, 20  } },
-        { "FlushOutput",       { 1, 9, 20  } }
+    { "StartUp",    { false, 0, 10 } },
+    { "Analyze",    {  true, 1, 80 } },
+    { "Shutdown",   { false, 2, 10 } }
 };
 
 } // namespace PacBio::Utility
