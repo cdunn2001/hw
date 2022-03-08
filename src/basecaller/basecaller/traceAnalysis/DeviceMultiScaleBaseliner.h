@@ -96,11 +96,18 @@ public:
         return -1.0f / std::log2(sigmaEmaAlpha_);
     }
 
+    static float MeanEmaScaleStrides()
+    { 
+        return -1.0f / std::log2(meanEmaAlpha_);
+    }
+
     size_t StartupLatency() const override 
     { 
+        // pick the longest estimated ema transient in strides
+        const float maxScaleStrides = std::max(MeanEmaScaleStrides(), SigmaEmaScaleStrides());
         // todo: consider scaling the second term here for additional
         // tunability.
-        return latency_ + SigmaEmaScaleStrides() * framesPerStride_;
+        return latency_ + maxScaleStrides * framesPerStride_;
     }
 
 private:    // Customizable implementation
