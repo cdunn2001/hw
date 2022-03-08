@@ -37,16 +37,20 @@ namespace PacBio::Calibration
 /// This function will call `RequestExit` on the supplied threading controller
 /// when the computation is complete.
 ///
-/// \param source      A DataSourceBase implementation that will provide the input data
-/// \param controller  An IThreadController handle, to help handle threading issues.
-/// \param outputFile  The destination on disk for the frame computations
-/// \return            A bool indicating success or failure.  Failures include returning
-///                    before completion if the controler indicates an early termination
-///                    is required
+/// \param source              A DataSourceBase implementation that will provide the input data
+/// \param controller          An IThreadController handle, to help handle threading issues.
+/// \param outputFile          The destination on disk for the frame computations
+/// \param createDarkCalFile   Boolean to indicate if we create a dark cal (or loading cal) file.
+///                            The core contents will be the same, but the different files use different
+///                            names for the groups/datasets
+/// \return                    A bool indicating success or failure.  Failures include returning
+///                            before completion if the controler indicates an early termination
+///                            is required
 bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
-                        std::string outputFile);
+                        std::string outputFile,
+                        bool createDarkCalFile);
 
 
 struct FrameStats
