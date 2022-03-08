@@ -91,7 +91,17 @@ public:
     DeviceMultiScaleBaseliner(DeviceMultiScaleBaseliner&&) = default;
     ~DeviceMultiScaleBaseliner() override;
 
-    size_t StartupLatency() const override { return startupLatency_; }
+    static float SigmaEmaScaleStrides()
+    { 
+        return -1.0f / std::log2(sigmaEmaAlpha_);
+    }
+
+    size_t StartupLatency() const override 
+    { 
+        // todo: consider scaling the second term here for additional
+        // tunability.
+        return latency_ + SigmaEmaScaleStrides() * framesPerStride_;
+    }
 
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
@@ -99,7 +109,8 @@ private:    // Customizable implementation
 
     using Filter = Cuda::ComposedFilterBase;
     std::unique_ptr<Filter> filter_;
-    size_t startupLatency_;
+    size_t latency_;
+    size_t framesPerStride_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller
