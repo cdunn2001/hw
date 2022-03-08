@@ -65,7 +65,7 @@ struct FrameStats
 /// \return       A FrameStats instance, containing mean and variance for each
 ///               pixel on the chip.  The boost::multi_arrays are stored using
 ///               an arr[row][col] convention.
-FrameStats AnalyzeChunk(DataSource::SensorPacketsChunk chunk,
+FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk,
                         const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props);
 
 } // namespace PacBio::Calibration

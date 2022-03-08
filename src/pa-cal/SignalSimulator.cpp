@@ -85,11 +85,11 @@ std::vector<DataSourceBase::UnitCellProperties> DataSourceSimulator::GetUnitCell
     DataSourceBase::UnitCellProperties prop = { DataSource::ZmwFeatures::Sequencing, 0, 0, 0 };
     std::vector<DataSourceBase::UnitCellProperties> retProps(NumZmw(), prop);
 
-    for (size_t i = 0; i < retProps.size(); ++i)
+    for (size_t z = 0; z < retProps.size(); ++z)
     {
-        auto coord = Id2Coords(i);
-        retProps[i].x = coord.first;
-        retProps[i].y = coord.second;
+        auto coord = Id2Coords(z);
+        retProps[z].x = coord.first;
+        retProps[z].y = coord.second;
     }
 
     return retProps;

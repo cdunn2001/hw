@@ -36,7 +36,6 @@
 
 #include "PaCalConfig.h"
 
-
 namespace PacBio::Calibration
 {
 
@@ -84,7 +83,7 @@ public:
 
     std::pair<int16_t, int16_t> Id2Norm(size_t zmwId) const
     {
-        return simCfg_.dataType == 0 ? 
+        return GetConfig().requestedLayout.Encoding() == DataSource::PacketLayout::INT16 ?
             Id2NormInt16(zmwId) : Id2NormInt8(zmwId);
     }
 

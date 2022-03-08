@@ -32,9 +32,13 @@
 
 #include <json/json.h>
 
+#include <Eigen/Core>
+
 // library includes
 #include <pacbio/configuration/MergeConfigs.h>
 #include <pacbio/datasource/DataSourceBase.h>
+#include <pacbio/datasource/ZmwFeatures.h>
+#include <pacbio/datasource/MallocAllocator.h>
 #include <pacbio/logging/Logger.h>
 #include <pacbio/POSIX.h>
 #include <pacbio/process/OptionParser.h>
@@ -51,6 +55,7 @@
 #include "FrameAnalyzer.h"
 #include "PaCalConfig.h"
 #include "PaCalConstants.h"
+#include "SignalSimulator.h"
 
 // auto generated header files (found in build directory, not source tree)
 #include <version.h>
@@ -59,12 +64,14 @@
 #include <PaCalHeader.h>
 
 using namespace PacBio;
+using namespace PacBio::Calibration;
 using namespace PacBio::Configuration;
 using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Logging;
 using namespace PacBio::Utilities;
 using namespace PacBio::Sensor;
+
 
 namespace PacBio::Calibration {
 
@@ -199,16 +206,26 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 
 std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames)
 {
-    // TODO actually create datasources...
-    //      Should be handled by PTSD-1107
+                                /*  lanesPerPool  framesPerBlock     laneSize  */
+    std::array<size_t, 3> layoutDims =    { 4096,      numFrames,    laneSize };
+
     return cfg.source.Visit(
-        [](const SimInputConfig& cfg) -> std::unique_ptr<DataSourceBase> { return nullptr; },
+        [&](const SimInputConfig& simConfig)        -> std::unique_ptr<DataSourceBase>
+        {
+            PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, layoutDims};
+            DataSourceBase::Configuration sourceCfg(layout, std::make_unique<MallocAllocator>());
+
+            SimInputConfig simConf;
+            // simConf.nRows = 2912; simConf.nCols = 2756;  // test Sequel chip
+            // simConf.nRows = 6144; simConf.nCols = 4096;  // test Kestrel chip
+            return std::make_unique<DataSourceSimulator>(std::move(sourceCfg), std::move(simConf));
+        },
         [&](const WXIPCDataSourceConfig& ipcConfig) -> std::unique_ptr<DataSourceBase>
         {
             auto allo = Acquisition::DataSource::WXIPCDataSource::CreateAllocator(ipcConfig);
             // Note: This layout is pretty arbitrary.  Feel free to adjust if there is cause
-            PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, {4096, numFrames, 64}};
-            DataSource::DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
+            PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, layoutDims};
+            DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
             sourceCfg.numFrames = numFrames;
             auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
             return source;

@@ -23,6 +23,7 @@ include_directories(
     ${PRIMARY_PROJECT_DIR}/..
 )
 
+include(pacbio-eigen)
 include(pacbio-cplusplus-api)
 include(pacbio-cmake-config-vars)
 include(pacbio-hw-mongo)
@@ -77,6 +78,7 @@ add_library(lib-pa-cal
 target_link_libraries(lib-pa-cal
     PUBLIC
         libBoost
+        libEigen
         libPacbioCplusplusApi
         libPacbioHwAcquisition
         GitVersionInfo

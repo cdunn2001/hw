@@ -128,17 +128,16 @@ TEST_P(DataSourceSimTest, Chip)
     simConf.nCols = params.nCols != 0 ? params.nCols : simConf.nCols;
     simConf.minInputDelaySeconds
                   = params.delay != 0 ? params.delay : simConf.minInputDelaySeconds;
-    simConf.dataType = params.numBits == 16 ? PacketLayout::INT16 : PacketLayout::UINT8;
+    auto dataType = params.numBits == 16 ? PacketLayout::INT16 : PacketLayout::UINT8;
 
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, 
-                        PacketLayout::EncodingFormat(simConf.dataType),
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, dataType,
                         {params.lanesPerPool, params.framesPerBlock, laneSize});
 
     DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
     cfg.numFrames = params.totalFrames;
     DataSourceSimulator source(std::move(cfg), std::move(simConf));
 
-    auto validateBatch = params.numBits == 16 ? 
+    auto validateBatch = (layout.Encoding() == PacketLayout::INT16) ?
         ValidatePacket<MatrixXs, MatrixXs::Scalar> : ValidatePacket<MatrixXb, MatrixXb::Scalar>;
 
     SensorPacketsChunk chunk;
