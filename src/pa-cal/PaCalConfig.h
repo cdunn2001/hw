@@ -45,6 +45,11 @@ struct SimInputConfig : PacBio::Configuration::PBConfig<SimInputConfig>
     PB_CONFIG_PARAM(uint32_t, nRows, 1000);
     PB_CONFIG_PARAM(uint32_t, nCols, 1000);
 
+    PB_CONFIG_PARAM(uint32_t, Pedestal, 0);
+
+    // Type of generated data, which corresponds to PacketLayout::EncodingFormat
+    PB_CONFIG_PARAM(uint32_t, dataType, 0);
+
     // TODO add params to control characteristics of simulated data?
 
     // The minimum time it will take to produce the chunk of data for
