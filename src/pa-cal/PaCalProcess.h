@@ -50,6 +50,7 @@ public:
     struct Settings
     {
         bool enableWatchdog = true;
+        bool createDarkCalFile = true;
         PaCalConfig  paCalConfig;
         int32_t sra = 0;
         int32_t movieNum = 0;
