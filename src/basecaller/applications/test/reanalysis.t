@@ -67,9 +67,9 @@
   $ bazviewer --silent -d -i 1024 ${ORIGBAZ} > orig.txt
 # "bad" has ~30 extra pulses, because it started basecalling 512 frames earlier
   $ grep Label bad.txt | wc -l
-  1696
+  1184
   $ grep Label orig.txt | wc -l
-  1664
+  1152
 
 # Now do a re-analysis.  We expect the results to be the same as the original
   $ GOODBAZ=good.baz
@@ -79,14 +79,14 @@
   $ bazviewer --silent -d -i 0 ${GOODBAZ} > reanalysis.txt
   $ bazviewer --silent -d -i 1024 ${ORIGBAZ} > orig.txt
   $ grep Label reanalysis.txt | wc -l
-  1664
+  1152
   $ grep Label orig.txt | wc -l
-  1664
+  1152
 # All that should differ is the zmw index
   $ diff -u reanalysis.txt orig.txt
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
-  @@ -11897,7 +11897,7 @@
+  @@ -8233,7 +8233,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
@@ -102,7 +102,7 @@
   $ diff -u reanalysis.txt orig.txt
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
-  @@ -11673,7 +11673,7 @@
+  @@ -8009,7 +8009,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
@@ -118,7 +118,7 @@
   $ diff -u reanalysis.txt orig.txt
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
-  @@ -11449,7 +11449,7 @@
+  @@ -7785,7 +7785,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
