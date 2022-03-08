@@ -43,6 +43,7 @@
 #include <pacbio/text/String.h>
 #include <pacbio/utilities/Finally.h>
 #include <pacbio/utilities/StdThread.h>
+#include <pacbio/text/String.h>
 
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 
@@ -101,12 +102,12 @@ OptionParser PaCalProcess::CreateOptionParser()
                                                                       "and some data sources will put additional constraints of what "
                                                                       "frame counts are valid.  Presumably this may be relaxed in the future");
     auto darkStr = CalibrationWorkflow::toString(CalibrationWorkflow::Dark);
-    auto loadStr = CalibrationWorkflow::toString(CalibrationWorkflow::Loading);
+    const auto vals = CalibrationWorkflow::allValuesAsStrings();
     parser.add_option("--cal").set_default(darkStr)
-                              .help("Selects between dark calibration and dynamic loading workflows.  The "
-                                    " payload in the resulting file is the same regardless, this just controls "
+                              .help("Selects between dark calibration and dynamic loading workflows.  The"
+                                    " payload in the resulting file is the same regardless, this just controls"
                                     " the naming convention for HDF5 groups/datasets.  Valid values are "
-                                    + darkStr + " and " + loadStr + ", with the first being the default");
+                                    + Text::String::Join(vals.begin(), vals.end(), ',') + " with the default being %default");
 
     parser.add_option("--timeoutSeconds").type_double().set_default(60*5).help("pa-cal will self abort if this timeout expires");
 
