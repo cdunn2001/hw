@@ -33,7 +33,7 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
-#include <common/ThreadController.h>
+#include <app-common/ThreadController.h>
 
 //#include "SraThread.h"
 #include "PaWsConfig.h"
