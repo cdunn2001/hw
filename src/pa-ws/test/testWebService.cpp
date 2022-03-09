@@ -31,8 +31,8 @@
 #include <pacbio/ipc/JSON.h>
 #include <pacbio/ipc/MessageQueue.h>
 
-#include <common/HttpHelpers.h>
-#include <common/ThreadController.h>
+#include <app-common/HttpHelpers.h>
+#include <app-common/ThreadController.h>
 
 #include <pa-ws/WebService.h>
 #include <pa-ws/api/PostprimaryObject.h>

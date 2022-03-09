@@ -59,7 +59,8 @@
 #include <pacbio/text/String.h>
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
-#include <pacbio/utilities/ISO8601.h>
+
+#include <app-common/ProgressMessage.h>
 
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -80,9 +81,24 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
 using namespace PacBio::File;
+using namespace PacBio::IPC;
 
 // ^^^^
 ///////
+
+SMART_ENUM(SmrtBasecallerStages,
+           StartUp,
+           Analyze,
+           Shutdown);
+
+using SmrtBasecallerProgressMessage = ProgressMessage<SmrtBasecallerStages>;
+using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
+
+SmrtBasecallerProgressMessage::Table stages = {
+        { "StartUp",    { false, 0, 10 } },
+        { "Analyze",    {  true, 1, 80 } },
+        { "Shutdown",   { false, 2, 10 } }
+};
 
 class SmrtBasecaller : public ThreadedProcessBase
 {
@@ -113,7 +129,9 @@ public:
         frames_ = options.get("maxFrames");
         // TODO need validation or something, as this is probably a trace file input specific option
         nop_ = options.get("nop");
-        statusFileDescriptor_ = options.get("statusfiledescriptor");
+        statusFileDescriptor_ = options.get("statusfd");
+        progressMessage_ = std::make_unique<SmrtBasecallerProgressMessage>(stages,
+                                                                           "PA_BASECALLER_STATUS", statusFileDescriptor_);
 
         if (nop_ == 1)
         {
@@ -383,9 +401,9 @@ private:
     }
 
     std::unique_ptr<LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
-                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                                                         const AnalysisConfig& analysisConfig,
-                                                                         const ScanData::Data& experimentMetadata)
+                                                                        const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                                                                        const AnalysisConfig& analysisConfig,
+                                                                        const ScanData::Data& experimentMetadata)
     {
         if (outputTrcFileName_ != "")
         {
@@ -550,6 +568,8 @@ private:
 
     void RunAnalyzer()
     {
+        SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
+
         // Names for the various graph stages
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
@@ -563,26 +583,8 @@ private:
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
                                                         config_.layout.framesPerChunk;
 
-#if 1
-        namespace io = boost::iostreams;
-        io::stream<io::file_descriptor_sink> statusStream(
-            io::file_descriptor_sink( statusFileDescriptor_, io::never_close_handle ) );
 
-        {
-            Json::Value status;
-            status["state"]="progress";
-            status["ready"]=false;
-            status["stageNumber"]=0;
-            status["stageName"]="basecalling";
-            status["counter"]=0;
-            status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-            status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
-            status["stageWeights"] = Json::arrayValue;
-            status["stageWeights"].resize(1);
-            status["stageWeights"][0]=1;
-            statusStream << "SBC_STATUS_REPORT " << status << std::endl;
-        }
-#endif
+
         try
         {
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
@@ -615,25 +617,9 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
+            startUpRpt.Update(1);
 
-#if 1
-            double progress  = 0.0;
-            {
-                Json::Value status;
-                status["state"]="progress";
-                status["ready"]=true;
-                status["stageNumber"]=0;
-                status["stageName"]="basecalling";
-                status["counter"]=0;
-                status["counterMax"]=frames_;
-                status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-                status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
-                status["stageWeights"] = Json::arrayValue;
-                status["stageWeights"].resize(1);
-                status["stageWeights"][0]=1;
-                statusStream << "SBC_STATUS_REPORT " << status << std::endl;
-            }
-#endif
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -717,26 +703,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-#if 1                        
-                    progress = (frames_ > 0) ? (framesAnalyzed * 1.0 / frames_) : 0.0;
-                    if (progress > 1.0) progress = 1.0; // this can happen because the frames_ can be anything, but the framesAnalyzed is rounded up to multiple of the chunk size
-                    {
-                        Json::Value status;
-                        status["state"]="progress";
-                        status["ready"]=true;
-                        status["stageNumber"]=0;
-                        status["stageName"]="basecalling";
-                        status["counter"]=framesAnalyzed;
-                        status["counterMax"]=frames_;
-                        status["progress"]=progress;
-                        status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-                        status["timeToNextStatus"]=50.0; // chunks are 5 seconds apart, so this is generous timeout
-                        status["stageWeights"] = Json::arrayValue;
-                        status["stageWeights"].resize(1);
-                        status["stageWeights"][0]=1;
-                        statusStream << "SBC_STATUS_REPORT " << status << std::endl;
-                    }
-#endif
+                    analyzeStageRpt.Update(framesAnalyzed);
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
@@ -754,6 +721,8 @@ private:
                     break;
                 }
             }
+
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
             inputNode->FlushNode();
 
             PBLOG_INFO << "Exited chunk analysis loop.";
@@ -786,36 +755,14 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
-#if 1
-            progress  = 1.0;
-            {
-                Json::Value status;
-                status["state"]="progress";
-                status["ready"]=true;
-                status["stageNumber"]=0;
-                status["stageName"]="basecalling";
-                status["counter"]=framesAnalyzed;
-                status["counterMax"]=frames_;
-                status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-                status["timeToNextStatus"]=600.0; // give it 10 minutes to start up
-                status["stageWeights"] = Json::arrayValue;
-                status["stageWeights"].resize(1);
-                status["stageWeights"][0]=1;
-                statusStream << "SBC_STATUS_REPORT " << status << std::endl;
-            }
-#endif
 
+
+            shutdownRpt.Update(1);
         }
         catch(const std::exception& ex)
         {
             PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
-#if 1                        
-            Json::Value status;
-            status["state"]="EXCEPTION";
-            status["message"] = ex.what();
-            status["timestamp"]= PacBio::Utilities::ISO8601::TimeString();
-            statusStream << "SBC_STATUS_REPORT " << status << std::endl;
-#endif
+            progressMessage_->Exception(ex.what());
             throw;
         }
     }
@@ -876,6 +823,7 @@ private:
     std::string outputTrcFileName_;
     std::unique_ptr<TraceFile> outputTrcFile_;
     int statusFileDescriptor_ = 1;
+    std::unique_ptr<SmrtBasecallerProgressMessage> progressMessage_;
 };
 
 int main(int argc, char* argv[])
@@ -909,7 +857,7 @@ int main(int argc, char* argv[])
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
         parser.add_option("--maxFrames").type_int().set_default(0).help("Specifies maximum number of frames to run. 0 means unlimited");
-        parser.add_option("--statusfiledescriptor").action_store_true().type_int().set_default(1).help("Write status messages to this file description. Default 1 (stdout)");
+        parser.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
 
         auto group1 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");

@@ -35,7 +35,7 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
-#include <common/ThreadController.h>
+#include <app-common/ThreadController.h>
 
 #include <pa-cal/PaCalConfig.h>
 #include <pa-cal/ExitCodes.h>

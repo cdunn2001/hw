@@ -26,7 +26,7 @@
 #include <string>
 
 #include <pacbio/datasource/DataSourceBase.h>
-#include <common/ThreadController.h>
+#include <app-common/ThreadController.h>
 
 namespace PacBio::Calibration
 {

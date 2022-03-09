@@ -25,6 +25,7 @@ PUBLIC
 
 target_link_libraries(smrt-basecaller
     PRIVATE
+        lib-app-common
         libAppModules
         libPacbioHwAcquisition
         GitVersionInfo
