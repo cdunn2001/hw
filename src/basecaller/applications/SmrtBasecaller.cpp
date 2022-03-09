@@ -40,7 +40,6 @@
 #include <common/graphs/GraphManager.h>
 #include <common/graphs/GraphNodeBody.h>
 #include <common/graphs/GraphNode.h>
-#include <common/utility/BasecallerProgressMessage.h>
 
 #include <pacbio/PBException.h>
 #include <pacbio/configuration/MergeConfigs.h>
@@ -61,6 +60,8 @@
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
 
+#include <app-common/ProgressMessage.h>
+
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
 
@@ -80,10 +81,24 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
 using namespace PacBio::File;
-using namespace PacBio::Utility;
+using namespace PacBio::IPC;
 
 // ^^^^
 ///////
+
+SMART_ENUM(SmrtBasecallerStages,
+           StartUp,
+           Analyze,
+           Shutdown);
+
+using SmrtBasecallerProgressMessage = ProgressMessage<SmrtBasecallerStages>;
+using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
+
+SmrtBasecallerProgressMessage::Table stages = {
+        { "StartUp",    { false, 0, 10 } },
+        { "Analyze",    {  true, 1, 80 } },
+        { "Shutdown",   { false, 2, 10 } }
+};
 
 class SmrtBasecaller : public ThreadedProcessBase
 {
@@ -602,7 +617,7 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
-            startUpRpt.Done();
+            startUpRpt.Update(1);
 
             SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
             while (source->IsActive())
@@ -688,7 +703,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-                    analyzeStageRpt.UpdateStatus(framesAnalyzed);
+                    analyzeStageRpt.Update(framesAnalyzed);
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
@@ -706,7 +721,6 @@ private:
                     break;
                 }
             }
-            analyzeStageRpt.Done();
 
             SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
             inputNode->FlushNode();
@@ -727,7 +741,7 @@ private:
                     << " zmws/sec)";
 
 
-            shutdownRpt.Done();
+            shutdownRpt.Update(1);
         }
         catch(const std::exception& ex)
         {
@@ -828,7 +842,7 @@ int main(int argc, char* argv[])
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
         parser.add_option("--maxFrames").type_int().set_default(0).help("Specifies maximum number of frames to run. 0 means unlimited");
-        parser.add_option("--statusfd").action_store_true().type_int().set_default(1).help("Write status messages to this file description. Default 1 (stdout)");
+        parser.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
 
         auto group1 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");

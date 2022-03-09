@@ -5,7 +5,7 @@
 
 #include <pacbio/logging/Logger.h>
 
-#include <common/Barrier.h>
+#include <app-common/Barrier.h>
 
 using namespace testing;
 using namespace PacBio::Utilities;

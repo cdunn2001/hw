@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <common/MemInfo.h>
+#include <app-common/MemInfo.h>
 
 using namespace testing;
 using namespace PacBio::Utilities;

@@ -23,8 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef PACBIO_COMMON_UTILITY_STATUSMESSAGE_H
-#define PACBIO_COMMON_UTILITY_STATUSMESSAGE_H
+#ifndef APP_COMMON_STATUSMESSAGE_H
+#define APP_COMMON_STATUSMESSAGE_H
 
 #include <numeric>
 
@@ -34,8 +34,8 @@
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
 
-namespace PacBio::Utility
-{
+namespace PacBio {
+namespace IPC {
 
 template <typename Stages>
 class ProgressMessage
@@ -50,12 +50,32 @@ public:
     };
     using Table = std::map<std::string, StageInfo>;
 
+    struct Output : Configuration::PBConfig<Output>
+    {
+    PB_CONFIG(Output);
+        PB_CONFIG_PARAM(bool, ready, false);
+        PB_CONFIG_PARAM(int, stageNumber, 0);
+        PB_CONFIG_PARAM(std::string, stageName, "");
+        PB_CONFIG_PARAM(std::vector<int>, stageWeights, std::vector<int>{});
+        PB_CONFIG_PARAM(uint64_t, counter, 0);
+        PB_CONFIG_PARAM(uint64_t, counterMax, 1);
+        PB_CONFIG_PARAM(double, timeoutForNextStatus, 0);
+        PB_CONFIG_PARAM(std::string, timeStamp, "");
+        PB_CONFIG_PARAM(std::string, state, "progress");
+    };
+
+    struct ExceptionOutput : Configuration::PBConfig<ExceptionOutput>
+    {
+    PB_CONFIG(ExceptionOutput);
+        PB_CONFIG_PARAM(std::string, message, "");
+        PB_CONFIG_PARAM(std::string, timeStamp, "");
+        PB_CONFIG_PARAM(std::string, state, "exception");
+    };
 public:
     ProgressMessage(const Table& stages, const std::string& header, int statusFd)
         : stageInfo_(stages)
         , header_(header)
-        , stream_(boost::iostreams::stream<boost::iostreams::file_descriptor_sink>(statusFd,
-                                                                                   boost::iostreams::never_close_handle))
+        , stream_(boost::iostreams::stream<boost::iostreams::file_descriptor_sink>(statusFd, boost::iostreams::close_handle))
     {
         {
             // Validate the SMART_ENUM against the stage names.
@@ -109,35 +129,21 @@ public:
     ~ProgressMessage() = default;
 
 public:
-    ProgressMessage& Message(const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
+    void Message(const Stages& s, Output& stage)
     {
         const auto& it = stageInfo_.find(Stages::toString(s));
         // No need to check it, we've already validated things in the constructor.
-        currentStage_.stageName = it->first;
-        currentStage_.stageNumber = it->second.stageNumber;
-        currentStage_.ready = it->second.ready;
-        currentStage_.stageWeights = stageWeights_;
-        currentStage_.counterMax = counterMax;
-        currentStage_.timeoutForNextStatus = timeoutForNextStatus;
-        return *this;
+        stage.stageName = it->first;
+        stage.stageNumber = it->second.stageNumber;
+        stage.ready = it->second.ready;
+        stage.stageWeights = stageWeights_;
+        stage.timeStamp = Utilities::ISO8601::TimeString();
+        stream_ << header_ << " " << stage.Serialize() << std::endl;
     }
 
-    ProgressMessage& UpdateCounter(uint64_t counter)
+    void Message(const Output& stage)
     {
-        currentStage_.counter = counter;
-        return *this;
-    }
-
-    ProgressMessage& UpdateCounterToMax()
-    {
-        currentStage_.counter = currentStage_.counterMax;
-        return *this;
-    }
-
-    void Send()
-    {
-        currentStage_.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " " << currentStage_.Serialize() << std::endl;
+        stream_ << header_ << " " << stage.Serialize() << std::endl;
     }
 
     void Exception(const std::string& what)
@@ -155,61 +161,33 @@ public:
         StageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
             : pm_(pm)
         {
-            pm_->Message(s, counterMax, timeoutForNextStatus).Send();
+            currentStage_.counterMax = counterMax;
+            currentStage_.timeoutForNextStatus = timeoutForNextStatus;
+            pm_->Message(s, currentStage_);
         }
 
         StageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
-            : pm_(pm)
-        {
-            pm_->Message(s, 1, timeoutForNextStatus).Send();
-        }
+            : StageReporter(pm, s, 1, timeoutForNextStatus)
+        { }
 
-        void UpdateStatus(uint64_t counter=1)
+        void Update(uint64_t counter)
         {
-           pm_->UpdateCounter(counter).Send();
+            currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
+            pm_->Message(currentStage_);
         }
-
-        void Done()
-        {
-            pm_->UpdateCounterToMax().Send();
-        }
-
     private:
-        ProgressMessage *pm_;
+        ProgressMessage* pm_;
+        Output currentStage_;
     };
 
-
-private:
-    struct Output : Configuration::PBConfig<Output>
-    {
-        PB_CONFIG(Output);
-        PB_CONFIG_PARAM(bool, ready, false);
-        PB_CONFIG_PARAM(int, stageNumber, 0);
-        PB_CONFIG_PARAM(std::string, stageName, "");
-        PB_CONFIG_PARAM(std::vector<int>, stageWeights, std::vector<int>{});
-        PB_CONFIG_PARAM(uint64_t, counter, 0);
-        PB_CONFIG_PARAM(uint64_t, counterMax, 1);
-        PB_CONFIG_PARAM(double, timeoutForNextStatus, 0);
-        PB_CONFIG_PARAM(std::string, timeStamp, "");
-        PB_CONFIG_PARAM(std::string, state, "progress");
-    };
-
-    struct ExceptionOutput : Configuration::PBConfig<ExceptionOutput>
-    {
-        PB_CONFIG(ExceptionOutput);
-        PB_CONFIG_PARAM(std::string, message, "");
-        PB_CONFIG_PARAM(std::string, timeStamp, "");
-        PB_CONFIG_PARAM(std::string, state, "exception");
-    };
 private:
     Table stageInfo_;
     std::vector<int> stageWeights_;
     std::string header_;
     boost::iostreams::stream<boost::iostreams::file_descriptor_sink> stream_;
-    Output currentStage_;
 };
 
-} // namespace PacBio::Utility
+}} // namespace PacBio::IPC
 
-#endif // PACBIO_COMMON_UTILITY_STATUSMESSAGE_H
+#endif // APP_COMMON_STATUSMESSAGE_H
 
