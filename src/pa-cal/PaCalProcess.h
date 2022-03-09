@@ -36,16 +36,26 @@
 #include <pacbio/process/ProcessBase.h>
 
 #include <app-common/ThreadController.h>
+#include <app-common/ProgressMessage.h>
 
 #include <pa-cal/PaCalConfig.h>
 #include <pa-cal/ExitCodes.h>
 
 namespace PacBio::Calibration {
 
+SMART_ENUM(PaCalStages,
+           StartUp,
+           Analyze,
+           Shutdown);
+
 class WebService;
 
 class PaCalProcess : public PacBio::Process::ThreadedProcessBase
 {
+public:
+    using PaCalProgressMessage = PacBio::IPC::ProgressMessage<PaCalStages>;
+    using PaCalStageReporter = PaCalProgressMessage::StageReporter;
+    static PaCalProgressMessage::Table stages;
 public:
     struct Settings
     {
@@ -109,6 +119,8 @@ protected:
 private:
     std::vector<std::string> commandLine_;
     Settings settings_;
+    int statusFileDescriptor_ = -1;
+    std::unique_ptr<PaCalProgressMessage> progressMessage_;
 };
 
 } // namespace PacBio::Calibration
