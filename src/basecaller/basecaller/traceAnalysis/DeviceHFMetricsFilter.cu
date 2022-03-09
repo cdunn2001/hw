@@ -596,6 +596,8 @@ __device__ PBShort2 labelBlock(
     features[ActivityLabeler::PKZVARNORM] -= lowpk;
     features[ActivityLabeler::PKZVARNORM] /= PBHalf2(3.0f);
 
+#if 0
+// TODO reactivation this assert block
 #ifndef NDEBUG
     for (size_t i = 0; i < features.size(); ++i)
     {
@@ -604,6 +606,7 @@ __device__ PBShort2 labelBlock(
         assert(nanMask.X());
         assert(nanMask.Y());
     }
+#endif
 #endif
 
     return PBShort2(traverseCart<0>(features), traverseCart<1>(features));

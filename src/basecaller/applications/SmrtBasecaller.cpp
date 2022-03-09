@@ -656,8 +656,10 @@ private:
                 if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
                 {
                     PBLOG_INFO << "Analyzing chunk frames = ["
-                        + std::to_string(chunk.StartFrame()) + ","
-                        + std::to_string(chunk.StopFrame()) + ")";
+                        << chunk.StartFrame() << ","
+                        << chunk.StopFrame() << ") "
+                        << SummarizeSharedMemory();
+
                     PacBio::Dev::QuietAutoTimer t;
                     if (nop_ == 1)
                     {

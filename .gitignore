@@ -20,4 +20,4 @@ hw-mongo
 *.log
 
 # Python
-__pycache__
+__pycache__/

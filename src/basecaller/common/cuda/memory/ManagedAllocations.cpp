@@ -38,6 +38,7 @@
 #include <pacbio/HugePage.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
+#include <pacbio/text/String.h>
 
 SMART_ENUM(ManagedAllocations, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ManagedAllocations>;
@@ -81,6 +82,10 @@ public:
     PastUsage PastMemUsage()
     {
         return std::exchange(past_, {past_.peakBytes, currentBytes_, currentBytes_});
+    }
+    PastUsage PeekMemUsage() const
+    {
+        return {past_.peakBytes, currentBytes_, currentBytes_};
     }
 
     size_t CurrentBytes() const { return currentBytes_; }
@@ -434,6 +439,17 @@ public:
         std::lock_guard<std::mutex> lm(instanceMutex_);
 
         return ReportImpl();
+    }
+
+    /// Returns the sum of current bytes
+    size_t CurrentBytes() const
+    {
+        size_t total = 0;
+        for (auto& kv : stats_)
+        {
+            total += kv.second.CurrentBytes();
+        }
+        return total;
     }
 
 private:
@@ -846,6 +862,23 @@ void ReportAllMemoryStats()
         }
     }
 }
+
+std::string SummarizeSharedMemory()
+{
+    std::ostringstream oss;
+    oss << "SharedMemoryRecentPeakSum:";
+    auto caches = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
+    bool first = true;
+    for (auto& cache : caches)
+    {
+        assert(cache);
+        if (!first) oss << "/";
+        first = false;
+        oss << PacBio::Text::String::FormatWithSI_Units(cache->CurrentBytes()) <<"B";
+    }
+    return oss.str();
+}
+
 
 
 }}} // ::PacBio::Cuda::Memory

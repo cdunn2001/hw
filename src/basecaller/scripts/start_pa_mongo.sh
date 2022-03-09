@@ -56,7 +56,7 @@ then
        exit 1
     fi
     trc_output="--outputtrcfile $TRACE_OUTPUT"
-    rm -f $TRACE_OUTPUT
+    if [[ ! $ECHO ]] ; then rm -f $TRACE_OUTPUT ; fi
 fi
 if [[ $BAZ_OUTPUT != "" ]]
 then
@@ -101,6 +101,7 @@ cat <<HERE > $tmpjson
          "primerScaler": ${PRIMERSCALER}
     }
   }
+  // , "system":{"analyzerHardware":"Host"}
 } 
 HERE
 

@@ -180,6 +180,9 @@ KestrelAllocator& GetGlobalAllocator();
 /// Logs a report about all memory usage statistics
 void ReportAllMemoryStats();
 
+/// Returns a string summarizing the shared memory, suitable for a frequent log entry
+std::string SummarizeSharedMemory();
+
 /// Creates a KestrelAllocator with a Malloc based implementation,
 /// primarily for host-only code, or code that doesn't care about
 /// performance.  It can still do GPU allocations, but it does not
