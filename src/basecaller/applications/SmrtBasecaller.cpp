@@ -725,10 +725,26 @@ private:
             SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
             inputNode->FlushNode();
 
-            PBLOG_INFO << "All chunks analyzed.";
-            PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
-                    << " out of " << source->NumFrames() << " requested from source. ("
-                    << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
+            PBLOG_INFO << "Exited chunk analysis loop.";
+            const double framePercentage =  (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1);
+            // As this is all integer math, I'm not worried about round off error to 99.99 or something silly like that.
+            // Note that the framesAnalyzed *might* exceed the requested frames if the last chunk is not truncated correctly.
+            if (framePercentage < 100.0)
+            {
+                PBLOG_WARN << "Not all Frames analyzed = " << framesAnalyzed
+                        << " out of " << source->NumFrames() << " requested from source. ("
+                        << framePercentage << "%)";
+            }
+            else if (framePercentage > 100.0)
+            {
+                PBLOG_NOTICE << "Slightly concerned that the number of framesAnalyzed (" << framesAnalyzed << ") exceeded the requested number ("
+                    << source->NumFrames() << ") but not concerned enough to do something about it. Just passively-aggressively pointing it out."
+                    << " You do realize that is not supposed to happen, right?";
+            }
+            else
+            {
+                PBLOG_INFO << "All frames analyzed = " << framesAnalyzed;
+            }
             if (nop_ == 1)
             {
                 PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
@@ -819,7 +835,6 @@ int main(int argc, char* argv[])
         {
             cliArgs << argv[i] << " ";
         }
-        PBLOG_INFO << cliArgs.str();
 
         auto parser = ProcessBase::OptionParserFactory();
         std::stringstream ss;
@@ -861,13 +876,13 @@ int main(int argc, char* argv[])
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));
-        PBLOG_DEBUG << json; // this does NOT work with --showconfig
         SmrtBasecallerConfig configs(json);
         if (options.get("showconfig"))
         {
             std::cout << configs.Serialize() << std::endl;
             return 0;
         }
+        PBLOG_INFO << cliArgs.str();
 
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)
