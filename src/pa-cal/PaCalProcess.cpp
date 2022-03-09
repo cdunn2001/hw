@@ -71,6 +71,12 @@ namespace PacBio::Calibration {
 
 SMART_ENUM(CalibrationWorkflow, Dark, Loading);
 
+PaCalProcess::PaCalProgressMessage::Table PaCalProcess::stages = {
+    { "StartUp",    { false, 0, 10 } },
+    { "Analyze",    {  true, 1, 80 } },
+    { "Shutdown",   { false, 2, 10 } }
+};
+
 PaCalProcess::~PaCalProcess()
 {
     Abort();
@@ -115,6 +121,7 @@ OptionParser PaCalProcess::CreateOptionParser()
                                                                "dynamic loading workflows");
 
     parser.add_option("--outputFile").type_string().help("Destination file, containing the collected frame mean/variance information");
+    parser.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
     return parser;
 }
 
@@ -259,7 +266,10 @@ int PaCalProcess::RunAllThreads()
     {
         try
         {
+            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, 300);
             auto source = CreateSource(settings_.paCalConfig, settings_.numFrames, settings_.inputDarkCalFile);
+            startUpRpt.Update(1);
+
             // The current implementation has some limitations, mainly that we expect to only
             // process a single chunk.  Let's validate those assumptions
             {
@@ -274,16 +284,21 @@ int PaCalProcess::RunAllThreads()
                                       + std::to_string(source->NumFrames()) + " frames are expected");
                 }
             }
+            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, 600);
             bool success = AnalyzeSourceInput(std::move(source), threadController,
                                               settings_.movieNum, settings_.outputFile,
                                               settings_.createDarkCalFile);
+            analyzeRpt.Update(1);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
+            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, 300);
             threadController->RequestExit();
+            shutdownRpt.Update(1);
         } catch (const std::exception& ex)
         {
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
             PBLOG_ERROR << "Analysis thread will now terminate early";
+            progressMessage_->Exception(ex.what());
             threadController->RequestExit();
             ret = ExitCode::StdException;
         }
@@ -346,6 +361,7 @@ int PaCalProcess::Run()
     catch (const std::exception& ex)
     {
         PBLOG_ERROR << "main: fatal exception: " << ex.what();
+        progressMessage_->Exception(ex.what());
         exitCode = ExitCode::StdException;
     }
     catch (...)
@@ -391,6 +407,12 @@ int PaCalProcess::Main(int argc, const char *argv[])
         std::vector<std::string> args = parser.args();
         HandleGlobalOptions(options);
         auto settings = HandleLocalOptions(options);
+        statusFileDescriptor_ = options.get("statusfd");
+        progressMessage_ = std::make_unique<PaCalProgressMessage>(stages,
+                                                                  settings->createDarkCalFile
+                                                                    ? "PA_DARKCAL_STATUS"
+                                                                    : "PA_LOADCAL_STATUS",
+                                                                  statusFileDescriptor_);
         if (settings.has_value())
         {
             settings_ = settings.value();
@@ -432,6 +454,7 @@ void PaCalProcess::SendException(const std::string& message)
     // the message is also caught at a separate try/catch block, so
     // debug level is ok for this message.
     PBLOG_ERROR << "PaCalProcess Exception message caught:" << message;
+    progressMessage_->Exception(message);
 }
 
 void PaCalProcess::SendException(const std::exception& ex)
@@ -439,6 +462,7 @@ void PaCalProcess::SendException(const std::exception& ex)
     // the message is also caught at a separate try/catch block, so
     // debug level is ok for this message.
     PBLOG_DEBUG << "PaCalProcess std::exception caught:" << ex.what();
+    progressMessage_->Exception(ex.what());
 }
 
 } // namespace PacBio::Calibration
