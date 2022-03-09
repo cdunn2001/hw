@@ -187,8 +187,9 @@ void ConvertBaz2Bam::ParseRMD()
     }
     catch (const InvalidSequencingChemistryException&)
     {
+        std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"," +
+                 "{\"acqId\":\"" + uuid + "\"," +
                  "\"message\":\"INVALID_SEQUENCING_CHEMISTRY_EXCEPTION\"}");
         throw;
     }
@@ -289,9 +290,10 @@ int ConvertBaz2Bam::Run()
     }
     catch (const std::exception& e)
     {
+        std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
         Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
+                 "{\"acqId\":\"" + uuid + "\"" +
                  ",\"message\":\"" + e.what() + "\"}");
         throw;
     }
