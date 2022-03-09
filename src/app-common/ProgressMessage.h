@@ -172,10 +172,20 @@ public:
 
         void Update(uint64_t counter)
         {
+            std::lock_guard<std::mutex> lock(reportMutex_);
             currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
             pm_->Message(currentStage_);
         }
+
+        void Update(uint16_t counter, double timeoutForNextStatus)
+        {
+            currentStage_.timeoutForNextStatus = timeoutForNextStatus;
+            Update(counter);
+        }
+
+
     private:
+        std::mutex reportMutex_;
         ProgressMessage* pm_;
         Output currentStage_;
     };

@@ -67,9 +67,9 @@ struct UserParameters
     std::string outputPrefix;
     std::string subreadsetFilePath;
     std::string runtimeMetaDataFilePath;
-    bool zmq = false;
     std::string fakeHQ;
 
+    int         statusFileDescriptor = -1;
     int         threads = 1;
     int         bamthreads = 4;
     bool        polymeraseread = false;

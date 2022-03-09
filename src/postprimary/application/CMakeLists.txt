@@ -33,6 +33,8 @@ add_library(libbaz2bam STATIC
     OomScoreMonitor.h
     OomScoreMonitor.cpp
     PpaAlgoConfig.cpp
+    PpaProgressMessage.h
+    PpaProgressMessage.cpp
 )
 
 target_link_libraries(libbaz2bam

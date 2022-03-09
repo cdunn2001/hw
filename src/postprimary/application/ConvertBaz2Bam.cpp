@@ -149,6 +149,13 @@ std::string PeakRSSinGiB()
     return ss.str();
 }
 
+PpaProgressMessage::Table stages = {
+    { "Startup",         { false, 0, 1  }},
+    { "ParseBazHeaders", { false, 1, 3  }},
+    { "Analyze",         {  true, 2, 95 }},
+    { "Shutdown",        { false, 3, 1  }}
+};
+
 } // anonymous
 
 
@@ -163,7 +170,6 @@ std::string PeakRSSinGiB()
 ConvertBaz2Bam::ConvertBaz2Bam(std::shared_ptr<UserParameters>& user) 
     : abortNow_(false)
     , threadpoolContinue_(true)
-    , ipcReceiverContinue_(true)
     , loggingContinue_(true)
     , numProcessedZMWs_(0)
     , threadCount_(0)
@@ -187,9 +193,7 @@ void ConvertBaz2Bam::ParseRMD()
     }
     catch (const InvalidSequencingChemistryException&)
     {
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"," +
-                 "\"message\":\"INVALID_SEQUENCING_CHEMISTRY_EXCEPTION\"}");
+        progressMessage_->Exception("INVALID_SEQUENCING_CHEMISTRY_EXCEPTION");
         throw;
     }
 }
@@ -215,167 +219,167 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
     }
     catch (const std::exception& e)
     {
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"" + e.what() + "\"}");
+        progressMessage_->Exception(e.what());
         PBLOG_ERROR << e.what();
         throw PBExceptionRethrow("Unable to parse collection metadata",e);
     }
 }
 
+void ConvertBaz2Bam::InitProgressMessage()
+{
+    progressMessage_ = std::make_unique<PpaProgressMessage>(stages,
+                                                            "PA_PPA_STATUS",
+                                                            user_->statusFileDescriptor);
+}
 
 int ConvertBaz2Bam::Run()
 {
-
-    if (!user_->silent)
-    {
-        std::cerr << "Version: " << versionString << std::endl;
-        std::cerr << "Commit hash: " << cmakeGitHash() << std::endl;
-        std::cerr << "Commit date: " << cmakeGitCommitDate() << std::endl;
-    }
-
-    InitLogToDisk();
-
-    InitIPC();
-
-    PBLOG_INFO << "Start";
-    PBLOG_INFO << user_->originalCommandLine;
-    PBLOG_INFO << "commit hash: " << cmakeGitHash();
-    PBLOG_INFO << "commit date: " << cmakeGitCommitDate();
-    PBLOG_INFO << "Version: " << versionString;
+    InitProgressMessage();
 
     {
-        std::ostringstream message;
-        message << "{" <<
-                "\"acqId\":\"" << user_->uuid << "\"," <<
-                "\"numZmwsSoFar\":0," <<
-                "\"numZmwsTotal\":" << maxNumZmwsToProcess_ << // this is not accurate, but an upper bound
-                "}";
-        Announce("ppa/start", message.str());
-    }
+        PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, 300);
 
-    CheckInputFile();
-
-    if (maxNumZmwsToProcess_ != std::numeric_limits<uint32_t>::max())
-    {
-        PBLOG_INFO << "Roughly processing the first " << maxNumZmwsToProcess_ << " ZMWs, up to a slice boundary...";
-    }
-
-
-    // Parse BAZ.
-    bazReader_ = std::unique_ptr<BazReader>(new BazReader(
-            user_->inputFilePaths, user_->zmwBatchMB, user_->zmwHeaderBatchMB, true,
-            [this]() {
-                if (!this->abortNow_) this->EmitHeartbeat();
-                return this->abortNow_.load();
-            }));
-
-    if (!abortNow_)
-    {
-        numZmwsToProcess_ = NumZmwsToProcess();
-    }
-
-    try
-    {
-        ParseRMD();
-        InitPpaAlgoConfig();
-        // compare UUIDs, if both are presented. This is a sanity test for running underneath pa-ws, to make sure
-        // that both baz2bam and pa-ws are using the same run metadata.
-        if (user_->uuid != "" && rmd_->subreadSet.uniqueId != "" &&
-            user_->uuid != rmd_->subreadSet.uniqueId)
+        if (!user_->silent)
         {
-            throw PBException("Inconsistent UUIDs. RMD UUID:" + rmd_->subreadSet.uniqueId + " --uuid:" + user_->uuid);
+            std::cerr << "Version: " << versionString << std::endl;
+            std::cerr << "Commit hash: " << cmakeGitHash() << std::endl;
+            std::cerr << "Commit date: " << cmakeGitCommitDate() << std::endl;
         }
-    }
-    catch (const std::exception& e)
-    {
-        PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"" + e.what() + "\"}");
-        throw;
+
+        InitLogToDisk();
+
+
+        PBLOG_INFO << "Start";
+        PBLOG_INFO << user_->originalCommandLine;
+        PBLOG_INFO << "commit hash: " << cmakeGitHash();
+        PBLOG_INFO << "commit date: " << cmakeGitCommitDate();
+        PBLOG_INFO << "Version: " << versionString;
+
+        CheckInputFile();
+
+        if (maxNumZmwsToProcess_ != std::numeric_limits<uint32_t>::max())
+        {
+            PBLOG_INFO << "Roughly processing the first " << maxNumZmwsToProcess_ << " ZMWs, up to a slice boundary...";
+        }
+
+        startUpRpt.Update(1);
     }
 
-    try
     {
+        // Everything below requires parsing the BAZ file.
+        PpaStageReporter parseBazHeadersRpt(progressMessage_.get(), PpaStages::ParseBazHeaders, 300);
+
+        // Parse BAZ.
+        bazReader_ = std::unique_ptr<BazReader>(new BazReader(
+                user_->inputFilePaths, user_->zmwBatchMB, user_->zmwHeaderBatchMB, true,
+                [this,&parseBazHeadersRpt]() {
+                    if (!this->abortNow_) parseBazHeadersRpt.Update(0);
+                    return this->abortNow_.load();
+                }));
+
+        parseBazHeadersRpt.Update(1);
+
         if (!abortNow_)
         {
-            // Labeling, also writes barcoding header info
-            subreadLabeler_ = std::unique_ptr<SubreadLabeler>(new SubreadLabeler(user_, rmd_, ppaAlgoConfig_));
+            numZmwsToProcess_ = NumZmwsToProcess();
         }
-    }
-    catch (const std::exception& e)
-    {
-        PBLOG_ERROR << "Exception during SubreadLabel ctor or ChipLayout::Factory";
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"" + e.what() + "\"}");
-        throw;
-    }
 
-    // Prepare output
-    ProgramInfo pg;
-    pg.Name("baz2bam")
-            .Version(versionString)
-            .Id("baz2bam")
-            .CommandLine(user_->originalCommandLine);
-
-    CreateWhiteList();
-
-    resultWriter_ = std::unique_ptr<ResultWriter>(new ResultWriter(
-            user_.get(),
-            cmd_.get(),
-            rmd_,
-            ppaAlgoConfig_.get(),
-            bazReader_->FileHeaderSet().MovieName(),
-            bazReader_->FileHeaderSet().MovieTimeInHrs(),
-            bazReader_->FileHeaderSet().BazVersion(),
-            bazReader_->FileHeaderSet().BazWriterVersion(),
-            bazReader_->FileHeaderSet().BaseCallerVersion(),
-            bazReader_->FileHeaderSet().FrameRateHz(),
-            bazReader_->FileHeaderSet().HasPacketField(BazIO::PacketFieldName::IsBase) || bazReader_->FileHeaderSet().Internal(),
-            {pg},
-            !user_->noStats,
-            NumZmwsToProcess()));
-
-    if (!abortNow_)
-    {
-        hqRegionFinder_ = HQRegionFinderFactory(*user_, ppaAlgoConfig_, bazReader_->FileHeaderSet().FrameRateHz());
-
-        insertFinder_ = InsertFinderFactory(*user_);
-
-        prodMetrics_ = std::make_unique<ProductivityMetrics>(
-                ppaAlgoConfig_->inputFilter.minSnr,
-                user_->minEmptyTime,
-                user_->emptyOutlierTime);
-
-        if (!user_->noStatsH5)
+        try
         {
-            std::string stsH5Filename = user_->outputPrefix + ".sts.h5";
-            CreateZmwStatsFile(stsH5Filename);
+            ParseRMD();
+            InitPpaAlgoConfig();
+            // compare UUIDs, if both are presented. This is a sanity test for running underneath pa-ws, to make sure
+            // that both baz2bam and pa-ws are using the same run metadata.
+            if (user_->uuid != "" && rmd_->subreadSet.uniqueId != "" &&
+                user_->uuid != rmd_->subreadSet.uniqueId)
+            {
+                throw PBException(
+                        "Inconsistent UUIDs. RMD UUID:" + rmd_->subreadSet.uniqueId + " --uuid:" + user_->uuid);
+            }
         }
-    }
-    else
-    {
-        resultWriter_->Abort();
+        catch (const std::exception& e)
+        {
+            PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
+            progressMessage_->Exception(e.what());
+            throw;
+        }
+
+        try
+        {
+            if (!abortNow_)
+            {
+                // Labeling, also writes barcoding header info
+                subreadLabeler_ = std::unique_ptr<SubreadLabeler>(new SubreadLabeler(user_, rmd_, ppaAlgoConfig_));
+            }
+        }
+        catch (const std::exception& e)
+        {
+            PBLOG_ERROR << "Exception during SubreadLabel ctor or ChipLayout::Factory";
+            progressMessage_->Exception(e.what());
+            throw;
+        }
+
+        // Prepare output
+        ProgramInfo pg;
+        pg.Name("baz2bam")
+                .Version(versionString)
+                .Id("baz2bam")
+                .CommandLine(user_->originalCommandLine);
+
+        CreateWhiteList();
+
+        resultWriter_ = std::unique_ptr<ResultWriter>(new ResultWriter(
+                user_.get(),
+                cmd_.get(),
+                rmd_,
+                ppaAlgoConfig_.get(),
+                bazReader_->FileHeaderSet().MovieName(),
+                bazReader_->FileHeaderSet().MovieTimeInHrs(),
+                bazReader_->FileHeaderSet().BazVersion(),
+                bazReader_->FileHeaderSet().BazWriterVersion(),
+                bazReader_->FileHeaderSet().BaseCallerVersion(),
+                bazReader_->FileHeaderSet().FrameRateHz(),
+                bazReader_->FileHeaderSet().HasPacketField(BazIO::PacketFieldName::IsBase) ||
+                bazReader_->FileHeaderSet().Internal(),
+                {pg},
+                !user_->noStats,
+                NumZmwsToProcess()));
+
+        if (!abortNow_)
+        {
+            hqRegionFinder_ = HQRegionFinderFactory(*user_, ppaAlgoConfig_, bazReader_->FileHeaderSet().FrameRateHz());
+
+            insertFinder_ = InsertFinderFactory(*user_);
+
+            prodMetrics_ = std::make_unique<ProductivityMetrics>(
+                    ppaAlgoConfig_->inputFilter.minSnr,
+                    user_->minEmptyTime,
+                    user_->emptyOutlierTime);
+
+            if (!user_->noStatsH5)
+            {
+                std::string stsH5Filename = user_->outputPrefix + ".sts.h5";
+                CreateZmwStatsFile(stsH5Filename);
+            }
+        }
+        else
+        {
+            resultWriter_->Abort();
+        }
     }
 
     LogStart();
 
     PopulateWorkerThreadPool();
 
-    {
-        std::ostringstream message;
-        message << "{" <<
-                "\"acqId\":\"" << rmd_->subreadSet.uniqueId << "\"," <<
-                "\"numZmwsSoFar\":0," <<
-                "\"numZmwsTotal\":" << NumZmwsToProcess() <<
-                "}";
-        Announce("ppa/start", message.str());
-    }
-    StartLoggingThread();
+    // We use the analyze status reporter which will increment based on the number of ZMWS
+    // processed for the logging thread but for input parsing we simply just send an update with
+    // the counter set to 0.
+    PpaStageReporter analyzeRpt(progressMessage_.get(), PpaStages::Analyze, NumZmwsToProcess(), 30);
 
-    ParseInput();
+    StartLoggingThread(analyzeRpt);
+
+    ParseInput(analyzeRpt);
 
     // Wait until all reads have been processed
     while (!readList_.empty() && !abortNow_)
@@ -429,26 +433,12 @@ int ConvertBaz2Bam::Run()
         return valid;
     });
 
-    double iProgress = 0;
+    PpaStageReporter shutdownRpt(progressMessage_.get(), PpaStages::Shutdown, 30);
     while (closeFuture.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
     {
         if (!abortNow_)
         {
-            iProgress += 1.0;
-            // pretend that the progress is always (n-1)/n. Ie. the progress sequence within this loop is
-            // 1/2, 2/3, 3/4, 4/5, ... Always optimistic that the end is nigh, and monotonically increasing.
-            // Then that faction is interpolated between 0.99999 and 1.0000
-            double progress = (iProgress / (iProgress + 1.0)) * .00001 + 0.99999;
-            std::ostringstream message;
-            message << "{" <<
-                    "\"progress\":" << std::setprecision(12) << std::fixed << progress << "," <<
-                    "\"acqId\":\"" << rmd_->subreadSet.uniqueId << "\"," <<
-                    "\"numZmwsSoFar\":" << numProcessedZMWs_ << "," <<
-                    "\"numZmwsTotal\":" << NumZmwsToProcess() << "," <<
-                    "\"peakRss\":" << PeakRSSinGiB() <<
-                    "}";
-            PBLOG_INFO << message.str();
-            Announce("ppa/progress", message.str());
+            shutdownRpt.Update(0);
         }
     }
 
@@ -459,52 +449,22 @@ int ConvertBaz2Bam::Run()
     }
     catch (const std::exception& ex)
     {
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"Exception in closing thread:" + ex.what() + "\"}");
+        progressMessage_->Exception(std::string("Exception in closing thread: ") + ex.what());
         throw;
     }
 
     if (valid == Validation::CLOSED_TRUNCATED)
     {
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"TRUNCATED_BAM\"}");
+        progressMessage_->Exception("TRUNCATED_BAM");
         PBLOG_ERROR << "TRUNCATED_BAM";
     }
     else if (valid == Validation::NOT_RUN)
     {
-        Announce("ppa/error",
-                 "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"" +
-                 ",\"message\":\"VALIDATION_NOTRUN\"}");
+        progressMessage_->Exception("VALIDATION_NOTRUN");
         PBLOG_ERROR << "VALIDATION_NOTRUN";
     }
 
-
-
-#ifdef BUILD_ZMQ
-    if (!abortNow_ && rmd_)
-    {
-        PBLOG_INFO << "Sending progress 1.0";
-
-        std::ostringstream message;
-        message << "{" <<
-           "\"progress\": " << 1.0 << "," <<
-           "\"acqId\":\""  << rmd_->subreadSet.uniqueId << "\"," <<
-           "\"numZmwsSoFar\":" << numProcessedZMWs_ << "," <<
-           "\"numZmwsTotal\":" << NumZmwsToProcess() << "," <<
-           "\"peakRss\":" << PeakRSSinGiB() <<
-           "}";
-
-        Announce("ppa/progress", message.str());
-        Announce("ppa/complete", "{\"acqId\":\"" + rmd_->subreadSet.uniqueId + "\"}");
-        PBLOG_INFO << "Progress 1.0 sent";
-    }
-    DisconnectIPC();
-    PBLOG_INFO << "IPC disconnected";
-#endif
-
-
+    shutdownRpt.Update(1);
     if (abortNow_)
     {
         PBLOG_ERROR << "Aborting";
@@ -531,7 +491,7 @@ using DiskProfiler = PacBio::Dev::Profile::ScopedProfilerChain<READ_PROFILES>;
 /**
  * @brief Orchestrates processing batches of ZMW-slices.
  */
-void ConvertBaz2Bam::ParseInput()
+void ConvertBaz2Bam::ParseInput(PpaStageReporter& analyzeRpt)
 {
     size_t iterations = 0;
     // Loop as long as file has not been read completely
@@ -561,8 +521,8 @@ void ConvertBaz2Bam::ParseInput()
         if (!performWhiteList_)
         {
             // Get new chunk
-            auto readsTmp = bazReader_->NextSlice([this]() {
-                if (!this->abortNow_) this->EmitHeartbeat();
+            auto readsTmp = bazReader_->NextSlice([this,&analyzeRpt]() {
+                if (!this->abortNow_) analyzeRpt.Update(0);
                 return this->abortNow_.load();
             });
             auto sending = profiler.CreateScopedProfiler(READ_PROFILES::SEND_DATA);
@@ -582,8 +542,8 @@ void ConvertBaz2Bam::ParseInput()
                 bazReader_->SkipNextSlice();
                 continue;
             }
-            auto readsTmp = bazReader_->NextSlice([this]() {
-                if (!this->abortNow_) this->EmitHeartbeat();
+            auto readsTmp = bazReader_->NextSlice([this,&analyzeRpt]() {
+                if (!this->abortNow_) analyzeRpt.Update(0);
                 return this->abortNow_.load();
             });
 
@@ -610,94 +570,14 @@ void ConvertBaz2Bam::ParseInput()
     DiskProfiler::FinalReport();
 }
 
-void ConvertBaz2Bam::InitIPC()
-{
-#ifdef BUILD_ZMQ
-    if (user_->zmq)
-    {
-        std::lock_guard<std::mutex> l(announceMutex_);
-
-        const PacBio::IPC::MessageQueueLabel ppaStatusQueue ("ppa-status" , PacBio::Primary::PORT_STAT_BAZ2BAM);
-        PBLOG_INFO << "Initialize IPC MessageSocketPublisher on port "
-                   << ppaStatusQueue.ToString();
-
-        try
-        {
-            publisher_.reset(new IPC::MessageSocketPublisher(ppaStatusQueue));
-        }
-        catch (...)
-        {
-            std::string error = "Could not open MessageSocketPublisher on port "
-                                + ppaStatusQueue.ToString();
-            PBLOG_FATAL << error;
-            exit(1);
-        }
-        PBLOG_INFO << "Initialization MessageSocketPublisher success";
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        // Init receiver as a thread
-        ipcReceiverThread_ = std::thread([this]()
-        {
-            const PacBio::IPC::MessageQueueLabel ppaCommandQueue("ppa-command", PacBio::Primary::PORT_CTRL_BAZ2BAM);
-            PBLOG_INFO << "Initialize IPC MessageSocketReceiver on port "
-                       << ppaCommandQueue.ToString();
-            std::unique_ptr<IPC::MessageSocketReceiver> receiveQueue;
-            try
-            {
-                receiveQueue.reset(new IPC::MessageSocketReceiver(ppaCommandQueue, 100));
-            }
-            catch (...)
-            {
-                std::string error = "Could not open MessageSocketReceiver on port "
-                                    + ppaCommandQueue.ToString();
-                PBLOG_FATAL << error;
-                exit(1);
-            }
-            PBLOG_INFO << "Initialization MessageSocketReceiver success";
-            while (ipcReceiverContinue_)
-            {
-                const IPC::SmallMessage rxMsg(receiveQueue->Receive());
-                if (rxMsg.IsAvailable())
-                {
-                    try
-                    {
-                        rxMsg.CheckValidity();
-                        PBLOG_INFO << "ProcessBase::MainEventLoop::mesg: " << rxMsg;
-                        if (rxMsg.GetName() == "ppa/command")
-                        {
-                            if (rxMsg.GetData() == "abort")
-                            {
-                                abortNow_ = true;
-                                if (resultWriter_)
-                                {
-                                    PBLOG_INFO << "Aborting ResultWriter";
-                                    resultWriter_->Abort();
-                                }
-                                std::cerr << std::endl << "ABORT" << std::endl;
-                                Announce("ppa/error",
-                                         "{\"acqId\":\"" + user_->uuid + "\"" +
-                                         ",\"message\":\"ABORTED_BY_PAWS\"}");
-                                break;
-                            }
-                        }
-                    }
-                    catch (std::exception& ex)
-                    {
-                        PBLOG_ERROR << "ProcessBase::MainEventLoop::mesg: exception " << ex.what();
-                    }
-                }
-            }
-        });
-    }
-#endif
-}
-
-void ConvertBaz2Bam::StartLoggingThread()
+void ConvertBaz2Bam::StartLoggingThread(PpaStageReporter& analyzeRpt)
 {
     using namespace std::chrono;
     
     uint32_t toDo = NumZmwsToProcess();
 
-    loggingThread_ = std::thread([this,toDo](){
+    loggingThread_ = std::thread([this,toDo,&analyzeRpt](){
+
         // Logging
         auto startTime = std::chrono::high_resolution_clock::now();
         auto lastTime = startTime;
@@ -798,20 +678,8 @@ void ConvertBaz2Bam::StartLoggingThread()
        
                 iterations++;
                 PBLOG_INFO << "Sending progress " + std::to_string(progress);
-
-                // Even though this is a JSON message, it is prettier to format it as a string
-                // because of the precision settings. Saving the floating point values using JSON::Value
-                // results in truncated decimal points (for progress) and ugly precision for peakRss.
-                std::ostringstream message;
                 currentProgress_ = progress;
-                message << "{" <<
-                        "\"progress\":" << std::setprecision(12) << std::fixed << progress << "," <<
-                        "\"acqId\":\""  << rmd_->subreadSet.uniqueId << "\"," <<
-                        "\"numZmwsSoFar\":" << numProcessedZMWs_ << "," <<
-                        "\"numZmwsTotal\":" << NumZmwsToProcess() << "," <<
-                        "\"peakRss\":" << PeakRSSinGiB() <<
-                        "}";
-                Announce("ppa/progress", message.str());
+                analyzeRpt.Update(numProcessedZMWs_);
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
@@ -858,15 +726,12 @@ ConvertBaz2Bam::~ConvertBaz2Bam()
 
     // verify that all threads are joined.
     threadpoolContinue_ = false;
-    ipcReceiverContinue_ = false;
     loggingContinue_ = false;
     PBLOG_INFO << "joining thread pool";
     for(auto& t: threadpool_) if (t.joinable()) t.join();
 
     PBLOG_INFO << "joining loggingThread_";
     if (loggingThread_.joinable()) loggingThread_.join();
-    PBLOG_INFO << "joining ipcReceiverThread_";
-    if (ipcReceiverThread_.joinable()) ipcReceiverThread_.join();
     PBLOG_INFO << "joining done";
 
     PBLOG_INFO << "Peak RSS      : " << PeakRSSinGiB() << " GiB";
@@ -1129,15 +994,13 @@ void ConvertBaz2Bam::CheckInputFile()
         struct stat buffer;
         if (stat(inputFilePath.c_str(), &buffer) != 0)
         {
-            Announce("ppa/error",
-                     "{\"message\":\"INVALID_INPUT_FILE\"}");
+            progressMessage_->Exception("INVALID_INPUT_FILE");
             throw PBException("Input file \"" + inputFilePath + "\" does not exist.");
         }
         // Test if input is a directory, if so, die
         if ((buffer.st_mode & S_IFMT) == S_IFDIR)
         {
-            Announce("ppa/error",
-                     "{\"message\":\"INPUT_FILE_IS_DIRECTORY\"}");
+            progressMessage_->Exception("INPUT_FILE_IS_DIRECTORY");
             throw PBException("Input file \"" + inputFilePath + "\" is a directory.");
         }
     }
