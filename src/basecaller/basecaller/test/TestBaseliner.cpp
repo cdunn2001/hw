@@ -30,6 +30,7 @@
 #include <cmath>
 
 #include <pacbio/datasource/DataSourceRunner.h>
+#include <pacbio/logging/Logger.h>
 #include <pacbio/PBException.h>
 
 #include <appModules/SimulatedDataSource.h>
@@ -468,8 +469,13 @@ INSTANTIATE_TEST_SUITE_P(,
 
                              return name.str();
                          });
+                         
 template <typename T>
-struct MultiScaleBaselinerSmallBatch : ::testing::Test {};
+struct MultiScaleBaselinerSmallBatch : ::testing::Test
+{
+private:
+    PacBio::Logging::LogSeverityContext logLevel {PacBio::Logging::LogLevel::WARN};
+};
 
 using MyTypes = ::testing::Types<HostMultiScaleBaseliner, DeviceMultiScaleBaseliner>;
 TYPED_TEST_SUITE(MultiScaleBaselinerSmallBatch, MyTypes);
