@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <common/Locked.h>
+#include <app-common/Locked.h>
 #include <future>
 
 using namespace testing;

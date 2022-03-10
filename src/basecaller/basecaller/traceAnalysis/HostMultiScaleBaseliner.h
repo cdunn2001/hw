@@ -37,6 +37,7 @@ public:
                             uint32_t lanesPerPool)
         : Baseliner(poolId)
         , latency_(params.LatentSize())
+        , framesPerStride_(params.AggregateStride())
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
@@ -45,7 +46,24 @@ public:
        }
     }
 
-    size_t StartupLatency() const override { return latency_; }
+    static float SigmaEmaScaleStrides()
+    { 
+        return -1.0f / std::log2(sigmaEmaAlpha_);
+    }
+
+    static float MeanEmaScaleStrides()
+    { 
+        return -1.0f / std::log2(meanEmaAlpha_);
+    }
+
+    size_t StartupLatency() const override 
+    { 
+        // pick the longest estimated ema transient in strides
+        const float maxScaleStrides = std::max(MeanEmaScaleStrides(), SigmaEmaScaleStrides());
+        // todo: consider scaling the second term here for additional
+        // tunability.
+        return latency_ + maxScaleStrides * framesPerStride_;
+    }
 
     HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
     HostMultiScaleBaseliner(HostMultiScaleBaseliner&&) = default;
@@ -192,6 +210,7 @@ private:
 private:
     std::vector<MultiScaleBaseliner> baselinerByLane_;
     size_t latency_;
+    size_t framesPerStride_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

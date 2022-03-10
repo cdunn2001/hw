@@ -35,21 +35,32 @@
 #include <pacbio/process/OptionParser.h>
 #include <pacbio/process/ProcessBase.h>
 
-#include <common/ThreadController.h>
+#include <app-common/ThreadController.h>
+#include <app-common/ProgressMessage.h>
 
 #include <pa-cal/PaCalConfig.h>
 #include <pa-cal/ExitCodes.h>
 
 namespace PacBio::Calibration {
 
+SMART_ENUM(PaCalStages,
+           StartUp,
+           Analyze,
+           Shutdown);
+
 class WebService;
 
 class PaCalProcess : public PacBio::Process::ThreadedProcessBase
 {
 public:
+    using PaCalProgressMessage = PacBio::IPC::ProgressMessage<PaCalStages>;
+    using PaCalStageReporter = PaCalProgressMessage::StageReporter;
+    static PaCalProgressMessage::Table stages;
+public:
     struct Settings
     {
         bool enableWatchdog = true;
+        bool createDarkCalFile = true;
         PaCalConfig  paCalConfig;
         int32_t sra = 0;
         int32_t movieNum = 0;
@@ -108,6 +119,8 @@ protected:
 private:
     std::vector<std::string> commandLine_;
     Settings settings_;
+    int statusFileDescriptor_ = -1;
+    std::unique_ptr<PaCalProgressMessage> progressMessage_;
 };
 
 } // namespace PacBio::Calibration

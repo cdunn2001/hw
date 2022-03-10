@@ -38,7 +38,8 @@ namespace PacBio::Calibration {
 bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
-                        std::string outputFile)
+                        std::string outputFile,
+                        bool createDarkCalFile)
 {
     DataSource::DataSourceRunner runner(std::move(source));
 
@@ -67,19 +68,27 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
 
     const uint32_t numRows = stats.mean.shape()[0];
     const uint32_t numCols = stats.mean.shape()[1];
-    File::CalibrationFile out(outputFile, numRows, numCols);
+    std::unique_ptr<FrameStatsFile> out;
+    if(createDarkCalFile)
+    {
+        out = std::make_unique<File::CalibrationFile>(outputFile, numRows, numCols);
+    }
+    else
+    {
+        out = std::make_unique<File::LoadingFile>(outputFile, numRows, numCols);
+    }
 
     if (controller->ExitRequested())
     {
         return false;
     }
-    out.SetFrameMean(stats.mean);
+    out->SetFrameMean(stats.mean);
 
     if (controller->ExitRequested())
     {
         return false;
     }
-    out.SetFrameVariance(stats.variance);
+    out->SetFrameVariance(stats.variance);
 
     if (controller->ExitRequested())
     {
@@ -94,7 +103,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
     //TODO missing plumbing to populate these!
     attr.startIndex = 0;
     attr.timeStamp = 0;
-    out.SetAttributes(attr);
+    out->SetAttributes(attr);
 
     return true;
 }

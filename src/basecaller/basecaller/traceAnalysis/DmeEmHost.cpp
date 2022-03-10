@@ -156,7 +156,7 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
     detModelPool->frameInterval = hfi;
 }
 
-void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
+void DmeEmHost::PrelimEstimate(const BaselinerStats& baselinerStats,
                                LaneDetModelHost *model) const
 {
     assert(model != nullptr);
@@ -166,15 +166,15 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     using std::sqrt;
     using std::isfinite;
 
-    const FloatVec nBlFrames(blStatAccState.NumBaselineFrames());
-    const FloatVec totalFrames(blStatAccState.TotalFrames());
+    const FloatVec nBlFrames(baselinerStats.BaselineFrameCount());
+    const FloatVec totalFrames(baselinerStats.TotalFrameCount());
     const FloatVec blWeight = max(nBlFrames / totalFrames, 0.01f);
 
     // Reject baseline statistics with insufficient data
     constexpr float nBaselineMin = 3.0f;
     const BoolVec mask = nBlFrames >= nBaselineMin;
     const Data::SignalModeHost<FloatVec>& m0blm = model->BaselineMode();
-    const StatAccumulator<FloatVec>& blsa = blStatAccState.baselineStats;
+    const StatAccumulator<FloatVec>& blsa = baselinerStats.BaselineFramesStats();
 
     auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
     blVar = max(blVar, BaselineVarianceMin());
@@ -202,7 +202,8 @@ void DmeEmHost::PrelimEstimate(const BlStatAccState& blStatAccState,
     model->BaselineMode().SignalMean(blMean);
     model->BaselineMode().SignalCovar(blVar);
 
-    // Frame interval is not updated since it is not exported
+    // We assume that the frame interval associated with the baseliner
+    // statistics is the same as that of the detection model being updated.
 
     FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBlFrames - nBaselineMin);
     model->Confidence(conf);
@@ -224,10 +225,9 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     LaneDetModelHost workModel = *detModel;
-    PrelimEstimate(blStatAccState, &workModel);
+    PrelimEstimate(bsa, &workModel);
 
-    // TODO: Until further works completed, this update causes unit test failures
-    // detModel->Update(workModel);
+    detModel->Update(workModel);
 
     // Make a working copy of the detection model.
     workModel = *detModel;

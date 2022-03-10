@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 cmake_policy(VERSION 3.8)
 cmake_policy(SET CMP0076 NEW)
 
@@ -29,7 +29,7 @@ include(pacbio-hw-mongo)
 
 generate_config_header(kestrel-config.h PrimaryConfig)
 
-add_subdirectory(../common common)
+add_subdirectory(../app-common app-common)
 
 project (pa-cal)
 
@@ -65,6 +65,8 @@ add_library(lib-pa-cal
         ExitCodes.h
         FrameAnalyzer.h
         FrameAnalyzer.cpp
+        SignalSimulator.h
+        SignalSimulator.cpp
         PaCalConfig.h
         PaCalConfig.cpp
         PaCalConstants.h

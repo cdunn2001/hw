@@ -60,6 +60,8 @@
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
 
+#include <app-common/ProgressMessage.h>
+
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
 
@@ -79,9 +81,24 @@ using namespace PacBio::DataSource;
 using namespace PacBio::Process;
 using namespace PacBio::Primary;
 using namespace PacBio::File;
+using namespace PacBio::IPC;
 
 // ^^^^
 ///////
+
+SMART_ENUM(SmrtBasecallerStages,
+           StartUp,
+           Analyze,
+           Shutdown);
+
+using SmrtBasecallerProgressMessage = ProgressMessage<SmrtBasecallerStages>;
+using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
+
+SmrtBasecallerProgressMessage::Table stages = {
+        { "StartUp",    { false, 0, 10 } },
+        { "Analyze",    {  true, 1, 80 } },
+        { "Shutdown",   { false, 2, 10 } }
+};
 
 class SmrtBasecaller : public ThreadedProcessBase
 {
@@ -112,7 +129,9 @@ public:
         frames_ = options.get("maxFrames");
         // TODO need validation or something, as this is probably a trace file input specific option
         nop_ = options.get("nop");
-        statusFileDescriptor_ = options.get("statusfiledescriptor");
+        statusFileDescriptor_ = options.get("statusfd");
+        progressMessage_ = std::make_unique<SmrtBasecallerProgressMessage>(stages,
+                                                                           "PA_BASECALLER_STATUS", statusFileDescriptor_);
 
         if (nop_ == 1)
         {
@@ -382,9 +401,9 @@ private:
     }
 
     std::unique_ptr<LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
-                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                                                         const AnalysisConfig& analysisConfig,
-                                                                         const ScanData::Data& experimentMetadata)
+                                                                        const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                                                                        const AnalysisConfig& analysisConfig,
+                                                                        const ScanData::Data& experimentMetadata)
     {
         if (outputTrcFileName_ != "")
         {
@@ -549,6 +568,8 @@ private:
 
     void RunAnalyzer()
     {
+        SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
+
         // Names for the various graph stages
         SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
 
@@ -562,10 +583,7 @@ private:
         PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
                                                         config_.layout.framesPerChunk;
 
-        namespace io = boost::iostreams;
-        io::stream<io::file_descriptor_sink> statusStream(
-            io::file_descriptor_sink( statusFileDescriptor_, io::never_close_handle ) );
-        statusStream << "PA_WS_STATUS { \"source\":\"smrt-basecaller\", \"message\": \"started\"}" << std::endl;
+
 
         try
         {
@@ -599,12 +617,9 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
+            startUpRpt.Update(1);
 
-#if 1
-            // TODO Change this to notify pa-ws that smrt-basecaller is ready
-            double progress  = 0.0;
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"READY\"}" << std::endl;
-#endif
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -688,16 +703,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-#if 1                        
-                    Json::Value status;
-                    status["source"]="smrt-basecaller";
-                    status["message"]="BUSY";
-                    status["frames"]=frames_;
-                    status["framesAnalyzed"]=framesAnalyzed;
-                    status["progress"]=progress;
-                    statusStream << "PA_WS_STATUS " << status << std::endl;
-                    progress = (frames_ > 0) ? (framesAnalyzed * 1.0 / frames_) : 0.0;
-#endif
+                    analyzeStageRpt.Update(framesAnalyzed);
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
@@ -715,12 +721,30 @@ private:
                     break;
                 }
             }
+
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
             inputNode->FlushNode();
 
-            PBLOG_INFO << "All chunks analyzed.";
-            PBLOG_INFO << "Total frames analyzed = " << framesAnalyzed
-                    << " out of " << source->NumFrames() << " requested from source. ("
-                    << (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1) << "%)";
+            PBLOG_INFO << "Exited chunk analysis loop.";
+            const double framePercentage =  (source->NumFrames() ? (100.0 * framesAnalyzed / source->NumFrames()) : -1);
+            // As this is all integer math, I'm not worried about round off error to 99.99 or something silly like that.
+            // Note that the framesAnalyzed *might* exceed the requested frames if the last chunk is not truncated correctly.
+            if (framePercentage < 100.0)
+            {
+                PBLOG_WARN << "Not all Frames analyzed = " << framesAnalyzed
+                        << " out of " << source->NumFrames() << " requested from source. ("
+                        << framePercentage << "%)";
+            }
+            else if (framePercentage > 100.0)
+            {
+                PBLOG_NOTICE << "Slightly concerned that the number of framesAnalyzed (" << framesAnalyzed << ") exceeded the requested number ("
+                    << source->NumFrames() << ") but not concerned enough to do something about it. Just passively-aggressively pointing it out."
+                    << " You do realize that is not supposed to happen, right?";
+            }
+            else
+            {
+                PBLOG_INFO << "All frames analyzed = " << framesAnalyzed;
+            }
             if (nop_ == 1)
             {
                 PBLOG_INFO << "NOP pixel comparison successes = " << nopSuccesses;
@@ -731,20 +755,14 @@ private:
                     << " chunks at " << chunkAnalyzeRate << " chunks/sec"
                     << " (" << (source->NumZmw() * chunkAnalyzeRate)
                     << " zmws/sec)";
-#if 1                        
-            statusStream << "PA_WS_STATUS {\"source\":\"smrt-basecaller\",\"message\":\"BUSY\",\"progress\":" << 1.0 << "}" << std::endl;
-#endif
+
+
+            shutdownRpt.Update(1);
         }
         catch(const std::exception& ex)
         {
             PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
-#if 1                        
-            Json::Value status;
-            status["source"]="smrt-basecaller";
-            status["message"]="EXCEPTION";
-            status["what"] = ex.what();
-            statusStream << "PA_WS_STATUS " << status << std::endl;
-#endif
+            progressMessage_->Exception(ex.what());
             throw;
         }
     }
@@ -805,6 +823,7 @@ private:
     std::string outputTrcFileName_;
     std::unique_ptr<TraceFile> outputTrcFile_;
     int statusFileDescriptor_ = 1;
+    std::unique_ptr<SmrtBasecallerProgressMessage> progressMessage_;
 };
 
 int main(int argc, char* argv[])
@@ -816,7 +835,6 @@ int main(int argc, char* argv[])
         {
             cliArgs << argv[i] << " ";
         }
-        PBLOG_INFO << cliArgs.str();
 
         auto parser = ProcessBase::OptionParserFactory();
         std::stringstream ss;
@@ -839,7 +857,7 @@ int main(int argc, char* argv[])
         parser.add_option("--outputtrcfile").help("Trace file output file (trc.h5). Optional");
         parser.add_option("--numWorkerThreads").type_int().set_default(0).help("Number of compute threads to use.  ");
         parser.add_option("--maxFrames").type_int().set_default(0).help("Specifies maximum number of frames to run. 0 means unlimited");
-        parser.add_option("--statusfiledescriptor").action_store_true().type_int().set_default(1).help("Write status messages to this file description. Default 1 (stdout)");
+        parser.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
 
         auto group1 = OptionGroup(parser, "Developer options",
                                   "For use by developers only");
@@ -858,13 +876,13 @@ int main(int argc, char* argv[])
         ThreadedProcessBase::HandleGlobalOptions(options);
 
         Json::Value json = MergeConfigs(options.all("config"));
-        PBLOG_DEBUG << json; // this does NOT work with --showconfig
         SmrtBasecallerConfig configs(json);
         if (options.get("showconfig"))
         {
             std::cout << configs.Serialize() << std::endl;
             return 0;
         }
+        PBLOG_INFO << cliArgs.str();
 
         auto validation = configs.Validate();
         if (validation.ErrorCount() > 0)

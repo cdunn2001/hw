@@ -29,6 +29,7 @@
 //  Description:
 //  Defines class DmeEmHost.
 
+#include <common/MongoConstants.h>
 #include "CoreDMEstimator.h"
 
 namespace PacBio {
@@ -42,12 +43,28 @@ namespace Basecaller {
 // be easier to manange
 struct ZmwAnalogMode
 {
+    using LaneAnalogModeT = Data::LaneAnalogMode<Cuda::PBHalf2, laneSize/2>;
+
     template <int low>
-    CUDA_ENABLED void Assign(const Data::LaneAnalogMode<Cuda::PBHalf2, 32>& mode, int idx)
+    CUDA_ENABLED void Assign(const LaneAnalogModeT& mode, int idx)
     {
+        static_assert(low == 0 || low == 1);
+        assert(idx >= 0);
+        assert(static_cast<unsigned int>(idx) < mode.means.size());
         mean = mode.means[idx].Get<low>();
         var = mode.vars[idx].Get<low>();
         weight = mode.weights[idx].Get<low>();
+    }
+
+    template <int low>
+    CUDA_ENABLED void Export(int index, LaneAnalogModeT* mode)
+    {
+        static_assert(low == 0 || low == 1);
+        assert(index >= 0);
+        assert(static_cast<unsigned int>(index) < mode->weights.size());
+        mode->weights[index].Set<low>(weight);
+        mode->means[index].Set<low>(mean);
+        mode->vars[index].Set<low>(var);
     }
 
     float mean;
@@ -58,10 +75,15 @@ struct ZmwAnalogMode
 struct ZmwDetectionModel
 {
     static constexpr int numAnalogs = 4;
+    using LaneModelParamsT = Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>;
 
     template <int low>
-    CUDA_ENABLED void Assign(const Data::LaneModelParameters<Cuda::PBHalf2, 32>& model, int idx)
+    CUDA_ENABLED void Assign(const LaneModelParamsT& model, int idx)
     {
+        static_assert(low == 0 || low == 1);
+        assert(idx >= 0);
+        assert(static_cast<unsigned int>(idx) < model.Confidence().size());
+        confidence = model.Confidence()[idx].Get<low>();
         for (int i = 0; i < numAnalogs; ++i)
         {
             analogs[i].Assign<low>(model.AnalogMode(i), idx);
@@ -69,10 +91,33 @@ struct ZmwDetectionModel
         baseline.Assign<low>(model.BaselineMode(), idx);
     }
 
+    // Transcribe the values in *this to the (index, low) slot of *model.
+    template <int low>
+    CUDA_ENABLED void Export(int index, LaneModelParamsT* model)
+    {
+        static_assert(low == 0 || low == 1);
+        assert(index >= 0);
+        assert(static_cast<unsigned int>(index) < model->Confidence().size());
+        model->Confidence()[index].Set<low>(confidence);
+        baseline.Export<low>(index, &model->BaselineMode());
+        for (unsigned int i = 0; i < numAnalogs; ++i)
+        {
+            analogs[i].Export<low>(index, &model->AnalogMode(i));
+        }
+    }
+
+    // Transcribe the values in *this to the (index, low) slot of *model.
+    CUDA_ENABLED void Export(int index, int low, LaneModelParamsT* model)
+    {
+        assert(low == 0 || low == 1);
+        if (low == 0) this->Export<0>(index, model);
+        else this->Export<1>(index, model);
+    }
+
     Cuda::Utility::CudaArray<ZmwAnalogMode, numAnalogs> analogs;
     ZmwAnalogMode baseline;
 
-    // TODO: Need to handle confidence and frame interval.
+    // TODO: Need to handle frame interval.
     float confidence = 0;
 };
 

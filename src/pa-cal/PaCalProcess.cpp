@@ -43,6 +43,7 @@
 #include <pacbio/text/String.h>
 #include <pacbio/utilities/Finally.h>
 #include <pacbio/utilities/StdThread.h>
+#include <pacbio/text/String.h>
 
 #include <acquisition/wxipcdatasource/WXIPCDataSource.h>
 
@@ -67,6 +68,14 @@ using namespace PacBio::Utilities;
 using namespace PacBio::Sensor;
 
 namespace PacBio::Calibration {
+
+SMART_ENUM(CalibrationWorkflow, Dark, Loading);
+
+PaCalProcess::PaCalProgressMessage::Table PaCalProcess::stages = {
+    { "StartUp",    { false, 0, 10 } },
+    { "Analyze",    {  true, 1, 80 } },
+    { "Shutdown",   { false, 2, 10 } }
+};
 
 PaCalProcess::~PaCalProcess()
 {
@@ -95,8 +104,16 @@ OptionParser PaCalProcess::CreateOptionParser()
     parser.add_option("--movieNum").type_int().set_default(0).help("The expected movie number, which should agree with what "
                                                                    "comes over the wire via the Wolverine");
     parser.add_option("--numFrames").type_int().set_default(512).help("Number of frames to use during the collection. "
-                                                                      "Note: Currently only the specific value of 512 is supported,"
-                                                                      "presumably this may be relaxed in the future");
+                                                                      "Note: Currently only single chunk analysis is supported,"
+                                                                      "and some data sources will put additional constraints of what "
+                                                                      "frame counts are valid.  Presumably this may be relaxed in the future");
+    auto darkStr = CalibrationWorkflow::toString(CalibrationWorkflow::Dark);
+    const auto vals = CalibrationWorkflow::allValuesAsStrings();
+    parser.add_option("--cal").set_default(darkStr)
+                              .help("Selects between dark calibration and dynamic loading workflows.  The"
+                                    " payload in the resulting file is the same regardless, this just controls"
+                                    " the naming convention for HDF5 groups/datasets.  Valid values are "
+                                    + Text::String::Join(vals.begin(), vals.end(), ',') + " with the default being %default");
 
     parser.add_option("--timeoutSeconds").type_double().set_default(60*5).help("pa-cal will self abort if this timeout expires");
 
@@ -104,6 +121,7 @@ OptionParser PaCalProcess::CreateOptionParser()
                                                                "dynamic loading workflows");
 
     parser.add_option("--outputFile").type_string().help("Destination file, containing the collected frame mean/variance information");
+    parser.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
     return parser;
 }
 
@@ -132,6 +150,15 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (ret.timeoutSeconds <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
 
         ret.inputDarkCalFile = options["inputDarkCalFile"];
+        std::string workflow = options["cal"];
+        try
+        {
+            auto workflowEnum = CalibrationWorkflow::fromString(workflow);
+            ret.createDarkCalFile = (workflowEnum == CalibrationWorkflow::Dark);
+        } catch (const CalibrationWorkflow::Exception&)
+        {
+            cliValidationErrors.push_back(workflow + " is not a valid option for --cal");
+        }
 
         ret.outputFile = options["outputFile"];
         if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
@@ -197,8 +224,14 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 #endif
 }
 
-std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames)
+std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numFrames, const std::string& darkCalFileName)
 {
+    std::unique_ptr<DarkFrame> darkFrame;
+    if (!darkCalFileName.empty())
+    {
+        darkFrame = std::make_unique<DarkFrame>();
+        darkFrame->darkCalFileName = darkCalFileName;
+    }
     // TODO actually create datasources...
     //      Should be handled by PTSD-1107
     return cfg.source.Visit(
@@ -210,6 +243,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numF
             PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::UINT8, {4096, numFrames, 64}};
             DataSource::DataSourceBase::Configuration sourceCfg{layout, std::move(allo)};
             sourceCfg.numFrames = numFrames;
+            sourceCfg.darkFrame = std::move(darkFrame);
             auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
             return source;
         }
@@ -232,7 +266,10 @@ int PaCalProcess::RunAllThreads()
     {
         try
         {
-            auto source = CreateSource(settings_.paCalConfig, settings_.numFrames);
+            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, 300);
+            auto source = CreateSource(settings_.paCalConfig, settings_.numFrames, settings_.inputDarkCalFile);
+            startUpRpt.Update(1);
+
             // The current implementation has some limitations, mainly that we expect to only
             // process a single chunk.  Let's validate those assumptions
             {
@@ -247,14 +284,21 @@ int PaCalProcess::RunAllThreads()
                                       + std::to_string(source->NumFrames()) + " frames are expected");
                 }
             }
-            bool success = AnalyzeSourceInput(std::move(source), threadController, settings_.movieNum, settings_.outputFile);
+            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, 600);
+            bool success = AnalyzeSourceInput(std::move(source), threadController,
+                                              settings_.movieNum, settings_.outputFile,
+                                              settings_.createDarkCalFile);
+            analyzeRpt.Update(1);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
+            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, 300);
             threadController->RequestExit();
+            shutdownRpt.Update(1);
         } catch (const std::exception& ex)
         {
             PBLOG_ERROR << "Caught exception thrown by analysis thread: " << ex.what();
             PBLOG_ERROR << "Analysis thread will now terminate early";
+            progressMessage_->Exception(ex.what());
             threadController->RequestExit();
             ret = ExitCode::StdException;
         }
@@ -317,6 +361,7 @@ int PaCalProcess::Run()
     catch (const std::exception& ex)
     {
         PBLOG_ERROR << "main: fatal exception: " << ex.what();
+        progressMessage_->Exception(ex.what());
         exitCode = ExitCode::StdException;
     }
     catch (...)
@@ -362,6 +407,12 @@ int PaCalProcess::Main(int argc, const char *argv[])
         std::vector<std::string> args = parser.args();
         HandleGlobalOptions(options);
         auto settings = HandleLocalOptions(options);
+        statusFileDescriptor_ = options.get("statusfd");
+        progressMessage_ = std::make_unique<PaCalProgressMessage>(stages,
+                                                                  settings->createDarkCalFile
+                                                                    ? "PA_DARKCAL_STATUS"
+                                                                    : "PA_LOADCAL_STATUS",
+                                                                  statusFileDescriptor_);
         if (settings.has_value())
         {
             settings_ = settings.value();
@@ -403,6 +454,7 @@ void PaCalProcess::SendException(const std::string& message)
     // the message is also caught at a separate try/catch block, so
     // debug level is ok for this message.
     PBLOG_ERROR << "PaCalProcess Exception message caught:" << message;
+    progressMessage_->Exception(message);
 }
 
 void PaCalProcess::SendException(const std::exception& ex)
@@ -410,6 +462,7 @@ void PaCalProcess::SendException(const std::exception& ex)
     // the message is also caught at a separate try/catch block, so
     // debug level is ok for this message.
     PBLOG_DEBUG << "PaCalProcess std::exception caught:" << ex.what();
+    progressMessage_->Exception(ex.what());
 }
 
 } // namespace PacBio::Calibration

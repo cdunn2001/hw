@@ -37,8 +37,8 @@
 
 #include <pacbio/process/CivetServer.h>
 
-#include <common/HttpHelpers.h>
-#include <common/ThreadController.h>
+#include <app-common/HttpHelpers.h>
+#include <app-common/ThreadController.h>
 
 #include "api/SocketObject.h"
 #include "PaWsConfig.h"

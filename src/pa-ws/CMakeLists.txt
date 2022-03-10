@@ -31,7 +31,7 @@ include(pacbio-cmake-config-vars)
 
 generate_config_header(kestrel-config.h PrimaryConfig)
 
-add_subdirectory(../common common)
+add_subdirectory(../app-common app-common)
 add_subdirectory(../../doc doc)
 
 

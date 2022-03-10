@@ -1,12 +1,19 @@
+cmake_minimum_required(VERSION 3.20)
+
 include(pacbio-gtest)
+include(pacbio-eigen)
 
 add_library(libTestPaCal OBJECT
     testPaCalProcess.cpp
+    testPaCalSimulator.cpp
 )
-    
+
+include_directories(..)
+
 target_link_libraries(libTestPaCal
     PUBLIC
     lib-pa-cal
+    libEigen
     libPacbioCplusplusApi
     libGtestWithMain
 )
