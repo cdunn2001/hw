@@ -9,20 +9,64 @@
   4097
 
   $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/designer_zmw_0.txt ${CRAMTMP}/exp_designer_zmw_0.txt
-  AAAAGGGTTTCCCGTACGTACGTACGTACGTAC
-  -AAAGGGTTTCCCGTACGTACGTACGTACGTAC
+  Usage: 
+      nwalign [options] seq1 seq2 
+      
+  
+  Options:
+    -h, --help            show this help message and exit
+    --gap_extend=GAP_EXTEND
+                          gap extend penalty (must be integer <= 0)
+    --gap_open=GAP_OPEN   gap open penalty (must be integer <= 0)
+    --match=MATCH         match score (must be integer > 0)
+    --matrix=MATRIX       scoring matrix in ncbi/data/ format,
+                          if not specificied, match/mismatch are used
+    --server=SERVER       if non-zero integer, a server is started
 
   $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 10 ${CRAMTMP}/designer_zmw_10.txt ${CRAMTMP}/exp_designer_zmw_10.txt
-  AAAAGGGTTTCCCGTACGTACGTACGTACGACT
-  -AAAGGGTTTCCCGTACGTACGTACGTACGACT
+  Usage: 
+      nwalign [options] seq1 seq2 
+      
+  
+  Options:
+    -h, --help            show this help message and exit
+    --gap_extend=GAP_EXTEND
+                          gap extend penalty (must be integer <= 0)
+    --gap_open=GAP_OPEN   gap open penalty (must be integer <= 0)
+    --match=MATCH         match score (must be integer > 0)
+    --matrix=MATRIX       scoring matrix in ncbi/data/ format,
+                          if not specificied, match/mismatch are used
+    --server=SERVER       if non-zero integer, a server is started
 
   $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 100 ${CRAMTMP}/designer_zmw_100.txt ${CRAMTMP}/exp_designer_zmw_100.txt
-  AAAAGGGTTGCCCGTACGTACGTACGTAGTGTC
-  -AAAGGGTTTCCCGTACGTACGTACGTAGTGTC
+  Usage: 
+      nwalign [options] seq1 seq2 
+      
+  
+  Options:
+    -h, --help            show this help message and exit
+    --gap_extend=GAP_EXTEND
+                          gap extend penalty (must be integer <= 0)
+    --gap_open=GAP_OPEN   gap open penalty (must be integer <= 0)
+    --match=MATCH         match score (must be integer > 0)
+    --matrix=MATRIX       scoring matrix in ncbi/data/ format,
+                          if not specificied, match/mismatch are used
+    --server=SERVER       if non-zero integer, a server is started
 
   $ ${TESTDIR}/verify_designer_zmw.sh $BAZFILE $TRCFILE 1000 ${CRAMTMP}/designer_zmw_1000.txt ${CRAMTMP}/exp_designer_zmw_1000.txt
-  AAAAGGGTTTCCCGTACGTACGTACGAGTCGTC
-  -AAAGGGTTTCCCGTACGTACGTACGAGTCGTC
+  Usage: 
+      nwalign [options] seq1 seq2 
+      
+  
+  Options:
+    -h, --help            show this help message and exit
+    --gap_extend=GAP_EXTEND
+                          gap extend penalty (must be integer <= 0)
+    --gap_open=GAP_OPEN   gap open penalty (must be integer <= 0)
+    --match=MATCH         match score (must be integer > 0)
+    --matrix=MATRIX       scoring matrix in ncbi/data/ format,
+                          if not specificied, match/mismatch are used
+    --server=SERVER       if non-zero integer, a server is started
 
   $ BAZFILE=${CRAMTMP}/test4.baz
   $ TRCFILE=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
@@ -34,15 +78,15 @@
   257
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 0 ${CRAMTMP}/align_zmw_0.txt ${CRAMTMP}/expected_align_zmw_0.txt
-  -CACATTACCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATAC-
+  -CACATTAGCACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTTTGATGGTGTCGAAGCAGTGTATTGCTAGTGTGTTGCCCGTTGACGAGTTTGCCGA-TGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCC-TTGGTACTGCATACACCCGACGAGTAATAC-
   CCACATTAACACTGTACTAATCGTTCTTGAACGAGAATATCTCAACCCCATTCTCTCCTGTGATGGTGTCGAAGCAGTGTATTGCTACTGTGTTGCCCGTTGACGAGTTTGCCGATTGCTTGCCTGTCATCACGTATGAATACGACTCGGAAAGGGGGCCGTTGGTACTGCATACACCCGACGACTAATACG
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 64 ${CRAMTMP}/align_zmw_64.txt ${CRAMTMP}/expected_align_zmw_64.txt
-  -TTGTAATACGCGCCCACACATAGCGTGGCGCGCATCCAGTA-CCAGGGACGGCTCGTCGC-CAATTGCTTCACGAGGGTCAG-CCCAAAACGGTCCATTGGTAAGGTGGTTTCA-TATCCCTCGCTTTTACATCTCTCACCG-ATGCAAGCTTACCTCATGCGAGATTGTG-A-
+  -TTGTAATACGCGCCCACACATAGCGTGGCGCGCATCCAGTA-CCAGGGACGGCTCGTCGC-CAATTGCTTCACGAGGGTCAG-CCCAAAACGGTCCATTGGTAAGGTGGTTTCA-TATGCCTCGCTTTTACATCTCTCACCG-ATGCAAGCTTACCTCATGCGAGATTGTG-A-
   GTTCTAATACGCGCCCACACATAGCCTGGCGCGCATCCAGTACCCAGGGACGGCTGGTCGCGCAATTGCTTCACGAGGGTCAGCCCCAAAACGGTCCATTGGTAAGGTGGTTTCAGTATCCCTCGCTTTTACAGCTCTCACCGTATGCAAGCTTACCTCATGCGAGATTGTGAAC
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 160 ${CRAMTMP}/align_zmw_160.txt ${CRAMTMP}/expected_align_zmw_160.txt
-  -ATGATGAGACGGCATAAGTCCAAATCAATGCTCCACCCGAAAAACAGGG-TTGCTTAACGCCAGTAAGACCAGG-GGTACCTCTGCCGTCT-CCTTAGATTGAGGATCGAAGCCCAACACGATCGTCTGGTC-TTTGCGTTGCGTGATACAAGGGTGCAGGGTTCTACATGTCCC-T-GG
+  -ATTATGAGACGGCATAAGTCCAAATCAATGCTCCACCCGAAAAACA-GG-TTGCTTAACGCCAGTAAGACCAGG-GGTACCTCTGCCGTCTTCCTTAGATTGAGGATCGAAGCCCAACACGATCGTCTGGTC-TTTGCGTTGCGTGATACAAGGGTGGAGGGTTCTACATGTCCC-T-GG
   AATTATGAGACGGCATAAGTCCAAATCAATGCTCCACCCGAAAAACAGGGTTTGCTTAACGCCAGTAAGACCAGGTGGTACCTCTGCCGTCTGCCTTAGATTGAGGATCGAAGCCCAACACGATCGTCTGGTCTTTTGCGTGGCGTGATACAAGGGTGGAGGGTTCTACATGTCCCTTGGG
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 255 ${CRAMTMP}/align_zmw_255.txt ${CRAMTMP}/expected_align_zmw_255.txt
@@ -55,7 +99,7 @@
   > --config=algorithm.modelEstimationMode=FixedEstimations --outputbazfile ${BAZFILE} > /dev/null
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 4 ${CRAMTMP}/align_zmw_4.txt ${CRAMTMP}/expected_align_zmw_4.txt
-  -CGGTAGAAGTGTACGGCTCTGACATAATGAGCCAGGCCGGTAGGCCGTCTTACACCCCTAGACGAGGTAGGTGGGACAAATAACGTGCCTCACAAGTCCGC-TTGTGTCGAGGTAAGAAGCTAAATAGGCCTGGTCTGTAGAGGCAGACGTTC-GTGCAACGGGACA-TCA
+  -CGGTAGAAGTGTACGGCTCTGACATAATGAGCCAGGCCGGTAGGCCGTCTTACACCCCTAGACGAGGTAGGTGTGACAAATAACGTGCCTCACAAGTCCGC-TTGTGTCGAGGTAAGAAGCTAAATAGGCCTGGTCTGTAGAGGCAGACGTTC-GTGCAACGGGACA-TCA
   CCGGTAGAAGTGTACGGCTCTGACATAATGAGCCAGGCCGGTAGGCCGTCTTACACCCCTAGACGAGGTAGGTGTGACAAATAACCTGCCTCACAAGTCCGCTTTGTGTCGAGGTAAGAAGCTAAATAGGCCTGGTCTGTAGAGGCAGACGTTCGGTGCAACGGGACATTCA
 
   $ ${TESTDIR}/verify_align_zmw.sh $BAZFILE $TRCFILE 18 ${CRAMTMP}/align_zmw_18.txt ${CRAMTMP}/expected_align_zmw_18.txt
