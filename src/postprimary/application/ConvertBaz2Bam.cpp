@@ -195,6 +195,7 @@ void ConvertBaz2Bam::ParseRMD()
     }
     catch (const InvalidSequencingChemistryException&)
     {
+        std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         progressMessage_->Exception("INVALID_SEQUENCING_CHEMISTRY_EXCEPTION");
         throw;
     }
@@ -292,6 +293,7 @@ int ConvertBaz2Bam::Run()
         }
         catch (const std::exception& e)
         {
+            std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
             PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
             progressMessage_->Exception(e.what());
             throw;
@@ -442,17 +444,20 @@ int ConvertBaz2Bam::Run()
     }
     catch (const std::exception& ex)
     {
+        std::string uuid = rmd_->subreadSet.uniqueId;
         progressMessage_->Exception(std::string("Exception in closing thread: ") + ex.what());
         throw;
     }
 
     if (valid == Validation::CLOSED_TRUNCATED)
     {
+        std::string uuid = rmd_->subreadSet.uniqueId;
         progressMessage_->Exception("TRUNCATED_BAM");
         PBLOG_ERROR << "TRUNCATED_BAM";
     }
     else if (valid == Validation::NOT_RUN)
     {
+        std::string uuid = rmd_->subreadSet.uniqueId;
         progressMessage_->Exception("VALIDATION_NOTRUN");
         PBLOG_ERROR << "VALIDATION_NOTRUN";
     }

@@ -45,7 +45,7 @@ public:
     SMART_ENUM(FilterTypes,
                MultiScaleLarge, MultiScaleMedium, MultiScaleSmall,
                TwoScaleLarge, TwoScaleMedium, TwoScaleSmall);
-    PB_CONFIG_PARAM(FilterTypes, Filter, FilterTypes::TwoScaleMedium);
+    PB_CONFIG_PARAM(FilterTypes, Filter, FilterTypes::MultiScaleLarge);
 
     SMART_ENUM(MethodName, HostMultiScale, DeviceMultiScale, NoOp);
 
