@@ -150,10 +150,10 @@ std::string PeakRSSinGiB()
 }
 
 PpaProgressMessage::Table stages = {
-    { "Startup",         { false, 0, 1  }},
-    { "ParseBazHeaders", { false, 1, 3  }},
-    { "Analyze",         {  true, 2, 95 }},
-    { "Shutdown",        { false, 3, 1  }}
+        {"Startup",         {false, 0, 1}},
+        {"ParseBazHeaders", {false, 1, 3}},
+        {"Analyze",         {true,  2, 95}},
+        {"Shutdown",        {false, 3, 1}}
 };
 
 } // anonymous
@@ -172,13 +172,15 @@ ConvertBaz2Bam::ConvertBaz2Bam(std::shared_ptr<UserParameters>& user)
     , threadpoolContinue_(true)
     , loggingContinue_(true)
     , numProcessedZMWs_(0)
+    , maxNumZmwsToProcess_(user->maxNumZmwsToProcess)
     , threadCount_(0)
     , ppaAlgoConfig_(std::make_shared<PpaAlgoConfig>())
     , user_(user)
     , raiiSignalHander_(SIGPIPE,abortNow_)
-{
-    maxNumZmwsToProcess_ = user_->maxNumZmwsToProcess;
-}
+    , progressMessage_(std::make_unique<PpaProgressMessage>(stages,
+                                                            "PA_PPA_STATUS",
+                                                            user_->statusFileDescriptor))
+{ }
 
 void ConvertBaz2Bam::ParseRMD()
 {
@@ -225,17 +227,8 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
     }
 }
 
-void ConvertBaz2Bam::InitProgressMessage()
-{
-    progressMessage_ = std::make_unique<PpaProgressMessage>(stages,
-                                                            "PA_PPA_STATUS",
-                                                            user_->statusFileDescriptor);
-}
-
 int ConvertBaz2Bam::Run()
 {
-    InitProgressMessage();
-
     {
         PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, 300);
 
@@ -375,7 +368,7 @@ int ConvertBaz2Bam::Run()
     // We use the analyze status reporter which will increment based on the number of ZMWS
     // processed for the logging thread but for input parsing we simply just send an update with
     // the counter set to 0.
-    PpaStageReporter analyzeRpt(progressMessage_.get(), PpaStages::Analyze, NumZmwsToProcess(), 30);
+    PpaThreadSafeStageReporter analyzeRpt(progressMessage_.get(), PpaStages::Analyze, NumZmwsToProcess(), 30);
 
     StartLoggingThread(analyzeRpt);
 
@@ -491,7 +484,7 @@ using DiskProfiler = PacBio::Dev::Profile::ScopedProfilerChain<READ_PROFILES>;
 /**
  * @brief Orchestrates processing batches of ZMW-slices.
  */
-void ConvertBaz2Bam::ParseInput(PpaStageReporter& analyzeRpt)
+void ConvertBaz2Bam::ParseInput(PpaThreadSafeStageReporter& analyzeRpt)
 {
     size_t iterations = 0;
     // Loop as long as file has not been read completely
@@ -570,7 +563,7 @@ void ConvertBaz2Bam::ParseInput(PpaStageReporter& analyzeRpt)
     DiskProfiler::FinalReport();
 }
 
-void ConvertBaz2Bam::StartLoggingThread(PpaStageReporter& analyzeRpt)
+void ConvertBaz2Bam::StartLoggingThread(PpaThreadSafeStageReporter& analyzeRpt)
 {
     using namespace std::chrono;
     

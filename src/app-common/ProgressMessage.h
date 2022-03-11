@@ -183,11 +183,37 @@ public:
             Update(counter);
         }
 
-
     private:
         std::mutex reportMutex_;
         ProgressMessage* pm_;
         Output currentStage_;
+    };
+
+    class ThreadSafeStageReporter
+    {
+    public:
+        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
+        : sr_(pm, s, counterMax, timeoutForNextStatus)
+        { }
+
+        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
+        : ThreadSafeStageReporter(pm, s, 1, timeoutForNextStatus)
+        { }
+
+        void Update(uint64_t counter)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sr_.Update(counter);
+        }
+
+        void Update(uint16_t counter, double timeoutForNextStatus)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sr_.Update(counter, timeoutForNextStatus);
+        }
+    private:
+        std::mutex mutex_;
+        StageReporter sr_;
     };
 
 private:

@@ -51,6 +51,7 @@ SMART_ENUM(PpaStages,
 
 using PpaProgressMessage = PacBio::IPC::ProgressMessage<PpaStages>;
 using PpaStageReporter = PpaProgressMessage::StageReporter;
+using PpaThreadSafeStageReporter = PpaProgressMessage::ThreadSafeStageReporter;
 
 }}} // namespace PacBio::Primary::Postprimary
 

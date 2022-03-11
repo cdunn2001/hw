@@ -219,13 +219,13 @@ private: // const methods
 
 private: // modifying methods
     /// Orchestrates processing batches of ZMW-slices.
-    void ParseInput(PpaStageReporter& analyzeRpt);
+    void ParseInput(PpaThreadSafeStageReporter& analyzeRpt);
 
     void ParseRMD();
 
     void InitPpaAlgoConfig();
 
-    void StartLoggingThread(PpaStageReporter& analyzeRpt);
+    void StartLoggingThread(PpaThreadSafeStageReporter& analyzeRpt);
 
     /// \brief Single thread of thread pool.
     /// \details Responsible for taking a batch of ZMWs of the readList_,
@@ -243,8 +243,6 @@ private: // modifying methods
     void CheckInputFile();
 
     void PopulateWorkerThreadPool();
-
-    void InitProgressMessage();
 };
 
 }}} // ::PacBio::Primary::Postprimary
