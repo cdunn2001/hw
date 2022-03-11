@@ -919,6 +919,7 @@ int main(int argc, char* argv[])
         bc->Run();
 
     } catch (const std::exception& ex) {
+        std::cerr << "Exception caught: " << ex.what() << std::endl;
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }
