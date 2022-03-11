@@ -114,7 +114,7 @@ __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
     blVar += sigMean * CoreDMEstimator::shotVarCoeff;
     blVar += sigMean * sigMean * excessNoiseCV2;
-    return blVar;
+    return min(60000.f, blVar);
 }
 
 template <typename VF>
@@ -690,7 +690,7 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     auto blMean = mask ? Mean(blsa)     : m0blm.mean;
     auto blVar  = mask ? Variance(blsa) : m0blm.var;
 
-    blVar = max(blVar, baseConfig.signalScaler);
+    blVar = min(60000.f, max(blVar, baseConfig.signalScaler));
 
     auto& detectionModes = model->analogs;
 
@@ -1064,6 +1064,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
         // M-step
 
+        c_i[0] = max(0.0001f, c_i[0]);
         // Mixing fractions.
         for (int i = 0; i < nModes; ++i)
         {
@@ -1142,7 +1143,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     //PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
     bgMode.mean = muEst[0];
     //PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
-    bgMode.var = varEst[0];
+    bgMode.var = min(60000.f, varEst[0]);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         auto& pda = pulseModes[a];
@@ -1152,7 +1153,7 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
         //PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
         pda.mean = muEst[i];
         //PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
-        pda.var = varEst[i];
+        pda.var = min(60000.f, varEst[i]);
     }
 
     // Note: this is disabled until we have a chi squared cfd on the gpu.
@@ -1263,14 +1264,14 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     model.BaselineMode().weights[threadIdx.x] = blWeight;
     for (int a = 0; a < numAnalogs; ++a)
     {
-        const auto aMean = blMean + staticConfig.analogs[a].relAmplitude * refSignal;
+        const auto aMean = max(blMean + staticConfig.analogs[a].relAmplitude * refSignal, 0);
         auto& aMode = model.AnalogMode(a);
         aMode.means[threadIdx.x] = aMean;
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         auto cv = Analog(a).excessNoiseCV;
-        aMode.vars[threadIdx.x] = ModelSignalCovar(cv*cv, aMean, blVar);
+        aMode.vars[threadIdx.x] = min(60000, ModelSignalCovar(cv*cv, aMean, blVar));
 
         aMode.weights[threadIdx.x] = aWeight;
     }

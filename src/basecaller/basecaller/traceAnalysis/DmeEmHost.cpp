@@ -177,7 +177,7 @@ void DmeEmHost::PrelimEstimate(const BaselinerStats& baselinerStats,
     const StatAccumulator<FloatVec>& blsa = baselinerStats.BaselineFramesStats();
 
     auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
-    blVar = max(blVar, BaselineVarianceMin());
+    blVar = min(60000.f, max(blVar, BaselineVarianceMin()));
     auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
     assert(all(isfinite(blMean)));
     assert(all(isfinite(blVar)) && all(blVar > 0.0f));
@@ -474,6 +474,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         // M-step
 
         // Mixing fractions.
+        c_i(0) = max(0.0001f, c_i(0));
         rho = c_i / n_j_sum;
 
         // Background mean.
@@ -550,7 +551,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
     bgMode.SignalMean(muEst[0]);
     PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
-    bgMode.SignalCovar(varEst[0]);
+    bgMode.SignalCovar(min(60000.f, varEst[0]));
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         auto& pda = pulseModes[a];
@@ -560,7 +561,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
         pda.SignalMean(muEst[i]);
         PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
-        pda.SignalCovar(varEst[i]);
+        pda.SignalCovar(min(60000.f, varEst[i]));
     }
 
     if (gTestFactor_ >= 0.0f) dmeDx.gTest = Gtest(hist, workModel);
@@ -869,10 +870,10 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
     {
         auto& aMode = ldm->AnalogMode(a);
         aMode.weights = analogModeWeight;
-        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        const auto aMean = max(0, blMean + analogs_[a].relAmplitude * refSignal);
         aMode.means = aMean;
         const auto cv2 = pow2(Analog(a).excessNoiseCV);
-        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
+        aMode.vars = min(60000, LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar));
     }
 }
 

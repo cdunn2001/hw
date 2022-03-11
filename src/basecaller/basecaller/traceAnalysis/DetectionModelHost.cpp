@@ -247,7 +247,7 @@ VF DetectionModelHost<VF>::ModelSignalCovar(
     VF r {blVar};
     r += sigMean * Basecaller::CoreDMEstimator::shotVarCoeff;
     r += pow2(sigMean) * excessNoiseCV2;
-    return r;
+    return min(60000.f, r);
 }
 
 template <typename VF>
