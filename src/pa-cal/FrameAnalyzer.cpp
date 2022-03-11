@@ -62,7 +62,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
         return false;
     }
 
-    const auto& stats = AnalyzeChunk(chunk, runner.GetUnitCellProperties());
+    const auto& stats = AnalyzeChunk(chunk, source->Pedestal(), runner.GetUnitCellProperties());
 
     assert(stats.mean.shape()[0] == stats.variance.shape()[0]);
     assert(stats.mean.shape()[1] == stats.variance.shape()[1]);
@@ -110,8 +110,6 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
 }
 
 // Eigen::Matrix has fortran memory layout by default
-// Unsigned one byte data is interpreted as _signed_ int8 to simplify 
-// conversion to and comparison with floating point results
 typedef Eigen::Matrix<int16_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 typedef Eigen::Matrix<uint8_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXub;
 
@@ -122,47 +120,53 @@ Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXs>& map)
 
 Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXub>& map)
 {
-    return (map.array() - UINT8_MAX - 1).cast<float>();
+    return map.cast<float>();
 }
 
-
 template<typename M, typename S> 
-boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChunk& chunk)
+boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal)
 {
-    const auto& layout = (chunk.cbegin())->Layout();
     auto firstChunkZmw = (chunk.cbegin())->StartZmw();
     auto lastChunkZmw  = (chunk.cend() - 1)->StopZmw();
     auto zmwPerChunk   = lastChunkZmw - firstChunkZmw;
-    auto framesPerBlock = layout.NumFrames();
 
     boost::multi_array<float, 2> chunkMoms(boost::extents[2][zmwPerChunk], boost::c_storage_order());
 
-    for (const SensorPacket& batch : chunk)
+    for (const SensorPacket& packet : chunk)
     {
         // Find packet parameters
-        auto batchStartZmw  = batch.StartZmw();
-        auto batchEndZmw    = batch.StopZmw();
-        auto zmwPerBatch    = batchEndZmw - batchStartZmw;
+        size_t startZmw       = packet.StartZmw();
+        PacketLayout pkLayout = packet.Layout();
+        size_t framesPerBlock = pkLayout.NumFrames();
+        size_t zmwPerBlock    = pkLayout.BlockWidth();
 
-        // Setup source data
-        auto srcDataPtr = reinterpret_cast<const S*>(batch.BlockData(0).Data());
-        Eigen::Map<const M> mapBatchView(srcDataPtr, zmwPerBatch, framesPerBlock);
-        Eigen::MatrixXf batchMat = convM2Float(mapBatchView);
+        for (size_t i = 0; i < pkLayout.NumBlocks(); ++i)
+        {
+            // Setup source data
+            SensorPacket::ConstDataView blockView = packet.BlockData(i);
+            auto srcDataPtr = reinterpret_cast<const S*>(blockView.Data());
+            Eigen::Map<const M> srcBlockMap(srcDataPtr, zmwPerBlock, framesPerBlock);
 
-        // Setup destination data
-        auto dstMomPtr = chunkMoms[boost::indices[0][batchStartZmw]].origin();
-        Eigen::Map<Eigen::MatrixXf> batchMomView(dstMomPtr, zmwPerBatch, 2);
+            // Setup destination data
+            size_t blockStartZmw = startZmw + i * zmwPerBlock;
+            auto dstMomPtr = chunkMoms[boost::indices[0][blockStartZmw]].origin();
+            Eigen::Map<Eigen::MatrixXf> dstMomMap(dstMomPtr, zmwPerChunk, 2);
 
-        // Find moments
-        batchMomView.col(0) = batchMat.rowwise().mean().array();
-        auto varTmp = (batchMat.colwise() - batchMomView.col(0)).array();
-        batchMomView.col(1) = varTmp.square().rowwise().sum().array() / (framesPerBlock - 1);
+            // Find moments
+            Eigen::MatrixXf blockMat = convM2Float(srcBlockMap);
+            auto mom0Tmp = blockMat.rowwise().mean();
+            auto mom1Tmp = (blockMat.colwise() - mom0Tmp).array();
+            dstMomMap.col(1).head(zmwPerBlock) = mom1Tmp.square().rowwise().sum().array() / (framesPerBlock - 1);
+
+            // Store mean adjusted for the offset
+            dstMomMap.col(0).head(zmwPerBlock) = mom0Tmp.array() - pedestal;
+        }
     }
 
     return chunkMoms;
 }
 
-FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk,
+FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal,
                         const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props)
 {
     auto firstChunkZmw = (chunk.cbegin())->StartZmw();
@@ -182,25 +186,25 @@ FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk,
     assert(size_t(numZmwX*numZmwY) == zmwPerChunk);
     assert(props.size() == zmwPerChunk);
 
-    const auto& layout = (chunk.cbegin())->Layout();
+    const auto& dataType = (chunk.cbegin())->Layout().Encoding();
      
-    auto chunkMoms = (layout.Encoding() == PacketLayout::INT16) ? 
-        CalcChunkMoments<MatrixXs,  MatrixXs::Scalar>(chunk) :
-        CalcChunkMoments<MatrixXub, MatrixXub::Scalar>(chunk);
+    auto chunkMoms = (dataType == PacketLayout::INT16) ?
+        CalcChunkMoments<MatrixXs,  MatrixXs::Scalar>(chunk, pedestal) :
+        CalcChunkMoments<MatrixXub, MatrixXub::Scalar>(chunk, pedestal);
 
     // Stat moments have to be returned as separate memory blocks
-    // They also may be rugged so reshaping is not allowed
-    boost::multi_array<float, 2> chunkMean(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
-    boost::multi_array<float, 2>  chunkVar(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
-    auto outMoms = std::make_tuple(&chunkMean, &chunkVar);
+    // They also may be rugged so reshaping is not an option
+    boost::multi_array<float, 2> chunkMom0(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
+    boost::multi_array<float, 2> chunkMom1(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
+    decltype(chunkMom0)* outMoms[] = { &chunkMom0, &chunkMom1 };
 
-    for (size_t i=0; i < zmwPerChunk; i++)
+    for (size_t z=0; z < zmwPerChunk; z++)
     {
-        (*std::get<0>(outMoms))[props[i].x][props[i].y] = chunkMoms[0][i];
-        (*std::get<1>(outMoms))[props[i].x][props[i].y] = chunkMoms[1][i];
+        (*outMoms[0])[props[z].x][props[z].y] = chunkMoms[0][z];
+        (*outMoms[1])[props[z].x][props[z].y] = chunkMoms[1][z];
     }
 
-    return FrameStats { chunkMean, chunkVar };;
+    return FrameStats { chunkMom0, chunkMom1 };;
 }
 
 } // namespace PacBio::Calibration

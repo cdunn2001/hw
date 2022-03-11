@@ -34,9 +34,10 @@
 #include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/datasource/MallocAllocator.h>
 
-#include "PaCalConfig.h"
-#include "PaCalConstants.h"
-#include "SignalSimulator.h"
+#include <pa-cal/PaCalConfig.h>
+#include <pa-cal/PaCalConstants.h>
+#include <pa-cal/SignalSimulator.h>
+
 
 // Eigen::Matrix has fortran memory layout by default
 // Unsigned one byte data is interpreted as _signed_ int8 to simplify 
@@ -93,12 +94,13 @@ void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packe
 
     for (size_t i = 0; i < pkLayout.NumBlocks(); ++i)
     {
+        // Setup source data
         SensorPacket::ConstDataView blockView = packet.BlockData(i);
+        auto srcDataPtr = reinterpret_cast<const S*>(blockView.Data());
+        Eigen::Map<const M> srcBlockMap(srcDataPtr, zmwPerBlock, framesPerBlock);
 
-        auto dataPtr = reinterpret_cast<const S*>(blockView.Data());
-        Eigen::Map<const M> mapView(dataPtr, zmwPerBlock, framesPerBlock);
-        Eigen::MatrixXf blkm = convM2Float(mapView);
-
+        // Find moments
+        Eigen::MatrixXf blkm = convM2Float(srcBlockMap);
         auto blkMean = blkm.rowwise().mean();
         auto blkVar1 = (blkm.colwise() - blkMean).array().square().rowwise().sum();
         auto blkVar = blkVar1 / (framesPerBlock - 1);

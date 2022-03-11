@@ -23,8 +23,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "FrameAnalyzer.h"
-
 #include <random>
 #include <vector>
 #include <algorithm>
@@ -39,26 +37,25 @@
 #include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/datasource/MallocAllocator.h>
 
-#include "PaCalConfig.h"
-#include "PaCalConstants.h"
-#include "SignalSimulator.h"
+#include <pa-cal/PaCalConfig.h>
+#include <pa-cal/PaCalConstants.h>
+#include <pa-cal/FrameAnalyzer.h>
 
 
 using namespace PacBio::Calibration;
 using namespace PacBio::DataSource;
 
 
-TEST(FrameAnalyzer, OneBatch)
+template<typename T>
+void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
 {
-    typedef int16_t T;
-
-    size_t numBlocks       = 1;
+    size_t numBlocks       = 4;
     size_t framesPerBlock  = 512;
     size_t chipWidth       = 16;  // 16 * 4 = 64 == laneSize
 
-                                /*  lanesPerPool  framesPerBlock     laneSize  */
+                                          /*  lanesPerPool  framesPerBlock     laneSize  */
     std::array<size_t, 3> layoutDims =    { numBlocks,      framesPerBlock,    laneSize };
-    PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, PacketLayout::INT16, layoutDims};
+    PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, dataType, layoutDims};
 
     auto numZmw = layout.NumZmw();
     DataSourceBase::UnitCellProperties prop = { ZmwFeatures::Sequencing, 0, 0, 0 };
@@ -66,8 +63,8 @@ TEST(FrameAnalyzer, OneBatch)
 
     for (size_t z = 0; z < numZmw; ++z)
     {
-        auto lda = chipWidth;
-        auto coord = std::make_pair(z / lda, z % lda);  // Same as SignalSimulator::Id2Coords
+        auto lda = chipWidth;    // Same as SignalSimulator::Id2Coords
+        auto coord = std::make_pair(z / lda, z % lda);
         cellProps[z].x = coord.first;
         cellProps[z].y = coord.second;
     }
@@ -84,18 +81,20 @@ TEST(FrameAnalyzer, OneBatch)
     for (size_t i = 0; i < numBlocks; ++i)
     {
         auto zmwPerBlock    = layout.BlockWidth();
-        boost::multi_array_ref<T, 2> blockData(
+        boost::multi_array_ref<T, 2> blkData(
             reinterpret_cast<T*>(batchData.BlockData(i).Data()),
             boost::extents[zmwPerBlock][framesPerBlock],
             boost::fortran_storage_order());
 
         for (size_t z = 0; z < zmwPerBlock; ++z)
         {
-            std::uniform_int_distribution<int16_t> metadist(0, numZmw);
-            cellDists.emplace_back(std::make_pair(metadist(gnr), metadist(gnr) / 5 + 2));
+            std::uniform_int_distribution<int16_t> metadist(0, 64);
+            auto mdist = std::make_pair(96 + metadist(gnr), metadist(gnr) % 17 + 3);
+            cellDists.emplace_back(mdist);
 
-            std::normal_distribution<> dist(cellDists.back().first, cellDists.back().second);
-            std::generate(blockData[z].begin(), blockData[z].end(), std::bind(dist, gnr));
+            std::normal_distribution<> dist(mdist.first, mdist.second);
+            std::generate(blkData[z].begin(), blkData[z].end(), std::bind(dist, gnr));
+            std::for_each(blkData[z].begin(), blkData[z].end(), [=](auto& x) { x += pedestal; });
         }
     }
 
@@ -103,18 +102,33 @@ TEST(FrameAnalyzer, OneBatch)
                                     (chunkIdx + 1) * layout.NumFrames());
     chunk.SetZmwRange(0, numZmw);
     chunk.AddPacket(std::move(batchData));
-    assert(chunk.HasFullPacketCoverage());
+    ASSERT_TRUE(chunk.HasFullPacketCoverage());
 
-    const auto& stats = AnalyzeChunk(chunk, cellProps);
+    const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps);
 
     for (size_t z = 0; z < numZmw; ++z)
     {
-        auto [ x, y ] = std::make_pair(cellProps[z].x, cellProps[z].y);
+        auto [ x, y ]            = std::make_pair(cellProps[z].x, cellProps[z].y);
         auto [ expMean, expStd ] = cellDists[z];
         auto [ actMean, actVar ] = std::make_pair(stats.mean[x][y], stats.variance[x][y]);
-        
-        EXPECT_NEAR(actMean, expMean,        6 * expStd / std::sqrt(framesPerBlock) + expStd / 2);
-        EXPECT_NEAR(actVar,  expStd*expStd,  6 * expStd);
-    }
 
+        auto confSigma = 4.5;
+        auto wtt = (expMean - actMean) / std::sqrt((actVar + expStd) / framesPerBlock);
+        EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
+    }
 }
+
+
+class AnalyzeChunkTest : public testing::TestWithParam<int16_t> {};
+
+TEST_P(AnalyzeChunkTest, OneBatch16)
+{
+    TestAnalyzeChunk<int16_t>(PacketLayout::INT16, GetParam());
+}
+
+TEST_P(AnalyzeChunkTest, OneBatch8)
+{
+    TestAnalyzeChunk<uint8_t>(PacketLayout::UINT8, GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(FrameAnalyzerSuite, AnalyzeChunkTest, testing::Values(-10, 0, 7));

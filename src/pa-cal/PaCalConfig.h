@@ -45,7 +45,7 @@ struct SimInputConfig : PacBio::Configuration::PBConfig<SimInputConfig>
     PB_CONFIG_PARAM(uint32_t, nRows, 1000);
     PB_CONFIG_PARAM(uint32_t, nCols, 1000);
 
-    PB_CONFIG_PARAM(uint32_t, Pedestal, 0);
+    PB_CONFIG_PARAM(int16_t, Pedestal, 0);
 
     // TODO add params to control characteristics of simulated data?
 
