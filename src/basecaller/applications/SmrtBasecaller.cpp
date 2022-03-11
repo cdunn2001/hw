@@ -221,6 +221,7 @@ private:
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
+                WXIPCDataSource::WaitForDaemon(wx2SourceConfig);
                 return CreateSharedHugePinnedAllocator(config_.source.GetEnum().toString(),
                                                        WXIPCDataSource::CreateAllocator(wx2SourceConfig),
                                                        CacheMode::PRIVATE_CACHE);
