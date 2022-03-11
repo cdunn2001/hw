@@ -195,8 +195,10 @@ void ConvertBaz2Bam::ParseRMD()
     }
     catch (const InvalidSequencingChemistryException&)
     {
-        std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
-        progressMessage_->Exception("INVALID_SEQUENCING_CHEMISTRY_EXCEPTION");
+        Json::Value j;
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["message"] = "INVALID_SEQUENCING_CHEMISTRY_EXCEPTION";
+        progressMessage_->Exception(j.asString());
         throw;
     }
 }
@@ -293,9 +295,11 @@ int ConvertBaz2Bam::Run()
         }
         catch (const std::exception& e)
         {
-            std::string uuid = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
             PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
-            progressMessage_->Exception(e.what());
+            Json::Value j;
+            j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+            j["message"] = e.what();
+            progressMessage_->Exception(j.asString());
             throw;
         }
 
@@ -444,22 +448,30 @@ int ConvertBaz2Bam::Run()
     }
     catch (const std::exception& ex)
     {
-        std::string uuid = rmd_->subreadSet.uniqueId;
-        progressMessage_->Exception(std::string("Exception in closing thread: ") + ex.what());
+        Json::Value j;
+        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["message"] = std::string("Exception in closing thread: ") + ex.what();
+        progressMessage_->Exception(j.asString());
         throw;
     }
 
     if (valid == Validation::CLOSED_TRUNCATED)
     {
-        std::string uuid = rmd_->subreadSet.uniqueId;
-        progressMessage_->Exception("TRUNCATED_BAM");
-        PBLOG_ERROR << "TRUNCATED_BAM";
+        std::string message = "TRUNCATED_BAM";
+        Json::Value j;
+        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["message"] = message;
+        progressMessage_->Exception(j.asString());
+        PBLOG_ERROR << message;
     }
     else if (valid == Validation::NOT_RUN)
     {
-        std::string uuid = rmd_->subreadSet.uniqueId;
-        progressMessage_->Exception("VALIDATION_NOTRUN");
-        PBLOG_ERROR << "VALIDATION_NOTRUN";
+        std::string message = "VALIDATION_NOTRUN";
+        Json::Value j;
+        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["message"] = message;
+        progressMessage_->Exception(j.asString());
+        PBLOG_ERROR << message;
     }
 
     shutdownRpt.Update(1);
