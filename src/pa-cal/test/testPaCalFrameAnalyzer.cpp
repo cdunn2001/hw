@@ -40,6 +40,7 @@
 #include <pa-cal/PaCalConfig.h>
 #include <pa-cal/PaCalConstants.h>
 #include <pa-cal/FrameAnalyzer.h>
+#include <pa-cal/SignalSimulator.h>
 
 
 using namespace PacBio::Calibration;
@@ -49,7 +50,7 @@ using namespace PacBio::DataSource;
 template<typename T>
 void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
 {
-    size_t numBlocks       = 4;
+    size_t numBlocks       = 3;
     size_t framesPerBlock  = 512;
     size_t chipWidth       = 16;  // 16 * 4 = 64 == laneSize
 
@@ -89,7 +90,7 @@ void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
         for (size_t z = 0; z < zmwPerBlock; ++z)
         {
             std::uniform_int_distribution<int16_t> metadist(0, 64);
-            auto mdist = std::make_pair(96 + metadist(gnr), metadist(gnr) % 17 + 3);
+            auto mdist = std::make_pair(96 + metadist(gnr), metadist(gnr) % 13 + 4);
             cellDists.emplace_back(mdist);
 
             std::normal_distribution<> dist(mdist.first, mdist.second);
@@ -112,9 +113,52 @@ void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
         auto [ expMean, expStd ] = cellDists[z];
         auto [ actMean, actVar ] = std::make_pair(stats.mean[x][y], stats.variance[x][y]);
 
-        auto confSigma = 4.5;
-        auto wtt = (expMean - actMean) / std::sqrt((actVar + expStd) / framesPerBlock);
+        auto confSigma = 3.2;
+        auto wtt = (expMean - actMean) / std::sqrt((actVar + expStd*expStd) / framesPerBlock);
         EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
+    }
+}
+
+void TestSimAnalyze(PacketLayout::EncodingFormat dataType, int16_t pedestal)
+{
+    size_t numBlocks       = 4;
+    size_t framesPerBlock  = 512;
+                                          /*  lanesPerPool  framesPerBlock     laneSize  */
+    std::array<size_t, 3> layoutDims =    { numBlocks,      framesPerBlock,    laneSize };
+    PacketLayout layout{PacketLayout::BLOCK_LAYOUT_DENSE, dataType, layoutDims};
+
+    SimInputConfig simConf;
+    simConf.nRows = 36;
+    simConf.nCols = 32;
+    simConf.Pedestal = pedestal;
+
+    DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
+    cfg.numFrames = framesPerBlock;
+
+    DataSourceSimulator source(std::move(cfg), std::move(simConf));
+
+    source.Start();
+    auto cellProps = source.GetUnitCellProperties();
+
+    while (source.IsRunning())
+    {
+        source.ContinueProcessing();
+        SensorPacketsChunk chunk;
+        if (source.PopChunk(chunk, std::chrono::milliseconds(10)))
+        {
+            const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps);
+
+            for (size_t z = chunk.StartZmw(); z < chunk.StopZmw(); ++z)
+            {
+                auto [ x, y ]            = std::make_pair(cellProps[z].x, cellProps[z].y);
+                auto [ expMean, expStd ] = source.Id2Norm(z);
+                auto [ actMean, actVar ] = std::make_pair(stats.mean[x][y], stats.variance[x][y]);
+
+                auto confSigma = 3.2;
+                auto wtt = (expMean - actMean - pedestal) / std::sqrt((actVar + expStd*expStd) / framesPerBlock);
+                EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
+            }
+        }
     }
 }
 
@@ -129,6 +173,16 @@ TEST_P(AnalyzeChunkTest, OneBatch16)
 TEST_P(AnalyzeChunkTest, OneBatch8)
 {
     TestAnalyzeChunk<uint8_t>(PacketLayout::UINT8, GetParam());
+}
+
+TEST_P(AnalyzeChunkTest, SimPackets16)
+{
+    TestSimAnalyze(PacketLayout::INT16, GetParam());
+}
+
+TEST_P(AnalyzeChunkTest, SimPackets8)
+{
+    TestSimAnalyze(PacketLayout::UINT8, GetParam());
 }
 
 INSTANTIATE_TEST_SUITE_P(FrameAnalyzerSuite, AnalyzeChunkTest, testing::Values(-10, 0, 7));

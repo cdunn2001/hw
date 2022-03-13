@@ -64,12 +64,12 @@ DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfi
     const size_t numPools = (numZmw + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
     for (size_t i = 0; i < numPools - 1; ++i)
     {
-        layouts_.emplace(std::make_pair(i, nominalLayout));
+        layouts_.emplace(i, nominalLayout);
     }
 
     layoutDims[0] = (numZmw - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
     PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE, reqLayout.Encoding(), layoutDims);
-    layouts_.emplace(std::make_pair(numPools - 1, lastLayout));
+    layouts_.emplace(numPools - 1, lastLayout);
 
     currChunk_ = SensorPacketsChunk(0, framesPerBlock);
     currChunk_.SetZmwRange(0, numZmw);

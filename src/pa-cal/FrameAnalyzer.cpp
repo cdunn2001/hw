@@ -112,23 +112,18 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
 // Eigen::Matrix has fortran memory layout by default
 typedef Eigen::Matrix<int16_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 typedef Eigen::Matrix<uint8_t, Eigen::Dynamic, Eigen::Dynamic> MatrixXub;
+typedef Eigen::Map<Eigen::MatrixXf, Eigen::Unaligned, Eigen::OuterStride<Eigen::Dynamic>> StridedMapMatrixXf;
 
-Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXs>& map)
+template <typename M>
+Eigen::MatrixXf convM2Float(const M& map)
 {
-    return map.cast<float>();
-}
-
-Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXub>& map)
-{
-    return map.cast<float>();
+    return map.template cast<float>();
 }
 
 template<typename M, typename S> 
 boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal)
 {
-    auto firstChunkZmw = (chunk.cbegin())->StartZmw();
-    auto lastChunkZmw  = (chunk.cend() - 1)->StopZmw();
-    auto zmwPerChunk   = lastChunkZmw - firstChunkZmw;
+    auto zmwPerChunk   = chunk.NumZmws();
 
     boost::multi_array<float, 2> chunkMoms(boost::extents[2][zmwPerChunk], boost::c_storage_order());
 
@@ -150,16 +145,16 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
             // Setup destination data
             size_t blockStartZmw = startZmw + i * zmwPerBlock;
             auto dstMomPtr = chunkMoms[boost::indices[0][blockStartZmw]].origin();
-            Eigen::Map<Eigen::MatrixXf> dstMomMap(dstMomPtr, zmwPerChunk, 2);
+            StridedMapMatrixXf dstMomMap(dstMomPtr, zmwPerBlock, 2, Eigen::OuterStride<Eigen::Dynamic>(zmwPerChunk));
 
-            // Find moments
+            // Find moments ...
             Eigen::MatrixXf blockMat = convM2Float(srcBlockMap);
             auto mom0Tmp = blockMat.rowwise().mean();
             auto mom1Tmp = (blockMat.colwise() - mom0Tmp).array();
-            dstMomMap.col(1).head(zmwPerBlock) = mom1Tmp.square().rowwise().sum().array() / (framesPerBlock - 1);
 
-            // Store mean adjusted for the offset
-            dstMomMap.col(0).head(zmwPerBlock) = mom0Tmp.array() - pedestal;
+            // And store them
+            dstMomMap.col(1) = mom1Tmp.square().rowwise().sum().array() / (framesPerBlock - 1);
+            dstMomMap.col(0) = mom0Tmp.array() - pedestal; // Adjust mean for the offset
         }
     }
 
@@ -169,9 +164,7 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
 FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal,
                         const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props)
 {
-    auto firstChunkZmw = (chunk.cbegin())->StartZmw();
-    auto lastChunkZmw  = (chunk.cend() - 1)->StopZmw();
-    auto zmwPerChunk   = lastChunkZmw - firstChunkZmw;
+    auto zmwPerChunk   = chunk.NumZmws();
 
     auto numZmwX = props[0].x;
     auto numZmwY = props[0].y;

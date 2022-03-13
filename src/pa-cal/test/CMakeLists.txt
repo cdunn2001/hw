@@ -9,8 +9,6 @@ add_library(libTestPaCal OBJECT
     testPaCalFrameAnalyzer.cpp
 )
 
-include_directories(..)
-
 target_link_libraries(libTestPaCal
     PUBLIC
     lib-pa-cal

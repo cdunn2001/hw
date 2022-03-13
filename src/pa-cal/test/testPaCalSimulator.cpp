@@ -110,10 +110,11 @@ void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packe
         {
             size_t zmwIdx = startZmw + i * zmwPerBlock + z;
             auto [ expMean, expStd ] = source.Id2Norm(zmwIdx);
-            auto [ actMean, actStd ] = std::make_pair(blkMean(z), sqrt(blkVar(z)));
+            auto [ actMean, actVar ] = std::make_pair(blkMean(z), blkVar(z));
 
-            EXPECT_NEAR(actMean, expMean, 3*expStd*std::sqrt(framesPerBlock));
-            EXPECT_NEAR(actStd*actStd,  expStd*expStd, 3*expStd);
+            auto confSigma = 3.2;
+            auto wtt = (expMean - actMean) / std::sqrt((actVar + expStd*expStd) / framesPerBlock);
+            EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
         }
     }
 }

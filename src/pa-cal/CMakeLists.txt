@@ -2,10 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 cmake_policy(VERSION 3.8)
 cmake_policy(SET CMP0076 NEW)
 
-project (pa-ws
-    VERSION 0.0
-    LANGUAGES C CXX
-)
+project (pa-cal)
 
 enable_testing()
 
@@ -32,7 +29,6 @@ generate_config_header(kestrel-config.h PrimaryConfig)
 
 add_subdirectory(../common common)
 
-project (pa-cal)
 
 # The SOFTWARE_VERSION is used to create the RPM and installation directory, and it is reported
 # by the application and logged.

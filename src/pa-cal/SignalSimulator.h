@@ -84,7 +84,7 @@ public:
     std::pair<int16_t, int16_t> Id2Norm(size_t zmwId) const
     {
         return GetConfig().requestedLayout.Encoding() == DataSource::PacketLayout::INT16 ?
-            Id2NormInt16(zmwId) : Id2NormInt8(zmwId);
+            Id2Norm_<int16_t>(zmwId) : Id2Norm_<uint8_t>(zmwId);
     }
 
 private:
@@ -100,31 +100,20 @@ private:
     }
 
     // Functions Id2Norm* calculate parameters of normal distribution
-    // for the respective data type
-    std::pair<int16_t, int16_t> Id2NormInt16(size_t zmwId) const
+    // for a respective data type
+    template <typename T>
+    std::pair<int16_t, int16_t> Id2Norm_(size_t zmwId) const
     {
-        int16_t sring = 43;
+        constexpr auto typeMax = std::numeric_limits<T>::max();
+        constexpr int16_t sring = sizeof(T) == 1 ? 9 : 113;
         int32_t lda = simCfg_.nCols;
         int32_t off = simCfg_.Pedestal;
 
         auto [x, y] = Id2Coords(zmwId);
-        int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
-        int mring = INT16_MAX - 10*std; // Rebound 6 sigmas from the data borders
-        int16_t mean = 3 * std::abs<int16_t>(x - y) % mring + 5*std;
-        return { mean + off, std };
-    }
-
-    std::pair<int16_t, int16_t> Id2NormInt8(size_t zmwId) const
-    {
-        int16_t sring = 5;
-        int32_t lda = simCfg_.nCols;
-        int32_t off = simCfg_.Pedestal;
-
-        auto [x, y] = Id2Coords(zmwId);
-        int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 1;
-        int mring = INT8_MAX - 10*std;  // Rebound 6 sigmas from the data borders
-        int16_t mean =  std::abs<int16_t>(x - y) % mring + 5*std;
-        return { std::clamp(mean + off, 0, 255), std };
+        int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 3;
+        int mring = typeMax / 2 - 10*std; // Rebound 5 sigmas from the data borders
+        int16_t mean = sizeof(T) * std::abs<int16_t>(x - y) % mring + 5*std;
+        return { std::clamp<T>(mean + off, 0, typeMax), std };
     }
 
 private:
