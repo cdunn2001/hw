@@ -47,6 +47,20 @@ using namespace PacBio::Calibration;
 using namespace PacBio::DataSource;
 
 
+static void testDist(size_t z, float expMean, float actMean, float expVar, float actVar, size_t n)
+{
+    float confSigma;
+   
+    confSigma = 4.5;
+    auto stt = (expMean - actMean) / std::sqrt(actVar / n);
+    EXPECT_LE(std::abs(stt), confSigma) << "z: " << z << std::endl;
+
+    confSigma = 3.5;
+    auto varTest =  (expVar - actVar) / actVar / sqrt(2.0 / n);
+    EXPECT_LT(std::abs(varTest), confSigma) << "z: " << z << std::endl;
+}
+
+
 template<typename T>
 void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
 {
@@ -113,9 +127,7 @@ void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
         auto [ expMean, expStd ] = cellDists[z];
         auto [ actMean, actVar ] = std::make_pair(stats.mean[x][y], stats.variance[x][y]);
 
-        auto confSigma = 3.2;
-        auto wtt = (expMean - actMean) / std::sqrt((actVar + expStd*expStd) / framesPerBlock);
-        EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
+        testDist(z, expMean, actMean, expStd*expStd, actVar, framesPerBlock);
     }
 }
 
@@ -154,9 +166,7 @@ void TestSimAnalyze(PacketLayout::EncodingFormat dataType, int16_t pedestal)
                 auto [ expMean, expStd ] = source.Id2Norm(z);
                 auto [ actMean, actVar ] = std::make_pair(stats.mean[x][y], stats.variance[x][y]);
 
-                auto confSigma = 3.2;
-                auto wtt = (expMean - actMean - pedestal) / std::sqrt((actVar + expStd*expStd) / framesPerBlock);
-                EXPECT_LE(std::abs(wtt), confSigma) << "z: " << z << std::endl;
+                testDist(z, expMean, actMean + pedestal, expStd*expStd, actVar, framesPerBlock);
             }
         }
     }

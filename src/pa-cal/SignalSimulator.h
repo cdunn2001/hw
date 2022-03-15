@@ -104,16 +104,17 @@ private:
     template <typename T>
     std::pair<int16_t, int16_t> Id2Norm_(size_t zmwId) const
     {
-        constexpr auto typeMax = std::numeric_limits<T>::max();
+        constexpr int16_t typeMax = std::numeric_limits<T>::max();
         constexpr int16_t sring = sizeof(T) == 1 ? 9 : 113;
         int32_t lda = simCfg_.nCols;
         int32_t off = simCfg_.Pedestal;
 
         auto [x, y] = Id2Coords(zmwId);
         int16_t std  =  2 * std::abs<int16_t>(lda - y + x) % sring + 3;
-        int mring = typeMax / 2 - 10*std; // Rebound 5 sigmas from the data borders
+        int16_t mring = typeMax / 2 - 10*std; // Rebound 5 sigmas from the data borders
         int16_t mean = sizeof(T) * std::abs<int16_t>(x - y) % mring + 5*std;
-        return { std::clamp<T>(mean + off, 0, typeMax), std };
+        // Adjust mean for offset so that values don't wrap around
+        return { std::min<int16_t>(std::max<int16_t>(mean, mean + off), typeMax - mean - off), std };
     }
 
 private:
