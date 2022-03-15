@@ -198,7 +198,7 @@ void ConvertBaz2Bam::ParseRMD()
         Json::Value j;
         j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         j["message"] = "INVALID_SEQUENCING_CHEMISTRY_EXCEPTION";
-        progressMessage_->Exception(j.asString());
+        progressMessage_->Exception(j);
         throw;
     }
 }
@@ -224,9 +224,12 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
     }
     catch (const std::exception& e)
     {
-        progressMessage_->Exception(e.what());
+        Json::Value j;
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["message"] = e.what();
+        progressMessage_->Exception(j);
         PBLOG_ERROR << e.what();
-        throw PBExceptionRethrow("Unable to parse collection metadata",e);
+        throw PBExceptionRethrow("Unable to parse collection metadata", e);
     }
 }
 
@@ -295,11 +298,12 @@ int ConvertBaz2Bam::Run()
         }
         catch (const std::exception& e)
         {
-            PBLOG_ERROR << "Exception during ParseRMD or InitPpaAlgoConfig";
+            constexpr auto msg = "Exception during ParseRMD or InitPpaAlgoConfig";
+            PBLOG_ERROR << msg;
             Json::Value j;
-            j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
-            j["message"] = e.what();
-            progressMessage_->Exception(j.asString());
+            j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+            j["message"] = std::string(msg) + ": " + e.what();
+            progressMessage_->Exception(j);
             throw;
         }
 
@@ -313,8 +317,12 @@ int ConvertBaz2Bam::Run()
         }
         catch (const std::exception& e)
         {
-            PBLOG_ERROR << "Exception during SubreadLabel ctor or ChipLayout::Factory";
-            progressMessage_->Exception(e.what());
+            constexpr auto msg = "Exception during SubreadLabel ctor or ChipLayout::Factory";
+            PBLOG_ERROR << msg;
+            Json::Value j;
+            j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+            j["message"] = std::string(msg) + ": " + e.what();
+            progressMessage_->Exception(j);
             throw;
         }
 
@@ -449,9 +457,9 @@ int ConvertBaz2Bam::Run()
     catch (const std::exception& ex)
     {
         Json::Value j;
-        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         j["message"] = std::string("Exception in closing thread: ") + ex.what();
-        progressMessage_->Exception(j.asString());
+        progressMessage_->Exception(j);
         throw;
     }
 
@@ -459,18 +467,18 @@ int ConvertBaz2Bam::Run()
     {
         std::string message = "TRUNCATED_BAM";
         Json::Value j;
-        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         j["message"] = message;
-        progressMessage_->Exception(j.asString());
+        progressMessage_->Exception(j);
         PBLOG_ERROR << message;
     }
     else if (valid == Validation::NOT_RUN)
     {
         std::string message = "VALIDATION_NOTRUN";
         Json::Value j;
-        j["uuid"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         j["message"] = message;
-        progressMessage_->Exception(j.asString());
+        progressMessage_->Exception(j);
         PBLOG_ERROR << message;
     }
 
@@ -1002,15 +1010,21 @@ void ConvertBaz2Bam::CheckInputFile()
     {
         // Test if input file exists
         struct stat buffer;
+        Json::Value j;
+        j["acqId"] = rmd_ ? rmd_->subreadSet.uniqueId : "unknown";
         if (stat(inputFilePath.c_str(), &buffer) != 0)
         {
-            progressMessage_->Exception("INVALID_INPUT_FILE");
+            constexpr auto msg = "INVALID_INPUT_FILE";
+            j["message"] = std::string(msg);
+            progressMessage_->Exception(j);
             throw PBException("Input file \"" + inputFilePath + "\" does not exist.");
         }
         // Test if input is a directory, if so, die
         if ((buffer.st_mode & S_IFMT) == S_IFDIR)
         {
-            progressMessage_->Exception("INPUT_FILE_IS_DIRECTORY");
+            constexpr auto msg = "INPUT_FILE_IS_DIRECTORY";
+            j["message"] = std::string(msg);
+            progressMessage_->Exception(j);
             throw PBException("Input file \"" + inputFilePath + "\" is a directory.");
         }
     }
