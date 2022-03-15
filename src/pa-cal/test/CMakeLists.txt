@@ -6,9 +6,8 @@ include(pacbio-eigen)
 add_library(libTestPaCal OBJECT
     testPaCalProcess.cpp
     testPaCalSimulator.cpp
+    testPaCalFrameAnalyzer.cpp
 )
-
-include_directories(..)
 
 target_link_libraries(libTestPaCal
     PUBLIC

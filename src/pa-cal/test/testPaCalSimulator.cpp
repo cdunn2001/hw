@@ -34,9 +34,10 @@
 #include <pacbio/datasource/ZmwFeatures.h>
 #include <pacbio/datasource/MallocAllocator.h>
 
-#include "PaCalConfig.h"
-#include "PaCalConstants.h"
-#include "SignalSimulator.h"
+#include <pa-cal/PaCalConfig.h>
+#include <pa-cal/PaCalConstants.h>
+#include <pa-cal/SignalSimulator.h>
+
 
 // Eigen::Matrix has fortran memory layout by default
 // Unsigned one byte data is interpreted as _signed_ int8 to simplify 
@@ -83,6 +84,19 @@ Eigen::MatrixXf convM2Float(Eigen::Map<const MatrixXb>& map)
     return map2.cast<float>();
 }
 
+static void testDist(size_t z, float expMean, float actMean, float expVar, float actVar, size_t n)
+{
+    float confSigma;
+   
+    confSigma = 4.5;
+    auto stt = (expMean - actMean) / std::sqrt(actVar / n);
+    EXPECT_LE(std::abs(stt), confSigma) << "z: " << z << std::endl;
+
+    confSigma = 3.5;
+    auto varTest =  (expVar - actVar) / actVar / sqrt(2.0 / n);
+    EXPECT_LT(std::abs(varTest), confSigma) << "z: " << z << std::endl;
+}
+
 template<typename M, typename S> // MatrixXs or MatrixXb, scalar has to be separate
 void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packet)
 {
@@ -93,12 +107,13 @@ void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packe
 
     for (size_t i = 0; i < pkLayout.NumBlocks(); ++i)
     {
+        // Setup source data
         SensorPacket::ConstDataView blockView = packet.BlockData(i);
+        auto srcDataPtr = reinterpret_cast<const S*>(blockView.Data());
+        Eigen::Map<const M> srcBlockMap(srcDataPtr, zmwPerBlock, framesPerBlock);
 
-        auto dataPtr = reinterpret_cast<const S*>(blockView.Data());
-        Eigen::Map<const M> mapView(dataPtr, zmwPerBlock, framesPerBlock);
-        Eigen::MatrixXf blkm = convM2Float(mapView);
-
+        // Find moments
+        Eigen::MatrixXf blkm = convM2Float(srcBlockMap);
         auto blkMean = blkm.rowwise().mean();
         auto blkVar1 = (blkm.colwise() - blkMean).array().square().rowwise().sum();
         auto blkVar = blkVar1 / (framesPerBlock - 1);
@@ -108,10 +123,9 @@ void ValidatePacket(const DataSourceSimulator& source, const SensorPacket& packe
         {
             size_t zmwIdx = startZmw + i * zmwPerBlock + z;
             auto [ expMean, expStd ] = source.Id2Norm(zmwIdx);
-            auto [ actMean, actStd ] = std::make_pair(blkMean(z), sqrt(blkVar(z)));
+            auto [ actMean, actVar ] = std::make_pair(blkMean(z), blkVar(z));
 
-            EXPECT_NEAR(actMean, expMean, 3*expStd*std::sqrt(framesPerBlock));
-            EXPECT_NEAR(actStd*actStd,  expStd*expStd, 3*expStd);
+            testDist(z, expMean, actMean, expStd*expStd, actVar, framesPerBlock);
         }
     }
 }
@@ -128,17 +142,16 @@ TEST_P(DataSourceSimTest, Chip)
     simConf.nCols = params.nCols != 0 ? params.nCols : simConf.nCols;
     simConf.minInputDelaySeconds
                   = params.delay != 0 ? params.delay : simConf.minInputDelaySeconds;
-    simConf.dataType = params.numBits == 16 ? PacketLayout::INT16 : PacketLayout::UINT8;
+    auto dataType = params.numBits == 16 ? PacketLayout::INT16 : PacketLayout::UINT8;
 
-    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, 
-                        PacketLayout::EncodingFormat(simConf.dataType),
+    PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE, dataType,
                         {params.lanesPerPool, params.framesPerBlock, laneSize});
 
     DataSourceBase::Configuration cfg(layout, std::make_unique<MallocAllocator>());
     cfg.numFrames = params.totalFrames;
     DataSourceSimulator source(std::move(cfg), std::move(simConf));
 
-    auto validateBatch = params.numBits == 16 ? 
+    auto validateBatch = (layout.Encoding() == PacketLayout::INT16) ?
         ValidatePacket<MatrixXs, MatrixXs::Scalar> : ValidatePacket<MatrixXb, MatrixXb::Scalar>;
 
     SensorPacketsChunk chunk;
