@@ -136,8 +136,8 @@ public: // Structors
     }
 
 public:
-    void Assert(const DmeEmHost::FloatVec& expected, 
-                const DmeEmHost::FloatVec& actual, 
+    void Assert(const DmeEmHost::FloatVec& expected,
+                const DmeEmHost::FloatVec& actual,
                 const DmeEmHost::FloatVec& absErrTol,
                 const std::string& message)
     {
@@ -166,6 +166,7 @@ public:
                                                       SOURCE_MARKER());
 
         // Initialize the model using the initial fixed detection model host.
+        models.frameInterval = detModelStart->FrameInterval();
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             detModelStart->ExportTo(&models.data.GetHostView()[l]);
@@ -175,10 +176,13 @@ public:
         // with which further unit tests can be written to verify its contents.
         dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
-        // If we skip the "EmDevice" test prior to this point, we can get a
-        // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
-        // PTSD-1137.
-        GTEST_SKIP() << "Need to fix DME implementation. See PTSD-1133.";
+        if (std::is_same<Filter,DmeEmDevice>::value)
+        {
+              // If we skip the "EmDevice" test prior to this point, we can get a
+              // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
+              // PTSD-1137.
+              GTEST_SKIP() << "Need to fix DME implementation. See PTSD-1133.";
+        }
 
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
@@ -204,15 +208,16 @@ public:
                 Assert(expected, result, absErrTol, "Bad mixing fraction for baseline");
 
                 // Check baseline estimated means.
+                auto nFramesBg = nFrames.at(0);
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                absErrTol = 4.0f * sqrt(cdbm.SignalCovar() / nFramesBg / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad baseline mean for baseline");
 
                 // Check baseline estimated variance.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
+                absErrTol = 4.0f * sqrt(2.0f / (nFramesBg * cdbm.Weight() - 1.0f)) * expected;
                 Assert(expected, result, absErrTol, "Bad baseline variance for baseline");
             }
 
@@ -224,20 +229,21 @@ public:
                 const auto& cdbm = completeDataModel.DetectionModes()[a];
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
-                DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFrames));
+                auto nFramesA = nFrames.at(a);
+                DmeEmHost::FloatVec absErrTol = max(0.015f, 4.0f * sqrt(expected * (1.0f - expected) / nFramesA));
                 const auto astr = std::to_string(a);
                 Assert(expected, result, absErrTol, "Bad mixing fraction for analog " + astr);
 
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / nFramesA / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad mean for analog " + astr);
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
+                absErrTol = 4.0f * sqrt(2.0f / (nFramesA * cdbm.Weight() - 1.0f)) * expected;
                 Assert(expected, result, absErrTol, "Bad variance for analog " + astr);
             }
         }
@@ -428,7 +434,7 @@ private:
 using EmHost = TestDmeEm<DmeEmHost>;
 using EmDevice = TestDmeEm<DmeEmDevice>;
 
-TEST_P(EmHost, DISABLED_EstimateFiniteMixture)
+TEST_P(EmHost, EstimateFiniteMixture)
 {
     RunTest();
 }
