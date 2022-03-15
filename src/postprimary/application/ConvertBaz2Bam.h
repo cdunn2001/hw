@@ -57,6 +57,7 @@
 #include <postprimary/stats/ProductivityMetrics.h>
 
 #include "PpaAlgoConfig.h"
+#include "PpaProgressMessage.h"
 #include "UserParameters.h"
 
 #include "RAIISignalHandler.h"
@@ -171,42 +172,38 @@ private:   // data
         int64_t batchCounter_ = 0;
     };
 
-    std::atomic_bool                  abortNow_;
-    std::atomic_bool                  threadpoolContinue_;
-    std::atomic_bool                  ipcReceiverContinue_;
-    std::atomic_bool                  loggingContinue_;
-    std::atomic_int                   numProcessedZMWs_;
-    std::atomic<uint32_t>             maxNumZmwsToProcess_; ///< This is equivalent to sending an "abort" message
-                                      ///< after the number of ZMWs gets above this threshold. It is not a clean
-                                      ///< limit to the number of ZMWs processed because the way slices are processed
-                                      ///< in quantized units. It is only useful for profiling and not intended to
-                                      ///< be used in production runs.
-    std::atomic_int                   threadCount_;
-    std::mutex                        announceMutex_;
-    std::shared_ptr<PpaAlgoConfig>    ppaAlgoConfig_;
-    std::shared_ptr<PacBio::BAM::CollectionMetadata>   cmd_;
-    std::shared_ptr<RuntimeMetaData>  rmd_;
-    std::shared_ptr<UserParameters>   user_;
-    std::unique_ptr<BazReader>        bazReader_;
-    std::unique_ptr<SubreadLabeler>   subreadLabeler_;
-    std::unique_ptr<ResultWriter>     resultWriter_;
-    std::unique_ptr<InsertFinder>     insertFinder_;
-    std::unique_ptr<HQRegionFinder>   hqRegionFinder_;
-    std::unique_ptr<ProductivityMetrics> prodMetrics_;
-    std::unique_ptr<PacBio::Primary::ZmwStatsFile> zmwStatsFile_;
-    std::vector<std::thread>          threadpool_;
-    ReadList                          readList_;
-    std::thread                       loggingThread_;
-    std::thread                       ipcReceiverThread_;
-    bool                              outputLog = true;
-    std::vector<uint32_t>             whiteListZmwIds_;
-    bool                              performWhiteList_ = false;
-#ifdef BUILD_ZMQ
-    std::unique_ptr<IPC::MessageSocketPublisher> publisher_;
-#endif
-    RAIISignalHandler raiiSignalHander_;
-    double                            currentProgress_{0};
-    uint32_t                          numZmwsToProcess_{0};
+    std::atomic_bool                                    abortNow_;
+    std::atomic_bool                                    threadpoolContinue_;
+    std::atomic_bool                                    loggingContinue_;
+    std::atomic_int                                     numProcessedZMWs_;
+    ///< This is equivalent to sending an "abort" message
+    ///< after the number of ZMWs gets above this threshold. It is not a clean
+    ///< limit to the number of ZMWs processed because the way slices are processed
+    ///< in quantized units. It is only useful for profiling and not intended to
+    ///< be used in production runs.
+    std::atomic<uint32_t>                               maxNumZmwsToProcess_;
+    std::atomic_int                                     threadCount_;
+    std::shared_ptr<PpaAlgoConfig>                      ppaAlgoConfig_;
+    std::shared_ptr<PacBio::BAM::CollectionMetadata>    cmd_;
+    std::shared_ptr<RuntimeMetaData>                    rmd_;
+    std::shared_ptr<UserParameters>                     user_;
+    std::unique_ptr<BazReader>                          bazReader_;
+    std::unique_ptr<SubreadLabeler>                     subreadLabeler_;
+    std::unique_ptr<ResultWriter>                       resultWriter_;
+    std::unique_ptr<InsertFinder>                       insertFinder_;
+    std::unique_ptr<HQRegionFinder>                     hqRegionFinder_;
+    std::unique_ptr<ProductivityMetrics>                prodMetrics_;
+    std::unique_ptr<PacBio::Primary::ZmwStatsFile>      zmwStatsFile_;
+    std::vector<std::thread>                            threadpool_;
+    ReadList                                            readList_;
+    std::thread                                         loggingThread_;
+    bool                                                outputLog = true;
+    std::vector<uint32_t>                               whiteListZmwIds_;
+    bool                                                performWhiteList_ = false;
+    RAIISignalHandler                                   raiiSignalHander_;
+    double                                              currentProgress_{0};
+    uint32_t                                            numZmwsToProcess_{0};
+    std::unique_ptr<PpaProgressMessage>                 progressMessage_;
 
 private: // const methods
     uint32_t NumZmwsToProcess() const
@@ -222,13 +219,13 @@ private: // const methods
 
 private: // modifying methods
     /// Orchestrates processing batches of ZMW-slices.
-    void ParseInput();
+    void ParseInput(PpaThreadSafeStageReporter& analyzeRpt);
 
     void ParseRMD();
 
     void InitPpaAlgoConfig();
 
-    void StartLoggingThread();
+    void StartLoggingThread(PpaThreadSafeStageReporter& analyzeRpt);
 
     /// \brief Single thread of thread pool.
     /// \details Responsible for taking a batch of ZMWs of the readList_,
@@ -245,55 +242,7 @@ private: // modifying methods
 
     void CheckInputFile();
 
-    void InitIPC();
-
     void PopulateWorkerThreadPool();
-
-    inline void Announce(const std::string& label, const std::string& message)
-    {
-#ifdef BUILD_ZMQ
-        if (publisher_)
-        {
-            std::lock_guard<std::mutex> l(announceMutex_);
-            IPC::Announcement msg(label,message.c_str());
-            publisher_->Send(msg);
-        }  
-#endif
-    }
-
-    inline void DisconnectIPC()
-    {
-#ifdef BUILD_ZMQ
-        if (publisher_)
-        {
-            publisher_->LogicalDisconnect();
-            ipcReceiverContinue_ = false;
-            ipcReceiverThread_.join();
-        }
-#endif
-    }
-
-    inline void EmitHeartbeat()
-    {
-#ifdef BUILD_ZMQ
-        if (publisher_)
-        {
-            double timeNow = PacBio::Utilities::Time::GetMonotonicTime();
-            double timeDelta = timeNow - lastHeartbeatTime_;
-            if (timeDelta >= MinimumHeartbeatTime)
-            {
-                std::ostringstream message;
-                message << "{" <<
-                        "\"progress\":" << std::setprecision(12) << std::fixed << currentProgress_ << "," <<
-                        "\"acqId\":\"" << user_->uuid << "\"," <<
-                        "\"numZmwsSoFar\":" << numProcessedZMWs_ << "," <<
-                        "\"numZmwsTotal\":" << numZmwsToProcess_ << "}";
-                Announce("ppa/progress", message.str());
-                lastHeartbeatTime_ = timeNow;
-            }
-        }
-#endif
-    }
 };
 
 }}} // ::PacBio::Primary::Postprimary

@@ -148,8 +148,7 @@ int main(int argc, char* argv[])
                                             " compare to the UUID of the subreadset within the metadata XML. pa-ws "
                                             " will set this option for sanity checking.  baz2bam will return "
                                             " with an error if there is a mismatch.");
-        groupOpt.add_option("--progress").action_store_true().help(
-            "Post progress messages via ipc");
+        groupOpt.add_option("--statusfd").type_int().set_default(-1).help("Write status messages to this file description. Default -1 (null)");
         groupOpt.add_option("-j --nProcs").type_int().set_default(1).dest("threads").help(
             "Number of threads for parallel ZMW processing");
         groupOpt.add_option("-b --bamThreads").type_int().set_default(4).dest("bamthreads").help(
@@ -350,7 +349,7 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        user->zmq = options.get("progress");
+        user->statusFileDescriptor = options.get("statusfd");
         user->noStats = options.get("noStats");
         user->noStatsH5 = options.get("noStsH5");
         user->diagStatsH5 = options.get("diagStsH5");
