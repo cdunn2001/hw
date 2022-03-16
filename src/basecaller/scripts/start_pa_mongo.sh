@@ -201,4 +201,4 @@ set -x
 pwd
 smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output} --statusfd=1
 
-curl -X POST http://localhost:23602/shutdown
+curl -X POST http://localhost:23602/restart
