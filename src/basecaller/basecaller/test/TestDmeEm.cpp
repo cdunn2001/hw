@@ -165,7 +165,7 @@ public:
                                                       Cuda::Memory::SyncDirection::Symmetric,
                                                       SOURCE_MARKER());
 
-        // Initialize the model using the initial fixed detection model host.
+        // Initialize the model
         models.frameInterval = detModelStart->FrameInterval();
         for (unsigned int l = 0; l < poolSize; ++l)
         {
@@ -176,12 +176,12 @@ public:
         // with which further unit tests can be written to verify its contents.
         dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
-        if (std::is_same<Filter,DmeEmDevice>::value)
+        if (std::is_same_v<Filter,DmeEmDevice>)
         {
               // If we skip the "EmDevice" test prior to this point, we can get a
               // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
               // PTSD-1137.
-              GTEST_SKIP() << "Need to fix DME implementation. See PTSD-1133.";
+              GTEST_SKIP() << "Need to fix DME implementation for GPU. See PTSD-1154.";
         }
 
         const auto& nFrames = GetParam().nFrames;
