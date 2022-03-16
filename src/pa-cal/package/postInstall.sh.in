@@ -44,4 +44,7 @@ then
    chmod o+t /var/run/pacbio
 fi
 
+mkdir -p /etc/modulefiles/@SYSTEMD_ALIAS@
+envsubst '$RPM_INSTALL_PREFIX' < $RPM_INSTALL_PREFIX/etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@ > /etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@
+
 exit 0
