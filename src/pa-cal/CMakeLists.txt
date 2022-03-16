@@ -90,7 +90,7 @@ target_link_libraries(pa-cal
 )
 
 
-set(PREFIX /opt/pacbio/pa-ws-${SOFTWARE_VERSION})
+set(PREFIX /opt/pacbio/pa-cal-${SOFTWARE_VERSION})
 set(CMAKE_INSTALL_PREFIX ${PREFIX})
 
 
@@ -100,7 +100,7 @@ set(PACKAGE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/package)
 
 # common RPM settings
 set(CPACK_GENERATOR "RPM")
-set(CPACK_PACKAGE_SUMMARY "PacBio Primary Analysis Webservice")
+set(CPACK_PACKAGE_SUMMARY "PacBio Primary Analysis Calibration")
 set(CPACK_PACKAGE_VERSION_MAJOR ${SOFTWARE_MAJOR_VERSION})
 set(CPACK_PACKAGE_VERSION_MINOR ${SOFTWARE_MINOR_VERSION})
 set(CPACK_PACKAGE_VERSION_PATCH ${SOFTWARE_REVISION_VERSION})
@@ -116,16 +116,15 @@ set(CPACK_COMPONENTS_GROUPING "ONE_PER_GROUP")
 
 set(SYSTEM_EXEC pa-cal)
 set(SYSTEMD_ALIAS pacbio-pa-cal)
-set(SYSTEMD_SERVICE ${SYSTEMD_ALIAS}-${SOFTWARE_VERSION}.service)
-# set(SYSTEMD_DEPENDENCIES "wolverine.service")
-set(SYSTEMD_CONF_PATH /etc/pacbio/${SYSTEMD_ALIAS}.conf)
 
-configure_file(${PACKAGE_DIR}/postInstall.sh.in           ${CMAKE_CURRENT_BINARY_DIR}/postInstall.sh         @ONLY)
-configure_file(${PACKAGE_DIR}/preInstall.sh.in            ${CMAKE_CURRENT_BINARY_DIR}/preInstall.sh          @ONLY)
-configure_file(${PACKAGE_DIR}/preUninstall.sh.in          ${CMAKE_CURRENT_BINARY_DIR}/preUninstall.sh        @ONLY)
+configure_file(${PACKAGE_DIR}/postInstall.sh.in            ${CMAKE_CURRENT_BINARY_DIR}/postInstall.sh           @ONLY)
+configure_file(${PACKAGE_DIR}/preInstall.sh.in             ${CMAKE_CURRENT_BINARY_DIR}/preInstall.sh            @ONLY)
+configure_file(${PACKAGE_DIR}/preUninstall.sh.in           ${CMAKE_CURRENT_BINARY_DIR}/preUninstall.sh          @ONLY)
+configure_file(${PACKAGE_DIR}/pacbio-pa-cal.modulefile.in  ${CMAKE_CURRENT_BINARY_DIR}/pacbio-pa-cal.modulefile @ONLY)
 
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/pa-ws                  DESTINATION bin )
-install(PROGRAMS ${SYSTEMD_DIR}/precheck-pa-cal.sh                 DESTINATION bin )
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/pa-cal                  DESTINATION bin )
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pacbio-pa-cal.modulefile RENAME ${SOFTWARE_VERSION} DESTINATION etc/modulefiles/pacbio-pa-cal )
+
 
 # cf http://schneide.wordpress.com/2013/02/11/build-a-rpm-package-using-cmake/
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/install)
