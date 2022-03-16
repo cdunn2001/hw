@@ -164,7 +164,7 @@ __device__ void UpdateModel1(const ZmwDetectionModel& from,
     auto bm = a * tbm.mean + b * obm.mean;
     tbm.mean = bm;
 
-    auto bv = powf(tbm.var, a) + powf(obm.var, b);
+    auto bv = powf(tbm.var, a) * powf(obm.var, b);
     tbm.var = bv;
 
     // Four analogs with remaining weight equally partitioned 
@@ -177,7 +177,7 @@ __device__ void UpdateModel1(const ZmwDetectionModel& from,
 
         tdmi.weight = aw;
 
-        auto am = powf(tdmi.mean, a) + powf(obmi.mean, b);
+        auto am = powf(tdmi.mean, a) * powf(obmi.mean, b);
         tdmi.mean = am;
 
         auto cv = Analog(i).excessNoiseCV;
@@ -206,7 +206,7 @@ __device__ void UpdateModel2(const ZmwDetectionModel& from,
     auto bm = a * tbm.mean + b * obm.mean;
     tbm.mean = bm;
 
-    auto bv = powf(tbm.var, a) + powf(obm.var, b);
+    auto bv = powf(tbm.var, a) * powf(obm.var, b);
     tbm.var = bv;
 
     // Four analogs with remaining weight equally partitioned 
@@ -223,7 +223,7 @@ __device__ void UpdateModel2(const ZmwDetectionModel& from,
         const auto oXsnCVSq = XsnCoeffCVSq(obmi.mean, obmi.var, obm.var);
         const auto newXsnCVSq = a * tXsnCVSq  + b * oXsnCVSq;
 
-        auto am = powf(tdmi.mean, a) + powf(obmi.mean, b);
+        auto am = powf(tdmi.mean, a) * powf(obmi.mean, b);
         tdmi.mean = am;
 
         auto av = ModelSignalCovar(newXsnCVSq, am, bv);
