@@ -62,7 +62,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
         return false;
     }
 
-    const auto& stats = AnalyzeChunk(chunk, source->Pedestal(), runner.GetUnitCellProperties());
+    const auto& stats = AnalyzeChunk(chunk, runner.Pedestal(), runner.GetUnitCellProperties());
 
     assert(stats.mean.shape()[0] == stats.variance.shape()[0]);
     assert(stats.mean.shape()[1] == stats.variance.shape()[1]);
