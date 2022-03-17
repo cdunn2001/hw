@@ -148,7 +148,7 @@ private:    // Static functions
                       const LaneDetModelHost& refModel,
                       const LaneDetModelHost& modelEst);
 
-    static void EvolveModel(FrameIntervalType estimationFI,
+    static void EvolveModel(const FrameIntervalType estimationFI,
                             const BaselinerStats& blStats,
                             LaneDetModelHost* model);
 
