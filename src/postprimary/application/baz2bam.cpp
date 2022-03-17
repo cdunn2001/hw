@@ -133,13 +133,17 @@ int main(int argc, char* argv[])
             "\n\n"
             + cmakeGitHash() + " "
             + cmakeGitCommitDate());
-        parser.usage("-o outputPrefix -m rmd.xml [options] input.baz");
+        parser.usage("\n"
+                     "-o outputPrefix -m rmd.xml [options] input.baz"
+                     "\n"
+                     "-o outputPrefix -s subreadset.xml [options] input.baz");
 
         parser.version(versionString);
 
         auto groupMand = PacBio::Process::OptionGroup(parser, "Mandatory parameters");
         groupMand.add_option("-o").dest("output").metavar("STRING").help("Prefix of output filenames");
         groupMand.add_option("-m", "--metadata").dest("rmd").metavar("STRING").help("Runtime meta data filename");
+        groupMand.add_option("-s", "--subreadset").dest("subreadset").metavar("STRING").help("Input subreadset.xml");
         parser.add_option_group(groupMand);
 
         auto groupOpt = PacBio::Process::OptionGroup(parser, "Optional parameters");
@@ -337,12 +341,16 @@ int main(int argc, char* argv[])
         user->runtimeMetaDataFilePath = options["rmd"];
         if (user->runtimeMetaDataFilePath.empty())
         {
-            std::cerr << "WARNING: META DATA EMPTY." << std::endl;
-            problem = true;
+            user->subreadsetFilePath = options["subreadset"];
+            if (user->subreadsetFilePath.empty())
+            {
+                std::cerr << "WARNING: META DATA AND SUBREADSET EMPTY." << std::endl;
+                problem = true;
+            }
         }
         user->uuid = options["uuid"];
 
-        // Whiteliste processing
+        // Whitelist processing
         if (!options["number"].empty() && !options["id"].empty())
         {
             std::cerr << "Options --whitelistZmwNum and --whitelistZmwId are mutually exclusive" << std::endl;

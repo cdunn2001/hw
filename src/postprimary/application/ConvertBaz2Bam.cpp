@@ -188,10 +188,36 @@ void ConvertBaz2Bam::ParseRMD()
     // supplied by pbbam.
     try
     {
-        // Parse RuntimeMetaData
-        rmd_ = MetadataParser::ParseRMD(bazReader_->FileHeaderSet().BaseCallerVersion(),
-                                        bazReader_->FileHeaderSet().MovieName(),
-                                        user_);
+        if (!user_->runtimeMetaDataFilePath.empty())
+        {
+            // Parse RuntimeMetaData
+            rmd_ = MetadataParser::ParseRMD(bazReader_->FileHeaderSet().BaseCallerVersion(),
+                                            bazReader_->FileHeaderSet().MovieName(),
+                                            user_);
+        }
+        else
+        {
+            // Parse SubreadSet
+            const auto& sr = PacBio::BAM::DataSet(user_->subreadsetFilePath);
+
+            rmd_ = std::make_shared<RuntimeMetaData>();
+
+            rmd_->bindingKit = sr.Metadata().CollectionMetadata().BindingKit().PartNumber();
+            rmd_->sequencingKit = sr.Metadata().CollectionMetadata().SequencingKitPlate().PartNumber();
+            rmd_->basecallerVersion = bazReader_->FileHeaderSet().BaseCallerVersion();
+
+            static bool warnOnce = [](){ PBLOG_WARN << "Hardcoding platform to SequelII for run metadata XML"; return true; }();
+            (void)warnOnce;
+            rmd_->platform = Platform::SEQUELII;
+            rmd_->movieName = bazReader_->FileHeaderSet().MovieName();
+            rmd_->runId = sr.Metadata().CollectionMetadata().Attribute("Context");
+
+            rmd_->subreadSet.uniqueId = sr.UniqueId();
+            rmd_->subreadSet.createdAt = sr.CreatedAt();
+            rmd_->subreadSet.name = sr.Name();
+            rmd_->subreadSet.timeStampedName = sr.TimeStampedName();
+            rmd_->schemaVersion = sr.Version();
+        }
     }
     catch (const InvalidSequencingChemistryException&)
     {
@@ -207,8 +233,17 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
 {
     try
     {
-        cmd_ = std::make_shared<PacBio::BAM::CollectionMetadata>
-                (PacBio::BAM::RunMetadata::Collection(user_->runtimeMetaDataFilePath));
+        if (!user_->runtimeMetaDataFilePath.empty())
+        {
+            cmd_ = std::make_shared<PacBio::BAM::CollectionMetadata>
+                    (PacBio::BAM::RunMetadata::Collection(user_->runtimeMetaDataFilePath));
+        }
+        else
+        {
+            cmd_ = std::make_shared<PacBio::BAM::CollectionMetadata>
+                    (PacBio::BAM::DataSet(user_->subreadsetFilePath).Metadata().CollectionMetadata());
+        }
+
         ppaAlgoConfig_->SetPlatformDefaults(rmd_->platform);
         if (cmd_->HasPPAConfig())
             throw PBException("Collection metadata should not have PPAConfig block");
