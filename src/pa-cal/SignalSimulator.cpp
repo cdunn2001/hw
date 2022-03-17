@@ -64,12 +64,12 @@ DataSourceSimulator::DataSourceSimulator(DataSourceBase::Configuration baseConfi
     const size_t numPools = (numZmw + nominalLayout.NumZmw() - 1) / nominalLayout.NumZmw();
     for (size_t i = 0; i < numPools - 1; ++i)
     {
-        layouts_.emplace(std::make_pair(i, nominalLayout));
+        layouts_.emplace(i, nominalLayout);
     }
 
     layoutDims[0] = (numZmw - nominalLayout.NumZmw() * (numPools - 1)) / laneSize;
     PacketLayout lastLayout(PacketLayout::BLOCK_LAYOUT_DENSE, reqLayout.Encoding(), layoutDims);
-    layouts_.emplace(std::make_pair(numPools - 1, lastLayout));
+    layouts_.emplace(numPools - 1, lastLayout);
 
     currChunk_ = SensorPacketsChunk(0, framesPerBlock);
     currChunk_.SetZmwRange(0, numZmw);
@@ -85,11 +85,11 @@ std::vector<DataSourceBase::UnitCellProperties> DataSourceSimulator::GetUnitCell
     DataSourceBase::UnitCellProperties prop = { DataSource::ZmwFeatures::Sequencing, 0, 0, 0 };
     std::vector<DataSourceBase::UnitCellProperties> retProps(NumZmw(), prop);
 
-    for (size_t i = 0; i < retProps.size(); ++i)
+    for (size_t z = 0; z < retProps.size(); ++z)
     {
-        auto coord = Id2Coords(i);
-        retProps[i].x = coord.first;
-        retProps[i].y = coord.second;
+        auto coord = Id2Coords(z);
+        retProps[z].x = coord.first;
+        retProps[z].y = coord.second;
     }
 
     return retProps;

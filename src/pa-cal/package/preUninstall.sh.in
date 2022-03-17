@@ -1,1 +1,7 @@
 
+if [ "$1" == "0" ]
+then
+    rm -f /etc/modulefiles/@SYSTEMD_ALIAS@/@SOFTWARE_VERSION@
+else
+    echo Not removing modulefiles
+fi

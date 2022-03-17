@@ -31,6 +31,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
+#include <pacbio/logging/Logger.h>
 #include <pacbio/utilities/Finally.h>
 
 #include <appModules/SimulatedDataSource.h>
@@ -143,6 +144,9 @@ class Histogram : public testing::TestWithParam<TestTypes>
 {
     SMART_ENUM(Profiles, TRACE_UPLOAD, HIST_UPLOAD, HIST_DOWNLOAD, BINNING);
     using Profiler = ScopedProfilerChain<Profiles>;
+
+    PacBio::Logging::LogSeverityContext logLevel {PacBio::Logging::LogLevel::WARN};
+
 public:
 
     static void ConfigureHists(const Data::BasecallerTraceHistogramConfig& histConfig, const Data::AnalysisConfig& anlyConfig)

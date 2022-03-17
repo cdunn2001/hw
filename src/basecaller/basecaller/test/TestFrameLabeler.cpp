@@ -28,6 +28,7 @@
 #include <gtest/gtest.h>
 
 #include <pacbio/datasource/DataSourceRunner.h>
+#include <pacbio/logging/Logger.h>
 #include <pacbio/primary/HDFMultiArrayIO.h>
 
 #include <appModules/TraceFileDataSource.h>
@@ -96,7 +97,9 @@ std::vector<std::unique_ptr<FrameLabeler>> CreateAndConfigure(BasecallerFrameLab
 }
 
 class FrameLabelerTest : public testing::TestWithParam<BasecallerFrameLabelerConfig::MethodName::RawEnum>
-{};
+{
+    PacBio::Logging::LogSeverityContext logLevel {PacBio::Logging::LogLevel::WARN};
+};
 
 TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 {
@@ -241,7 +244,8 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     EXPECT_GT(matches / total, 0.97);
     EXPECT_LT(subframeMiss / total, .020);
     EXPECT_LT(mismatches / total, .01);
-    std::cerr << "Matches/SubframeConfusion/Mismatches: " << matches << "/" << subframeMiss << "/" << mismatches << std::endl;
+    // std::cerr << "Matches/SubframeConfusion/Mismatches: "
+    //           << matches << "/" << subframeMiss << "/" << mismatches << std::endl;
 
     FrameLabeler::Finalize();
 }

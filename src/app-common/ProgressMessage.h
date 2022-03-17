@@ -52,7 +52,7 @@ public:
 
     struct Output : Configuration::PBConfig<Output>
     {
-    PB_CONFIG(Output);
+        PB_CONFIG(Output);
         PB_CONFIG_PARAM(bool, ready, false);
         PB_CONFIG_PARAM(int, stageNumber, 0);
         PB_CONFIG_PARAM(std::string, stageName, "");
@@ -64,13 +64,6 @@ public:
         PB_CONFIG_PARAM(std::string, state, "progress");
     };
 
-    struct ExceptionOutput : Configuration::PBConfig<ExceptionOutput>
-    {
-    PB_CONFIG(ExceptionOutput);
-        PB_CONFIG_PARAM(std::string, message, "");
-        PB_CONFIG_PARAM(std::string, timeStamp, "");
-        PB_CONFIG_PARAM(std::string, state, "exception");
-    };
 public:
     ProgressMessage(const Table& stages, const std::string& header, int statusFd)
         : stageInfo_(stages)
@@ -146,12 +139,12 @@ public:
         stream_ << header_ << " " << stage.Serialize() << std::endl;
     }
 
-    void Exception(const std::string& what)
+    void Exception(const Json::Value& j)
     {
-        ExceptionOutput o;
-        o.message = what;
-        o.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " " << o.Serialize() << std::endl;
+        Json::Value jOut = j;
+        jOut["timeStamp"] = Utilities::ISO8601::TimeString();
+        jOut["state"] = "exception";
+        stream_ << header_ << " " << jOut << std::endl;
     }
 
 public:
@@ -172,12 +165,48 @@ public:
 
         void Update(uint64_t counter)
         {
+            std::lock_guard<std::mutex> lock(reportMutex_);
             currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
             pm_->Message(currentStage_);
         }
+
+        void Update(uint16_t counter, double timeoutForNextStatus)
+        {
+            currentStage_.timeoutForNextStatus = timeoutForNextStatus;
+            Update(counter);
+        }
+
     private:
+        std::mutex reportMutex_;
         ProgressMessage* pm_;
         Output currentStage_;
+    };
+
+    class ThreadSafeStageReporter
+    {
+    public:
+        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
+        : sr_(pm, s, counterMax, timeoutForNextStatus)
+        { }
+
+        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
+        : ThreadSafeStageReporter(pm, s, 1, timeoutForNextStatus)
+        { }
+
+        void Update(uint64_t counter)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sr_.Update(counter);
+        }
+
+        void Update(uint16_t counter, double timeoutForNextStatus)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sr_.Update(counter, timeoutForNextStatus);
+        }
+    private:
+        std::mutex mutex_;
+        StageReporter sr_;
     };
 
 private:
