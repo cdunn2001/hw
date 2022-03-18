@@ -103,7 +103,7 @@ inline HQRFMethod GetPrivateHQRFMethod(HqrfPublicMethod method)
         //default:
         //    throw PBException("Can't determine HQRFMethod from chip class: " + chipClass.toString());
         //}
-        method = HqrfPublicMethod::M1;
+        method = HqrfPublicMethod::N2;
     }
 
     //if (chipClassCompatible.at(method) != chipClass)

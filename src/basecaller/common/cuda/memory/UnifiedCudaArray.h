@@ -255,7 +255,10 @@ public:
         size_t ret = 0;
         if (!activeOnHost_)
         {
-            ret = gpuData_.size();
+            if (syncDir_ != SyncDirection::HostWriteDeviceRead)
+            {
+                ret = gpuData_.size();
+            }
             GetHostView();
         }
 
