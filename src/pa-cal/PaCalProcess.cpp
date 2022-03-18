@@ -168,7 +168,7 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
 
         Json::Value json = MergeConfigs(options.all("config"));
-        if (json["source"].isMember("WXIPCDataSourceConfig") && json["souce"]["WXIPCDataSourceConfig"].isMember("sraIndex"))
+        if (json["source"].isMember("WXIPCDataSourceConfig") && json["source"]["WXIPCDataSourceConfig"].isMember("sraIndex"))
         {
             PBLOG_WARN << "Setting the json configuration member source.WXIPCDataSourceConfig.sraIndex "
                        << "does nothing, and the supplied value is overwritten by the --sra flag.";
