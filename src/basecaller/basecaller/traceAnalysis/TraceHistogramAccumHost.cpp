@@ -112,6 +112,11 @@ void TraceHistogramAccumHost::ResetImpl(const Data::BaselinerMetrics& metrics)
                                     sqrt(laneBlStats.Variance()),
                                     FloatVec(FallBackBaselineSigma()));
 
+        // TODO: Baseline estimation can be confused by trace data with very
+        // sparse sampling of true baseline.  In such cases, estimates of the
+        // mean and sigma of the baseline distribution are typically drastically
+        // too high.
+
         const FloatVec binSize = max(binSizeCoeff_ * blSigma, binSizeMin);
         const auto loBound = blMean - 4.0f*blSigma;
         const auto upBound = loBound + float(numBins)*binSize;
