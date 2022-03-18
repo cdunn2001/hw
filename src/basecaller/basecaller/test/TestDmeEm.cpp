@@ -208,16 +208,15 @@ public:
                 Assert(expected, result, absErrTol, "Bad mixing fraction for baseline");
 
                 // Check baseline estimated means.
-                auto nFramesBg = nFrames.at(0);
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 4.0f * sqrt(cdbm.SignalCovar() / nFramesBg / cdbm.Weight());
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad baseline mean for baseline");
 
                 // Check baseline estimated variance.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 4.0f * sqrt(2.0f / (nFramesBg * cdbm.Weight() - 1.0f)) * expected;
+                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
                 Assert(expected, result, absErrTol, "Bad baseline variance for baseline");
             }
 
@@ -229,21 +228,20 @@ public:
                 const auto& cdbm = completeDataModel.DetectionModes()[a];
                 DmeEmHost::FloatVec result = rbm.Weight();
                 DmeEmHost::FloatVec expected = cdbm.Weight();
-                auto nFramesA = nFrames.at(a);
-                DmeEmHost::FloatVec absErrTol = max(0.015f, 4.0f * sqrt(expected * (1.0f - expected) / nFramesA));
+                DmeEmHost::FloatVec absErrTol = max(0.015f, 5.0f * sqrt(expected * (1.0f - expected) / numFrames));
                 const auto astr = std::to_string(a);
                 Assert(expected, result, absErrTol, "Bad mixing fraction for analog " + astr);
 
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / nFramesA / cdbm.Weight());
+                absErrTol = 6.5f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad mean for analog " + astr);
 
                 // Check estimated variances.
                 result = rbm.SignalCovar();
                 expected = cdbm.SignalCovar();
-                absErrTol = 4.0f * sqrt(2.0f / (nFramesA * cdbm.Weight() - 1.0f)) * expected;
+                absErrTol = 5.0f * sqrt(2.0f / (numFrames * cdbm.Weight() - 1.0f)) * expected;
                 Assert(expected, result, absErrTol, "Bad variance for analog " + astr);
             }
         }
