@@ -71,8 +71,11 @@ add_library(lib-pa-cal
         PaCalProcess.cpp
 )
 
+target_compile_options(lib-pa-cal PRIVATE "-fopenmp")
+
 target_link_libraries(lib-pa-cal
     PUBLIC
+        gomp
         libBoost
         libEigen
         libPacbioCplusplusApi

@@ -132,10 +132,12 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
         // Find packet parameters
         size_t startZmw       = packet.StartZmw();
         PacketLayout pkLayout = packet.Layout();
-        size_t framesPerBlock = pkLayout.NumFrames();
+        size_t numBlocks      = pkLayout.NumBlocks();
         size_t zmwPerBlock    = pkLayout.BlockWidth();
+        size_t framesPerBlock = pkLayout.NumFrames();
 
-        for (size_t i = 0; i < pkLayout.NumBlocks(); ++i)
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t i = 0; i < numBlocks; ++i)
         {
             // Setup source data
             SensorPacket::ConstDataView blockView = packet.BlockData(i);
@@ -148,12 +150,12 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
             StridedMapMatrixXf dstMomMap(dstMomPtr, zmwPerBlock, 2, Eigen::OuterStride<Eigen::Dynamic>(zmwPerChunk));
 
             // Find moments ...
-            Eigen::MatrixXf blockMat = convM2Float(srcBlockMap);
-            auto mom0Tmp = blockMat.rowwise().mean();
-            auto mom1Tmp = (blockMat.colwise() - mom0Tmp).array();
+            Eigen::MatrixXf blockMat = convM2Float(srcBlockMap.transpose());
+            auto mom0Tmp = blockMat.colwise().mean();
+            auto mom1Tmp = (blockMat.rowwise() - mom0Tmp).array();
 
             // And store them
-            dstMomMap.col(1) = mom1Tmp.square().rowwise().sum().array() / (framesPerBlock - 1);
+            dstMomMap.col(1) = mom1Tmp.square().colwise().sum().array() / (framesPerBlock - 1);
             dstMomMap.col(0) = mom0Tmp.array() - pedestal; // Adjust mean for the offset
         }
     }

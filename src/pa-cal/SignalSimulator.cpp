@@ -142,6 +142,8 @@ SensorPacket DataSourceSimulator::GenerateBatch() const
     auto startZmw       = batchIdx_ * layouts_.at(0).NumZmw();
     auto startFrame     = chunkIdx_ * layouts_.at(0).NumFrames();
     SensorPacket batchData(layout, batchIdx_, startZmw, startFrame, *GetConfig().allocator);
+
+    #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < numBlocks; ++i)
     {
         boost::multi_array_ref<T, 2> blkData(
