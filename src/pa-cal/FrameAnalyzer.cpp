@@ -133,7 +133,7 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
 
     for (const SensorPacket& packet : chunk)
     {
-        PBLOG_INFO << "CalcChunkMoments of packet " << packet.PacketID() << " of " << chunk.NumPackets();
+        PBLOG_DEBUG << "CalcChunkMoments of packet " << packet.PacketID() << " of " << chunk.NumPackets();
 
         // Find packet parameters
         size_t startZmw       = packet.StartZmw();
@@ -155,7 +155,7 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
             auto dstMomPtr = chunkMoms[boost::indices[0][blockStartZmw]].origin();
             StridedMapMatrixXf dstMomMap(dstMomPtr, zmwPerBlock, 2, Eigen::OuterStride<Eigen::Dynamic>(zmwPerChunk));
 
-            // Find moments ...
+            // Find moments (transpose to traverse frame dimention faster) ...
             Eigen::MatrixXf blockMat = convM2Float(srcBlockMap.transpose());
             auto mom0Tmp = blockMat.colwise().mean();
             auto mom1Tmp = (blockMat.rowwise() - mom0Tmp).array();
