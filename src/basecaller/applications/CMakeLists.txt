@@ -66,6 +66,10 @@ install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/smrt-basecaller             DESTINA
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/smrt-basecaller-launch.sh   DESTINATION bin )
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pacbio-pa-smrt-basecaller.modulefile RENAME ${SOFTWARE_VERSION} DESTINATION etc/modulefiles/pacbio-pa-smrt-basecaller )
 
+# TODO remove these, once PPA becomes it's own independent project again.
+install(PROGRAMS ${CMAKE_BINARY_DIR}/postprimary/application/baz2bam DESTINATION bin)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/postprimary/application/ppa-reducestats DESTINATION bin)
+
 #    set_target_properties(${UNBUNDLED_EXE} PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # cf http://schneide.wordpress.com/2013/02/11/build-a-rpm-package-using-cmake/
