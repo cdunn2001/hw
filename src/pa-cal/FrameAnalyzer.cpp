@@ -48,11 +48,14 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
 
     runner.Start();
 
+    PBLOG_INFO << "Waiting for data chunk ... ";
     SensorPacketsChunk chunk;
     while (runner.IsActive() && !controller->ExitRequested())
     {
         if(runner.PopChunk(chunk, std::chrono::milliseconds{100}))
         {
+            PBLOG_INFO << "Received data chunk, frames:[" << chunk.StartFrame() << ","
+                << chunk.StopFrame() << "). Has full coverage:" << chunk.HasFullPacketCoverage();
             break;
         }
     }
@@ -62,7 +65,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
         return false;
     }
 
-    const auto& stats = AnalyzeChunk(chunk, source->Pedestal(), runner.GetUnitCellProperties());
+    const auto& stats = AnalyzeChunk(chunk, runner.Pedestal(), runner.GetUnitCellProperties());
 
     assert(stats.mean.shape()[0] == stats.variance.shape()[0]);
     assert(stats.mean.shape()[1] == stats.variance.shape()[1]);
@@ -105,6 +108,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
     attr.startIndex = 0;
     attr.timeStamp = 0;
     out->SetAttributes(attr);
+    PBLOG_INFO << "Calibration file " << outputFile << " written and closed.";
 
     return true;
 }
@@ -129,6 +133,8 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
 
     for (const SensorPacket& packet : chunk)
     {
+        PBLOG_INFO << "CalcChunkMoments of packet " << packet.PacketID() << " of " << chunk.NumPackets();
+
         // Find packet parameters
         size_t startZmw       = packet.StartZmw();
         PacketLayout pkLayout = packet.Layout();
