@@ -649,7 +649,7 @@ std::string ResultWriter::CreateBam(const std::vector<ProgramInfo>& programInfos
     {
         if (user_)
         {
-            if (!user_->runtimeMetaDataFilePath.empty())
+            if (user_->runtimeMetaDataFilePath != "")
             {
                 std::ifstream ifs(user_->runtimeMetaDataFilePath);
                 PacBio::Text::PBXml rmd(ifs);
@@ -664,7 +664,7 @@ std::string ResultWriter::CreateBam(const std::vector<ProgramInfo>& programInfos
                         .RawChildXML("Collections");
                 sideband.SetCollectionMetadataXML(xml);
             }
-            else if (!user_->subreadsetFilePath.empty())
+            else if (user_->subreadsetFilePath != "")
             {
                 std::ifstream ifs(user_->subreadsetFilePath);
                 PacBio::Text::PBXml rmd(ifs);
@@ -903,25 +903,28 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType)
     if (!rmd_->bindingKit.empty())
         group.BindingKit(SanitizeBAMTag(rmd_->bindingKit));
 
-    const auto& wellSampleNode = cmd_->Child<PacBio::BAM::internal::DataSetElement>("WellSample");
-    if (wellSampleNode.HasAttribute("Name"))
+    if (cmd_ && cmd_->HasChild("WellSample"))
     {
-        std::string library = wellSampleNode.Attribute("Name");
-        library = SanitizeBAMTag(library);
-        group.Library(library); // aka LB tag
-    }
-
-    if (wellSampleNode.HasChild("BioSamples"))
-    {
-        const auto& bioSamples = wellSampleNode.Child<PacBio::BAM::internal::DataSetElement>("BioSamples");
-        if (bioSamples.HasChild("BioSample"))
+        const auto& wellSampleNode = cmd_->Child<PacBio::BAM::internal::DataSetElement>("WellSample");
+        if (wellSampleNode.HasAttribute("Name"))
         {
-            const auto& bioSample = wellSampleNode.Child<PacBio::BAM::internal::DataSetElement>("BioSample");
-            if (bioSample.HasAttribute("Name"))
+            std::string library = wellSampleNode.Attribute("Name");
+            library = SanitizeBAMTag(library);
+            group.Library(library); // aka LB tag
+        }
+
+        if (wellSampleNode.HasChild("BioSamples"))
+        {
+            const auto& bioSamples = wellSampleNode.Child<PacBio::BAM::internal::DataSetElement>("BioSamples");
+            if (bioSamples.HasChild("BioSample"))
             {
-                std::string sample = bioSample.Attribute("Name");
-                sample = SanitizeBAMTag(sample);
-                group.Sample(sample); // aka SM tag
+                const auto& bioSample = bioSamples.Child<PacBio::BAM::internal::DataSetElement>("BioSample");
+                if (bioSample.HasAttribute("Name"))
+                {
+                    std::string sample = bioSample.Attribute("Name");
+                    sample = SanitizeBAMTag(sample);
+                    group.Sample(sample); // aka SM tag
+                }
             }
         }
     }

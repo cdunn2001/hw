@@ -9,7 +9,7 @@ Create BAZ files
   $ samtools view -H out_production.hqregions.bam
   @HD\tVN:1.5\tSO:unknown\tpb:3.0.7 (esc)
   @RG\tID:a0c9db3d\tPL:PACBIO\tDS:READTYPE=HQREGION;Ipd:Frames=ip;PulseWidth:Frames=pw;StartFrame=sf;BINDINGKIT=100-862-200;SEQUENCINGKIT=101-826-100;BASECALLERVERSION=5.0.0;FRAMERATEHZ=100.000000\tLB:(Obfuscated)\tPU:m00001_052415_013000\tPM:SEQUELII (esc)
-  @PG\tID:baz2bam\tPN:baz2bam\tVN:GIT_BRANCH_RAW_65c9f876550f6dbe79fecb88e38dfe4c691ca575-dirty\tCL:baz2bam out_production.baz -o out_production --hqregion -j 8 --fasta --silent -Q /home/UNIXHOME/jnguyen/pa-kestrel/src/postprimary/test/cram/data/goldenSubset.fasta --subreadset=/home/UNIXHOME/jnguyen/pa-kestrel/src/postprimary/test/cram/data/SubreadSet.xml --enableBarcodedAdapters=False  (esc)
+  @PG\tID:baz2bam\tPN:baz2bam\tVN:*\tCL:baz2bam out_production.baz -o out_production --hqregion -j 8 --fasta --silent -Q *postprimary/test/cram/data/goldenSubset.fasta --subreadset=*postprimary/test/cram/data/SubreadSet.xml --enableBarcodedAdapters=False  (esc) (glob)
   @PG\tID:bazFormat\tPN:bazformat\tVN:2.0.0 (esc)
   @PG\tID:bazwriter\tPN:bazwriter\tVN:0.0.0 (esc)
   @PG\tID:samtools\tPN:samtools\tPP:baz2bam\tVN:1.10\tCL:samtools view -H out_production.hqregions.bam (esc)
