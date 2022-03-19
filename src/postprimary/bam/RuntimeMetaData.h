@@ -58,8 +58,10 @@ struct RuntimeMetaData
     Platform platform = Platform::NONE;
     std::string movieName;
     std::string runId; /// < aka "movie context", derived from the "context" attribute
+    // This also seems to be not needed.
     std::string baz2bamVersion;
     std::string dataSetCollection;
+    // This seems to be not used and can be eliminated.
     std::string externalResource;
     struct SubreadSet
     {
@@ -77,6 +79,8 @@ struct RuntimeMetaData
     bool barcodeQualityScore = false;
     BarcodeStrategy barcodeScoreMode;
     int  numBarcodes = -1;
+
+    // The below can be removed as they are handled by the PPAAlgoConfig.
 
     // Control information
     std::string leftAdapterControl;
