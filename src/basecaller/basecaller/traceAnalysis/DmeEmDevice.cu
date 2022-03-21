@@ -1316,12 +1316,14 @@ void DmeEmDevice::EstimateImpl(const PoolHist &hist,
 
     const auto& pfi = detModelPool->frameInterval;
 
-    FiTypeDevice histFI { hfi.Lower(), hfi.Upper() };
-    FiTypeDevice poolFI { pfi.Lower(), pfi.Upper() };
+    FiTypeDevice hstFI { hfi.Lower(), hfi.Upper() };
+    FiTypeDevice modFI { pfi.Lower(), pfi.Upper() };
 
     Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)
-                    (histFI, hist.data, metrics.baselinerStats, detModelPool->data, poolFI);
+                    (hstFI, hist.data, metrics.baselinerStats, detModelPool->data, modFI);
     Cuda::CudaSynchronizeDefaultStream();
+
+    detModelPool->frameInterval = hfi;
 }
 
 __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState> stats,
