@@ -136,8 +136,8 @@ public: // Structors
     }
 
 public:
-    void Assert(const DmeEmHost::FloatVec& expected, 
-                const DmeEmHost::FloatVec& actual, 
+    void Assert(const DmeEmHost::FloatVec& expected,
+                const DmeEmHost::FloatVec& actual,
                 const DmeEmHost::FloatVec& absErrTol,
                 const std::string& message)
     {
@@ -165,7 +165,8 @@ public:
                                                       Cuda::Memory::SyncDirection::Symmetric,
                                                       SOURCE_MARKER());
 
-        // Initialize the model using the initial fixed detection model host.
+        // Initialize the model
+        models.frameInterval = detModelStart->FrameInterval();
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             detModelStart->ExportTo(&models.data.GetHostView()[l]);
@@ -175,10 +176,13 @@ public:
         // with which further unit tests can be written to verify its contents.
         dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
-        // If we skip the "EmDevice" test prior to this point, we can get a
-        // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
-        // PTSD-1137.
-        GTEST_SKIP() << "Need to fix DME implementation. See PTSD-1133.";
+        if (std::is_same_v<Filter,DmeEmDevice>)
+        {
+              // If we skip the "EmDevice" test prior to this point, we can get a
+              // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
+              // PTSD-1137.
+              GTEST_SKIP() << "Need to fix DME implementation for GPU. See PTSD-1154.";
+        }
 
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
@@ -231,7 +235,7 @@ public:
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                absErrTol = 6.5f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad mean for analog " + astr);
 
                 // Check estimated variances.
@@ -428,7 +432,7 @@ private:
 using EmHost = TestDmeEm<DmeEmHost>;
 using EmDevice = TestDmeEm<DmeEmDevice>;
 
-TEST_P(EmHost, DISABLED_EstimateFiniteMixture)
+TEST_P(EmHost, EstimateFiniteMixture)
 {
     RunTest();
 }
