@@ -163,13 +163,13 @@ public:
     }
     void Exception(const std::string& message)
     {
-        Json::Value j = Jsons::objectValue;
+        Json::Value j = Json::objectValue;
         j["message"] = message;
         Exception(j);
     }
     void Exception(const char* message)
     {
-        Json::Value j = Jsons::objectValue;
+        Json::Value j = Json::objectValue;
         j["message"] = message;
         Exception(j);
     }
