@@ -277,6 +277,19 @@ public:
                 bytesDownloaded_ += ret.DeactivateGpuMem();
                 bytesDownloaded_ += gpuStash->StashPool(in.Metadata().PoolId());
                 msDownload += timer.GetElapsedMilliseconds();
+
+                // We need to make sure we retire the GPU memory for our input
+                // traces, because another graph node may be holding on to a
+                // reference to this batch, and it's not necessarily going out
+                // of scope soon
+                auto inputDownloadBytes = std::visit([](const auto& batch)
+                {
+                    return batch.DeactivateGpuMem();
+                }, in.Data());
+                if (inputDownloadBytes !=0)
+                {
+                    PBLOG_WARN << "Downloading traces from the GPU.  This shouldn't happen, the data wasn't set to the HostWriteDeviceRead mode";
+                }
             }
         }
         return ret;

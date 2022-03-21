@@ -121,7 +121,7 @@ __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
     blVar += sigMean * CoreDMEstimator::shotVarCoeff;
     blVar += sigMean * sigMean * excessNoiseCV2;
-    return blVar;
+    return min(60000.f, blVar);
 }
 
 template <typename VF>
@@ -143,7 +143,7 @@ __device__ void UpdateMode(const ZmwAnalogMode& from,
     to->var  = a * from.var  + b * to->var;
 }
 
-__device__ void UpdateModel(const ZmwDetectionModel& from,
+__device__ void UpdateModel0(const ZmwDetectionModel& from,
                               ZmwDetectionModel *to,
                               float fraction)
 {
@@ -152,6 +152,91 @@ __device__ void UpdateModel(const ZmwDetectionModel& from,
     {
         UpdateMode(from.analogs[i], &to->analogs[i], fraction);
     }
+}
+
+__device__ void UpdateModel1(const ZmwDetectionModel& from,
+                              ZmwDetectionModel *to,
+                              float fraction)
+{
+
+    const float a = fraction;
+    const float b = 1 - fraction;
+
+    auto &tbm = to->baseline;
+    auto &obm = from.baseline;
+
+    auto bw = a * tbm.weight + b * obm.weight;
+    tbm.weight = bw;
+
+    auto bm = a * tbm.mean + b * obm.mean;
+    tbm.mean = bm;
+
+    auto bv = powf(tbm.var, a) * powf(obm.var, b);
+    tbm.var = bv;
+
+    // Four analogs with remaining weight equally partitioned 
+    auto aw = 0.25f * (1.0f - bw);
+
+    for (int i = 0; i < to->numAnalogs; ++i)
+    {
+        auto& tdmi = to->analogs[i];
+        auto& obmi = from.analogs[i];
+
+        tdmi.weight = aw;
+
+        auto am = powf(tdmi.mean, a) * powf(obmi.mean, b);
+        tdmi.mean = am;
+
+        auto cv = Analog(i).excessNoiseCV;
+        auto av = ModelSignalCovar(cv*cv, am, bv);
+        tdmi.var = av;
+    }
+
+}
+
+__device__ void UpdateModel2(const ZmwDetectionModel& from,
+                              ZmwDetectionModel *to,
+                              float fraction)
+{
+
+    const float a = fraction;
+    const float b = 1 - fraction;
+
+    auto &tbm = to->baseline;
+    auto &obm = from.baseline;
+
+    const auto prevBlCovar = tbm.var;
+
+    auto bw = a * tbm.weight + b * obm.weight;
+    tbm.weight = bw;
+
+    auto bm = a * tbm.mean + b * obm.mean;
+    tbm.mean = bm;
+
+    auto bv = powf(tbm.var, a) * powf(obm.var, b);
+    tbm.var = bv;
+
+    // Four analogs with remaining weight equally partitioned 
+    auto aw = 0.25f * (1.0f - bw);
+
+    for (int i = 0; i < to->numAnalogs; ++i)
+    {
+        auto& tdmi = to->analogs[i];
+        auto& obmi = from.analogs[i];
+
+        tdmi.weight = aw;
+
+        const auto tXsnCVSq = XsnCoeffCVSq(tdmi.mean, tdmi.var, prevBlCovar);
+        const auto oXsnCVSq = XsnCoeffCVSq(obmi.mean, obmi.var, obm.var);
+        const auto newXsnCVSq = a * tXsnCVSq  + b * oXsnCVSq;
+
+        auto am = powf(tdmi.mean, a) * powf(obmi.mean, b);
+        tdmi.mean = am;
+
+        auto av = ModelSignalCovar(newXsnCVSq, am, bv);
+        tdmi.var = av;
+    }
+
 }
 
 __device__ void UpdateModel(const ZmwDetectionModel& from,
@@ -167,163 +252,17 @@ __device__ void UpdateModel(const ZmwDetectionModel& from,
     assert (fraction >= 0.0f);
     assert (fraction <= 1.0f);
     //assert ((fraction > 0) | (confSum == Confidence())));
-
-    UpdateModel(from, to, fraction);
-    // TODO no confidence stored in LaneModelParamters
-    //Confidence(confSum);
-}
-
-// Functions to merge and move data from a Zmw based structure to 
-// the appropriate slot in a lane-based structure
-template <int low>
-__device__ void UpdateTo0(const ZmwDetectionModel& from,
-                          LaneModelParameters<PBHalf2, 32> *to,
-                          int idx, float fraction)
-{
-    const float a = 1 - fraction;
-    const float b = fraction;
-
-    // In CUDA code "from" and "to" end names are reversed due to code organization
-    // Rename them to streamline code correspondence with the host code
-    auto &tbm = to->BaselineMode();
-    auto &obm = from.baseline;
-
-    auto bm = a * tbm.means[idx].Get<low>() + b * obm.mean;
-    tbm.means[idx].Set<low>(bm);
-
-    auto bv = a * tbm.vars[idx].Get<low>() + b * obm.var;
-    tbm.vars[idx].Set<low>(bv);
-
-    for (int i = 0; i < to->numAnalogs; ++i)
+    switch (staticConfig.updateMethod_)
     {
-        auto &tdmi = to->AnalogMode(i);
-        auto &obmi = from.analogs[i];
-
-        auto am = a * tdmi.means[idx].Get<low>() + b * obmi.mean;
-        tdmi.means[idx].Set<low>(am);
-
-        auto av = a * tdmi.vars[idx].Get<low>() + b * obmi.var;
-        tdmi.vars[idx].Set<low>(av);
+        case 0: UpdateModel0(from, to, fraction); break;
+        case 1: UpdateModel1(from, to, fraction); break;
+        case 2: UpdateModel2(from, to, fraction); break;
+        // hmm, can't throw an exception in device code, so defaulting to 0
+        // and doing this explicitly just to prevent confusion
+        default: UpdateModel0(from, to, fraction); break;
     }
-}
 
-template <int low>
-__device__ void UpdateTo1(const ZmwDetectionModel& from,
-                          LaneModelParameters<PBHalf2, 32> *to,
-                          int idx, float fraction)
-{
-    const float a = 1 - fraction;
-    const float b = fraction;
-
-    // In CUDA code "from" and "to" end names are reversed due to code organization
-    // Rename them to streamline code correspondence with the host code
-    auto &tbm = to->BaselineMode();
-    auto &obm = from.baseline;
-
-    auto bw = a * tbm.weights[idx].Get<low>() + b * obm.weight;
-    tbm.weights[idx].Set<low>(bw);
-
-    auto bm = a * tbm.means[idx].Get<low>() + b * obm.mean;
-    tbm.means[idx].Set<low>(bm);
-
-    auto bv = powf(tbm.vars[idx].Get<low>(), a) + powf(obm.var, b);
-    tbm.vars[idx].Set<low>(bv);
-
-    auto aw = 0.25f * (1.0f - bw);
-
-    // Four analogs with remaining weight equally partitioned 
-    for (int i = 0; i < to->numAnalogs; ++i)
-    {
-        auto& tdmi = to->AnalogMode(i);
-        auto& obmi = from.analogs[i];
-
-        tdmi.weights[idx].Set<low>(aw);
-
-        auto am = powf(tdmi.means[idx].Get<low>(), a) + powf(obmi.mean, b);
-        tdmi.means[idx].Set<low>(am);
-
-        auto cv = Analog(i).excessNoiseCV;
-        auto av = ModelSignalCovar(cv*cv, am, bv);
-        tdmi.vars[idx].Set<low>(av);
-    }
-}
-
-template <int low>
-__device__ void UpdateTo2(const ZmwDetectionModel& from,
-                          LaneModelParameters<PBHalf2, 32> *to,
-                          int idx, float fraction)
-{
-    const float a = 1 - fraction;
-    const float b = fraction;
-
-    // In CUDA code "from" and "to" end names are reversed due to code organization
-    // Rename them to streamline code correspondence with the host code
-    auto &tbm = to->BaselineMode();
-    auto &obm = from.baseline;
-
-    const auto prevBlCovar = tbm.vars[idx].Get<low>();
-
-    auto bw = a * tbm.weights[idx].Get<low>() + a * obm.weight;
-    tbm.weights[idx].Set<low>(bw);
-
-    auto bm = a * tbm.means[idx].Get<low>() + b * obm.mean;
-    tbm.means[idx].Set<low>(bm);
-
-    auto bv = powf(tbm.vars[idx].Get<low>(), a) + powf(obm.var, b);
-    tbm.vars[idx].Set<low>(bv);
-
-    // Four analogs with remaining weight equally partitioned 
-    auto aw = 0.25f * (1.0f - bw);
-
-    for (int i = 0; i < to->numAnalogs; ++i)
-    {
-        auto& tdmi = to->AnalogMode(i);
-        auto& odmi = from.analogs[i];
-
-        tdmi.weights[idx].Set<low>(aw);
-
-        const auto tXsnCVSq = XsnCoeffCVSq(tdmi.vars[idx].Get<low>(), tdmi.vars[idx].Get<low>(), prevBlCovar);
-        const auto oXsnCVSq = XsnCoeffCVSq(odmi.mean, odmi.var, obm.var);
-        const auto newXsnCVSq = a * tXsnCVSq  + b * oXsnCVSq;
-
-        auto am = powf(tdmi.means[idx].Get<low>(), a) + powf(odmi.mean, b);
-        tdmi.means[idx].Set<low>(am);
-
-        auto cv2 = newXsnCVSq;
-        auto av = ModelSignalCovar(cv2, am, bv);
-        tdmi.vars[idx].Set<low>(av);
-    }
-}
-
-template <int low>
-__device__ void UpdateTo(const ZmwDetectionModel& from, 
-                         LaneModelParameters<Cuda::PBHalf2, 32> *to,
-                         int idx, uint32_t updMethod)
-{
-    float toConfidence = 0;
-    assert (from.confidence >= 0.0f);
-    assert (toConfidence >= 0.0f);
-
-    const auto confSum = from.confidence + toConfidence;
-    const float fraction = confSum > 0.0f ? from.confidence / confSum: 0.f;
-
-    assert (fraction >= 0.0f);
-    assert (fraction <= 1.0f);
-    //assert ((fraction > 0) | (confSum == Confidence())));
-
-    switch (updMethod)
-    {
-        case 0: UpdateTo0<low>(from, to, idx, fraction); break;
-        case 1: UpdateTo1<low>(from, to, idx, fraction); break;
-        case 2: UpdateTo2<low>(from, to, idx, fraction); break;
-        default:
-            // throw PBException("DetectionModel: Bad update method id");
-            break;
-    }
-    
-    // TODO no updated boolean
-    // TODO no frame interval to update
-    // TODO no confidence stored in LaneModelParamters
+    // TODO no confidence stored in LaneModelParameters
     //Confidence(confSum);
 }
 
@@ -789,7 +728,7 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     auto blMean = mask ? Mean(blsa)     : m0blm.mean;
     auto blVar  = mask ? Variance(blsa) : m0blm.var;
 
-    blVar = max(blVar, baseConfig.signalScaler);
+    blVar = min(60000.f, max(blVar, baseConfig.signalScaler));
 
     auto& detectionModes = model->analogs;
 
@@ -1173,6 +1112,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
 
         // M-step
 
+        c_i[0] = max(0.0001f, c_i[0]);
         // Mixing fractions.
         for (int i = 0; i < nModes; ++i)
         {
@@ -1251,7 +1191,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
     //PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
     bgMode.mean = muEst[0];
     //PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
-    bgMode.var = varEst[0];
+    bgMode.var = min(60000.f, varEst[0]);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         auto& pda = pulseModes[a];
@@ -1261,7 +1201,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         //PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
         pda.mean = muEst[i];
         //PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
-        pda.var = varEst[i];
+        pda.var = min(60000.f, varEst[i]);
     }
 
     // Note: this is disabled until we have a chi squared cfd on the gpu.
@@ -1387,14 +1327,14 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     model.BaselineMode().weights[threadIdx.x] = blWeight;
     for (int a = 0; a < numAnalogs; ++a)
     {
-        const auto aMean = blMean + staticConfig.analogs[a].relAmplitude * refSignal;
+        const auto aMean = max(blMean + staticConfig.analogs[a].relAmplitude * refSignal, 0);
         auto& aMode = model.AnalogMode(a);
         aMode.means[threadIdx.x] = aMean;
 
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         auto cv = Analog(a).excessNoiseCV;
-        aMode.vars[threadIdx.x] = ModelSignalCovar(cv*cv, aMean, blVar);
+        aMode.vars[threadIdx.x] = min(60000, ModelSignalCovar(cv*cv, aMean, blVar));
 
         aMode.weights[threadIdx.x] = aWeight;
     }

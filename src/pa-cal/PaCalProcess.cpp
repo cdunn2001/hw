@@ -168,7 +168,7 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         if (ret.outputFile.empty()) cliValidationErrors.push_back("Must supply value for --outputFile option");
 
         Json::Value json = MergeConfigs(options.all("config"));
-        if (json["source"].isMember("WXIPCDataSourceConfig") && json["souce"]["WXIPCDataSourceConfig"].isMember("sraIndex"))
+        if (json["source"].isMember("WXIPCDataSourceConfig") && json["source"]["WXIPCDataSourceConfig"].isMember("sraIndex"))
         {
             PBLOG_WARN << "Setting the json configuration member source.WXIPCDataSourceConfig.sraIndex "
                        << "does nothing, and the supplied value is overwritten by the --sra flag.";
@@ -248,6 +248,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numF
             // simCfg.nRows = 2912; simCfg.nCols = 2756;  // test Sequel chip
             // simCfg.nRows = 6144; simCfg.nCols = 4096;  // test Kestrel chip
             DataSourceBase::Configuration sourceCfg(layout, std::make_unique<MallocAllocator>());
+            sourceCfg.numFrames = numFrames;
             return std::make_unique<DataSourceSimulator>(std::move(sourceCfg), std::move(simCfg));
         },
         [&](const WXIPCDataSourceConfig& ipcConfig) -> std::unique_ptr<DataSourceBase>

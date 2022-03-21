@@ -56,7 +56,6 @@ public:
     std::vector<UnitCellProperties> GetUnitCellProperties() const override;
     std::vector<uint32_t> UnitCellIds() const override;
 
-    size_t NumFrames() const override { return numFrames_; }
     size_t NumZmw()    const override; // Kestrel: 4096 x 6144
     int16_t Pedestal() const override { return simCfg_.Pedestal;  };
     double FrameRate() const override { return 100.0;      };
@@ -120,7 +119,6 @@ private:
 private:
     size_t chunkIdx_  = 0;
     size_t batchIdx_  = 0;
-    size_t numFrames_ = 0;
     DataSource::SensorPacketsChunk currChunk_;
     std::map<uint32_t, DataSource::PacketLayout> layouts_;
 

@@ -25,4 +25,4 @@ cram -v *.t
 status=$?
 popd
 
-# exit $status
+exit $status

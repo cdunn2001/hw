@@ -41,6 +41,14 @@ template <typename Stages>
 class ProgressMessage
 {
     static_assert(std::is_base_of<SmartEnumBase, Stages>::value, "Stages must be a SMART_ENUM!");
+
+    Json::StreamWriterBuilder GetStreamWriterBuilder()
+    {
+        Json::StreamWriterBuilder builder;
+        builder.settings_["commentStyle"] = "None";
+        builder.settings_["indentation"] = "";
+        return builder;
+    }
 public:
     struct StageInfo
     {
@@ -69,6 +77,7 @@ public:
         : stageInfo_(stages)
         , header_(header)
         , stream_(boost::iostreams::stream<boost::iostreams::file_descriptor_sink>(statusFd, boost::iostreams::close_handle))
+        , jsonWriter_(GetStreamWriterBuilder().newStreamWriter())
     {
         {
             // Validate the SMART_ENUM against the stage names.
@@ -131,12 +140,16 @@ public:
         stage.ready = it->second.ready;
         stage.stageWeights = stageWeights_;
         stage.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " " << stage.Serialize() << std::endl;
+        stream_ << header_ << " ";
+        jsonWriter_->write(stage.Serialize(), &stream_);
+        stream_ << std::endl;
     }
 
     void Message(const Output& stage)
     {
-        stream_ << header_ << " " << stage.Serialize() << std::endl;
+        stream_ << header_ << " ";
+        jsonWriter_->write(stage.Serialize(), &stream_);
+        stream_ << std::endl;
     }
 
     void Exception(const Json::Value& j)
@@ -144,7 +157,9 @@ public:
         Json::Value jOut = j;
         jOut["timeStamp"] = Utilities::ISO8601::TimeString();
         jOut["state"] = "exception";
-        stream_ << header_ << " " << jOut << std::endl;
+        stream_ << header_ << " ";
+        jsonWriter_->write(jOut, &stream_);
+        stream_ << std::endl;
     }
 
 public:
@@ -214,6 +229,7 @@ private:
     std::vector<int> stageWeights_;
     std::string header_;
     boost::iostreams::stream<boost::iostreams::file_descriptor_sink> stream_;
+    std::unique_ptr<Json::StreamWriter> jsonWriter_;
 };
 
 }} // namespace PacBio::IPC

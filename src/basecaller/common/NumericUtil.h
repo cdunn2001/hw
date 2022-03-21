@@ -49,7 +49,7 @@ inline FP satlin(const FP& a, const FP& b, const FP& x)
 
 /// Squares the argument.
 template <typename NumT>
-NumT pow2(const NumT& x)
+constexpr NumT pow2(const NumT& x)
 { return x*x; }
 
 

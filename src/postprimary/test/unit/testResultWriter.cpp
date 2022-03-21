@@ -275,10 +275,9 @@ TEST(ResultWriter,LB_SM_tags)
 
     bool computeStats = true;
 
-    PacBio::BAM::CollectionMetadata cmd;
-
     // create 3 datasets, each with different XML Wellsamples
     {
+        PacBio::BAM::CollectionMetadata cmd;
         // No WellSample node
         rmd->dataSetCollection = R"(
 <Collections>
@@ -334,6 +333,15 @@ TEST(ResultWriter,LB_SM_tags)
     // are effectively ignored when parsed.
     // The second biosample will be ignored.
     {
+        PacBio::BAM::CollectionMetadata cmd;
+        auto& wellSample = cmd.Child<PacBio::BAM::internal::DataSetElement>("WellSample");
+        wellSample.Attribute("Name", "12345_SAT");
+
+        auto& bioSamples = wellSample.Child<PacBio::BAM::internal::DataSetElement>("BioSamples");
+
+        bioSamples.Child<PacBio::BAM::internal::DataSetElement>("BioSample")
+                  .Attribute("Name", "lambda 2");
+
         // Fully populated WellSample Node
         rmd->dataSetCollection = R"(
 <Collections>
@@ -374,7 +382,7 @@ TEST(ResultWriter,LB_SM_tags)
                 {
                     EXPECT_EQ("12345_SAT", rg.Library());
                     // newline and tab is replaced by _
-                    EXPECT_EQ("lambda_11_22_33", rg.Sample());
+                    EXPECT_EQ("lambda 2", rg.Sample());
                 }
             }
         }
@@ -382,6 +390,10 @@ TEST(ResultWriter,LB_SM_tags)
 
 
     {
+        PacBio::BAM::CollectionMetadata cmd;
+        auto& wellSample = cmd.Child<PacBio::BAM::internal::DataSetElement>("WellSample");
+        wellSample.Attribute("Name", "12345_SAT");
+
         // Wellsample Node, without BioSamples nodes. The WellSample name has an escaped TAB character.
         rmd->dataSetCollection = R"(
 <Collections>
@@ -463,6 +475,11 @@ TEST(ResultWriter,StreamingToStdout)
 
 
     PacBio::BAM::CollectionMetadata cmd;
+    cmd.Child<PacBio::BAM::internal::DataSetElement>("ConsensusReadSetRef")
+       .Attribute("UniqueId", "faf4adf1-73f4-4ea8-be07-89a92318ff2c");
+
+    auto& wellSample = cmd.Child<PacBio::BAM::internal::DataSetElement>("WellSample");
+    wellSample.Attribute("Name", "Sample Name");
 
     {
         bool computeStats = true;

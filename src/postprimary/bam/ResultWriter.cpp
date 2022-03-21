@@ -647,45 +647,59 @@ std::string ResultWriter::CreateBam(const std::vector<ProgramInfo>& programInfos
 
     BamCommentSideband sideband;
     {
-        if (user_ && user_->runtimeMetaDataFilePath != "")
+        if (user_)
         {
-            PBLOG_INFO << "Writing contents of " << user_->runtimeMetaDataFilePath << " <CollectionMetadata>"
-                                                                                      " to BAM header comment";
-            std::ifstream ifs(user_->runtimeMetaDataFilePath);
-            PacBio::Text::PBXml rmd(ifs);
-            auto subreadSetElement = rmd.Down("PacBioDataModel")
-                    .Down("ExperimentContainer")
-                    .Down("Runs")
-                    .Down("Run")
-                    .Down("Outputs")
-                    .Down("SubreadSets")
-                    .Down("SubreadSet");
-            // just grab the Name attribute
-            sideband.SetSubreadsetName(subreadSetElement.currentNode.attribute("Name").as_string(""));
-
-            // grab the entire XML string
-            PacBio::Text::PBXml dataSetMetadata = subreadSetElement
-                    .Down("DataSetMetadata");
-            std::string xml = dataSetMetadata.RawChildXML("Collections");
-            PBLOG_DEBUG << "collection metadata" << xml;
-            sideband.SetCollectionMetadataXML(xml);
-
-            // just grab the UUID
-            std::string consensusReadSetRefUuid = dataSetMetadata
-                    .Down("Collections")
-                    .Down("CollectionMetadata")
-                    .Down("ConsensusReadSetRef").currentNode.attribute("UniqueId").as_string("");
-            if (consensusReadSetRefUuid != "")
+            if (user_->runtimeMetaDataFilePath != "")
             {
-                sideband.SetDatasetUUID(consensusReadSetRefUuid);
+                std::ifstream ifs(user_->runtimeMetaDataFilePath);
+                PacBio::Text::PBXml rmd(ifs);
+                std::string xml  = rmd.Down("PacBioDataModel")
+                        .Down("ExperimentContainer")
+                        .Down("Runs")
+                        .Down("Run")
+                        .Down("Outputs")
+                        .Down("SubreadSets")
+                        .Down("SubreadSet")
+                        .Down("DataSetMetadata")
+                        .RawChildXML("Collections");
+                sideband.SetCollectionMetadataXML(xml);
+            }
+            else if (user_->subreadsetFilePath != "")
+            {
+                std::ifstream ifs(user_->subreadsetFilePath);
+                PacBio::Text::PBXml rmd(ifs);
+                std::string xml  = rmd.Down("SubreadSet")
+                        .Down("DataSetMetadata")
+                        .RawChildXML("Collections");
+                sideband.SetCollectionMetadataXML(xml);
+            }
+        }
+
+        if (rmd_)
+        {
+            sideband.SetSubreadsetName(rmd_->subreadSet.name);
+        }
+
+        if (cmd_)
+        {
+            if (cmd_->HasChild("ConsensusReadSetRef"))
+            {
+                const auto& c = cmd_->Child<PacBio::BAM::internal::DataSetElement>("ConsensusReadSetRef");
+                if (c.HasAttribute("UniqueId"))
+                {
+                    sideband.SetDatasetUUID(c.Attribute("UniqueId"));
+                }
             }
         }
     }
+
     if (maxNumZmws_ != 0) sideband.SetNumZmws(maxNumZmws_);
+
     for(const auto& resource: additionalExternalResources)
     {
         sideband.AddExternalResource(resource);
     }
+
     {
         Json::Value commentCopy = sideband.GetJsonComment();
         if (! PacBio::Logging::PBLogger::SeverityIsEnabled(PacBio::Logging::LogLevel::DEBUG))
@@ -889,28 +903,29 @@ ReadGroupInfo ResultWriter::CreateReadGroupInfo(const std::string& readType)
     if (!rmd_->bindingKit.empty())
         group.BindingKit(SanitizeBAMTag(rmd_->bindingKit));
 
-    if (!rmd_->dataSetCollection.empty())
+    if (cmd_ && cmd_->HasChild("WellSample"))
     {
-        pugi_pb::xml_document collections;
-        if (!collections.load(rmd_->dataSetCollection.c_str()))
+        const auto& wellSampleNode = cmd_->Child<PacBio::BAM::internal::DataSetElement>("WellSample");
+        if (wellSampleNode.HasAttribute("Name"))
         {
-            throw PBException("failure to parse datasetcollection");
-        }
-
-        auto wellSampleNode = collections.select_single_node(".//Collections/CollectionMetadata/WellSample/@Name");
-        if (wellSampleNode)
-        {
-            std::string library = wellSampleNode.attribute().as_string("");
+            std::string library = wellSampleNode.Attribute("Name");
             library = SanitizeBAMTag(library);
             group.Library(library); // aka LB tag
         }
 
-        auto bioSampleNode = collections.select_single_node(".//Collections/CollectionMetadata/WellSample/BioSamples/BioSample/@Name");
-        if (bioSampleNode)
+        if (wellSampleNode.HasChild("BioSamples"))
         {
-            std::string sample = bioSampleNode.attribute().as_string("");
-            sample = SanitizeBAMTag(sample);
-            group.Sample(sample); // aka SM tag
+            const auto& bioSamples = wellSampleNode.Child<PacBio::BAM::internal::DataSetElement>("BioSamples");
+            if (bioSamples.HasChild("BioSample"))
+            {
+                const auto& bioSample = bioSamples.Child<PacBio::BAM::internal::DataSetElement>("BioSample");
+                if (bioSample.HasAttribute("Name"))
+                {
+                    std::string sample = bioSample.Attribute("Name");
+                    sample = SanitizeBAMTag(sample);
+                    group.Sample(sample); // aka SM tag
+                }
+            }
         }
     }
 

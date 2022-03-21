@@ -178,8 +178,9 @@ void DmeEmHost::PrelimEstimate(const BaselinerStats& baselinerStats,
     const Data::SignalModeHost<FloatVec>& m0blm = model->BaselineMode();
     const StatAccumulator<FloatVec>& blsa = baselinerStats.BaselineFramesStats();
 
+    const auto blVarMax = BaselineVarianceMax();
     auto blVar  = Blend(mask, blsa.Variance(), m0blm.SignalCovar());
-    blVar = max(blVar, BaselineVarianceMin());
+    blVar = clamp(blVar, BaselineVarianceMin(), blVarMax);
     auto blMean = Blend(mask, blsa.Mean(), m0blm.SignalMean());
     assert(all(isfinite(blMean)));
     assert(all(isfinite(blVar)) && all(blVar > 0.0f));
@@ -208,6 +209,7 @@ void DmeEmHost::PrelimEstimate(const BaselinerStats& baselinerStats,
     // statistics is the same as that of the detection model being updated.
 
     FloatVec conf = 0.1f * satlin<FloatVec>(0.0f, 500.0f, nBlFrames - nBaselineMin);
+    conf *= satlin<FloatVec>(blVarMax, 0.5f * (BaselineVarianceNominal() + blVarMax), blVar);
     model->Confidence(conf);
 }
 
@@ -255,22 +257,33 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     ModeArray mu;      // Mean of each mode.
     ModeArray var;     // Variance of each mode.
 
-    rho[0] = bgMode.Weight();
+    const float rhoMin = 0.001f;
+    const float blVarMin = BaselineVarianceMin();
+    const float blVarMax = BaselineVarianceMax();
+
+    rho[0] = max(bgMode.Weight(), rhoMin);
+    assert(all(rho[0] <= 1.0f));
     mu[0] = bgMode.SignalMean();
     var[0] = bgMode.SignalCovar();
+    assert(all(var[0] >= blVarMin));
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto k = a + 1;
         PBAssert(k < nModes, "k < nModes");
         const auto& pma = pulseModes[a];
-        rho[k] = pma.Weight();
+        rho[k] = max(pma.Weight(), rhoMin);
+        assert(all(rho[k] <= 1.0f));
         mu[k] = pma.SignalMean();
         var[k] = pma.SignalCovar();
+        assert(all(var[k] >= blVarMin));
     }
 
     // Variance associated with data binning.
     const auto& varQuant = pow2(hist.BinSize()) / 12.0f;
     var += varQuant;
+
+    // Enforce sanity bound on baseline variance.
+    var[0] = min(var[0], blVarMax);
 
     // Enforce normalization of mixture fractions.
     rho = rho / rho.sum();
@@ -330,8 +343,10 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     MaxLikelihoodDiagnostics<FloatVec>& mldx = dmeDx.mldx;
     mldx.degOfFreedom = LaneArray<int>(numFrames - CoreDMEstimator::nModelParams);
 
-    // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
-    // Machine Learning 47:7 (2002). [CSMM2002]
+    // Expectation-maximization of grouped data.
+    // See G. J. McLachlan and P. N. Jones,
+    // Biometrics, Vol. 44, No. 2 (June, 1988), pp. 571-578.
+    // http://www.jstor.org/stable/2531869
 
     const auto nBins = numeric_cast<unsigned short>(hist.NumBins());
 
@@ -476,7 +491,13 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         // M-step
 
         // Mixing fractions.
+        // Constrain baseline component to have some minimal mixing fraction.
+        // TODO: When active, this constraint will cause bias in mu[0] and var[0].
+        // We've constrained the original mixing fraction > 0.
+        // The only other way for c_i to be zero is underflow.
+        c_i = c_i.max(0.1f);
         rho = c_i / n_j_sum;
+        rho = rho / rho.sum();
 
         // Background mean.
         mu[0] = mom1[0] / c_i[0];
@@ -530,6 +551,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         }
         mom2 *= 0.5f * binSize;
         var[0] = mom2 / c_i[0] + varQuant;
+        var[0] = clamp(var[0], blVarMin, blVarMax);
 
         // Each pulse mode variance is computed as a function of the background
         // variance and the pulse mode mean.
@@ -552,6 +574,8 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
     PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
     bgMode.SignalMean(muEst[0]);
     PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
+    // PBAssert(all(varEst[0] >= blVarMin), "Baseline variance below allowed range.");
+    // PBAssert(all(varEst[0] <= blVarMax), "Baseline variance above allowed range.");
     bgMode.SignalCovar(varEst[0]);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
@@ -861,7 +885,7 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
     auto& bm = ldm->BaselineMode();
     bm.weights = blWeight;
     bm.means = blMean;
-    bm.vars = blVar;
+    bm.vars = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
 
     // Distribute non-baseline weight equally among the analogs.
     const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
@@ -871,7 +895,7 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
     {
         auto& aMode = ldm->AnalogMode(a);
         aMode.weights = analogModeWeight;
-        const auto aMean = blMean + analogs_[a].relAmplitude * refSignal;
+        const auto aMean = max(0, blMean + analogs_[a].relAmplitude * refSignal);
         aMode.means = aMean;
         const auto cv2 = pow2(Analog(a).excessNoiseCV);
         aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
@@ -896,15 +920,7 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
     blMean = Blend(isnan(blMean), FallbackBaselineMean(), blMean);
     blVar = Blend(isnan(blVar), FallbackBaselineVariance(), blVar);
 
-    // TODO: Can this be eliminated?
-    // We're having problems with the baseline variance overflowing a half precision
-    // storage.  Something is already terribly wrong if our variance is over
-    // 65k, but we'll put a limiter here because having a literal infinity run
-    // around is causing problems elsewhere
-    blVar = min(blVar, 60000.0f);
-
-    // Constrain variance to a minimum value.
-    blVar = max(blVar, BaselineVarianceMin());
+    blVar = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
 
     InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }
