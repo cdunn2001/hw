@@ -302,6 +302,14 @@ public: // more friend functions (not operators)
             l, r);
     }
 
+    // TODO: Seems like this does not really need to be "friend".
+    /// Returns the value of v constrained by limits lo and hi.
+    friend Derived clamp(const Derived& v, const Derived& lo, const Derived& hi)
+    {
+        assert(all(lo <= hi));
+        return min(max(v, lo), hi);
+    }
+
     friend Derived abs(const Derived& a)
     {
         if constexpr (std::is_signed_v<ScalarType<T>>) return max(a, -a);

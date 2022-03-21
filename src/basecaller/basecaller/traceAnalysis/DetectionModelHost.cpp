@@ -29,6 +29,8 @@
 
 #include "DetectionModelHost.h"
 
+#include <limits.h>
+
 #include <common/LaneArray.h>
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
@@ -275,9 +277,11 @@ template <typename VF2>
 void SignalModeHost<VF>::ExportTo(LaneAnalogMode<VF2, laneSize>* lam) const
 {
     assert(lam);
-    lam->means =  mean_;
-    lam->vars = var_;
     lam->weights = weight_;
+    lam->means =  mean_;
+    // TODO: Get a specialization of std::numeric_limits for PBHalf.
+    const auto varMax = (std::is_same_v<VF2, Cuda::PBHalf> ? VF2(65000.0f) : std::numeric_limits<VF2>::max());
+    lam->vars = min(var_, varMax);
 }
 
 
