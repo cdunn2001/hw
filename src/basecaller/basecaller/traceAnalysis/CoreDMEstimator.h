@@ -67,16 +67,34 @@ public:     // Types
     struct Configuration
     {
         float fallbackBaselineMean;
+
+        // TODO: Seems like using baselineVarianceNominal as our fallback value
+        // would make a lot of sense.
         float fallbackBaselineVariance;
+
         float signalScaler;     // photoelectronSensitivity (e-/DN)
+
+        CUDA_ENABLED float BaselineVarianceNominal() const
+        { return pow2(2.0f * signalScaler); }
 
         CUDA_ENABLED float BaselineVarianceMin() const
         {
+            // Use a simple estimate of quantization noise.
             constexpr auto oneTwelfth = 1.0f / 12.0f;
             const auto ss = std::max(signalScaler, 1.0f);
             return ss * ss * oneTwelfth;
         }
 
+        CUDA_ENABLED float BaselineVarianceMax() const
+        {
+            constexpr float headroom = pow2(6.0f);
+            const float varMax = headroom * BaselineVarianceNominal();
+
+            // Ensure that varMax is representable in half-precision.
+            assert(varMax < 6.5e+4f);
+
+            return varMax;
+        }
     };
 
 public:     // Static constants
@@ -109,9 +127,15 @@ public:     // Static functions
     static float FallbackBaselineVariance()
     { return config_.fallbackBaselineVariance; }
 
+    static float BaselineVarianceNominal()
+    { return config_.BaselineVarianceNominal(); }
+
     /// Baseline variance is constrained to be no smaller than this.
     static float BaselineVarianceMin()
     { return config_.BaselineVarianceMin(); }
+
+    static float BaselineVarianceMax()
+    { return config_.BaselineVarianceMax(); }
 
     /// The scale factor applied to the raw trace signal values.
     /// In current practice, the conversion from DN to photoelectron units
