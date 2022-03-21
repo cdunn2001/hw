@@ -30,6 +30,8 @@
 
 #include <limits>
 
+#include <common/IntInterval.h>
+
 #include <common/cuda/memory/AllocationViews.cuh>
 #include <common/cuda/PBCudaSimd.cuh>
 #include <common/cuda/streams/LaunchManager.cuh>
@@ -48,6 +50,9 @@ using std::numeric_limits;
 using namespace PacBio::Cuda;
 using namespace PacBio::Cuda::Utility;
 using namespace PacBio::Mongo::Data;
+
+using FrameIntervalType = PacBio::Mongo::IntInterval<FrameIndexType>;
+
 
 namespace PacBio {
 namespace Mongo {
@@ -75,6 +80,8 @@ struct StaticConfig
     CudaArray<AnalogMode, 4> analogs;
     float analogMixFracThresh0_;
     float analogMixFracThresh1_;
+    float confidHalfLife0_;
+    float confidHalfLife1_;
     float scaleSnrConfTol_;
     unsigned short emIterLimit_;
     float gTestFactor_;
@@ -289,6 +296,8 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
 
     config.analogMixFracThresh0_ = dmeConfig.AnalogMixFractionThreshold[0];
     config.analogMixFracThresh1_ = dmeConfig.AnalogMixFractionThreshold[1];
+    config.confidHalfLife0_ = dmeConfig.ConfidenceHalfLife[0];
+    config.confidHalfLife1_ = dmeConfig.ConfidenceHalfLife[1];
     config.scaleSnrConfTol_ = dmeConfig.ScaleSnrConfTol;
 
     config.emIterLimit_ = dmeConfig.EmIterationLimit;
@@ -672,6 +681,35 @@ __device__ float Variance(const StatAccumState& stats)
     return stats.moment0[threadIdx.x] > 1.0f ? var : nan;
 };
 
+__device__ void EvolveModel(FiTypeDevice estFI,
+                            const BaselinerStatAccumState& blStats,
+                            ZmwDetectionModel* model,
+                            FiTypeDevice modFI)
+{
+    // Current and next model
+    auto mod0Cntr = modFI.lo + modFI.up / 2;
+    auto mod1Cntr = estFI.lo + estFI.up / 2;
+
+    const float thl = 0.5f * (mod0Cntr + mod1Cntr);
+
+    // TODO: Make these configurable.       ALP: Adaptive Laser Power
+    static const float t00 = 56160.0f;   // 50th percentile of ALP duration
+    static const float t10 = 168480.0f;  // 97.5th %-ile of ALP duration
+
+    // Compute the nominal confidence half-life.
+    const float& hl0 = staticConfig.confidHalfLife0_;
+    const float& hl1 = staticConfig.confidHalfLife1_;
+    const float hl = hl0 + (hl1 - hl0) * satlin(t00, t10, thl);     // frames
+
+    // EvolveConfidence
+    const auto t01 = mod0Cntr;
+    const auto t11 = mod1Cntr;
+    auto confHalfLife = hl;
+    const float tDiff = static_cast<float>(t11 - t01);
+    const auto m = exp2(-abs(tDiff)/confHalfLife);
+    model->confidence *= m;
+}
+
 __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
                                ZmwDetectionModel* model)
 {
@@ -723,9 +761,11 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
 // Use the trace histogram and the input detection model to compute a new
 // estimate for the detection model. Mix the new estimate with the input
 // model, weighted by confidence scores. That result is returned in detModel.
-__device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
+__device__ void EstimateLaneDetModel(FiTypeDevice estFI,
+                                     const DmeEmDevice::LaneHist& hist,
                                      const BaselinerStatAccumState& blStatAccState,
-                                     LaneDetModel* detModel)
+                                     LaneDetModel* detModel,
+                                     FiTypeDevice modFI)
 {
     // TODO: Evolve model. Use trace autocorrelation to adjust confidence
     // half-life.
@@ -737,15 +777,23 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
     else
         model0.Assign<1>(*detModel, threadIdx.x/2);
 
+    FiTypeDevice wmFI;
+    EvolveModel(estFI, blStatAccState, &model0, modFI);
+    modFI = estFI;
+
     // Update model based on estimate of baseline variance
     // with confidence-weighted method
     ZmwDetectionModel workModel = model0;
+    wmFI = modFI;
+
     PrelimEstimate(blStatAccState, &workModel);
 
     UpdateModel(workModel, &model0);
+    modFI = wmFI;
 
     // Make a working copy of the detection model.
     workModel = model0;
+    wmFI = modFI;
 
     // The term "mode" refers to a component of the mixture model.
     auto& bgMode = workModel.baseline;
@@ -1181,26 +1229,41 @@ __device__ void EstimateLaneDetModel(const DmeEmDevice::LaneHist& hist,
 
     // Update the current model, model0.
     UpdateModel(workModel, &model0);
+    modFI = wmFI;
 
     // Transcribe back to *detModel.
     model0.Export(threadIdx.x/2, threadIdx.x%2, detModel);
 }
 
-__global__ void EstimateKernel(Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
+__global__ void EstimateKernel(FiTypeDevice estFI,
+                               Cuda::Memory::DeviceView<const DmeEmDevice::LaneHist> hists,
                                Cuda::Memory::DeviceView<const BaselinerStatAccumState> blStatsState,
-                               Cuda::Memory::DeviceView<LaneDetModel> models)
+                               Cuda::Memory::DeviceView<LaneDetModel> models,
+                               FiTypeDevice currFI)
 {
-    EstimateLaneDetModel(hists[blockIdx.x], blStatsState[blockIdx.x], &models[blockIdx.x]);
+    EstimateLaneDetModel(estFI, hists[blockIdx.x], blStatsState[blockIdx.x], &models[blockIdx.x], currFI);
 }
 
 
 void DmeEmDevice::EstimateImpl(const PoolHist &hist, 
                                const Data::BaselinerMetrics& metrics,
-                               PoolDetModel *detModel) const
+                               PoolDetModel *detModelPool) const
 {
+    // We assume that frame intervals of the trace histogram and the baseliner
+    // statistics are equal.
+    const auto& hfi = hist.frameInterval;
+    assert(hfi == metrics.frameInterval);
+
+    const auto& pfi = detModelPool->frameInterval;
+
+    FiTypeDevice hstFI { hfi.Lower(), hfi.Upper() };
+    FiTypeDevice modFI { pfi.Lower(), pfi.Upper() };
+
     Cuda::PBLauncher(EstimateKernel, hist.data.Size(), laneSize)
-                    (hist.data, metrics.baselinerStats, detModel->data);
+                    (hstFI, hist.data, metrics.baselinerStats, detModelPool->data, modFI);
     Cuda::CudaSynchronizeDefaultStream();
+
+    detModelPool->frameInterval = hfi;
 }
 
 __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState> stats,
