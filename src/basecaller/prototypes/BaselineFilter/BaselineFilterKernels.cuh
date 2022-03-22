@@ -555,11 +555,13 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
         {
             // Data shifted and scaled
             auto rawSignal = inZmw(j);
-            auto blSubtractedFrame = (rawSignal - blEst) * sParams.scale;
+            auto blSubtractedFrame = ToShort((rawSignal - blEst) * sParams.scale);
             // ... stored as output traces
-            outZmw[j] = ToShort(blSubtractedFrame);
+            outZmw[j] = blSubtractedFrame;
             // ... and added to statistics
-            localLatent.AddToBaselineStats(rawSignal * sParams.scale, blSubtractedFrame, sParams.scale, stats);
+            localLatent.AddToBaselineStats(ToShort(rawSignal * sParams.scale),
+                                           blSubtractedFrame,
+                                           sParams.scale, stats);
         }
     }
 
