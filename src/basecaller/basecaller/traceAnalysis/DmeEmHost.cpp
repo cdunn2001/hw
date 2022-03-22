@@ -143,10 +143,12 @@ void DmeEmHost::EstimateImpl(const PoolHist &hist,
     const auto& hfi = hist.frameInterval;
     assert(hfi == metrics.frameInterval);
 
+    const auto& pfi = detModelPool->frameInterval;
+
     tbb::task_arena().execute([&] {
         tbb::parallel_for((uint32_t) {0}, PoolSize(), [&](uint32_t l) {
             // Estimate parameters transcribe results back to this lane
-            LaneDetModelHost detModelHost {dmView[l], detModelPool->frameInterval};
+            LaneDetModelHost detModelHost {dmView[l], pfi};
             EstimateLaneDetModel(hfi, hView[l], blsView[l], &detModelHost);
             detModelHost.ExportTo(&dmView[l]);
             assert(hfi == detModelHost.FrameInterval());
@@ -811,7 +813,7 @@ void DmeEmHost::EvolveModel(const FrameIntervalType estimationFI,
     // Evaluate the half-life at the midpoint of tModel and tEst.
     const float thl = 0.5f * numeric_cast<float>(tModel + tEst);
 
-    // TODO: Make these configurable.
+    // TODO: Make these configurable.   // ALP: Adaptive Laser Power
     static const float t0 = 56160.0f;   // 50th percentile of ALP duration
     static const float t1 = 168480.0f;  // 97.5th %-ile of ALP duration
 

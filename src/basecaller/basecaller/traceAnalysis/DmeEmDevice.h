@@ -30,10 +30,13 @@
 //  Defines class DmeEmHost.
 
 #include <common/MongoConstants.h>
+
 #include "CoreDMEstimator.h"
+
 
 namespace PacBio {
 namespace Mongo {
+
 namespace Basecaller {
 
 // This class and the next could probably be unified with the Lane versions via
@@ -70,6 +73,12 @@ struct ZmwAnalogMode
     float mean;
     float var;
     float weight;
+};
+
+struct FiTypeDevice
+{
+    int32_t lo;
+    int32_t up;
 };
 
 struct ZmwDetectionModel
@@ -117,7 +126,6 @@ struct ZmwDetectionModel
     Cuda::Utility::CudaArray<ZmwAnalogMode, numAnalogs> analogs;
     ZmwAnalogMode baseline;
 
-    // TODO: Need to handle frame interval.
     float confidence = 0;
 };
 
@@ -133,6 +141,7 @@ public:
     DmeEmDevice(uint32_t poolId, unsigned int poolSize);
 
     PoolDetModel InitDetectionModels(const PoolBaselineStats& blStats) const override;
+
 private:    // Customized implementation
     void EstimateImpl(const PoolHist& hist,
                       const Data::BaselinerMetrics& metrics,
