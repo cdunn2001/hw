@@ -262,8 +262,7 @@ __device__ void UpdateModel(const ZmwDetectionModel& from,
         default: UpdateModel0(from, to, fraction); break;
     }
 
-    // TODO no confidence stored in LaneModelParameters
-    //Confidence(confSum);
+    to->confidence=confSum;
 }
 
 }
@@ -1219,7 +1218,6 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         if (conf < staticConfig.successConfThresh_) conf = 0;
         workModel.confidence = conf;
     }
-
     // TODO: Push results to DmeDumpCollector.
     //    if (this->dmeDumpCollector_)
     //    {
