@@ -176,14 +176,6 @@ public:
         // with which further unit tests can be written to verify its contents.
         dme->Estimate(completeData->traceHistAccum->Histogram(), completeData->blMetrics, &models);
 
-        if (std::is_same_v<Filter,DmeEmDevice>)
-        {
-              // If we skip the "EmDevice" test prior to this point, we can get a
-              // failure of Device/FrameLabelerTest.CompareVsGroundTruth/0.  See
-              // PTSD-1137.
-              GTEST_SKIP() << "Need to fix DME implementation for GPU. See PTSD-1154.";
-        }
-
         const auto& nFrames = GetParam().nFrames;
         const auto numFrames = std::accumulate(nFrames.cbegin(), nFrames.cend(),
                                                FrameIntervalSizeType(0));
