@@ -125,6 +125,7 @@ private:
     SimInputConfig simCfg_;
 
     std::default_random_engine gnr_;
+    std::chrono::steady_clock::time_point delayTime_;
 };
 
 } // namespace PacBio::Calibration

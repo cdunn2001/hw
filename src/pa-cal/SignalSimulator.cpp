@@ -167,7 +167,7 @@ void DataSourceSimulator::ContinueProcessing()
 {
     assert(!layouts_.empty());
 
-    if (currChunk_.HasFullPacketCoverage())
+    if ((std::chrono::steady_clock::now() < delayTime_) || currChunk_.HasFullPacketCoverage())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return;
@@ -205,5 +205,5 @@ void DataSourceSimulator::ContinueProcessing()
 void DataSourceSimulator::vStart()
 {
     int delayMs = simCfg_.minInputDelaySeconds * 1000;
-    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+    delayTime_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
 }
