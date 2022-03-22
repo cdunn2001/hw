@@ -161,6 +161,18 @@ public:
         jsonWriter_->write(jOut, &stream_);
         stream_ << std::endl;
     }
+    void Exception(const std::string& message)
+    {
+        Json::Value j = Json::objectValue;
+        j["message"] = message;
+        Exception(j);
+    }
+    void Exception(const char* message)
+    {
+        Json::Value j = Json::objectValue;
+        j["message"] = message;
+        Exception(j);
+    }
 
 public:
     class StageReporter
