@@ -594,7 +594,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"PKZVAR_T" : 0, (esc)
   \t\t\t\t\t"PULSE_DETECTION_SCORE" : -4.02734375, (esc)
   \t\t\t\t\t"PULSE_WIDTH" : 215, (esc)
-  \t\t\t\t\t"TRACE_AUTOCORR" : -0.59912109375 (esc)
+  \t\t\t\t\t"TRACE_AUTOCORR" : 0.64599609375 (esc)
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"BASELINE_MEAN" : 4.06640625, (esc)

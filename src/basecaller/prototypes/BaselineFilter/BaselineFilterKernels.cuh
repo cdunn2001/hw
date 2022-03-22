@@ -384,9 +384,9 @@ struct LatentBaselineData
         }
 
         __device__ void AddToBaselineStats(PBHalf2 rawTrace,
-                                        PBHalf2 blSubtracted,
-                                        PBHalf2 scale,
-                                        StatAccumulator<blockThreads, lag>& stats)
+                                           PBHalf2 blSubtracted,
+                                           PBHalf2 scale,
+                                           StatAccumulator<blockThreads, lag>& stats)
         {
             PBHalf2 thrLow  = blSigmaEma * sigmaThrL;
             PBHalf2 thrHigh = blSigmaEma * sigmaThrL;
@@ -430,8 +430,8 @@ struct LatentBaselineData
         local.latLMask     = latLMask[threadIdx.x];
         local.latHMask1    = latHMask1[threadIdx.x];
         local.latHMask2    = latHMask2[threadIdx.x];
-        local.m2Lag        = m2Lag[threadIdx.x];
 
+        local.m2Lag        = 0;
         local.fbi = local.bbi = 0;
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
@@ -453,13 +453,12 @@ struct LatentBaselineData
         latLMask[threadIdx.x]       = local.latLMask;
         latHMask1[threadIdx.x]      = local.latHMask1;
         latHMask2[threadIdx.x]      = local.latHMask2;
-        m2Lag[threadIdx.x]          = local.m2Lag;
     }
 
     __device__ void FillOutputCorr(LocalLatent& local, Mongo::Data::BaselinerStatAccumState& stats)
     {
-        stats.fullAutocorrState.moment2[2*threadIdx.x]        = m2Lag[threadIdx.x].X();
-        stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = m2Lag[threadIdx.x].Y();
+        stats.fullAutocorrState.moment2[2*threadIdx.x]        = local.m2Lag.X();
+        stats.fullAutocorrState.moment2[2*threadIdx.x+1]      = local.m2Lag.Y();
 
         #pragma unroll(lag)
         for (auto k = 0u; k < lag; ++k)
@@ -492,7 +491,6 @@ private:
     Utility::CudaArray<PBBool2, blockThreads> latLMask;
     Utility::CudaArray<PBBool2, blockThreads> latHMask1;
     Utility::CudaArray<PBBool2, blockThreads> latHMask2;
-    Utility::CudaArray<PBFloat2, blockThreads> m2Lag;
 };
 
 template <typename T, size_t blockThreads, size_t lag>
