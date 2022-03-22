@@ -114,7 +114,8 @@ TEST(PaCalProcess,LocalOptions)
         EXPECT_EQ(settings->outputFile, "location");
         EXPECT_EQ(settings->movieNum, 4);
         EXPECT_EQ(settings->sra, 2);
-        EXPECT_DOUBLE_EQ(settings->timeoutSeconds, 80.2);
+        // Temporary change, this value is overriden
+        EXPECT_DOUBLE_EQ(settings->timeoutSeconds, 1000);
     }
 }
 
