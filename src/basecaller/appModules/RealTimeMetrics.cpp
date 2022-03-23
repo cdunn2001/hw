@@ -31,8 +31,22 @@ using namespace PacBio::Mongo;
 namespace PacBio::Application
 {
 
+RealTimeMetrics::RealTimeMetrics(std::vector<Data::RealTimeMetricsRegion>& regions,
+                                 std::vector<DataSourceBase::LaneSelector>& selections,
+                                 std::vector<std::vector<uint32_t>>& features)
+{
+    for (size_t i = 0; i < regions.size(); i++)
+    {
+        uint32_t featuresMask = static_cast<uint32_t>(regions[i].features.front());
+        for (size_t f = 1; f < regions[i].features.size(); f++)
+            featuresMask |= static_cast<uint32_t>(regions[i].features[f]);
+        regionInfo_.push_back({ regions[i], std::move(selections[i]),
+                                SelectedLanesWithFeatures(features[i], featuresMask) });
+    }
+}
+
 std::vector<LaneMask<>> RealTimeMetrics::SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
-                                                                   uint32_t featuresMask) const
+                                                                   uint32_t featuresMask)
 {
     LaneArray<uint32_t> fm {featuresMask};
     std::vector<LaneMask<>> laneMasks;

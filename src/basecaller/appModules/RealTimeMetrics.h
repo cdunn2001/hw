@@ -33,41 +33,56 @@
 
 #include <common/graphs/GraphNodeBody.h>
 #include <common/LaneArray.h>
+#include <dataTypes/configs/RealTimeMetricsConfig.h>
 
 #include <bazio/writing/BazBuffer.h>
 
 namespace PacBio::Application
 {
 
-class NoopRealTimeMetrics final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+class NoopRealTimeMetrics final : public Graphs::TransformBody<std::unique_ptr<BazIO::BazBuffer>, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer>) override
+    std::unique_ptr<BazIO::BazBuffer> Process(std::unique_ptr<BazIO::BazBuffer> in) override
     {
+        return in;
     }
 };
 
-class RealTimeMetrics : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+class RealTimeMetrics : public Graphs::TransformBody<std::unique_ptr<BazIO::BazBuffer>, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
-    RealTimeMetrics() = default;
-    ~RealTimeMetrics() = default;
+    RealTimeMetrics(std::vector<Mongo::Data::RealTimeMetricsRegion>& regions,
+                    std::vector<DataSource::DataSourceBase::LaneSelector>& selections,
+                    std::vector<std::vector<uint32_t>>& features);
+
+    RealTimeMetrics(const RealTimeMetrics&) = delete;
+    RealTimeMetrics(RealTimeMetrics&&) = delete;
+    RealTimeMetrics& operator=(const RealTimeMetrics&) = delete;
+    RealTimeMetrics& operator==(RealTimeMetrics&&) = delete;
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer>) override
+    std::unique_ptr<BazIO::BazBuffer> Process(std::unique_ptr<BazIO::BazBuffer> in) override
     {
+        return in;
     }
 
-    std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
-                                                             uint32_t featuresMask) const;
+    static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
+                                                                    uint32_t featuresMask);
 
 private:
-
+    struct RegionInfo
+    {
+        Mongo::Data::RealTimeMetricsRegion region;
+        DataSource::DataSourceBase::LaneSelector selection;
+        std::vector<Mongo::LaneMask<>> laneMasks;
+    };
+    std::vector<RegionInfo> regionInfo_;
 };
 
 } // namespace PacBio::Application

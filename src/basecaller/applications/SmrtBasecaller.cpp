@@ -541,32 +541,41 @@ private:
         }
     }
 
-    std::unique_ptr<LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    std::unique_ptr<TransformBody<std::unique_ptr<PacBio::BazIO::BazBuffer>,std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreateRealTimeMetrics(const DataSourceRunner& dataSource)
     {
-        if (!config_.realTimeMetrics.roi.empty())
+        if (!config_.realTimeMetrics.regions.empty())
         {
-            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.realTimeMetrics.roi, laneSize);
-            const auto actualZmw = selection.size() * laneSize;
-
-            const auto& fullProperties = dataSource.GetUnitCellProperties();
-            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
-
-            size_t idx = 0;
-            for (const auto& lane: selection)
+            std::vector<DataSourceBase::LaneSelector> selections;
+            std::vector<std::vector<uint32_t>> properties;
+            for (const auto& region : config_.realTimeMetrics.regions)
             {
-                size_t currZmw = lane * laneSize;
-                for (size_t i = 0; i < laneSize; ++i)
-                {
-                    assert(idx < actualZmw);
-                    properties[idx] = fullProperties[currZmw];
-                    currZmw++;
-                    idx++;
-                }
-            }
-            assert(idx == actualZmw);
+                auto selection = SelectedBasecallerLanesWithinROI(dataSource, region.roi, laneSize);
 
-            return std::make_unique<RealTimeMetrics>();
+                const auto actualZmw = selection.size() * laneSize;
+
+                const auto& fullProperties = dataSource.GetUnitCellProperties();
+                std::vector<uint32_t> selectionFeatures(actualZmw);
+
+                size_t idx = 0;
+                for (const auto& lane: selection)
+                {
+                    size_t currZmw = lane * laneSize;
+                    for (size_t i = 0; i < laneSize; ++i)
+                    {
+                        assert(idx < actualZmw);
+                        selectionFeatures[idx] = fullProperties[currZmw].flags;
+                        currZmw++;
+                        idx++;
+                    }
+                }
+                assert(idx == actualZmw);
+                selections.emplace_back(std::move(selection));
+                properties.emplace_back(selectionFeatures);
+            }
+
+            return std::make_unique<RealTimeMetrics>(config_.realTimeMetrics.regions,
+                                                     selections, properties);
         }
         else
         {
@@ -579,7 +588,7 @@ private:
         SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
 
         // Names for the various graph stages
-        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
+        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
 
         auto source = CreateSource();
         AnalysisConfig analysisConfig;
@@ -610,7 +619,8 @@ private:
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
-                preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
+                auto* rtMetrics = preHQ->AddNode(CreateRealTimeMetrics(*source), GraphProfiler::RT_METRICS);
+                rtMetrics->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;
