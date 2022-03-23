@@ -142,7 +142,7 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
         size_t zmwPerBlock    = pkLayout.BlockWidth();
         size_t framesPerBlock = pkLayout.NumFrames();
 
-        #pragma omp parallel for schedule(dynamic)
+        // #pragma omp parallel for schedule(dynamic)
         for (size_t i = 0; i < numBlocks; ++i)
         {
             // Setup source data

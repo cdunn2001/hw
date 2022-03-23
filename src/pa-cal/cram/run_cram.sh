@@ -29,4 +29,4 @@ fi
 status=$?
 popd
 
-# exit $status
+exit $status
