@@ -42,6 +42,8 @@ from Helpers import RealtimeException, TerminateNamedProcess
 from KestrelRT import RT
 from ProgressHelper import ProgressManager, ProgressScope
 
+from SensorSim import SensorSim
+
 # Globals
 testSuite = TestSuite('kpa-ws test suite', [])
 args = argparse.Namespace()
@@ -142,12 +144,12 @@ class EndToEnd:
         self.progressMonitor.SetProgress("setup")
 
         if args.expedite:
-            args.numdarkcalframestx = 2048
+            args.numdarkcalframestx = 128
             args.darkcalstartframe = 200
-            args.numdarkcalframes = 100
+            args.numdarkcalframes = 128
 
             args.numloadcals = 1
-            args.numloadcalframestx = 2048
+            args.numloadcalframestx = 128
             args.numloadcalframes = "100"   # csv format
             args.loadcalstartframe= "2048"  # csv format
             args.loadcalexpcount  = "200.0" # csv format
@@ -355,12 +357,6 @@ class EndToEnd:
                      self.sensor.StartFrame(),
                      currentframe)
 
-        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p30:
-            self.sensor.SendFrames(args.numdarkcalframestx, args.darkcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
-            logging.info("EndToEnd.DoCalibrations: before preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
-            self.sensor.WaitUntilPreloaded()
-            logging.info("EndToEnd.DoCalibrations: after preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
-
         with ProgressScope(self.progressMonitor,"DoDarkCalibration") as p3:
             calFileUrl = self.DoDarkCalibration(acq)
             #Test.assertIn('file://' + localPaName + '/data/pa/cal/' + acq.mid + '_dark_', co['url'])
@@ -374,10 +370,6 @@ class EndToEnd:
         offsetFrame = self.sensor.GetCurrentFrameIndex()
         if offsetFrame == None or self.sensor.StartFrame() == 0:
             offsetFrame = 0
-
-        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p50:
-            self.sensor.SendFrames(args.numloadcalframestx, args.loadcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
-            self.sensor.WaitUntilPreloaded()
 
         loadinfo = []
         for loadcaliter in range(0, args.numloadcals):
@@ -426,6 +418,12 @@ class EndToEnd:
         logging.info('EndToEnd.DoDarkCalibration: %s', acq)
         self.rt.StartDarkcal("1", acq, self.movieNumber)
         self.rt.WaitForState("1","darkcal","RUNNING")
+        with ProgressScope(self.progressMonitor,"preloadingDarkCalFrames") as p30:
+            self.sensor.SendFrames(args.numdarkcalframestx, args.darkcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
+            logging.info("EndToEnd.DoCalibrations: before preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
+#            self.sensor.WaitUntilPreloaded()
+#            logging.info("EndToEnd.DoCalibrations: after preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
+
         self.rt.WaitForState("1","darkcal","COMPLETE")
 
         logging.info('EndToEnd.DoDarkCalibration: done')
@@ -437,6 +435,10 @@ class EndToEnd:
         logging.info('EndToEnd.DoDynamicLoadingCalibration: %s', acq)
         self.rt.StartLoadingcal("1", acq, self.movieNumber)
         self.rt.WaitForState("1","loadingcal","RUNNING")
+
+        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p50:
+            self.sensor.SendFrames(args.numloadcalframestx, args.loadcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
+
         self.rt.WaitForState("1","loadingcal","COMPLETE")
         logging.info('EndToEnd.DoDynamicLoadingCalibration: done')
         return self.rt.GetApp("1","loadingcal")
@@ -448,6 +450,8 @@ class EndToEnd:
         logging.info('EndToEnd.DoAcquisition: %s', acq)
         self.rt.StartBasecaller("1", acq, self.movieNumber)
         self.rt.WaitForState("1","basecaller","RUNNING")
+        with ProgressScope(self.progressMonitor,"acquisitionSendingFrames") as p50:
+            self.sensor.SendFrames(args.numFrames, args.datafile_on_sensorhost, frameRate=args.framerate, movieNumber=self.movieNumber)
         self.rt.WaitForState("1","basecaller","COMPLETE")
         logging.info('EndToEnd.DoAcquisition: done')
         return self.rt.GetApp("1","basecaller")
@@ -551,7 +555,7 @@ if __name__ == '__main__':
                        default='/pbi/dept/primary/sim/sequel/sequel_calpattern_frm512.trc.h5')
     group.add_argument('--numdarkcalframestx',
                        help="Number of dark cal frames to transmit. default: %(default)s",
-                       default=3000,type=int)
+                       default=128,type=int)
     group.add_argument('--darkcalstartframe',
                        help="Dark calibration start frame to use. default: %(default)s",
                        default=2510, type=int)
@@ -560,7 +564,7 @@ if __name__ == '__main__':
                        default=100.0, type=float) # the sim file above consists many frames of "100", and the startframe points to these.
     group.add_argument('--numdarkcalframes',
                        help="Number of dark calibration frames to use. default: %(default)s",
-                       default=100, type=int) # this is the number of the frames in the sim file, and also close to production dark frame movies.
+                       default=128, type=int) # this is the number of the frames in the sim file, and also close to production dark frame movies.
 
     group = parser.add_argument_group('Loading Calibration Setup')
     # Loading calibration
@@ -590,6 +594,9 @@ if __name__ == '__main__':
     group.add_argument('--framerate',
                        help="Acquisition frame rate (also used by --sensorhost for transmitting frames)",
                        default=100.0, type=float)
+    group.add_argument('--numFrames',
+                       help="Acquisition frames to be acquired",
+                       default=5120, type=int)
     group.add_argument('--runmetadata',
                        help="Acquisition run metadata to load",
                        default=os.path.dirname(os.path.abspath(__file__)) + '/test/m54004_170308_194231.metadata.xml')
@@ -684,7 +691,6 @@ if __name__ == '__main__':
 
         if args.bist:
             from PaWsSim import PaWsSim
-            from SensorSim import SensorSim
             from WxDaemonSim import WxDaemonSim
             wxdaemon = WxDaemonSim()
             wxdaemon.Run()

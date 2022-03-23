@@ -1,5 +1,6 @@
 from xml.dom import minidom
 import pytest
+import pathlib
 
 class Acquisition:
     def __init__(self, mid):
@@ -15,7 +16,10 @@ class Acquisition:
             }
 
     def GenerateDarkcalJsonPayload(self):
-        storagePrefix = "http://localhost:23632/storages/" + self.mid
+# TODO        storagePrefix = "http://localhost:23632/storages/" + self.mid
+        storagePrefix = "/data/nrta/0/" + self.mid
+        pathlib.Path(storagePrefix).mkdir(parents=True, exist_ok=True)
+
         return {
             "mid": self.mid,
             "movieMaxFrames": 512,
@@ -27,7 +31,9 @@ class Acquisition:
         }
 
     def GenerateLoadingcalJsonPayload(self):
-        storagePrefix = "http://localhost:23632/storages/" + self.mid
+# TODO        storagePrefix = "http://localhost:23632/storages/" + self.mid
+        storagePrefix = "/data/nrta/0/" + self.mid
+        pathlib.Path(storagePrefix).mkdir(parents=True, exist_ok=True)
         return {
             "mid": self.mid,
             "movieMaxFrames": 512,

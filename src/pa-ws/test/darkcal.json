@@ -1,0 +1,9 @@
+{
+    "calibFileUrl": "/data/nrta/0/darkcal1.h5",
+    "mid": "m1234",
+    "maxMovieFrames": 128,
+    "maxMovieSeconds": 500,
+    "movieNumber": 0,
+    "logUrl": "/data/nrta/0/darkcal1.log",
+    "logLevel": "INFO"
+}

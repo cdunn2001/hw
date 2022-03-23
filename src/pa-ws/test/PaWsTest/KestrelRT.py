@@ -34,7 +34,8 @@ class RT(HttpHelper.SafeHttpClient):
         self.progressMonitor.SetProgress("WaitForState:%s/%s=%s" % (socket,app,state))
         t0 = monotonic() 
         while True:
-            stateActual = self.checkedGet("%s/sockets/%s/%s/processStatus/executionStatus" % ( self.paws, socket, app ))
+            stateActual = self.checkedGet("%s/sockets/%s/%s" % ( self.paws, socket, app ))
+            stateActual = stateActual["processStatus"]["executionStatus"]
             if stateActual == state:
                 logging.info('RT.WaitForState: DONE %s/%s %s' % (socket,app,state))
                 return
