@@ -190,10 +190,11 @@ public:
             : StageReporter(pm, s, 1, timeoutForNextStatus)
         { }
 
-        void Update(uint64_t counter)
+        /// \param delta Increments the counter by the delta amount. The counter will not exceed the counterMax
+        void Update(uint64_t delta)
         {
             std::lock_guard<std::mutex> lock(reportMutex_);
-            currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
+            currentStage_.counter = std::min(currentStage_.counter + delta, currentStage_.counterMax);
             pm_->Message(currentStage_);
         }
 

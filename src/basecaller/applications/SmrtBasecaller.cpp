@@ -711,7 +711,7 @@ private:
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
 
-                    analyzeStageRpt.Update(framesAnalyzed);
+                    analyzeStageRpt.Update(chunk.NumFrames());
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
