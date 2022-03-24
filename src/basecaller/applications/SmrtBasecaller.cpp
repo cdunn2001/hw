@@ -228,6 +228,7 @@ private:
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
+                WXIPCDataSource::WaitForDaemon(wx2SourceConfig);
                 return CreateSharedHugePinnedAllocator(config_.source.GetEnum().toString(),
                                                        WXIPCDataSource::CreateAllocator(wx2SourceConfig),
                                                        CacheMode::PRIVATE_CACHE);
@@ -926,6 +927,7 @@ int main(int argc, char* argv[])
         bc->Run();
 
     } catch (const std::exception& ex) {
+        std::cerr << "Exception caught: " << ex.what() << std::endl;
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }

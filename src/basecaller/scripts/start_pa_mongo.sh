@@ -173,7 +173,7 @@ else
   export PATH=$scriptdir/../../../build/basecaller/gcc/x86_64/${BUILD}/applications:${PATH}
   echo PATH is $PATH
 fi
-if [[ $LOGOUTPUT != "" && $LOGOUTPUT != "none" ]]
+if [[ $LOGOUTPUT != "" && ${LOGOUTPUT^^} != "NONE" ]]
 then
     logoutput="--logoutput $LOGOUTPUT"
 else
@@ -199,5 +199,6 @@ echo PATH = $PATH
 
 set -x
 pwd
-smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output}
+smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output} --statusfd=1
 
+curl -X POST http://localhost:23602/restart
