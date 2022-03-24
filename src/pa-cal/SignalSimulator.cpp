@@ -142,6 +142,8 @@ SensorPacket DataSourceSimulator::GenerateBatch() const
     auto startZmw       = batchIdx_ * layouts_.at(0).NumZmw();
     auto startFrame     = chunkIdx_ * layouts_.at(0).NumFrames();
     SensorPacket batchData(layout, batchIdx_, startZmw, startFrame, *GetConfig().allocator);
+
+    // #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < numBlocks; ++i)
     {
         boost::multi_array_ref<T, 2> blkData(
@@ -165,7 +167,7 @@ void DataSourceSimulator::ContinueProcessing()
 {
     assert(!layouts_.empty());
 
-    if (currChunk_.HasFullPacketCoverage())
+    if ((std::chrono::steady_clock::now() < delayTime_) || currChunk_.HasFullPacketCoverage())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         return;
@@ -203,5 +205,5 @@ void DataSourceSimulator::ContinueProcessing()
 void DataSourceSimulator::vStart()
 {
     int delayMs = simCfg_.minInputDelaySeconds * 1000;
-    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+    delayTime_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
 }

@@ -1,0 +1,2 @@
+
+add_test(NAME cramPaCal COMMAND ./run_cram.sh WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})
