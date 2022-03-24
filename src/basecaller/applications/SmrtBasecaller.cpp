@@ -127,6 +127,13 @@ public:
         ThreadedProcessBase::HandleProcessOptions(options);
 
         frames_ = options.get("maxFrames");
+        const auto framesPerChunk = config_.layout.framesPerChunk;
+        if (frames_ % framesPerChunk != 0)
+        {
+            frames_ = (frames_ + framesPerChunk - 1) / framesPerChunk * framesPerChunk;
+            PBLOG_INFO << "Rounding up maxFrames to " << frames_ << ", to be "
+                       << "an even multiple of the chunk size (" << framesPerChunk << ")";
+        }
         // TODO need validation or something, as this is probably a trace file input specific option
         nop_ = options.get("nop");
         statusFileDescriptor_ = options.get("statusfd");
