@@ -33,31 +33,34 @@
 
 #include <common/graphs/GraphNodeBody.h>
 #include <common/LaneArray.h>
+#include <dataTypes/BatchResult.h>
 #include <dataTypes/configs/RealTimeMetricsConfig.h>
-
-#include <bazio/writing/BazBuffer.h>
 
 namespace PacBio::Application
 {
 
-class NoopRealTimeMetrics final : public Graphs::TransformBody<std::unique_ptr<BazIO::BazBuffer>, std::unique_ptr<BazIO::BazBuffer>>
+class NoopRealTimeMetrics final : public Graphs::TransformBody<Mongo::Data::BatchResult, Mongo::Data::BatchResult>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    std::unique_ptr<BazIO::BazBuffer> Process(std::unique_ptr<BazIO::BazBuffer> in) override
+    Mongo::Data::BatchResult Process(Mongo::Data::BatchResult in) override
     {
         return in;
     }
 };
 
-class RealTimeMetrics : public Graphs::TransformBody<std::unique_ptr<BazIO::BazBuffer>, std::unique_ptr<BazIO::BazBuffer>>
+class RealTimeMetrics : public Graphs::TransformBody<Mongo::Data::BatchResult, Mongo::Data::BatchResult>
 {
 public:
-    RealTimeMetrics(std::vector<Mongo::Data::RealTimeMetricsRegion>& regions,
-                    std::vector<DataSource::DataSourceBase::LaneSelector>& selections,
-                    std::vector<std::vector<uint32_t>>& features);
+    static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
+                                                                    uint32_t featuresMask);
+public:
+    RealTimeMetrics(uint32_t numFramesPerMetricBlock, size_t numBatches,
+                    std::vector<Mongo::Data::RealTimeMetricsRegion>&& regions,
+                    std::vector<DataSource::DataSourceBase::LaneSelector>&& selections,
+                    const std::vector<std::vector<uint32_t>>& features);
 
     RealTimeMetrics(const RealTimeMetrics&) = delete;
     RealTimeMetrics(RealTimeMetrics&&) = delete;
@@ -67,13 +70,7 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    std::unique_ptr<BazIO::BazBuffer> Process(std::unique_ptr<BazIO::BazBuffer> in) override
-    {
-        return in;
-    }
-
-    static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
-                                                                    uint32_t featuresMask);
+    Mongo::Data::BatchResult Process(Mongo::Data::BatchResult in) override;
 
 private:
     struct RegionInfo
@@ -83,6 +80,11 @@ private:
         std::vector<Mongo::LaneMask<>> laneMasks;
     };
     std::vector<RegionInfo> regionInfo_;
+
+    uint32_t framesPerMetricBlock_;
+    size_t numBatches_;
+    size_t batchesSeen_ = 0;
+    int32_t currFrame_ = std::numeric_limits<int32_t>::min();
 };
 
 } // namespace PacBio::Application

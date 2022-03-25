@@ -34,7 +34,6 @@
 // SUCH DAMAGE.
 
 
-#include <pacbio/primary/RTMetricsConfig.h>
 #include <postprimary/insertfinder/InsertState.h>
 
 #include "ZmwStats.h"

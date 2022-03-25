@@ -541,8 +541,8 @@ private:
         }
     }
 
-    std::unique_ptr<TransformBody<std::unique_ptr<PacBio::BazIO::BazBuffer>,std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreateRealTimeMetrics(const DataSourceRunner& dataSource)
+    std::unique_ptr<TransformBody<BatchResult, BatchResult>>
+    CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         if (!config_.realTimeMetrics.regions.empty())
         {
@@ -574,8 +574,10 @@ private:
                 properties.emplace_back(selectionFeatures);
             }
 
-            return std::make_unique<RealTimeMetrics>(config_.realTimeMetrics.regions,
-                                                     selections, properties);
+            return std::make_unique<RealTimeMetrics>(config_.algorithm.Metrics.framesPerHFMetricBlock,
+                                                     poolDims.size(),
+                                                     std::move(config_.realTimeMetrics.regions),
+                                                     std::move(selections), properties);
         }
         else
         {
@@ -618,9 +620,9 @@ private:
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
-                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
-                auto* rtMetrics = preHQ->AddNode(CreateRealTimeMetrics(*source), GraphProfiler::RT_METRICS);
-                rtMetrics->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
+                auto* rtMetrics = analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims), GraphProfiler::RT_METRICS);
+                auto* preHQ = rtMetrics->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
             }
 
             size_t numChunksAnalyzed = 0;

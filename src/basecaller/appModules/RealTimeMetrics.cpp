@@ -31,18 +31,52 @@ using namespace PacBio::Mongo;
 namespace PacBio::Application
 {
 
-RealTimeMetrics::RealTimeMetrics(std::vector<Data::RealTimeMetricsRegion>& regions,
-                                 std::vector<DataSourceBase::LaneSelector>& selections,
-                                 std::vector<std::vector<uint32_t>>& features)
+RealTimeMetrics::RealTimeMetrics(uint32_t framesPerMetricBlock, size_t numBatches,
+                                 std::vector<Data::RealTimeMetricsRegion>&& regions,
+                                 std::vector<DataSourceBase::LaneSelector>&& selections,
+                                 const std::vector<std::vector<uint32_t>>& features)
+    : framesPerMetricBlock_{framesPerMetricBlock}
+    , numBatches_{numBatches}
 {
     for (size_t i = 0; i < regions.size(); i++)
     {
         uint32_t featuresMask = static_cast<uint32_t>(regions[i].features.front());
         for (size_t f = 1; f < regions[i].features.size(); f++)
             featuresMask |= static_cast<uint32_t>(regions[i].features[f]);
-        regionInfo_.push_back({ regions[i], std::move(selections[i]),
+        regionInfo_.push_back({ std::move(regions[i]), std::move(selections[i]),
                                 SelectedLanesWithFeatures(features[i], featuresMask) });
     }
+}
+
+Mongo::Data::BatchResult RealTimeMetrics::Process(Mongo::Data::BatchResult in)
+{
+    const auto& pulseBatch = in.pulses;
+    const auto& metricsPtr = in.metrics;
+
+    if (metricsPtr)
+    {
+        if (metricsPtr->GetHostView()[0].numFrames[0] == framesPerMetricBlock_)
+        {
+            if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
+            {
+                if (batchesSeen_ % numBatches_ != 0)
+                    throw PBException("Data out of order, new metric block seen before all batches of previous metric block");
+                currFrame_ = pulseBatch.GetMeta().FirstFrame();
+            }
+            else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
+            {
+                throw PBException("Data out of order, multiple metric blocks being processed simultaneously");
+            }
+
+            batchesSeen_++;
+            if (batchesSeen_ == numBatches_)
+            {
+                batchesSeen_ = 0;
+            }
+        }
+    }
+
+    return in;
 }
 
 std::vector<LaneMask<>> RealTimeMetrics::SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
