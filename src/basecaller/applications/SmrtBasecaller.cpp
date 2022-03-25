@@ -28,6 +28,7 @@
 #include <appModules/BlockRepacker.h>
 #include <appModules/PrelimHQFilter.h>
 #include <appModules/RealTimeMetrics.h>
+#include <appModules/SmrtBasecallerProgress.h>
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
@@ -86,18 +87,12 @@ using namespace PacBio::IPC;
 // ^^^^
 ///////
 
-SMART_ENUM(SmrtBasecallerStages,
-           StartUp,
-           Analyze,
-           Shutdown);
-
-using SmrtBasecallerProgressMessage = ProgressMessage<SmrtBasecallerStages>;
-using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
 
 SmrtBasecallerProgressMessage::Table stages = {
-        { "StartUp",    { false, 0, 10 } },
-        { "Analyze",    {  true, 1, 80 } },
-        { "Shutdown",   { false, 2, 10 } }
+        { "StartUp",    { false, 0,  1 } },
+        { "BazCreation",{ false, 1,  9 } },
+        { "Analyze",    {  true, 2, 80 } },
+        { "Shutdown",   { false, 3, 10 } }
 };
 
 class SmrtBasecaller : public ThreadedProcessBase
@@ -508,9 +503,16 @@ private:
     CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
                    const ScanData::Data& experimentMetadata)
     {
+
+        const uint64_t creatingBazFileCounterMax = poolDims.size() + 3;
+        const auto reportTimeout = (config_.multipleBazFiles)?300:3000;
+        SmrtBasecallerStageReporter bazCreationRpt(progressMessage_.get(), SmrtBasecallerStages::BazCreation, 
+            creatingBazFileCounterMax, reportTimeout);
+
         if (hasBazFile_)
         {
             auto props = source.GetUnitCellProperties();
+            bazCreationRpt.Update(1);
 
             // NOTE: UnitCellProperties currently defines x,y as int32_t.
             std::vector<uint16_t> unitX;
@@ -526,18 +528,21 @@ private:
             transform(props.begin(), props.end(), back_inserter(unitFeatures),
                       [](DataSourceBase::UnitCellProperties x){ return static_cast<uint32_t>(x.flags); });
 
+            bazCreationRpt.Update(1);
             ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures));
 
+            bazCreationRpt.Update(1);
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
                                                    zmwInfo,
                                                    poolDims,
                                                    config_,
-                                                   experimentMetadata);
+                                                   experimentMetadata,
+                                                   bazCreationRpt);
         } else
         {
+            bazCreationRpt.Update(creatingBazFileCounterMax);
             return std::make_unique<NoopBazWriterBody>();
-
         }
     }
 
@@ -576,41 +581,59 @@ private:
 
     void RunAnalyzer()
     {
-        SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
-
-        // Names for the various graph stages
-        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
-
-        auto source = CreateSource();
-        AnalysisConfig analysisConfig;
-        analysisConfig.movieInfo = source->MovieInformation();
-        analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
-        analysisConfig.pedestal = source->Pedestal();
-
-        PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
-        PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
-                                                        config_.layout.framesPerChunk;
-
-
-
         try
         {
+            const uint64_t startupCounterMax = 6;
+            // startup = 0
+            SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, startupCounterMax, 300);
+
+            // Names for the various graph stages
+            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
+
+            auto source = CreateSource();
+            AnalysisConfig analysisConfig;
+            analysisConfig.movieInfo = source->MovieInformation();
+            analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
+            analysisConfig.pedestal = source->Pedestal();
+
+            startUpRpt.Update(1);
+
+            PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
+            PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
+                                                            config_.layout.framesPerChunk;
+
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
             // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
+            // startup = 1
             auto repacker = CreateRepacker(source->PacketLayouts(), source->NumZmw());
+            startUpRpt.Update(1);
+            // startup = 2
             auto poolDims = repacker->BatchLayouts();
 
             auto experimentData = CreateExperimentMetadata(*source, analysisConfig);
+            startUpRpt.Update(1);
 
+            // startup = 3
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
+            startUpRpt.Update(1);
+            // startup = 4
             inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
+                startUpRpt.Update(1);
+                // startup = 5
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                startUpRpt.Update(1);
+                // startup = 6
+                // switching to different reporter now
                 preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
+            }
+            else
+            {
+                startUpRpt.Update(2);
             }
 
             size_t numChunksAnalyzed = 0;
@@ -625,7 +648,6 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
-            startUpRpt.Update(1);
 
             SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
             while (source->IsActive())
@@ -730,7 +752,8 @@ private:
                 }
             }
 
-            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
+            uint64_t shutdownCounterMax = 1;
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, shutdownCounterMax, 300);
             inputNode->FlushNode();
 
             PBLOG_INFO << "Exited chunk analysis loop.";
