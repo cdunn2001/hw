@@ -284,7 +284,7 @@ int PaCalProcess::RunAllThreads()
 
     std::shared_ptr<Threading::IThreadController> threadController = Threading::MakeThreadController(*this);
 
-    enum ExitCode ret;
+    enum ExitCode ret = ExitCode::NormalExit;
     CreateThread("Analysis", [this, threadController, &ret]()
     {
         try
