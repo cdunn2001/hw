@@ -46,7 +46,7 @@ add_definitions(
 )
 
 add_subdirectory(test)
-# add_subdirectory(cram)
+add_subdirectory(cram)
 
 ###########################################################
 include(pacbio-versionheaderfile)
