@@ -577,7 +577,7 @@ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
 {
     const auto mldx = dmeDx.mldx;
     CudaArray<float, ConfFactor::NUM_CONF_FACTORS> cf;
-    for (auto val : cf) val = 1.f;
+    for (auto& val : cf) val = 1.f;
 
     // Check EM convergence.
     cf[ConfFactor::CONVERGED] = mldx.converged;
