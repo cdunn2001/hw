@@ -148,6 +148,7 @@ public:
 
     void Message(const Output& stage)
     {
+        stage.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " ";
         jsonWriter_->write(stage.Serialize(), &stream_);
         stream_ << std::endl;
