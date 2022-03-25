@@ -29,6 +29,7 @@
 #include <numeric>
 
 #include <pacbio/configuration/PBConfig.h>
+#include <pacbio/dev/AutoTimer.h>
 #include <pacbio/utilities/ISO8601.h>
 
 #include <boost/iostreams/device/file_descriptor.hpp>
@@ -190,11 +191,16 @@ public:
             : StageReporter(pm, s, 1, timeoutForNextStatus)
         { }
 
-        void Update(uint64_t counter)
+        /// \param delta Increments the counter by the delta amount. The counter will not exceed the counterMax
+        void Update(uint64_t delta)
         {
             std::lock_guard<std::mutex> lock(reportMutex_);
-            currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
-            pm_->Message(currentStage_);
+            currentStage_.counter = std::min(currentStage_.counter + delta, currentStage_.counterMax);
+            if (timeSinceOutput_.GetElapsedMilliseconds() > 1000)
+            {
+                pm_->Message(currentStage_);
+                timeSinceOutput_.Restart();
+            }
         }
 
         void Update(uint16_t counter, double timeoutForNextStatus)
@@ -205,6 +211,7 @@ public:
 
     private:
         std::mutex reportMutex_;
+        PacBio::Dev::QuietAutoTimer timeSinceOutput_;
         ProgressMessage* pm_;
         Output currentStage_;
     };
