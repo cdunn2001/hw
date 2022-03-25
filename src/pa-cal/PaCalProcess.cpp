@@ -289,7 +289,8 @@ int PaCalProcess::RunAllThreads()
     {
         try
         {
-            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, 300);
+            const uint64_t startupCounterMax = 1;
+            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, startupCounterMax, 300);
             auto source = CreateSource(settings_.paCalConfig, settings_.numFrames, settings_.inputDarkCalFile);
             startUpRpt.Update(1);
 
@@ -307,14 +308,17 @@ int PaCalProcess::RunAllThreads()
                                       + std::to_string(source->NumFrames()) + " frames are expected");
                 }
             }
-            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, 600);
+            const uint64_t analyzeCounterMax = 1;
+            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, analyzeCounterMax, 600);
             bool success = AnalyzeSourceInput(std::move(source), threadController,
                                               settings_.movieNum, settings_.outputFile,
-                                              settings_.createDarkCalFile);
+                                              settings_.createDarkCalFile,
+                                              analyzeRpt);
             analyzeRpt.Update(1);
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
-            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, 300);
+            const uint64_t shutdownCounterMax = 1;
+            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, shutdownCounterMax, 300);
             threadController->RequestExit();
             shutdownRpt.Update(1);
         } catch (const std::exception& ex)

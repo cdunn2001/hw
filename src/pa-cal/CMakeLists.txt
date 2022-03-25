@@ -70,6 +70,7 @@ add_library(lib-pa-cal
         PaCalConstants.h
         PaCalProcess.h
         PaCalProcess.cpp
+        PaCalProgressMessage.h
 )
 
 target_compile_options(lib-pa-cal PRIVATE "-fopenmp")

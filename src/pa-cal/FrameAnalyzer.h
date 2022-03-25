@@ -27,6 +27,7 @@
 
 #include <pacbio/datasource/DataSourceBase.h>
 #include <app-common/ThreadController.h>
+#include <pa-cal/PaCalProgressMessage.h>
 
 namespace PacBio::Calibration
 {
@@ -50,7 +51,8 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
                         std::string outputFile,
-                        bool createDarkCalFile);
+                        bool createDarkCalFile,
+                        PaCalStageReporter& reporter);
 
 
 struct FrameStats

@@ -32,6 +32,8 @@
 #include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/file/FrameStatsFile.h>
 
+#include <pa-cal/PaCalProgressMessage.h>
+
 using namespace PacBio::DataSource;
 using namespace PacBio::File;
 
@@ -42,7 +44,8 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
                         std::string outputFile,
-                        bool createDarkCalFile)
+                        bool createDarkCalFile,
+                        PaCalStageReporter& reporter)
 {
     DataSource::DataSourceRunner runner(std::move(source));
 
