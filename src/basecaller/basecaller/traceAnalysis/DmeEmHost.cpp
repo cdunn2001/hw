@@ -491,7 +491,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         // M-step
 
         // Mixing fractions.
-        // Constrain baseline component to have some minimal mixing fraction.
+        // Constrain each component to have some minimal mixing fraction.
         // TODO: When active, this constraint will cause bias in mu[0] and var[0].
         // We've constrained the original mixing fraction > 0.
         // The only other way for c_i to be zero is underflow.

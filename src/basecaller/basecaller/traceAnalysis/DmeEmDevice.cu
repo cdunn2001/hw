@@ -769,8 +769,6 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
                                      LaneDetModel* detModel,
                                      FiTypeDevice modFI)
 {
-    // TODO: Evolve model. Use trace autocorrelation to adjust confidence
-    // half-life.
     assert(detModel != nullptr);
 
     ZmwDetectionModel model0;

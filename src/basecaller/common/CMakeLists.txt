@@ -18,6 +18,7 @@ add_library(libMongoCommon STATIC
     LaneArray.cpp
     MongoConstants.h
     NumericUtil.h
+    NumericUtil.cpp
     StatAccumulator.h
     StatAccumState.h
     # I think these should move to pa-common once tbb compilation
