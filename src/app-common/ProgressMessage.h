@@ -146,7 +146,7 @@ public:
         stream_ << std::endl;
     }
 
-    void Message(const Output& stage)
+    void Message(Output& stage)
     {
         stage.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " ";
