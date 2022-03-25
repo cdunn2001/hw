@@ -72,6 +72,7 @@ struct FrameStats
 ///               pixel on the chip.  The boost::multi_arrays are stored using
 ///               an arr[row][col] convention.
 FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal,
-                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props);
+                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props,
+                        PaCalStageReporter& reporter);
 
 } // namespace PacBio::Calibration
