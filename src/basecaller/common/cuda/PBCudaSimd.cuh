@@ -215,6 +215,9 @@ inline __device__ PBHalf2 max(PBHalf2 l, PBHalf2 r)
     return Blend(cond, l, r);
 }
 
+inline __device__ PBHalf2 clamp(PBHalf2 val, PBHalf2 lo, PBHalf2 hi)
+{ return min(max(val, lo), hi); }
+
 inline __device__ PBShort2 ToShort(PBHalf2 h)
 {
     return PBShort2(__half2short_rn(h.data().x),

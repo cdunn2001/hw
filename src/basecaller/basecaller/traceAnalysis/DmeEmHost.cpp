@@ -885,7 +885,7 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
     auto& bm = ldm->BaselineMode();
     bm.weights = blWeight;
     bm.means = blMean;
-    bm.vars = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
+    bm.vars = blVar;
 
     // Distribute non-baseline weight equally among the analogs.
     const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
