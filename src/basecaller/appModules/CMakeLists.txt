@@ -23,6 +23,7 @@ add_library(libAppModules STATIC
         RealTimeMetrics.cpp
         Repacker.h
         Repacker.cpp
+        SmrtBasecallerProgress.h
         TrivialRepacker.h
         TrivialRepacker.cpp
         TraceSaver.h

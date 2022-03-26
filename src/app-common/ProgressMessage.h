@@ -146,8 +146,9 @@ public:
         stream_ << std::endl;
     }
 
-    void Message(const Output& stage)
+    void Message(Output& stage)
     {
+        stage.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " ";
         jsonWriter_->write(stage.Serialize(), &stream_);
         stream_ << std::endl;
@@ -175,7 +176,6 @@ public:
         Exception(j);
     }
 
-public:
     class StageReporter
     {
     public:
@@ -186,10 +186,6 @@ public:
             currentStage_.timeoutForNextStatus = timeoutForNextStatus;
             pm_->Message(s, currentStage_);
         }
-
-        StageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
-            : StageReporter(pm, s, 1, timeoutForNextStatus)
-        { }
 
         /// \param delta Increments the counter by the delta amount. The counter will not exceed the counterMax
         void Update(uint64_t delta)
@@ -216,15 +212,12 @@ public:
         Output currentStage_;
     };
 
+public:
     class ThreadSafeStageReporter
     {
     public:
         ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
         : sr_(pm, s, counterMax, timeoutForNextStatus)
-        { }
-
-        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
-        : ThreadSafeStageReporter(pm, s, 1, timeoutForNextStatus)
         { }
 
         void Update(uint64_t counter)

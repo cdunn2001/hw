@@ -29,6 +29,7 @@
 
 #include <pacbio/logging/Logger.h>
 
+#include <appModules/SmrtBasecallerProgress.h>
 #include <bazio/file/FileHeaderBuilder.h>
 #include <dataTypes/Pulse.h>
 #include <dataTypes/PulseGroups.h>
@@ -47,7 +48,8 @@ BazWriterBody::BazWriterBody(
         const BazIO::ZmwInfo& zmwInfo,
         const std::map<uint32_t, BatchDimensions>& poolDims,
         const SmrtBasecallerConfig& basecallerConfig,
-        const PacBio::File::ScanData::Data& experimentMetadata)
+        const PacBio::File::ScanData::Data& experimentMetadata,
+        SmrtBasecallerStageReporter& reporter)
     : numThreads_(basecallerConfig.system.ioConcurrency)
     , numBatches_(poolDims.size())
     , multipleBazFiles_(basecallerConfig.multipleBazFiles)
@@ -130,6 +132,7 @@ BazWriterBody::BazWriterBody(
 
             bazWriters_[b] = std::make_unique<BazIO::BazWriter>(multiBazName, fh, basecallerConfig.bazIO, ioStatsAggregator);
             auto openedSnapshot = ++openedFiles;
+            reporter.Update(1);
             if (openedSnapshot % 10 == 0) PBLOG_INFO << "Opened " << openedSnapshot << " baz files so far";
         });
         PBLOG_INFO << "Finished opening a total of " << numBatches_ << " baz files";
@@ -148,13 +151,13 @@ BazWriterBody::BazWriterBody(
                              zmwInfo,
                              metricFrames,
                              fileHeaderFlags);
-
         // TODO: This needs to be more dynamic (or at least not hard coded in the bowels
         //       of the code) but for now this is necessary to remain compatible with
         //       CCS
         fh.BaseCallerVersion("5.0");
 
         bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazIO));
+        reporter.Update(numBatches_);
     }
 }
 

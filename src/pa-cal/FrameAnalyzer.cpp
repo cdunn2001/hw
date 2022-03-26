@@ -32,6 +32,8 @@
 #include <pacbio/datasource/DataSourceRunner.h>
 #include <pacbio/file/FrameStatsFile.h>
 
+#include <pa-cal/PaCalProgressMessage.h>
+
 using namespace PacBio::DataSource;
 using namespace PacBio::File;
 
@@ -42,7 +44,8 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
                         std::string outputFile,
-                        bool createDarkCalFile)
+                        bool createDarkCalFile,
+                        PaCalStageReporter& reporter)
 {
     DataSource::DataSourceRunner runner(std::move(source));
 
@@ -65,7 +68,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
         return false;
     }
 
-    const auto& stats = AnalyzeChunk(chunk, runner.Pedestal(), runner.GetUnitCellProperties());
+    const auto& stats = AnalyzeChunk(chunk, runner.Pedestal(), runner.GetUnitCellProperties(), reporter);
 
     assert(stats.mean.shape()[0] == stats.variance.shape()[0]);
     assert(stats.mean.shape()[1] == stats.variance.shape()[1]);
@@ -125,7 +128,9 @@ Eigen::MatrixXf convM2Float(const M& map)
 }
 
 template<typename M, typename S> 
-boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal)
+boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChunk& chunk, 
+                                              int16_t pedestal,
+                                              PaCalStageReporter& reporter)
 {
     auto zmwPerChunk   = chunk.NumZmws();
 
@@ -164,13 +169,15 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
             dstMomMap.col(1) = mom1Tmp.square().colwise().sum().array() / (framesPerBlock - 1);
             dstMomMap.col(0) = mom0Tmp.array() - pedestal; // Adjust mean for the offset
         }
+        reporter.Update(1);
     }
 
     return chunkMoms;
 }
 
 FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal,
-                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props)
+                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props,
+                        PaCalStageReporter& reporter)
 {
     auto zmwPerChunk   = chunk.NumZmws();
 
@@ -190,8 +197,8 @@ FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t ped
     const auto& dataType = (chunk.cbegin())->Layout().Encoding();
      
     auto chunkMoms = (dataType == PacketLayout::INT16) ?
-        CalcChunkMoments<MatrixXs,  MatrixXs::Scalar>(chunk, pedestal) :
-        CalcChunkMoments<MatrixXub, MatrixXub::Scalar>(chunk, pedestal);
+        CalcChunkMoments<MatrixXs,  MatrixXs::Scalar>(chunk, pedestal, reporter) :
+        CalcChunkMoments<MatrixXub, MatrixXub::Scalar>(chunk, pedestal, reporter);
 
     // Stat moments have to be returned as separate memory blocks
     // They also may be rugged so reshaping is not an option
