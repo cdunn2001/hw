@@ -83,10 +83,6 @@ public:
     {
         return std::exchange(past_, {past_.peakBytes, currentBytes_, currentBytes_});
     }
-    PastUsage PeekMemUsage() const
-    {
-        return {past_.peakBytes, currentBytes_, currentBytes_};
-    }
 
     size_t CurrentBytes() const { return currentBytes_; }
 private:
