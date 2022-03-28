@@ -101,8 +101,8 @@ public: // metrics
     SingleMetric<float2>  baselineM2;
 
     // The autocorrelation accumulator:
-    SingleMetric<PBHalf2> traceM0;
-    SingleMetric<PBHalf2> traceM1;
+    SingleMetric<float2> traceM0;
+    SingleMetric<float2> traceM1;
     SingleMetric<float2>  traceM2;
     SingleMetric<float2>  autocorrM2;
     Cuda::Utility::CudaArray<SingleMetric<PBHalf2>, AutocorrAccumState::lag> fBuf; // left region buffer
@@ -129,11 +129,6 @@ __device__ float variance(const float M0, const float M1, const float M2)
 __device__ float2 variance(const float2 M0, const float2 M1, const float2 M2)
 {
     return make_float2(variance(M0.x, M1.x, M2.x), variance(M0.y, M1.y, M2.y));
-}
-
-__device__ PBHalf2 variance(const PBHalf2 M0, const PBHalf2 M1, const float2 M2)
-{
-    return PBHalf2(variance(M0.FloatX(), M1.FloatX(), M2.x), variance(M0.FloatY(), M1.FloatY(), M2.y));
 }
 
 __device__ uint2 getWideLoad(const Cuda::Utility::CudaArray<uint16_t, laneSize>& load)
@@ -195,16 +190,15 @@ __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& bl
 {
     const uint32_t lag = AutocorrAccumState::lag;
     // math in float2 for additional range
-    const auto nmk = asFloat2(blockMetrics.traceM0[threadIdx.x] - PBHalf2(lag));
+    const auto nmk = blockMetrics.traceM0[threadIdx.x] - make_float2(lag, lag);
     PBHalf2 ac = [&blockMetrics](float2 nmk)
     {
-        float2 mu = asFloat2(blockMetrics.traceM1[threadIdx.x] / blockMetrics.traceM0[threadIdx.x]);
-        float2 m1x2 = make_float2(2.0f, 2.0f) * asFloat2(blockMetrics.traceM1[threadIdx.x]);
+        float2 mu = blockMetrics.traceM1[threadIdx.x] / blockMetrics.traceM0[threadIdx.x];
+        float2 m1x2 = make_float2(2.0f, 2.0f) * blockMetrics.traceM1[threadIdx.x];
         for (auto k = 0u; k < lag; ++k)
         {
-            m1x2 = m1x2 
-                - asFloat2(blockMetrics.fBuf[k][threadIdx.x] 
-                + blockMetrics.bBuf[k][threadIdx.x]);
+            m1x2 = m1x2 - asFloat2(blockMetrics.fBuf[k][threadIdx.x]
+                                   + blockMetrics.bBuf[k][threadIdx.x]);
         }
         float2 ac = mu*(m1x2 - nmk*mu);
         nmk = nmk - asFloat2(PBHalf2(1.0f));
@@ -283,8 +277,8 @@ __global__ void InitializeMetrics(
     blockMetrics.baselineM1[threadIdx.x] = zero;
     blockMetrics.baselineM2[threadIdx.x] = zero;
 
-    blockMetrics.traceM0[threadIdx.x] = 0.0f;
-    blockMetrics.traceM1[threadIdx.x] = 0.0f;
+    blockMetrics.traceM0[threadIdx.x] = zero;
+    blockMetrics.traceM1[threadIdx.x] = zero;
     blockMetrics.traceM2[threadIdx.x] = zero;
 
     blockMetrics.autocorrM2[threadIdx.x] = zero;

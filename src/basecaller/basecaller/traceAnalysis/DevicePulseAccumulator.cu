@@ -91,9 +91,6 @@ public:
             signalTotal_[i] = PBShort2(0);
             signalM2_[i] = PBFloat2(0.0f);
             label_[i] = PBShort2(initialState);
-            m0_[i] = PBHalf2(0.0f);
-            m1_[i] = PBHalf2(0.0f);
-            m2_[i] = PBFloat2(0.0f);
         }
     }
 
@@ -107,9 +104,6 @@ public:
         signalTotal_[threadIdx.x] = other.signalTotal_[threadIdx.x];
         signalM2_[threadIdx.x] = other.signalM2_[threadIdx.x];
         label_[threadIdx.x] = other.label_[threadIdx.x];
-        m0_[threadIdx.x] = other.m0_[threadIdx.x];
-        m1_[threadIdx.x] = other.m1_[threadIdx.x];
-        m2_[threadIdx.x] = other.m2_[threadIdx.x];
     }
 
     __device__ PBShort2 IsNewSegment(PBShort2 label) const
@@ -184,6 +178,30 @@ public:
         signalMax_[threadIdx.x] = Blend(update, max(signal, signalMax_[threadIdx.x]), signalMax_[threadIdx.x]);
     }
 
+private:
+    CudaArray<uint2, blockThreads> startFrame_;        // Needed because of partial segments
+    CudaArray<uint2, blockThreads> endFrame_;          // 1 + the last frame included in the segment
+
+    CudaArray<PBShort2, blockThreads> signalFrstFrame_;   // Signal of the most recent frame added
+    CudaArray<PBShort2, blockThreads> signalLastFrame_;   // Signal recorded for the last frame in the segment
+    CudaArray<PBHalf2, blockThreads> signalMax_;          // Max signal over all frames in segment
+    CudaArray<PBShort2, blockThreads> signalTotal_;       // Signal total, excluding the first and last frame
+    CudaArray<PBFloat2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
+
+    CudaArray<PBShort2, blockThreads> label_;             // Internal label ID corresponding to detection modes
+};
+
+template <size_t blockThreads>
+class BaselineStats
+{
+public:
+    __device__ void SharedInit()
+    {
+        m0_[threadIdx.x] = 0;
+        m1_[threadIdx.x] = 0;
+        m2_[threadIdx.x] = 0;
+    }
+
     __device__ void AddBaseline(PBShort2 baselineMask, PBShort2 signal)
     {
         PBHalf2 zero(0.0f);
@@ -203,20 +221,7 @@ public:
         stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
         stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
-
 private:
-    CudaArray<uint2, blockThreads> startFrame_;        // Needed because of partial segments
-    CudaArray<uint2, blockThreads> endFrame_;          // 1 + the last frame included in the segment
-
-    CudaArray<PBShort2, blockThreads> signalFrstFrame_;   // Signal of the most recent frame added
-    CudaArray<PBShort2, blockThreads> signalLastFrame_;   // Signal recorded for the last frame in the segment
-    CudaArray<PBHalf2, blockThreads> signalMax_;          // Max signal over all frames in segment
-    CudaArray<PBShort2, blockThreads> signalTotal_;       // Signal total, excluding the first and last frame
-    CudaArray<PBFloat2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
-
-    CudaArray<PBShort2, blockThreads> label_;             // Internal label ID corresponding to detection modes
-
-    // Baseline stats computed from frames marked as baseline
     CudaArray<PBHalf2,  blockThreads> m0_;
     CudaArray<PBHalf2,  blockThreads> m1_;
     CudaArray<PBFloat2, blockThreads> m2_;
@@ -237,8 +242,10 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     assert(labels.NumFrames() == signal.NumFrames() + latSignal.NumFrames());
 
     __shared__ Segment<LabelManager, blockThreads> segment;
+    __shared__ BaselineStats<blockThreads> baselineStats;
 
     segment.SharedCopy(workingSegments[blockIdx.x]);
+    baselineStats.SharedInit();
 
     // each thread handles 2 zmw, which normally are interleaved in something like PBShort2,
     // but cannot be for pulses
@@ -274,7 +281,7 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
         // to not contaminate the baseline statistics by frames that
         // might be partially influenced by an adjacent pulse frame.
         auto baseline = (!pulseMask) && (!boundaryMask);
-        segment.AddBaseline(baseline, signal);
+        baselineStats.AddBaseline(baseline, signal);
     };
 
     const int latFrames = latSignal.NumFrames();
@@ -293,7 +300,7 @@ __global__ void ProcessLabels(GpuBatchData<const PBShort2> labels,
     }
 
     workingSegments[blockIdx.x].SharedCopy(segment);
-    workingSegments[blockIdx.x].FillBaselineStats(stats[blockIdx.x]);
+    baselineStats.FillBaselineStats(stats[blockIdx.x]);
 }
 
 }
