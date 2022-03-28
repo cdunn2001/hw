@@ -29,6 +29,7 @@
 //  Description:
 //  Defines class DmeEmHost.
 
+#include <algorithm>
 #include <common/MongoConstants.h>
 
 #include "CoreDMEstimator.h"
@@ -67,7 +68,10 @@ struct ZmwAnalogMode
         assert(static_cast<unsigned int>(index) < mode->weights.size());
         mode->weights[index].Set<low>(weight);
         mode->means[index].Set<low>(mean);
-        mode->vars[index].Set<low>(var);
+
+        // Guard against overflow converting from single- to half-precision.
+        const auto cvar = std::min(var, 65000.0f);
+        mode->vars[index].Set<low>(cvar);
     }
 
     float mean;
