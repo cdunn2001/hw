@@ -598,7 +598,7 @@ if __name__ == '__main__':
                        default='/pbi/dept/primary/sim/sequel/sequel_calpattern_frm512.trc.h5')
     group.add_argument('--numloadcalframestx',
                        help="Number of loading cal frames to transmit. default: %(default)s",
-                       default=25000,type=int)
+                       default=128,type=int)
     group.add_argument('--loadcalstartframe',
                        help="Loading calibration start frames to use (CSV format). default: %(default)s",
                        default='4196,10290,14923')

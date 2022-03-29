@@ -15,73 +15,42 @@ pawsPostDict = {}
 pawsGetDict["/status"] = {"platform":"Kestrel"}
 pawsGetDict["/status/platform"] = "Kestrel"
 pawsGetDict["/sockets"] = [ "1"] 
-pawsGetDict["/sockets/1/basecaller"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
-pawsGetDict["/sockets/1/darkcal"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
-pawsGetDict["/sockets/1/loadingcal"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
+pawsGetDict["/sockets/1/basecaller"] = {"processStatus":{}}
+pawsGetDict["/sockets/1/darkcal"] = {"processStatus":{}}
+pawsGetDict["/sockets/1/loadingcal"] = {"processStatus":{}}
 
+
+def DoSim(app,root,payload):
+    global pawsGetDict
+    if payload == "":
+        raise Exception("POST to %s/start had empty payload" % root)
+    if payload == "reset":
+        logging.info("%s %s RESET",app,payload)
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
+        pawsGetDict[root]["processStatus"]["completionStatus"] = "UNKNOWN"
+        pawsGetDict[root]["processStatus"]["armed"] = False
+    else:
+        j = json.loads(payload)
+        logging.info("%s %s RUNNING",app,payload)
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["completionStatus"] = "UNKNOWN"
+        pawsGetDict[root]["processStatus"]["armed"] = False
+        time.sleep(1)
+        pawsGetDict[root]["processStatus"]["armed"] = True
+        time.sleep(1)
+        logging.info("%s %s COMPLETE",app,payload)
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["completionStatus"] = "SUCCESS"
+        pawsGetDict[root]["processStatus"]["armed"] = False
 
 def BasecallerSim(payload):
-    global pawsGetDict
-    root="/sockets/1/basecaller"
-    if payload == "":
-        raise Exception("POST to basecaller/start had empty payload")
-    if payload == "reset":
-        logging.info("BasecallerSim %s RESET",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-    else:
-        j = json.loads(payload)
-        logging.info("BasecallerSim %s RUNNING",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-        time.sleep(1)
-        pawsGetDict[root]["processStatus"]["armed"] = True
-        time.sleep(1)
-        logging.info("BasecallerSim %s COMPLETE",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
-        pawsGetDict[root]["processStatus"]["armed"] = False
+    DoSim("basecaller","/sockets/1/basecaller",payload)
 
 def DarkcalSim(payload):
-    global pawsGetDict
-    root= "/sockets/1/darkcal"
-    if payload == "":
-        raise Exception("POST to darkcal/start had empty payload")
-    if payload == "reset":
-        logging.info("DarkcalSim %s RESET",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-    else:
-        j = json.loads(payload)
-        logging.info("DarkcalSim %s RUNNING",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-        time.sleep(1)
-        pawsGetDict[root]["processStatus"]["armed"] = True
-        time.sleep(1)
-        logging.info("DarkcalSim %s COMPLETE",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
-        pawsGetDict[root]["processStatus"]["armed"] = False
+    DoSim("darkcal","/sockets/1/darkcal",payload)
 
 def LoadingcalSim(payload):
-    global pawsGetDict
-    root= "/sockets/1/loadingcal"
-    if payload == "":
-        raise Exception("POST to loadingcal/start had empty payload")
-    if payload == "reset":
-        logging.info("LoadingcalSim %s RESET",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-    else:
-        j = json.loads(payload)
-        logging.info("LoadingcalSim %s RUNNING",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
-        pawsGetDict[root]["processStatus"]["armed"] = False
-        time.sleep(1)
-        pawsGetDict[root]["processStatus"]["armed"] = True
-        time.sleep(1)
-        logging.info("LoadingcalSim %s COMPLETE",payload)
-        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
-        pawsGetDict[root]["processStatus"]["armed"] = False
+    DoSim("loadingcal","/sockets/1/loadingcal",payload)
 
 def StartBasecaller(payload):
     global pawsGetDict
@@ -172,6 +141,7 @@ class PaWsSim:
         self.server = socketserver.TCPServer(("", 0), PaWsHandler)
         self.ip, self.port = self.server.server_address
         logging.info("serving at %s" % self.GetUrl())
+        ResetAll("reset")
         self.server_thread = threading.Thread(target=self.server.serve_forever,name="PaWs")
         self.server_thread.daemon = True
         self.server_thread.start()
