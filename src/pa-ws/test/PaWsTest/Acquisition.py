@@ -51,9 +51,12 @@ class Acquisition:
         }
 
 def test_Acquisition():  
-    acq = Acquisition("1","m1234","/data/nrta/0")
-    assert acq.GenerateBasecallerJsonPayload()["mid"] == "m1234"
-    assert acq.GenerateDarkcalJsonPayload()["mid"] == "m1234"
-    assert "m1234" in acq.GenerateDarkcalJsonPayload()["calibFileUrl"]
-    assert "/data/nrta/0" in acq.GenerateDarkcalJsonPayload()["calibFileUrl"]
-    assert acq.GenerateLoadingcalJsonPayload()["mid"] == "m1234"
+    import tempfile
+    # a real directory is needed as an argument to the Acquisition ctor.
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        acq = Acquisition("1","m1234", tmpdirname)
+        assert acq.GenerateBasecallerJsonPayload()["mid"] == "m1234"
+        assert acq.GenerateDarkcalJsonPayload()["mid"] == "m1234"
+        assert "m1234" in acq.GenerateDarkcalJsonPayload()["calibFileUrl"]
+        assert tmpdirname in acq.GenerateDarkcalJsonPayload()["calibFileUrl"]
+        assert acq.GenerateLoadingcalJsonPayload()["mid"] == "m1234"
