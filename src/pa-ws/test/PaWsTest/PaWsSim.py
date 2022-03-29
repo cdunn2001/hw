@@ -3,6 +3,7 @@ import threading
 import socketserver
 import logging
 import json
+import os
 import pytest
 import time
 
@@ -13,88 +14,98 @@ pawsPostDict = {}
 
 pawsGetDict["/status"] = {"platform":"Kestrel"}
 pawsGetDict["/status/platform"] = "Kestrel"
-pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "UNKNOWN"
-pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "UNKNOWN"
-pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "UNKNOWN"
 pawsGetDict["/sockets"] = [ "1"] 
-pawsGetDict["/sockets/1/basecaller"] = {"processStatus":{"executionStatus": "UNKNOWN"}}
-pawsGetDict["/sockets/1/darkcal"] = {"processStatus":{"executionStatus": "UNKNOWN"}}
-pawsGetDict["/sockets/1/loadingcal"] = {"processStatus":{"executionStatus": "UNKNOWN"}}
+pawsGetDict["/sockets/1/basecaller"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
+pawsGetDict["/sockets/1/darkcal"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
+pawsGetDict["/sockets/1/loadingcal"] = {"processStatus":{"executionStatus": "UNKNOWN","armed":False}}
 
 
 def BasecallerSim(payload):
     global pawsGetDict
+    root="/sockets/1/basecaller"
     if payload == "":
         raise Exception("POST to basecaller/start had empty payload")
     if payload == "reset":
         logging.info("BasecallerSim %s RESET",payload)
-        pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "UNKNOWN"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
+        pawsGetDict[root]["processStatus"]["armed"] = False
     else:
         j = json.loads(payload)
-        logging.info("BasecallerSim %s READY",payload)
-        pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "READY"
-        time.sleep(1)
         logging.info("BasecallerSim %s RUNNING",payload)
-        pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["armed"] = False
+        time.sleep(1)
+        pawsGetDict[root]["processStatus"]["armed"] = True
         time.sleep(1)
         logging.info("BasecallerSim %s COMPLETE",payload)
-        pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["armed"] = False
 
 def DarkcalSim(payload):
     global pawsGetDict
+    root= "/sockets/1/darkcal"
     if payload == "":
         raise Exception("POST to darkcal/start had empty payload")
     if payload == "reset":
         logging.info("DarkcalSim %s RESET",payload)
-        pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "UNKNOWN"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
+        pawsGetDict[root]["processStatus"]["armed"] = False
     else:
         j = json.loads(payload)
-        logging.info("DarkcalSim %s READY",payload)
-        pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "READY"
-        time.sleep(1)
         logging.info("DarkcalSim %s RUNNING",payload)
-        pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["armed"] = False
+        time.sleep(1)
+        pawsGetDict[root]["processStatus"]["armed"] = True
         time.sleep(1)
         logging.info("DarkcalSim %s COMPLETE",payload)
-        pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["armed"] = False
 
 def LoadingcalSim(payload):
     global pawsGetDict
+    root= "/sockets/1/loadingcal"
     if payload == "":
         raise Exception("POST to loadingcal/start had empty payload")
     if payload == "reset":
         logging.info("LoadingcalSim %s RESET",payload)
-        pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "UNKNOWN"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "READY"
+        pawsGetDict[root]["processStatus"]["armed"] = False
     else:
         j = json.loads(payload)
-        logging.info("LoadingcalSim %s READY",payload)
-        pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "READY"
-        time.sleep(1)
         logging.info("LoadingcalSim %s RUNNING",payload)
-        pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "RUNNING"
+        pawsGetDict[root]["processStatus"]["armed"] = False
+        time.sleep(1)
+        pawsGetDict[root]["processStatus"]["armed"] = True
         time.sleep(1)
         logging.info("LoadingcalSim %s COMPLETE",payload)
-        pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["executionStatus"] = "COMPLETE"
+        pawsGetDict[root]["processStatus"]["armed"] = False
 
 def StartBasecaller(payload):
     global pawsGetDict
-    pawsGetDict["/sockets/1/basecaller/processStatus/executionStatus"] = "READY"
     t = threading.Thread(target=BasecallerSim,name="BasecallerSim",args=[payload])
     t.start()
 
 def StartDarkcal(payload):
     global pawsGetDict
-    pawsGetDict["/sockets/1/darkcal/processStatus/executionStatus"] = "READY"
     t = threading.Thread(target=DarkcalSim,name="DarkcalSim",args=[payload])
     t.start()
 
 def StartLoadingcal(payload):
     global pawsGetDict
-    pawsGetDict["/sockets/1/loadingcal/processStatus/executionStatus"] = "READY"
     t = threading.Thread(target=LoadingcalSim,name="LoadingcalSim",args=[payload])
     t.start()
 
 
+def ResetAll(payload):
+    print("ResetAll(%s)" % payload)
+    StartBasecaller("reset"),
+    StartDarkcal("reset"),
+    StartLoadingcal("reset") 
+
+pawsPostDict["/sockets/1/reset"] = ResetAll
 pawsPostDict["/sockets/1/basecaller/reset"] = lambda payload : StartBasecaller("reset")
 pawsPostDict["/sockets/1/basecaller/start"] = lambda payload : StartBasecaller(payload)
 pawsPostDict["/sockets/1/darkcal/reset"] = lambda payload : StartDarkcal("reset")
@@ -117,9 +128,20 @@ class PaWsHandler(socketserver.BaseRequestHandler):
             header,payload, = req.split("\r\n\r\n", maxsplit=2)
             req0,url,theRest = header.split(None, maxsplit=2)
             if req0 == "GET":
-                if url in pawsGetDict:
-                    code="200 OK"
-                    response = pawsGetDict[url]
+                # Try to match the longest piece of the URL against the pawsGetDict
+                # keys.  After a match is made, then drill down the remaining part of the 
+                # URL into the response.
+                paths = [ ]
+                while url != "":
+                    if url in pawsGetDict:
+                        code="200 OK"
+                        response = pawsGetDict[url]
+                        for p in paths:
+                            response = response[p]
+                        break
+                    p = os.path.basename(url)
+                    url = os.path.dirname(url)
+                    paths.insert(0,p)
                 else:
                     code="404 NOT FOUND"
                     response="URL " + url + " not found"    
@@ -172,14 +194,17 @@ def test_one():
     url = paws.GetUrl()
     client = HttpHelper.SafeHttpClient()
     assert "platform" in str(client.checkedGet(url +"/status"))
+    client.checkedPost(url + "/sockets/1/reset",payload={},timeout=60)
     assert "{" in str(client.checkedPost(url + "/sockets/1/basecaller/reset",payload={},timeout=60))
-    assert "UNKNOWN" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
-    assert "{" in str(client.checkedPost(url +"/sockets/1/basecaller/start",payload={"mid":"m1234"},timeout=60))
+    time.sleep(0.1)
+    assert "{'processStatus': {" in str(client.checkedGet(url +"/sockets/1/basecaller"))
+    assert "{'executionStatus': 'READY'" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus"))
     assert "READY" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
-    time.sleep(1.1)
+    assert "{" in str(client.checkedPost(url +"/sockets/1/basecaller/start",payload={"mid":"m1234"},timeout=60))
     assert "RUNNING" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
+    time.sleep(1.1)
+    assert client.checkedGet(url +"/sockets/1/basecaller/processStatus/armed")
     time.sleep(1.1)
     assert "COMPLETE" in str(client.checkedGet(url +"/sockets/1/basecaller/processStatus/executionStatus"))
 
     paws.Shutdown()
-
