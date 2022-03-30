@@ -20,7 +20,7 @@ class SensorSim(HttpHelper.SafeHttpClient):
         self.progresser.SetScope("SensorSim", self.StatusUpdate)
         self.startFrame = 0
         self.platform = self.GetPlatform()
-        self.WaitForState("online")
+        self.WaitForState("IDLE")
         self.frameLatency = int(self.checkedGet(self.url + "/status/wolverine/frameLatency"))
 
     def StatusUpdate(self):

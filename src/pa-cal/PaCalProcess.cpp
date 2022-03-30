@@ -321,7 +321,7 @@ int PaCalProcess::RunAllThreads()
             PBLOG_ERROR << "Analysis thread will now terminate early";
             progressMessage_->Exception(ex.what());
             threadController->RequestExit();
-            ret = ExitCode::StdException;
+            SetExitCode(ExitCode::StdException);
         }
         PBLOG_INFO << "Analysis Thread Complete";
     });
@@ -335,7 +335,7 @@ int PaCalProcess::RunAllThreads()
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
             RequestExit();
-            ret = ExitCode::Timeout;
+            SetExitCode(ExitCode::Timeout);
         }
     }
 
@@ -348,8 +348,6 @@ int PaCalProcess::RunAllThreads()
 
 int PaCalProcess::Run()
 {
-    int exitCode = ExitCode::DefaultUnknownFailure;
-
     Console::SetWindow(400, 400);
 
     ThreadedProcessBase::SetXtermTitle("pa-cal");
@@ -376,40 +374,41 @@ int PaCalProcess::Run()
     PBLOG_INFO << "Testing 'info' level logging";
     try
     {
-        exitCode = RunAllThreads();
-        PBLOG_INFO << "main: RunAllThreads() normal exit, code:" << exitCode;
+        auto exitCode1 = RunAllThreads();
+        SetExitCode(exitCode1);
+        PBLOG_INFO << "main: RunAllThreads() normal exit, code:" << exitCode1;
     }
     catch (const std::exception& ex)
     {
         PBLOG_ERROR << "main: fatal exception: " << ex.what();
         progressMessage_->Exception(ex.what());
-        exitCode = ExitCode::StdException;
+        SetExitCode(ExitCode::StdException);
     }
     catch (...)
     {
         PBLOG_ERROR << "main: fatal uncaught exception";
-        exitCode = ExitCode::UncaughtException;
+        SetExitCode(ExitCode::UncaughtException);
     }
 
     try
     {
         auto exitCode1 = Join();
-        if (exitCode == ExitCode::DefaultUnknownFailure) exitCode = exitCode1;
+        SetExitCode(exitCode1);
         PBLOG_DEBUG << "main: main event loop exit, code:" << exitCode1
              << " pid:" << POSIX::GetPid();
     }
     catch (const std::exception& ex)
     {
-        exitCode = ExitCode::StdException;
+        SetExitCode(ExitCode::StdException);
         PBLOG_ERROR << "main: exception2: " << ex.what();
     }
     catch (...)
     {
-        exitCode = ExitCode::UncaughtException;
+        SetExitCode(ExitCode::UncaughtException);
         PBLOG_ERROR << "main: uncaught exception2";
     }
 
-
+    auto exitCode = ExitCode();
     PBLOG_DEBUG << "main: exit code:" << exitCode;
     return exitCode;
 }
