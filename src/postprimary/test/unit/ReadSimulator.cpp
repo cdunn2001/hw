@@ -167,10 +167,18 @@ EventData SimulateEventData(const ReadConfig& config)
     }
 
     const auto& fh = config.GenerateHeader();
+    EventData::Meta meta;
+    meta.truncated = false;
+    meta.xPos = fh.ZmwInformation().HoleY()[0];
+    meta.yPos = fh.ZmwInformation().HoleY()[0];
+    meta.zmwIdx = 0;
+    meta.zmwNum = fh.ZmwInformation().ZmwIndexToNumber(0);
+    meta.features = fh.ZmwInformation().HoleFeaturesMask()[0];
+    meta.holeType = 0;
     return EventData(
-            0, fh.ZmwInformation().ZmwIndexToNumber(0), false,
-            BazIO::BazEventData(fields, {}),
-            std::move(states));
+                     meta,
+                     BazIO::BazEventData(fields, {}),
+                     std::move(states));
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
 // arguments to function parameters
@@ -188,8 +196,15 @@ ZmwMetrics RunMetrics(const EventData& events,
     ProductivityMetrics prodClassifier(4, minEmptyTime, emptyOutlierTime);
     auto prod = prodClassifier.ComputeProductivityInfo(hqRegion, metrics, true);
 
-    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwNumber()),
-                      hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
+    return ZmwMetrics(fh.MovieTimeInHrs(),
+                      fh.FrameRateHz(),
+                      hqRegion,
+                      std::vector<RegionLabel>{},
+                      metrics,
+                      events,
+                      prod,
+                      ControlMetrics{},
+                      AdapterMetrics{});
 }
 
 

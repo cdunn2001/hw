@@ -871,7 +871,15 @@ void ConvertBaz2Bam::SingleThread()
                     auto processProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PROCESS_PACKETS);
                     (void)processProfile;
                     const bool truncated = ffs.IsZmwNumberTruncated(fhs.ZmwIndexToNumber(batch[i].ZmwIndex()));
-                    return EventData(batch[i].ZmwIndex(), fhs.ZmwIndexToNumber(batch[i].ZmwIndex()), truncated, std::move(bazEvents), std::move(insertStates));
+                    EventData::Meta meta;
+                    meta.truncated = truncated;
+                    meta.zmwIdx = batch[i].ZmwIndex();
+                    meta.zmwNum = fhs.ZmwIndexToNumber(*meta.zmwIdx);
+                    meta.features = fhs.ZmwFeatures(*meta.zmwIdx);
+                    meta.xPos = fhs.ZmwIndexToXCoord(*meta.zmwIdx);
+                    meta.yPos = fhs.ZmwIndexToYCoord(*meta.zmwIdx);
+                    meta.holeType = fhs.ZmwIndexToHoleType(*meta.zmwIdx);
+                    return EventData(meta, std::move(bazEvents), std::move(insertStates));
                 }();
 
                 auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
@@ -925,7 +933,6 @@ void ConvertBaz2Bam::SingleThread()
                 (void)zstatsProfile;
                 ZmwMetrics zmwMetrics(bazReader_->FileHeaderSet().MovieTimeInHrs(),
                                       bazReader_->FileHeaderSet().FrameRateHz(),
-                                      bazReader_->FileHeaderSet().ZmwFeatures(events.ZmwIndex()),
                                       regions.hqregion,
                                       regions.adapters,
                                       bazMetrics,

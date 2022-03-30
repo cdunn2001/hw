@@ -37,6 +37,7 @@
 
 #pragma once
 
+#include <pacbio/datasource/ZmwFeatures.h>
 #define BYTETOBINARY(byte)  \
   (byte & 0x80 ? 1 : 0), \
   (byte & 0x40 ? 1 : 0), \
@@ -92,12 +93,13 @@ public:
             zmwY.push_back(zmwNumbers[i] & 0x0000FFFF);
         }
         std::iota(zmwX.begin(), zmwX.end(), 0);
-        BazIO::ZmwInfo zmwInfo(BazIO::ZmwInfo::Data
-                                (   zmwNumbers,
-                                    std::vector<uint8_t>(zmwNumbers.size(), 1),
-                                    zmwX,
-                                    zmwY,
-                                    std::vector<uint32_t>(zmwNumbers.size(), 0)));
+        BazIO::ZmwInfo zmwInfo(BazIO::ZmwInfo::Data {
+                                   zmwNumbers,
+                                   std::vector<uint8_t>(zmwNumbers.size(), 1),
+                                   zmwX,
+                                   zmwY,
+                                   std::vector<uint32_t>(zmwNumbers.size(), DataSource::ZmwFeatures::Sequencing)
+                               });
         return zmwInfo;
     }
 

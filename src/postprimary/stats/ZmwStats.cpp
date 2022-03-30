@@ -85,13 +85,12 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     zmwStats.Loading = static_cast<uint8_t>(zmwMetrics.ZmwProdMetrics().loading);
 
     zmwStats.HoleNumber = events.ZmwNumber();
-    static bool warned = [](){PBLOG_WARN << "ZmwStats not setting hole type or holexy"; return true; }();
+    static bool warned = [](){PBLOG_WARN << "ZmwStats not setting hole type"; return true; }();
     (void)warned;
-    //Primary::UnitCell uc(events.ZmwNumber());
-    zmwStats.HoleXY[0] = 0;//uc.x;
-    zmwStats.HoleXY[1] = 0;//uc.y;
-    zmwStats.HoleType = 0;//chipLayout.UnitCellTypeId(static_cast<uint16_t>(uc.x), static_cast<uint16_t>(uc.y));
-    zmwStats.UnitFeature = readMetrics.UnitFeatures();
+    zmwStats.HoleXY[0] = events.XCord();
+    zmwStats.HoleXY[1] = events.YCord();
+    zmwStats.HoleType = events.HoleType();
+    zmwStats.UnitFeature = events.UnitFeature();
 
     zmwStats.ReadType = static_cast<uint8_t>(zmwMetrics.ZmwProdMetrics().readType);
     zmwStats.ReadScore = zmwMetrics.ZmwProdMetrics().readAccuracy;
@@ -145,7 +144,7 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
 
         FillAnalog(zmwStats.HQRegionSnrMean, hqSignalMetrics.Snr());
         FillAnalog(zmwStats.HQPkmid, hqSignalMetrics.PkMid());
-        
+
         FillFilter(zmwStats.HQChannelMinSnr, hqSignalMetrics.MinSnr());
         FillFilter(zmwStats.HQBaselineLevel, hqSignalMetrics.Baseline());
         FillFilter(zmwStats.HQBaselineStd, hqSignalMetrics.BaselineSD());

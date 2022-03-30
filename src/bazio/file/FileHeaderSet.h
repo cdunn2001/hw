@@ -84,6 +84,15 @@ public:
     uint32_t ZmwIndexToNumber(const uint32_t index) const
     { return zmwInfo_.ZmwIndexToNumber(index); }
 
+    uint32_t ZmwIndexToXCoord(const uint32_t index) const
+    { return zmwInfo_.HoleX().at(index); }
+
+    uint32_t ZmwIndexToYCoord(const uint32_t index) const
+    { return zmwInfo_.HoleY().at(index); }
+
+    uint32_t ZmwIndexToHoleType(const uint32_t index) const
+    { return zmwInfo_.HoleTypes().at(index); }
+
     const std::vector<uint32_t>& ZmwNumbers() const
     { return zmwInfo_.HoleNumbers(); }
 

@@ -572,21 +572,17 @@ BaseMetrics::BaseMetrics(double frameRateHz,
 {}
 
 ReadMetrics::ReadMetrics(float movieTimeInHrs,
-                         uint32_t unitFeatures,
                          const RegionLabel& hqRegion,
                          const EventData& events,
                          const ProductivityInfo& prod)
-    : unitFeatures_(unitFeatures)
-    , readLength_(hqRegion.Length())
+    : readLength_(hqRegion.Length())
     , polyLength_(events.NumBases())
-    , holeNumber_(events.ZmwNumber())
     , internal_(events.Internal())
     , isRead_(ComputeIsRead(movieTimeInHrs, hqRegion, events, prod))
 {}
 
 ZmwMetrics::ZmwMetrics(float movieTimeInHrs,
                        float frameRateHz,
-                       uint32_t unitFeatures,
                        const RegionLabel& hqRegion,
                        const std::vector<RegionLabel>& adapters,
                        const BlockLevelMetrics& metrics,
@@ -596,7 +592,7 @@ ZmwMetrics::ZmwMetrics(float movieTimeInHrs,
                        const AdapterMetrics& adapterMetrics)
     : zmwSignalMetrics_(metrics.GetFullRegion(), metrics)
     , excludedPulseMetrics_(events.InsertStates())
-    , readMetrics_(movieTimeInHrs, unitFeatures, hqRegion, events, prod)
+    , readMetrics_(movieTimeInHrs, hqRegion, events, prod)
     , prodMetrics_(prod)
     , controlMetrics_(control)
     , adapterMetrics_(adapterMetrics)
