@@ -32,8 +32,12 @@ import string
 from subprocess import check_call, check_output
 import sys
 from time import sleep
+import tempfile
 import traceback
 from typing import List
+
+STATUS_COUNT=5
+STATUS_DELAY_SECONDS=1
 
 sys.path.append(sys.path[0] + "/PaWsTest")
 import Acquisition
@@ -41,6 +45,9 @@ from Helpers import RealtimeException, TerminateNamedProcess
 # from HttpHelper import SafeHttpClient
 from KestrelRT import RT
 from ProgressHelper import ProgressManager, ProgressScope
+from SensorSim import SensorSim
+
+from SensorSim import SensorSim
 
 # Globals
 testSuite = TestSuite('kpa-ws test suite', [])
@@ -142,12 +149,12 @@ class EndToEnd:
         self.progressMonitor.SetProgress("setup")
 
         if args.expedite:
-            args.numdarkcalframestx = 2048
+            args.numdarkcalframestx = 128
             args.darkcalstartframe = 200
-            args.numdarkcalframes = 100
+            args.numdarkcalframes = 128
 
             args.numloadcals = 1
-            args.numloadcalframestx = 2048
+            args.numloadcalframestx = 128
             args.numloadcalframes = "100"   # csv format
             args.loadcalstartframe= "2048"  # csv format
             args.loadcalexpcount  = "200.0" # csv format
@@ -179,7 +186,7 @@ class EndToEnd:
 #            self.rt.DeleteFiles()
 
             acquisitions = []
-            acquisitions.append( Acquisition.Acquisition("m1234"))
+            acquisitions.append( Acquisition.Acquisition("1","m1234",args.outputprefix))
 
             logging.info("%d acquisitions are all configured", len(acquisitions))
 
@@ -288,6 +295,7 @@ class EndToEnd:
                 TestSuite.to_file(f, [testSuite])
 
         exitCode = 0 if self.overallresult == 'PASS' else 1
+        self.progressMonitor.SetProgress("OverallResult = %s, exit code=%s" % ( self.overallresult, exitCode))
         return exitCode
 
     # TODO port this code for Kestrel
@@ -355,12 +363,6 @@ class EndToEnd:
                      self.sensor.StartFrame(),
                      currentframe)
 
-        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p30:
-            self.sensor.SendFrames(args.numdarkcalframestx, args.darkcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
-            logging.info("EndToEnd.DoCalibrations: before preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
-            self.sensor.WaitUntilPreloaded()
-            logging.info("EndToEnd.DoCalibrations: after preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
-
         with ProgressScope(self.progressMonitor,"DoDarkCalibration") as p3:
             calFileUrl = self.DoDarkCalibration(acq)
             #Test.assertIn('file://' + localPaName + '/data/pa/cal/' + acq.mid + '_dark_', co['url'])
@@ -374,10 +376,6 @@ class EndToEnd:
         offsetFrame = self.sensor.GetCurrentFrameIndex()
         if offsetFrame == None or self.sensor.StartFrame() == 0:
             offsetFrame = 0
-
-        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p50:
-            self.sensor.SendFrames(args.numloadcalframestx, args.loadcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
-            self.sensor.WaitUntilPreloaded()
 
         loadinfo = []
         for loadcaliter in range(0, args.numloadcals):
@@ -423,10 +421,23 @@ class EndToEnd:
 
     def DoDarkCalibration(self, acq):
         global args
+        socket="1"
         logging.info('EndToEnd.DoDarkCalibration: %s', acq)
-        self.rt.StartDarkcal("1", acq, self.movieNumber)
-        self.rt.WaitForState("1","darkcal","RUNNING")
-        self.rt.WaitForState("1","darkcal","COMPLETE")
+        self.rt.Reset(socket,"darkcal")
+        self.rt.WaitForState(socket,"darkcal","READY")
+        self.rt.StartDarkcal(socket, acq, self.movieNumber)
+        self.rt.WaitForStates(socket,"darkcal",["RUNNING","COMPLETE"]) # FIXME with proper delays, this should just be "RUNNING"
+        with ProgressScope(self.progressMonitor,"preloadingDarkCalFrames") as p30:
+            self.sensor.SendFrames(args.numdarkcalframestx, args.darkcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
+            logging.info("EndToEnd.DoCalibrations: before preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
+#            self.sensor.WaitUntilPreloaded()
+#            logging.info("EndToEnd.DoCalibrations: after preload, currentframe %d",self.sensor.GetCurrentFrameIndex())
+
+        expectedTimeout = (STATUS_COUNT+2)*STATUS_DELAY_SECONDS*2
+        self.rt.WaitForState("1","darkcal","COMPLETE",expectedTimeout)
+        completionStatus = self.rt.GetCompletionStatus("1","darkcal")
+        if completionStatus != "SUCCESS":
+            raise Exception("darkcal did not complete successfully, completed with %s" % completionStatus)
 
         logging.info('EndToEnd.DoDarkCalibration: done')
         return self.rt.GetApp("1","darkcal")
@@ -434,10 +445,21 @@ class EndToEnd:
 
     def DoDynamicLoadingCalibration(self, acq, loadcaliter, frameOffset):
         global args
+        socket = "1"
         logging.info('EndToEnd.DoDynamicLoadingCalibration: %s', acq)
-        self.rt.StartLoadingcal("1", acq, self.movieNumber)
-        self.rt.WaitForState("1","loadingcal","RUNNING")
-        self.rt.WaitForState("1","loadingcal","COMPLETE")
+        self.rt.Reset(socket,"loadingcal")
+        self.rt.WaitForState(socket,"loadingcal","READY")
+        self.rt.StartLoadingcal(socket, acq, self.movieNumber)
+        self.rt.WaitForStates(socket,"loadingcal",["RUNNING","COMPLETE"]) # FIXME with proper delays, this should just be "RUNNING"
+
+        with ProgressScope(self.progressMonitor,"preloadingDynamicCalFrames") as p50:
+            self.sensor.SendFrames(args.numloadcalframestx, args.loadcalfile, frameRate=args.framerate, movieNumber=self.movieNumber)
+
+        expectedTimeout = (STATUS_COUNT+2)*STATUS_DELAY_SECONDS*2
+        self.rt.WaitForState("1","loadingcal","COMPLETE",expectedTimeout)
+        completionStatus = self.rt.GetCompletionStatus("1","loadingcal")
+        if completionStatus != "SUCCESS":
+            raise Exception("loadingcal did not complete successfully, completed with %s" % completionStatus)
         logging.info('EndToEnd.DoDynamicLoadingCalibration: done')
         return self.rt.GetApp("1","loadingcal")
 
@@ -448,7 +470,15 @@ class EndToEnd:
         logging.info('EndToEnd.DoAcquisition: %s', acq)
         self.rt.StartBasecaller("1", acq, self.movieNumber)
         self.rt.WaitForState("1","basecaller","RUNNING")
-        self.rt.WaitForState("1","basecaller","COMPLETE")
+        self.rt.WaitForArmed("1","basecaller")
+        with ProgressScope(self.progressMonitor,"acquisitionSendingFrames") as p50:
+            self.sensor.SendFrames(args.numFrames, args.datafile_on_sensorhost, frameRate=args.framerate, movieNumber=self.movieNumber)
+        expectedTimeout = (STATUS_COUNT+2)*STATUS_DELAY_SECONDS*2
+        self.rt.WaitForState("1","basecaller","COMPLETE",expectedTimeout)
+        completionStatus = self.rt.GetCompletionStatus("1","basecaller")
+        if completionStatus != "SUCCESS":
+            raise Exception("basecaller did not complete successfully, completed with %s" % completionStatus)
+
         logging.info('EndToEnd.DoAcquisition: done')
         return self.rt.GetApp("1","basecaller")
 
@@ -518,7 +548,7 @@ if __name__ == '__main__':
                        default=None)
     group.add_argument('--outputprefix',
                        help="Local directory on --pachost for results",
-                       default='/data/pa')
+                       default='/data/nrta/0')
     group.add_argument('--progressfile',
                        default="/tmp/progress_" + getpass.getuser()+
                                "_" + datetime.now().isoformat() +".txt",
@@ -551,7 +581,7 @@ if __name__ == '__main__':
                        default='/pbi/dept/primary/sim/sequel/sequel_calpattern_frm512.trc.h5')
     group.add_argument('--numdarkcalframestx',
                        help="Number of dark cal frames to transmit. default: %(default)s",
-                       default=3000,type=int)
+                       default=128,type=int)
     group.add_argument('--darkcalstartframe',
                        help="Dark calibration start frame to use. default: %(default)s",
                        default=2510, type=int)
@@ -560,7 +590,7 @@ if __name__ == '__main__':
                        default=100.0, type=float) # the sim file above consists many frames of "100", and the startframe points to these.
     group.add_argument('--numdarkcalframes',
                        help="Number of dark calibration frames to use. default: %(default)s",
-                       default=100, type=int) # this is the number of the frames in the sim file, and also close to production dark frame movies.
+                       default=128, type=int) # this is the number of the frames in the sim file, and also close to production dark frame movies.
 
     group = parser.add_argument_group('Loading Calibration Setup')
     # Loading calibration
@@ -569,7 +599,7 @@ if __name__ == '__main__':
                        default='/pbi/dept/primary/sim/sequel/sequel_calpattern_frm512.trc.h5')
     group.add_argument('--numloadcalframestx',
                        help="Number of loading cal frames to transmit. default: %(default)s",
-                       default=25000,type=int)
+                       default=128,type=int)
     group.add_argument('--loadcalstartframe',
                        help="Loading calibration start frames to use (CSV format). default: %(default)s",
                        default='4196,10290,14923')
@@ -590,6 +620,9 @@ if __name__ == '__main__':
     group.add_argument('--framerate',
                        help="Acquisition frame rate (also used by --sensorhost for transmitting frames)",
                        default=100.0, type=float)
+    group.add_argument('--numFrames',
+                       help="Acquisition frames to be acquired",
+                       default=5120, type=int)
     group.add_argument('--runmetadata',
                        help="Acquisition run metadata to load",
                        default=os.path.dirname(os.path.abspath(__file__)) + '/test/m54004_170308_194231.metadata.xml')
@@ -682,32 +715,33 @@ if __name__ == '__main__':
 
         SetupLogging()
 
-        if args.bist:
-            from PaWsSim import PaWsSim
-            from SensorSim import SensorSim
-            from WxDaemonSim import WxDaemonSim
-            wxdaemon = WxDaemonSim()
-            wxdaemon.Run()
-            paws = PaWsSim()
-            paws.Run()
-            args.sensorurl = wxdaemon.GetUrl()
-            args.wxurl = wxdaemon.GetUrl()
-            args.pawsurl = paws.GetUrl()
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            if args.bist:
+                from PaWsSim import PaWsSim
+                from WxDaemonSim import WxDaemonSim
+                wxdaemon = WxDaemonSim()
+                wxdaemon.Run()
+                paws = PaWsSim()
+                paws.Run()
+                args.sensorurl = wxdaemon.GetUrl()
+                args.wxurl = wxdaemon.GetUrl()
+                args.pawsurl = paws.GetUrl()
+                args.outputprefix = tmpdirname
 
-        if args.failure is None:
-            args.failure = [ ]
+            if args.failure is None:
+                args.failure = [ ]
 
-        if args.scpsimfiles:
-            SecureCopySimFiles()
-        else:
-            args.datafile_on_sensorhost = args.datafile
+            if args.scpsimfiles:
+                SecureCopySimFiles()
+            else:
+                args.datafile_on_sensorhost = args.datafile
 
-        progressManager = ProgressManager(args.progressfile)
-        e2e = EndToEnd(progressManager)
-        e2e.Setup()
-        exitCode = e2e.Run()
-        logging.info("End Stats: %s",stats)
-        sys.exit(exitCode)
+            progressManager = ProgressManager(args.progressfile)
+            e2e = EndToEnd(progressManager)
+            e2e.Setup()
+            exitCode = e2e.Run()
+            logging.info("End Stats: %s",stats)
+            sys.exit(exitCode)
 
     except Exception as ex:
         logging.exception('Exception caught during main, something is really broken!')

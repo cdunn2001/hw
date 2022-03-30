@@ -1,0 +1,22 @@
+{
+    "uuid": "123",
+    "bazUrl": "/data/nrta/0/foo1.baz",
+    "traceFileUrl": "/data/nrta/0/foo1.trc.h5",
+    "chiplayout": "",
+    "darkcalFileUrl": "discard:",
+    "pixelSpreadFunction": null,
+    "crosstalkFilter": null,
+    "analogs": null,
+    "sequencingRoi": null,
+    "traceFileRoi": null,
+    "expectedFrameRate": 100,
+    "photoelectronSensitivity": 0,
+    "refSnr": 0,
+    "smrtBasecallerConfig": "",
+    "mid": "m1234",
+    "maxMovieFrames": 3600,
+    "maxMovieSeconds": 40,
+    "movieNumber": 0,
+    "logUrl": "/data/nrta/0/foo1.log",
+    "logLevel": "DEBUG"
+}

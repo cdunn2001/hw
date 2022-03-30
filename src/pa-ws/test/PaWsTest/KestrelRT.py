@@ -26,22 +26,48 @@ class RT(HttpHelper.SafeHttpClient):
     def GetPlatform(self):
         return self.checkedGet(self.wxdaemon+'/status/platform')
 
-    def Reset(self, socket):
+    def Reset(self, socket, app=""):
         logging.info('RT.Reset:')
-        self.checkedPost("%s/sockets/%s/reset" % ( self.paws, socket), payload={})
+        if app == "":
+            self.checkedPost("%s/sockets/%s/reset" % ( self.paws, socket), payload={})
+        else :
+            self.checkedPost("%s/sockets/%s/%s/reset" % ( self.paws, socket, app), payload={})
 
-    def WaitForState(self,socket,app,state,timeout=5):
-        self.progressMonitor.SetProgress("WaitForState:%s/%s=%s" % (socket,app,state))
+    def WaitForState(self,socket,app,allowedState,timeout=5):  
+        self.WaitForStates(socket,app,[allowedState],timeout)
+
+    def WaitForStates(self,socket,app,allowedStates,timeout=5):  
+        self.progressMonitor.SetProgress("WaitForState:%s/%s=%s" % (socket,app,allowedStates))
         t0 = monotonic() 
         while True:
-            stateActual = self.checkedGet("%s/sockets/%s/%s/processStatus/executionStatus" % ( self.paws, socket, app ))
-            if stateActual == state:
-                logging.info('RT.WaitForState: DONE %s/%s %s' % (socket,app,state))
+            stateActual = self.checkedGet("%s/sockets/%s/%s" % ( self.paws, socket, app ))
+            stateActual = stateActual["processStatus"]["executionStatus"]
+            if stateActual in allowedStates:
+                logging.info('RT.WaitForState: DONE %s/%s %s' % (socket,app,allowedStates))
                 return
             if monotonic() - t0 > timeout:
-                raise TimeoutError("timeout waiting for %s" % state)    
+                raise TimeoutError("timeout waiting for %s, most recent state was %s" % (allowedStates,stateActual))    
             sleep(0.100)
-        raise Exception("timeout waiting for %s/%s %s" % (socket, app, state))
+
+    def WaitForArmed(self,socket,app,armed=True,timeout=5):  
+        self.progressMonitor.SetProgress("WaitForArmed:%s/%s=%s" % (socket,app,armed))
+        t0 = monotonic() 
+        while True:
+            armedActual = self.checkedGet("%s/sockets/%s/%s" % ( self.paws, socket, app ))
+            armedActual = armedActual["processStatus"]["armed"]
+            if armedActual == armed:
+                logging.info('RT.WaitForArmed: DONE %s/%s %s' % (socket,app,armed))
+                return
+            if monotonic() - t0 > timeout:
+                raise TimeoutError("timeout waiting for armed==%s" % (armed))    
+            sleep(0.100)
+
+    def GetCompletionStatus(self,socket,app):
+        r = self.checkedGet("%s/sockets/%s/%s" % ( self.paws, socket, app ))
+        r = r["processStatus"]
+        if r["executionStatus"] != "COMPLETE":
+            raise Exception("Can't get completionStatus if the executionStatus is not COMPLETE, was %s" % r["executionStatus"])
+        return r["completionStatus"]
 
     def StartApp(self,socket,app,payload0, movieNumber):
         logging.info('RT.Start:')
@@ -250,13 +276,14 @@ def test_KestrelRT():
     assert rt.GetPlatform() == "Kestrel"
 
     rt.Init()
-    rt.Reset("1")
-    rt.WaitForState("1","basecaller","UNKNOWN")
-    acq = Acquisition.Acquisition("m1234")
-    rt.StartBasecaller("1", acq, 100)
-    rt.WaitForState("1","basecaller","READY")
-    rt.WaitForState("1","basecaller","RUNNING")
-    rt.WaitForState("1","basecaller","COMPLETE")
+    acq = Acquisition.Acquisition("1","m1234","/tmp")
+    rt.Reset(acq.Socket())
+    rt.WaitForStates(acq.Socket(),"basecaller","READY")
+    rt.WaitForArmed(acq.Socket(),"basecaller",False)
+    rt.StartBasecaller(acq.Socket(), acq, 100)
+    rt.WaitForState(acq.Socket(),"basecaller","RUNNING")
+    rt.WaitForArmed(acq.Socket(),"basecaller",True)
+    rt.WaitForState(acq.Socket(),"basecaller","COMPLETE")
 
     wxdaemon.Shutdown()
     paws.Shutdown()
