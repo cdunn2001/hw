@@ -47,6 +47,7 @@
 #include <pacbio/text/String.h>
 #include <pacbio/image/Netpbm.h>
 
+#include <pacbio/datasource/ZmwFeatures.h>
 
 namespace PacBio {
 namespace Primary {
@@ -521,7 +522,7 @@ void Filter::Load( const ZmwStatsFile& file)
 {
     data_.resize(file.nH());
 
-    std::vector<uint32_t> holeNumbers(file.nH());
+    std::vector<uint32_t> holeFeatures;
 
     switch (type_)
     {
@@ -564,34 +565,20 @@ void Filter::Load( const ZmwStatsFile& file)
 
     case Filter_t::Sequencing:
     {
-        static bool warnOnce = [](){PBLOG_WARN << "ZmwReducedStats treating all ZMW as sequencing"; return true;}();
-        (void) warnOnce;
-        //std::string layoutName = file.ChipLayoutName();
-        //auto chipLayout = ChipLayout::Factory(layoutName);
-        ZmwStatDataSet ds = file.GetDataSet("/ZMW/HoleNumber");
-        ds.DataSet() >> holeNumbers;
+        file.UnitFeature.DataSet() >> holeFeatures;
         for (uint32_t i=0;i<data_.size();i++)
         {
-            //UnitCell uc(holeNumbers[i]);
-            //data_[i] = static_cast<uint8_t>(chipLayout->IsSequencing(static_cast<uint16_t>(uc.x),
-            //                                                         static_cast<uint16_t>(uc.y)));
-            data_[i] = 1;
+            data_[i] = ((holeFeatures[i] & DataSource::ZmwFeatures::Sequencing) != 0);
         }
     }
         break;
 
     case Filter_t::NonSequencing:
     {
-        //std::string layoutName = file.ChipLayoutName();
-        //auto chipLayout = ChipLayout::Factory(layoutName);
-        ZmwStatDataSet ds = file.GetDataSet("/ZMW/HoleNumber");
-        ds.DataSet() >> holeNumbers;
+        file.UnitFeature.DataSet() >> holeFeatures;
         for (uint32_t i=0;i<data_.size();i++)
         {
-            //UnitCell uc(holeNumbers[i]);
-            //data_[i] = static_cast<uint8_t>(!chipLayout->IsSequencing(static_cast<uint16_t>(uc.x),
-            //                                                          static_cast<uint16_t>(uc.y)));
-            data_[i] = 0;
+            data_[i] = ((holeFeatures[i] & DataSource::ZmwFeatures::Sequencing) == 0);
         }
     }
         break;
