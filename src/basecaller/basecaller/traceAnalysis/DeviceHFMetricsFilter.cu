@@ -629,7 +629,7 @@ __global__ void FinalizeMetrics(
                                                   blockMetrics.baselineM1[threadIdx.x],
                                                   blockMetrics.baselineM2[threadIdx.x]);
         const float2 pkMidSignal(blockMetrics.pkMidSignal[pulseLabel][threadIdx.x]);
-        const float2 pkMidSignalSqr = asFloat2(pkMidSignal) * asFloat2(pkMidSignal);
+        const float2 pkMidSignalSqr = pkMidSignal * pkMidSignal;
 
         { // Convert moments to interpulse variance
             const PBHalf2& nb = blockMetrics.numPkMidBasesByAnalog[pulseLabel][threadIdx.x];
@@ -657,7 +657,7 @@ __global__ void FinalizeMetrics(
         const auto& modelIntraVars = blockMetrics.modelVariance[pulseLabel][threadIdx.x];
         // the model intrapulse variance still contains baseline variance,
         // remove before normalizing
-        auto mask = (modelIntraVars < baselineVariance);
+        auto mask = (modelIntraVars <= baselineVariance);
         blockMetrics.pkZvar[pulseLabel][threadIdx.x] /= modelIntraVars - baselineVariance;
         mask = mask || (blockMetrics.pkZvar[pulseLabel][threadIdx.x] < 0.0f);
         blockMetrics.pkZvar[pulseLabel][threadIdx.x] = Blend(
