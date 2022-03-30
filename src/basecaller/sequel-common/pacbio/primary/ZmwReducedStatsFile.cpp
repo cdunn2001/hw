@@ -149,9 +149,18 @@ void ZmwReducedStatsFile::Reduce(const std::string& name, ZmwReducedDataSet& zrd
                 {
                     for (uint32_t binCol = 0; binCol < binning.BinCols(); binCol++)
                     {
-                        int k = (inputRow + binRow) * binning.UnitCellCols() + (inputCol + binCol);
-                        binData[j]   = sourceImage[k];
-                        binFilter[j] = filterImage[k];
+                        if (inputRow + binRow >= binning.UnitCellRows()
+                            || inputCol + binCol >= binning.UnitCellCols())
+                        {
+                            binData[j] = Reducer::NaN();
+                            binFilter[j] = 0;
+                        }
+                        else
+                        {
+                            int k = (inputRow + binRow) * binning.UnitCellCols() + (inputCol + binCol);
+                            binData[j]   = sourceImage[k];
+                            binFilter[j] = filterImage[k];
+                        }
                         j++;
                     }
                 }
@@ -231,6 +240,22 @@ void ZmwReducedStatsFile::Reduce(const ZmwStatsFile& inputFile, const ReducedSta
     PBLOG_DEBUG << config;
 
     currentZmwStatsFile_ = &inputFile;
+    boost::multi_array<uint16_t, 2> holeXY;
+    inputFile.HoleXY.DataSet() >> holeXY;
+    Reducer::Binning::Sizes sizes;
+    sizes.minX = holeXY[0][0];
+    sizes.minY = holeXY[0][1];
+    sizes.maxX = holeXY[0][0];
+    sizes.maxY = holeXY[0][1];
+    for (size_t i = 0; i < holeXY.shape()[0]; ++i)
+    {
+        sizes.minX = std::min(sizes.minX, holeXY[i][0]);
+        sizes.maxX = std::max(sizes.maxX, holeXY[i][0]);
+        sizes.minY = std::min(sizes.minY, holeXY[i][1]);
+        sizes.maxY = std::max(sizes.maxY, holeXY[i][1]);
+    }
+
+    PBLOG_INFO << "Input stats file dimensions:" << sizes.minX << " " << sizes.minY << " " << sizes.maxX << " " << sizes.maxY;
 
     for(const auto& output : config.Outputs)
     {
@@ -263,7 +288,7 @@ void ZmwReducedStatsFile::Reduce(const ZmwStatsFile& inputFile, const ReducedSta
         ReducedStatsConfig outputConfig{};
         outputConfig.Copy(config);
         outputConfig.Load(output.Json()); // this is a trick to overwrite the parent with the child values
-        Reducer::Binning binning(outputConfig);
+        Reducer::Binning binning(outputConfig, sizes);
 
         // the first dimension from the source dataset is always nH (Num Holes)
         // we're going to replace that single dimension with 2 dimensions and turn it into an image.
