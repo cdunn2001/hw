@@ -32,6 +32,7 @@ import string
 from subprocess import check_call, check_output
 import sys
 from time import sleep
+import tempfile
 import traceback
 from typing import List
 
@@ -714,31 +715,33 @@ if __name__ == '__main__':
 
         SetupLogging()
 
-        if args.bist:
-            from PaWsSim import PaWsSim
-            from WxDaemonSim import WxDaemonSim
-            wxdaemon = WxDaemonSim()
-            wxdaemon.Run()
-            paws = PaWsSim()
-            paws.Run()
-            args.sensorurl = wxdaemon.GetUrl()
-            args.wxurl = wxdaemon.GetUrl()
-            args.pawsurl = paws.GetUrl()
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            if args.bist:
+                from PaWsSim import PaWsSim
+                from WxDaemonSim import WxDaemonSim
+                wxdaemon = WxDaemonSim()
+                wxdaemon.Run()
+                paws = PaWsSim()
+                paws.Run()
+                args.sensorurl = wxdaemon.GetUrl()
+                args.wxurl = wxdaemon.GetUrl()
+                args.pawsurl = paws.GetUrl()
+                args.outputprefix = tmpdirname
 
-        if args.failure is None:
-            args.failure = [ ]
+            if args.failure is None:
+                args.failure = [ ]
 
-        if args.scpsimfiles:
-            SecureCopySimFiles()
-        else:
-            args.datafile_on_sensorhost = args.datafile
+            if args.scpsimfiles:
+                SecureCopySimFiles()
+            else:
+                args.datafile_on_sensorhost = args.datafile
 
-        progressManager = ProgressManager(args.progressfile)
-        e2e = EndToEnd(progressManager)
-        e2e.Setup()
-        exitCode = e2e.Run()
-        logging.info("End Stats: %s",stats)
-        sys.exit(exitCode)
+            progressManager = ProgressManager(args.progressfile)
+            e2e = EndToEnd(progressManager)
+            e2e.Setup()
+            exitCode = e2e.Run()
+            logging.info("End Stats: %s",stats)
+            sys.exit(exitCode)
 
     except Exception as ex:
         logging.exception('Exception caught during main, something is really broken!')
