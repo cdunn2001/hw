@@ -598,8 +598,8 @@ private:
             // startup = 0
             SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, startupCounterMax, 300);
 
-        // Names for the various graph stages
-        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
+            // Names for the various graph stages
+            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
 
             auto source = CreateSource();
             AnalysisConfig analysisConfig;
