@@ -102,24 +102,14 @@ FileHeaderSet::FileHeaderSet(const std::vector<std::pair<std::string,std::unique
         throw PBException("ZMW hole numbers are not distinct, check files!");
     }
 
+    std::vector<std::reference_wrapper<const ZmwInfo>> infos;
     for (const auto& fh : fhs_)
     {
-        // Adjust index since each BAZ file stores it sequentially starting at 0.
-        for (const auto& kv : fh.ZmwInformation().ZmwNumbersToIndex())
-            zmwNumbersToIndex_[kv.first] = totalNumZmws_ + kv.second;
-
-        zmwNumbers_.insert(std::end(zmwNumbers_),
-                           fh.ZmwNumbers().begin(), fh.ZmwNumbers().end());
-
-        zmwFeatures_.insert(std::end(zmwFeatures_),
-                            fh.ZmwInformation().HoleFeaturesMask().begin(),
-                            fh.ZmwInformation().HoleFeaturesMask().end());
-
-        maxNumZmws_.push_back(fh.MaxNumZMWs());
+        infos.push_back(fh.ZmwInformation());
         numSuperChunks_.push_back(fh.NumSuperChunks());
-
-        totalNumZmws_ += fh.MaxNumZMWs();
+        maxNumZmws_.push_back(fh.MaxNumZMWs());
     }
+    zmwInfo_ = ZmwInfo::CombineInfos(infos);
 
     movieName_ = PacBio::Text::String::Split(fhs_.begin()->MovieName(), '.')[0];
 }

@@ -57,13 +57,6 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
         A, C, G, T
     };
 
-    static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII and setting GREEN = 0, RED = 0"; return true;}();
-    (void)warnOnce;
-    enum Color
-    {
-        GREEN = 0, RED = 0
-    };
-
     // Unconstrained auto isn't ideal here, but the dest parameter
     // is a boost type with a longer name, and the second parameter
     // really is somewhat generic.  Unfortunately can't specify
@@ -78,9 +71,7 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     };
     auto FillFilter = [&](auto& dest, const auto& filter)
     {
-        static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for FillFilter"; return true;}();
-        (void)warnOnce;
-        dest[Color::GREEN] = filter.green;
+        dest[0] = filter.green;
     };
 
     const auto& excludedPulseMetrics = zmwMetrics.ZmwExcludedPulseMetrics();

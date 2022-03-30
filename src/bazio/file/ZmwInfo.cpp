@@ -46,25 +46,31 @@ ZmwInfo::ZmwInfo(const Data& zmwData)
                                   zmwData_.holeFeaturesMask.size() };
     if(!std::all_of(vecSizes.begin()+1, vecSizes.end(), [&](const size_t s) { return s == vecSizes.front(); }))
         throw PBException("ZmwData does not contain equal sizes for all datasets!");
+
+    for (uint32_t i = 0; i < zmwData_.holeNumbers.size(); ++i)
+    {
+        zmwNumbersToIndex_[zmwData.holeNumbers[i]] = i;
+    }
 }
 
-void ZmwInfo::FromJson(const Json::Value& zmwInfo)
+ZmwInfo ZmwInfo::FromJson(const Json::Value& zmwInfo)
 {
-    zmwData_.holeNumbers = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwNumberLut);
-    zmwData_.holeFeaturesMask = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwFeatureLut);
+    ZmwInfo::Data zmwData;
+    zmwData.holeNumbers = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwNumberLut);
+    zmwData.holeFeaturesMask = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwFeatureLut);
     std::vector<uint32_t> holeTypes = ParseJsonRLEHexArray(zmwInfo, JsonKey::ZmwTypeLut);
     std::vector<uint32_t> holeX = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwX);
     std::vector<uint32_t> holeY = ParseJsonRLEHexArray(zmwInfo[JsonKey::ZmwXYLut], JsonKey::ZmwY);
 
-    zmwData_.holeTypes.resize(NumZmws());
-    zmwData_.holeX.resize(NumZmws());
-    zmwData_.holeY.resize(NumZmws());
-    for (size_t i = 0; i < NumZmws(); i++)
+    const auto numZmws = zmwData.holeNumbers.size();
+    zmwData.holeTypes.resize(numZmws);
+    zmwData.holeX.resize(numZmws);
+    zmwData.holeY.resize(numZmws);
+    for (size_t i = 0; i < numZmws; i++)
     {
-        zmwData_.holeTypes[i] = static_cast<uint8_t>(holeTypes[i]);
-        zmwData_.holeX[i] = static_cast<uint16_t>(holeX[i]);
-        zmwData_.holeY[i] = static_cast<uint16_t>(holeY[i]);
-        zmwNumbersToIndex_[zmwData_.holeNumbers[i]] = i;
+        zmwData.holeTypes[i] = static_cast<uint8_t>(holeTypes[i]);
+        zmwData.holeX[i] = static_cast<uint16_t>(holeX[i]);
+        zmwData.holeY[i] = static_cast<uint16_t>(holeY[i]);
     }
 
     if (zmwInfo.isMember(JsonKey::ZmwFeatureMap))
@@ -78,6 +84,37 @@ void ZmwInfo::FromJson(const Json::Value& zmwInfo)
     {
         throw PBException("Missing " + std::string(JsonKey::ZmwFeatureMap) + " in BAZ header!");
     }
+
+    return ZmwInfo(zmwData);
+}
+
+ZmwInfo ZmwInfo::CombineInfos(const std::vector<std::reference_wrapper<const ZmwInfo>>& infos)
+{
+    const auto numZmw = std::accumulate(infos.begin(), infos.end(), 0u,
+                                        [](uint32_t val, const ZmwInfo& info)
+                                        { return val + info.NumZmws(); });
+    ZmwInfo::Data zmwData;
+    zmwData.holeFeaturesMask.reserve(numZmw);
+    zmwData.holeNumbers.reserve(numZmw);
+    zmwData.holeTypes.reserve(numZmw);
+    zmwData.holeX.reserve(numZmw);
+    zmwData.holeY.reserve(numZmw);
+
+    auto append = [](auto& first, const auto& second)
+    {
+        std::copy(second.begin(), second.end(), std::back_inserter(first));
+    };
+
+    for (const ZmwInfo& info : infos)
+    {
+        append(zmwData.holeFeaturesMask, info.HoleFeaturesMask());
+        append(zmwData.holeNumbers, info.HoleNumbers());
+        append(zmwData.holeTypes, info.HoleTypes());
+        append(zmwData.holeX, info.HoleX());
+        append(zmwData.holeY, info.HoleY());
+    }
+
+    return ZmwInfo(zmwData);
 }
 
 Json::Value ZmwInfo::ToJson() const
@@ -118,7 +155,7 @@ Json::Value ZmwInfo::ZmwFeatureLut() const
     return RunLengthEncLUTHexJson(RunLengthEncLUT(zmwData_.holeFeaturesMask));
 }
 
-std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const
+std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, const std::string& field)
 {
     if (node.isMember(field))
     {
@@ -131,4 +168,3 @@ std::vector<uint32_t> ZmwInfo::ParseJsonRLEHexArray(const Json::Value& node, con
 }
 
 } // PacBio::BazIO
-
