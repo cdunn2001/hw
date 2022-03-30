@@ -440,12 +440,7 @@ public:
     /// Returns the sum of current bytes
     size_t CurrentBytes() const
     {
-        size_t total = 0;
-        for (auto& kv : stats_)
-        {
-            total += kv.second.CurrentBytes();
-        }
-        return total;
+        return fullStats_.CurrentBytes() + cacheStats_.CurrentBytes();
     }
 
 private:
