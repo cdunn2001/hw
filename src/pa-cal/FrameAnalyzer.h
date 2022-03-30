@@ -27,6 +27,7 @@
 
 #include <pacbio/datasource/DataSourceBase.h>
 #include <app-common/ThreadController.h>
+#include <pa-cal/PaCalProgressMessage.h>
 
 namespace PacBio::Calibration
 {
@@ -50,7 +51,8 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                         std::shared_ptr<Threading::IThreadController> controller,
                         uint32_t movieNum,
                         std::string outputFile,
-                        bool createDarkCalFile);
+                        bool createDarkCalFile,
+                        PaCalStageReporter& reporter);
 
 
 struct FrameStats
@@ -70,6 +72,7 @@ struct FrameStats
 ///               pixel on the chip.  The boost::multi_arrays are stored using
 ///               an arr[row][col] convention.
 FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t pedestal,
-                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props);
+                        const std::vector<DataSource::DataSourceBase::UnitCellProperties>& props,
+                        PaCalStageReporter& reporter);
 
 } // namespace PacBio::Calibration

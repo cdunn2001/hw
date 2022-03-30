@@ -87,7 +87,7 @@
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
   @@ -8233,7 +8233,7 @@
-   \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
+   \t\t\t\t\t"TRACE_AUTOCORR" : 0.037384033203125 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
   -\t\t\t"ZMW_ID" : 0, (esc)
@@ -103,7 +103,7 @@
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
   @@ -8009,7 +8009,7 @@
-   \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
+   \t\t\t\t\t"TRACE_AUTOCORR" : 0.044189453125 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
   -\t\t\t"ZMW_ID" : 64, (esc)
@@ -119,7 +119,7 @@
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
   @@ -7785,7 +7785,7 @@
-   \t\t\t\t\t"TRACE_AUTOCORR" : 0 (esc)
+   \t\t\t\t\t"TRACE_AUTOCORR" : 0.030731201171875 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
   -\t\t\t"ZMW_ID" : 192, (esc)

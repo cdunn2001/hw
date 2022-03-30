@@ -38,6 +38,7 @@
 
 #include <common/graphs/GraphNodeBody.h>
 
+#include <appModules/SmrtBasecallerProgress.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/BatchResult.h>
 
@@ -63,7 +64,8 @@ public:
                   const BazIO::ZmwInfo& zmwInfo,
                   const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
                   const Mongo::Data::SmrtBasecallerConfig& basecallerConfig,
-                  const PacBio::File::ScanData::Data& experimentMetadata);
+                  const PacBio::File::ScanData::Data& experimentMetadata,
+                  SmrtBasecallerStageReporter& reporter);
 
     ~BazWriterBody();
 

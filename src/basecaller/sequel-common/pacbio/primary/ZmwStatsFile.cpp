@@ -329,7 +329,7 @@ void ZmwStatsFile::WriteScanData(const Json::Value& experimentMetadata)
     //HotStartFrameValid      << static_cast<uint8_t>(experimentMetadata["AcqParams"]["HotStartFrameValid"].asUInt());
     //CameraType              << experimentMetadata["AcqParams"]["CameraType"].asInt();
     //CameraGain              << experimentMetadata["AcqParams"]["CameraGain"].asFloat();
-    AduGain                 << experimentMetadata["AcqParams"]["AduGain"].asFloat();
+    AduGain                 << experimentMetadata["acqParams"]["aduGain"].asFloat();
     //CameraBias              << experimentMetadata["AcqParams"]["CameraBias"].asFloat();
     //CameraBiasStd           << experimentMetadata["AcqParams"]["CameraBiasStd"].asFloat();
     //FrameRate               << experimentMetadata["AcqParams"]["FrameRate"].asFloat();

@@ -271,7 +271,8 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
 int ConvertBaz2Bam::Run()
 {
     {
-        PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, 300);
+        const uint64_t startupCounterMax = 1;
+        PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, startupCounterMax, 300);
 
         if (!user_->silent)
         {
@@ -301,7 +302,8 @@ int ConvertBaz2Bam::Run()
 
     {
         // Everything below requires parsing the BAZ file.
-        PpaStageReporter parseBazHeadersRpt(progressMessage_.get(), PpaStages::ParseBazHeaders, 300);
+        const uint64_t parseBazHeadersCounterMax = 1;
+        PpaStageReporter parseBazHeadersRpt(progressMessage_.get(), PpaStages::ParseBazHeaders, parseBazHeadersCounterMax, 300);
 
         // Parse BAZ.
         bazReader_ = std::unique_ptr<BazReader>(new BazReader(
@@ -475,7 +477,8 @@ int ConvertBaz2Bam::Run()
         return valid;
     });
 
-    PpaStageReporter shutdownRpt(progressMessage_.get(), PpaStages::Shutdown, 30);
+    const uint64_t shutdownCounterMax = 1;
+    PpaStageReporter shutdownRpt(progressMessage_.get(), PpaStages::Shutdown, shutdownCounterMax, 30);
     while (closeFuture.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
     {
         if (!abortNow_)

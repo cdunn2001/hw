@@ -29,6 +29,7 @@
 #include <numeric>
 
 #include <pacbio/configuration/PBConfig.h>
+#include <pacbio/dev/AutoTimer.h>
 #include <pacbio/utilities/ISO8601.h>
 
 #include <boost/iostreams/device/file_descriptor.hpp>
@@ -145,8 +146,9 @@ public:
         stream_ << std::endl;
     }
 
-    void Message(const Output& stage)
+    void Message(Output& stage)
     {
+        stage.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " ";
         jsonWriter_->write(stage.Serialize(), &stream_);
         stream_ << std::endl;
@@ -174,7 +176,6 @@ public:
         Exception(j);
     }
 
-public:
     class StageReporter
     {
     public:
@@ -186,15 +187,16 @@ public:
             pm_->Message(s, currentStage_);
         }
 
-        StageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
-            : StageReporter(pm, s, 1, timeoutForNextStatus)
-        { }
-
-        void Update(uint64_t counter)
+        /// \param delta Increments the counter by the delta amount. The counter will not exceed the counterMax
+        void Update(uint64_t delta)
         {
             std::lock_guard<std::mutex> lock(reportMutex_);
-            currentStage_.counter = std::min(currentStage_.counter + counter, currentStage_.counterMax);
-            pm_->Message(currentStage_);
+            currentStage_.counter = std::min(currentStage_.counter + delta, currentStage_.counterMax);
+            if (timeSinceOutput_.GetElapsedMilliseconds() > 1000)
+            {
+                pm_->Message(currentStage_);
+                timeSinceOutput_.Restart();
+            }
         }
 
         void Update(uint16_t counter, double timeoutForNextStatus)
@@ -205,19 +207,17 @@ public:
 
     private:
         std::mutex reportMutex_;
+        PacBio::Dev::QuietAutoTimer timeSinceOutput_;
         ProgressMessage* pm_;
         Output currentStage_;
     };
 
+public:
     class ThreadSafeStageReporter
     {
     public:
         ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
         : sr_(pm, s, counterMax, timeoutForNextStatus)
-        { }
-
-        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, double timeoutForNextStatus)
-        : ThreadSafeStageReporter(pm, s, 1, timeoutForNextStatus)
         { }
 
         void Update(uint64_t counter)

@@ -5,6 +5,8 @@
 # loading all default versions of modules needed to run the cram tests.
 
 if [[ ! -v NO_MODULE_LOAD ]]; then
+    . /etc/profile.d/modules.sh
+
     echo "Loading dependency modules... "
     module use /pbi/dept/primary/modulefiles
     module use /mnt/software/modulefiles

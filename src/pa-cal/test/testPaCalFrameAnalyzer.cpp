@@ -119,7 +119,10 @@ void TestAnalyzeChunk(PacketLayout::EncodingFormat dataType, int16_t pedestal)
     chunk.AddPacket(std::move(batchData));
     ASSERT_TRUE(chunk.HasFullPacketCoverage());
 
-    const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps);
+    PaCalProgressMessage progressMessage(PaCalProgressStages(), "FOO", 1);
+    const uint64_t analyzeCounterMax = chunk.NumPackets();
+    PaCalStageReporter analyzeRpt(&progressMessage, PaCalStages::Analyze, analyzeCounterMax, 30);
+    const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps, analyzeRpt);
 
     for (size_t z = 0; z < numZmw; ++z)
     {
@@ -152,13 +155,16 @@ void TestSimAnalyze(PacketLayout::EncodingFormat dataType, int16_t pedestal)
     source.Start();
     auto cellProps = source.GetUnitCellProperties();
 
+    PaCalProgressMessage progressMessage(PaCalProgressStages(), "FOO", 1);
     while (source.IsRunning())
     {
         source.ContinueProcessing();
         SensorPacketsChunk chunk;
         if (source.PopChunk(chunk, std::chrono::milliseconds(10)))
         {
-            const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps);
+            const uint64_t analyzeCounterMax = chunk.NumPackets();
+            PaCalStageReporter analyzeRpt(&progressMessage, PaCalStages::Analyze, analyzeCounterMax, 30);
+            const auto& stats = AnalyzeChunk(chunk, pedestal, cellProps, analyzeRpt);
 
             for (size_t z = chunk.StartZmw(); z < chunk.StopZmw(); ++z)
             {
