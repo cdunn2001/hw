@@ -36,7 +36,7 @@
 namespace PacBio {
 namespace Application {
 
-class PrelimHQFilterBody final : public Graphs::MultiTransformBody<Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
+class PrelimHQFilterBody final : public Graphs::MultiTransformBody<const Mongo::Data::BatchResult, std::unique_ptr<BazIO::BazBuffer>>
 {
 public:
     PrelimHQFilterBody(size_t numZmws, const std::map<uint32_t, Mongo::Data::BatchDimensions>& poolDims,
@@ -46,7 +46,7 @@ public:
     size_t ConcurrencyLimit() const override { return numThreads_; }
     float MaxDutyCycle() const override { return 1; }
 
-    void Process(Mongo::Data::BatchResult in) override;
+    void Process(const Mongo::Data::BatchResult& in) override;
 
     std::vector<uint32_t> GetFlushTokens() override;
 

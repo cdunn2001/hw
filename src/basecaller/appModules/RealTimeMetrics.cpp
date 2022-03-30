@@ -48,7 +48,7 @@ RealTimeMetrics::RealTimeMetrics(uint32_t framesPerMetricBlock, size_t numBatche
     }
 }
 
-Mongo::Data::BatchResult RealTimeMetrics::Process(Mongo::Data::BatchResult in)
+void RealTimeMetrics::Process(const Mongo::Data::BatchResult& in)
 {
     const auto& pulseBatch = in.pulses;
     const auto& metricsPtr = in.metrics;
@@ -76,7 +76,6 @@ Mongo::Data::BatchResult RealTimeMetrics::Process(Mongo::Data::BatchResult in)
         }
     }
 
-    return in;
 }
 
 std::vector<LaneMask<>> RealTimeMetrics::SelectedLanesWithFeatures(const std::vector<uint32_t>& features,

@@ -39,19 +39,19 @@
 namespace PacBio::Application
 {
 
-class NoopRealTimeMetrics final : public Graphs::TransformBody<Mongo::Data::BatchResult, Mongo::Data::BatchResult>
+class NoopRealTimeMetrics final : public Graphs::LeafBody<const Mongo::Data::BatchResult>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    Mongo::Data::BatchResult Process(Mongo::Data::BatchResult in) override
+    void Process(const Mongo::Data::BatchResult& in) override
     {
-        return in;
+
     }
 };
 
-class RealTimeMetrics : public Graphs::TransformBody<Mongo::Data::BatchResult, Mongo::Data::BatchResult>
+class RealTimeMetrics final: public Graphs::LeafBody<const Mongo::Data::BatchResult>
 {
 public:
     static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
@@ -70,7 +70,7 @@ public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    Mongo::Data::BatchResult Process(Mongo::Data::BatchResult in) override;
+    void Process(const Mongo::Data::BatchResult& in) override;
 
 private:
     struct RegionInfo

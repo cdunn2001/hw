@@ -489,7 +489,7 @@ private:
         }
     }
 
-    std::unique_ptr<TransformBody<const TraceBatchVariant, BatchResult>>
+    std::unique_ptr<TransformBody<const TraceBatchVariant, const BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims, const AnalysisConfig& analysisConfig) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
@@ -498,7 +498,7 @@ private:
                                                 config_.system);
     }
 
-    std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    std::unique_ptr<MultiTransformBody<const BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_);
@@ -541,7 +541,7 @@ private:
         }
     }
 
-    std::unique_ptr<TransformBody<BatchResult, BatchResult>>
+    std::unique_ptr<LeafBody<const BatchResult>>
     CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         if (!config_.realTimeMetrics.regions.empty())
@@ -620,8 +620,8 @@ private:
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
-                auto* rtMetrics = analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims), GraphProfiler::RT_METRICS);
-                auto* preHQ = rtMetrics->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims), GraphProfiler::RT_METRICS);
+                auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
                 preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
             }
 
