@@ -37,7 +37,6 @@
 
 #include <bazio/BlockActivityLabels.h>
 
-#include <pacbio/primary/RTMetricsConfig.h>
 #include <pacbio/smrtdata/Basecall.h>
 
 #include "TraceAnalysisMetrics.h"

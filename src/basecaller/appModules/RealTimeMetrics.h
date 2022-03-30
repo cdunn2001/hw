@@ -33,41 +33,58 @@
 
 #include <common/graphs/GraphNodeBody.h>
 #include <common/LaneArray.h>
-
-#include <bazio/writing/BazBuffer.h>
+#include <dataTypes/BatchResult.h>
+#include <dataTypes/configs/RealTimeMetricsConfig.h>
 
 namespace PacBio::Application
 {
 
-class NoopRealTimeMetrics final : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+class NoopRealTimeMetrics final : public Graphs::LeafBody<const Mongo::Data::BatchResult>
 {
 public:
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer>) override
+    void Process(const Mongo::Data::BatchResult& in) override
     {
+
     }
 };
 
-class RealTimeMetrics : public Graphs::LeafBody<std::unique_ptr<BazIO::BazBuffer>>
+class RealTimeMetrics final: public Graphs::LeafBody<const Mongo::Data::BatchResult>
 {
 public:
-    RealTimeMetrics() = default;
-    ~RealTimeMetrics() = default;
+    static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
+                                                                    uint32_t featuresMask);
+public:
+    RealTimeMetrics(uint32_t numFramesPerMetricBlock, size_t numBatches,
+                    std::vector<Mongo::Data::RealTimeMetricsRegion>&& regions,
+                    std::vector<DataSource::DataSourceBase::LaneSelector>&& selections,
+                    const std::vector<std::vector<uint32_t>>& features);
+
+    RealTimeMetrics(const RealTimeMetrics&) = delete;
+    RealTimeMetrics(RealTimeMetrics&&) = delete;
+    RealTimeMetrics& operator=(const RealTimeMetrics&) = delete;
+    RealTimeMetrics& operator==(RealTimeMetrics&&) = delete;
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
-    void Process(std::unique_ptr<BazIO::BazBuffer>) override
-    {
-    }
-
-    std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
-                                                             uint32_t featuresMask) const;
+    void Process(const Mongo::Data::BatchResult& in) override;
 
 private:
+    struct RegionInfo
+    {
+        Mongo::Data::RealTimeMetricsRegion region;
+        DataSource::DataSourceBase::LaneSelector selection;
+        std::vector<Mongo::LaneMask<>> laneMasks;
+    };
+    std::vector<RegionInfo> regionInfo_;
 
+    uint32_t framesPerMetricBlock_;
+    size_t numBatches_;
+    size_t batchesSeen_ = 0;
+    int32_t currFrame_ = std::numeric_limits<int32_t>::min();
 };
 
 } // namespace PacBio::Application

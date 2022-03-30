@@ -49,7 +49,7 @@
 namespace PacBio {
 namespace Application {
 
-class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatchVariant, Mongo::Data::BatchResult>
+class BasecallerBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatchVariant, const Mongo::Data::BatchResult>
 {
     using BatchAnalyzer = Mongo::Basecaller::BatchAnalyzer;
 public:
