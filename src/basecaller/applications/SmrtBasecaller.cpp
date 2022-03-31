@@ -661,15 +661,29 @@ private:
 
             source->Start();
 
-            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60,
+                [](Json::Value& metrics){
+                    metrics["MemoryUsage"] = SummarizeMemoryUsage();
+                }
+            );
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
                 if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
                 {
-                    PBLOG_INFO << "Analyzing chunk frames = ["
-                        + std::to_string(chunk.StartFrame()) + ","
-                        + std::to_string(chunk.StopFrame()) + ")";
+                    {
+                        PacBio::Logging::LogStream ls(PacBio::Logging::LogLevel::INFO);
+                        Json::Value memSummary = SummarizeMemoryUsage();
+                        for (const auto& key : memSummary.getMemberNames())
+                        {
+                            if (memSummary[key] == "") memSummary.removeMember(key);
+                        }
+                        ls << "Analyzing chunk frames = ["
+                           << chunk.StartFrame() << ","
+                           << chunk.StopFrame() << ")\n"
+                           << "MemInfo: " << memSummary;
+                    }
+
                     PacBio::Dev::QuietAutoTimer t;
                     if (nop_ == 1)
                     {
@@ -744,7 +758,6 @@ private:
                     numChunksAnalyzed++;
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
-
                     analyzeStageRpt.Update(chunk.NumFrames());
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
