@@ -56,7 +56,7 @@ public:
     Impl() = default;
     virtual ~Impl() = default;
 
-    virtual std::unique_ptr<BazBuffer> Process(BatchResult in) = 0;
+    virtual std::unique_ptr<BazBuffer> Process(const BatchResult& in) = 0;
     virtual std::unique_ptr<BazBuffer> Flush() = 0;
 };
 
@@ -95,7 +95,7 @@ public:
         , serializers_(numZmws)
     {}
 
-    std::unique_ptr<BazBuffer> Process(BatchResult in) override
+    std::unique_ptr<BazBuffer> Process(const BatchResult& in) override
     {
         const auto& pulseBatch = in.pulses;
         const auto& metricsPtr = in.metrics;
@@ -292,11 +292,11 @@ PrelimHQFilterBody::PrelimHQFilterBody(
 
 PrelimHQFilterBody::~PrelimHQFilterBody() = default;
 
-void PrelimHQFilterBody::Process(Mongo::Data::BatchResult in)
+void PrelimHQFilterBody::Process(const Mongo::Data::BatchResult& in)
 {
     auto ret = (impl_.size() == 1)
-            ? impl_[0]->Process(std::move(in))
-            : impl_[in.pulses.GetMeta().PoolId()]->Process(std::move(in));
+            ? impl_[0]->Process(in)
+            : impl_[in.pulses.GetMeta().PoolId()]->Process(in);
     if (ret) this->PushOut(std::move(ret));
 }
 

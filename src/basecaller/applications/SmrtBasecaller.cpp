@@ -484,7 +484,7 @@ private:
         }
     }
 
-    std::unique_ptr<TransformBody<const TraceBatchVariant, BatchResult>>
+    std::unique_ptr<TransformBody<const TraceBatchVariant, const BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims, const AnalysisConfig& analysisConfig) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
@@ -493,7 +493,7 @@ private:
                                                 config_.system);
     }
 
-    std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    std::unique_ptr<MultiTransformBody<const BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_);
@@ -506,7 +506,7 @@ private:
 
         const uint64_t creatingBazFileCounterMax = poolDims.size() + 3;
         const auto reportTimeout = (config_.multipleBazFiles)?300:3000;
-        SmrtBasecallerStageReporter bazCreationRpt(progressMessage_.get(), SmrtBasecallerStages::BazCreation, 
+        SmrtBasecallerStageReporter bazCreationRpt(progressMessage_.get(), SmrtBasecallerStages::BazCreation,
             creatingBazFileCounterMax, reportTimeout);
 
         if (hasBazFile_)
@@ -546,32 +546,43 @@ private:
         }
     }
 
-    std::unique_ptr<LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreateRealTimeMetrics(const DataSourceRunner& dataSource)
+    std::unique_ptr<LeafBody<const BatchResult>>
+    CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
-        if (!config_.realTimeMetrics.roi.empty())
+        if (!config_.realTimeMetrics.regions.empty())
         {
-            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.realTimeMetrics.roi, laneSize);
-            const auto actualZmw = selection.size() * laneSize;
-
-            const auto& fullProperties = dataSource.GetUnitCellProperties();
-            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
-
-            size_t idx = 0;
-            for (const auto& lane: selection)
+            std::vector<DataSourceBase::LaneSelector> selections;
+            std::vector<std::vector<uint32_t>> properties;
+            for (const auto& region : config_.realTimeMetrics.regions)
             {
-                size_t currZmw = lane * laneSize;
-                for (size_t i = 0; i < laneSize; ++i)
-                {
-                    assert(idx < actualZmw);
-                    properties[idx] = fullProperties[currZmw];
-                    currZmw++;
-                    idx++;
-                }
-            }
-            assert(idx == actualZmw);
+                auto selection = SelectedBasecallerLanesWithinROI(dataSource, region.roi, laneSize);
 
-            return std::make_unique<RealTimeMetrics>();
+                const auto actualZmw = selection.size() * laneSize;
+
+                const auto& fullProperties = dataSource.GetUnitCellProperties();
+                std::vector<uint32_t> selectionFeatures(actualZmw);
+
+                size_t idx = 0;
+                for (const auto& lane: selection)
+                {
+                    size_t currZmw = lane * laneSize;
+                    for (size_t i = 0; i < laneSize; ++i)
+                    {
+                        assert(idx < actualZmw);
+                        selectionFeatures[idx] = fullProperties[currZmw].flags;
+                        currZmw++;
+                        idx++;
+                    }
+                }
+                assert(idx == actualZmw);
+                selections.emplace_back(std::move(selection));
+                properties.emplace_back(selectionFeatures);
+            }
+
+            return std::make_unique<RealTimeMetrics>(config_.algorithm.Metrics.framesPerHFMetricBlock,
+                                                     poolDims.size(),
+                                                     std::move(config_.realTimeMetrics.regions),
+                                                     std::move(selections), properties);
         }
         else
         {
@@ -588,7 +599,7 @@ private:
             SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, startupCounterMax, 300);
 
             // Names for the various graph stages
-            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
+            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
 
             auto source = CreateSource();
             AnalysisConfig analysisConfig;
@@ -625,6 +636,7 @@ private:
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
                 startUpRpt.Update(1);
                 // startup = 5
+                analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims), GraphProfiler::RT_METRICS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
                 startUpRpt.Update(1);
                 // startup = 6
