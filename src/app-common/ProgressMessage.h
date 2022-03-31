@@ -179,9 +179,6 @@ public:
     class StageReporter
     {
     public:
-        uint32_t minimumReportInterval = 1000;
-
-    public:
         StageReporter(ProgressMessage* pm, const Stages& stage, uint64_t counterMax, double timeoutForNextStatus,
             std::function<void(Json::Value&)> metricsCallback = nullptr
         )
@@ -226,12 +223,17 @@ public:
         {
             return currentStage_.metrics;
         }
+        void SetMinimumInterval(uint32_t x)
+        {
+            minimumReportInterval = x;
+        }
     private:
         std::mutex reportMutex_;
         PacBio::Dev::QuietAutoTimer timeSinceOutput_;
         ProgressMessage* pm_;
         Output currentStage_;
         std::function<void(Json::Value& metrics)> metricsCallback_;
+        uint32_t minimumReportInterval = 1000;
     };
 
 public:
@@ -244,12 +246,18 @@ public:
         /// \param timeoutForNextStatus the maximum time expected for the next progress message.
         /// \param metricsCallback An optional callback that can be used to refresh some metrics that will be bundled in the
         ///        progress message, under the "metrics" JSON object. The argument to the callback is the Json::Value& of the
-        ///        "metrics" object. 
+        ///        "metrics" object.   NB: the callback must be threadsafe.
         ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus,
             std::function<void(Json::Value& metrics)> metricsCallback = nullptr
         )
         : sr_(pm, s, counterMax, timeoutForNextStatus, metricsCallback)
-        { }
+        { 
+           
+        }
+        void SetMinimumInterval(uint32_t x)
+        {
+            sr_.SetMinimumInterval(x);
+        }
         void Flush()
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -266,28 +274,6 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             sr_.Update(counter, timeoutForNextStatus);
-        }
-        /// \returns a thread-safe "pointer" to the metrics JSON object. The user is free
-        /// to set key/value values inside the metrics object, which will be
-        /// reported to pa-ws.
-        struct MetricsLock {
-            MetricsLock(Json::Value& value, std::mutex& mutex) : value_(value), mutex_(mutex)
-            {
-                mutex_.lock();
-            }
-            ~MetricsLock() {
-                mutex_.unlock();
-            }
-            Json::Value& operator->() { return value_; }
-            Json::Value& operator*() { return value_; }
-
-        private:
-            Json::Value& value_;
-            std::mutex& mutex_;
-        };
-        MetricsLock GetMetrics()
-        {
-            return MetricsLock(sr_.GetMetrics(), mutex_);
         }
     private:
         std::mutex mutex_;
