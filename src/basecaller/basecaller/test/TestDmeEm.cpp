@@ -227,7 +227,7 @@ public:
                 // Check estimated means.
                 result = rbm.SignalMean();
                 expected = cdbm.SignalMean();
-                absErrTol = 6.5f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
+                absErrTol = 5.0f * sqrt(cdbm.SignalCovar() / numFrames / cdbm.Weight());
                 Assert(expected, result, absErrTol, "Bad mean for analog " + astr);
 
                 // Check estimated variances.
@@ -260,7 +260,7 @@ private:
     LaneDetectionModel MakeInitialModel(void)
     {
         LaneDetectionModel ldm;
-        DmeEmHost::InitLaneDetModel(0.5f, 0.0f, 50.0f, &ldm);
+        DmeEmHost::InitLaneDetModel(0.5f, 0.0f, 100.0f, &ldm);
         return ldm;
     }
 
@@ -401,6 +401,13 @@ private:
     void SetUp()
     {
         analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
+        analysisConfig.movieInfo.refSnr = 5.0;
+        analysisConfig.movieInfo.frameRate = 80.0f;
+        analysisConfig.movieInfo.photoelectronSensitivity = 0.5f;
+        analysisConfig.movieInfo.analogs[0].relAmplitude = 3.70f;
+        analysisConfig.movieInfo.analogs[1].relAmplitude = 2.55f;
+        analysisConfig.movieInfo.analogs[2].relAmplitude = 1.68f;
+        analysisConfig.movieInfo.analogs[3].relAmplitude = 1.0f;
 
         // Need to configure DmeEmHost regardless of whether we are testing the
         // CPU or GPU implementation because we are using a couple static
@@ -416,6 +423,10 @@ private:
         detModelStart->Confidence(GetParam().initModelConf);
         const float simRefSnr = GetParam().simSnr;
         const auto startRefSnr = analysisConfig.movieInfo.refSnr;
+#if 0
+        std::cout << "simRefSnr = " << simRefSnr << std::endl;
+        std::cout << "startRefSnr = " << startRefSnr << std::endl;
+#endif
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
         DmeEmHost::ScaleModelSnr(simRefSnr/startRefSnr, detModelSim.get());
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));
@@ -435,12 +446,12 @@ TEST_P(EmDevice, EstimateFiniteMixture)
 
 const std::array<unsigned int,nModes> frameCountsBalanced = {500, 125, 125, 125, 125};
 const auto snrSweep = ::testing::Values(
-        TestDmeEmParam{14.4f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{16.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{20.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{24.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{32.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{40.0f,  frameCountsBalanced,      0.0f,       0.0f}
+        TestDmeEmParam{3.6f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{4.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{5.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{6.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{8.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        TestDmeEmParam{10.0f,  frameCountsBalanced,      0.0f,       0.0f}
         );
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost, snrSweep);
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmDevice, snrSweep);
