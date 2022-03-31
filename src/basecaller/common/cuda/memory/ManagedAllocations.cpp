@@ -869,7 +869,7 @@ Json::Value SummarizeMemoryUsage()
             first = false;
             oss << PacBio::Text::String::FormatWithSI_Units(ref->CurrentBytes()) <<"B";
         }
-        if (!first) summary[key] = oss.str();
+        summary[key] = oss.str();
     };
 
     report("shared", AllocationManager<SharedHugePinnedAllocator>::GetAllRefs());

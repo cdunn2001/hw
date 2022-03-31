@@ -661,10 +661,15 @@ private:
                 {
                     {
                         PacBio::Logging::LogStream ls(PacBio::Logging::LogLevel::INFO);
+                        Json::Value memSummary = SummarizeMemoryUsage();
+                        for (const auto& key : memSummary.getMemberNames())
+                        {
+                            if (memSummary[key] == "") memSummary.removeMember(key);
+                        }
                         ls << "Analyzing chunk frames = ["
                            << chunk.StartFrame() << ","
                            << chunk.StopFrame() << ")\n"
-                           << "MemInfo: " << SummarizeMemoryUsage().toStyledString();
+                           << "MemInfo: " << memSummary;
                     }
 
                     PacBio::Dev::QuietAutoTimer t;
