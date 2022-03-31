@@ -651,7 +651,7 @@ private:
 
             SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60,
                 [](Json::Value& metrics){
-                    metrics["sharedMemory"] = SummarizeSharedMemory();
+                    metrics["MemoryUsage"] = SummarizeMemoryUsage();
                 }
             );
             while (source->IsActive())
@@ -659,10 +659,13 @@ private:
                 SensorPacketsChunk chunk;
                 if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
                 {
-                    PBLOG_INFO << "Analyzing chunk frames = ["
-                        << chunk.StartFrame() << ","
-                        << chunk.StopFrame() << ") "
-                        << SummarizeSharedMemory();
+                    {
+                        PacBio::Logging::LogStream ls(PacBio::Logging::LogLevel::INFO);
+                        ls << "Analyzing chunk frames = ["
+                           << chunk.StartFrame() << ","
+                           << chunk.StopFrame() << ")\n"
+                           << "MemInfo: " << SummarizeMemoryUsage().toStyledString();
+                    }
 
                     PacBio::Dev::QuietAutoTimer t;
                     if (nop_ == 1)

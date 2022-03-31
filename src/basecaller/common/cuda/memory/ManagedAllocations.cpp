@@ -854,20 +854,30 @@ void ReportAllMemoryStats()
     }
 }
 
-std::string SummarizeSharedMemory()
+Json::Value SummarizeMemoryUsage()
 {
-    std::ostringstream oss;
-    oss << "SharedMemoryRecentPeakSum:";
-    auto refs = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
-    bool first = true;
-    for (auto& ref : refs)
+    Json::Value summary;
+
+    auto report = [&](const std::string& key, auto refs)
     {
-        assert(ref);
-        if (!first) oss << "/";
-        first = false;
-        oss << PacBio::Text::String::FormatWithSI_Units(ref->CurrentBytes()) <<"B";
-    }
-    return oss.str();
+        auto first = true;
+        std::ostringstream oss;
+        for (auto& ref : refs)
+        {
+            assert(ref);
+            if(!first) oss << "/";
+            first = false;
+            oss << PacBio::Text::String::FormatWithSI_Units(ref->CurrentBytes()) <<"B";
+        }
+        if (!first) summary[key] = oss.str();
+    };
+
+    report("shared", AllocationManager<SharedHugePinnedAllocator>::GetAllRefs());
+    report("pinned", AllocationManager<PinnedAllocator>::GetAllRefs());
+    report("malloc", AllocationManager<MallocAllocator>::GetAllRefs());
+    report("gpu",    AllocationManager<GpuAllocator>::GetAllRefs());
+
+    return summary;
 }
 
 

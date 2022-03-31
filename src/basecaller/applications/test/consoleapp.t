@@ -43,5 +43,5 @@
   $ cat ${CRAMTMP}/pa_basecaller_status.txt
   PA_BASECALLER_STATUS {"counter":0,"counterMax":6,"metrics":{*},"ready":false,"stageName":"StartUp","stageNumber":0,"stageWeights":[1, 9, 80, 10],"state":"progress","timeStamp":"*","timeoutForNextStatus":300} (glob)
   PA_BASECALLER_STATUS {"counter":0,"counterMax":4,"metrics":{*},"ready":false,"stageName":"BazCreation","stageNumber":1,"stageWeights":[1, 9, 80, 10],"state":"progress","timeStamp":"*","timeoutForNextStatus":3000} (glob)
-  PA_BASECALLER_STATUS {"counter":0,"counterMax":0,"metrics":{"sharedMemory":"*"},"ready":true,"stageName":"Analyze","stageNumber":2,"stageWeights":[1, 9, 80, 10],"state":"progress","timeStamp":"*","timeoutForNextStatus":60} (glob)
+  PA_BASECALLER_STATUS {"counter":0,"counterMax":0,"metrics":{"MemoryUsage":{*}},"ready":true,"stageName":"Analyze","stageNumber":2,"stageWeights":[1, 9, 80, 10],"state":"progress","timeStamp":"*","timeoutForNextStatus":60} (glob)
   PA_BASECALLER_STATUS {"counter":0,"counterMax":1,"metrics":{*},"ready":false,"stageName":"Shutdown","stageNumber":3,"stageWeights":[1, 9, 80, 10],"state":"progress","timeStamp":"*","timeoutForNextStatus":300} (glob)
