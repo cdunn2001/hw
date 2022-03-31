@@ -163,8 +163,8 @@ __device__ void UpdateModel1(const ZmwDetectionModel& from,
                               float fraction)
 {
 
-    const float a = fraction;
-    const float b = 1 - fraction;
+    const float a = 1.0f - fraction;
+    const float b = fraction;
 
     auto &tbm = to->baseline;
     auto &obm = from.baseline;
@@ -203,8 +203,8 @@ __device__ void UpdateModel2(const ZmwDetectionModel& from,
                               float fraction)
 {
 
-    const float a = fraction;
-    const float b = 1 - fraction;
+    const float a = 1.0f - fraction;
+    const float b = fraction;
 
     auto &tbm = to->baseline;
     auto &obm = from.baseline;
