@@ -858,14 +858,14 @@ std::string SummarizeSharedMemory()
 {
     std::ostringstream oss;
     oss << "SharedMemoryRecentPeakSum:";
-    auto caches = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
+    auto refs = AllocationManager<SharedHugePinnedAllocator>::GetAllRefs();
     bool first = true;
-    for (auto& cache : caches)
+    for (auto& ref : refs)
     {
-        assert(cache);
+        assert(ref);
         if (!first) oss << "/";
         first = false;
-        oss << PacBio::Text::String::FormatWithSI_Units(cache->CurrentBytes()) <<"B";
+        oss << PacBio::Text::String::FormatWithSI_Units(ref->CurrentBytes()) <<"B";
     }
     return oss.str();
 }

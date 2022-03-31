@@ -27,6 +27,7 @@
 #define APP_COMMON_STATUSMESSAGE_H
 
 #include <numeric>
+#include <mutex>
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/dev/AutoTimer.h>
@@ -71,6 +72,7 @@ public:
         PB_CONFIG_PARAM(double, timeoutForNextStatus, 0);
         PB_CONFIG_PARAM(std::string, timeStamp, "");
         PB_CONFIG_PARAM(std::string, state, "progress");
+        PB_CONFIG_PARAM(Json::Value, metrics, Json::objectValue);
     };
 
 public:
@@ -132,7 +134,9 @@ public:
     ~ProgressMessage() = default;
 
 public:
-    void Message(const Stages& s, Output& stage)
+    /// Prepares the `stage` object with the defaults from the defaults table
+    /// This does not send a message; SendMessage(stage) if you want to immediate send the message.
+    void Initialize(const Stages& s, Output& stage)
     {
         const auto& it = stageInfo_.find(Stages::toString(s));
         // No need to check it, we've already validated things in the constructor.
@@ -140,13 +144,9 @@ public:
         stage.stageNumber = it->second.stageNumber;
         stage.ready = it->second.ready;
         stage.stageWeights = stageWeights_;
-        stage.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " ";
-        jsonWriter_->write(stage.Serialize(), &stream_);
-        stream_ << std::endl;
     }
 
-    void Message(Output& stage)
+    void SendMessage(Output& stage)
     {
         stage.timeStamp = Utilities::ISO8601::TimeString();
         stream_ << header_ << " ";
@@ -179,12 +179,31 @@ public:
     class StageReporter
     {
     public:
-        StageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
-            : pm_(pm)
+        uint32_t minimumReportInterval = 1000;
+
+    public:
+        StageReporter(ProgressMessage* pm, const Stages& stage, uint64_t counterMax, double timeoutForNextStatus,
+            std::function<void(Json::Value&)> metricsCallback = nullptr
+        )
+            : pm_(pm), metricsCallback_(metricsCallback)
         {
             currentStage_.counterMax = counterMax;
             currentStage_.timeoutForNextStatus = timeoutForNextStatus;
-            pm_->Message(s, currentStage_);
+            pm_->Initialize(stage, currentStage_);
+            Flush(true);
+        }
+
+        void Flush(bool force = false)
+        {
+            if (force || timeSinceOutput_.GetElapsedMilliseconds() >= minimumReportInterval)
+            {
+                if (metricsCallback_)
+                {
+                    metricsCallback_(GetMetrics());
+                }
+                pm_->SendMessage(currentStage_);
+                timeSinceOutput_.Restart();
+            }
         }
 
         /// \param delta Increments the counter by the delta amount. The counter will not exceed the counterMax
@@ -192,11 +211,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(reportMutex_);
             currentStage_.counter = std::min(currentStage_.counter + delta, currentStage_.counterMax);
-            if (timeSinceOutput_.GetElapsedMilliseconds() > 1000)
-            {
-                pm_->Message(currentStage_);
-                timeSinceOutput_.Restart();
-            }
+            Flush();
         }
 
         void Update(uint16_t counter, double timeoutForNextStatus)
@@ -204,21 +219,42 @@ public:
             currentStage_.timeoutForNextStatus = timeoutForNextStatus;
             Update(counter);
         }
-
+        /// \returns a reference to the metrics JSON object. The user is free
+        /// to set key/value values inside the metrics object, which will be
+        /// reported to pa-ws.
+        Json::Value& GetMetrics()
+        {
+            return currentStage_.metrics;
+        }
     private:
         std::mutex reportMutex_;
         PacBio::Dev::QuietAutoTimer timeSinceOutput_;
         ProgressMessage* pm_;
         Output currentStage_;
+        std::function<void(Json::Value& metrics)> metricsCallback_;
     };
 
 public:
     class ThreadSafeStageReporter
     {
     public:
-        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus)
-        : sr_(pm, s, counterMax, timeoutForNextStatus)
+        /// \param pm The instance that actually sends the message
+        /// \param s The stage that this report is bound to
+        /// \param counterMax the maximum number associated with the counter, to be used to calculate a fractional progress
+        /// \param timeoutForNextStatus the maximum time expected for the next progress message.
+        /// \param metricsCallback An optional callback that can be used to refresh some metrics that will be bundled in the
+        ///        progress message, under the "metrics" JSON object. The argument to the callback is the Json::Value& of the
+        ///        "metrics" object. 
+        ThreadSafeStageReporter(ProgressMessage* pm, const Stages& s, uint64_t counterMax, double timeoutForNextStatus,
+            std::function<void(Json::Value& metrics)> metricsCallback = nullptr
+        )
+        : sr_(pm, s, counterMax, timeoutForNextStatus, metricsCallback)
         { }
+        void Flush()
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sr_.Flush();
+        }
 
         void Update(uint64_t counter)
         {
@@ -230,6 +266,28 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             sr_.Update(counter, timeoutForNextStatus);
+        }
+        /// \returns a thread-safe "pointer" to the metrics JSON object. The user is free
+        /// to set key/value values inside the metrics object, which will be
+        /// reported to pa-ws.
+        struct MetricsLock {
+            MetricsLock(Json::Value& value, std::mutex& mutex) : value_(value), mutex_(mutex)
+            {
+                mutex_.lock();
+            }
+            ~MetricsLock() {
+                mutex_.unlock();
+            }
+            Json::Value& operator->() { return value_; }
+            Json::Value& operator*() { return value_; }
+
+        private:
+            Json::Value& value_;
+            std::mutex& mutex_;
+        };
+        MetricsLock GetMetrics()
+        {
+            return MetricsLock(sr_.GetMetrics(), mutex_);
         }
     private:
         std::mutex mutex_;

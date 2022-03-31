@@ -649,7 +649,11 @@ private:
 
             source->Start();
 
-            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60,
+                [](Json::Value& metrics){
+                    metrics["sharedMemory"] = SummarizeSharedMemory();
+                }
+            );
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
@@ -734,7 +738,6 @@ private:
                     numChunksAnalyzed++;
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
-
                     analyzeStageRpt.Update(chunk.NumFrames());
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)

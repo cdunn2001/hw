@@ -4,6 +4,7 @@ add_library(libTestAppCommon OBJECT
     testBarrier.cpp
     testLocked.cpp
     testMemInfo.cpp
+    testProgressMessage.cpp
 )
     
 target_link_libraries(libTestAppCommon
