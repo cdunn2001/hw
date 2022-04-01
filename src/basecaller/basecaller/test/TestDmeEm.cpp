@@ -423,10 +423,6 @@ private:
         detModelStart->Confidence(GetParam().initModelConf);
         const float simRefSnr = GetParam().simSnr;
         const auto startRefSnr = analysisConfig.movieInfo.refSnr;
-#if 0
-        std::cout << "simRefSnr = " << simRefSnr << std::endl;
-        std::cout << "startRefSnr = " << startRefSnr << std::endl;
-#endif
         detModelSim = std::make_unique<LaneDetectionModelHost>(*detModelStart);
         DmeEmHost::ScaleModelSnr(simRefSnr/startRefSnr, detModelSim.get());
         completeData = std::make_unique<CompleteData>(SimulateCompleteData(GetParam().nFrames, *detModelSim));
