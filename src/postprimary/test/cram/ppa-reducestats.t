@@ -6,8 +6,8 @@
   {
   \t"ppa-reducestats" :  (esc)
   \t{ (esc)
-  \t\t"BinCols" : 20, (esc)
-  \t\t"BinRows" : 20, (esc)
+  \t\t"BinCols" : 16, (esc)
+  \t\t"BinRows" : 16, (esc)
   \t\t"MaxCols" : 65535, (esc)
   \t\t"MaxRows" : 65535, (esc)
   \t\t"MinOffsetX" : 0, (esc)

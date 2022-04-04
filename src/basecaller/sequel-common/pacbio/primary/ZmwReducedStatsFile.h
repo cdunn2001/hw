@@ -73,12 +73,12 @@ class ReducedStatsDatasetConfig : public PacBio::Process::ConfigurationObject
 /// Configuration for the rsts.h5, which will be applied to all datasets.
 class ReducedStatsConfig : public PacBio::Process::ConfigurationObject
 {
-    ADD_PARAMETER(uint32_t, BinRows, 20);    ///< the number of rows aggregated into the reduced row. For example, 8 rows from the ``.sts.h5`` file are reduced to one row in the ``.rsts.h5`` file. A typical value will be 8.
-    ADD_PARAMETER(uint32_t, BinCols, 20);    ///< the number of columns aggregated in to the reduced column. For example, 10 columns from the ``.sts.h5`` file are reduced to one column in the ``.rsts.h5`` file.  A typical value will be 8.
+    ADD_PARAMETER(uint32_t, BinRows, 16);    ///< the number of rows aggregated into the reduced row. For example, 8 rows from the ``.sts.h5`` file are reduced to one row in the ``.rsts.h5`` file. A typical value will be 8.
+    ADD_PARAMETER(uint32_t, BinCols, 16);    ///< the number of columns aggregated in to the reduced column. For example, 10 columns from the ``.sts.h5`` file are reduced to one column in the ``.rsts.h5`` file.  A typical value will be 8.
     ADD_PARAMETER(uint16_t, MinOffsetX, 0);  ///< the minimum Unit Cell X coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.  Actual value used will not be smaller than the smallest X coordinate of the input ```sts.h5`` file
-    ADD_PARAMETER(uint16_t, MinOffsetY, 0);  ///< the minimum Unit Cell Y coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.   Actual value used will not be smaller than the smallest X coordinate of the input ```sts.h5`` file
-    ADD_PARAMETER(uint32_t, MaxRows, std::numeric_limits<uint16_t>::max());   ///< Number max of rows of unit cells to use an input.  Actual value used will be bounded by the actual input ``sts.h5`` file
-    ADD_PARAMETER(uint32_t, MaxCols, std::numeric_limits<uint16_t>::max());   ///< Number max of colulmns of unit cells to use as input.  Actual value used will be bounded by the actual input ``sts.h5`` file
+    ADD_PARAMETER(uint16_t, MinOffsetY, 0);  ///< the minimum Unit Cell Y coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.   Actual value used will not be smaller than the smallest X coordinate of the input ```sts.h5`` filnumber e
+    ADD_PARAMETER(uint32_t, MaxRows, std::numeric_limits<uint16_t>::max());   ///< Max number of rows of unit cells to use an input.  Actual value used will be bounded by the actual input ``sts.h5`` file                                                      number
+    ADD_PARAMETER(uint32_t, MaxCols, std::numeric_limits<uint16_t>::max());   ///< Max number of colulmns of unit cells to use as input.  Actual value used will be bounded by the actual input ``sts.h5`` file
     ADD_ARRAY(ReducedStatsDatasetConfig,Outputs);
 
 public:
@@ -143,6 +143,15 @@ public:
     {
         binRows_ = config.BinRows();
         binCols_ = config.BinCols();
+
+        if (sizes.minX > sizes.maxX)
+        {
+            throw PBException("Received invalid size specification, with a minX larger than the maxX");
+        }
+        if (sizes.minY > sizes.maxY)
+        {
+            throw PBException("Received invalid size specification, with a minY larger than the maxY");
+        }
 
         unitCellOffsetX_ = std::max(config.MinOffsetX(), sizes.minX);
         unitCellOffsetY_ = std::max(config.MinOffsetY(), sizes.minY);

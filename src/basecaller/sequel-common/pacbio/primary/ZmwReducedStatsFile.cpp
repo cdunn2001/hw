@@ -257,6 +257,11 @@ void ZmwReducedStatsFile::Reduce(const ZmwStatsFile& inputFile, const ReducedSta
     }
 
     PBLOG_INFO << "Input stats file dimensions:" << sizes.minX << " " << sizes.minY << " " << sizes.maxX << " " << sizes.maxY;
+    if ((sizes.maxX - sizes.minX + 1u) * (sizes.maxY - sizes.minY + 1u) != inputFile.nH())
+    {
+        PBLOG_WARN << "Input ZmwStatsFile does not appear to be densly populated.  The x/y coordinates stored in the file imply"
+                   << " a larger number of ZMW than the file contains.";
+    }
 
     for(const auto& output : config.Outputs)
     {
