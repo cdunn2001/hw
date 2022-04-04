@@ -70,50 +70,16 @@ class ReducedStatsDatasetConfig : public PacBio::Process::ConfigurationObject
 
 };
 
-namespace Sequel
-{
-    const uint32_t BinRows = 8;
-    const uint32_t BinCols = 8;
-    const uint32_t UnitCellOffsetX = 0x40;
-    const uint32_t UnitCellOffsetY = 0x40;
-    const uint32_t UnitCellRows = 1080;
-    const uint32_t UnitCellCols = 960;
-}
-
-namespace Spider
-{
-    const uint32_t BinRows = 13;
-    const uint32_t BinCols = 13;
-    const uint32_t UnitCellOffsetX = 0;
-    const uint32_t UnitCellOffsetY = 0;
-    const uint32_t UnitCellRows = 2756;
-    const uint32_t UnitCellCols = 2912;
-}
-
-
-
 /// Configuration for the rsts.h5, which will be applied to all datasets.
 class ReducedStatsConfig : public PacBio::Process::ConfigurationObject
 {
-    ADD_PARAMETER(uint32_t, BinRows, Sequel::BinRows);                  ///< the number of rows aggregated into the reduced row. For example, 8 rows from the ``.sts.h5`` file are reduced to one row in the ``.rsts.h5`` file. A typical value will be 8.
-    ADD_PARAMETER(uint32_t, BinCols, Sequel::BinRows);                  ///< the number of columns aggregated in to the reduced column. For example, 10 columns from the ``.sts.h5`` file are reduced to one column in the ``.rsts.h5`` file.  A typical value will be 8.
-    ADD_PARAMETER(uint32_t, UnitCellOffsetX, Sequel::UnitCellOffsetX);  ///< the Unit Cell X coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.
-    ADD_PARAMETER(uint32_t, UnitCellOffsetY, Sequel::UnitCellOffsetY);  ///< the Unit Cell Y coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.
-    ADD_PARAMETER(uint32_t, UnitCellRows, Sequel::UnitCellRows);        ///< Number of rows of unit cells to use an input.
-    ADD_PARAMETER(uint32_t, UnitCellCols, Sequel::UnitCellCols);        ///< Number of colulmns of unit cells to use as input
+    ADD_PARAMETER(uint32_t, BinRows, 16);    ///< the number of rows aggregated into the reduced row. For example, 8 rows from the ``.sts.h5`` file are reduced to one row in the ``.rsts.h5`` file. A typical value will be 8.
+    ADD_PARAMETER(uint32_t, BinCols, 16);    ///< the number of columns aggregated in to the reduced column. For example, 10 columns from the ``.sts.h5`` file are reduced to one column in the ``.rsts.h5`` file.  A typical value will be 8.
+    ADD_PARAMETER(uint16_t, MinOffsetX, 0);  ///< the minimum Unit Cell X coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.  Actual value used will not be smaller than the smallest X coordinate of the input ```sts.h5`` file
+    ADD_PARAMETER(uint16_t, MinOffsetY, 0);  ///< the minimum Unit Cell Y coordinate of the first Unit Cell of the first bin stored in the ``.rsts.h5`` file.   Actual value used will not be smaller than the smallest X coordinate of the input ```sts.h5`` filnumber e
+    ADD_PARAMETER(uint32_t, MaxRows, std::numeric_limits<uint16_t>::max());   ///< Max number of rows of unit cells to use an input.  Actual value used will be bounded by the actual input ``sts.h5`` file                                                      number
+    ADD_PARAMETER(uint32_t, MaxCols, std::numeric_limits<uint16_t>::max());   ///< Max number of colulmns of unit cells to use as input.  Actual value used will be bounded by the actual input ``sts.h5`` file
     ADD_ARRAY(ReducedStatsDatasetConfig,Outputs);
-
-private:
-    void SetSpiderDefaults()
-    {
-        BinRows = Spider::BinRows;
-        BinCols = Spider::BinCols;
-        // TODO: We eventually want to pull these values from the chip layout.
-        UnitCellOffsetX = Spider::UnitCellOffsetX;
-        UnitCellOffsetY = Spider::UnitCellOffsetY;
-        UnitCellRows = Spider::UnitCellRows;
-        UnitCellCols = Spider::UnitCellCols;
-    }
 
 public:
     /// todo: refactor this to use ChipLayout instead of ChipClass.
@@ -150,8 +116,6 @@ public:
         }
     )json";
         this->Load(defaults);
-
-        SetSpiderDefaults();
     }
 };
 
@@ -167,14 +131,32 @@ class Binning
 {
 public:
     /// Constructor
-    Binning(const ReducedStatsConfig& config)
+    struct Sizes
+    {
+        uint16_t minX;
+        uint16_t minY;
+        uint16_t maxX;
+        uint16_t maxY;
+    };
+    Binning(const ReducedStatsConfig& config,
+            const Sizes& sizes)
     {
         binRows_ = config.BinRows();
         binCols_ = config.BinCols();
-        unitCellOffsetX_ = config.UnitCellOffsetX();
-        unitCellOffsetY_ = config.UnitCellOffsetY();
-        unitCellRows_ = config.UnitCellRows();
-        unitCellCols_ = config.UnitCellCols();
+
+        if (sizes.minX > sizes.maxX)
+        {
+            throw PBException("Received invalid size specification, with a minX larger than the maxX");
+        }
+        if (sizes.minY > sizes.maxY)
+        {
+            throw PBException("Received invalid size specification, with a minY larger than the maxY");
+        }
+
+        unitCellOffsetX_ = std::max(config.MinOffsetX(), sizes.minX);
+        unitCellOffsetY_ = std::max(config.MinOffsetY(), sizes.minY);
+        unitCellRows_ = std::min(config.MaxRows(), sizes.maxX - sizes.minX + 1u);
+        unitCellCols_ = std::min(config.MaxCols(), sizes.maxY - sizes.minY + 1u);
 
         if (binRows_ == 0) throw PBException("BinRows was zero");
         if (binCols_ == 0) throw PBException("BinCols was zero");

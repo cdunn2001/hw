@@ -3,12 +3,15 @@
   Version:* (glob)
 
   $ ppa-reducestats --showconfig
-  * WARN     Hardcoding platform to SequelII for reducedStatsConfig (glob)
   {
   \t"ppa-reducestats" :  (esc)
   \t{ (esc)
-  \t\t"BinCols" : 13, (esc)
-  \t\t"BinRows" : 13, (esc)
+  \t\t"BinCols" : 16, (esc)
+  \t\t"BinRows" : 16, (esc)
+  \t\t"MaxCols" : 65535, (esc)
+  \t\t"MaxRows" : 65535, (esc)
+  \t\t"MinOffsetX" : 0, (esc)
+  \t\t"MinOffsetY" : 0, (esc)
   \t\t"Outputs" :  (esc)
   \t\t[ (esc)
   \t\t\t{ (esc)
@@ -133,11 +136,7 @@
   \t\t\t\t"Input" : "/ZMWMetrics/BaseIpd", (esc)
   \t\t\t\t"Type" : "float" (esc)
   \t\t\t} (esc)
-  \t\t], (esc)
-  \t\t"UnitCellCols" : 2912, (esc)
-  \t\t"UnitCellOffsetX" : 0, (esc)
-  \t\t"UnitCellOffsetY" : 0, (esc)
-  \t\t"UnitCellRows" : 2756 (esc)
+  \t\t] (esc)
   \t} (esc)
   } (no-eol)
 
