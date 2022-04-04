@@ -42,8 +42,7 @@ namespace PacBio {
 namespace Primary {
 namespace Postprimary {
 
-void ZmwStats::FillPerZmwStats(const Platform& platform,
-                               const RegionLabel& hqRegion,
+void ZmwStats::FillPerZmwStats(const RegionLabel& hqRegion,
                                const ZmwMetrics& zmwMetrics,
                                const EventData& events,
                                const BlockLevelMetrics& blockMetrics,

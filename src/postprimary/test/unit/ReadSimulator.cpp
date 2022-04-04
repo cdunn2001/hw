@@ -223,7 +223,7 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
     PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.NumberMetricBlocks()};
     using Platform = PacBio::Primary::Postprimary::Platform;
-    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
+    Postprimary::ZmwStats::FillPerZmwStats(hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);
     return std::make_tuple(zmw, std::move(fh));
 }

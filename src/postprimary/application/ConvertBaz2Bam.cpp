@@ -950,14 +950,14 @@ void ConvertBaz2Bam::SingleThread()
                             bufferList->emplace_back(zmwStatsFile_->GetZmwStatsTemplate());
                             PacBio::Primary::ZmwStats& zmw = bufferList->back();
                             zmw.index_ = i + startIndex;
-                            ZmwStats::FillPerZmwStats(rmd_->platform, regions.hqregion,
+                            ZmwStats::FillPerZmwStats(regions.hqregion,
                                                       zmwMetrics, events, bazMetrics,
                                                       controlMetrics.isControl, user_->diagStatsH5, zmw);
                         }
                         else
                         {
                             PacBio::Primary::ZmwStats zmwStats{zmwStatsFile_->GetZmwStatsTemplate()};
-                            ZmwStats::FillPerZmwStats(rmd_->platform, regions.hqregion,
+                            ZmwStats::FillPerZmwStats(regions.hqregion,
                                                       zmwMetrics, events, bazMetrics,
                                                       controlMetrics.isControl, user_->diagStatsH5, zmwStats);
                             zmwStatsFile_->Set(i + startIndex, zmwStats);
