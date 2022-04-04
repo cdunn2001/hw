@@ -403,7 +403,7 @@ std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
 std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCellProperties() const
 {
     const auto numZmw = numZmwLanes_ * BlockWidth();
-    std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
+    std::vector<DataSourceBase::UnitCellProperties> features(numZmw);
     const auto& holexy = traceFile_.Traces().HoleXY();
     const auto& holeType = traceFile_.Traces().HoleType();
     const auto& holeFeaturesMask = [&](){
@@ -454,12 +454,20 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     //       tall and skinny!
     if (mode_ == Mode::Replication)
     {
+        // Loop to try and find the "most square" layout that we can.  At the least
+        // we know we can do `laneSize X numLanes` so we'll start iterating from there
         uint32_t nCols = BlockWidth();
         for (uint32_t tryCols = nCols; tryCols < numZmwLanes_; tryCols += BlockWidth())
         {
+            // Not a valid square layout, so skip this one
             if (numZmw % tryCols != 0) continue;
             auto tryRows = numZmw / tryCols;
-            if (tryRows > tryCols) break;
+            // We've transitioned past the midpoint, so there's no point in looking
+            // as everything will now be increasingly rectangular
+            if (tryRows < tryCols) break;
+            // Keep track of our most recent valid guess.  The last valid guess
+            // after this loop terminates will be as close to a square layout as
+            // we can be.
             nCols = tryCols;
         }
         assert(numZmw % BlockWidth() == 0);
