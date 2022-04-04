@@ -402,7 +402,8 @@ std::vector<uint32_t> TraceFileDataSource::UnitCellIds() const
 
 std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCellProperties() const
 {
-    std::vector<DataSourceBase::UnitCellProperties> features(numZmwLanes_ * BlockWidth());
+    const auto numZmw = numZmwLanes_ * BlockWidth();
+    std::vector<DataSourceBase::UnitCellProperties> features(numZmw);
     const auto& holexy = traceFile_.Traces().HoleXY();
     const auto& holeType = traceFile_.Traces().HoleType();
     const auto& holeFeaturesMask = [&](){
@@ -418,7 +419,7 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         }
     }();
 
-    for(uint32_t i = 0; i < features.size(); i++)
+    for(uint32_t i = 0; i < numZmw; i++)
     {
         // i is ZMW position in chunk.
         // The chunk is filled with lanes from the tracefile, modulo the size of the trace file. It is
@@ -429,7 +430,6 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         const auto chunkLane = i / BlockWidth();
         const auto offset = i % BlockWidth();
         const auto traceLane = chunkLane % selectedTraceLanes_.size();
-        const auto wrapCount = chunkLane / selectedTraceLanes_.size();
         const auto traceZmw = selectedTraceLanes_[traceLane] * BlockWidth() + offset; // position in trace file
 
         if (traceZmw >= holexy.shape()[0])
@@ -440,12 +440,43 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         features[i].type = holeType[traceZmw];
         features[i].x = holexy[traceZmw][0];
         features[i].y = holexy[traceZmw][1];
+    }
 
-        // Keep our x/y coordinates unique if we had to replicate the trace data
-        if (wrapCount > 0)
+    // If we're replicating the tracefile, we need to re-work the x/y coordinates
+    // for two reasons:
+    // * If we're re-using the same input ZMW, then the coordinates won't be unique
+    // * The input zmw are typically "sparse", and we wan't to re-organize things
+    //   a bit to look like a properly filled out 2D chip, so that this mode can
+    //   be used better as a WXIPCDataSource replacement in tests.
+    //
+    // Note: Any lane count should be fine, but if it's a prime (or nearly prime)
+    //       number of lanes, then the "chip" is going to end up looking very
+    //       tall and skinny!
+    if (mode_ == Mode::Replication)
+    {
+        // Loop to try and find the "most square" layout that we can.  At the least
+        // we know we can do `laneSize X numLanes` so we'll start iterating from there
+        uint32_t nCols = BlockWidth();
+        for (uint32_t tryCols = nCols; tryCols < numZmwLanes_; tryCols += BlockWidth())
         {
-            features[i].x += wrapCount*numTraceZmws_;
-            features[i].y += wrapCount*numTraceZmws_;
+            // Not a valid square layout, so skip this one
+            if (numZmw % tryCols != 0) continue;
+            auto tryRows = numZmw / tryCols;
+            // We've transitioned past the midpoint, so there's no point in looking
+            // as everything will now be increasingly rectangular
+            if (tryRows < tryCols) break;
+            // Keep track of our most recent valid guess.  The last valid guess
+            // after this loop terminates will be as close to a square layout as
+            // we can be.
+            nCols = tryCols;
+        }
+        assert(numZmw % BlockWidth() == 0);
+        assert(numZmw % nCols == 0);
+
+        for (uint32_t i = 0; i < features.size(); ++i)
+        {
+            features[i].x = i % nCols;
+            features[i].y = i / nCols;
         }
     }
     return features;
