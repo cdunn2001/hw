@@ -36,6 +36,8 @@
 #ifndef PACBIO_POSTPRIMARY_BAM_EVENT_DATA_H
 #define PACBIO_POSTPRIMARY_BAM_EVENT_DATA_H
 
+#include <optional>
+
 #include <pbbam/Tag.h>
 
 #include <bazio/BazEventData.h>
@@ -56,9 +58,30 @@ class EventData
 {
 public:
 
-    EventData(size_t zmwIdx,
-              size_t zmwNum,
-              bool truncated,
+    // Using optional for most values, because this class gets used
+    // for both baz2bam and bamb2bam, but in the later case not all
+    // of this information is present.  Using an optional type lets
+    // us be clearer about values that are missing, and we'll throw
+    // an exception if we ever try to use them without them being
+    // explicitly set
+    struct Info
+    {
+        std::optional<uint32_t> zmwNum;
+        std::optional<uint32_t> zmwIdx;
+        std::optional<uint16_t> yPos;
+        std::optional<uint16_t> xPos;
+        std::optional<uint8_t> holeType;
+        std::optional<uint32_t> features;
+
+        static Info BamDefault(uint32_t zmwNum)
+        {
+            Info ret;
+            ret.zmwNum = zmwNum;
+            return ret;
+        }
+    };
+    EventData(const Info& meta,
+              bool truncates,
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states);
 
@@ -67,7 +90,7 @@ public:
     EventData(size_t zmwNum,
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states)
-        : EventData(0, zmwNum, false, std::move(events), std::move(states))
+        : EventData(Info::BamDefault(zmwNum), false, std::move(events), std::move(states))
     {}
 
     // Move only semantics
@@ -132,16 +155,50 @@ public: // const data accessors
     { return truncated_; }
 
     uint32_t ZmwIndex() const
-    { return zmwIndex_; }
+    {
+        if (!info_.zmwIdx.has_value())
+            throw PBException("Accessing ZmwIndex value that was not initialized");
+        return *info_.zmwIdx;
+    }
 
     uint32_t ZmwNumber() const
-    { return zmwNum_; }
+    {
+        if (!info_.zmwNum.has_value())
+            throw PBException("Accessing ZmwNumber value that was not initialized");
+        return *info_.zmwNum;
+    }
+
+    uint16_t XCord() const
+    {
+        if (!info_.xPos.has_value())
+            throw PBException("Accessing x coordinate that was not initialized");
+        return *info_.xPos;
+    }
+
+    uint16_t YCord() const
+    {
+        if (!info_.yPos.has_value())
+            throw PBException("Accessing y coordinate that was not initialized");
+        return *info_.yPos;
+    }
+
+    uint8_t HoleType() const
+    {
+        if (!info_.holeType.has_value())
+            throw PBException("Accessing HolType value that was not initialized");
+        return *info_.holeType;
+    }
+
+    uint32_t UnitFeature() const
+    {
+        if (!info_.features.has_value())
+            throw PBException("Accessing UnitFeature value that was not initialized");
+        return *info_.features;
+    }
 
 private:
+    Info info_;
     bool truncated_;
-
-    uint32_t zmwIndex_;
-    uint32_t zmwNum_;
 
     uint64_t numBases_;
 

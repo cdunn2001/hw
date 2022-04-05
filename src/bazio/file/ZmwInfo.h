@@ -88,8 +88,6 @@ public:
 
 public:
 
-    ZmwInfo(const Data& zmwData, const std::string& holeFeaturesMap);
-
     ZmwInfo(const Data& zmwData);
 
     ZmwInfo() = default;
@@ -101,7 +99,8 @@ public:
 
 public:
 
-    void FromJson(const Json::Value& zmwInfo);
+    static ZmwInfo FromJson(const Json::Value& zmwInfo);
+    static ZmwInfo CombineInfos(const std::vector<std::reference_wrapper<const ZmwInfo>>& infos);
 
 public:
 
@@ -143,8 +142,8 @@ public:
 
 private:
 
-    std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field) const;
-    std::vector<uint32_t> ParseJsonRLESameHexArray(const Json::Value& node, const std::string& field) const;
+    static std::vector<uint32_t> ParseJsonRLEHexArray(const Json::Value& node, const std::string& field);
+    static std::vector<uint32_t> ParseJsonRLESameHexArray(const Json::Value& node, const std::string& field);
 
 private:
     Data                            zmwData_;

@@ -54,8 +54,7 @@ class ZmwStats
 public:
     using FileHeader = BazIO::FileHeader;
 public: // stateless
-    static void FillPerZmwStats(const Platform& platform,
-                                const RegionLabel& hqRegion,
+    static void FillPerZmwStats(const RegionLabel& hqRegion,
                                 const ZmwMetrics& zmwMetrics,
                                 const EventData& events,
                                 const BlockLevelMetrics& blockMetrics,

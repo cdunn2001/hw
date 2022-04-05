@@ -70,7 +70,7 @@ public:
 
     // Returns the total number of ZMWs across all BAZ files.
     uint32_t TotalNumZmws() const
-    { return totalNumZmws_; }
+    { return zmwInfo_.NumZmws(); }
 
     const std::vector<uint32_t>& NumSuperChunks() const
     { return numSuperChunks_; }
@@ -79,16 +79,25 @@ public:
     { return fhs_.begin()->MetricByteSize();; }
 
     uint32_t ZmwNumberToIndex(const uint32_t holeNumber) const
-    { return zmwNumbersToIndex_.at(holeNumber); }
+    { return zmwInfo_.ZmwNumberToIndex(holeNumber); }
 
     uint32_t ZmwIndexToNumber(const uint32_t index) const
-    { return zmwNumbers_.at(index); }
+    { return zmwInfo_.ZmwIndexToNumber(index); }
 
-    const std::vector <uint32_t>& ZmwNumbers() const
-    { return zmwNumbers_; }
+    uint32_t ZmwIndexToXCoord(const uint32_t index) const
+    { return zmwInfo_.HoleX().at(index); }
+
+    uint32_t ZmwIndexToYCoord(const uint32_t index) const
+    { return zmwInfo_.HoleY().at(index); }
+
+    uint32_t ZmwIndexToHoleType(const uint32_t index) const
+    { return zmwInfo_.HoleTypes().at(index); }
+
+    const std::vector<uint32_t>& ZmwNumbers() const
+    { return zmwInfo_.HoleNumbers(); }
 
     uint32_t ZmwFeatures(uint32_t zmwIndex) const
-    { return zmwFeatures_.at(zmwIndex); }
+    { return zmwInfo_.HoleFeaturesMask().at(zmwIndex); }
 
     const std::vector<Primary::MetricField>& MetricFields() const
     { return fhs_.begin()->MetricFields(); }
@@ -178,13 +187,10 @@ private:
 
 private:
     std::vector<size_t> maxNumZmws_;
-    uint32_t totalNumZmws_ = 0;
     std::vector<uint32_t> numSuperChunks_;
-    std::map<uint32_t,uint32_t> zmwNumbersToIndex_;
-    std::vector<uint32_t> zmwNumbers_;
-    std::vector<uint32_t> zmwFeatures_;
     std::string movieName_;
     std::unordered_set<FileHeader, FileHeaderHash, FileHeaderEqual> fhs_;
+    ZmwInfo zmwInfo_;
 };
 
 } // namespace PacBio::BazIO
