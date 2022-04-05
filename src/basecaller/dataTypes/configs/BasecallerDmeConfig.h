@@ -88,7 +88,7 @@ public:
     // positive lower bound for the confidence factor that is attained when
     // the mixing fraction is 0.
     PB_CONFIG_PARAM(std::vector<float>, AnalogMixFractionThreshold,
-            std::vector<float>({ 0.02f / 3, 0.02f }));
+            std::vector<float>({ 0.039f / 3, 0.039f }));
 
     // If the confidence of the initial model for the core DME EM algorithm
     // is less than ScaleSnrConfTol, its SNR will be scaled toward a
@@ -127,7 +127,7 @@ public:
 
     // Controls the mathematical details of the method for weighted update
     // of DetectionModel.
-    PB_CONFIG_PARAM(unsigned int, ModelUpdateMethod, 0);
+    PB_CONFIG_PARAM(unsigned int, ModelUpdateMethod, 1);
 
     // A coefficient to scale the threshold used to penalize the confidence 
     // if the SNR drops dramatically.
@@ -174,7 +174,7 @@ public:
     PB_CONFIG_PARAM(uint32_t, MinFramesForEstimate, 4000);
 
     // Frames required to estimate histogram bounds from
-    // basline stats
+    // baseline stats
     PB_CONFIG_PARAM(uint32_t, NumFramesPreAccumStats, 1000u);
 
     // Coefficient for the reduction of model confidence triggered by laser
