@@ -403,7 +403,7 @@ private:
         analysisConfig.movieInfo = PacBio::DataSource::MockMovieInfo();
         analysisConfig.movieInfo.refSnr = 5.0;
         analysisConfig.movieInfo.frameRate = 80.0f;
-        analysisConfig.movieInfo.photoelectronSensitivity = 0.5f;
+        analysisConfig.movieInfo.photoelectronSensitivity = 2.0f;
         analysisConfig.movieInfo.analogs[0].relAmplitude = 3.70f;
         analysisConfig.movieInfo.analogs[1].relAmplitude = 2.55f;
         analysisConfig.movieInfo.analogs[2].relAmplitude = 1.68f;
@@ -445,9 +445,9 @@ const auto snrSweep = ::testing::Values(
         TestDmeEmParam{3.6f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmParam{4.0f,  frameCountsBalanced,      0.0f,       0.0f},
         TestDmeEmParam{5.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{6.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{8.0f,  frameCountsBalanced,      0.0f,       0.0f},
-        TestDmeEmParam{10.0f,  frameCountsBalanced,      0.0f,       0.0f}
+        TestDmeEmParam{6.0f,  frameCountsBalanced,      0.0f,       0.0f}
+        // TestDmeEmParam{8.0f,  frameCountsBalanced,      0.0f,       0.0f},
+        // TestDmeEmParam{10.0f,  frameCountsBalanced,      0.0f,       0.0f}
         );
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost, snrSweep);
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmDevice, snrSweep);
