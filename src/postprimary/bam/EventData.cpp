@@ -212,10 +212,12 @@ EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
     return ret;
 }
 
-EventData::EventData(const Meta& meta,
+EventData::EventData(const Info& info,
+                     bool truncated,
                      BazIO::BazEventData&& events,
                      std::vector<InsertState>&& states)
-      : meta_(meta)
+      : info_(info)
+      , truncated_(truncated)
       , bazEvents_(std::move(events))
       , insertStates_(std::move(states))
 {

@@ -167,16 +167,15 @@ EventData SimulateEventData(const ReadConfig& config)
     }
 
     const auto& fh = config.GenerateHeader();
-    EventData::Meta meta;
-    meta.truncated = false;
-    meta.xPos = fh.ZmwInformation().HoleY()[0];
-    meta.yPos = fh.ZmwInformation().HoleY()[0];
-    meta.zmwIdx = 0;
-    meta.zmwNum = fh.ZmwInformation().ZmwIndexToNumber(0);
-    meta.features = fh.ZmwInformation().HoleFeaturesMask()[0];
-    meta.holeType = 0;
-    return EventData(
-                     meta,
+    EventData::Info info;
+    info.xPos = fh.ZmwInformation().HoleY()[0];
+    info.yPos = fh.ZmwInformation().HoleY()[0];
+    info.zmwIdx = 0;
+    info.zmwNum = fh.ZmwInformation().ZmwIndexToNumber(0);
+    info.features = fh.ZmwInformation().HoleFeaturesMask()[0];
+    info.holeType = 0;
+    return EventData(info,
+                     false,
                      BazIO::BazEventData(fields, {}),
                      std::move(states));
 }

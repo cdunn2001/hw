@@ -100,18 +100,18 @@ ZmwInfo ZmwInfo::CombineInfos(const std::vector<std::reference_wrapper<const Zmw
     zmwData.holeX.reserve(numZmw);
     zmwData.holeY.reserve(numZmw);
 
-    auto append = [](auto& first, const auto& second)
+    auto append = [](const auto& second, auto *first)
     {
-        std::copy(second.begin(), second.end(), std::back_inserter(first));
+        std::copy(second.begin(), second.end(), std::back_inserter(*first));
     };
 
     for (const ZmwInfo& info : infos)
     {
-        append(zmwData.holeFeaturesMask, info.HoleFeaturesMask());
-        append(zmwData.holeNumbers, info.HoleNumbers());
-        append(zmwData.holeTypes, info.HoleTypes());
-        append(zmwData.holeX, info.HoleX());
-        append(zmwData.holeY, info.HoleY());
+        append(info.HoleFeaturesMask(), &zmwData.holeFeaturesMask);
+        append(info.HoleNumbers(), &zmwData.holeNumbers);
+        append(info.HoleTypes(), &zmwData.holeTypes);
+        append(info.HoleX(), &zmwData.holeX);
+        append(info.HoleY(), &zmwData.holeY);
     }
 
     return ZmwInfo(zmwData);

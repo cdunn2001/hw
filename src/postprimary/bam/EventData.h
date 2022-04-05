@@ -64,7 +64,7 @@ public:
     // us be clearer about values that are missing, and we'll throw
     // an exception if we ever try to use them without them being
     // explicitly set
-    struct Meta
+    struct Info
     {
         std::optional<uint32_t> zmwNum;
         std::optional<uint32_t> zmwIdx;
@@ -72,17 +72,16 @@ public:
         std::optional<uint16_t> xPos;
         std::optional<uint8_t> holeType;
         std::optional<uint32_t> features;
-        bool truncated = false;
 
-        static Meta BamDefault(uint64_t zmwNum)
+        static Info BamDefault(uint32_t zmwNum)
         {
-            Meta ret;
+            Info ret;
             ret.zmwNum = zmwNum;
-            ret.truncated = false;
             return ret;
         }
     };
-    EventData(const Meta& meta,
+    EventData(const Info& meta,
+              bool truncates,
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states);
 
@@ -91,7 +90,7 @@ public:
     EventData(size_t zmwNum,
               BazIO::BazEventData&& events,
               std::vector<InsertState>&& states)
-        : EventData(Meta::BamDefault(zmwNum), std::move(events), std::move(states))
+        : EventData(Info::BamDefault(zmwNum), false, std::move(events), std::move(states))
     {}
 
     // Move only semantics
@@ -153,52 +152,53 @@ public: // const data accessors
     { return bazEvents_.NumEvents(); }
 
     bool Truncated() const
-    { return meta_.truncated; }
+    { return truncated_; }
 
     uint32_t ZmwIndex() const
     {
-        if (!meta_.zmwIdx.has_value())
+        if (!info_.zmwIdx.has_value())
             throw PBException("Accessing ZmwIndex value that was not initialized");
-        return *meta_.zmwIdx;
+        return *info_.zmwIdx;
     }
 
     uint32_t ZmwNumber() const
     {
-        if (!meta_.zmwNum.has_value())
+        if (!info_.zmwNum.has_value())
             throw PBException("Accessing ZmwNumber value that was not initialized");
-        return *meta_.zmwNum;
+        return *info_.zmwNum;
     }
 
     uint16_t XCord() const
     {
-        if (!meta_.xPos.has_value())
+        if (!info_.xPos.has_value())
             throw PBException("Accessing x coordinate that was not initialized");
-        return *meta_.xPos;
+        return *info_.xPos;
     }
 
     uint16_t YCord() const
     {
-        if (!meta_.yPos.has_value())
+        if (!info_.yPos.has_value())
             throw PBException("Accessing y coordinate that was not initialized");
-        return *meta_.yPos;
+        return *info_.yPos;
     }
 
     uint8_t HoleType() const
     {
-        if (!meta_.holeType.has_value())
+        if (!info_.holeType.has_value())
             throw PBException("Accessing HolType value that was not initialized");
-        return *meta_.holeType;
+        return *info_.holeType;
     }
 
     uint32_t UnitFeature() const
     {
-        if (!meta_.features.has_value())
+        if (!info_.features.has_value())
             throw PBException("Accessing UnitFeature value that was not initialized");
-        return *meta_.features;
+        return *info_.features;
     }
 
 private:
-    Meta meta_;
+    Info info_;
+    bool truncated_;
 
     uint64_t numBases_;
 

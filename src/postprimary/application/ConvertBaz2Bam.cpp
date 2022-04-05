@@ -871,15 +871,15 @@ void ConvertBaz2Bam::SingleThread()
                     auto processProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PROCESS_PACKETS);
                     (void)processProfile;
                     const bool truncated = ffs.IsZmwNumberTruncated(fhs.ZmwIndexToNumber(batch[i].ZmwIndex()));
-                    EventData::Meta meta;
-                    meta.truncated = truncated;
-                    meta.zmwIdx = batch[i].ZmwIndex();
-                    meta.zmwNum = fhs.ZmwIndexToNumber(*meta.zmwIdx);
-                    meta.features = fhs.ZmwFeatures(*meta.zmwIdx);
-                    meta.xPos = fhs.ZmwIndexToXCoord(*meta.zmwIdx);
-                    meta.yPos = fhs.ZmwIndexToYCoord(*meta.zmwIdx);
-                    meta.holeType = fhs.ZmwIndexToHoleType(*meta.zmwIdx);
-                    return EventData(meta, std::move(bazEvents), std::move(insertStates));
+                    EventData::Info info;
+                    auto zId = batch[i].ZmwIndex();
+                    info.zmwIdx = zId;
+                    info.zmwNum = fhs.ZmwIndexToNumber(zId);
+                    info.features = fhs.ZmwFeatures(zId);
+                    info.xPos = fhs.ZmwIndexToXCoord(zId);
+                    info.yPos = fhs.ZmwIndexToYCoord(zId);
+                    info.holeType = fhs.ZmwIndexToHoleType(zId);
+                    return EventData(info, truncated, std::move(bazEvents), std::move(insertStates));
                 }();
 
                 auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
