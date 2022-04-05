@@ -29,6 +29,7 @@
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/datasource/ZmwFeatures.h>
+#include <pacbio/text/String.h>
 
 #include <common/MongoConstants.h>
 
@@ -44,9 +45,18 @@ struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsRep
 
         PB_CONFIG_PARAM(uint32_t, sampleTotal, 0);
         PB_CONFIG_PARAM(uint32_t, sampleSize, 0);
-        PB_CONFIG_PARAM(float, sampleMean, -1);
-        PB_CONFIG_PARAM(float, sampleMedian, -1);
-        PB_CONFIG_PARAM(float, sampleCV, -1);
+        PB_CONFIG_PARAM(float, sampleMean, std::numeric_limits<float>::quiet_NaN());
+        PB_CONFIG_PARAM(float, sampleMedian, std::numeric_limits<float>::quiet_NaN());
+        PB_CONFIG_PARAM(float, sampleCV, std::numeric_limits<float>::quiet_NaN());
+
+        std::string CSVOutput() const
+        {
+            return std::to_string(sampleMean) + "," +
+                   std::to_string(sampleMedian) + "," +
+                   std::to_string(sampleCV) + "," +
+                   std::to_string(sampleSize) + "," +
+                   std::to_string(sampleTotal);
+        }
     };
 
     PB_CONFIG_PARAM(SummaryStats, baseRate, {});
@@ -65,6 +75,49 @@ struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsRep
     PB_CONFIG_PARAM(uint32_t, numFrames, 0);
     PB_CONFIG_PARAM(uint64_t, beginFrameTimeStamp, 0);
     PB_CONFIG_PARAM(uint64_t, endFrameTimeStamp, 0);
+
+    static std::string Header(const std::vector<std::string>& regionNames)
+    {
+        const auto& statStr = [](const std::string& v) {
+            const std::array<std::string,5> sHeaders = {{"Mean", "Median", "CV", "Size", "Total"}};
+            std::vector<std::string> elems;
+            std::transform(sHeaders.begin(), sHeaders.end(), std::back_inserter(elems),
+                           [&v](const auto& s) { return v + "_" + s; });
+            return PacBio::Text::String::Join(elems.begin(), elems.end(), ',');
+        };
+
+        std::string header = "StartFrame,NumFrames,StartFrameTS,EndFrameTS,";
+        const std::array<std::string,4> bases = {{"A", "C", "G", "T"}};
+        for (const auto& name : regionNames)
+        {
+            header += statStr(name + "_BaseRate") + "," + statStr(name + "_BaseWidth");
+            header += ",";
+            header += statStr(name + "_PulseRate") + "," + statStr(name + "_PulseWidth");
+            header += ",";
+            for (size_t i = 0; i < numAnalogs; i++)
+            {
+                header += statStr(name + "_Snr" + bases[i]) + "," + statStr(name + "_Pkmid" + bases[i]) + ",";
+            }
+            header += statStr(name + "_Baseline") + "," + statStr(name + "_BaselineSd");
+        }
+
+        return header;
+    }
+
+    std::string CSVOutput() const
+    {
+        std::string output = baseRate.CSVOutput() + "," + baseWidth.CSVOutput();
+        output += ",";
+        output += pulseRate.CSVOutput() + "," + pulseWidth.CSVOutput();
+        output += ",";
+        for (size_t i = 0; i < numAnalogs; i++)
+        {
+            output += snr[i].CSVOutput() + "," + pkmid[i].CSVOutput() + ",";
+        }
+        output += baseline.CSVOutput() + "," +
+                  baselineSd.CSVOutput();
+        return output;
+    }
 };
 
 struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsRegion>
@@ -83,6 +136,7 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
     PB_CONFIG(RealTimeMetricsConfig);
 
     PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
+    PB_CONFIG_PARAM(std::string, csvOutputFile, "");
 };
 
 } // namespace PacBio::Mongo::Data

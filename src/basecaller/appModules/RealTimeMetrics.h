@@ -32,7 +32,9 @@
 #include <pacbio/datasource/DataSourceRunner.h>
 
 #include <common/graphs/GraphNodeBody.h>
+#include <common/MongoConstants.h>
 #include <common/LaneArray.h>
+#include <common/StatAccumulator.h>
 #include <dataTypes/BatchResult.h>
 #include <dataTypes/configs/RealTimeMetricsConfig.h>
 
@@ -60,12 +62,9 @@ public:
     RealTimeMetrics(uint32_t numFramesPerMetricBlock, size_t numBatches,
                     std::vector<Mongo::Data::RealTimeMetricsRegion>&& regions,
                     std::vector<DataSource::DataSourceBase::LaneSelector>&& selections,
-                    const std::vector<std::vector<uint32_t>>& features);
-
-    RealTimeMetrics(const RealTimeMetrics&) = delete;
-    RealTimeMetrics(RealTimeMetrics&&) = delete;
-    RealTimeMetrics& operator=(const RealTimeMetrics&) = delete;
-    RealTimeMetrics& operator==(RealTimeMetrics&&) = delete;
+                    const std::vector<std::vector<uint32_t>>& features,
+                    float frameRate, const std::string& csvOutputFile);
+    ~RealTimeMetrics();
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
@@ -73,18 +72,8 @@ public:
     void Process(const Mongo::Data::BatchResult& in) override;
 
 private:
-    struct RegionInfo
-    {
-        Mongo::Data::RealTimeMetricsRegion region;
-        DataSource::DataSourceBase::LaneSelector selection;
-        std::vector<Mongo::LaneMask<>> laneMasks;
-    };
-    std::vector<RegionInfo> regionInfo_;
-
-    uint32_t framesPerMetricBlock_;
-    size_t numBatches_;
-    size_t batchesSeen_ = 0;
-    int32_t currFrame_ = std::numeric_limits<int32_t>::min();
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace PacBio::Application
