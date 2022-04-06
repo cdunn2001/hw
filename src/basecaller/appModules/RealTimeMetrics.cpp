@@ -107,7 +107,7 @@ public:
                 {
                     for (const auto laneIdx: r.selection.SelectedLanes(laneBegin, laneEnd))
                     {
-                        auto& metrics = metricsPtr->GetHostView()[laneIdx];
+                        auto& metrics = metricsPtr->GetHostView()[laneIdx - laneBegin];
 
                         // Need to convert the activity label to uint16_t as LaneArray doesn't support uint8_t.
                         Cuda::Utility::CudaArray<uint16_t, laneSize> aL;
