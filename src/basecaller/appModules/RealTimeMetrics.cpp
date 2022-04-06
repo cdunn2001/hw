@@ -266,8 +266,8 @@ private:
             for (size_t i = 0; i < laneSize; i++)
             {
                 stats.sampleSize += counts[i];
-                summedM1 += m1[0];
-                summedM2 += m2[0];
+                summedM1 += m1[i];
+                summedM2 += m2[i];
             }
 
             if (stats.sampleSize > region.minSampleSize)
