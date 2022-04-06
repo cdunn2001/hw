@@ -192,9 +192,9 @@ private:
         // Normalization factor for UEMA. See blMeanUemaSum_.
         FloatArray blMeanUemaWeight_ = 0.0f;
 
-        // Uniformly initialized to negative value, which is used as condition to
-        // initialize when processing first trace block.
-        FloatArray blSigmaEma_ = -1.0;
+        // todo: This initial value (in DN) should be set via some set of
+        // system parameters.
+        FloatArray blSigmaEma_ = 2.0;
 
         LaneArray latData_{0};
         LaneArray latRawData_{0};
