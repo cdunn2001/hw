@@ -29,8 +29,10 @@
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/datasource/ZmwFeatures.h>
+#include <pacbio/text/String.h>
 
 #include <common/MongoConstants.h>
+#include <dataTypes/HQRFPhysicalStates.h>
 
 namespace PacBio::Mongo::Data
 {
@@ -44,9 +46,9 @@ struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsRep
 
         PB_CONFIG_PARAM(uint32_t, sampleTotal, 0);
         PB_CONFIG_PARAM(uint32_t, sampleSize, 0);
-        PB_CONFIG_PARAM(float, sampleMean, -1);
-        PB_CONFIG_PARAM(float, sampleMedian, -1);
-        PB_CONFIG_PARAM(float, sampleCV, -1);
+        PB_CONFIG_PARAM(float, sampleMean, std::numeric_limits<float>::quiet_NaN());
+        PB_CONFIG_PARAM(float, sampleMedian, std::numeric_limits<float>::quiet_NaN());
+        PB_CONFIG_PARAM(float, sampleCV, std::numeric_limits<float>::quiet_NaN());
     };
 
     PB_CONFIG_PARAM(SummaryStats, baseRate, {});
@@ -71,7 +73,7 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
 {
     PB_CONFIG(RealTimeMetricsRegion);
 
-    PB_CONFIG_PARAM(std::vector<DataSource::ZmwFeatures>, features,
+    PB_CONFIG_PARAM(std::vector<DataSource::ZmwFeatures>, featuresForFilter,
                     std::vector<DataSource::ZmwFeatures>{DataSource::ZmwFeatures::Sequencing});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
@@ -83,6 +85,8 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
     PB_CONFIG(RealTimeMetricsConfig);
 
     PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
+    PB_CONFIG_PARAM(std::string, rtMetricsFile, "");
+    PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 
 } // namespace PacBio::Mongo::Data

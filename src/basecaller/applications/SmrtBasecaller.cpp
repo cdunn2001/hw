@@ -547,7 +547,8 @@ private:
     }
 
     std::unique_ptr<LeafBody<const BatchResult>>
-    CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
+    CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                          const AnalysisConfig& analysisConfig)
     {
         if (!config_.realTimeMetrics.regions.empty())
         {
@@ -582,7 +583,10 @@ private:
             return std::make_unique<RealTimeMetrics>(config_.algorithm.Metrics.framesPerHFMetricBlock,
                                                      poolDims.size(),
                                                      std::move(config_.realTimeMetrics.regions),
-                                                     std::move(selections), properties);
+                                                     std::move(selections), properties,
+                                                     analysisConfig.movieInfo.frameRate,
+                                                     config_.realTimeMetrics.rtMetricsFile,
+                                                     config_.realTimeMetrics.useSingleActivityLabels);
         }
         else
         {
@@ -636,7 +640,7 @@ private:
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
                 startUpRpt.Update(1);
                 // startup = 5
-                analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims), GraphProfiler::RT_METRICS);
+                analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims, analysisConfig), GraphProfiler::RT_METRICS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
                 startUpRpt.Update(1);
                 // startup = 6
