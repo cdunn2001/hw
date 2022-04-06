@@ -36,37 +36,44 @@ namespace PacBio::Application
 class RealTimeMetrics::Impl
 {
 public:
-    Impl(uint32_t framesPerMetricBlock, size_t numBatches,
+    Impl(uint32_t framesPerHFMetricBlock, size_t numBatches,
          std::vector<Data::RealTimeMetricsRegion>&& regions,
          std::vector<DataSourceBase::LaneSelector>&& selections,
-         const std::vector<std::vector<uint32_t>>& features,
-         float frameRate, const std::string& csvOutputFile)
-    : framesPerMetricBlock_{framesPerMetricBlock}
+         const std::vector<std::vector<uint32_t>>& zmwFeatures,
+         float frameRate, const std::string& rtMetricsFile,
+         bool useSingleActivityLabels)
+    : framesPerHFMetricBlock_{framesPerHFMetricBlock}
     , numBatches_{numBatches}
     , frameRate_{frameRate}
-    , csvOutputFile_{csvOutputFile}
+    , rtMetricsFile_{rtMetricsFile}
+    , useSingleActivityLabels_{useSingleActivityLabels}
+    , jsonWriter_{GetStreamWriterBuilder().newStreamWriter()}
     {
         std::vector<std::string> regionNames;
         for (size_t i = 0; i < regions.size(); i++)
         {
-            uint32_t featuresMask = static_cast<uint32_t>(regions[i].features.front());
-            for (size_t f = 1; f < regions[i].features.size(); f++)
-                featuresMask |= static_cast<uint32_t>(regions[i].features[f]);
-            regionInfo_.push_back({ std::move(regions[i]), std::move(selections[i]),
-                                    SelectedLanesWithFeatures(features[i], featuresMask) });
+            uint32_t featuresMask = std::accumulate(regions[i].featuresForFilter.begin(),
+                                                    regions[i].featuresForFilter.end(), 0,
+                                                    [](uint32_t a, uint32_t b) { return a | b; });
             regionNames.push_back(regions[i].name);
+            regionInfo_.push_back({ std::move(regions[i]), std::move(selections[i]),
+                                    SelectedLanesWithFeatures(zmwFeatures[i], featuresMask) });
         }
 
-        if (csvOutputFile_ != "")
+        if (rtMetricsFile_ != "")
         {
-            rtMetricsCsvOut_.open(csvOutputFile_, std::ios_base::trunc);
-            rtMetricsCsvOut_ << Mongo::Data::RealTimeMetricsReport::Header(regionNames) << std::endl;
+            rtMetricsOut_.open(rtMetricsFile_, std::ios_base::trunc);
         }
     }
 
-    ~Impl()
+    ~Impl() = default;
+
+    Json::StreamWriterBuilder GetStreamWriterBuilder()
     {
-        if (rtMetricsCsvOut_.is_open()) rtMetricsCsvOut_.close();
+        Json::StreamWriterBuilder builder;
+        builder.settings_["commentStyle"] = "None";
+        builder.settings_["indentation"] = "";
+        return builder;
     }
 
     void Process(const Mongo::Data::BatchResult& in)
@@ -74,30 +81,31 @@ public:
         const auto& pulseBatch = in.pulses;
         const auto& metricsPtr = in.metrics;
 
+        if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
+        {
+            if (batchesSeen_ % numBatches_ != 0)
+                throw PBException("Data out of order, new metric block seen before all batches of previous metric block");
+            currFrame_ = pulseBatch.GetMeta().FirstFrame();
+        }
+        else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
+        {
+            throw PBException("Data out of order, multiple metric blocks being processed simultaneously");
+        }
+
         if (metricsPtr)
         {
-            if (metricsPtr->GetHostView()[0].numFrames[0] == framesPerMetricBlock_)
+            // Only record metrics when we get a full metric block worth, lanes in a pool
+            // should have the same metric block size.
+            if (metricsPtr->GetHostView()[0].numFrames[0] == framesPerHFMetricBlock_)
             {
-                if (pulseBatch.GetMeta().FirstFrame() > currFrame_)
-                {
-                    if (batchesSeen_ % numBatches_ != 0)
-                        throw PBException("Data out of order, new metric block seen before all batches of previous metric block");
-                    currFrame_ = pulseBatch.GetMeta().FirstFrame();
-                }
-                else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
-                {
-                    throw PBException("Data out of order, multiple metric blocks being processed simultaneously");
-                }
-
-                batchesSeen_++;
-
+                fullMetricsBatchesSeen_++;
                 const auto zmwOffset = pulseBatch.GetMeta().FirstZmw();
                 const DataSourceBase::LaneIndex laneBegin = zmwOffset / pulseBatch.Dims().laneWidth;
                 const DataSourceBase::LaneIndex laneEnd = laneBegin + pulseBatch.Dims().lanesPerBatch;
 
-                for (auto& r : regionInfo_)
+                for (auto& r: regionInfo_)
                 {
-                    for (const auto laneIdx : r.selection.SelectedLanes(laneBegin, laneEnd))
+                    for (const auto laneIdx: r.selection.SelectedLanes(laneBegin, laneEnd))
                     {
                         auto& metrics = metricsPtr->GetHostView()[laneIdx];
 
@@ -107,27 +115,30 @@ public:
                                        [](const Data::HQRFPhysicalStates& s) { return static_cast<uint16_t>(s); });
                         LaneArray<uint16_t> activityLabel(aL);
 
+                        auto mask = r.laneMasks[laneIdx];
+
                         // Filter for zmws marked as SINGLE by the real-time activity labeler.
-                        const auto& mask = r.laneMasks[laneIdx] &
-                                           (activityLabel == static_cast<uint16_t>(Data::HQRFPhysicalStates::SINGLE));
+                        if (useSingleActivityLabels_)
+                            mask &= (activityLabel == static_cast<uint16_t>(Data::HQRFPhysicalStates::SINGLE));
 
                         LaneArray<float> numBases(LaneArray<uint16_t>(metrics.numBases));
-                        r.baseRate.AddSample(numBases / framesPerMetricBlock_, mask);
+                        r.ma.baseRate.AddSample(numBases / framesPerHFMetricBlock_, mask);
 
                         LaneArray<float> numBaseFrames(LaneArray<uint16_t>(metrics.numBaseFrames));
-                        r.baseWidth.AddSample((numBaseFrames / numBases) / frameRate_, mask);
+                        r.ma.baseWidth.AddSample((numBaseFrames / numBases) / frameRate_, mask & (numBases != 0));
 
                         LaneArray<float> numPulses(LaneArray<uint16_t>(metrics.numPulses));
-                        r.pulseRate.AddSample(numPulses / framesPerMetricBlock_, mask);
+                        r.ma.pulseRate.AddSample(numPulses / framesPerHFMetricBlock_, mask);
 
                         LaneArray<float> numPulseFrames(LaneArray<uint16_t>(metrics.numPulseFrames));
-                        r.pulseWidth.AddSample((numPulseFrames / numPulses) / frameRate_, mask);
+                        r.ma.pulseWidth.AddSample((numPulseFrames / numPulses) / frameRate_, mask & (numPulses != 0));
 
                         LaneArray<float> baseline(metrics.frameBaselineDWS);
-                        r.baseline.AddSample(baseline, mask);
+                        r.ma.baseline.AddSample(baseline, mask);
 
                         LaneArray<float> baselineVar(metrics.frameBaselineVarianceDWS);
-                        r.baselineSd.AddSample(sqrt(baselineVar), mask);
+                        auto baselineSd = sqrt(baselineVar);
+                        r.ma.baselineSd.AddSample(baselineSd, mask & (baselineSd != 0));
 
                         for (size_t i = 0; i < numAnalogs; i++)
                         {
@@ -135,58 +146,54 @@ public:
                             LaneArray<float> pkmidFrames(LaneArray<uint16_t>(metrics.numPkMidFrames[i]));
                             const auto pkmidMean = pkmid / pkmidFrames;
 
-                            r.pkmid[i].AddSample(pkmidMean, mask);
-                            r.snr[i].AddSample(pkmidMean / sqrt(baselineVar), mask);
+                            r.ma.pkmid[i].AddSample(pkmidMean, mask & (pkmidFrames != 0));
+                            r.ma.snr[i].AddSample(pkmidMean / baselineSd, mask & (baselineSd != 0));
                         }
                     }
-                }
-
-                if (batchesSeen_ == numBatches_)
-                {
-                    if (rtMetricsCsvOut_.is_open())
-                    {
-                        // TODO
-                        float beginFrameTimeStamp = 0;
-                        float endFrameTimeStamp = 0;
-
-                        rtMetricsCsvOut_ << currFrame_ << ","
-                                         << framesPerMetricBlock_ << ","
-                                         << beginFrameTimeStamp << ","
-                                         << endFrameTimeStamp << ",";
-                    }
-
-                    Json::Value rtMetrics;
-                    for (auto& r : regionInfo_)
-                    {
-                        Data::RealTimeMetricsReport report;
-                        report.name = r.region.name;
-                        report.startFrame = currFrame_;
-                        report.numFrames = framesPerMetricBlock_;
-
-                        // TODO
-                        // report.beginFrameTimeStamp =
-                        // report.endFrameTimeStamp =
-
-                        r.FillReportMetrics(report);
-                        rtMetrics.append(report.Serialize());
-                        if (rtMetricsCsvOut_.is_open())
-                        {
-                            rtMetricsCsvOut_ << report.CSVOutput();
-                        }
-
-                        r.ResetAccumulators();
-                    }
-
-                    // Emit report.
-
-                    if (rtMetricsCsvOut_.is_open())
-                    {
-                        rtMetricsCsvOut_ << std::endl;
-                    }
-
-                    batchesSeen_ = 0;
                 }
             }
+        }
+
+        // Require a full chip worth of full metrics.
+        if (fullMetricsBatchesSeen_ == numBatches_)
+        {
+            Json::Value rtMetrics;
+            for (auto& r: regionInfo_)
+            {
+                Data::RealTimeMetricsReport report;
+                report.name = r.region.name;
+                report.startFrame = currFrame_;
+                report.numFrames = framesPerHFMetricBlock_;
+
+                // TODO
+                // report.beginFrameTimeStamp =
+                // report.endFrameTimeStamp =
+
+                r.FillReportMetrics(report);
+                rtMetrics.append(report.Serialize());
+                r.ma = RegionInfo::MetricAccumulators();
+            }
+
+            // TODO: Emit report.
+
+            if (rtMetricsOut_.is_open())
+            {
+                jsonWriter_->write(rtMetrics, &rtMetricsOut_);
+                rtMetricsOut_ << std::endl;
+            }
+
+            fullMetricsBatchesSeen_ = 0;
+        }
+
+        batchesSeen_++;
+        if (batchesSeen_ == numBatches_)
+        {
+            for (auto& r : regionInfo_)
+            {
+                r.ma = RegionInfo::MetricAccumulators();
+            }
+            fullMetricsBatchesSeen_ = 0;
+            batchesSeen_ = 0;
         }
     }
 
@@ -200,26 +207,12 @@ private:
             , selection(std::move(s))
             , laneMasks(std::move(l))
         {
+            // Count total number of zmws for this region.
             for (const auto& lm : laneMasks)
             {
                 for (size_t i = 0; i < laneSize; i++)
-                    if (lm[i]) total++;
+                    if (lm[i]) totalZmws++;
             }
-        }
-
-        void ResetAccumulators()
-        {
-            baseRate.Reset();
-            baseWidth.Reset();
-            pulseRate.Reset();
-            pulseWidth.Reset();
-            for (size_t i = 0; i < numAnalogs; i++)
-            {
-                snr[i].Reset();
-                pkmid[i].Reset();
-            }
-            baseline.Reset();
-            baselineSd.Reset();
         }
 
         Mongo::Data::RealTimeMetricsRegion region;
@@ -230,36 +223,40 @@ private:
         using MetricAccumulator = Mongo::StatAccumulator<FloatArray>;
         using AnalogMetricAccumulator = std::array<MetricAccumulator,Mongo::numAnalogs>;
 
-        MetricAccumulator baseRate;
-        MetricAccumulator baseWidth;
-        MetricAccumulator pulseRate;
-        MetricAccumulator pulseWidth;
-        AnalogMetricAccumulator snr;
-        AnalogMetricAccumulator pkmid;
-        MetricAccumulator baseline;
-        MetricAccumulator baselineSd;
-        uint32_t total = 0;
+        struct MetricAccumulators
+        {
+            MetricAccumulator baseRate;
+            MetricAccumulator baseWidth;
+            MetricAccumulator pulseRate;
+            MetricAccumulator pulseWidth;
+            AnalogMetricAccumulator snr;
+            AnalogMetricAccumulator pkmid;
+            MetricAccumulator baseline;
+            MetricAccumulator baselineSd;
+        };
+        MetricAccumulators ma;
+        uint32_t totalZmws = 0;
 
         void FillReportMetrics(Mongo::Data::RealTimeMetricsReport& report)
         {
-            FillSummaryStats(baseRate, report.baseRate);
-            FillSummaryStats(baseWidth, report.baseWidth);
-            FillSummaryStats(pulseRate, report.pulseRate);
-            FillSummaryStats(pulseWidth, report.pulseWidth);
+            FillSummaryStats(ma.baseRate, report.baseRate);
+            FillSummaryStats(ma.baseWidth, report.baseWidth);
+            FillSummaryStats(ma.pulseRate, report.pulseRate);
+            FillSummaryStats(ma.pulseWidth, report.pulseWidth);
 
             for (size_t i = 0; i < Mongo::numAnalogs; i++)
             {
-                FillSummaryStats(snr[i], report.snr[i]);
-                FillSummaryStats(pkmid[i], report.pkmid[i]);
+                FillSummaryStats(ma.snr[i], report.snr[i]);
+                FillSummaryStats(ma.pkmid[i], report.pkmid[i]);
             }
 
-            FillSummaryStats(baseline, report.baseline);
-            FillSummaryStats(baselineSd, report.baselineSd);
+            FillSummaryStats(ma.baseline, report.baseline);
+            FillSummaryStats(ma.baselineSd, report.baselineSd);
         }
 
         void FillSummaryStats(const MetricAccumulator& ma, Mongo::Data::RealTimeMetricsReport::SummaryStats& stats)
         {
-            stats.sampleTotal = total;
+            stats.sampleTotal = totalZmws;
 
             const auto counts = MakeUnion(ma.Count());
             const auto m1 = MakeUnion(ma.M1());
@@ -275,27 +272,28 @@ private:
 
             if (stats.sampleSize > region.minSampleSize)
             {
-                if (stats.sampleSize > 0)
-                    stats.sampleMean = summedM1 / stats.sampleSize;
-                if (stats.sampleSize >= 2)
-                {
-                    float sampleVar = (summedM2 - ((summedM1 * summedM1) / stats.sampleSize) / (stats.sampleSize - 1));
-                    stats.sampleCV = sqrt(sampleVar) / stats.sampleMean;
-                }
+                stats.sampleMean = summedM1 / stats.sampleSize;
+                float sampleVar = (summedM2 - ((summedM1 * summedM1) / stats.sampleSize) / (stats.sampleSize - 1));
+                stats.sampleCV = sqrt(sampleVar) / stats.sampleMean;
 
-                // TODO: median?
+                // TODO: Need to compute the median. Previously we
+                // were using boost::accumulators which uses a p^2
+                // quantile estimator.
             }
         }
     };
     std::vector<RegionInfo> regionInfo_;
 
-    uint32_t framesPerMetricBlock_;
+    uint32_t framesPerHFMetricBlock_;
     size_t numBatches_;
     float frameRate_;
-    std::string csvOutputFile_;
-    std::ofstream rtMetricsCsvOut_;
+    std::string rtMetricsFile_;
+    bool useSingleActivityLabels_;
+    std::ofstream rtMetricsOut_;
+    std::unique_ptr<Json::StreamWriter> jsonWriter_;
 
     size_t batchesSeen_ = 0;
+    size_t fullMetricsBatchesSeen_ = 0;
     int32_t currFrame_ = std::numeric_limits<int32_t>::min();
 };
 
@@ -303,10 +301,11 @@ RealTimeMetrics::RealTimeMetrics(uint32_t framesPerMetricBlock, size_t numBatche
                                  std::vector<Data::RealTimeMetricsRegion>&& regions,
                                  std::vector<DataSourceBase::LaneSelector>&& selections,
                                  const std::vector<std::vector<uint32_t>>& features,
-                                 float frameRate, const std::string& csvOutputFile)
+                                 float frameRate, const std::string& csvOutputFile,
+                                 bool useSingleActivityLabels)
     : impl_(std::make_unique<Impl>(framesPerMetricBlock, numBatches, std::move(regions),
                                    std::move(selections), features, frameRate,
-                                   csvOutputFile))
+                                   csvOutputFile, useSingleActivityLabels))
 { }
 
 RealTimeMetrics::~RealTimeMetrics() = default;

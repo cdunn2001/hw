@@ -59,11 +59,12 @@ public:
     static std::vector<Mongo::LaneMask<>> SelectedLanesWithFeatures(const std::vector<uint32_t>& features,
                                                                     uint32_t featuresMask);
 public:
-    RealTimeMetrics(uint32_t numFramesPerMetricBlock, size_t numBatches,
+    RealTimeMetrics(uint32_t framesPerHFMetricBlock, size_t numBatches,
                     std::vector<Mongo::Data::RealTimeMetricsRegion>&& regions,
                     std::vector<DataSource::DataSourceBase::LaneSelector>&& selections,
-                    const std::vector<std::vector<uint32_t>>& features,
-                    float frameRate, const std::string& csvOutputFile);
+                    const std::vector<std::vector<uint32_t>>& zmwFeatures,
+                    float frameRate, const std::string& csvOutputFile,
+                    bool useSingleActivityLabels);
     ~RealTimeMetrics();
 
     size_t ConcurrencyLimit() const override { return 1; }

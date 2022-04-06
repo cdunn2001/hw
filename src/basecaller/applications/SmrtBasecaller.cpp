@@ -585,7 +585,8 @@ private:
                                                      std::move(config_.realTimeMetrics.regions),
                                                      std::move(selections), properties,
                                                      analysisConfig.movieInfo.frameRate,
-                                                     config_.realTimeMetrics.csvOutputFile);
+                                                     config_.realTimeMetrics.rtMetricsFile,
+                                                     config_.realTimeMetrics.useSingleActivityLabels);
         }
         else
         {
