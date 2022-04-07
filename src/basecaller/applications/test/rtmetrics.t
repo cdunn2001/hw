@@ -11,8 +11,8 @@
 
   $ head -n1 rtmetrics.json | python -m json.tool | grep -A6 baseRate
           "baseRate": {
-              "sampleCV": 63.99*, (glob)
-              "sampleMean": 0.0625*, (glob)
+              "sampleCV": 63.9*, (glob)
+              "sampleMean": 0.06*, (glob)
               "sampleMedian": null,
               "sampleSize": 4096,
               "sampleTotal": 4096
@@ -20,15 +20,15 @@
 
   $ head -n1 rtmetrics.json | python -m json.tool | grep -A6 baseline
           "baseline": {
-              "sampleCV": 116.85*, (glob)
-              "sampleMean": 0.794*, (glob)
+              "sampleCV": 116.8*, (glob)
+              "sampleMean": 0.79*, (glob)
               "sampleMedian": null,
               "sampleSize": 4096,
               "sampleTotal": 4096
           },
           "baselineSd": {
-              "sampleCV": 64.03*, (glob)
-              "sampleMean": 5.84*, (glob)
+              "sampleCV": 64.0*, (glob)
+              "sampleMean": 5.8*, (glob)
               "sampleMedian": null,
               "sampleSize": 4096,
               "sampleTotal": 4096
@@ -37,29 +37,29 @@
   $ head -n+1 rtmetrics.json | python -m json.tool | grep -A29 snr
           "snr": [
               {
-                  "sampleCV": 64.04*, (glob)
-                  "sampleMean": 40.39*, (glob)
+                  "sampleCV": 64.0*, (glob)
+                  "sampleMean": 40.3*, (glob)
                   "sampleMedian": null,
                   "sampleSize": 4096,
                   "sampleTotal": 4096
               },
               {
-                  "sampleCV": 64.04*, (glob)
-                  "sampleMean": 27.28*, (glob)
+                  "sampleCV": 64.0*, (glob)
+                  "sampleMean": 27.2*, (glob)
                   "sampleMedian": null,
                   "sampleSize": 4096,
                   "sampleTotal": 4096
               },
               {
-                  "sampleCV": 64.05*, (glob)
-                  "sampleMean": 17.58*, (glob)
+                  "sampleCV": 64.0*, (glob)
+                  "sampleMean": 17.5*, (glob)
                   "sampleMedian": null,
                   "sampleSize": 4096,
                   "sampleTotal": 4096
               },
               {
-                  "sampleCV": 64.06*, (glob)
-                  "sampleMean": 11.12*, (glob)
+                  "sampleCV": 64.0*, (glob)
+                  "sampleMean": 11.1*, (glob)
                   "sampleMedian": null,
                   "sampleSize": 4096,
                   "sampleTotal": 4096

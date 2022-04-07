@@ -28,6 +28,7 @@
 
 #include <numeric>
 #include <mutex>
+#include <sstream>
 
 #include <pacbio/configuration/PBConfig.h>
 #include <pacbio/dev/AutoTimer.h>
@@ -148,20 +149,26 @@ public:
 
     void SendMessage(Output& stage)
     {
+        std::ostringstream sout;
         stage.timeStamp = Utilities::ISO8601::TimeString();
-        stream_ << header_ << " ";
-        jsonWriter_->write(stage.Serialize(), &stream_);
-        stream_ << std::endl;
+        sout << header_ << " ";
+        jsonWriter_->write(stage.Serialize(), &sout);
+        sout << std::endl;
+        stream_ << sout.str();
+        stream_.flush();
     }
 
     void Exception(const Json::Value& j)
     {
+        std::ostringstream sout;
         Json::Value jOut = j;
         jOut["timeStamp"] = Utilities::ISO8601::TimeString();
         jOut["state"] = "exception";
-        stream_ << header_ << " ";
-        jsonWriter_->write(jOut, &stream_);
-        stream_ << std::endl;
+        sout << header_ << " ";
+        jsonWriter_->write(jOut, &sout);
+        sout << std::endl;
+        stream_ << sout.str();
+        stream_.flush();
     }
     void Exception(const std::string& message)
     {
