@@ -257,9 +257,9 @@ TraceFileDataSource::TraceFileDataSource(
     , mode_(mode)
 {
     const auto& config = GetConfig();
-    if (config.darkFrame != nullptr)
+    if (config.darkFrame != nullptr && config.darkFrame->darkCalFileName != "")
         throw PBException("Dark frame subtraction not currently supported for trace files");
-    if (config.crosstalkFilter != nullptr)
+    if (config.crosstalkFilter != nullptr && config.crosstalkFilter->kernel.shape()[0] != 0)
         throw PBException("Cross talk correction not currently supported for trace files");
     if (config.decimationMask != nullptr)
         throw PBException("Decimation mask not currently supported for trace files");
