@@ -34,6 +34,7 @@
 
 #include <dataTypes/configs/BasecallerAlgorithmConfig.h>
 #include <dataTypes/configs/BatchLayoutConfig.h>
+#include <dataTypes/configs/DataSourceConfig.h>
 #include <dataTypes/configs/PrelimHQConfig.h>
 #include <dataTypes/configs/RealTimeMetricsConfig.h>
 #include <dataTypes/configs/SourceConfig.h>
@@ -55,7 +56,7 @@ class SmrtBasecallerConfig : public Configuration::PBConfig<SmrtBasecallerConfig
     PB_CONFIG_OBJECT(PrelimHQConfig, prelimHQ);
     PB_CONFIG_OBJECT(RealTimeMetricsConfig, realTimeMetrics);
     PB_CONFIG_OBJECT(Primary::BazIOConfig, bazIO);
-
+    PB_CONFIG_OBJECT(DataSourceConfig, dataSource);
 
     PB_CONFIG_VARIANT(source,
                       TraceReplication,

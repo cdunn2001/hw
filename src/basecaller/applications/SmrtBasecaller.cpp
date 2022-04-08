@@ -233,6 +233,25 @@ private:
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
+        datasourceConfig.darkFrame = std::make_unique<PacBio::DataSource::DarkFrame>();
+        datasourceConfig.darkFrame->darkCalFileName = config_.dataSource.darkCalFileName;
+
+        auto CopyVectorsToMultiArray = [](const std::vector<std::vector<double>>& vectors, boost::multi_array<double, 2>& multiArray){
+            const auto numRows = vectors.size();
+            const auto numCols = vectors[0].size();
+            multiArray.resize(boost::extents[numRows][numCols]);
+            for(uint32_t i=0; i< numRows; i++)
+                for(uint32_t j=0; j < numCols; j++)
+                    multiArray[i][j] = vectors[i][j];
+        };
+        datasourceConfig.crosstalkFilter = std::make_unique<PacBio::DataSource::CrosstalkFilter>();
+        CopyVectorsToMultiArray( config_.dataSource.crosstalkFilterKernel, datasourceConfig.crosstalkFilter->kernel);
+
+        datasourceConfig.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>();
+        CopyVectorsToMultiArray( config_.dataSource.imagePsfKernel, datasourceConfig.imagePsf->kernel);
+
+        datasourceConfig.decimationMask.reset(); // TODO = std::make_unique<PacBio::DataSource::DecimationMask>(thing);
+
         auto dataSource = config_.source.Visit(
             [&](const TraceReanalysis& config) -> std::unique_ptr<DataSourceBase>
             {
