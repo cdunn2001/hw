@@ -33,6 +33,8 @@
 // OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 // SUCH DAMAGE.
 
+#include <postprimary/bam/EventData.h>
+
 #include <limits>
 
 #include <boost/numeric/conversion/converter.hpp>
@@ -41,7 +43,6 @@
 #include <pacbio/logging/Logger.h>
 
 #include <bazio/FieldType.h>
-#include <postprimary/bam/EventData.h>
 
 namespace PacBio {
 namespace Primary {
@@ -211,14 +212,12 @@ EventData::AvailableTagData(size_t pulseBegin, size_t pulseEnd) const
     return ret;
 }
 
-EventData::EventData(size_t zmwIdx,
-                     size_t zmwNum,
+EventData::EventData(const Info& info,
                      bool truncated,
                      BazIO::BazEventData&& events,
                      std::vector<InsertState>&& states)
-      : truncated_(truncated)
-      , zmwIndex_(zmwIdx)
-      , zmwNum_(zmwNum)
+      : info_(info)
+      , truncated_(truncated)
       , bazEvents_(std::move(events))
       , insertStates_(std::move(states))
 {

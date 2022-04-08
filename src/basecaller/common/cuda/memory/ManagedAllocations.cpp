@@ -38,6 +38,7 @@
 #include <pacbio/HugePage.h>
 #include <pacbio/datasource/SharedMemoryAllocator.h>
 #include <pacbio/dev/profile/ScopedProfilerChain.h>
+#include <pacbio/text/String.h>
 
 SMART_ENUM(ManagedAllocations, HostAllocate, GpuAllocate, HostDeallocate, GpuDeallocate);
 using Profiler = PacBio::Dev::Profile::ScopedProfilerChain<ManagedAllocations>;
@@ -434,6 +435,12 @@ public:
         std::lock_guard<std::mutex> lm(instanceMutex_);
 
         return ReportImpl();
+    }
+
+    /// Returns the sum of current bytes
+    size_t CurrentBytes() const
+    {
+        return fullStats_.CurrentBytes() + cacheStats_.CurrentBytes();
     }
 
 private:
@@ -846,6 +853,33 @@ void ReportAllMemoryStats()
         }
     }
 }
+
+Json::Value SummarizeMemoryUsage()
+{
+    Json::Value summary;
+
+    auto report = [&](const std::string& key, auto refs)
+    {
+        auto first = true;
+        std::ostringstream oss;
+        for (auto& ref : refs)
+        {
+            assert(ref);
+            if(!first) oss << "/";
+            first = false;
+            oss << PacBio::Text::String::FormatWithSI_Units(ref->CurrentBytes()) <<"B";
+        }
+        summary[key] = oss.str();
+    };
+
+    report("shared", AllocationManager<SharedHugePinnedAllocator>::GetAllRefs());
+    report("pinned", AllocationManager<PinnedAllocator>::GetAllRefs());
+    report("malloc", AllocationManager<MallocAllocator>::GetAllRefs());
+    report("gpu",    AllocationManager<GpuAllocator>::GetAllRefs());
+
+    return summary;
+}
+
 
 
 }}} // ::PacBio::Cuda::Memory

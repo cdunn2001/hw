@@ -38,6 +38,8 @@ add_library(lib-app-common
         Locked.cpp
         MemInfo.h
         MemInfo.cpp
+        ProgressMessage.h
+        ProgressMessage.cpp
         ThreadController.h
 )
 

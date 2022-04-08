@@ -491,7 +491,7 @@ void DmeEmHost::EstimateLaneDetModel(FrameIntervalType estFrameInterval,
         // M-step
 
         // Mixing fractions.
-        // Constrain baseline component to have some minimal mixing fraction.
+        // Constrain each component to have some minimal mixing fraction.
         // TODO: When active, this constraint will cause bias in mu[0] and var[0].
         // We've constrained the original mixing fraction > 0.
         // The only other way for c_i to be zero is underflow.
@@ -869,42 +869,7 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 }
 
 // static
-void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
-                                 const FloatVec& blMean,
-                                 const FloatVec& blVar,
-                                 LaneDetModel* ldm)
-{
-    assert(all(blWeight >= 0.0f) && all(blWeight <= 1.0f));
-    assert(all(isfinite(blMean)));
-    assert(all(blVar > 0.0f));
-
-    // Assign some small nominal confidence.
-    ldm->Confidence() = 0.1f;
-
-    // There's an implicit LaneArray -> CudaArray conversion here.
-    auto& bm = ldm->BaselineMode();
-    bm.weights = blWeight;
-    bm.means = blMean;
-    bm.vars = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
-
-    // Distribute non-baseline weight equally among the analogs.
-    const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
-    const auto refSignal = refSnr_ * sqrt(blVar);
-    assert(numAnalogs <= analogs_.size());
-    for (unsigned int a = 0; a < numAnalogs; ++a)
-    {
-        auto& aMode = ldm->AnalogMode(a);
-        aMode.weights = analogModeWeight;
-        const auto aMean = max(0, blMean + analogs_[a].relAmplitude * refSignal);
-        aMode.means = aMean;
-        const auto cv2 = pow2(Analog(a).excessNoiseCV);
-        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
-    }
-}
-
-// static
-void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
-                                 LaneDetModel& ldm)
+void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState, LaneDetModel& ldm)
 {
     const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
     const auto& baselineStats = bsa.BaselineFramesStats();
@@ -923,6 +888,40 @@ void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
     blVar = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
 
     InitLaneDetModel(blWeight, blMean, blVar, &ldm);
+}
+
+// static
+void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
+                                 const FloatVec& blMean,
+                                 const FloatVec& blVar,
+                                 LaneDetModel* ldm)
+{
+    assert(all(blWeight >= 0.0f) && all(blWeight <= 1.0f));
+    assert(all(isfinite(blMean)));
+    assert(all(blVar > 0.0f));
+
+    // Assign some small nominal confidence.
+    ldm->Confidence() = 0.1f;
+
+    // There's an implicit LaneArray -> CudaArray conversion here.
+    auto& bm = ldm->BaselineMode();
+    bm.weights = blWeight;
+    bm.means = blMean;
+    bm.vars = blVar;
+
+    // Distribute non-baseline weight equally among the analogs.
+    const FloatVec analogModeWeight = (1.0f - blWeight) / numAnalogs;
+    const auto refSignal = refSnr_ * sqrt(blVar);
+    assert(numAnalogs <= analogs_.size());
+    for (unsigned int a = 0; a < numAnalogs; ++a)
+    {
+        auto& aMode = ldm->AnalogMode(a);
+        aMode.weights = analogModeWeight;
+        const auto aMean = max(0, blMean + analogs_[a].relAmplitude * refSignal);
+        aMode.means = aMean;
+        const auto cv2 = pow2(Analog(a).excessNoiseCV);
+        aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
+    }
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

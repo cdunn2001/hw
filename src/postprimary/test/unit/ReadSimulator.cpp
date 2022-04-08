@@ -167,10 +167,17 @@ EventData SimulateEventData(const ReadConfig& config)
     }
 
     const auto& fh = config.GenerateHeader();
-    return EventData(
-            0, fh.ZmwInformation().ZmwIndexToNumber(0), false,
-            BazIO::BazEventData(fields, {}),
-            std::move(states));
+    EventData::Info info;
+    info.xPos = fh.ZmwInformation().HoleY()[0];
+    info.yPos = fh.ZmwInformation().HoleY()[0];
+    info.zmwIdx = 0;
+    info.zmwNum = fh.ZmwInformation().ZmwIndexToNumber(0);
+    info.features = fh.ZmwInformation().HoleFeaturesMask()[0];
+    info.holeType = 0;
+    return EventData(info,
+                     false,
+                     BazIO::BazEventData(fields, {}),
+                     std::move(states));
 }
 // gcc 6.3.0 was starting to have ICE errors relating to default
 // arguments to function parameters
@@ -188,8 +195,15 @@ ZmwMetrics RunMetrics(const EventData& events,
     ProductivityMetrics prodClassifier(4, minEmptyTime, emptyOutlierTime);
     auto prod = prodClassifier.ComputeProductivityInfo(hqRegion, metrics, true);
 
-    return ZmwMetrics(fh.MovieTimeInHrs(), fh.FrameRateHz(), fh.ZmwUnitFeatures(events.ZmwNumber()),
-                      hqRegion, std::vector<RegionLabel>{}, metrics, events, prod, ControlMetrics{}, AdapterMetrics{});
+    return ZmwMetrics(fh.MovieTimeInHrs(),
+                      fh.FrameRateHz(),
+                      hqRegion,
+                      std::vector<RegionLabel>{},
+                      metrics,
+                      events,
+                      prod,
+                      ControlMetrics{},
+                      AdapterMetrics{});
 }
 
 
@@ -208,7 +222,7 @@ std::tuple<PacBio::Primary::ZmwStats, std::unique_ptr<PacBio::BazIO::FileHeader>
     const auto& zmwMetrics = RunMetrics(events, metrics, hqRegion, readconfig);
     PacBio::Primary::ZmwStats zmw{readconfig.numAnalogs, readconfig.numFilters, readconfig.NumberMetricBlocks()};
     using Platform = PacBio::Primary::Postprimary::Platform;
-    Postprimary::ZmwStats::FillPerZmwStats(Platform::SEQUEL, hqRegion, zmwMetrics, events, metrics,
+    Postprimary::ZmwStats::FillPerZmwStats(hqRegion, zmwMetrics, events, metrics,
                                            false, false, zmw);
     return std::make_tuple(zmw, std::move(fh));
 }

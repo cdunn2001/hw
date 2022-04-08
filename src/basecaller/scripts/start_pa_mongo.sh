@@ -56,7 +56,7 @@ then
        exit 1
     fi
     trc_output="--outputtrcfile $TRACE_OUTPUT"
-    rm -f $TRACE_OUTPUT
+    if [[ ! $ECHO ]] ; then rm -f $TRACE_OUTPUT ; fi
 fi
 if [[ $BAZ_OUTPUT != "" ]]
 then
@@ -101,6 +101,7 @@ cat <<HERE > $tmpjson
          "primerScaler": ${PRIMERSCALER}
     }
   }
+  // , "system":{"analyzerHardware":"Host"}
 } 
 HERE
 
@@ -173,7 +174,7 @@ else
   export PATH=$scriptdir/../../../build/basecaller/gcc/x86_64/${BUILD}/applications:${PATH}
   echo PATH is $PATH
 fi
-if [[ $LOGOUTPUT != "" && $LOGOUTPUT != "none" ]]
+if [[ $LOGOUTPUT != "" && ${LOGOUTPUT^^} != "NONE" ]]
 then
     logoutput="--logoutput $LOGOUTPUT"
 else
@@ -199,5 +200,6 @@ echo PATH = $PATH
 
 set -x
 pwd
-smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output}
+smrt-basecaller-launch.sh --maxFrames=${FRAMES} --logfilter=${LOGFILTER} --config $tmpjson --config $acqconfig ${nop_option} ${trc_output} ${logoutput} ${roi_spec} ${baz_output} --statusfd=1
 
+curl -X POST http://localhost:23602/restart

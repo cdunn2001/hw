@@ -29,6 +29,8 @@
 #include <cstring>
 #include <string>
 
+#include <json/value.h>
+
 #include <mongo-config.h>
 
 #include <pacbio/datasource/SharedMemoryAllocator.h>
@@ -179,6 +181,9 @@ KestrelAllocator& GetGlobalAllocator();
 
 /// Logs a report about all memory usage statistics
 void ReportAllMemoryStats();
+
+/// Returns a Json object summarizing current memory usages, suitable for a frequent log entry
+Json::Value SummarizeMemoryUsage();
 
 /// Creates a KestrelAllocator with a Malloc based implementation,
 /// primarily for host-only code, or code that doesn't care about

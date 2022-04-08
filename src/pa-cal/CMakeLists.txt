@@ -32,12 +32,11 @@ add_subdirectory(../app-common app-common)
 
 # The SOFTWARE_VERSION is used to create the RPM and installation directory, and it is reported
 # by the application and logged.
-set(SOFTWARE_VERSION "0.1.0")
 
 # temporary hack, to work around some accidentally visible version strings in the hw-mongo
 set(SOFTWARE_MAJOR_VERSION 0)
 set(SOFTWARE_MINOR_VERSION 1)
-set(SOFTWARE_REVISION_VERSION 0)
+set(SOFTWARE_REVISION_VERSION 2)
 set(SOFTWARE_VERSION "${SOFTWARE_MAJOR_VERSION}.${SOFTWARE_MINOR_VERSION}.${SOFTWARE_REVISION_VERSION}")
 add_definitions(
     -DSOFTWARE_MAJOR_VERSION=${SOFTWARE_MAJOR_VERSION}
@@ -46,7 +45,7 @@ add_definitions(
 )
 
 add_subdirectory(test)
-# add_subdirectory(cram)
+add_subdirectory(cram)
 
 ###########################################################
 include(pacbio-versionheaderfile)
@@ -70,6 +69,7 @@ add_library(lib-pa-cal
         PaCalConstants.h
         PaCalProcess.h
         PaCalProcess.cpp
+        PaCalProgressMessage.h
 )
 
 target_compile_options(lib-pa-cal PRIVATE "-fopenmp")

@@ -54,7 +54,7 @@ public:
 
     // Bin size of data histogram is nominally defined as initial estimate
     // of baseline sigma multiplied by this coefficient.
-    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.25f);
+    PB_CONFIG_PARAM(float, BinSizeCoeff, 0.2f);
 
     // The bin size of trace histogram is constrained to be no less than
     // BinSizeLowBoundCoeff * photoelectronSensitivity * 1 DN.

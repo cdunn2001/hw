@@ -75,12 +75,6 @@ namespace PacBio::Calibration {
 
 SMART_ENUM(CalibrationWorkflow, Dark, Loading);
 
-PaCalProcess::PaCalProgressMessage::Table PaCalProcess::stages = {
-    { "StartUp",    { false, 0, 10 } },
-    { "Analyze",    {  true, 1, 80 } },
-    { "Shutdown",   { false, 2, 10 } }
-};
-
 PaCalProcess::~PaCalProcess()
 {
     Abort();
@@ -284,12 +278,13 @@ int PaCalProcess::RunAllThreads()
 
     std::shared_ptr<Threading::IThreadController> threadController = Threading::MakeThreadController(*this);
 
-    enum ExitCode ret;
+    enum ExitCode ret = ExitCode::NormalExit;
     CreateThread("Analysis", [this, threadController, &ret]()
     {
         try
         {
-            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, 300);
+            const uint64_t startupCounterMax = 1;
+            PaCalStageReporter startUpRpt(progressMessage_.get(), PaCalStages::StartUp, startupCounterMax, 300);
             auto source = CreateSource(settings_.paCalConfig, settings_.numFrames, settings_.inputDarkCalFile);
             startUpRpt.Update(1);
 
@@ -307,14 +302,17 @@ int PaCalProcess::RunAllThreads()
                                       + std::to_string(source->NumFrames()) + " frames are expected");
                 }
             }
-            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, 600);
+            const uint64_t analyzeCounterMax = source->PacketLayouts().size();
+            PaCalStageReporter analyzeRpt(progressMessage_.get(), PaCalStages::Analyze, analyzeCounterMax, 30);
             bool success = AnalyzeSourceInput(std::move(source), threadController,
                                               settings_.movieNum, settings_.outputFile,
-                                              settings_.createDarkCalFile);
-            analyzeRpt.Update(1);
+                                              settings_.createDarkCalFile,
+                                              analyzeRpt);
+
             if (success) PBLOG_INFO << "Main analysis has completed";
             else PBLOG_INFO << "Main analysis not successful";
-            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, 300);
+            const uint64_t shutdownCounterMax = 1;
+            PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, shutdownCounterMax, 300);
             threadController->RequestExit();
             shutdownRpt.Update(1);
         } catch (const std::exception& ex)
@@ -323,7 +321,7 @@ int PaCalProcess::RunAllThreads()
             PBLOG_ERROR << "Analysis thread will now terminate early";
             progressMessage_->Exception(ex.what());
             threadController->RequestExit();
-            ret = ExitCode::StdException;
+            SetExitCode(ExitCode::StdException);
         }
         PBLOG_INFO << "Analysis Thread Complete";
     });
@@ -337,7 +335,7 @@ int PaCalProcess::RunAllThreads()
         {
             PBLOG_ERROR << "Timeout limit exceeded, attempting to self-terminate process...";
             RequestExit();
-            ret = ExitCode::Timeout;
+            SetExitCode(ExitCode::Timeout);
         }
     }
 
@@ -350,8 +348,6 @@ int PaCalProcess::RunAllThreads()
 
 int PaCalProcess::Run()
 {
-    int exitCode = ExitCode::DefaultUnknownFailure;
-
     Console::SetWindow(400, 400);
 
     ThreadedProcessBase::SetXtermTitle("pa-cal");
@@ -378,40 +374,41 @@ int PaCalProcess::Run()
     PBLOG_INFO << "Testing 'info' level logging";
     try
     {
-        exitCode = RunAllThreads();
-        PBLOG_INFO << "main: RunAllThreads() normal exit, code:" << exitCode;
+        auto exitCode1 = RunAllThreads();
+        SetExitCode(exitCode1);
+        PBLOG_INFO << "main: RunAllThreads() normal exit, code:" << exitCode1;
     }
     catch (const std::exception& ex)
     {
         PBLOG_ERROR << "main: fatal exception: " << ex.what();
         progressMessage_->Exception(ex.what());
-        exitCode = ExitCode::StdException;
+        SetExitCode(ExitCode::StdException);
     }
     catch (...)
     {
         PBLOG_ERROR << "main: fatal uncaught exception";
-        exitCode = ExitCode::UncaughtException;
+        SetExitCode(ExitCode::UncaughtException);
     }
 
     try
     {
         auto exitCode1 = Join();
-        if (exitCode == ExitCode::DefaultUnknownFailure) exitCode = exitCode1;
+        SetExitCode(exitCode1);
         PBLOG_DEBUG << "main: main event loop exit, code:" << exitCode1
              << " pid:" << POSIX::GetPid();
     }
     catch (const std::exception& ex)
     {
-        exitCode = ExitCode::StdException;
+        SetExitCode(ExitCode::StdException);
         PBLOG_ERROR << "main: exception2: " << ex.what();
     }
     catch (...)
     {
-        exitCode = ExitCode::UncaughtException;
+        SetExitCode(ExitCode::UncaughtException);
         PBLOG_ERROR << "main: uncaught exception2";
     }
 
-
+    auto exitCode = ExitCode();
     PBLOG_DEBUG << "main: exit code:" << exitCode;
     return exitCode;
 }
@@ -431,7 +428,7 @@ int PaCalProcess::Main(int argc, const char *argv[])
         HandleGlobalOptions(options);
         auto settings = HandleLocalOptions(options);
         statusFileDescriptor_ = options.get("statusfd");
-        progressMessage_ = std::make_unique<PaCalProgressMessage>(stages,
+        progressMessage_ = std::make_unique<PaCalProgressMessage>(PaCalProgressStages(),
                                                                   settings->createDarkCalFile
                                                                     ? "PA_DARKCAL_STATUS"
                                                                     : "PA_LOADCAL_STATUS",

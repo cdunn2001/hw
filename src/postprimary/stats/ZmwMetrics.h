@@ -174,15 +174,12 @@ class ReadMetrics
 public:
     ReadMetrics() = default;
     ReadMetrics(float movieTimeInHrs,
-                uint32_t unitFeatures,
                 const RegionLabel& hqRegion,
                 const EventData& events,
                 const ProductivityInfo& prod);
-    
-    uint32_t UnitFeatures() const { return unitFeatures_; }
+
     uint32_t ReadLength() const { return readLength_; }
     uint32_t PolyLength() const { return polyLength_; }
-    uint32_t HoleNumber() const { return holeNumber_; }
     bool Internal() const { return internal_; }
     float IsRead() const { return isRead_; }
 
@@ -192,10 +189,8 @@ public:
     }
 
 private:
-    uint32_t unitFeatures_ = 0;
     uint32_t readLength_ = 0;
     uint32_t polyLength_ = 0;
-    uint32_t holeNumber_ = 0;
     bool internal_ = false;
     float isRead_ = false;
 };
@@ -248,7 +243,6 @@ private:
 public:
     ZmwMetrics(float movieTimeInHrs,
                float frameRateHz,
-               uint32_t unitFeatures,
                const RegionLabel& hqRegion,
                const std::vector<RegionLabel>& adapters,
                const BlockLevelMetrics& metrics,

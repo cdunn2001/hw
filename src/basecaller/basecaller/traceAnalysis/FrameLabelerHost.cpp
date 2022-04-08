@@ -330,8 +330,7 @@ LabelBlock(const FrameLabeler::LaneModelParameters& model,
     BlockStateSubframeScorer<VF> scorer;
 
     // Initial setup
-    CudaArray<VF, numStates> scratch;
-    auto& logLike = scratch;
+    CudaArray<VF, numStates> logLike;
     auto bc = latentData.GetLabelBoundary();
     const auto numLatent = prevLat.NumFrames();
     const VF zero(0.0f);
@@ -376,7 +375,7 @@ LabelBlock(const FrameLabeler::LaneModelParameters& model,
         Recursion(labels[frame + numLatent], logLike, scorer, trans, trIt.Extract(), roiIt.Extract());
     }
 
-    decltype(logLike) anchorLogLike = logLike;
+    auto anchorLogLike = logLike;
 
     for (size_t frame = anchor; frame < anchor + ViterbiStitchLookback; ++trIt, ++roiIt, ++frame)
     {

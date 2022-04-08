@@ -302,7 +302,6 @@ public: // more friend functions (not operators)
             l, r);
     }
 
-    // TODO: Seems like this does not really need to be "friend".
     /// Returns the value of v constrained by limits lo and hi.
     friend Derived clamp(const Derived& v, const Derived& lo, const Derived& hi)
     {

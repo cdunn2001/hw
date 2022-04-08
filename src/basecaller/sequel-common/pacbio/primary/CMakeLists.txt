@@ -24,11 +24,6 @@ include(pacbio-half)
 
 add_library(libSequelCommon1
     STATIC
-        BasecallingMetrics.h
-        BasecallingMetrics.cpp
-        DetectionMode.h
-        DetectionModeScalar.h
-        DetectionModeScalar.cpp
         HDF5_type_traits.h
         HDF5_type_traits.cpp
         HDF5cpp.h
@@ -40,12 +35,8 @@ add_library(libSequelCommon1
         HQRFParamsMCart.cpp
         HQRFParamsNCart.h
         HQRFParamsNCart.cpp
-        PulseLookback.h
-        SequelDefinitions.h
         SequelHDF5.h
         SequelHDF5.cpp
-        TraceAnalysisMetrics.h
-        Util.h
         ZmwReducedStatsFile.h
         ZmwReducedStatsFile.cpp
         ZmwStatsFile.h

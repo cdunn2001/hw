@@ -271,7 +271,8 @@ void ConvertBaz2Bam::InitPpaAlgoConfig()
 int ConvertBaz2Bam::Run()
 {
     {
-        PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, 300);
+        const uint64_t startupCounterMax = 1;
+        PpaStageReporter startUpRpt(progressMessage_.get(), PpaStages::Startup, startupCounterMax, 300);
 
         if (!user_->silent)
         {
@@ -301,7 +302,8 @@ int ConvertBaz2Bam::Run()
 
     {
         // Everything below requires parsing the BAZ file.
-        PpaStageReporter parseBazHeadersRpt(progressMessage_.get(), PpaStages::ParseBazHeaders, 300);
+        const uint64_t parseBazHeadersCounterMax = 1;
+        PpaStageReporter parseBazHeadersRpt(progressMessage_.get(), PpaStages::ParseBazHeaders, parseBazHeadersCounterMax, 300);
 
         // Parse BAZ.
         bazReader_ = std::unique_ptr<BazReader>(new BazReader(
@@ -475,7 +477,8 @@ int ConvertBaz2Bam::Run()
         return valid;
     });
 
-    PpaStageReporter shutdownRpt(progressMessage_.get(), PpaStages::Shutdown, 30);
+    const uint64_t shutdownCounterMax = 1;
+    PpaStageReporter shutdownRpt(progressMessage_.get(), PpaStages::Shutdown, shutdownCounterMax, 30);
     while (closeFuture.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
     {
         if (!abortNow_)
@@ -868,7 +871,15 @@ void ConvertBaz2Bam::SingleThread()
                     auto processProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PROCESS_PACKETS);
                     (void)processProfile;
                     const bool truncated = ffs.IsZmwNumberTruncated(fhs.ZmwIndexToNumber(batch[i].ZmwIndex()));
-                    return EventData(batch[i].ZmwIndex(), fhs.ZmwIndexToNumber(batch[i].ZmwIndex()), truncated, std::move(bazEvents), std::move(insertStates));
+                    EventData::Info info;
+                    auto zId = batch[i].ZmwIndex();
+                    info.zmwIdx = zId;
+                    info.zmwNum = fhs.ZmwIndexToNumber(zId);
+                    info.features = fhs.ZmwFeatures(zId);
+                    info.xPos = fhs.ZmwIndexToXCoord(zId);
+                    info.yPos = fhs.ZmwIndexToYCoord(zId);
+                    info.holeType = fhs.ZmwIndexToHoleType(zId);
+                    return EventData(info, truncated, std::move(bazEvents), std::move(insertStates));
                 }();
 
                 auto parseProfile = profiler.CreateScopedProfiler(COMPUTE_PROFILES::PARSE_BINARY);
@@ -922,7 +933,6 @@ void ConvertBaz2Bam::SingleThread()
                 (void)zstatsProfile;
                 ZmwMetrics zmwMetrics(bazReader_->FileHeaderSet().MovieTimeInHrs(),
                                       bazReader_->FileHeaderSet().FrameRateHz(),
-                                      bazReader_->FileHeaderSet().ZmwFeatures(events.ZmwIndex()),
                                       regions.hqregion,
                                       regions.adapters,
                                       bazMetrics,
@@ -940,14 +950,14 @@ void ConvertBaz2Bam::SingleThread()
                             bufferList->emplace_back(zmwStatsFile_->GetZmwStatsTemplate());
                             PacBio::Primary::ZmwStats& zmw = bufferList->back();
                             zmw.index_ = i + startIndex;
-                            ZmwStats::FillPerZmwStats(rmd_->platform, regions.hqregion,
+                            ZmwStats::FillPerZmwStats(regions.hqregion,
                                                       zmwMetrics, events, bazMetrics,
                                                       controlMetrics.isControl, user_->diagStatsH5, zmw);
                         }
                         else
                         {
                             PacBio::Primary::ZmwStats zmwStats{zmwStatsFile_->GetZmwStatsTemplate()};
-                            ZmwStats::FillPerZmwStats(rmd_->platform, regions.hqregion,
+                            ZmwStats::FillPerZmwStats(regions.hqregion,
                                                       zmwMetrics, events, bazMetrics,
                                                       controlMetrics.isControl, user_->diagStatsH5, zmwStats);
                             zmwStatsFile_->Set(i + startIndex, zmwStats);

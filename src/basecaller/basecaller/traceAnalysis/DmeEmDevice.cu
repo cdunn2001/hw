@@ -28,6 +28,7 @@
 
 #include "DmeEmDevice.h"
 
+#include <algorithm>
 #include <limits>
 
 #include <common/IntInterval.h>
@@ -120,9 +121,12 @@ static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 template <typename VF>
 __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
-    blVar += sigMean * staticConfig.shotNoiseCoeff_;
-    blVar += sigMean * sigMean * excessNoiseCV2;
-    return min(60000.f, blVar);
+    blVar += staticConfig.shotNoiseCoeff_ * sigMean;
+
+    // Typically, excessNoiseCV2 << 1 and sigMean >> 1. Order multiplications
+    // this way to avoid overflow, especially when VF is half-precision.
+    blVar += excessNoiseCV2 * sigMean * sigMean;
+    return blVar;
 }
 
 template <typename VF>
@@ -160,8 +164,8 @@ __device__ void UpdateModel1(const ZmwDetectionModel& from,
                               float fraction)
 {
 
-    const float a = fraction;
-    const float b = 1 - fraction;
+    const float a = 1.0f - fraction;
+    const float b = fraction;
 
     auto &tbm = to->baseline;
     auto &obm = from.baseline;
@@ -200,8 +204,8 @@ __device__ void UpdateModel2(const ZmwDetectionModel& from,
                               float fraction)
 {
 
-    const float a = fraction;
-    const float b = 1 - fraction;
+    const float a = 1.0f - fraction;
+    const float b = fraction;
 
     auto &tbm = to->baseline;
     auto &obm = from.baseline;
@@ -576,7 +580,7 @@ ComputeConfidence(const DmeDiagnostics<float>& dmeDx,
 {
     const auto mldx = dmeDx.mldx;
     CudaArray<float, ConfFactor::NUM_CONF_FACTORS> cf;
-    for (auto val : cf) val = 1.f;
+    for (auto& val : cf) val = 1.f;
 
     // Check EM convergence.
     cf[ConfFactor::CONVERGED] = mldx.converged;
@@ -729,7 +733,8 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     auto blMean = mask ? Mean(blsa)     : m0blm.mean;
     auto blVar  = mask ? Variance(blsa) : m0blm.var;
 
-    blVar = min(60000.f, max(blVar, baseConfig.signalScaler));
+    const auto blVarMax = baseConfig.BaselineVarianceMax();
+    blVar = std::clamp(blVar, baseConfig.BaselineVarianceMin(), blVarMax);
 
     auto& detectionModes = model->analogs;
 
@@ -756,6 +761,7 @@ __device__ void PrelimEstimate(const BaselinerStatAccumState& blStatAccState,
     // Frame interval is not updated since it is not exported
 
     float conf = 0.1f * satlin(0.0f, 500.0f, nBlFrames - nBaselineMin);
+    conf *= satlin(blVarMax, 0.5f * (baseConfig.BaselineVarianceNominal() + blVarMax), blVar);
     model->confidence = conf;
 }
 
@@ -768,8 +774,6 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
                                      LaneDetModel* detModel,
                                      FiTypeDevice modFI)
 {
-    // TODO: Evolve model. Use trace autocorrelation to adjust confidence
-    // half-life.
     assert(detModel != nullptr);
 
     ZmwDetectionModel model0;
@@ -816,21 +820,32 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
     ModeArray mu;      // Mean of each mode.
     ModeArray var;     // Variance of each mode.
 
+    const float rhoMin = 0.001f;
+    const float blVarMin = baseConfig.BaselineVarianceMin();
+    const float blVarMax = baseConfig.BaselineVarianceMax();
+
     // Variance associated with data binning.
     const auto varQuant = binSize * binSize / 12.f;
 
-    rho[0] = bgMode.weight;
+    rho[0] = max(bgMode.weight, rhoMin);
+    assert(rho[0] <= 1.0f);
     mu[0] = bgMode.mean;
     var[0] = bgMode.var + varQuant;
+    assert(var[0] >= blVarMin);
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         const auto k = a + 1;
         //PBAssert(k < nModes, "k < nModes");
         const auto& pma = pulseModes[a];
         rho[k] = pma.weight;
+        assert(rho[k] <= 1.0f);
         mu[k] = pma.mean;
         var[k] = pma.var + varQuant;
+        assert(var[k] >= blVarMin);
     }
+
+    // Enforce sanity bound on baseline variance.
+    var[0] = min(var[0], blVarMax);
 
     // Enforce normalization of mixture fractions.
     {
@@ -913,8 +928,10 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
     MaxLikelihoodDiagnostics<float>& mldx = dmeDx.mldx;
     mldx.degOfFreedom = numFrames - CoreDMEstimator::nModelParams;
 
-    // See I. V. Cadez, P. Smyth, G. J. McLachlan, and C. E. McLaren,
-    // Machine Learning 47:7 (2002). [CSMM2002]
+    // Expectation-maximization of grouped data.
+    // See G. J. McLachlan and P. N. Jones,
+    // Biometrics, Vol. 44, No. 2 (June, 1988), pp. 571-578.
+    // http://www.jstor.org/stable/2531869
 
     const float n_j_sum = [&](){
         float sum = 0;
@@ -1113,12 +1130,16 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
 
         // M-step
 
-        c_i[0] = max(0.0001f, c_i[0]);
         // Mixing fractions.
+        // Constrain each component to have some minimal mixing fraction.
+        float rhoSum = 0.0f;
         for (int i = 0; i < nModes; ++i)
         {
+            c_i[i] = max(c_i[i], 0.1f);
             rho[i] = c_i[i] / n_j_sum;
+            rhoSum += rho[i];
         }
+        for (auto& x : rho) x /= rhoSum;
 
         auto oldMu = mu[0];
         // Background mean.
@@ -1170,6 +1191,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         mom2 += muDiff * correct1 + muDiff * muDiff * correct2;
         mom2 *= hBinSize;
         var[0] = mom2 / c_i[0] + varQuant;
+        var[0] = std::clamp(var[0], blVarMin, blVarMax);
 
         // Each pulse mode variance is computed as a function of the background
         // variance and the pulse mode mean.
@@ -1192,7 +1214,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
     //PBAssert(all(isfinite(muEst[0])), "all(isfinite(muEst[0]))");
     bgMode.mean = muEst[0];
     //PBAssert(all(isfinite(varEst[0])), "all(isfinite(varEst[0]))");
-    bgMode.var = min(60000.f, varEst[0]);
+    bgMode.var = varEst[0];
     for (unsigned int a = 0; a < numAnalogs; ++a)
     {
         auto& pda = pulseModes[a];
@@ -1202,7 +1224,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         //PBAssert(all(isfinite(muEst[i])), "all(isfinite(muEst[i]))");
         pda.mean = muEst[i];
         //PBAssert(all(isfinite(varEst[i])), "all(isfinite(varEst[i]))");
-        pda.var = min(60000.f, varEst[i]);
+        pda.var = varEst[i];
     }
 
     // Note: this is disabled until we have a chi squared cfd on the gpu.
@@ -1298,7 +1320,7 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         // storage.  Something is already terribly wrong if our variance is over
         // 65k, but we'll put a limiter here because having a literal infinity run
         // around is causing problems elsewhere
-        PBHalf2 var = min(max(PBHalf2{tmp.X(), tmp.Y()}, 0.0f), 60000.f);
+        PBHalf2 var = clamp(PBHalf2{tmp.X(), tmp.Y()}, 0.0f, 65000.0f);
         return Blend(mom0 > 1.0f, var, nan);
     };
 
@@ -1317,8 +1339,11 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
     blMean = Blend(isnan(blMean), baseConfig.fallbackBaselineMean, blMean);
     blVar = Blend(isnan(blVar), baseConfig.fallbackBaselineVariance, blVar);
 
-    // Constrain variance to a minimum value.
-    blVar = max(blVar, baseConfig.BaselineVarianceMin());
+    // Constrain variance to reasonable range.
+    const float blVarMin = baseConfig.BaselineVarianceMin();
+    const float blVarMax = baseConfig.BaselineVarianceMax();
+    blVar = clamp(blVar, blVarMin, blVarMax);
+
 
     const auto refSignal = staticConfig.refSnr_ * sqrt(blVar);
     const auto& aWeight = 0.25f * (1.0f - blWeight);
@@ -1334,7 +1359,7 @@ __global__ void InitModel(Cuda::Memory::DeviceView<const BaselinerStatAccumState
         // This noise model assumes that the trace data have been converted to
         // photoelectron units.
         auto cv = Analog(a).excessNoiseCV;
-        aMode.vars[threadIdx.x] = min(60000, ModelSignalCovar(cv*cv, aMean, blVar));
+        aMode.vars[threadIdx.x] = min(65000.0f, ModelSignalCovar(cv*cv, aMean, blVar));
 
         aMode.weights[threadIdx.x] = aWeight;
     }

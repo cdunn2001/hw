@@ -34,7 +34,6 @@
 // SUCH DAMAGE.
 
 
-#include <pacbio/primary/RTMetricsConfig.h>
 #include <postprimary/insertfinder/InsertState.h>
 
 #include "ZmwStats.h"
@@ -43,8 +42,7 @@ namespace PacBio {
 namespace Primary {
 namespace Postprimary {
 
-void ZmwStats::FillPerZmwStats(const Platform& platform,
-                               const RegionLabel& hqRegion,
+void ZmwStats::FillPerZmwStats(const RegionLabel& hqRegion,
                                const ZmwMetrics& zmwMetrics,
                                const EventData& events,
                                const BlockLevelMetrics& blockMetrics,
@@ -56,13 +54,6 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     enum Analog
     {
         A, C, G, T
-    };
-
-    static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII and setting GREEN = 0, RED = 0"; return true;}();
-    (void)warnOnce;
-    enum Color
-    {
-        GREEN = 0, RED = 0
     };
 
     // Unconstrained auto isn't ideal here, but the dest parameter
@@ -79,9 +70,7 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     };
     auto FillFilter = [&](auto& dest, const auto& filter)
     {
-        static bool warnOnce = [](){PBLOG_WARN << "Hardcoding platform to SequelII for FillFilter"; return true;}();
-        (void)warnOnce;
-        dest[Color::GREEN] = filter.green;
+        dest[0] = filter.green;
     };
 
     const auto& excludedPulseMetrics = zmwMetrics.ZmwExcludedPulseMetrics();
@@ -95,13 +84,12 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
     zmwStats.Loading = static_cast<uint8_t>(zmwMetrics.ZmwProdMetrics().loading);
 
     zmwStats.HoleNumber = events.ZmwNumber();
-    static bool warned = [](){PBLOG_WARN << "ZmwStats not setting hole type or holexy"; return true; }();
+    static bool warned = [](){PBLOG_WARN << "ZmwStats not setting hole type"; return true; }();
     (void)warned;
-    //Primary::UnitCell uc(events.ZmwNumber());
-    zmwStats.HoleXY[0] = 0;//uc.x;
-    zmwStats.HoleXY[1] = 0;//uc.y;
-    zmwStats.HoleType = 0;//chipLayout.UnitCellTypeId(static_cast<uint16_t>(uc.x), static_cast<uint16_t>(uc.y));
-    zmwStats.UnitFeature = readMetrics.UnitFeatures();
+    zmwStats.HoleXY[0] = events.XCord();
+    zmwStats.HoleXY[1] = events.YCord();
+    zmwStats.HoleType = events.HoleType();
+    zmwStats.UnitFeature = events.UnitFeature();
 
     zmwStats.ReadType = static_cast<uint8_t>(zmwMetrics.ZmwProdMetrics().readType);
     zmwStats.ReadScore = zmwMetrics.ZmwProdMetrics().readAccuracy;
@@ -155,7 +143,7 @@ void ZmwStats::FillPerZmwStats(const Platform& platform,
 
         FillAnalog(zmwStats.HQRegionSnrMean, hqSignalMetrics.Snr());
         FillAnalog(zmwStats.HQPkmid, hqSignalMetrics.PkMid());
-        
+
         FillFilter(zmwStats.HQChannelMinSnr, hqSignalMetrics.MinSnr());
         FillFilter(zmwStats.HQBaselineLevel, hqSignalMetrics.Baseline());
         FillFilter(zmwStats.HQBaselineStd, hqSignalMetrics.BaselineSD());

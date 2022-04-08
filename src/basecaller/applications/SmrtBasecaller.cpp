@@ -28,6 +28,7 @@
 #include <appModules/BlockRepacker.h>
 #include <appModules/PrelimHQFilter.h>
 #include <appModules/RealTimeMetrics.h>
+#include <appModules/SmrtBasecallerProgress.h>
 #include <appModules/TrivialRepacker.h>
 #include <appModules/TraceFileDataSource.h>
 #include <appModules/TraceSaver.h>
@@ -86,18 +87,12 @@ using namespace PacBio::IPC;
 // ^^^^
 ///////
 
-SMART_ENUM(SmrtBasecallerStages,
-           StartUp,
-           Analyze,
-           Shutdown);
-
-using SmrtBasecallerProgressMessage = ProgressMessage<SmrtBasecallerStages>;
-using SmrtBasecallerStageReporter = SmrtBasecallerProgressMessage::StageReporter;
 
 SmrtBasecallerProgressMessage::Table stages = {
-        { "StartUp",    { false, 0, 10 } },
-        { "Analyze",    {  true, 1, 80 } },
-        { "Shutdown",   { false, 2, 10 } }
+        { "StartUp",    { false, 0,  1 } },
+        { "BazCreation",{ false, 1,  9 } },
+        { "Analyze",    {  true, 2, 80 } },
+        { "Shutdown",   { false, 3, 10 } }
 };
 
 class SmrtBasecaller : public ThreadedProcessBase
@@ -127,6 +122,13 @@ public:
         ThreadedProcessBase::HandleProcessOptions(options);
 
         frames_ = options.get("maxFrames");
+        const auto framesPerChunk = config_.layout.framesPerChunk;
+        if (frames_ % framesPerChunk != 0)
+        {
+            frames_ = (frames_ + framesPerChunk - 1) / framesPerChunk * framesPerChunk;
+            PBLOG_INFO << "Rounding up maxFrames to " << frames_ << ", to be "
+                       << "an even multiple of the chunk size (" << framesPerChunk << ")";
+        }
         // TODO need validation or something, as this is probably a trace file input specific option
         nop_ = options.get("nop");
         statusFileDescriptor_ = options.get("statusfd");
@@ -221,6 +223,7 @@ private:
             },
             [&](const WXIPCDataSourceConfig& wx2SourceConfig)
             {
+                WXIPCDataSource::WaitForDaemon(wx2SourceConfig);
                 return CreateSharedHugePinnedAllocator(config_.source.GetEnum().toString(),
                                                        WXIPCDataSource::CreateAllocator(wx2SourceConfig),
                                                        CacheMode::PRIVATE_CACHE);
@@ -475,7 +478,7 @@ private:
         }
     }
 
-    std::unique_ptr<TransformBody<const TraceBatchVariant, BatchResult>>
+    std::unique_ptr<TransformBody<const TraceBatchVariant, const BatchResult>>
     CreateBasecaller(const std::map<uint32_t, Data::BatchDimensions>& poolDims, const AnalysisConfig& analysisConfig) const
     {
         return std::make_unique<BasecallerBody>(poolDims,
@@ -484,7 +487,7 @@ private:
                                                 config_.system);
     }
 
-    std::unique_ptr<MultiTransformBody<BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
+    std::unique_ptr<MultiTransformBody<const BatchResult, std::unique_ptr<PacBio::BazIO::BazBuffer>>>
     CreatePrelimHQFilter(size_t numZmw, const std::map<uint32_t, Data::BatchDimensions>& poolDims)
     {
         return std::make_unique<PrelimHQFilterBody>(numZmw, poolDims, config_);
@@ -494,9 +497,16 @@ private:
     CreateBazSaver(const DataSourceRunner& source, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
                    const ScanData::Data& experimentMetadata)
     {
+
+        const uint64_t creatingBazFileCounterMax = poolDims.size() + 3;
+        const auto reportTimeout = (config_.multipleBazFiles)?300:3000;
+        SmrtBasecallerStageReporter bazCreationRpt(progressMessage_.get(), SmrtBasecallerStages::BazCreation,
+            creatingBazFileCounterMax, reportTimeout);
+
         if (hasBazFile_)
         {
             auto props = source.GetUnitCellProperties();
+            bazCreationRpt.Update(1);
 
             // NOTE: UnitCellProperties currently defines x,y as int32_t.
             std::vector<uint16_t> unitX;
@@ -512,47 +522,65 @@ private:
             transform(props.begin(), props.end(), back_inserter(unitFeatures),
                       [](DataSourceBase::UnitCellProperties x){ return static_cast<uint32_t>(x.flags); });
 
+            bazCreationRpt.Update(1);
             ZmwInfo zmwInfo(ZmwInfo::Data(source.UnitCellIds(), unitTypes, unitX, unitY, unitFeatures));
 
+            bazCreationRpt.Update(1);
             return std::make_unique<BazWriterBody>(outputBazFile_,
                                                    source.NumFrames(),
                                                    zmwInfo,
                                                    poolDims,
                                                    config_,
-                                                   experimentMetadata);
+                                                   experimentMetadata,
+                                                   bazCreationRpt);
         } else
         {
+            bazCreationRpt.Update(creatingBazFileCounterMax);
             return std::make_unique<NoopBazWriterBody>();
-
         }
     }
 
-    std::unique_ptr<LeafBody<std::unique_ptr<PacBio::BazIO::BazBuffer>>>
-    CreateRealTimeMetrics(const DataSourceRunner& dataSource)
+    std::unique_ptr<LeafBody<const BatchResult>>
+    CreateRealTimeMetrics(const DataSourceRunner& dataSource, const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                          const AnalysisConfig& analysisConfig)
     {
-        if (!config_.realTimeMetrics.roi.empty())
+        if (!config_.realTimeMetrics.regions.empty())
         {
-            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.realTimeMetrics.roi, laneSize);
-            const auto actualZmw = selection.size() * laneSize;
-
-            const auto& fullProperties = dataSource.GetUnitCellProperties();
-            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
-
-            size_t idx = 0;
-            for (const auto& lane: selection)
+            std::vector<DataSourceBase::LaneSelector> selections;
+            std::vector<std::vector<uint32_t>> properties;
+            for (const auto& region : config_.realTimeMetrics.regions)
             {
-                size_t currZmw = lane * laneSize;
-                for (size_t i = 0; i < laneSize; ++i)
-                {
-                    assert(idx < actualZmw);
-                    properties[idx] = fullProperties[currZmw];
-                    currZmw++;
-                    idx++;
-                }
-            }
-            assert(idx == actualZmw);
+                auto selection = SelectedBasecallerLanesWithinROI(dataSource, region.roi, laneSize);
 
-            return std::make_unique<RealTimeMetrics>();
+                const auto actualZmw = selection.size() * laneSize;
+
+                const auto& fullProperties = dataSource.GetUnitCellProperties();
+                std::vector<uint32_t> selectionFeatures(actualZmw);
+
+                size_t idx = 0;
+                for (const auto& lane: selection)
+                {
+                    size_t currZmw = lane * laneSize;
+                    for (size_t i = 0; i < laneSize; ++i)
+                    {
+                        assert(idx < actualZmw);
+                        selectionFeatures[idx] = fullProperties[currZmw].flags;
+                        currZmw++;
+                        idx++;
+                    }
+                }
+                assert(idx == actualZmw);
+                selections.emplace_back(std::move(selection));
+                properties.emplace_back(selectionFeatures);
+            }
+
+            return std::make_unique<RealTimeMetrics>(config_.algorithm.Metrics.framesPerHFMetricBlock,
+                                                     poolDims.size(),
+                                                     std::move(config_.realTimeMetrics.regions),
+                                                     std::move(selections), properties,
+                                                     analysisConfig.movieInfo.frameRate,
+                                                     config_.realTimeMetrics.rtMetricsFile,
+                                                     config_.realTimeMetrics.useSingleActivityLabels);
         }
         else
         {
@@ -562,41 +590,60 @@ private:
 
     void RunAnalyzer()
     {
-        SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, 300);
-
-        // Names for the various graph stages
-        SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER);
-
-        auto source = CreateSource();
-        AnalysisConfig analysisConfig;
-        analysisConfig.movieInfo = source->MovieInformation();
-        analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
-        analysisConfig.pedestal = source->Pedestal();
-
-        PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
-        PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
-                                                        config_.layout.framesPerChunk;
-
-
-
         try
         {
+            const uint64_t startupCounterMax = 6;
+            // startup = 0
+            SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, startupCounterMax, 300);
+
+            // Names for the various graph stages
+            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
+
+            auto source = CreateSource();
+            AnalysisConfig analysisConfig;
+            analysisConfig.movieInfo = source->MovieInformation();
+            analysisConfig.encoding = source->PacketLayouts().begin()->second.Encoding();
+            analysisConfig.pedestal = source->Pedestal();
+
+            startUpRpt.Update(1);
+
+            PBLOG_INFO << "Number of analysis zmwLanes = " << source->NumZmw() / laneSize;
+            PBLOG_INFO << "Number of analysis chunks = " << source->NumFrames() /
+                                                            config_.layout.framesPerChunk;
+
             // this try block is to catch problems before `source` is destroyed. The destruction of WXDataSource is expensive
             // and not reliable. So better to catch and report exceptions here before they percolate to the top of the call stack...
 
+            // startup = 1
             auto repacker = CreateRepacker(source->PacketLayouts(), source->NumZmw());
+            startUpRpt.Update(1);
+            // startup = 2
             auto poolDims = repacker->BatchLayouts();
 
             auto experimentData = CreateExperimentMetadata(*source, analysisConfig);
+            startUpRpt.Update(1);
 
+            // startup = 3
             GraphManager<GraphProfiler> graph(config_.system.numWorkerThreads);
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
+            startUpRpt.Update(1);
+            // startup = 4
             inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);
+                startUpRpt.Update(1);
+                // startup = 5
+                analyzer->AddNode(CreateRealTimeMetrics(*source, poolDims, analysisConfig), GraphProfiler::RT_METRICS);
                 auto* preHQ = analyzer->AddNode(CreatePrelimHQFilter(source->NumZmw(), poolDims), GraphProfiler::PRE_HQ);
+                startUpRpt.Update(1);
+                // startup = 6
+                // switching to different reporter now
                 preHQ->AddNode(CreateBazSaver(*source, poolDims, experimentData), GraphProfiler::BAZWRITER);
+            }
+            else
+            {
+                startUpRpt.Update(2);
             }
 
             size_t numChunksAnalyzed = 0;
@@ -611,17 +658,30 @@ private:
             uint64_t framesSinceBigReports = 0;
 
             source->Start();
-            startUpRpt.Update(1);
 
-            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60);
+            SmrtBasecallerStageReporter analyzeStageRpt(progressMessage_.get(), SmrtBasecallerStages::Analyze, frames_, 60,
+                [](Json::Value& metrics){
+                    metrics["MemoryUsage"] = SummarizeMemoryUsage();
+                }
+            );
             while (source->IsActive())
             {
                 SensorPacketsChunk chunk;
                 if (source->PopChunk(chunk, std::chrono::milliseconds{10}))
                 {
-                    PBLOG_INFO << "Analyzing chunk frames = ["
-                        + std::to_string(chunk.StartFrame()) + ","
-                        + std::to_string(chunk.StopFrame()) + ")";
+                    {
+                        PacBio::Logging::LogStream ls(PacBio::Logging::LogLevel::INFO);
+                        Json::Value memSummary = SummarizeMemoryUsage();
+                        for (const auto& key : memSummary.getMemberNames())
+                        {
+                            if (memSummary[key] == "") memSummary.removeMember(key);
+                        }
+                        ls << "Analyzing chunk frames = ["
+                           << chunk.StartFrame() << ","
+                           << chunk.StopFrame() << ")\n"
+                           << "MemInfo: " << memSummary;
+                    }
+
                     PacBio::Dev::QuietAutoTimer t;
                     if (nop_ == 1)
                     {
@@ -696,8 +756,7 @@ private:
                     numChunksAnalyzed++;
                     framesSinceBigReports += config_.layout.framesPerChunk;
                     framesAnalyzed += chunk.NumFrames();
-
-                    analyzeStageRpt.Update(framesAnalyzed);
+                    analyzeStageRpt.Update(chunk.NumFrames());
 
                     if (framesSinceBigReports >= config_.monitoringReportInterval)
                     {
@@ -716,7 +775,8 @@ private:
                 }
             }
 
-            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, 300);
+            uint64_t shutdownCounterMax = 1;
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, shutdownCounterMax, 300);
             inputNode->FlushNode();
 
             PBLOG_INFO << "Exited chunk analysis loop.";
@@ -913,6 +973,7 @@ int main(int argc, char* argv[])
         bc->Run();
 
     } catch (const std::exception& ex) {
+        std::cerr << "Exception caught: " << ex.what() << std::endl;
         PBLOG_ERROR << "Exception caught: " << ex.what();
         return 1;
     }

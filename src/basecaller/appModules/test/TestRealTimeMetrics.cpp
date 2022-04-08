@@ -38,8 +38,6 @@ using namespace PacBio::Simd;
 
 TEST(RealTimeMetrics, SelectedLanesWithFeatures)
 {
-    RealTimeMetrics rtm;
-
     size_t numLanes = 4;
     size_t numZmws = numLanes * laneSize;
     std::vector<uint32_t> features(numLanes * laneSize, static_cast<uint32_t>(ZmwFeatures::Sequencing));
@@ -49,7 +47,8 @@ TEST(RealTimeMetrics, SelectedLanesWithFeatures)
         if (i % 2) features[i] = static_cast<uint32_t>(ZmwFeatures::LaserScatter);
     }
 
-    auto lms = rtm.SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::Sequencing));
+
+    auto lms = RealTimeMetrics::SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::Sequencing));
 
     for (const auto& lm : lms)
     {
@@ -69,7 +68,7 @@ TEST(RealTimeMetrics, SelectedLanesWithFeatures)
                                     | static_cast<uint32_t>(ZmwFeatures::LaserPower2p0x);
     }
 
-    lms = rtm.SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::Sequencing));
+    lms = RealTimeMetrics::SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::Sequencing));
     for (const auto& lm : lms)
     {
         for (size_t i = 0; i < laneSize; i++)
@@ -78,7 +77,7 @@ TEST(RealTimeMetrics, SelectedLanesWithFeatures)
         }
     }
 
-    lms = rtm.SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::LaserScatter));
+    lms = RealTimeMetrics::SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::LaserScatter));
     size_t zmwNo = 0;
     for (const auto& lm : lms)
     {
@@ -90,7 +89,7 @@ TEST(RealTimeMetrics, SelectedLanesWithFeatures)
         }
     }
 
-    lms = rtm.SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::LaserPower2p0x));
+    lms = RealTimeMetrics::SelectedLanesWithFeatures(features, static_cast<uint32_t>(ZmwFeatures::LaserPower2p0x));
     zmwNo = 0;
     for (const auto& lm : lms)
     {

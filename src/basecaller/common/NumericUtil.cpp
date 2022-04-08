@@ -1,7 +1,5 @@
-#ifndef Sequel_Primary_DetectionModeFloat_H_
-#define Sequel_Primary_DetectionModeFloat_H_
 
-// Copyright (c) 2015, Pacific Biosciences of California, Inc.
+// Copyright (c) 2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -27,17 +25,6 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file   DetectionModeFloat.h
-/// \brief  Explicit instantiation declarations for scalar (single ZMW) types.
+//  Stub translation unit for NumericUtil.h.
 
-#include "DetectionMode.h"
-
-namespace PacBio {
-namespace Primary {
-
-extern template class DetectionMode<float>;
-
-}} // ::PacBio::Primary
-
-#endif
-
+#include "NumericUtil.h"

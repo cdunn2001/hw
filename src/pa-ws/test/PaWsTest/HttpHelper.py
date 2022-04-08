@@ -1,4 +1,5 @@
 import logging
+from pyparsing import null_debug_action
 import pytest
 import requests
 from time import sleep
@@ -29,16 +30,20 @@ class SafeHttpClient(object):
         logging.debug('POST - %s, %s', url, payload)
         # debugging REST calls, not needed now:
         if type(payload) is str:
-            logging.info("payload is string")
+            logging.debug("payload is string")
             response = requests.post(url, json=payload, timeout=timeout)
         elif type(payload) is dict:
-            logging.info("payload is dict")
+            logging.debug("payload is dict")
             response = requests.post(url, json=payload, timeout=timeout)
 #            response = requests.post(url, data=payload, timeout=timeout)
         else:
             print(type(payload))
             raise Exception("payload is not string")
-        r = response.json()
+        if response.text == "":
+            # an empty response is equivalent to a JSON NULL
+            r = None
+        else:        
+            r = response.json()
         if response.status_code / 100 != 2 :
             raise HttpException('status_code:' + str(response.status_code) + str(r))
         return r

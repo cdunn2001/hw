@@ -169,11 +169,11 @@ TEST(zmwMetrics, ProductivityReadMetrics)
     EXPECT_EQ(ProductivityClass::PRODUCTIVE, prod.productivity);
     EXPECT_EQ(ReadTypeClass::PARTIALHQREAD1, prod.readType);
 
-    ReadMetrics readMetrics(fh.MovieTimeInHrs(), fh.ZmwUnitFeatures(events.ZmwNumber()),
+    ReadMetrics readMetrics(fh.MovieTimeInHrs(),
                             hqRegion, events, prod);
 
-    EXPECT_EQ(0, readMetrics.UnitFeatures());
-    EXPECT_EQ(4194368, readMetrics.HoleNumber());
+    EXPECT_EQ(PacBio::DataSource::ZmwFeatures::Sequencing, events.UnitFeature());
+    EXPECT_EQ(4194368, events.ZmwNumber());
     EXPECT_EQ(2560, readMetrics.ReadLength());
     EXPECT_EQ(5120, readMetrics.PolyLength());
     EXPECT_EQ(true, readMetrics.Internal());
