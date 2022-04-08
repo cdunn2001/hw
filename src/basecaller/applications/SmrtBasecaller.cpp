@@ -238,11 +238,18 @@ private:
 
         auto CopyVectorsToMultiArray = [](const std::vector<std::vector<double>>& vectors, boost::multi_array<double, 2>& multiArray){
             const auto numRows = vectors.size();
-            const auto numCols = vectors[0].size();
-            multiArray.resize(boost::extents[numRows][numCols]);
-            for(uint32_t i=0; i< numRows; i++)
-                for(uint32_t j=0; j < numCols; j++)
-                    multiArray[i][j] = vectors[i][j];
+            if (numRows > 0)
+            {
+                const auto numCols = vectors[0].size();
+                multiArray.resize(boost::extents[numRows][numCols]);
+                for(uint32_t i=0; i< numRows; i++)
+                    for(uint32_t j=0; j < numCols; j++)
+                        multiArray[i][j] = vectors[i][j];
+            }
+            else
+            {
+                multiArray.resize(boost::extents[0][0]);
+            }
         };
         datasourceConfig.crosstalkFilter = std::make_unique<PacBio::DataSource::CrosstalkFilter>();
         CopyVectorsToMultiArray( config_.dataSource.crosstalkFilterKernel, datasourceConfig.crosstalkFilter->kernel);
