@@ -366,12 +366,6 @@ private:
         auto& chipInfo = expMetadata.chipInfo;
         chipInfo.layoutName = defaultLayoutName;
         chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
-        const auto& imagePsf = dataSource.ImagePsfMatrix();
-        chipInfo.imagePsf.resize(boost::extents[imagePsf.shape()[0]][imagePsf.shape()[1]]);
-        chipInfo.imagePsf = imagePsf;
-        const auto& crossTalk = dataSource.CrosstalkFilterMatrix();
-        chipInfo.xtalkCorrection.resize(boost::extents[crossTalk.shape()[0]][crossTalk.shape()[1]]);
-        chipInfo.xtalkCorrection = crossTalk;
 
         auto& dyeSet = expMetadata.dyeSet;
         const size_t numAnalogs = analysisConfig.movieInfo.analogs.size();

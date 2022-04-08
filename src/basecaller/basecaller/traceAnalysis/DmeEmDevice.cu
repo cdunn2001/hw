@@ -93,6 +93,7 @@ struct StaticConfig
     float successConfThresh_;
     uint32_t updateMethod_;
     float refSnr_;       // Expected SNR for analog with relative amplitude of 1
+    float shotNoiseCoeff_;
 };
 
 __constant__ StaticConfig staticConfig;
@@ -119,7 +120,7 @@ static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 template <typename VF>
 __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
-    blVar += sigMean * CoreDMEstimator::shotVarCoeff;
+    blVar += sigMean * staticConfig.shotNoiseCoeff_;
     blVar += sigMean * sigMean * excessNoiseCV2;
     return min(60000.f, blVar);
 }
@@ -128,7 +129,7 @@ template <typename VF>
 __device__ VF XsnCoeffCVSq(const VF& sigMean, const VF& sigCovar, const VF& blVar)
 {
     VF r (sigCovar - blVar);
-    r -= sigMean * CoreDMEstimator::shotVarCoeff;
+    r -= sigMean * staticConfig.shotNoiseCoeff_;
     r /= sigMean * sigMean;
     return r;
 }
@@ -309,6 +310,7 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.updateMethod_   = dmeConfig.ModelUpdateMethod;
     config.refSnr_ = movieInfo.refSnr;
+    config.shotNoiseCoeff_ = CoreDMEstimator::shotNoiseCoeff;
 
     Cuda::CudaCopyToSymbol(&staticConfig, &config);
 }
