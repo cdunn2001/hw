@@ -147,6 +147,9 @@ int main(int argc, char* argv[])
         parser.add_option_group(groupMand);
 
         auto groupOpt = PacBio::Process::OptionGroup(parser, "Optional parameters");
+        groupOpt.add_option("--logoutput").dest("logoutput").help("Log output filename. Default <output_prefix>.log");
+        std::vector<std::string> loglevels = { "TRACE", "DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "CRITICAL", "FATAL" };
+        groupOpt.add_option("--logfilter").dest("logfilter").type_choice().choices(loglevels).set_default("INFO").help("Log level to filter on. Default INFO");
         groupOpt.add_option("--filelist").dest("filelist").help("Text file containing full paths to BAZ files, one per line");
         groupOpt.add_option("--uuid").help("If this is specified, it must"
                                             " compare to the UUID of the subreadset within the metadata XML. pa-ws "
@@ -331,6 +334,7 @@ int main(int argc, char* argv[])
             }
         }
 
+        // Mandatory parameters
         user->outputPrefix = options["output"];
         if (user->outputPrefix.empty())
         {
@@ -348,6 +352,18 @@ int main(int argc, char* argv[])
                 problem = true;
             }
         }
+
+        // Optional parameters
+        if (options.is_set_by_user("logoutput"))
+        {
+            user->logFileName = options["logoutput"];
+        }
+        else
+        {
+            user->logFileName = user->outputPrefix + ".baz2bam.log";
+        }
+        user->logFilterLevel = options["logfilter"];
+
         user->uuid = options["uuid"];
 
         // Whitelist processing
