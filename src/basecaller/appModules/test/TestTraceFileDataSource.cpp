@@ -118,7 +118,7 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
 
 TEST(TraceFileDataSourceMisc, Replication)
 {
-    const uint32_t numZmwLanes = 275;
+    const uint32_t numZmwLanes = 274;
     const uint32_t numZmw = numZmwLanes * laneSize;
     const uint32_t lanesPerPool = 64;
     const uint32_t framesPerBlock = 512;
@@ -136,6 +136,7 @@ TEST(TraceFileDataSourceMisc, Replication)
     trcConfig.traceFile = traceFileName;
     trcConfig.numFrames = numFrames;
     trcConfig.numZmwLanes = numZmwLanes;
+    trcConfig.minCols = 128;
 
     PacketLayout layout(PacketLayout::BLOCK_LAYOUT_DENSE,
                         PacketLayout::INT16,
@@ -211,18 +212,31 @@ TEST(TraceFileDataSourceMisc, Replication)
         }
     }
 
-    // Intentionally odd roi.  Every selected ZMW gets us a full lane,
-    // which means the 13 gets us a lane, and 184-271 overlaps three lanes
-    auto selected = source.SelectedLanesWithinROI({{13},{184,88}});
-    ASSERT_EQ(selected.size(), 4);
+    std::vector<std::vector<int>> roi;
+    // Grab two isolated lanes, letting the extents be defaulted
+    roi.push_back({12, 0});
+    roi.push_back({17,64});
+    // Now grab the first 4 lanes
+    roi.push_back({0,0,2,128});
+    // Overlapping rectangles should not be an error?
+    roi.push_back({1,0});
+    auto selected = source.SelectedLanesWithinROI(roi);
+    // We asked for 7, but one was a duplicate
+    ASSERT_EQ(selected.size(), 6);
     auto itr = selected.begin();
+    // The first four lanes should come first
     EXPECT_EQ(*itr, 0);
+    itr++;
+    EXPECT_EQ(*itr, 1);
     itr++;
     EXPECT_EQ(*itr, 2);
     itr++;
     EXPECT_EQ(*itr, 3);
     itr++;
-    EXPECT_EQ(*itr, 4);
+    // Then the two isolated lanes
+    EXPECT_EQ(*itr, 24);
+    itr++;
+    EXPECT_EQ(*itr, 35);
     itr++;
     EXPECT_EQ(itr, selected.end());
 

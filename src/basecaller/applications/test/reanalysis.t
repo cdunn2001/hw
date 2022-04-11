@@ -23,7 +23,7 @@
   $ SAVEDTRACE=saved.trc.h5
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768, "numZmwLanes":64,"traceFile":"'$TRCFILE'","cache":true }' \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 --outputtrcfile=${SAVEDTRACE} --outputbazfile ${ORIGBAZ}        \
-  > --config traceSaver.roi=[[1024,64],[2048,128],[3072,192]] > /dev/null
+  > --config traceSaver.roi=[[16,0],[32,0,2,64],[48,0,3,64]] > /dev/null
 
   $ h5ls -d ${SAVEDTRACE}/TraceData/AnalysisBatch
   AnalysisBatch            Dataset {384}

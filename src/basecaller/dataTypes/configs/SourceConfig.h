@@ -62,13 +62,19 @@ struct TraceReplication : public Configuration::PBConfig<TraceReplication>
     // Generates some number of chunks before producing traces.
     // Potentially useful if the trace file is too large to cache,
     // but you still want to have some data to measure throughput
-    // without being limited by disk read space
+    // without being limited by disk read speed.
     PB_CONFIG_PARAM(size_t, preloadChunks, 0);
     // The max number of chunks the data source will get ahead of
     // the actual analysis without self throttling
     PB_CONFIG_PARAM(size_t, maxQueueSize, 0);
 
     PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
+
+    // Sets bounds on the x/y dimensions of the "chip".  Otherwise the
+    // coordiantes will be as square as possible while making sure a row
+    // is multiple of the lane size
+    PB_CONFIG_PARAM(uint32_t, minRows, 0);
+    PB_CONFIG_PARAM(uint32_t, minCols, 0);
 };
 
 using WXIPCDataSourceConfig = PacBio::Acquisition::DataSource::WXIPCDataSourceConfig;
