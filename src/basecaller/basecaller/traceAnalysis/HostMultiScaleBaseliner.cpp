@@ -43,44 +43,13 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-// static
-float HostMultiScaleBaseliner::cMeanBiasAdj_ = 0.0f;
-float HostMultiScaleBaseliner::cSigmaBiasAdj_ = 0.0f;
-float HostMultiScaleBaseliner::meanEmaAlpha_ = 0.0f;
-float HostMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
-float HostMultiScaleBaseliner::jumpTolCoeff_ = std::numeric_limits<float>::infinity();
-
 void HostMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
                                         const Data::AnalysisConfig& analysisConfig)
 {
     const auto hostExecution = true;
     InitFactory(hostExecution, analysisConfig);
 
-    {
-        // Validation has already been handled in the configuration framework.
-        // This just asserts that the configuration is indeed valid.
-        assert(bbc.Validate());
-
-        cMeanBiasAdj_ = bbc.MeanBiasAdjust;
-
-        cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
-
-        const float meanEmaScale = bbc.MeanEmaScaleStrides;
-        meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);
-        assert(0.0f <= meanEmaAlpha_ && meanEmaAlpha_ < 1.0f);
-
-        const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
-        std::ostringstream msg;
-        msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
-        // TODO: Use a scoped logger.
-        PBLOG_INFO << msg.str();
-        sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
-        assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
-
-        // TODO: Enable jumpTolCoeff_
-        // const float js = bbc.JumpSuppression;
-        // jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
-    }
+    MultiScaleBaseliner::Configure(bbc, analysisConfig);
 }
 
 void HostMultiScaleBaseliner::Finalize() {}
@@ -123,7 +92,7 @@ HostMultiScaleBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
 
 template <typename T>
 Data::BaselinerStatAccumulator<HostMultiScaleBaseliner::ElementTypeOut>
-HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::BlockView<const T>& traceData,
+HostMultiScaleBaseliner::LaneBaseliner::EstimateBaseline(const Data::BlockView<const T>& traceData,
                                                                Data::BlockView<ElementTypeOut> lowerBuffer,
                                                                Data::BlockView<ElementTypeOut> upperBuffer,
                                                                Data::BlockView<ElementTypeOut> baselineSubtractedData)
@@ -172,7 +141,7 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
     return baselinerStats;
 }
 
-void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const LaneArray& traceData,
+void HostMultiScaleBaseliner::LaneBaseliner::AddToBaselineStats(const LaneArray& traceData,
                                                                       const LaneArray& baselineSubtractedFrame,
                                                                       Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
@@ -203,7 +172,7 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
 }
 
 HostMultiScaleBaseliner::FloatArray
-HostMultiScaleBaseliner::MultiScaleBaseliner::GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper)
+HostMultiScaleBaseliner::LaneBaseliner::GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper)
 {
     static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
     const float sigmaEmaAlpha = SigmaEmaAlpha();
