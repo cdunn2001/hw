@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source module_setup.sh
+set -vx
 
 main(){
   tool=$1
@@ -9,7 +10,7 @@ main(){
     ./cmake_setup.sh
   fi
   cd build/$tool/gcc/x86_64/Release
-  ninja package
+  ninja -v package
 }
 
 main $1
