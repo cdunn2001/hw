@@ -41,8 +41,8 @@ void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
     assert(std::isfinite(phes) && phes > 0.0f);
     config_.signalScaler = phes;
 
-    auto& xtc = analysisConfig.movieInfo.xtc;
-    auto& psf = analysisConfig.movieInfo.psf;
+    auto& psf = analysisConfig.movieInfo.xtalkPsf;
+    auto& xtc = analysisConfig.movieInfo.xtalkCorrection;
 
     if (psf.shape()[0] * psf.shape()[1] == 0)
     {
@@ -60,7 +60,7 @@ void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
         shotNoiseCoeff = xtcMat.cwiseProduct(xtcMat).cwiseProduct(psfMat).sum(); // S =  sum(X .^ 2 .* P, "all")
     }
 
-    (void)shotNoiseCoeff;
+    // shotNoiseCoeff = 1.2171f;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller
