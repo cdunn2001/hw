@@ -58,37 +58,37 @@ Check that paths are relative
 
 Exercise the various HQRF configurations:
   $ baz2bam out_production.baz -o out_sequel_default --hqregion -j8 --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "SEQUEL_CRF_HMM configured" out_sequel_default.baz2bam_1.log
+  $ grep -c "SEQUEL_CRF_HMM configured" out_sequel_default.baz2bam.log
   1
   $ baz2bam out_production.baz -o out_sequel --hqrfConfig K1 --hqregion -j8 --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "SEQUEL_CRF_HMM configured" out_sequel.baz2bam_1.log
+  $ grep -c "SEQUEL_CRF_HMM configured" out_sequel.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_default --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "SPIDER_CRF_HMM configured" out_spider_default.baz2bam_1.log
+  $ grep -c "SPIDER_CRF_HMM configured" out_spider_default.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_2p0 --hqrfConfig M1 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "SPIDER_CRF_HMM configured" out_spider_2p0.baz2bam_1.log
+  $ grep -c "SPIDER_CRF_HMM configured" out_spider_2p0.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_3p0 --hqrfConfig N1 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "ZOFFSET_CRF_HMM configured" out_spider_3p0.baz2bam_1.log
+  $ grep -c "ZOFFSET_CRF_HMM configured" out_spider_3p0.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_2p0_RTAL --hqrfConfig M2 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "TRAINED_CART_HMM configured" out_spider_2p0_RTAL.baz2bam_1.log
+  $ grep -c "TRAINED_CART_HMM configured" out_spider_2p0_RTAL.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_2p0_RT --hqrfConfig M3 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "TRAINED_CART_CART configured" out_spider_2p0_RT.baz2bam_1.log
+  $ grep -c "TRAINED_CART_CART configured" out_spider_2p0_RT.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_use_baz_al --hqrfConfig M4 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "BAZ_HMM configured" out_use_baz_al.baz2bam_1.log
+  $ grep -c "BAZ_HMM configured" out_use_baz_al.baz2bam.log
   1
   $ baz2bam out_spider.baz -o out_spider_n2 --hqrfConfig N2 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "ZOFFSET_CART_HMM configured" out_spider_n2.baz2bam_1.log
+  $ grep -c "ZOFFSET_CART_HMM configured" out_spider_n2.baz2bam.log
   1
 
 Test ignoreBazActivityLabels:
   $ baz2bam out_spider.baz -o out_spider_n2_relabel --hqrfConfig N2 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --ignoreBazActivityLabels --enableBarcodedAdapters=False
 
-  $ grep -c "ZOFFSET_CART_HMM configured" out_spider_n2_relabel.baz2bam_1.log
+  $ grep -c "ZOFFSET_CART_HMM configured" out_spider_n2_relabel.baz2bam.log
   1
 
 When we ignore the baz activity labels (which are simulated to be A1) and
@@ -98,7 +98,7 @@ compute new ones, the simulated MFMetrics features result in all A0s.
 
 Test Spider RTAL BAZ:
   $ baz2bam out_spiderrtal.baz -o out_spiderrtal_n2 --hqrfConfig N2 --hqregion -j8 --silent --metadata=$TESTDIR/data/spider_metadata.xml --enableBarcodedAdapters=False
-  $ grep -c "ZOFFSET_CART_HMM configured" out_spiderrtal_n2.baz2bam_1.log
+  $ grep -c "ZOFFSET_CART_HMM configured" out_spiderrtal_n2.baz2bam.log
   1
 
   $ bazviewer --silent -m -f out_spiderrtal.baz | grep -c "PKMAX_[ACTG]"

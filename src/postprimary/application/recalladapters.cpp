@@ -146,6 +146,9 @@ int main(int argc, char* argv[])
         groupOpt.add_option("--inlinePbi").action_store_true().help(
                 "Generate pbindex inline with BAM writing");
         groupOpt.add_option("--silent").action_store_true().help("No progress output.");
+        groupOpt.add_option("--logoutput").dest("logoutput").help("Log output filename. Default <output_prefix>.log");
+        std::vector<std::string> loglevels = { "TRACE", "DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "CRITICAL", "FATAL" };
+        groupOpt.add_option("--logfilter").dest("logfilter").type_choice().choices(loglevels).set_default("INFO").help("Log level to filter on. Default INFO");
         parser.add_option_group(groupOpt);
 
         auto groupAdapter =
@@ -198,6 +201,7 @@ int main(int argc, char* argv[])
             problem = true;
         }
 
+        // Mandatory parameters
         user->subreadsetFilePath = options["subreadset"];
         user->outputPrefix = options["output"];
 
@@ -206,6 +210,25 @@ int main(int argc, char* argv[])
             std::cerr << "ERROR: No output provided -o" << std::endl;
             problem = true;
         }
+
+        // Optional parameters
+        if (options.is_set_by_user("logoutput"))
+        {
+            if (options["logoutput"] != "")
+            {
+                user->logFileName = options["logoutput"];
+            }
+            else
+            {
+                std::cerr << "ERROR: Empty log file name specified." << std::endl;
+                problem = true;
+            }
+        }
+        else
+        {
+            user->logFileName = user->outputPrefix + ".bam2bam.log";
+        }
+        user->logFilterLevel = options["logfilter"];
 
         user->minSubreadLength = (int)options.get("minSubreadLength");
 
