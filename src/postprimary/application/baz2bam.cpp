@@ -356,7 +356,15 @@ int main(int argc, char* argv[])
         // Optional parameters
         if (options.is_set_by_user("logoutput"))
         {
-            user->logFileName = options["logoutput"];
+            if (options["logoutput"] != "")
+            {
+                user->logFileName = options["logoutput"];
+            }
+            else
+            {
+                std::cerr << "ERROR: Empty log file name specified." << std::endl;
+                problem = true;
+            }
         }
         else
         {
