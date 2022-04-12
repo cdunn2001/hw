@@ -129,14 +129,32 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
         const DataSourceBase::LaneIndex laneBegin = zmwOffset / traceBatch.LaneWidth();
         const DataSourceBase::LaneIndex laneEnd = laneBegin + traceBatch.LanesPerBatch();
 
-        for (const auto laneIdx : laneSelector_.SelectedLanes(laneBegin, laneEnd))
+        uint64_t traceBlockFrames = traceBatch.NumFrames();
+        if (frameOffset > numFrames_)
+        {
+            PBLOG_ERROR << "The frameOffset=" << frameOffset << " of the current chunk lies past the end of the trace file,"
+                << " numFrames:" << numFrames_ << ". Skipping this chunk";
+            traceBlockFrames = 0;
+        }
+        else if (frameOffset + traceBlockFrames > numFrames_)
+        {
+            // limit the frames to the original requested size
+            traceBlockFrames = numFrames_ - frameOffset;
+        }
+
+        const auto& selection = laneSelector_.SelectedLanes(laneBegin, laneEnd);
+        uint32_t traceFileStartLane = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), *selection.begin()) - laneSelector_.begin();
+        uint32_t pos = 0;
+        using arr_t = boost::multi_array<T, 2>;
+        arr_t batchTraces{boost::extents[traceBatch.LaneWidth() * selection.size()][traceBatch.NumFrames()]};
+        for (const auto laneIdx : selection)
         {
             PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
             const auto blockIdx = laneIdx - laneBegin;
             Mongo::Data::BlockView<const T> blockView = traceBatch.GetBlockView(blockIdx);
 #if 0
             PBLOG_NOTICE << "blockView data, zmwOffset:" << zmwOffset << "frameOffset:" << frameOffset;
-            for(uint32_t x=0;x<32;x++) 
+            for(uint32_t x=0;x<32;x++)
             {
                 PBLOG_NOTICE <<  std::hex << blockView.Data()[x];
             }
@@ -147,44 +165,26 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
             boost::const_multi_array_ref<T, 2> data {
                 blockView.Data(), boost::extents[blockView.NumFrames()][blockView.LaneWidth()]};
 
-            typedef boost::multi_array<T, 2> array_ref;
-            uint64_t traceBlockFrames = blockView.NumFrames();
-            if (frameOffset > numFrames_)
+            if (traceBlockFrames > 0)
             {
-                PBLOG_ERROR << "The frameOffset=" << frameOffset << " of the current chunk lies past the end of the trace file,"
-                    << " numFrames:" << numFrames_ << ". Skipping this chunk";
-                traceBlockFrames = 0;
-            } 
-            else if (frameOffset + traceBlockFrames > numFrames_)
-            {
-                // limit the frames to the original requested size
-                traceBlockFrames = numFrames_ - frameOffset;
-            }
-            if (traceBlockFrames>0)
-            {
-                array_ref transpose {boost::extents[blockView.LaneWidth()][traceBlockFrames]};
+                auto startZmwIdx = pos * blockView.LaneWidth();
                 for (uint32_t iframe = 0; iframe < traceBlockFrames; iframe++)
                 {
                     for (uint32_t izmw = 0; izmw < blockView.LaneWidth(); izmw++)
                     {
-                        transpose[izmw][iframe] = data[iframe][izmw];
+                        batchTraces[startZmwIdx + izmw][iframe] = data[iframe][izmw];
                     }
                 }
-
-                // this is messy and could be improved. It simply does a lookup of the laneIdx to get the lane offset within
-                // the trace file. TODO
-                // (MTL) I think this would better be implemented by having the laneSelector_.SelectedLanes() return a
-                // std::pair<int,int> where the first index is the index within the selected lanes container, and the second
-                // is the actual lane.  Then the `traceFileLane` just below is `iterator->first`, and `laneIdx = iterator->second`.
-                // This will allow laneSelector_.SelectedLanes() to randomly interate.
-                auto position = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), laneIdx);
-                const int64_t traceFileLane = position - laneSelector_.begin();
-
-                const int64_t traceFileZmwOffset = traceFileLane * traceBatch.LaneWidth();
-                boost::array<typename array_ref::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
-                transpose.reindex(bases);
-                file_.Traces().WriteTraceBlock<T>(transpose);
+                pos++;
             }
+        }
+
+        if (traceBlockFrames > 0)
+        {
+            const int64_t traceFileZmwOffset = (traceFileStartLane) * traceBatch.LaneWidth();
+            boost::array<typename arr_t::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
+            batchTraces.reindex(bases);
+            file_.Traces().WriteTraceBlock<T>(batchTraces);
         }
     };
 
