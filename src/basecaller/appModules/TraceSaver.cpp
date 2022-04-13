@@ -76,10 +76,10 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
 
     if (maxQueueSize_ > 0)
     {
-        enableWriterThread = true;
+        enableWriterThread_ = true;
         writer_ = std::thread([this]()
         {
-            while (enableWriterThread)
+            while (enableWriterThread_)
             {
                 if (queue.Empty())
                 {
@@ -222,7 +222,7 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                 throw PBException("Received trace data does not fit inside dimensions of trace file");
             }
 
-            if (enableWriterThread)
+            if (enableWriterThread_)
             {
                 uint32_t waitCount = 0;
                 while (queue.Size() >= maxQueueSize_)
@@ -243,14 +243,14 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
 
 TraceSaverBody::~TraceSaverBody()
 {
-    if (enableWriterThread)
+    if (enableWriterThread_)
     {
         while (!queue.Empty())
         {
             PBLOG_INFO << "Waiting for trace writing to complete";
             std::this_thread::sleep_for(std::chrono::seconds{1});
         }
-        enableWriterThread = false;
+        enableWriterThread_ = false;
         if (writer_.joinable())
         {
             PBLOG_INFO << "Joining write thread";

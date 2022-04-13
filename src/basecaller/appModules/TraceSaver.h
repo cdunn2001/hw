@@ -62,7 +62,7 @@ public:
                   uint64_t maxFrames);
 
     size_t ConcurrencyLimit() const override { return 1; }
-    float MaxDutyCycle() const override { return 0.2; }
+    float MaxDutyCycle() const override { return 0.05; }
 
     PreppedTracesVariant Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
 private:
@@ -86,7 +86,7 @@ public:
                    uint32_t maxQueueSize = 0);
 
     size_t ConcurrencyLimit() const override { return 1; }
-    float MaxDutyCycle() const override { return 0.01; }
+    float MaxDutyCycle() const override { return enableWriterThread_ ? 0.01 : 0.25; }
 
     void Process(PreppedTracesVariant tracesVariant) override;
 
@@ -104,7 +104,7 @@ private:
     uint64_t numFrames_;
     uint64_t numZmw_;
 
-    std::atomic<bool> enableWriterThread = false;
+    std::atomic<bool> enableWriterThread_ = false;
     uint32_t maxQueueSize_;
     std::thread writer_;
     ThreadSafeQueue<PreppedTracesVariant> queue;
