@@ -517,7 +517,8 @@ private:
                                                 properties,
                                                 batchIds,
                                                 experimentMetadata,
-                                                analysisConfig);
+                                                analysisConfig,
+                                                poolDims.size() * trcConfig.bufferedChunksAllowed);
     }
 
     std::unique_ptr<TransformBody<const TraceBatchVariant, const BatchResult>>

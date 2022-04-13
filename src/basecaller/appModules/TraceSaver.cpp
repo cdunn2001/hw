@@ -53,7 +53,8 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                                const std::vector<uint32_t>& batchIds,
                                const File::ScanData::Data& experimentMetadata,
-                               const Mongo::Data::AnalysisConfig& analysisConfig)
+                               const Mongo::Data::AnalysisConfig& analysisConfig,
+                               uint32_t maxQueueSize)
     : file_(
         // this lambda is a trick to call these chunking static functions before the file_ is constructed.
         // The `filename` argument is hijacked for the simple reason that it is the first argument
@@ -68,9 +69,31 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         numFrames)
     , numFrames_(numFrames)
     , numZmw_(holeNumbers.size())
+    , maxQueueSize_(maxQueueSize)
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
     PopulateScanData(experimentMetadata);
+
+    if (maxQueueSize_ > 0)
+    {
+        enableWriterThread = true;
+        writer_ = std::thread([this]()
+        {
+            while (enableWriterThread)
+            {
+                if (queue.Empty())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+                std::visit([this](auto&& traces)
+                {
+                    using T = std::remove_pointer_t<decltype(traces->data())>;
+                    file_.Traces().WriteTraceBlock<T>(*traces);
+                }, queue.Pop());
+            }
+        });
+    };
 
     PBLOG_INFO << "TraceSaverBody created";
 }
@@ -199,12 +222,42 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                 throw PBException("Received trace data does not fit inside dimensions of trace file");
             }
 
-            file_.Traces().WriteTraceBlock<T>(*traces);
+            if (enableWriterThread)
+            {
+                uint32_t waitCount = 0;
+                while (queue.Size() >= maxQueueSize_)
+                {
+                    if (waitCount % 10 == 0)
+                        PBLOG_WARN << "Trace Saving queue is full... Sleeping!";
+                    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+                    waitCount++;
+                }
+                queue.Push(std::move(traces));
+            }
+            else
+                file_.Traces().WriteTraceBlock<T>(*traces);
         }
     };
     std::visit(writeTraces, traceVariant);
 }
 
+TraceSaverBody::~TraceSaverBody()
+{
+    if (enableWriterThread)
+    {
+        while (!queue.Empty())
+        {
+            PBLOG_INFO << "Waiting for trace writing to complete";
+            std::this_thread::sleep_for(std::chrono::seconds{1});
+        }
+        enableWriterThread = false;
+        if (writer_.joinable())
+        {
+            PBLOG_INFO << "Joining write thread";
+            writer_.join();
+        }
+    }
+}
 
 
 }  // namespace PacBio::Application::TraceSaver

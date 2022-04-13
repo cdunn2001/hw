@@ -82,12 +82,15 @@ public:
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                    const std::vector<uint32_t>& batchIds,
                    const File::ScanData::Data& experimentMetadata,
-                   const Mongo::Data::AnalysisConfig& analysisConfig);
+                   const Mongo::Data::AnalysisConfig& analysisConfig,
+                   uint32_t maxQueueSize = 0);
 
     size_t ConcurrencyLimit() const override { return 1; }
     float MaxDutyCycle() const override { return 0.01; }
 
     void Process(PreppedTracesVariant tracesVariant) override;
+
+    ~TraceSaverBody();
 private:
 
     void PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
@@ -100,6 +103,11 @@ private:
     File::TraceFile file_;
     uint64_t numFrames_;
     uint64_t numZmw_;
+
+    std::atomic<bool> enableWriterThread = false;
+    uint32_t maxQueueSize_;
+    std::thread writer_;
+    ThreadSafeQueue<PreppedTracesVariant> queue;
 };
 
 }

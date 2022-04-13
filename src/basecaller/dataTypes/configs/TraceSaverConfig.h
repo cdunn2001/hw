@@ -46,6 +46,21 @@ struct TraceSaverConfig  : public Configuration::PBConfig<TraceSaverConfig>
     SMART_ENUM(OutFormat, Natural, INT16, UINT8);
     PB_CONFIG_PARAM(OutFormat, outFormat, OutFormat::Natural);
 
+    // This is hopefully a temporary workaround, allowing trace
+    // data to be written to an internal queue serviced by a
+    // private thread.  Ideally graph nodes don't have private
+    // threads, as it hinders the graph framework's ability to
+    // do performance monitoring/budgeting, but we need an extra
+    // slip layer so that a hiccough in disk performance doesn't
+    // force us to fall behind in the main analysis.
+    //
+    // There is already a planned improvement to the graph framework,
+    // allowing one chunk to start even if all nodes have not yet finished
+    // the previous batch, which should give us the required flexibility
+    // without giving up performance monitoring.  Once that goes in this
+    // can likely be retired.
+    PB_CONFIG_PARAM(uint32_t, bufferedChunksAllowed, 5);
+
     // Defines the chunk size that the HDF5 library will use for the trace file.
     // This is the granularity at which the library will write to disk, regardless
     // of what size data is handed to the public read/write routines.  This means that
