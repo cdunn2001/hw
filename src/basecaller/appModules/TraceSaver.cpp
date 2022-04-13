@@ -30,19 +30,22 @@
 
 #include <dataTypes/configs/AnalysisConfig.h>
 
-namespace PacBio {
-namespace Application {
+namespace PacBio::Application {
 
 using namespace PacBio::DataSource;
 using namespace PacBio::File;
 
 using namespace Mongo;
 using namespace Mongo::Data;
- 
+
+TracePrepBody::TracePrepBody(DataSource::DataSourceBase::LaneSelector laneSelector,
+                             uint64_t maxFrames)
+    : laneSelector_(std::move(laneSelector))
+    , maxFrames_(maxFrames)
+{}
 
 TraceSaverBody::TraceSaverBody(const std::string& filename,
                                uint64_t numFrames,
-                               DataSource::DataSourceBase::LaneSelector laneSelector,
                                const uint64_t frameBlockingSize,
                                const uint64_t zmwBlockingSize,
                                File::TraceDataType dataType,
@@ -51,8 +54,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                                const std::vector<uint32_t>& batchIds,
                                const File::ScanData::Data& experimentMetadata,
                                const Mongo::Data::AnalysisConfig& analysisConfig)
-    : laneSelector_(std::move(laneSelector))
-    , file_(
+    : file_(
         // this lambda is a trick to call these chunking static functions before the file_ is constructed.
         // The `filename` argument is hijacked for the simple reason that it is the first argument
         // to the file_ constructor, but the filename is purely a spectator to this lambda.
@@ -62,9 +64,10 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
             return filename;
         }()),
         dataType,
-        laneSelector_.size() * laneSize,
+        holeNumbers.size(),
         numFrames)
     , numFrames_(numFrames)
+    , numZmw_(holeNumbers.size())
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
     PopulateScanData(experimentMetadata);
@@ -77,9 +80,7 @@ void TraceSaverBody::PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
                                        const std::vector<uint32_t>& batchIds,
                                        const Mongo::Data::AnalysisConfig& analysisConfig)
 {
-    const size_t numZmw = laneSelector_.size() * laneSize;
-    if (holeNumbers.size() != numZmw)
-        throw PBException("Invalid number of hole numbers provided");
+    const size_t numZmw = holeNumbers.size();
     if (properties.size() != numZmw)
         throw PBException("Invalid number of hole properties provided");
     if (batchIds.size() != numZmw)
@@ -115,9 +116,9 @@ void TraceSaverBody::PopulateScanData(const ScanData::Data& experimentMetadata)
     file_.Scan().AcquisitionXML(experimentMetadata.acquisitionXML);
 }
 
-void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
+PreppedTracesVariant TracePrepBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
 {
-    auto writeTraces = [&](const auto& traceBatch)
+    auto writeTraces = [&](const auto& traceBatch) -> PreppedTracesVariant
     {
         using T = typename std::remove_reference_t<decltype(traceBatch)>::HostType;
 
@@ -128,23 +129,22 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
         const DataSourceBase::LaneIndex laneEnd = laneBegin + traceBatch.LanesPerBatch();
 
         uint64_t traceBlockFrames = traceBatch.NumFrames();
-        if (frameOffset > numFrames_)
+        if (frameOffset > maxFrames_)
         {
             PBLOG_ERROR << "The frameOffset=" << frameOffset << " of the current chunk lies past the end of the trace file,"
-                << " numFrames:" << numFrames_ << ". Skipping this chunk";
+                << " numFrames:" << maxFrames_ << ". Skipping this chunk";
             traceBlockFrames = 0;
         }
-        else if (frameOffset + traceBlockFrames > numFrames_)
+        else if (frameOffset + traceBlockFrames > maxFrames_)
         {
             // limit the frames to the original requested size
-            traceBlockFrames = numFrames_ - frameOffset;
+            traceBlockFrames = maxFrames_ - frameOffset;
         }
 
         const auto& selection = laneSelector_.SelectedLanes(laneBegin, laneEnd);
         uint32_t traceFileStartLane = std::lower_bound(laneSelector_.begin(), laneSelector_.end(), *selection.begin()) - laneSelector_.begin();
         uint32_t pos = 0;
-        using arr_t = boost::multi_array<T, 2>;
-        arr_t batchTraces{boost::extents[traceBatch.LaneWidth() * selection.size()][traceBatch.NumFrames()]};
+        auto ret = std::make_unique<boost::multi_array<T, 2>>(boost::extents[traceBatch.LaneWidth() * selection.size()][traceBatch.NumFrames()]);
         for (const auto laneIdx : selection)
         {
             PBLOG_DEBUG << "TraceSaverBody::Process, laneIdx" << laneIdx;
@@ -170,25 +170,41 @@ void TraceSaverBody::Process(const Mongo::Data::TraceBatchVariant& traceVariant)
                 {
                     for (uint32_t izmw = 0; izmw < blockView.LaneWidth(); izmw++)
                     {
-                        batchTraces[startZmwIdx + izmw][iframe] = data[iframe][izmw];
+                        (*ret)[startZmwIdx + izmw][iframe] = data[iframe][izmw];
                     }
                 }
                 pos++;
             }
         }
-
-        if (traceBlockFrames > 0)
-        {
-            const int64_t traceFileZmwOffset = (traceFileStartLane) * traceBatch.LaneWidth();
-            boost::array<typename arr_t::index, 2> bases = {{traceFileZmwOffset, frameOffset}};
-            batchTraces.reindex(bases);
-            file_.Traces().WriteTraceBlock<T>(batchTraces);
-        }
+        boost::array<boost::multi_array_types::index, 2> bases;
+        bases[0] = traceFileStartLane * traceBatch.LaneWidth();
+        bases[1] = frameOffset;
+        ret->reindex(bases);
+        return ret;
     };
 
-    std::visit(writeTraces, traceVariant.Data());
+    return std::visit(writeTraces, traceVariant.Data());
+}
+
+void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
+{
+    auto writeTraces = [&](auto& traces)
+    {
+        using T = std::remove_pointer_t<decltype(traces->data())>;
+        if (traces->shape()[1] > 0)
+        {
+            if (traces->shape()[0] + traces->index_bases()[0] > numZmw_ ||
+                traces->shape()[1] + traces->index_bases()[1] > numFrames_)
+            {
+                throw PBException("Received trace data does not fit inside dimensions of trace file");
+            }
+
+            file_.Traces().WriteTraceBlock<T>(*traces);
+        }
+    };
+    std::visit(writeTraces, traceVariant);
 }
 
 
-}  // namespace Application
-}  // namespace PacBio
+
+}  // namespace PacBio::Application::TraceSaver

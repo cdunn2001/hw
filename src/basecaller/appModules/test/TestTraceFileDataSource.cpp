@@ -100,7 +100,6 @@ GeneratedTraceInfo GenerateTraceFile(const std::string& name)
     // populated, we mostly just want something with batchIds
     TraceSaverBody tmp(name,
                        512,
-                       DataSourceBase::LaneSelector(lanes),
                        framesPerHdf5Chunk,
                        zmwsPerHdf5Chunk,
                        TraceDataType::INT16,
