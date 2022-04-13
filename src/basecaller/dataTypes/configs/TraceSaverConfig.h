@@ -45,6 +45,37 @@ struct TraceSaverConfig  : public Configuration::PBConfig<TraceSaverConfig>
     // of the pipeline is configured to produce.
     SMART_ENUM(OutFormat, Natural, INT16, UINT8);
     PB_CONFIG_PARAM(OutFormat, outFormat, OutFormat::Natural);
+
+    // Defines the chunk size that the HDF5 library will use for the trace file.
+    // This is the granularity at which the library will write to disk, regardless
+    // of what size data is handed to the public read/write routines.  This means that
+    // if chunking is small then throughput will suffer because even large swaths
+    // of data will be broken up into small individual writes.
+    //
+    // That said, the default cache size for HDF5 is 1MiB.  If the chunk size is
+    // larger than the cache size, then presumably we can't keep even a single
+    // chunk around between write operations, which means that if we try to provide
+    // HDF5 with buffers to write that are smaller than a chunk, we'll have a lot
+    // of unecessary cache thrashing and disk operations.
+    //
+    // These parameters were chosen to match the default cache size.  This lets
+    // us perpetually keep one active chunk in cache, which well suits our
+    // streaming write patterns.
+    // TODO: If we were to update our own HDF5 wrappers to allow configuration
+    //       of the cache size then there is room for marginal improvements via larger
+    //       writes, but there is no time for that at the moment
+    PB_CONFIG_PARAM(uint32_t, frameChunking,
+                    Configuration::DefaultFunc([](uint32_t framesPerChunk)
+                                               {
+                                                   return framesPerChunk;
+                                               },
+                                               {"layout.framesPerChunk"}));
+    PB_CONFIG_PARAM(uint32_t, zmwChunking,
+                    Configuration::DefaultFunc([](uint32_t framesPerChunk)
+                                               {
+                                                   return (1 << 20) / framesPerChunk;
+                                               },
+                                               {"layout.framesPerChunk"}));
 };
 
 }}}     // namespace PacBio::Mongo::Data

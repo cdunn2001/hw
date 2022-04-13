@@ -432,6 +432,7 @@ private:
     std::unique_ptr<LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
                                                                         const std::map<uint32_t, Data::BatchDimensions>& poolDims,
                                                                         const AnalysisConfig& analysisConfig,
+                                                                        const TraceSaverConfig& trcConfig,
                                                                         const ScanData::Data& experimentMetadata)
     {
         if (outputTrcFileName_ != "")
@@ -495,8 +496,8 @@ private:
             return std::make_unique<TraceSaverBody>(outputTrcFileName_,
                                                     dataSource.NumFrames(),
                                                     std::move(selection),
-                                                    sampleLayout.NumFrames(),
-                                                    sampleLayout.BlockWidth(),
+                                                    trcConfig.frameChunking,
+                                                    trcConfig.zmwChunking,
                                                     dataType,
                                                     holeNumbers,
                                                     properties,
@@ -660,7 +661,7 @@ private:
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
             startUpRpt.Update(1);
             // startup = 4
-            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
+            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, config_.traceSaver, experimentData), GraphProfiler::SAVE_TRACE);
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);

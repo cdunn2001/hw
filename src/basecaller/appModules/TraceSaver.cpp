@@ -57,16 +57,14 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         // The `filename` argument is hijacked for the simple reason that it is the first argument
         // to the file_ constructor, but the filename is purely a spectator to this lambda.
         ([&](){
-            if (frameBlockingSize > numFrames) throw PBException("frameBlockingSize must not be more than numFrames");
-            if (zmwBlockingSize > holeNumbers.size()) throw PBException("zmwBlockingSize must not be more than numZmws (holeNumbers.size())");
-            PacBio::File::TraceData::SetDefaultChunkZmwDim(zmwBlockingSize);
-            PacBio::File::TraceData::SetDefaultChunkFrameDim(frameBlockingSize);
+            PacBio::File::TraceData::SetDefaultChunkZmwDim(std::min(zmwBlockingSize, holeNumbers.size()));
+            PacBio::File::TraceData::SetDefaultChunkFrameDim(std::min(frameBlockingSize, numFrames));
             return filename;
         }()),
         dataType,
         laneSelector_.size() * laneSize,
         numFrames)
-    , numFrames_(numFrames)    
+    , numFrames_(numFrames)
 {
     PopulateTraceData(holeNumbers, properties, batchIds, analysisConfig);
     PopulateScanData(experimentMetadata);
