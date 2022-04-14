@@ -452,7 +452,7 @@ private:
         if (trcConfig.roi.empty())
             throw PBException("TraceSaving was enabled, but no roi was provided");
 
-        auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
+        const auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
         const auto actualZmw = selection.size() * laneSize;
 
         std::vector<uint32_t> fullBatchIds;
@@ -505,6 +505,10 @@ private:
             if (sampleLayout.Encoding() == PacketLayout::UINT8)
             {
                 dataType = TraceDataType::UINT8;
+            }
+            else if (sampleLayout.Encoding() == PacketLayout::INT12)
+            {
+                throw PBException("Unsupported encoding for trace saving");
             }
         }
 

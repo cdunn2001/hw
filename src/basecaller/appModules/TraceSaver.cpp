@@ -82,7 +82,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
             PreppedTracesVariant data;
             while (enableWriterThread_)
             {
-                if (queue.Pop(data, std::chrono::milliseconds{100}))
+                if (queue_.Pop(data, std::chrono::milliseconds{100}))
                 {
                     std::visit([this](auto&& traces)
                     {
@@ -224,7 +224,7 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
             if (enableWriterThread_)
             {
                 uint32_t waitCount = 0;
-                while (queue.Size() >= maxQueueSize_)
+                while (queue_.Size() >= maxQueueSize_)
                 {
                     if (waitCount % 10 == 0)
                     {
@@ -241,10 +241,12 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                     std::this_thread::sleep_for(std::chrono::milliseconds{100});
                     waitCount++;
                 }
-                queue.Push(std::move(traces));
+                queue_.Push(std::move(traces));
             }
             else
+            {
                 file_.Traces().WriteTraceBlock<T>(*traces);
+            }
         }
     };
     std::visit(writeTraces, traceVariant);
@@ -254,7 +256,7 @@ TraceSaverBody::~TraceSaverBody()
 {
     if (enableWriterThread_)
     {
-        while (!queue.Empty())
+        while (!queue_.Empty())
         {
             PBLOG_INFO << "Waiting for trace writing to complete";
             std::this_thread::sleep_for(std::chrono::seconds{1});

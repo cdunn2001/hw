@@ -1,5 +1,7 @@
   $ TRCOUT=${CRAMTMP}/out.trc.h5
   $ TRCIN=/pbi/dept/primary/sim/mongo/test4_mongo_acgt_SNR-40.trc.h5
+# Test both formats for specifying the ROI, i.e. coordinates with and without an explicit extent.
+# 2x64 gives us 128, plus an implicit 1x64 for a total of 192 (out of 256)
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":8192, "numZmwLanes":4,"traceFile":"'$TRCIN'"}' \
   > --nop=2 --config layout.lanesPerPool=1 --outputtrcfile ${TRCOUT} --config=traceSaver.roi=[[0,0,2,64],[3,0]] > /dev/null 2>&1
 
