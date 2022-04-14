@@ -26,6 +26,9 @@
 #ifndef PACBIO_APPLICATION_TRACE_SAVER_H
 #define PACBIO_APPLICATION_TRACE_SAVER_H
 
+#include <future>
+#include <vector>
+
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
@@ -38,8 +41,6 @@
 #include <appModules/DataFileWriter.h>
 
 #include <boost/multi_array.hpp>
-
-#include <vector>
 
 namespace PacBio::Application {
 
@@ -106,7 +107,7 @@ private:
 
     std::atomic<bool> enableWriterThread_ = false;
     uint32_t maxQueueSize_;
-    std::thread writer_;
+    std::future<void> writeFuture_;
     ThreadSafeQueue<PreppedTracesVariant> queue;
 };
 

@@ -77,7 +77,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
     if (maxQueueSize_ > 0)
     {
         enableWriterThread_ = true;
-        writer_ = std::thread([this]()
+        writeFuture_ = std::async(std::launch::async, [this]()
         {
             while (enableWriterThread_)
             {
@@ -228,7 +228,17 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                 while (queue.Size() >= maxQueueSize_)
                 {
                     if (waitCount % 10 == 0)
+                    {
+                        if (writeFuture_.wait_for(std::chrono::milliseconds{0}) != std::future_status::timeout)
+                        {
+                            PBLOG_ERROR << "Trace Saving queue is full and the dedicated thread has died";
+                            PBLOG_ERROR << "Checking for exception...";
+                            writeFuture_.get();
+                            PBLOG_ERROR << "No Exception found";
+                            throw PBException("Unknown failure in TraceSaver");
+                        }
                         PBLOG_WARN << "Trace Saving queue is full... Sleeping!";
+                    }
                     std::this_thread::sleep_for(std::chrono::milliseconds{100});
                     waitCount++;
                 }
@@ -251,10 +261,17 @@ TraceSaverBody::~TraceSaverBody()
             std::this_thread::sleep_for(std::chrono::seconds{1});
         }
         enableWriterThread_ = false;
-        if (writer_.joinable())
+        try
         {
-            PBLOG_INFO << "Joining write thread";
-            writer_.join();
+            PBLOG_INFO << "Waiting for SaverThread to complete";
+            writeFuture_.wait();
+            PBLOG_INFO << "SaverThread done";
+        }
+        catch (const std::exception& e)
+        {
+            PBLOG_ERROR << "Exception in TraceSaver thread: ";
+            PBLOG_ERROR << e.what();
+            PBLOG_ERROR << "We're in a destructor, so swallowing exception...";
         }
     }
 }
