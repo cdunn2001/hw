@@ -79,18 +79,17 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         enableWriterThread_ = true;
         writeFuture_ = std::async(std::launch::async, [this]()
         {
+            PreppedTracesVariant data;
             while (enableWriterThread_)
             {
-                if (queue.Empty())
+                if (queue.Pop(data, std::chrono::milliseconds{100}))
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
+                    std::visit([this](auto&& traces)
+                    {
+                        using T = std::remove_pointer_t<decltype(traces->data())>;
+                        file_.Traces().WriteTraceBlock<T>(*traces);
+                    }, data);
                 }
-                std::visit([this](auto&& traces)
-                {
-                    using T = std::remove_pointer_t<decltype(traces->data())>;
-                    file_.Traces().WriteTraceBlock<T>(*traces);
-                }, queue.Pop());
             }
         });
     };
