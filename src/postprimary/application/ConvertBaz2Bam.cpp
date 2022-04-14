@@ -735,7 +735,7 @@ void ConvertBaz2Bam::StartLoggingThread(PpaThreadSafeStageReporter& analyzeRpt)
                 iterations++;
                 PBLOG_INFO << "Sending progress " + std::to_string(progress);
                 currentProgress_ = progress;
-                analyzeRpt.Update(numProcessedZMWs_);
+                analyzeRpt.Update(deltaZMW);
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
