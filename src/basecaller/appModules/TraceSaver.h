@@ -107,7 +107,7 @@ private:
 
     std::atomic<bool> enableWriterThread_ = false;
     uint32_t maxQueueSize_;
-    std::future<void> writeFuture_;
+    std::future<uint64_t> writeFuture_;
     ThreadSafeQueue<PreppedTracesVariant> queue_;
 };
 
