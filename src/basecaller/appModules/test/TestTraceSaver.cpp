@@ -142,9 +142,10 @@ TYPED_TEST(TestTraceSaver, TestA)
         dims.framesPerBatch = 128;
         dims.laneWidth = laneWidth;
         DataSourceBase::LaneSelector laneSelector(lanes);
+        TracePrepBody tracePreper(std::move(laneSelector),
+                                  numFrames);
         TraceSaverBody traceSaver(traceFile,
                                   numFrames,
-                                  std::move(laneSelector),
                                   dims.framesPerBatch,
                                   dims.laneWidth,
                                   writeType,
@@ -213,7 +214,7 @@ TYPED_TEST(TestTraceSaver, TestA)
                 TEST_COUT << ss.str();
 #endif
 
-                traceSaver.Process(std::move(traceBatch));  // blah
+                traceSaver.Process(tracePreper.Process(std::move(traceBatch)));  // blah
             }
         }
     }
@@ -346,8 +347,7 @@ TEST(Sanity,ROI)
     {
         TraceSaverBody traceSaver(traceFileName,
                                   frames,
-                                  std::move(blocks),
-                                  framesPerHdf5Chunk, 
+                                  framesPerHdf5Chunk,
                                   zmwsPerHdf5Chunk,
                                   TraceDataType::INT16,
                                   holeNumbers,

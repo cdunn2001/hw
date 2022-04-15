@@ -4,7 +4,7 @@
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
   > --config realTimeMetrics.rtMetricsFile="rtmetrics.json" \
   > --config realTimeMetrics.useSingleActivityLabels=false \
-  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,4096]]}]' > /dev/null 2>&1
+  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]]}]' > /dev/null 2>&1
 
   $ wc -l rtmetrics.json
   3 rtmetrics.json
