@@ -204,7 +204,58 @@ void CudaRawCopyToSymbol(const void* dest, const void* src, size_t count)
 
 void CudaHostRegister(void* ptr, size_t size)
 {
-    cudaCheckErrors(::cudaHostRegister(ptr, size, cudaHostRegisterPortable));
+    // Calls to cudaHostRegister are mysteriously failing with a cudaErrorMemoryAllocation
+    // error code.  While this is documented as a valid return code for this function, I've
+    // no idea what may be causing it.  We clearly already have the main allocation in hand,
+    // so it's something internal to the cuda runtime bookkeeping that is choking.
+    //
+    // As a preliminary stopgap, we're adding a retry mechanism in case that makes a difference.
+    // For now this is an experimental change, and since it's a complete shot in the dark
+    // we want to know if it's actually mitigating the issue, or if we're getting lucky/unlucky
+    // and just not triggering the root cause.  So, no matter what if the first call fails then
+    // we are still going to throw an exception.  If the retry logic doesn't fix the issue then we'll
+    // continue to throw the same (perhaps somewhat confusing) cudaErrorMemoryAllocation message.
+    // If the retry succeeds then we'll throw a separate exception, since that way things will
+    // get reported back to us, as opposed to vanilla log messages.  Assuming we see this succeed
+    // in the wild at least once, we'll return and do the sensible thing only throwing if we
+    // completely fail to register this memory address.
+
+    try
+    {
+        cudaCheckErrors(::cudaHostRegister(ptr, size, cudaHostRegisterPortable));
+    } catch (const CudaMemException& ex)
+    {
+        // Try again a few times, to see if that helps...
+        for (int retriesLeft = 10; retriesLeft >= 0; --retriesLeft)
+        {
+            try
+            {
+                // Sleep for a bit, just in case there is a timing issue
+                // We're in no rush here, so I'm being "generous" (on computer
+                // timescales)
+                std::this_thread::sleep_for(std::chrono::seconds{1});
+
+                cudaCheckErrors(::cudaHostRegister(ptr, size, cudaHostRegisterPortable));
+                // If we succeeded, then we exit the loop (and throw a brand new exception
+                // for visibility reasons)
+                break;
+            } catch (const CudaMemException& ex)
+            {
+                if (retriesLeft == 0)
+                {
+                    // Retries didn't help...  Rethrow the CudaMemException, and
+                    // things will look like they did before this rety logic was added
+                    throw;
+                }
+            }
+        }
+        // Hooray, if we got here then the rety logic worked!  Now to throw an exception
+        // so that someone files a bug report and lets us know...
+        throw PBException("Difficulty encountered when trying to register allocation with the cuda runtime.  "
+                          "This is a high priority issue, and triggering this particular exception "
+                          "actually means we may have a path forward.  Please file a ticket ASAP,"
+                          " or even reach out to Ben Byington directly");
+    }
 }
 
 void CudaHostUnregister(void* ptr)
