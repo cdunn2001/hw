@@ -496,21 +496,23 @@ private:
         assert(idx == actualZmw);
 
         const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
-        auto dataType = TraceDataType::INT16;
-        if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
-        {
-            dataType = TraceDataType::UINT8;
-        } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
-        {
-            if (sampleLayout.Encoding() == PacketLayout::UINT8)
+        const auto dataType = [&](){
+            switch(config_.traceSaver.outFormat)
             {
-                dataType = TraceDataType::UINT8;
+                case TraceSaverConfig::OutFormat::UINT8: return TraceDataType::UINT8;
+                case TraceSaverConfig::OutFormat::INT16: return TraceDataType::INT16;
+                case TraceSaverConfig::OutFormat::Natural:
+                {
+                    switch(sampleLayout.Encoding())
+                    {
+                    case PacBio::DataSource::PacketLayout::UINT8: return TraceDataType::UINT8;
+                    case PacBio::DataSource::PacketLayout::INT16: return TraceDataType::INT16;
+                    default: throw PBException("Not Supported");
+                    }
+                }
+                default: throw PBException("Not Supported");
             }
-            else if (sampleLayout.Encoding() == PacketLayout::INT12)
-            {
-                throw PBException("Unsupported encoding for trace saving");
-            }
-        }
+        }();
 
         return std::make_unique<TraceSaverBody>(outputTrcFileName_,
                                                 dataSource.NumFrames(),
