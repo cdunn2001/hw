@@ -231,10 +231,12 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                 {
                     if (waitCount % 10 == 0)
                     {
+                        assert(writeFuture_.valid());
                         if (writeFuture_.wait_for(std::chrono::milliseconds{0}) != std::future_status::timeout)
                         {
                             PBLOG_ERROR << "Trace Saving queue is full and the dedicated thread has died";
                             PBLOG_ERROR << "Checking for exception...";
+                            assert(writeFuture_.valid());
                             auto writtenPixels = writeFuture_.get();
                             PBLOG_ERROR << "No Exception found.  Thread terminated early after writing "
                                         << writtenPixels << " unitCells";
@@ -269,6 +271,7 @@ TraceSaverBody::~TraceSaverBody()
         try
         {
             PBLOG_INFO << "Waiting for SaverThread to complete";
+            assert(writeFuture_.valid());
             auto unitCellsWritten = writeFuture_.get();
             if (unitCellsWritten == numFrames_ * numZmw_)
                 PBLOG_INFO << "SaverThread done, TraceFile is complete";

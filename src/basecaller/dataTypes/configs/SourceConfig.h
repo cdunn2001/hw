@@ -71,7 +71,7 @@ struct TraceReplication : public Configuration::PBConfig<TraceReplication>
     PB_CONFIG_PARAM(TraceInputType, inputType, TraceInputType::Natural);
 
     // Sets bounds on the x/y dimensions of the "chip".  Otherwise the
-    // coordiantes will be as square as possible while making sure a row
+    // coordinates will be as square as possible while making sure a row
     // is multiple of the lane size
     PB_CONFIG_PARAM(uint32_t, minRows, 0);
     PB_CONFIG_PARAM(uint32_t, minCols, 0);

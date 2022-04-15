@@ -55,6 +55,12 @@ template <typename T>
 using RawPreppedTraces = std::unique_ptr<boost::multi_array<T, 2>>;
 using PreppedTracesVariant = std::variant<RawPreppedTraces<uint8_t>, RawPreppedTraces<int16_t>>;
 
+// Class that prepares traces for writing to the tracefile.  It extracts the requested ZMWS,
+// as well as transposes the data, to match the "trace-major" ordering used in the tracefile.
+//
+// Actual saving of the data to disk is handled by the TraceSaverBody class.  Witing is kept
+// separate so that hiccoughs in disk performance are more uncoupled from the raw trace input
+// buffers, which are also seen and used on the WX2.
 class TracePrepBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatchVariant,
                                                          PreppedTracesVariant>
 {
@@ -71,6 +77,9 @@ private:
     uint64_t maxFrames_;
 };
 
+// Class that handles just the dumping of extracted trace data to the trace file.
+// This class is intended to be robust against temporary IO slowdowns, letting trace
+// writing fall behind the main analysis by a limited amount.
 class TraceSaverBody final : public Graphs::LeafBody<PreppedTracesVariant>
 {
 public:
