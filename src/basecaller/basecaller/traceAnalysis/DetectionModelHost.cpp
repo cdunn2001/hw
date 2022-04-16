@@ -247,7 +247,7 @@ VF DetectionModelHost<VF>::ModelSignalCovar(
         const VF& blVar)
 {
     VF r {blVar};
-    r += Basecaller::CoreDMEstimator::shotNoiseCoeff * sigMean;
+    r += Basecaller::CoreDMEstimator::Config().shotVarCoeff * sigMean;
     r += excessNoiseCV2 * pow2(sigMean);
     return r;
 }
@@ -259,7 +259,7 @@ VF DetectionModelHost<VF>::XsnCoeffCVSq(
         const VF& blVar)
 {
     VF r {sigCovar - blVar};
-    r -= sigMean * Basecaller::CoreDMEstimator::shotNoiseCoeff;
+    r -= sigMean * Basecaller::CoreDMEstimator::Config().shotVarCoeff;
     r /= pow2(sigMean);
     return r;
 }

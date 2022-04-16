@@ -499,7 +499,8 @@ DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
     const auto& xtcSrc = chipInfo.xtalkCorrection;
     psfDst.resize(boost::extents[psfSrc.shape()[0]][psfSrc.shape()[1]]);
     xtcDst.resize(boost::extents[xtcSrc.shape()[0]][xtcSrc.shape()[1]]);
-    std::tie(psfDst, xtcDst) = std::make_tuple(psfSrc, xtcSrc);
+    psfDst = psfSrc;
+    xtcDst = xtcSrc;
 
     const auto& dyeSet = traceFile_.Scan().DyeSet();
     assert(dyeSet.numAnalog == movieInfo.analogs.size());

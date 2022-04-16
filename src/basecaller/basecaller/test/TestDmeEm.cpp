@@ -159,7 +159,7 @@ public:
         DmeImpl::Configure(testConfig.dmeConfig, analysisConfig);
 
         // Based on MockMovieInfo data in analysisConfig.movieInfo
-        EXPECT_FLOAT_EQ(CoreDMEstimator::shotNoiseCoeff, 1.21678);
+        EXPECT_FLOAT_EQ(CoreDMEstimator::Config().shotVarCoeff, 1.21678);
 
         std::unique_ptr<CoreDMEstimator> dme = std::make_unique<DmeImpl>(poolId, poolSize);
         Data::DetectionModelPool<Cuda::PBHalf> models(poolSize,

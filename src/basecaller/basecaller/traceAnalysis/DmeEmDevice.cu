@@ -94,7 +94,6 @@ struct StaticConfig
     float successConfThresh_;
     uint32_t updateMethod_;
     float refSnr_;       // Expected SNR for analog with relative amplitude of 1
-    float shotNoiseCoeff_;
 };
 
 __constant__ StaticConfig staticConfig;
@@ -121,7 +120,7 @@ static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 template <typename VF>
 __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
-    blVar += staticConfig.shotNoiseCoeff_ * sigMean;
+    blVar += baseConfig.shotVarCoeff * sigMean;
 
     // Typically, excessNoiseCV2 << 1 and sigMean >> 1. Order multiplications
     // this way to avoid overflow, especially when VF is half-precision.
@@ -133,7 +132,7 @@ template <typename VF>
 __device__ VF XsnCoeffCVSq(const VF& sigMean, const VF& sigCovar, const VF& blVar)
 {
     VF r (sigCovar - blVar);
-    r -= sigMean * staticConfig.shotNoiseCoeff_;
+    r -= sigMean * baseConfig.shotVarCoeff;
     r /= sigMean * sigMean;
     return r;
 }
@@ -314,7 +313,6 @@ void DmeEmDevice::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     config.successConfThresh_ = dmeConfig.SuccessConfidenceThresh;
     config.updateMethod_   = dmeConfig.ModelUpdateMethod;
     config.refSnr_ = movieInfo.refSnr;
-    config.shotNoiseCoeff_ = CoreDMEstimator::shotNoiseCoeff;
 
     Cuda::CudaCopyToSymbol(&staticConfig, &config);
 }
