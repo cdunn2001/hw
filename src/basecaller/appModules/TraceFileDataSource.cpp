@@ -235,6 +235,7 @@ TraceFileDataSource::TraceFileDataSource(
         std::string file,
         uint32_t frames,
         uint32_t numZmwLanes,
+        std::pair<uint32_t, uint32_t> minRowsCols,
         bool cache,
         size_t preloadChunks,
         size_t maxQueueSize,
@@ -257,9 +258,9 @@ TraceFileDataSource::TraceFileDataSource(
     , mode_(mode)
 {
     const auto& config = GetConfig();
-    if (config.darkFrame != nullptr)
+    if (config.darkFrame != nullptr && config.darkFrame->darkCalFileName != "")
         throw PBException("Dark frame subtraction not currently supported for trace files");
-    if (config.crosstalkFilter != nullptr)
+    if (config.crosstalkFilter != nullptr && config.crosstalkFilter->kernel.shape()[0] != 0)
         throw PBException("Cross talk correction not currently supported for trace files");
     if (config.decimationMask != nullptr)
         throw PBException("Decimation mask not currently supported for trace files");
@@ -326,6 +327,38 @@ TraceFileDataSource::TraceFileDataSource(
         // Maintain cache of blocks for current active chunk to support replicating in ZMW space.
         traceDataCache_.resize(boost::extents[1][selectedTraceLanes_.size()][BlockWidth()*BlockLen()*bytesPerValue_]);
         laneCurrentChunk_.resize(selectedTraceLanes_.size(), std::numeric_limits<size_t>::max());
+    }
+
+    if (mode_ == Mode::Replication)
+    {
+        // Loop to try and find the "most square" layout that we can that also
+        // satisfies the min row/col requests.  We'll start with numLanes_ X BlockWidth
+        // since we at least know they will be factors of NumZmw().
+        uint32_t nCols = BlockWidth();
+        for (uint32_t tryCols = nCols; tryCols < numZmwLanes_; tryCols += BlockWidth())
+        {
+            // Not a valid rectangular layout, so skip this one
+            if (NumZmw() % tryCols != 0) continue;
+            auto tryRows = NumZmw() / tryCols;
+            // If we've both transitioned past the midpoint as well as the
+            // minimum column count, then we're effectively done.
+            if (tryRows < tryCols && nCols > minRowsCols.second) break;
+            // Keep track of our most recent valid guess.  The last valid guess
+            // after this loop terminates will be as close to a square layout as
+            // we can be.
+            nCols = tryCols;
+        }
+        assert(NumZmw() % nCols == 0);
+        const auto nRows = NumZmw() / nCols;
+        if (nRows < minRowsCols.first)
+        {
+            throw PBException("Cannot find suitable layout for " + std::to_string(NumZmw())
+                              + " ZMW that satisfy the minRow/minCol/blockWidth constraints: "
+                              + std::to_string(minRowsCols.first) + "/" + std::to_string(minRowsCols.second)
+                              + "/" + std::to_string(BlockWidth()));
+        }
+        PBLOG_INFO << "TraceReplication configured to use " << nRows << " rows and " << nCols << " cols";
+        replicationDims_ = std::make_pair(NumZmw() / nCols, nCols);
     }
 
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
@@ -454,29 +487,13 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     //       tall and skinny!
     if (mode_ == Mode::Replication)
     {
-        // Loop to try and find the "most square" layout that we can.  At the least
-        // we know we can do `laneSize X numLanes` so we'll start iterating from there
-        uint32_t nCols = BlockWidth();
-        for (uint32_t tryCols = nCols; tryCols < numZmwLanes_; tryCols += BlockWidth())
-        {
-            // Not a valid square layout, so skip this one
-            if (numZmw % tryCols != 0) continue;
-            auto tryRows = numZmw / tryCols;
-            // We've transitioned past the midpoint, so there's no point in looking
-            // as everything will now be increasingly rectangular
-            if (tryRows < tryCols) break;
-            // Keep track of our most recent valid guess.  The last valid guess
-            // after this loop terminates will be as close to a square layout as
-            // we can be.
-            nCols = tryCols;
-        }
-        assert(numZmw % BlockWidth() == 0);
-        assert(numZmw % nCols == 0);
+        assert(replicationDims_.has_value());
+        assert(replicationDims_->first * replicationDims_->second == numZmw);
 
         for (uint32_t i = 0; i < features.size(); ++i)
         {
-            features[i].x = i % nCols;
-            features[i].y = i / nCols;
+            features[i].x = i % replicationDims_->second;
+            features[i].y = i / replicationDims_->second;
         }
     }
     return features;
@@ -628,17 +645,14 @@ void TraceFileDataSource::ReadBlockFromTraceFile(size_t traceLane, size_t traceC
     }
 }
 
-// I wouldn't be surprised if this gets overhauled in the future.  For a real sensor acquisition, the ROI
-// is generaly a list of rectangles, specified in the chips x/y coordinates.  That's very difficult
-// to imitate here, since for trace replication the original x/y coordinates don't mean anything, and even
-// for re-analysis it would be hard to specify rectangles that are a subset of the original trace collection
-// roi.
-//
-// So for now:
-// * TraceReplication accepts a list of vectors with either one or two elements.  The first element is a ZMW *index*
-//   (that is 0-N), and the optional second index is a count to select.
+// This function behaves differently depending on if we are in trace replication mode or trace reanalysis mode:
+// * TraceReplication accepts a list of vectors with either two or four elements, just like for a real collection.
+//   The first two mandatory elements are an x/y coordinate, and the second two optional dimensions are extents.
+//   If the extents are not provided then we default to 1 row and BlockLen() columns.
 // * TraceReanalysis accepts a list of vectors only with a single element.  That single element is to be a ZMW
-//   hole number.  Asking for hole numbers not present in the tracefile will result in a warning.
+//   hole number.  Asking for hole numbers not present in the tracefile will result in a warning.  It's not really
+//   expected that this feature will get much use in re-analysis mode, but it's easier to manage than trying to
+//   find (or even specify) rectangles, since the ZMW in the tracefile were probably sparsely sampled.
 TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(const std::vector<std::vector<int>>& vec) const
 {
     if (vec.empty())
@@ -649,33 +663,79 @@ TraceFileDataSource::LaneSelector TraceFileDataSource::SelectedLanesWithinROI(co
 
     if (mode_ == Mode::Replication)
     {
-        std::set<LaneIndex> selected;
-        for (const auto& range : vec)
-        {
-            if (range.size() == 0 || range.size() > 2)
-                throw PBException("Unexpected format for TraceReplication ROI.  "
-                                  "The inner most vector should be a single element "
-                                  "representing a ZMW, or two values representing a start ZMW and count");
-
-            // always going to enter at least one lane, corresponding to the first element.
-            // This first ZMW may be in the middle of a lane, but we'll add the whole lane
-            // anyway
-            selected.insert(range[0]/laneSize);
-            if (range.size() == 2)
+        auto ShowRectangle = [](const std::vector<int>& rect){
+            std::ostringstream os;
+            os << "[";
+            bool first = true;
+            for(const auto d : rect)
             {
-                // We've already addd the first lane, now we use some intentional
-                // integer arithmetic to get the rest of the lanes, even if the ROI
-                // specified doesn't line up with lane boundaries.
-                int laneStart = (range[0] + laneSize) / laneSize;
-                int laneEnd = (range[0] + range[1] - 1) / laneSize;
-                for (int i = laneStart; i <= laneEnd; ++i)
+                if (!first) os << ",";
+                first = false;
+                os << d;
+            }
+            os << "]";
+            return os.str();
+        };
+        std::set<LaneIndex> lanes;
+        for(const auto& rect : vec)
+        {
+            if (rect.size() != 2 && rect.size() != 4)
+            {
+                throw PBException("ROI rectangles must be either [rowOffset,colOffset]"
+                    " or [rowOffset,colOffset,numRows,numCols]. "
+                    " Rectangle had " + std::to_string(rect.size()) + " dimensions.");
+            }
+            const auto rowBegin = rect[0];
+            const auto colBegin = rect[1];
+            auto rowEnd = rowBegin;
+            auto colEnd = colBegin;
+            auto rectHeight = (rect.size() > 2) ? rect[2] : 1;
+            auto rectWidth = (rect.size() > 3) ? rect[3] : BlockWidth();
+            rowEnd += rectHeight;
+            colEnd += rectWidth;
+
+            if (colBegin % BlockWidth() != 0)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " does not have a width a multiple of the lane width : " + std::to_string(BlockWidth()));
+            }
+            if (rectWidth % BlockWidth() != 0)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " does not start on a column that is a multiple of the lane width : " + std::to_string(BlockWidth()));
+            }
+            if (rowBegin < 0)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " extends past minimum row of layout:" + std::to_string(0));
+            }
+            if (colBegin < 0)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " extends past minimum column of layout:" + std::to_string(0));
+            }
+            if (rowEnd > replicationDims_->first)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " extends past maximum row of layout:" + std::to_string(replicationDims_->first));
+            }
+            if (colEnd > replicationDims_->second)
+            {
+                throw PBException("ROI rectangle:" + ShowRectangle(rect) +
+                    " extends past maximum column of layout:" + std::to_string(replicationDims_->second));
+            }
+
+            for(auto row = rowBegin; row < rowEnd; row++)
+            {
+                for (auto col=colBegin; col < colEnd; col += BlockWidth())
                 {
-                    selected.insert(i);
+                    const auto lane = (col + row * replicationDims_->second) / BlockWidth();
+                    PBLOG_DEBUG << "Adding lane to ROI: " << lane;
+                    lanes.insert(lane);
                 }
             }
         }
-        std::vector<LaneIndex> retValues(selected.begin(), selected.end());
-        return LaneSelector(retValues);
+        return LaneSelector{lanes};
     }
     else if (mode_ == Mode::Reanalysis)
     {

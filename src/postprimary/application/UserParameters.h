@@ -68,6 +68,8 @@ struct UserParameters
     std::string subreadsetFilePath;
     std::string runtimeMetaDataFilePath;
     std::string fakeHQ;
+    std::string logFileName;
+    std::string logFilterLevel;
 
     int         statusFileDescriptor = -1;
     int         threads = 1;

@@ -233,6 +233,32 @@ private:
         DataSourceBase::Configuration datasourceConfig(layout, std::move(allo));
         datasourceConfig.numFrames = frames_;
 
+        datasourceConfig.darkFrame = std::make_unique<PacBio::DataSource::DarkFrame>();
+        datasourceConfig.darkFrame->darkCalFileName = config_.dataSource.darkCalFileName;
+
+        auto CopyVectorsToMultiArray = [](const std::vector<std::vector<double>>& vectors, boost::multi_array<double, 2>& multiArray){
+            const auto numRows = vectors.size();
+            if (numRows > 0)
+            {
+                const auto numCols = vectors[0].size();
+                multiArray.resize(boost::extents[numRows][numCols]);
+                for(uint32_t i=0; i< numRows; i++)
+                    for(uint32_t j=0; j < numCols; j++)
+                        multiArray[i][j] = vectors[i][j];
+            }
+            else
+            {
+                multiArray.resize(boost::extents[0][0]);
+            }
+        };
+        datasourceConfig.crosstalkFilter = std::make_unique<PacBio::DataSource::CrosstalkFilter>();
+        CopyVectorsToMultiArray( config_.dataSource.crosstalkFilterKernel, datasourceConfig.crosstalkFilter->kernel);
+
+        datasourceConfig.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>();
+        CopyVectorsToMultiArray( config_.dataSource.imagePsfKernel, datasourceConfig.imagePsf->kernel);
+
+        datasourceConfig.decimationMask.reset(); // TODO = std::make_unique<PacBio::DataSource::DecimationMask>(thing);
+
         auto dataSource = config_.source.Visit(
             [&](const TraceReanalysis& config) -> std::unique_ptr<DataSourceBase>
             {
@@ -403,85 +429,102 @@ private:
         return expMetadata;
     }
 
-    std::unique_ptr<LeafBody<const TraceBatchVariant>> CreateTraceSaver(const DataSourceRunner& dataSource,
-                                                                        const std::map<uint32_t, Data::BatchDimensions>& poolDims,
-                                                                        const AnalysisConfig& analysisConfig,
-                                                                        const ScanData::Data& experimentMetadata)
+    std::unique_ptr<TransformBody<const TraceBatchVariant, PreppedTracesVariant>>
+    CreateTracePrepper(const DataSourceRunner& dataSource,
+                       const TraceSaverConfig& trcConfig)
     {
-        if (outputTrcFileName_ != "")
+        auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
+
+        return std::make_unique<TracePrepBody>(
+            std::move(selection),
+            dataSource.NumFrames());
+    }
+
+    std::unique_ptr<LeafBody<PreppedTracesVariant>>
+    CreateTraceSaver(const DataSourceRunner& dataSource,
+                     const std::map<uint32_t, Data::BatchDimensions>& poolDims,
+                     const AnalysisConfig& analysisConfig,
+                     const TraceSaverConfig& trcConfig,
+                     const ScanData::Data& experimentMetadata)
+    {
+        if (outputTrcFileName_ == "")
+            throw PBException("Trying to configure TraceSaver when no output filename was provided!");
+        if (trcConfig.roi.empty())
+            throw PBException("TraceSaving was enabled, but no roi was provided");
+
+        const auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
+        const auto actualZmw = selection.size() * laneSize;
+
+        std::vector<uint32_t> fullBatchIds;
+        fullBatchIds.reserve(dataSource.NumZmw());
+        PBLOG_DEBUG << "poolDims.size:" << poolDims.size();
+        for (const auto& kv : poolDims)
         {
-            auto selection = SelectedBasecallerLanesWithinROI(dataSource, config_.traceSaver.roi, laneSize);
-            const auto actualZmw = selection.size() * laneSize;
-
-            std::vector<uint32_t> fullBatchIds;
-            fullBatchIds.reserve(dataSource.NumZmw());
-            PBLOG_DEBUG << "poolDims.size:" << poolDims.size();
-            for (const auto& kv : poolDims)
-            {
-                PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch()
-                            << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch
-                            << "," << kv.second.framesPerBatch;
-                fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
-            }
-            if(fullBatchIds.size() != dataSource.NumZmw())
-            {
-                throw PBException("fullBatchIds.size():" + std::to_string(fullBatchIds.size()) 
-                    + " != dataSource.NumZmw():" + std::to_string(dataSource.NumZmw()));
-            }
-
-            const auto& fullHoleIds = dataSource.UnitCellIds();
-            const auto& fullProperties = dataSource.GetUnitCellProperties();
-
-            std::vector<uint32_t> holeNumbers(actualZmw);
-            std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
-            std::vector<uint32_t> batchIds(actualZmw);
-
-            size_t idx = 0;
-            for (const auto& lane : selection)
-            {
-                size_t currZmw = lane*laneSize;
-                for (size_t i = 0; i < laneSize; ++i)
-                {
-                    assert(idx < actualZmw);
-                    holeNumbers[idx] = fullHoleIds[currZmw];
-                    properties[idx] = fullProperties[currZmw];
-                    batchIds[idx] = fullBatchIds[currZmw];
-
-                    currZmw++;
-                    idx++;
-                }
-            }
-            assert(idx == actualZmw);
-
-            const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
-            auto dataType = TraceDataType::INT16;
-            if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::UINT8)
-            {
-                dataType = TraceDataType::UINT8;
-            } else if (config_.traceSaver.outFormat == TraceSaverConfig::OutFormat::Natural)
-            {
-                if (sampleLayout.Encoding() == PacketLayout::UINT8)
-                {
-                    dataType = TraceDataType::UINT8;
-                }
-            }
-
-            return std::make_unique<TraceSaverBody>(outputTrcFileName_,
-                                                    dataSource.NumFrames(),
-                                                    std::move(selection),
-                                                    sampleLayout.NumFrames(),
-                                                    sampleLayout.BlockWidth(),
-                                                    dataType,
-                                                    holeNumbers,
-                                                    properties,
-                                                    batchIds,
-                                                    experimentMetadata,
-                                                    analysisConfig);
+            PBLOG_DEBUG << "Pooldims:" << kv.first << " " << kv.second.ZmwsPerBatch()
+                        << " " << kv.second.laneWidth << "," << kv.second.lanesPerBatch
+                        << "," << kv.second.framesPerBatch;
+            fullBatchIds.insert(fullBatchIds.end(), kv.second.ZmwsPerBatch(), kv.first);
         }
-        else
+        if(fullBatchIds.size() != dataSource.NumZmw())
         {
-            return std::make_unique<NoopTraceSaverBody>();
+            throw PBException("fullBatchIds.size():" + std::to_string(fullBatchIds.size())
+                + " != dataSource.NumZmw():" + std::to_string(dataSource.NumZmw()));
         }
+
+        const auto& fullHoleIds = dataSource.UnitCellIds();
+        const auto& fullProperties = dataSource.GetUnitCellProperties();
+
+        std::vector<uint32_t> holeNumbers(actualZmw);
+        std::vector<DataSourceBase::UnitCellProperties> properties(actualZmw);
+        std::vector<uint32_t> batchIds(actualZmw);
+
+        size_t idx = 0;
+        for (const auto& lane : selection)
+        {
+            size_t currZmw = lane*laneSize;
+            for (size_t i = 0; i < laneSize; ++i)
+            {
+                assert(idx < actualZmw);
+                holeNumbers[idx] = fullHoleIds[currZmw];
+                properties[idx] = fullProperties[currZmw];
+                batchIds[idx] = fullBatchIds[currZmw];
+
+                currZmw++;
+                idx++;
+            }
+        }
+        assert(idx == actualZmw);
+
+        const auto sampleLayout = dataSource.PacketLayouts().begin()->second;
+        const auto dataType = [&](){
+            switch(config_.traceSaver.outFormat)
+            {
+                case TraceSaverConfig::OutFormat::UINT8: return TraceDataType::UINT8;
+                case TraceSaverConfig::OutFormat::INT16: return TraceDataType::INT16;
+                case TraceSaverConfig::OutFormat::Natural:
+                {
+                    switch(sampleLayout.Encoding())
+                    {
+                    case PacBio::DataSource::PacketLayout::UINT8: return TraceDataType::UINT8;
+                    case PacBio::DataSource::PacketLayout::INT16: return TraceDataType::INT16;
+                    default: throw PBException("Not Supported");
+                    }
+                }
+                default: throw PBException("Not Supported");
+            }
+        }();
+
+        return std::make_unique<TraceSaverBody>(outputTrcFileName_,
+                                                dataSource.NumFrames(),
+                                                trcConfig.frameChunking,
+                                                trcConfig.zmwChunking,
+                                                dataType,
+                                                holeNumbers,
+                                                properties,
+                                                batchIds,
+                                                experimentMetadata,
+                                                analysisConfig,
+                                                poolDims.size() * trcConfig.bufferedChunksAllowed);
     }
 
     std::unique_ptr<TransformBody<const TraceBatchVariant, const BatchResult>>
@@ -603,7 +646,7 @@ private:
             SmrtBasecallerStageReporter startUpRpt(progressMessage_.get(), SmrtBasecallerStages::StartUp, startupCounterMax, 300);
 
             // Names for the various graph stages
-            SMART_ENUM(GraphProfiler, REPACKER, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
+            SMART_ENUM(GraphProfiler, REPACKER, PREP_TRACE, SAVE_TRACE, ANALYSIS, PRE_HQ, BAZWRITER, RT_METRICS);
 
             auto source = CreateSource();
             AnalysisConfig analysisConfig;
@@ -634,7 +677,13 @@ private:
             auto* inputNode = graph.AddNode(std::move(repacker), GraphProfiler::REPACKER);
             startUpRpt.Update(1);
             // startup = 4
-            inputNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, experimentData), GraphProfiler::SAVE_TRACE);
+            if (outputTrcFileName_ != "")
+            {
+                auto prepNode = inputNode->AddNode(CreateTracePrepper(*source, config_.traceSaver),
+                                                   GraphProfiler::PREP_TRACE);
+                prepNode->AddNode(CreateTraceSaver(*source, poolDims, analysisConfig, config_.traceSaver, experimentData),
+                                  GraphProfiler::SAVE_TRACE);
+            }
             if (nop_ != 2)
             {
                 auto* analyzer = inputNode->AddNode(CreateBasecaller(poolDims, analysisConfig), GraphProfiler::ANALYSIS);

@@ -26,6 +26,9 @@
 #ifndef PACBIO_APPLICATION_TRACE_SAVER_H
 #define PACBIO_APPLICATION_TRACE_SAVER_H
 
+#include <future>
+#include <vector>
+
 #include <pacbio/datasource/DataSourceBase.h>
 #include <pacbio/datasource/PacketLayout.h>
 #include <pacbio/datasource/SensorPacket.h>
@@ -39,29 +42,49 @@
 
 #include <boost/multi_array.hpp>
 
-#include <vector>
+namespace PacBio::Application {
 
-namespace PacBio {
-namespace Application {
+// Intermediate payload containing traces, which is just a
+// a multi-array for the data to be written.  The data will
+// already be transposed and re-indexed, making it suitable
+// for just dumping straight to disk.
+//
+// Note: boost::multi_array is ancient and doesn't have move
+// semantics... Using `unique_ptr` as a quick workaround
+template <typename T>
+using RawPreppedTraces = std::unique_ptr<boost::multi_array<T, 2>>;
+using PreppedTracesVariant = std::variant<RawPreppedTraces<uint8_t>, RawPreppedTraces<int16_t>>;
 
-class NoopTraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatchVariant>
+// Class that prepares traces for writing to the tracefile.  It extracts the requested ZMWS,
+// as well as transposes the data, to match the "trace-major" ordering used in the tracefile.
+//
+// Actual saving of the data to disk is handled by the TraceSaverBody class.  Witing is kept
+// separate so that hiccoughs in disk performance are more uncoupled from the raw trace input
+// buffers, which are also seen and used on the WX2.
+class TracePrepBody final : public Graphs::TransformBody<const Mongo::Data::TraceBatchVariant,
+                                                         PreppedTracesVariant>
 {
 public:
+    TracePrepBody(DataSource::DataSourceBase::LaneSelector laneSelector,
+                  uint64_t maxFrames);
+
     size_t ConcurrencyLimit() const override { return 1; }
-    float MaxDutyCycle() const override { return 0.01; }
+    float MaxDutyCycle() const override { return 0.05; }
 
-    void Process(const Mongo::Data::TraceBatchVariant&) override
-    {
-
-    }
+    PreppedTracesVariant Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
+private:
+    PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
+    uint64_t maxFrames_;
 };
 
-class TraceSaverBody final : public Graphs::LeafBody<const Mongo::Data::TraceBatchVariant>
+// Class that handles just the dumping of extracted trace data to the trace file.
+// This class is intended to be robust against temporary IO slowdowns, letting trace
+// writing fall behind the main analysis by a limited amount.
+class TraceSaverBody final : public Graphs::LeafBody<PreppedTracesVariant>
 {
 public:
     TraceSaverBody(const std::string& filename,
                    uint64_t numFrames, // TODO numFrames is 64 bits but the frame indices are returned as signed 32 bit ints.
-                   DataSource::DataSourceBase::LaneSelector laneSelector,
                    const uint64_t frameBlockingSize,
                    const uint64_t zmwBlockingSize,
                    File::TraceDataType dataType,
@@ -69,17 +92,15 @@ public:
                    const std::vector<DataSource::DataSourceBase::UnitCellProperties>& properties,
                    const std::vector<uint32_t>& batchIds,
                    const File::ScanData::Data& experimentMetadata,
-                   const Mongo::Data::AnalysisConfig& analysisConfig);
-
-    TraceSaverBody(const TraceSaverBody&) = delete;
-    TraceSaverBody(TraceSaverBody&&) = delete;
-    TraceSaverBody& operator=(const TraceSaverBody&) = delete;
-    TraceSaverBody& operator==(TraceSaverBody&&) = delete;
+                   const Mongo::Data::AnalysisConfig& analysisConfig,
+                   uint32_t maxQueueSize = 0);
 
     size_t ConcurrencyLimit() const override { return 1; }
-    float MaxDutyCycle() const override { return 0.01; }
+    float MaxDutyCycle() const override { return enableWriterThread_ ? 0.01 : 0.25; }
 
-    void Process(const Mongo::Data::TraceBatchVariant& traceBatch) override;
+    void Process(PreppedTracesVariant tracesVariant) override;
+
+    ~TraceSaverBody();
 private:
 
     void PopulateTraceData(const std::vector<uint32_t>& holeNumbers,
@@ -89,12 +110,16 @@ private:
 
     void PopulateScanData(const File::ScanData::Data& experimentMetadata);
 
-    PacBio::DataSource::DataSourceBase::LaneSelector laneSelector_;
-    PacBio::DataSource::PacketLayout packetLayout_;
     File::TraceFile file_;
     uint64_t numFrames_;
+    uint64_t numZmw_;
+
+    std::atomic<bool> enableWriterThread_ = false;
+    uint32_t maxQueueSize_;
+    std::future<uint64_t> writeFuture_;
+    ThreadSafeQueue<PreppedTracesVariant> queue_;
 };
 
-}}
+}
 
 #endif //PACBIO_APPLICATION_TRACE_SAVER_H

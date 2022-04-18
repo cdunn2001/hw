@@ -44,7 +44,7 @@ public:
     /// (which includes the basecallerConcurrencyRequest below), but if
     /// any host computation stages are active then the more worker threades
     /// allowed, the more TBB will be able to leverage any nested parallelism.
-    PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 8);
+    PB_CONFIG_PARAM(uint32_t, numWorkerThreads, 12);
 
     /// The number of threads allowed to be working in the basecaller at any given
     /// time.  This will also correspond to the number of cuda streams in play.
