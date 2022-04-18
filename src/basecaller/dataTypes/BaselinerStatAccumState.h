@@ -30,6 +30,10 @@ struct BaselinerStatAccumState
     // Sum of raw baseline frames (i.e., prior to baseline subtraction).
     FloatArray rawBaselineSum;
 
+    // baseline mean which was subtracted from traces. See BackgroundMean and
+    // friends in Sequel code.
+    StatAccumState backgroundStats;
+
     const StatAccumState::FloatArray& NumBaselineFrames() const
     {
         return baselineStats.moment0;

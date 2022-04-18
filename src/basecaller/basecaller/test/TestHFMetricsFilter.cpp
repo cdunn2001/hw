@@ -205,6 +205,12 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
             baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = n0;
             baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 110;
             baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 5650;
+            // Set the background value to zero.
+            // Also set the counts to a non-zero value so we don't
+            // get nans from querying this.
+            baselinerStats.backgroundStats.moment0[zmw] = 42;
+            baselinerStats.backgroundStats.moment1[zmw] = 0;
+            baselinerStats.backgroundStats.moment2[zmw] = 0;
         }
     }
     return ret;

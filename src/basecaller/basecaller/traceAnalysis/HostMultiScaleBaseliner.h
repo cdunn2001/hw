@@ -109,7 +109,8 @@ private:
                                                                         Data::BlockView<ElementTypeOut> upperBuffer,
                                                                         Data::BlockView<ElementTypeOut> baselineSubtractedData);
 
-        void AddToBaselineStats(const LaneArray& traceData,
+        void AddToBaselineStats(const LaneArray& subtractedBaseline,
+                                const LaneArray& traceData,
                                 const LaneArray& baselineSubtractedFrames,
                                 Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats);
 

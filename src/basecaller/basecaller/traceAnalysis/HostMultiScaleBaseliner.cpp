@@ -160,19 +160,21 @@ HostMultiScaleBaseliner::MultiScaleBaseliner::EstimateBaseline(const Data::Block
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
             // Data shifted and scaled
-            auto rawSignal = trIt.Extract() - pedestal_;
-            LaneArray blSubtractedFrame((rawSignal - blEst) * scaler_);
+            auto rawSignalScaled = (trIt.Extract() - pedestal_) * scaler_;
+            auto subtractedBaseline = blEst * scaler_;
+            LaneArray blSubtractedFrame(rawSignalScaled - subtractedBaseline);
             // ... stored as output traces
             blsIt.Store(blSubtractedFrame);
             // ... and added to statistics
-            AddToBaselineStats(rawSignal * scaler_, blSubtractedFrame, baselinerStats);
+            AddToBaselineStats(subtractedBaseline, rawSignalScaled, blSubtractedFrame, baselinerStats);
         }
     }
 
     return baselinerStats;
 }
 
-void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const LaneArray& traceData,
+void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const LaneArray& subtractedBaseline,
+                                                                      const LaneArray& traceData,
                                                                       const LaneArray& baselineSubtractedFrame,
                                                                       Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
@@ -195,7 +197,7 @@ void HostMultiScaleBaseliner::MultiScaleBaseliner::AddToBaselineStats(const Lane
     latHMask2_ = latHMask1_;
     latHMask1_ = maskHp1;
 
-    baselinerStats.AddSample(latRawData_, latData_, mask);
+    baselinerStats.AddSample(subtractedBaseline, latRawData_, latData_, mask);
 
     // Set latent data.
     latRawData_ = traceData;

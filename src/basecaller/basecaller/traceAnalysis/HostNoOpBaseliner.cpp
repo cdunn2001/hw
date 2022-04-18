@@ -36,12 +36,13 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
             auto baselinerStats = Data::BaselinerStatAccumulator<Data::BaselinedTraceElement>{};
             auto statsView = out.second.baselinerStats.GetHostView();
             auto outItr = cameraTraceData.Begin();
+            FloatArray background {0.0f};
             for (auto inItr = traceData.CBegin(); inItr != traceData.CEnd(); inItr++, outItr++)
             {
                 auto copy = (inItr.Extract() - pedestal_) * movieScaler_;
                 outItr.Store(copy);
                 Mask isBaseline { false };
-                baselinerStats.AddSample(copy, copy, isBaseline);
+                baselinerStats.AddSample(background, copy, copy, isBaseline);
             }
 
             statsView[laneIdx] = baselinerStats.GetState();
