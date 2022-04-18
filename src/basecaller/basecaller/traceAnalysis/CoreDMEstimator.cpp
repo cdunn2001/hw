@@ -17,8 +17,6 @@ namespace Basecaller {
 constexpr unsigned short CoreDMEstimator::nModelParams;
 constexpr unsigned int CoreDMEstimator::nFramesMin;
 
-float CoreDMEstimator::shotNoiseCoeff = 1.0;
-
 // static
 PacBio::Logging::PBLogger CoreDMEstimator::logger_ (boost::log::keywords::channel = "DetectionModelEstimator");
 
@@ -34,8 +32,9 @@ CoreDMEstimator::CoreDMEstimator(uint32_t poolId, unsigned int poolSize)
 // static
 void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
 {
-    config_.fallbackBaselineMean = 0.0f;
+    config_.fallbackBaselineMean     = 0.0f;
     config_.fallbackBaselineVariance = 100.0f;
+    config_.shotVarCoeff             = 1.0f;
 
     const float phes = analysisConfig.movieInfo.photoelectronSensitivity;
     assert(std::isfinite(phes) && phes > 0.0f);
@@ -44,11 +43,7 @@ void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
     auto& psf = analysisConfig.movieInfo.xtalkPsf;
     auto& xtc = analysisConfig.movieInfo.xtalkCorrection;
 
-    if (psf.shape()[0] * psf.shape()[1] == 0)
-    {
-        shotNoiseCoeff = 1;
-    }
-    else
+    if (psf.shape()[0] * psf.shape()[1] != 0)
     {
         // xtc size is greater or equal to psf
         auto i = (xtc.shape()[0] - psf.shape()[0]) / 2;
@@ -57,10 +52,8 @@ void CoreDMEstimator::Configure(const Data::AnalysisConfig& analysisConfig)
         StridedMapMatrixXi xtcMat(xtc[boost::indices[i][j]].origin(), psf.shape()[1], psf.shape()[0], Eigen::OuterStride<>(xtc.shape()[1]));
         Eigen::Map<const Eigen::MatrixXf> psfMat(psf.origin(),        psf.shape()[1], psf.shape()[0]);
 
-        shotNoiseCoeff = xtcMat.cwiseProduct(xtcMat).cwiseProduct(psfMat).sum(); // S =  sum(X .^ 2 .* P, "all")
+        config_.shotVarCoeff = xtcMat.cwiseProduct(xtcMat).cwiseProduct(psfMat).sum(); // S =  sum(X .^ 2 .* P, "all")
     }
-
-    // shotNoiseCoeff = 1.2171f;
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

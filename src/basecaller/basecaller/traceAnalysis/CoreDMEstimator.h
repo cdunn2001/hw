@@ -74,6 +74,8 @@ public:     // Types
 
         float signalScaler;     // photoelectronSensitivity (e-/DN)
 
+        float shotVarCoeff;     // Cross-talk correction value
+
         CUDA_ENABLED float BaselineVarianceNominal() const
         { return pow2(2.0f * signalScaler); }
 
@@ -105,9 +107,6 @@ public:     // Static constants
 
     /// Minimum number of frames required for parameter estimation.
     static constexpr unsigned int nFramesMin = 20 * nModelParams;
-
-    /// Cross-talk correction value
-    static float shotNoiseCoeff;
 
 public:     // Static functions
     static void Configure(const Data::AnalysisConfig& analysisConfig);
