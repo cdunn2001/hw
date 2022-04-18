@@ -225,6 +225,8 @@ void CudaHostRegister(void* ptr, size_t size)
         cudaCheckErrors(::cudaHostRegister(ptr, size, cudaHostRegisterPortable));
     } catch (const CudaMemException& ex)
     {
+        PBLOG_ERROR << "Initial attempt to register " << size << " bytes at address "
+                    << ptr << " with cuda runtime failed.  Retrying...";
         // Try again a few times, to see if that helps...
         for (int retriesLeft = 10; retriesLeft >= 0; --retriesLeft)
         {
@@ -241,10 +243,12 @@ void CudaHostRegister(void* ptr, size_t size)
                 break;
             } catch (const CudaMemException& ex)
             {
+                PBLOG_ERROR << "Attempts to register address with cuda runtime still failing.  " << retriesLeft << " retries are left";
                 if (retriesLeft == 0)
                 {
                     // Retries didn't help...  Rethrow the CudaMemException, and
                     // things will look like they did before this rety logic was added
+                    PBLOG_ERROR << "Could not register address with the cuda runtime.  Giving up now...";
                     throw;
                 }
             }
