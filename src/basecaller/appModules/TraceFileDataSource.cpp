@@ -510,6 +510,15 @@ DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
     const auto& chipInfo = traceFile_.Scan().ChipInfo();
     movieInfo.refSnr = chipInfo.analogRefSnr;
 
+    auto& psfDst = movieInfo.xtalkPsf;
+    auto& xtcDst = movieInfo.xtalkCorrection;
+    const auto& psfSrc = chipInfo.imagePsf;
+    const auto& xtcSrc = chipInfo.xtalkCorrection;
+    psfDst.resize(boost::extents[psfSrc.shape()[0]][psfSrc.shape()[1]]);
+    xtcDst.resize(boost::extents[xtcSrc.shape()[0]][xtcSrc.shape()[1]]);
+    psfDst = psfSrc;
+    xtcDst = xtcSrc;
+
     const auto& dyeSet = traceFile_.Scan().DyeSet();
     assert(dyeSet.numAnalog == movieInfo.analogs.size());
     for (size_t i = 0; i < movieInfo.analogs.size(); i++)
