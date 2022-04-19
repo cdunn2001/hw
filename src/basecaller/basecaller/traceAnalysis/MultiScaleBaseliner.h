@@ -34,8 +34,8 @@
 #include "BlockFilterStage.h"
 #include "TraceFilters.h"
 
-#include <common/AlignedCircularBuffer.h>
 #include <dataTypes/BaselinerStatAccumulator.h>
+#include <common/AlignedCircularBuffer.h>
 
 namespace PacBio {
 namespace Mongo {
@@ -51,8 +51,22 @@ public:     // Static functions
 
     static void Finalize();
 
+    // configuration getters
+
+    static float CSigmaBiasAdj()
+    { return cSigmaBiasAdj_; }
+
+    static float CMeanBiasAdj()
+    { return cMeanBiasAdj_; }
+
+    static float MeanEmaAlpha()
+    { return meanEmaAlpha_; }
+
     static float SigmaEmaAlpha()
     { return sigmaEmaAlpha_; }
+
+    static float JumpTolCoeff()
+    { return jumpTolCoeff_; }
 
 public:
     MultiScaleBaseliner(uint32_t poolId,
@@ -88,7 +102,7 @@ public:
     MultiScaleBaseliner(MultiScaleBaseliner&&) = default;
     ~MultiScaleBaseliner() override = default;
 
-protected:     // Static data
+private:     // Static data
     static float cSigmaBiasAdj_;
     static float cMeanBiasAdj_;
     static float meanEmaAlpha_;

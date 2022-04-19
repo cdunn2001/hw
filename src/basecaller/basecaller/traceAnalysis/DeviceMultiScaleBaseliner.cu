@@ -74,10 +74,10 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
     Cuda::ComposedConstructArgs args;
     args.pedestal = pedestal_;
     args.scale = Scale();
-    args.meanBiasAdj   = cMeanBiasAdj_;
-    args.sigmaBiasAdj  = cSigmaBiasAdj_;
-    args.meanEmaAlpha  = meanEmaAlpha_;
-    args.sigmaEmaAlpha = sigmaEmaAlpha_;
+    args.meanBiasAdj   = CMeanBiasAdj();
+    args.sigmaBiasAdj  = CSigmaBiasAdj();
+    args.meanEmaAlpha  = MeanEmaAlpha();
+    args.sigmaEmaAlpha = SigmaEmaAlpha();
     args.numLanes = lanesPerPool;
     args.val = initVal;
     switch (expectedEncoding_)

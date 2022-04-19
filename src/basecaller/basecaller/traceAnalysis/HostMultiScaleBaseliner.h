@@ -28,9 +28,6 @@ public:     // Static functions
 
     static void Finalize();
 
-    static float SigmaEmaAlpha()
-    { return sigmaEmaAlpha_; }
-
 public:
     HostMultiScaleBaseliner(uint32_t poolId,
                             const BaselinerParams& params,
@@ -61,8 +58,8 @@ private:
         LaneBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
             : msLowerOpen_(params.Strides(), params.Widths())
             , msUpperOpen_(params.Strides(), params.Widths())
-            , cMeanBias_{params.MeanBias() * std::exp2(cMeanBiasAdj_)}
-            , cSigmaBias_{params.SigmaBias() * std::exp2(cSigmaBiasAdj_)}
+            , cMeanBias_{params.MeanBias() * std::exp2(CMeanBiasAdj())}
+            , cSigmaBias_{params.SigmaBias() * std::exp2(CSigmaBiasAdj())}
             , stride_(params.AggregateStride())
             , scaler_(scaler)
             , pedestal_(pedestal)
