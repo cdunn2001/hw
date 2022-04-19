@@ -1,7 +1,7 @@
 #ifndef MONGO_BASECALLER_HOSTMULTISCALEBASELINER_H
 #define MONGO_BASECALLER_HOSTMULTISCALEBASELINER_H
 
-#include "Baseliner.h"
+#include "MultiScaleBaseliner.h"
 #include "BaselinerParams.h"
 #include "BlockFilterStage.h"
 #include "TraceFilters.h"
@@ -13,9 +13,9 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class HostMultiScaleBaseliner : public Baseliner
+class HostMultiScaleBaseliner : public MultiScaleBaseliner
 {
-    using Parent = Baseliner;
+    using Parent = MultiScaleBaseliner;
 public:
     using ElementTypeOut = Parent::ElementTypeOut;
     using LaneArray = Data::BaselinerStatAccumulator<ElementTypeOut>::LaneArray;
@@ -28,41 +28,17 @@ public:     // Static functions
 
     static void Finalize();
 
-    static float SigmaEmaAlpha()
-    { return sigmaEmaAlpha_; }
-
 public:
     HostMultiScaleBaseliner(uint32_t poolId,
                             const BaselinerParams& params,
                             uint32_t lanesPerPool)
-        : Baseliner(poolId)
-        , latency_(params.LatentSize())
-        , framesPerStride_(params.AggregateStride())
+        : MultiScaleBaseliner(poolId, params, lanesPerPool)
     {
        baselinerByLane_.reserve(lanesPerPool);
        for (uint32_t l = 0; l < lanesPerPool; l++)
        {
            baselinerByLane_.emplace_back(params, Scale(), pedestal_);
        }
-    }
-
-    static float SigmaEmaScaleStrides()
-    { 
-        return -1.0f / std::log2(sigmaEmaAlpha_);
-    }
-
-    static float MeanEmaScaleStrides()
-    { 
-        return -1.0f / std::log2(meanEmaAlpha_);
-    }
-
-    size_t StartupLatency() const override 
-    { 
-        // pick the longest estimated ema transient in strides
-        const float maxScaleStrides = std::max(MeanEmaScaleStrides(), SigmaEmaScaleStrides());
-        // todo: consider scaling the second term here for additional
-        // tunability.
-        return latency_ + maxScaleStrides * framesPerStride_;
     }
 
     HostMultiScaleBaseliner(const HostMultiScaleBaseliner&) = delete;
@@ -74,31 +50,24 @@ private:
     std::pair<Data::TraceBatch<ElementTypeOut>, Data::BaselinerMetrics>
     FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
-private:     // Static data
-    static float cSigmaBiasAdj_;
-    static float cMeanBiasAdj_;
-    static float meanEmaAlpha_;
-    static float sigmaEmaAlpha_;
-    static float jumpTolCoeff_;
-
 private:
 
-    class MultiScaleBaseliner
+    class LaneBaseliner
     {
     public:
-        MultiScaleBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
+        LaneBaseliner(const BaselinerParams& params, float scaler, int16_t pedestal)
             : msLowerOpen_(params.Strides(), params.Widths())
             , msUpperOpen_(params.Strides(), params.Widths())
-            , cMeanBias_{params.MeanBias() * std::exp2(cMeanBiasAdj_)}
-            , cSigmaBias_{params.SigmaBias() * std::exp2(cSigmaBiasAdj_)}
+            , cMeanBias_{params.MeanBias() * std::exp2(CMeanBiasAdj())}
+            , cSigmaBias_{params.SigmaBias() * std::exp2(CSigmaBiasAdj())}
             , stride_(params.AggregateStride())
             , scaler_(scaler)
             , pedestal_(pedestal)
         { }
 
-        MultiScaleBaseliner(const MultiScaleBaseliner&) = delete;
-        MultiScaleBaseliner(MultiScaleBaseliner&&) = default;
-        ~MultiScaleBaseliner() = default;
+        LaneBaseliner(const LaneBaseliner&) = delete;
+        LaneBaseliner(LaneBaseliner&&) = default;
+        ~LaneBaseliner() = default;
 
     public:
         size_t Stride() const { return stride_; }
@@ -205,12 +174,10 @@ private:
         const size_t stride_;
         float scaler_;  // Converts DN quantization to e- values
         int16_t pedestal_;
-    };  // MultiScaleBaseliner
+    };  // LaneBaseliner
 
 private:
-    std::vector<MultiScaleBaseliner> baselinerByLane_;
-    size_t latency_;
-    size_t framesPerStride_;
+    std::vector<LaneBaseliner> baselinerByLane_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

@@ -36,7 +36,7 @@
 #include <dataTypes/BasicTypes.h>
 #include <dataTypes/configs/ConfigForward.h>
 #include <dataTypes/TraceBatch.h>
-#include <basecaller/traceAnalysis/Baseliner.h>
+#include <basecaller/traceAnalysis/MultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/BaselinerParams.h>
 
 namespace PacBio {
@@ -52,21 +52,15 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class DeviceMultiScaleBaseliner : public Baseliner
+class DeviceMultiScaleBaseliner : public MultiScaleBaseliner
 {
     static constexpr size_t lag = 4;
 
 private:     // Static data
-    // Used to initialze the morpholigical filters.  Really the first bunch of frames
+    // Used to initialze the morphological filters.  Really the first bunch of frames
     // out are garbage, but setting this value at least close to the expected baseline
     // means it will potentially not be horribly off base.
     static constexpr short initVal = 150;
-
-    static float cSigmaBiasAdj_;
-    static float cMeanBiasAdj_;
-    static float meanEmaAlpha_;
-    static float sigmaEmaAlpha_;
-    static float jumpTolCoeff_;
 
 public:     // Static functions
     /// Sets algorithm configuration and system calibration properties.
@@ -91,33 +85,12 @@ public:
     DeviceMultiScaleBaseliner(DeviceMultiScaleBaseliner&&) = default;
     ~DeviceMultiScaleBaseliner() override;
 
-    static float SigmaEmaScaleStrides()
-    { 
-        return -1.0f / std::log2(sigmaEmaAlpha_);
-    }
-
-    static float MeanEmaScaleStrides()
-    { 
-        return -1.0f / std::log2(meanEmaAlpha_);
-    }
-
-    size_t StartupLatency() const override 
-    { 
-        // pick the longest estimated ema transient in strides
-        const float maxScaleStrides = std::max(MeanEmaScaleStrides(), SigmaEmaScaleStrides());
-        // todo: consider scaling the second term here for additional
-        // tunability.
-        return latency_ + maxScaleStrides * framesPerStride_;
-    }
-
 private:    // Customizable implementation
     std::pair<Data::TraceBatch<Data::BaselinedTraceElement>, Data::BaselinerMetrics>
     FilterBaseline(const Data::TraceBatchVariant& rawTrace) override;
 
     using Filter = Cuda::ComposedFilterBase;
     std::unique_ptr<Filter> filter_;
-    size_t latency_;
-    size_t framesPerStride_;
 };
 
 }}}     // namespace PacBio::Mongo::Basecaller

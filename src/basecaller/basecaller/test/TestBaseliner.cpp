@@ -191,7 +191,7 @@ struct TestingParams
     std::vector<short> pfg_pulseSignalLevels;
 };
 
-struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
+struct MultiScaleBaselinerTest : public ::testing::TestWithParam<TestingParams>
 {
     const uint32_t numZmwLanes = 4;
     const uint32_t numPools = 2;
@@ -282,7 +282,7 @@ struct MultiScaleBaseliner : public ::testing::TestWithParam<TestingParams>
     }
 };
 
-TEST_P(MultiScaleBaseliner, StatsAndSubtraction)
+TEST_P(MultiScaleBaselinerTest, StatsAndSubtraction)
 {
      for (auto& batch : source->AllBatches())
      {
@@ -356,7 +356,7 @@ TEST_P(MultiScaleBaseliner, StatsAndSubtraction)
 //-----------------------------------------Testing parameters---------------------------//
 
 INSTANTIATE_TEST_SUITE_P(,
-                         MultiScaleBaseliner,
+                         MultiScaleBaselinerTest,
                          testing::Values(
                              TestingParams {
                                  BasecallerBaselinerConfig::MethodName::HostMultiScale,
@@ -471,16 +471,16 @@ INSTANTIATE_TEST_SUITE_P(,
                          });
                          
 template <typename T>
-struct MultiScaleBaselinerSmallBatch : ::testing::Test
+struct MultiScaleBaselinerTestSmallBatch : ::testing::Test
 {
 private:
     PacBio::Logging::LogSeverityContext logLevel {PacBio::Logging::LogLevel::WARN};
 };
 
 using MyTypes = ::testing::Types<HostMultiScaleBaseliner, DeviceMultiScaleBaseliner>;
-TYPED_TEST_SUITE(MultiScaleBaselinerSmallBatch, MyTypes);
+TYPED_TEST_SUITE(MultiScaleBaselinerTestSmallBatch, MyTypes);
 
-TYPED_TEST(MultiScaleBaselinerSmallBatch, OneBatch)
+TYPED_TEST(MultiScaleBaselinerTestSmallBatch, OneBatch)
 {
     using Baseliner = TypeParam;
     constexpr float scaler = 3.46410f; // sqrt(12)

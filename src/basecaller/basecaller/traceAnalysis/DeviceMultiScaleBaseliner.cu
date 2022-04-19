@@ -39,11 +39,6 @@ namespace Basecaller {
 using namespace PacBio::Cuda::Memory;
 
 constexpr short  DeviceMultiScaleBaseliner::initVal;
-float DeviceMultiScaleBaseliner::cMeanBiasAdj_  = 0.0f;
-float DeviceMultiScaleBaseliner::cSigmaBiasAdj_ = 0.0f;
-float DeviceMultiScaleBaseliner::meanEmaAlpha_  = 0.0f;
-float DeviceMultiScaleBaseliner::sigmaEmaAlpha_ = 0.0f;
-float DeviceMultiScaleBaseliner::jumpTolCoeff_  = std::numeric_limits<float>::infinity();
 
 void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
                                           const Data::AnalysisConfig& analysisConfig)
@@ -51,25 +46,7 @@ void DeviceMultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig&
     const auto hostExecution = false;
     InitFactory(hostExecution, analysisConfig);
 
-    cMeanBiasAdj_ = bbc.MeanBiasAdjust;
-
-    cSigmaBiasAdj_ = bbc.SigmaBiasAdjust;
-
-    const float meanEmaScale = bbc.MeanEmaScaleStrides;
-    meanEmaAlpha_ = std::pow(0.5f, 1.0f / meanEmaScale);
-    assert(0.0f <= meanEmaAlpha_ && meanEmaAlpha_ < 1.0f);
-
-    const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
-    std::ostringstream msg;
-    msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
-    // TODO: Use a scoped logger.
-    PBLOG_INFO << msg.str();
-    sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
-    assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
-
-    // TODO: Enable jumpTolCoeff_
-    // const float js = bbc.JumpSuppression;
-    // jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
+    MultiScaleBaseliner::Configure(bbc, analysisConfig);
 }
 
 void DeviceMultiScaleBaseliner::Finalize() {}
@@ -92,17 +69,15 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
                                                      const BaselinerParams& params,
                                                      uint32_t lanesPerPool,
                                                      StashableAllocRegistrar* registrar)
-    : Baseliner(poolId)
-    , latency_(params.LatentSize())
-    , framesPerStride_(params.AggregateStride())
+    : MultiScaleBaseliner(poolId, params, lanesPerPool)
 {
     Cuda::ComposedConstructArgs args;
     args.pedestal = pedestal_;
     args.scale = Scale();
-    args.meanBiasAdj   = cMeanBiasAdj_;
-    args.sigmaBiasAdj  = cSigmaBiasAdj_;
-    args.meanEmaAlpha  = meanEmaAlpha_;
-    args.sigmaEmaAlpha = sigmaEmaAlpha_;
+    args.meanBiasAdj   = CMeanBiasAdj();
+    args.sigmaBiasAdj  = CSigmaBiasAdj();
+    args.meanEmaAlpha  = MeanEmaAlpha();
+    args.sigmaEmaAlpha = SigmaEmaAlpha();
     args.numLanes = lanesPerPool;
     args.val = initVal;
     switch (expectedEncoding_)
