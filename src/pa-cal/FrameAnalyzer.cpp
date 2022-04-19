@@ -61,6 +61,7 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                 << chunk.StopFrame() << "). Has full coverage:" << chunk.HasFullPacketCoverage();
             break;
         }
+        reporter.Update(0); // keep the heartbeats alive.
     }
     if (controller->ExitRequested())
     {
