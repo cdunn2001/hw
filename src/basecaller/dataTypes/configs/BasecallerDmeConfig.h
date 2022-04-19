@@ -58,7 +58,7 @@ class BasecallerDmeConfig : public Configuration::PBConfig<BasecallerDmeConfig>
 public:
     PB_CONFIG(BasecallerDmeConfig);
 
-    SMART_ENUM(MethodName, Fixed, EmHost, EmDevice);
+    SMART_ENUM(MethodName, Fixed, EmHost, EmDevice, EmHybrid);
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {
