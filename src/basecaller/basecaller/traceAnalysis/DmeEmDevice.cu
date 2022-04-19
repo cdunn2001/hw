@@ -120,9 +120,9 @@ static constexpr auto numBins = DmeEmDevice::LaneHist::numBins;
 template <typename VF>
 __device__ VF ModelSignalCovar(float excessNoiseCV2, VF sigMean, VF blVar)
 {
-    blVar += sigMean * CoreDMEstimator::shotVarCoeff;
+    blVar += baseConfig.shotVarCoeff * sigMean;
 
-    // Typically, excessNoiseCV2 << 1 and sigMean >> 1.  Order multiplications
+    // Typically, excessNoiseCV2 << 1 and sigMean >> 1. Order multiplications
     // this way to avoid overflow, especially when VF is half-precision.
     blVar += excessNoiseCV2 * sigMean * sigMean;
     return blVar;
@@ -132,7 +132,7 @@ template <typename VF>
 __device__ VF XsnCoeffCVSq(const VF& sigMean, const VF& sigCovar, const VF& blVar)
 {
     VF r (sigCovar - blVar);
-    r -= sigMean * CoreDMEstimator::shotVarCoeff;
+    r -= sigMean * baseConfig.shotVarCoeff;
     r /= sigMean * sigMean;
     return r;
 }

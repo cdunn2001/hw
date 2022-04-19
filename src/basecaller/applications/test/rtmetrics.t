@@ -4,7 +4,7 @@
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
   > --config realTimeMetrics.rtMetricsFile="rtmetrics.json" \
   > --config realTimeMetrics.useSingleActivityLabels=false \
-  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,4096]]}]' > /dev/null 2>&1
+  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]]}]' > /dev/null 2>&1
 
   $ wc -l rtmetrics.json
   3 rtmetrics.json
@@ -20,7 +20,7 @@
 
   $ head -n1 rtmetrics.json | python -m json.tool | grep -A6 baseline
           "baseline": {
-              "sampleCV": 116.8*, (glob)
+              "sampleCV": 117.0*, (glob)
               "sampleMean": 0.79*, (glob)
               "sampleMedian": null,
               "sampleSize": 4096,

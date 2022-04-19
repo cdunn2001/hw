@@ -6,11 +6,11 @@ Standard TC6, +/- enableBarcodedAdapters (look for TC6 vs classify stem)
   $ baz2bam tc6.baz -o tc6_daft -Q $TESTDIR/data/goldenSubset.fasta -j 8 --fasta --fastq --silent --metadata=$TESTDIR/data/metadata.xml --enableBarcodedAdapters=True
 
 Check that we can tell that DAFT was used
-  $ grep "adapter caller has been configured" tc6_tc6.baz2bam_1.log | rev | cut -c -65 | rev
+  $ grep "adapter caller has been configured" tc6_tc6.baz2bam.log | rev | cut -c -65 | rev
   |- An adapter caller has been configured with the standard method
   |- An adapter caller has been configured with the standard method
   |- An adapter caller has been configured with the standard method
-  $ grep "adapter caller has been configured" tc6_daft.baz2bam_1.log | rev | cut -c -65 | rev
+  $ grep "adapter caller has been configured" tc6_daft.baz2bam.log | rev | cut -c -65 | rev
    An adapter caller has been configured with the trimToLoop method
   |- An adapter caller has been configured with the standard method
   |- An adapter caller has been configured with the standard method

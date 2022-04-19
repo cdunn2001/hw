@@ -60,10 +60,6 @@ public:
     int16_t Pedestal() const override { return simCfg_.Pedestal;  };
     double FrameRate() const override { return 100.0;      };
 
-    // Returns "valid" matrices that can be written as-is to a trace file.
-    boost::multi_array<float, 2> CrosstalkFilterMatrix() const override;
-    boost::multi_array<float, 2> ImagePsfMatrix() const override;
-
     Sensor::Platform Platform() const override { return Sensor::Platform::DONT_CARE; }
     std::string InstrumentName() const override { return "Sim DataSource"; }
     DataSource::HardwareInformation GetHardwareInformation() override;

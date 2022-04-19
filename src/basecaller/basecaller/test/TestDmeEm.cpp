@@ -91,7 +91,7 @@ template <typename T>
 struct TestDmeEm : public ::testing::TestWithParam<TestDmeEmParam>
 {
 public: // Types and static constants
-    using Filter = T;
+    using DmeImpl = T;
     using LaneDetectionModel = Data::LaneDetectionModel<Cuda::PBHalf>;
     using LaneDetectionModelHost = DmeEmHost::LaneDetModelHost;
 public:
@@ -147,20 +147,21 @@ public:
 
         for (uint32_t i = 0; i < laneSize; ++i)
         {
-            EXPECT_NEAR(exp[i], act[i], tol[i])
-                << message << " (i = " << i << ')';
+            EXPECT_NEAR(exp[i], act[i], tol[i]) << message << " (i = " << i << ')';
         }
     }
-
 
     // The main test.  Ideally this should just be in the usual TEST_P macro, but we
     // need to parameterize both over type as well as value, which gtest does not make
     // easy to do.
     void RunTest()
     {
-        Filter::Configure(testConfig.dmeConfig, analysisConfig);
+        DmeImpl::Configure(testConfig.dmeConfig, analysisConfig);
 
-        std::unique_ptr<CoreDMEstimator> dme = std::make_unique<Filter>(poolId, poolSize);
+        // Based on MockMovieInfo data in analysisConfig.movieInfo
+        EXPECT_FLOAT_EQ(CoreDMEstimator::Config().shotVarCoeff, 1.2168207);
+
+        std::unique_ptr<CoreDMEstimator> dme = std::make_unique<DmeImpl>(poolId, poolSize);
         Data::DetectionModelPool<Cuda::PBHalf> models(poolSize,
                                                       Cuda::Memory::SyncDirection::Symmetric,
                                                       SOURCE_MARKER());

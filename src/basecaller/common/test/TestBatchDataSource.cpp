@@ -61,8 +61,6 @@ public:
     double FrameRate() const override { throw PBException("Not Implemented"); }
     HardwareInformation GetHardwareInformation() override { throw PBException("Not Implemented"); }
     int16_t Pedestal() const override { throw PBException("Not Implemented"); }
-    boost::multi_array<float,2> CrosstalkFilterMatrix() const override { throw PBException("Not implemented!"); }
-    boost::multi_array<float,2> ImagePsfMatrix() const override { throw PBException("Not implemented!"); }
     PacBio::Sensor::Platform Platform() const override { throw PBException("Not implemented!"); }
     std::string InstrumentName() const override { throw PBException("Not implemented!"); }
     MovieInfo MovieInformation() const override { throw PBException("Not implemented!"); }

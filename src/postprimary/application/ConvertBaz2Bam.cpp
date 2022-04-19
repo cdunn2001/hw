@@ -735,7 +735,7 @@ void ConvertBaz2Bam::StartLoggingThread(PpaThreadSafeStageReporter& analyzeRpt)
                 iterations++;
                 PBLOG_INFO << "Sending progress " + std::to_string(progress);
                 currentProgress_ = progress;
-                analyzeRpt.Update(numProcessedZMWs_);
+                analyzeRpt.Update(deltaZMW);
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
@@ -1020,33 +1020,26 @@ void ConvertBaz2Bam::LogStart()
 
 void ConvertBaz2Bam::InitLogToDisk()
 {
-    // Logging
-    std::string logFilePrefix = user_->outputPrefix + ".baz2bam_";
-    int logFileCounter = 1;
-
-    bool logFileMissing = false;
-    std::string logFileName;
-    do {
-        logFileName = logFilePrefix + std::to_string(logFileCounter) + ".log";
-        struct stat logFilebuffer;   
-        logFileMissing = stat (logFileName.c_str(), &logFilebuffer) != 0;
-        if (!logFileMissing) logFileCounter++;
-        if (logFileCounter == 999)
-        {
-            std::cerr << "Cannot write log file with prefix " << logFilePrefix << std::endl;
-            outputLog = false;
-        }
-    }
-    while(!logFileMissing);
-
     boost::log::settings settings;
     settings["Sinks.File.Destination"] = "TextFile";
     settings["Sinks.File.Format"] = ">|> %TimeStamp% -|- %Severity% -|- %Channel% -|- %HostName%|P:%PBProcessID%|T:%PBThreadID% -|- %Message%";
-    settings["Sinks.File.FileName"] = logFileName;
+    settings["Sinks.File.FileName"] = user_->logFileName;
+    settings["Sinks.File.Append"] = true;
     settings["Sinks.File.AutoFlush"] = true;
-    settings["Sinks.File.RotationSize"] = 100 * 1024 * 1024; // 10 MiB
     Logging::PBLogger::InitPBLogging(settings);
-    if (!user_->silent) std::cout << "Writing log to: " << logFileName << std::endl;
+    Logging::PBLogger::SetMinimumSeverityLevel(Logging::PBLogger::ConvertToLogLevel(user_->logFilterLevel));
+    if (!user_->silent)
+    {
+        struct stat logFilebuffer;
+        if (stat(user_->logFileName.c_str(), &logFilebuffer))
+        {
+            std::cout << "Appending log to: " << user_->logFileName << std::endl;
+        }
+        else
+        {
+            std::cout << "Writing log to: " << user_->logFileName << std::endl;
+        }
+    }
 }
 
 void ConvertBaz2Bam::CheckInputFile()
