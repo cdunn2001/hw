@@ -23,6 +23,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <boost/filesystem.hpp>
+
 #include <pacbio/logging/Logger.h>
 
 #include <appModules/RealTimeMetrics.h>
@@ -37,27 +39,41 @@ class RealTimeMetrics::Impl
 {
 public:
     Impl(uint32_t framesPerHFMetricBlock, size_t numBatches,
-         std::vector<Data::RealTimeMetricsRegion>&& regions,
+         const Data::RealTimeMetricsConfig& rtConfig,
          std::vector<DataSourceBase::LaneSelector>&& selections,
          const std::vector<std::vector<uint32_t>>& zmwFeatures,
-         float frameRate, const std::string& rtMetricsFile,
-         bool useSingleActivityLabels)
+         float frameRate)
     : framesPerHFMetricBlock_{framesPerHFMetricBlock}
     , numBatches_{numBatches}
     , frameRate_{frameRate}
-    , rtMetricsFile_{rtMetricsFile}
-    , useSingleActivityLabels_{useSingleActivityLabels}
+    , jsonFileName_{rtConfig.jsonOutputFile}
+    , csvFileName_{rtConfig.csvOutputFile}
+    , useSingleActivityLabels_{rtConfig.useSingleActivityLabels}
     , jsonWriter_{GetStreamWriterBuilder().newStreamWriter()}
     {
         std::vector<std::string> regionNames;
-        for (size_t i = 0; i < regions.size(); i++)
+        for (size_t i = 0; i < rtConfig.regions.size(); i++)
         {
-            uint32_t featuresMask = std::accumulate(regions[i].featuresForFilter.begin(),
-                                                    regions[i].featuresForFilter.end(), 0,
+            uint32_t featuresMask = std::accumulate(rtConfig.regions[i].featuresForFilter.begin(),
+                                                    rtConfig.regions[i].featuresForFilter.end(), 0,
                                                     [](uint32_t a, uint32_t b) { return a | b; });
-            regionNames.push_back(regions[i].name);
-            regionInfo_.push_back({ std::move(regions[i]), std::move(selections[i]),
+            regionNames.push_back(rtConfig.regions[i].name);
+            regionInfo_.push_back({rtConfig.regions[i], std::move(selections[i]),
                                     SelectedLanesWithFeatures(zmwFeatures[i], featuresMask) });
+        }
+
+        if (csvFileName_ != "" && boost::filesystem::exists(csvFileName_))
+        {
+            PBLOG_INFO << "RTMetrics file " << csvFileName_ << " already exists, attempting to remove...";
+            if (boost::filesystem::is_regular_file(csvFileName_))
+            {
+                boost::filesystem::remove(csvFileName_);
+            } else
+            {
+                throw PBException("RTMetrics file " + csvFileName_ +
+                                  " is not a regular file that can be removed");
+            }
+            PBLOG_INFO << "RTMetrics file " << csvFileName_ << " removed";
         }
     }
 
@@ -176,20 +192,29 @@ public:
                 r.ma = RegionInfo::MetricAccumulators();
             }
 
-            // TODO: Emit report.
 
-            if (rtMetricsFile_ != "")
+            if (csvFileName_ != "")
             {
-                if (!rtMetricsOut_.is_open())
+                if (!rtMetricsCsvOut_.is_open())
                 {
-                    rtMetricsOut_.open(rtMetricsFile_, std::ios_base::trunc);
+                    rtMetricsCsvOut_.open(csvFileName_, std::ios_base::trunc);
                     assert(!report.metricsChunk.metricsBlocks.empty());
-                    rtMetricsOut_ << report.metricsChunk.metricsBlocks[0].GenerateCSVHeader();
+                    rtMetricsCsvOut_ << report.metricsChunk.metricsBlocks[0].GenerateCSVHeader();
                 }
                 for (const auto& block : report.metricsChunk.metricsBlocks)
                 {
-                    rtMetricsOut_ << block.GenerateCSVRow();
+                    rtMetricsCsvOut_ << block.GenerateCSVRow();
                 }
+            }
+
+            if (jsonFileName_ != "")
+            {
+                std::string tmpName = jsonFileName_ + ".tmp";
+                std::ofstream rtMetricsOut(tmpName, std::ios_base::trunc);
+                jsonWriter_->write(report.Serialize(), &rtMetricsOut);
+                rtMetricsOut << std::endl;
+
+                boost::filesystem::rename(tmpName, jsonFileName_);
             }
 
             fullMetricsBatchesSeen_ = 0;
@@ -210,10 +235,10 @@ public:
 private:
     struct RegionInfo
     {
-        RegionInfo(Mongo::Data::RealTimeMetricsRegion&& r,
+        RegionInfo(const Mongo::Data::RealTimeMetricsRegion& r,
                    DataSource::DataSourceBase::LaneSelector&& s,
                    std::vector<Mongo::LaneMask<>>&& l)
-            : region(std::move(r))
+            : region(r)
             , selection(std::move(s))
             , laneMasks(std::move(l))
         {
@@ -348,9 +373,10 @@ private:
     uint32_t framesPerHFMetricBlock_;
     size_t numBatches_;
     float frameRate_;
-    std::string rtMetricsFile_;
+    std::string jsonFileName_;
+    std::string csvFileName_;
     bool useSingleActivityLabels_;
-    std::ofstream rtMetricsOut_;
+    std::ofstream rtMetricsCsvOut_;
     std::unique_ptr<Json::StreamWriter> jsonWriter_;
 
     size_t batchesSeen_ = 0;
@@ -359,14 +385,12 @@ private:
 };
 
 RealTimeMetrics::RealTimeMetrics(uint32_t framesPerMetricBlock, size_t numBatches,
-                                 std::vector<Data::RealTimeMetricsRegion>&& regions,
+                                 const Data::RealTimeMetricsConfig& rtConfig,
                                  std::vector<DataSourceBase::LaneSelector>&& selections,
                                  const std::vector<std::vector<uint32_t>>& features,
-                                 float frameRate, const std::string& csvOutputFile,
-                                 bool useSingleActivityLabels)
-    : impl_(std::make_unique<Impl>(framesPerMetricBlock, numBatches, std::move(regions),
-                                   std::move(selections), features, frameRate,
-                                   csvOutputFile, useSingleActivityLabels))
+                                 float frameRate)
+    : impl_(std::make_unique<Impl>(framesPerMetricBlock, numBatches, rtConfig,
+                                   std::move(selections), features, frameRate))
 { }
 
 RealTimeMetrics::~RealTimeMetrics() = default;

@@ -204,7 +204,12 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
     PB_CONFIG(RealTimeMetricsConfig);
 
     PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
-    PB_CONFIG_PARAM(std::string, rtMetricsFile, "");
+    // The csv format will be continusouly appended, to maintain a history of all RT Metrics produced
+    PB_CONFIG_PARAM(std::string, csvOutputFile, "");
+    // The json format will only include the most recent RT Metrics produced.  It will be updated
+    // in an atomic fashion via a tmp file, to avoid "slicing" the data in the event of a concurrent
+    // update and read
+    PB_CONFIG_PARAM(std::string, jsonOutputFile, "");
     PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 

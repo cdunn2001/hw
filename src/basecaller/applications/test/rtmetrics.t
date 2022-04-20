@@ -2,7 +2,7 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768,"numZmwLanes":64,"traceFile":"'$TRCIN'"}' \
   > --config system.basecallerConcurrency=1 \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
-  > --config realTimeMetrics.rtMetricsFile="rtmetrics.csv" \
+  > --config realTimeMetrics.csvOutputFile="rtmetrics.csv" \
   > --config realTimeMetrics.useSingleActivityLabels=false \
   > --config realTimeMetrics.regions='[{"name":"TR","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","Pkmid","SNR","PulseRate","PulseWidth","BaseRate","BaseWidth"]}]' > /dev/null 2>&1
 
@@ -12,7 +12,7 @@
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768,"numZmwLanes":64,"traceFile":"'$TRCIN'"}' \
   > --config system.basecallerConcurrency=1 \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
-  > --config realTimeMetrics.rtMetricsFile="rtmetrics.csv" \
+  > --config realTimeMetrics.csvOutputFile="rtmetrics.csv" \
   > --config realTimeMetrics.useSingleActivityLabels=false \
   > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"]}]' > /dev/null 2>&1
 
@@ -25,3 +25,106 @@
   24552,4096,0,0,121.72*,0.74*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.10*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
   28648,4096,0,0,121.86*,0.73*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.11*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
 
+  $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768,"numZmwLanes":64,"traceFile":"'$TRCIN'"}' \
+  > --config system.basecallerConcurrency=1 \
+  > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
+  > --config realTimeMetrics.jsonOutputFile="rtmetrics.json" \
+  > --config realTimeMetrics.useSingleActivityLabels=false \
+  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"]}]' > /dev/null 2>&1
+
+  $ wc -l rtmetrics.json
+  1 rtmetrics.json
+
+  $ cat rtmetrics.json | python -m json.tool
+  {
+      "frameTimeStampDelta": 0,
+      "metricsChunk": {
+          "metricsBlocks": [
+              {
+                  "beginFrameTimeStamp": 0,
+                  "endFrameTimeStamp": 0,
+                  "groups": [
+                      {
+                          "metrics": [
+                              {
+                                  "name": "Baseline",
+                                  "sampleCV": [
+                                      121.86* (glob)
+                                  ],
+                                  "sampleMean": [
+                                      0.73* (glob)
+                                  ],
+                                  "sampleMed": [
+                                      -1
+                                  ],
+                                  "sampleSize": [
+                                      4096
+                                  ],
+                                  "sampleTotal": [
+                                      4096
+                                  ]
+                              },
+                              {
+                                  "name": "BaselineStd",
+                                  "sampleCV": [
+                                      64.0* (glob)
+                                  ],
+                                  "sampleMean": [
+                                      5.85* (glob)
+                                  ],
+                                  "sampleMed": [
+                                      -1
+                                  ],
+                                  "sampleSize": [
+                                      4096
+                                  ],
+                                  "sampleTotal": [
+                                      4096
+                                  ]
+                              },
+                              {
+                                  "name": "SNR",
+                                  "sampleCV": [
+                                      64.04*, (glob)
+                                      64.04*, (glob)
+                                      64.05*, (glob)
+                                      64.06* (glob)
+                                  ],
+                                  "sampleMean": [
+                                      40.39*, (glob)
+                                      27.28*, (glob)
+                                      17.56*, (glob)
+                                      11.11* (glob)
+                                  ],
+                                  "sampleMed": [
+                                      -1,
+                                      -1,
+                                      -1,
+                                      -1
+                                  ],
+                                  "sampleSize": [
+                                      4096,
+                                      4096,
+                                      4096,
+                                      4096
+                                  ],
+                                  "sampleTotal": [
+                                      4096,
+                                      4096,
+                                      4096,
+                                      4096
+                                  ]
+                              }
+                          ],
+                          "region": "TestRegion"
+                      }
+                  ],
+                  "numFrames": 4096,
+                  "startFrame": 28648
+              }
+          ],
+          "numMetricsBlocks": 1
+      },
+      "startFrameTimeStamp": 0,
+      "token": ""
+  }
