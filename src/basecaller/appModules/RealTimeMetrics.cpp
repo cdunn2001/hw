@@ -157,20 +157,27 @@ public:
         // Require a full chip worth of full metrics.
         if (fullMetricsBatchesSeen_ == numBatches_)
         {
-            Json::Value rtMetrics;
+            Data::RealTimeMetricsReport report;
+            // TODO PTSD-1513
+            //report.frameTimeStampDelta =
+            //report.startFrameTimeStamp =
+
+            report.metricsChunk.numMetricsBlocks = 1;
+            report.metricsChunk.metricsBlocks.resize(1);
+
+            auto& blockReport = report.metricsChunk.metricsBlocks.front();
+            // TODO PTSD-1513
+            //blockReport.beginFrameTimeStamp =
+            //blockReport.endFrameTimeStamp =
+            blockReport.numFrames = framesPerHFMetricBlock_;
+            blockReport.startFrame = currFrame_;
+            blockReport.groups.reserve(regionInfo_.size());
             for (auto& r: regionInfo_)
             {
-                Data::RealTimeMetricsReport report;
-                report.name = r.region.name;
-                report.startFrame = currFrame_;
-                report.numFrames = framesPerHFMetricBlock_;
+                auto& regionReport = blockReport.groups.emplace_back();
+                regionReport.region = r.region.name;
 
-                // TODO
-                // report.beginFrameTimeStamp =
-                // report.endFrameTimeStamp =
-
-                r.FillReportMetrics(report);
-                rtMetrics.append(report.Serialize());
+                r.FillReportMetrics(regionReport);
                 r.ma = RegionInfo::MetricAccumulators();
             }
 
@@ -178,7 +185,7 @@ public:
 
             if (rtMetricsOut_.is_open())
             {
-                jsonWriter_->write(rtMetrics, &rtMetricsOut_);
+                jsonWriter_->write(report.Serialize(), &rtMetricsOut_);
                 rtMetricsOut_ << std::endl;
             }
 
@@ -237,48 +244,99 @@ private:
         MetricAccumulators ma;
         uint32_t totalZmws = 0;
 
-        void FillReportMetrics(Mongo::Data::RealTimeMetricsReport& report)
+        void FillReportMetrics(Mongo::Data::GroupStats& groupReport)
         {
-            FillSummaryStats(ma.baseRate, report.baseRate);
-            FillSummaryStats(ma.baseWidth, report.baseWidth);
-            FillSummaryStats(ma.pulseRate, report.pulseRate);
-            FillSummaryStats(ma.pulseWidth, report.pulseWidth);
-
-            for (size_t i = 0; i < Mongo::numAnalogs; i++)
+            for (auto metric : this->region.metrics)
             {
-                FillSummaryStats(ma.snr[i], report.snr[i]);
-                FillSummaryStats(ma.pkmid[i], report.pkmid[i]);
+                auto& metricReport = groupReport.metrics.emplace_back();
+                metricReport.name = metric;
+                switch(metric)
+                {
+                    case Mongo::Data::MetricNames::Baseline:
+                    {
+                        FillSummaryStats(ma.baseline, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::BaselineStd:
+                    {
+                        FillSummaryStats(ma.baselineSd, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::Pkmid:
+                    {
+                        FillSummaryStats(ma.pkmid, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::SNR:
+                    {
+                        FillSummaryStats(ma.snr, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::PulseRate:
+                    {
+                        FillSummaryStats(ma.pulseRate, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::PulseWidth:
+                    {
+                        FillSummaryStats(ma.pulseWidth, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::BaseRate:
+                    {
+                        FillSummaryStats(ma.baseRate, metricReport);
+                        break;
+                    }
+                    case Mongo::Data::MetricNames::BaseWidth:
+                    {
+                        FillSummaryStats(ma.baseWidth, metricReport);
+                        break;
+                    }
+                }
             }
-
-            FillSummaryStats(ma.baseline, report.baseline);
-            FillSummaryStats(ma.baselineSd, report.baselineSd);
         }
 
-        void FillSummaryStats(const MetricAccumulator& ma, Mongo::Data::RealTimeMetricsReport::SummaryStats& stats)
+        void FillSummaryStats(const MetricAccumulator& ma, Mongo::Data::SummaryStats& stats)
         {
-            stats.sampleTotal = totalZmws;
-
             const auto counts = MakeUnion(ma.Count());
             const auto m1 = MakeUnion(ma.M1());
             const auto m2 = MakeUnion(ma.M2());
+            float summedM0 = 0;
             float summedM1 = 0;
             float summedM2 = 0;
             for (size_t i = 0; i < laneSize; i++)
             {
-                stats.sampleSize += counts[i];
+                summedM0 += counts[i];
                 summedM1 += m1[i];
                 summedM2 += m2[i];
             }
 
-            if (stats.sampleSize > region.minSampleSize)
-            {
-                stats.sampleMean = summedM1 / stats.sampleSize;
-                float sampleVar = (summedM2 - ((summedM1 * summedM1) / stats.sampleSize) / (stats.sampleSize - 1));
-                stats.sampleCV = sqrt(sampleVar) / stats.sampleMean;
+            stats.sampleTotal.push_back(totalZmws);
+            stats.sampleSize.push_back(summedM0);
 
-                // TODO: Need to compute the median. Previously we
-                // were using boost::accumulators which uses a p^2
-                // quantile estimator.
+            if (summedM0 > region.minSampleSize)
+            {
+                float sampleMean = summedM1 / summedM0;
+                float sampleVar = (summedM2 - ((summedM1 * summedM1) / summedM0) / (summedM0 - 1));
+                stats.sampleMean.push_back(sampleMean);
+                stats.sampleCV.push_back(sqrt(sampleVar) / sampleMean);
+
+            } else
+            {
+                stats.sampleMean.push_back(-1);
+                stats.sampleCV.push_back(-1);
+            }
+            // TODO: Need to compute the median. Previously we
+            // were using boost::accumulators which uses a p^2
+            // quantile estimator.
+            stats.sampleMed.push_back(-1);
+        }
+
+        void FillSummaryStats(const AnalogMetricAccumulator& ma, Mongo::Data::SummaryStats& stats)
+        {
+            for (size_t i = 0; i < numAnalogs; ++i)
+            {
+                FillSummaryStats(ma[i], stats);
             }
         }
     };

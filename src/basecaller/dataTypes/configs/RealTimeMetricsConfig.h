@@ -37,36 +37,59 @@
 namespace PacBio::Mongo::Data
 {
 
-struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsReport>
+SMART_ENUM(MetricNames, Baseline, BaselineStd, Pkmid, SNR, PulseRate, PulseWidth, BaseRate, BaseWidth);
+
+struct SummaryStats : public Configuration::PBConfig<SummaryStats>
 {
-    PB_CONFIG(RealTimeMetricsReport);
-    struct SummaryStats : public Configuration::PBConfig<SummaryStats>
-    {
-        PB_CONFIG(SummaryStats);
+public:
+    PB_CONFIG(SummaryStats);
 
-        PB_CONFIG_PARAM(uint32_t, sampleTotal, 0);
-        PB_CONFIG_PARAM(uint32_t, sampleSize, 0);
-        PB_CONFIG_PARAM(float, sampleMean, std::numeric_limits<float>::quiet_NaN());
-        PB_CONFIG_PARAM(float, sampleMedian, std::numeric_limits<float>::quiet_NaN());
-        PB_CONFIG_PARAM(float, sampleCV, std::numeric_limits<float>::quiet_NaN());
-    };
+    PB_CONFIG_PARAM(MetricNames, name, MetricNames::Baseline);
+    PB_CONFIG_PARAM(std::vector<uint32_t>, sampleTotal, {});
+    PB_CONFIG_PARAM(std::vector<uint32_t>, sampleSize, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleMean, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleMed, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleCV, {});
+};
 
-    PB_CONFIG_PARAM(SummaryStats, baseRate, {});
-    PB_CONFIG_PARAM(SummaryStats, baseWidth, {});
-    PB_CONFIG_PARAM(SummaryStats, pulseRate, {});
-    PB_CONFIG_PARAM(SummaryStats, pulseWidth, {});
+struct GroupStats : public Configuration::PBConfig<GroupStats>
+{
+    PB_CONFIG(GroupStats);
 
-    using analogsMetric = std::array<SummaryStats,numAnalogs>;
-    PB_CONFIG_PARAM(analogsMetric, snr, {});
-    PB_CONFIG_PARAM(analogsMetric, pkmid, {});
-    PB_CONFIG_PARAM(SummaryStats, baseline, {});
-    PB_CONFIG_PARAM(SummaryStats, baselineSd, {});
+    PB_CONFIG_PARAM(std::string, region, "");
+    PB_CONFIG_PARAM(std::vector<SummaryStats>, metrics, {});
+};
 
-    PB_CONFIG_PARAM(std::string, name, "");
+struct MetricBlock : public Configuration::PBConfig<MetricBlock>
+{
+    PB_CONFIG(MetricBlock);
+
+    PB_CONFIG_PARAM(std::vector<GroupStats>, groups, {});
+
     PB_CONFIG_PARAM(uint64_t, startFrame, 0);
     PB_CONFIG_PARAM(uint32_t, numFrames, 0);
     PB_CONFIG_PARAM(uint64_t, beginFrameTimeStamp, 0);
     PB_CONFIG_PARAM(uint64_t, endFrameTimeStamp, 0);
+};
+
+struct MetricsChunk : public Configuration::PBConfig<MetricsChunk>
+{
+    PB_CONFIG(MetricsChunk);
+
+    PB_CONFIG_PARAM(uint32_t, numMetricsBlocks, 1);
+    PB_CONFIG_PARAM(std::vector<MetricBlock>, metricsBlocks, {});
+};
+
+struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsReport>
+{
+    PB_CONFIG(RealTimeMetricsReport);
+
+    PB_CONFIG_PARAM(uint64_t, startFrameTimeStamp, 0);
+    PB_CONFIG_PARAM(uint64_t, frameTimeStampDelta, 0);
+
+    PB_CONFIG_OBJECT(MetricsChunk, metricsChunk);
+
+    PB_CONFIG_PARAM(std::string, token, "");
 };
 
 struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsRegion>
@@ -77,6 +100,7 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
                     std::vector<DataSource::ZmwFeatures>{DataSource::ZmwFeatures::Sequencing});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
+    PB_CONFIG_PARAM(std::vector<MetricNames>, metrics, {});
     PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
 };
 
