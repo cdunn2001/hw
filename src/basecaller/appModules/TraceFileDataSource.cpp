@@ -488,7 +488,7 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
     if (mode_ == Mode::Replication)
     {
         assert(replicationDims_.has_value());
-        assert(replicationDims_->first * replicationDims_->second == numZmw);
+        assert(replicationDims_->first * replicationDims_->second == (int)numZmw);
 
         for (uint32_t i = 0; i < features.size(); ++i)
         {

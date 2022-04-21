@@ -11,3 +11,4 @@ Release History
 0.1.10 2022-4-8  Fixes for darkframe and crosstalk and PSF support
 0.1.11 2022-4-11 More fixes for darkframe and crosstalk support. Needed to build with newer hw-mongo artifact.
 0.1.12 2022-4-14 baz2bam progress fixes, PTSD-1462 Nan/Zeros fixes
+0.1.13 2022-4-21 upgrade to hw-mongo to get photoelectronSensitivity, Analogs and refSnr working.
