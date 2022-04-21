@@ -120,7 +120,7 @@ std::vector<Activity> LabelActivities(const BlockLevelMetrics& metrics,
                 throw PBException("ActivityLabeler feature specified by model but not supported by software!");
                 break;
             }
-            assert(!std::isnan(features[fidx]));
+            if (std::isnan(features[fidx])) features[fidx] = 0; 
         }
 
         // Thresholds should not be for standardized or normalized features. If

@@ -61,7 +61,9 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
                 << chunk.StopFrame() << "). Has full coverage:" << chunk.HasFullPacketCoverage();
             break;
         }
+        reporter.Update(0); // keep the heartbeats alive.
     }
+    reporter.ForceNextUpdate();
     if (controller->ExitRequested())
     {
         runner.RequestExit();
@@ -136,8 +138,10 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
 
     boost::multi_array<float, 2> chunkMoms(boost::extents[2][zmwPerChunk], boost::c_storage_order());
 
+    uint32_t ipacket = 0;
     for (const SensorPacket& packet : chunk)
     {
+        ipacket++;
         PBLOG_DEBUG << "CalcChunkMoments of packet " << packet.PacketID() << " of " << chunk.NumPackets();
 
         // Find packet parameters
@@ -169,6 +173,7 @@ boost::multi_array<float, 2> CalcChunkMoments(const DataSource::SensorPacketsChu
             dstMomMap.col(1) = mom1Tmp.square().colwise().sum().array() / (framesPerBlock - 1);
             dstMomMap.col(0) = mom0Tmp.array() - pedestal; // Adjust mean for the offset
         }
+        if (ipacket == chunk.NumPackets()) reporter.ForceNextUpdate();
         reporter.Update(1);
     }
 

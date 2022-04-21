@@ -158,6 +158,7 @@ BazWriterBody::BazWriterBody(
 
         bazWriters_.push_back(std::make_unique<BazIO::BazWriter>(bazName, fh, basecallerConfig.bazIO));
         reporter.Update(numBatches_);
+        PBLOG_INFO << "Opened BAZ file for writing: " << bazName << " zmws: " << zmwInfo.NumZmws();
     }
 }
 

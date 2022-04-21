@@ -66,7 +66,7 @@ public:
                         const Mongo::Data::TraceReanalysis& trcCfg)
         : TraceFileDataSource(std::move(sourceCfg),
                               trcCfg.traceFile,
-                              0, 0, false, 0, 0,
+                              0, 0, {0,0}, false, 0, 0,
                               Mode::Reanalysis,
                               trcCfg.whitelist,
                               Mongo::Data::TraceInputType::Natural)
@@ -77,9 +77,14 @@ public:
     // also provided, to help remove file IO as a bottleneck.
     TraceFileDataSource(DataSourceBase::Configuration sourceCfg,
                         const Mongo::Data::TraceReplication& trcCfg)
-        : TraceFileDataSource(std::move(sourceCfg), trcCfg.traceFile, trcCfg.numFrames,
-                              trcCfg.numZmwLanes, trcCfg.cache,
-                              trcCfg.preloadChunks, trcCfg.maxQueueSize,
+        : TraceFileDataSource(std::move(sourceCfg),
+                              trcCfg.traceFile,
+                              trcCfg.numFrames,
+                              trcCfg.numZmwLanes,
+                              std::make_pair(trcCfg.minRows, trcCfg.minCols),
+                              trcCfg.cache,
+                              trcCfg.preloadChunks,
+                              trcCfg.maxQueueSize,
                               Mode::Replication,
                               {},  //empty whitelist, all ZMW are to be read
                               trcCfg.inputType)
@@ -92,6 +97,7 @@ private:
                         std::string file,
                         uint32_t frames,
                         uint32_t numZmwLanes,
+                        std::pair<uint32_t, uint32_t> minRowCol,
                         bool cache,
                         size_t preloadChunks,
                         size_t maxQueueSize,
@@ -125,15 +131,6 @@ public:
     double FrameRate() const override { return frameRate_; }
 
     int16_t Pedestal() const override { return this->traceFile_.Traces().Pedestal(); }
-
-    boost::multi_array<float,2> CrosstalkFilterMatrix() const override
-    {
-        return this->traceFile_.Scan().ChipInfo().xtalkCorrection;
-    }
-    boost::multi_array<float,2> ImagePsfMatrix() const override
-    {
-        return this->traceFile_.Scan().ChipInfo().imagePsf;
-    }
 
     Sensor::Platform Platform() const override
     {
@@ -189,6 +186,8 @@ private:
     size_t numChunks_;
     size_t maxQueueSize_;
     uint32_t bytesPerValue_;
+    // effective "chip" dims, only used in replication mode
+    std::optional<std::pair<int32_t, int32_t>> replicationDims_;
 
     size_t chunkIndex_ = 0;
 

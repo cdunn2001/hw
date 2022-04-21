@@ -869,6 +869,28 @@ DmeEmHost::InitDetectionModels(const PoolBaselineStats& blStats) const
 }
 
 // static
+void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState, LaneDetModel& ldm)
+{
+    const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
+    const auto& baselineStats = bsa.BaselineFramesStats();
+
+    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
+    FloatVec blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
+
+    FloatVec blVar = fixedBaselineParams_ ? fixedBaselineVar_
+                                          : baselineStats.Variance();
+
+    // If baseline frame count is insufficient, blMean and blVar can be NaN.
+    // In this case, just adopt some semi-arbitrary fallback value.
+    blMean = Blend(isnan(blMean), FallbackBaselineMean(), blMean);
+    blVar = Blend(isnan(blVar), FallbackBaselineVariance(), blVar);
+
+    blVar = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
+
+    InitLaneDetModel(blWeight, blMean, blVar, &ldm);
+}
+
+// static
 void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
                                  const FloatVec& blMean,
                                  const FloatVec& blVar,
@@ -900,29 +922,6 @@ void DmeEmHost::InitLaneDetModel(const FloatVec& blWeight,
         const auto cv2 = pow2(Analog(a).excessNoiseCV);
         aMode.vars = LaneDetModelHost::ModelSignalCovar(cv2, aMean, blVar);
     }
-}
-
-// static
-void DmeEmHost::InitLaneDetModel(const BlStatAccState& blStatAccState,
-                                 LaneDetModel& ldm)
-{
-    const Data::BaselinerStatAccumulator<Data::RawTraceElement> bsa {blStatAccState};
-    const auto& baselineStats = bsa.BaselineFramesStats();
-
-    const FloatVec& blWeight = bsa.BaselineFrameCount() / bsa.TotalFrameCount();
-    FloatVec blMean = fixedBaselineParams_ ? fixedBaselineMean_ : baselineStats.Mean();
-
-    FloatVec blVar = fixedBaselineParams_ ? fixedBaselineVar_
-                                          : baselineStats.Variance();
-
-    // If baseline frame count is insufficient, blMean and blVar can be NaN.
-    // In this case, just adopt some semi-arbitrary fallback value.
-    blMean = Blend(isnan(blMean), FallbackBaselineMean(), blMean);
-    blVar = Blend(isnan(blVar), FallbackBaselineVariance(), blVar);
-
-    blVar = clamp(blVar, BaselineVarianceMin(), BaselineVarianceMax());
-
-    InitLaneDetModel(blWeight, blMean, blVar, &ldm);
 }
 
 }}}     // namespace PacBio::Mongo::Basecaller

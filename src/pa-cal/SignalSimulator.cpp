@@ -114,16 +114,6 @@ HardwareInformation DataSourceSimulator::GetHardwareInformation()
     return retInfo;
 }
 
-boost::multi_array<float, 2> DataSourceSimulator::CrosstalkFilterMatrix() const
-{
-    return MakeUnityMatrix();
-}
-
-boost::multi_array<float, 2> DataSourceSimulator::ImagePsfMatrix() const
-{
-    return MakeUnityMatrix();
-}
-
 MovieInfo DataSourceSimulator::MovieInformation() const
 {
     return DataSource::MockMovieInfo();

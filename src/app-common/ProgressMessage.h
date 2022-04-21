@@ -199,7 +199,7 @@ public:
 
         void Flush(bool force = false)
         {
-            if (force || timeSinceOutput_.GetElapsedMilliseconds() >= minimumReportInterval)
+            if (force || timeSinceOutput_.GetElapsedMilliseconds() >= minimumReportInterval || forceNext_)
             {
                 if (metricsCallback_)
                 {
@@ -207,6 +207,7 @@ public:
                 }
                 pm_->SendMessage(currentStage_);
                 timeSinceOutput_.Restart();
+                forceNext_ = false;
             }
         }
 
@@ -234,6 +235,10 @@ public:
         {
             minimumReportInterval = x;
         }
+        void ForceNextUpdate()
+        {
+            forceNext_ = true;
+        }
     private:
         std::mutex reportMutex_;
         PacBio::Dev::QuietAutoTimer timeSinceOutput_;
@@ -241,6 +246,7 @@ public:
         Output currentStage_;
         std::function<void(Json::Value& metrics)> metricsCallback_;
         uint32_t minimumReportInterval = 1000;
+        bool forceNext_ = false;
     };
 
 public:
