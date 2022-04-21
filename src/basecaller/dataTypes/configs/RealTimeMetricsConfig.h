@@ -50,6 +50,55 @@ public:
     PB_CONFIG_PARAM(std::vector<float>, sampleMean, {});
     PB_CONFIG_PARAM(std::vector<float>, sampleMed, {});
     PB_CONFIG_PARAM(std::vector<float>, sampleCV, {});
+
+    std::stringstream& GenerateCSVHeader(const std::string& statPrefix, std::stringstream& ss) const
+    {
+        assert(sampleTotal.size() == sampleSize.size());
+        assert(sampleTotal.size() == sampleMean.size());
+        assert(sampleTotal.size() == sampleMed.size());
+        assert(sampleTotal.size() == sampleCV.size());
+
+        assert(sampleTotal.size() == 1 || sampleTotal.size() == 4);
+
+        std::vector<std::string> prefixVec = (sampleTotal.size() == 1) ?
+            std::vector<std::string>{statPrefix+"_"} :
+            std::vector<std::string>{statPrefix+"_A_",statPrefix+"_C_",statPrefix+"_G_",statPrefix+"_T_"};
+
+        const auto json = Serialize();
+        for (const auto& memberName : json.getMemberNames())
+        {
+            if (memberName == "name") continue;
+            assert(json[memberName].size() == prefixVec.size());
+
+            for (const auto& prefix : prefixVec)
+            {
+                ss << prefix + memberName + ",";
+            }
+        }
+        return ss;
+    }
+
+    std::stringstream& GenerateCSVRow(std::stringstream& ss) const
+    {
+        assert(sampleTotal.size() == sampleSize.size());
+        assert(sampleTotal.size() == sampleMean.size());
+        assert(sampleTotal.size() == sampleMed.size());
+        assert(sampleTotal.size() == sampleCV.size());
+
+        assert(sampleTotal.size() == 1 || sampleTotal.size() == 4);
+
+        const auto json = Serialize();
+        for (const auto& memberName : json.getMemberNames())
+        {
+            assert(json[memberName].isArray());
+
+            for (const auto& val: json[memberName])
+            {
+                ss << val << ",";
+            }
+        }
+        return ss;
+    }
 };
 
 struct GroupStats : public Configuration::PBConfig<GroupStats>
@@ -58,6 +107,24 @@ struct GroupStats : public Configuration::PBConfig<GroupStats>
 
     PB_CONFIG_PARAM(std::string, region, "");
     PB_CONFIG_PARAM(std::vector<SummaryStats>, metrics, {});
+
+    std::stringstream& GenerateCSVHeader(std::stringstream& ss) const
+    {
+        for (const auto& metric : metrics)
+        {
+            metric.GenerateCSVHeader(region + "_" + metric.name.toString(), ss);
+        }
+        return ss;
+    }
+
+    std::stringstream& GenerateCSVRow(std::stringstream& ss) const
+    {
+        for (const auto& metric : metrics)
+        {
+            metric.GenerateCSVRow(ss);
+        }
+        return ss;
+    }
 };
 
 struct MetricBlock : public Configuration::PBConfig<MetricBlock>
@@ -70,6 +137,34 @@ struct MetricBlock : public Configuration::PBConfig<MetricBlock>
     PB_CONFIG_PARAM(uint32_t, numFrames, 0);
     PB_CONFIG_PARAM(uint64_t, beginFrameTimeStamp, 0);
     PB_CONFIG_PARAM(uint64_t, endFrameTimeStamp, 0);
+
+    std::string GenerateCSVHeader() const
+    {
+        std::stringstream  ss;
+        ss << "StartFrame,NumFrames,StartFrameTS,EndFrameTS,";
+        for (const auto& group : groups)
+        {
+            group.GenerateCSVHeader(ss);
+        }
+        // Change trailing comma to a newline
+        ss.seekp(-1, ss.cur);
+        ss << std::endl;
+        return ss.str();
+    }
+
+    std::string GenerateCSVRow() const
+    {
+        std::stringstream  ss;
+        ss << startFrame << "," << numFrames << "," << beginFrameTimeStamp << "," << endFrameTimeStamp << ",";
+        for (const auto& group : groups)
+        {
+            group.GenerateCSVRow(ss);
+        }
+        // Change trailing comma to a newline
+        ss.seekp(-1, ss.cur);
+        ss << std::endl;
+        return ss.str();
+    }
 };
 
 struct MetricsChunk : public Configuration::PBConfig<MetricsChunk>

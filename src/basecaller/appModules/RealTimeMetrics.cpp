@@ -59,11 +59,6 @@ public:
             regionInfo_.push_back({ std::move(regions[i]), std::move(selections[i]),
                                     SelectedLanesWithFeatures(zmwFeatures[i], featuresMask) });
         }
-
-        if (rtMetricsFile_ != "")
-        {
-            rtMetricsOut_.open(rtMetricsFile_, std::ios_base::trunc);
-        }
     }
 
     ~Impl() = default;
@@ -183,10 +178,18 @@ public:
 
             // TODO: Emit report.
 
-            if (rtMetricsOut_.is_open())
+            if (rtMetricsFile_ != "")
             {
-                jsonWriter_->write(report.Serialize(), &rtMetricsOut_);
-                rtMetricsOut_ << std::endl;
+                if (!rtMetricsOut_.is_open())
+                {
+                    rtMetricsOut_.open(rtMetricsFile_, std::ios_base::trunc);
+                    assert(!report.metricsChunk.metricsBlocks.empty());
+                    rtMetricsOut_ << report.metricsChunk.metricsBlocks[0].GenerateCSVHeader();
+                }
+                for (const auto& block : report.metricsChunk.metricsBlocks)
+                {
+                    rtMetricsOut_ << block.GenerateCSVRow();
+                }
             }
 
             fullMetricsBatchesSeen_ = 0;
