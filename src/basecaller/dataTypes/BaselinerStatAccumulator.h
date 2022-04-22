@@ -108,6 +108,8 @@ private:
     // This is the only member associated with the "rawTrace" data.
     FloatArray rawBaselineSum_ {0};
 
+    // Statistics of the baseline subtracted from the raw trace. Used
+    // to restore absolute baseline levels.
     StatAccumulator<FloatArray> backgroundStats_;
 };
 
