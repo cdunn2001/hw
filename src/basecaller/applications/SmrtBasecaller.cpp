@@ -251,11 +251,30 @@ private:
                 multiArray.resize(boost::extents[0][0]);
             }
         };
-        datasourceConfig.crosstalkFilter = std::make_unique<PacBio::DataSource::CrosstalkFilter>();
-        CopyVectorsToMultiArray( config_.dataSource.crosstalkFilterKernel, datasourceConfig.crosstalkFilter->kernel);
 
-        datasourceConfig.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>();
-        CopyVectorsToMultiArray( config_.dataSource.imagePsfKernel, datasourceConfig.imagePsf->kernel);
+        PBLOG_INFO << "DataSourceConfig:" << config_.dataSource.Serialize();
+        if (config_.dataSource.crosstalkFilterKernel.size() > 0 && config_.dataSource.crosstalkFilterKernel[0].size() > 0)
+        {
+            datasourceConfig.crosstalkFilter = std::make_unique<PacBio::DataSource::CrosstalkFilter>();
+            CopyVectorsToMultiArray( config_.dataSource.crosstalkFilterKernel, datasourceConfig.crosstalkFilter->kernel);
+            PBLOG_NOTICE << "Precalculated crosstalk filter will be passed to the DataSource for processing. PSF will NOT be used.";
+        } 
+        else 
+        {
+            datasourceConfig.crosstalkFilter.reset();
+            PBLOG_WARN << "Precalculated crosstalk filter will not be used, one of the dimensions is zero";
+        }
+        if (config_.dataSource.imagePsfKernel.size() > 0 && config_.dataSource.imagePsfKernel[0].size() > 0)
+        {
+            datasourceConfig.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>();
+            CopyVectorsToMultiArray( config_.dataSource.imagePsfKernel, datasourceConfig.imagePsf->kernel);
+            PBLOG_INFO << "PSF will be passed to the DataSource for processing. ";
+        }
+        else
+        {
+            datasourceConfig.imagePsf.reset();
+            PBLOG_WARN << "PSF will not be used, one of the dimensions is zero";
+        }
 
         datasourceConfig.decimationMask.reset(); // TODO = std::make_unique<PacBio::DataSource::DecimationMask>(thing);
 
