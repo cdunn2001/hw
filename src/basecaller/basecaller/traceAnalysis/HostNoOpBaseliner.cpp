@@ -42,8 +42,10 @@ HostNoOpBaseliner::FilterBaseline(const Data::TraceBatchVariant& batch)
                 auto copy = (inItr.Extract() - pedestal_) * movieScaler_;
                 outItr.Store(copy);
                 Mask isBaseline { false };
-                baselinerStats.AddSample(background, copy, copy, isBaseline);
+                baselinerStats.AddSample(copy, copy, isBaseline);
             }
+
+            baselinerStats.AddSampleBackground(background);
 
             statsView[laneIdx] = baselinerStats.GetState();
         }

@@ -42,10 +42,11 @@ public:     // Mutating functions
     /// \a x contains raw trace values.
     /// \a y contains baseline-subtracted trace values.
     /// Only add to baseline statistics where \a isBaseline is true.
-    void AddSample(const LaneArray& subtractedBaseline,
-                   const LaneArray& rawTrace,
+    void AddSample(const LaneArray& rawTrace,
                    const LaneArray& baselineSubtracted,
                    const Mask& isBaseline);
+
+    void AddSampleBackground(const LaneArray& subtractedBaseline);
 
 public:     // Const functions
     BaselinerStatAccumState GetState() const

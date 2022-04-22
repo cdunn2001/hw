@@ -36,8 +36,7 @@ namespace Mongo {
 namespace Data {
 
 template <typename T>
-void BaselinerStatAccumulator<T>::AddSample(const LaneArray& subtractedBaseline,
-                                            const LaneArray& rawTrace,
+void BaselinerStatAccumulator<T>::AddSample(const LaneArray& rawTrace,
                                             const LaneArray& blSubtracted,
                                             const Mask& isBaseline)
 {
@@ -51,7 +50,12 @@ void BaselinerStatAccumulator<T>::AddSample(const LaneArray& subtractedBaseline,
     // Add frame to baseline statistics if so flagged
     baselineSubtractedStats_.AddSample(bs, isBaseline);
     rawBaselineSum_ += Blend(isBaseline, rawTrace, LaneArray{0});
+    
+}
 
+template <typename T>
+void BaselinerStatAccumulator<T>::AddSampleBackground(const LaneArray& subtractedBaseline)
+{
     // accumulate the substracted baseline
     backgroundStats_.AddSample(subtractedBaseline);
     

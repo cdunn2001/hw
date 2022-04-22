@@ -124,26 +124,28 @@ HostMultiScaleBaseliner::LaneBaseliner::EstimateBaseline(const Data::BlockView<c
         auto lowerVal = loIt.Extract() - pedestal_;
         auto upperVal = upIt.Extract() - pedestal_;
         FloatArray blEst = GetSmoothedBlEstimate(lowerVal, upperVal);
+        const auto subtractedBaseline = blEst * scaler_;
 
         // Estimates are scattered on stride intervals.
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
             // Data shifted and scaled
-            auto rawSignalScaled = (trIt.Extract() - pedestal_) * scaler_;
-            auto subtractedBaseline = blEst * scaler_;
+            const auto rawSignalScaled = (trIt.Extract() - pedestal_) * scaler_;      
             LaneArray blSubtractedFrame(rawSignalScaled - subtractedBaseline);
             // ... stored as output traces
             blsIt.Store(blSubtractedFrame);
             // ... and added to statistics
-            AddToBaselineStats(subtractedBaseline, rawSignalScaled, blSubtractedFrame, baselinerStats);
+            AddToBaselineStats(rawSignalScaled, blSubtractedFrame, baselinerStats);
         }
+
+        baselinerStats.AddSampleBackground(subtractedBaseline);
+
     }
 
     return baselinerStats;
 }
 
-void HostMultiScaleBaseliner::LaneBaseliner::AddToBaselineStats(const LaneArray& subtractedBaseline,
-                                                                const LaneArray& traceData,
+void HostMultiScaleBaseliner::LaneBaseliner::AddToBaselineStats(const LaneArray& traceData,
                                                                 const LaneArray& baselineSubtractedFrame,
                                                                 Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
@@ -166,7 +168,7 @@ void HostMultiScaleBaseliner::LaneBaseliner::AddToBaselineStats(const LaneArray&
     latHMask2_ = latHMask1_;
     latHMask1_ = maskHp1;
 
-    baselinerStats.AddSample(subtractedBaseline, latRawData_, latData_, mask);
+    baselinerStats.AddSample(latRawData_, latData_, mask);
 
     // Set latent data.
     latRawData_ = traceData;
