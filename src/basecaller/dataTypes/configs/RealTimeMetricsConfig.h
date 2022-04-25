@@ -215,4 +215,58 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
 
 } // namespace PacBio::Mongo::Data
 
+namespace PacBio::Configuration {
+
+template <>
+inline void ValidateConfig<Mongo::Data::RealTimeMetricsRegion>(
+        const Mongo::Data::RealTimeMetricsRegion& config,
+        ValidationResults* results)
+{
+    if (config.minSampleSize < 2)
+        results->AddError("Sample size for RT Metrics region " + config.name + " cannot be less than 2.  It was " + std::to_string(config.minSampleSize));
+
+    std::string name = config.name;
+    if (config.name.empty())
+    {
+        name = "NoName";
+        results->AddError("RT Metrics region has no name.  (Subsequent error messages will refer to it as \""+name+"\")");
+    }
+
+    if (config.roi.empty())
+        results->AddError("No ROI specified for RT Metrics region " + name);
+
+    if (config.featuresForFilter.empty())
+        results->AddError("No ZMWFeatures were selected for RT Metrics region " + name);
+
+    if (config.metrics.empty())
+        results->AddError("No metrics selected to compute for RT Metrics region " + name);
+}
+
+template <>
+inline void ValidateConfig<Mongo::Data::RealTimeMetricsConfig>(
+        const Mongo::Data::RealTimeMetricsConfig& config,
+        ValidationResults* results)
+{
+    const bool enabled = config.csvOutputFile != "" || config.jsonOutputFile != "";
+    if (enabled && config.regions.empty())
+    {
+        results->AddError("RT Metrics were enabled but no regions are defined");
+    } else {
+        std::map<std::string, int> counts;
+        for (const auto& r : config.regions)
+        {
+            counts[r.name]++;
+        }
+
+        for (const auto& kv : counts)
+        {
+            if (kv.second > 1)
+                results->AddError("RT Metrics region name was specified multiple times: " + kv.first);
+        }
+
+    }
+}
+
+}   // namespace PacBio::Configuration
+
 #endif // basecaller_dataTypes_configs_RealTimeMetricsConfig_H_
