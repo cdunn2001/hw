@@ -89,7 +89,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                     {
                         using T = std::remove_pointer_t<decltype(traces->data())>;
                         file_.Traces().WriteTraceBlock<T>(*traces);
-                        unitCellsWritten += traces->size();
+                        unitCellsWritten += traces->num_elements();
                     }, data);
                 }
             }
