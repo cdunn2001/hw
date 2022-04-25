@@ -214,6 +214,7 @@ public:
                 jsonWriter_->write(report.Serialize(), &rtMetricsOut);
                 rtMetricsOut << std::endl;
 
+                rtMetricsOut.close();
                 boost::filesystem::rename(tmpName, jsonFileName_);
             }
 
