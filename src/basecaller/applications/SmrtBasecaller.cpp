@@ -625,11 +625,9 @@ private:
 
             return std::make_unique<RealTimeMetrics>(config_.algorithm.Metrics.framesPerHFMetricBlock,
                                                      poolDims.size(),
-                                                     std::move(config_.realTimeMetrics.regions),
+                                                     config_.realTimeMetrics,
                                                      std::move(selections), properties,
-                                                     analysisConfig.movieInfo.frameRate,
-                                                     config_.realTimeMetrics.rtMetricsFile,
-                                                     config_.realTimeMetrics.useSingleActivityLabels);
+                                                     analysisConfig.movieInfo.frameRate);
         }
         else
         {

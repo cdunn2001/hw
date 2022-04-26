@@ -60,11 +60,10 @@ public:
                                                                     uint32_t featuresMask);
 public:
     RealTimeMetrics(uint32_t framesPerHFMetricBlock, size_t numBatches,
-                    std::vector<Mongo::Data::RealTimeMetricsRegion>&& regions,
+                    const Mongo::Data::RealTimeMetricsConfig& rtConfig,
                     std::vector<DataSource::DataSourceBase::LaneSelector>&& selections,
                     const std::vector<std::vector<uint32_t>>& zmwFeatures,
-                    float frameRate, const std::string& csvOutputFile,
-                    bool useSingleActivityLabels);
+                    float frameRate);
     ~RealTimeMetrics();
 
     size_t ConcurrencyLimit() const override { return 1; }
