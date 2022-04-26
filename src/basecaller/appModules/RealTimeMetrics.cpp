@@ -23,6 +23,9 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/median.hpp>
 #include <boost/filesystem.hpp>
 
 #include <pacbio/logging/Logger.h>
@@ -131,6 +134,8 @@ public:
 
                 for (auto& r: regionInfo_)
                 {
+                    const auto stride = r.region.medianIntraLaneStride;
+
                     for (const auto laneIdx: r.selection.SelectedLanes(laneBegin, laneEnd))
                     {
                         auto& metrics = metricsPtr->GetHostView()[laneIdx - laneBegin];
@@ -148,23 +153,23 @@ public:
                             mask &= (activityLabel == static_cast<uint16_t>(Data::HQRFPhysicalStates::SINGLE));
 
                         LaneArray<float> numBases(LaneArray<uint16_t>(metrics.numBases));
-                        r.ma.baseRate.AddSample(numBases / framesPerHFMetricBlock_, mask);
+                        r.ma.baseRate.AddSample(numBases / framesPerHFMetricBlock_, mask, stride);
 
                         LaneArray<float> numBaseFrames(LaneArray<uint16_t>(metrics.numBaseFrames));
-                        r.ma.baseWidth.AddSample((numBaseFrames / numBases) / frameRate_, mask & (numBases != 0));
+                        r.ma.baseWidth.AddSample((numBaseFrames / numBases) / frameRate_, mask & (numBases != 0), stride);
 
                         LaneArray<float> numPulses(LaneArray<uint16_t>(metrics.numPulses));
-                        r.ma.pulseRate.AddSample(numPulses / framesPerHFMetricBlock_, mask);
+                        r.ma.pulseRate.AddSample(numPulses / framesPerHFMetricBlock_, mask, stride);
 
                         LaneArray<float> numPulseFrames(LaneArray<uint16_t>(metrics.numPulseFrames));
-                        r.ma.pulseWidth.AddSample((numPulseFrames / numPulses) / frameRate_, mask & (numPulses != 0));
+                        r.ma.pulseWidth.AddSample((numPulseFrames / numPulses) / frameRate_, mask & (numPulses != 0), stride);
 
                         LaneArray<float> baseline(metrics.frameBaselineDWS);
-                        r.ma.baseline.AddSample(baseline, mask);
+                        r.ma.baseline.AddSample(baseline, mask, stride);
 
                         LaneArray<float> baselineVar(metrics.frameBaselineVarianceDWS);
                         auto baselineSd = sqrt(baselineVar);
-                        r.ma.baselineSd.AddSample(baselineSd, mask & (baselineSd != 0));
+                        r.ma.baselineSd.AddSample(baselineSd, mask & (baselineSd != 0), stride);
 
                         for (size_t i = 0; i < numAnalogs; i++)
                         {
@@ -172,8 +177,8 @@ public:
                             LaneArray<float> pkmidFrames(LaneArray<uint16_t>(metrics.numPkMidFrames[i]));
                             const auto pkmidMean = pkmid / pkmidFrames;
 
-                            r.ma.pkmid[i].AddSample(pkmidMean, mask & (pkmidFrames != 0));
-                            r.ma.snr[i].AddSample(pkmidMean / baselineSd, mask & (baselineSd != 0));
+                            r.ma.pkmid[i].AddSample(pkmidMean, mask & (pkmidFrames != 0), stride);
+                            r.ma.snr[i].AddSample(pkmidMean / baselineSd, mask & (baselineSd != 0), stride);
                         }
                     }
                 }
@@ -271,7 +276,36 @@ private:
         std::vector<Mongo::LaneMask<>> laneMasks;
 
         using FloatArray = Mongo::LaneArray<float>;
-        using MetricAccumulator = Mongo::StatAccumulator<FloatArray>;
+        // Small wrapper class, that basically looks like a StatAccumulator, but also
+        // provides a median calculation.
+        //
+        // Note: This is potentially a temporary workaround.  Adding the median slowed
+        //       down computations *drastically*, though there wasn't time to determine
+        //       if that's an intrinsic cost to computing the median or if we are hurting
+        //       from not being vectorized. Attempts to get the boost accumulators to
+        //       work with our LaneArray types were not successful, though I ran out of time
+        //       so it may still be a possibility in the future.
+        struct MetricAccumulator
+        {
+            void AddSample(const FloatArray& sample, const LaneMask<>& mask, uint32_t medianStride)
+            {
+                statAccum_.AddSample(sample, mask);
+
+                auto sVec = Simd::MakeUnion(sample);
+                for (size_t i = 0; i < mask.ScalarCount; i += medianStride)
+                {
+                    if(mask[i]) median_(sVec[i]);
+                }
+            }
+
+            const FloatArray& Count() const { return statAccum_.Count(); }
+            const FloatArray& M1() const { return statAccum_.M1(); }
+            const FloatArray& M2() const { return statAccum_.M2(); }
+            float Median() const { return boost::accumulators::median(median_); }
+        private:
+            Mongo::StatAccumulator<FloatArray> statAccum_;
+            boost::accumulators::accumulator_set<float, boost::accumulators::stats<boost::accumulators::tag::median>> median_;
+        };
         using AnalogMetricAccumulator = std::array<MetricAccumulator,Mongo::numAnalogs>;
 
         struct MetricAccumulators
@@ -364,16 +398,14 @@ private:
                 float sampleVar = (summedM2 - ((summedM1 * summedM1) / summedM0) / (summedM0 - 1));
                 stats.sampleMean.push_back(sampleMean);
                 stats.sampleCV.push_back(sqrt(sampleVar) / sampleMean);
+                stats.sampleMed.push_back(ma.Median());
 
             } else
             {
                 stats.sampleMean.push_back(-1);
                 stats.sampleCV.push_back(-1);
+                stats.sampleMed.push_back(-1);
             }
-            // TODO: Need to compute the median. Previously we
-            // were using boost::accumulators which uses a p^2
-            // quantile estimator.
-            stats.sampleMed.push_back(-1);
         }
 
         void FillSummaryStats(const AnalogMetricAccumulator& ma, Mongo::Data::SummaryStats& stats)

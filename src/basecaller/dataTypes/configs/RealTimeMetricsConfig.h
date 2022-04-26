@@ -197,6 +197,10 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
     PB_CONFIG_PARAM(std::vector<MetricNames>, metrics, {});
     PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
+    // Stride used during the median computation only, since it is expensive.  A value that divides
+    // evenly into 64 makes the most sense, but anything should work, the sampling will just end up
+    // slightly irregular since the stride counter always starts at 0 with the beginning of each lane
+    PB_CONFIG_PARAM(uint32_t, medianIntraLaneStride, 1);
 };
 
 class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConfig>
