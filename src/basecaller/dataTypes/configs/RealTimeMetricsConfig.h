@@ -192,7 +192,7 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
     PB_CONFIG(RealTimeMetricsRegion);
 
     PB_CONFIG_PARAM(std::vector<DataSource::ZmwFeatures>, featuresForFilter,
-                    std::vector<DataSource::ZmwFeatures>{DataSource::ZmwFeatures::Sequencing});
+                    std::vector<DataSource::ZmwFeatures>{});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
     PB_CONFIG_PARAM(std::vector<MetricNames>, metrics, {});
@@ -203,11 +203,24 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
     PB_CONFIG_PARAM(uint32_t, medianIntraLaneStride, 1);
 };
 
+// TODO is this an API snafu?  These defaults have a lot of platform/layout specific
+//      information.  Should it have been querriable from the DataSource API instead?
+std::vector<RealTimeMetricsRegion> DefaultKestrelRegions();
+
 class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConfig>
 {
     PB_CONFIG(RealTimeMetricsConfig);
 
-    PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
+    PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions,
+                    Configuration::DefaultFunc([](const std::string& csvOutputFile,
+                                                  const std::string& jsonOutputFile)
+                    {
+                        if (csvOutputFile.empty() && jsonOutputFile.empty())
+                            return std::vector<RealTimeMetricsRegion>{};
+                        else
+                            return DefaultKestrelRegions();
+                    }, {"csvOutputFile", "jsonOutputFile"}));
+
     // The csv format will be continusouly appended, to maintain a history of all RT Metrics produced
     PB_CONFIG_PARAM(std::string, csvOutputFile, "");
     // The json format will only include the most recent RT Metrics produced.  It will be updated
