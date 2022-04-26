@@ -58,8 +58,23 @@ public:
                                                     rtConfig.regions[i].featuresForFilter.end(), 0,
                                                     [](uint32_t a, uint32_t b) { return a | b; });
             regionNames.push_back(rtConfig.regions[i].name);
-            regionInfo_.push_back({rtConfig.regions[i], std::move(selections[i]),
-                                    SelectedLanesWithFeatures(zmwFeatures[i], featuresMask) });
+
+            auto fullMasks = SelectedLanesWithFeatures(zmwFeatures[i], featuresMask);
+
+            // Filter out all lanes that don't have any matching features
+            std::vector<uint32_t> filteredLanes;
+            std::vector<LaneMask<>> filteredMasks;
+            size_t idx = 0;
+            for (const auto& lane : selections[i])
+            {
+                if (any(fullMasks[idx]))
+                {
+                    filteredMasks.push_back(fullMasks[idx]);
+                    filteredLanes.push_back(lane);
+                }
+                idx++;
+            }
+            regionInfo_.emplace_back(rtConfig.regions[i], DataSourceBase::LaneSelector{filteredLanes}, std::move(filteredMasks));
         }
 
         if (csvFileName_ != "" && boost::filesystem::exists(csvFileName_))
