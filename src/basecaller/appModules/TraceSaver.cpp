@@ -268,21 +268,23 @@ TraceSaverBody::~TraceSaverBody()
             std::this_thread::sleep_for(std::chrono::seconds{1});
         }
         enableWriterThread_ = false;
-        try
+        if (writeFuture_.valid())
         {
-            PBLOG_INFO << "Waiting for SaverThread to complete";
-            assert(writeFuture_.valid());
-            auto samplesWritten = writeFuture_.get();
-            if (samplesWritten == numFrames_ * numZmw_)
-                PBLOG_INFO << "SaverThread done, TraceFile is complete";
-            else
-                PBLOG_WARN << "SaverThread finished without error, but only wrote " << samplesWritten << " samples out of " << numFrames_ * numZmw_;
-        }
-        catch (const std::exception& e)
-        {
-            PBLOG_ERROR << "Exception in TraceSaver thread: ";
-            PBLOG_ERROR << e.what();
-            PBLOG_ERROR << "We're in a destructor, so swallowing exception...";
+            try
+            {
+                PBLOG_INFO << "Waiting for SaverThread to complete";
+                auto samplesWritten = writeFuture_.get();
+                if (samplesWritten == numFrames_ * numZmw_)
+                    PBLOG_INFO << "SaverThread done, TraceFile is complete";
+                else
+                    PBLOG_WARN << "SaverThread finished without error, but only wrote " << samplesWritten << " samples out of " << numFrames_ * numZmw_;
+            }
+            catch (const std::exception& e)
+            {
+                PBLOG_ERROR << "Exception in TraceSaver thread: ";
+                PBLOG_ERROR << e.what();
+                PBLOG_ERROR << "We're in a destructor, so swallowing exception...";
+            }
         }
     }
 }
