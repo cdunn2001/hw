@@ -238,6 +238,10 @@ public:
         m0_[threadIdx.x] = 0.0f;
         m1_[threadIdx.x] = 0.0f;
         m2_[threadIdx.x] = 0.0f;
+
+        m0Bknd_[threadIdx.x] = 0.0f;
+        m1Bknd_[threadIdx.x] = 0.0f;
+        m2Bknd_[threadIdx.x] = 0.0f;
     }
 
     __device__ void AddBaselineData(PBHalf2 raw,
@@ -267,6 +271,16 @@ public:
         m2_[threadIdx.x] += valf*valf;
     }
 
+    __device__ void AddSampleBackground(PBHalf2 value)
+    {
+        PBHalf2 one(1.0f);
+        PBFloat2 valf(value);
+
+        m0Bknd_[threadIdx.x] += one;
+        m1Bknd_[threadIdx.x] += value;
+        m2Bknd_[threadIdx.x] += valf*valf;
+    }
+
     __device__ void FillOutputStats(Mongo::Data::BaselinerStatAccumState& stats)
     {
         // Baseline stats
@@ -292,6 +306,14 @@ public:
         stats.fullAutocorrState.basicStats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].Y();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x]   = m2_[threadIdx.x].X();
         stats.fullAutocorrState.basicStats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
+
+        //background stats
+        stats.backgroundStats.moment0[2*threadIdx.x]   = m0Bknd_[threadIdx.x].FloatX();
+        stats.backgroundStats.moment0[2*threadIdx.x+1] = m0Bknd_[threadIdx.x].FloatY();
+        stats.backgroundStats.moment1[2*threadIdx.x]   = m1Bknd_[threadIdx.x].X();
+        stats.backgroundStats.moment1[2*threadIdx.x+1] = m1Bknd_[threadIdx.x].Y();
+        stats.backgroundStats.moment2[2*threadIdx.x]   = m2Bknd_[threadIdx.x].X();
+        stats.backgroundStats.moment2[2*threadIdx.x+1] = m2Bknd_[threadIdx.x].Y();
     }
 
 private:
@@ -308,6 +330,10 @@ private:
     Utility::CudaArray<PBHalf2,  blockThreads> m0_;
     Utility::CudaArray<PBFloat2,  blockThreads> m1_;
     Utility::CudaArray<PBFloat2, blockThreads> m2_;
+    // Background stats computed from subtracted baseline
+    Utility::CudaArray<PBHalf2,  blockThreads> m0Bknd_;
+    Utility::CudaArray<PBFloat2,  blockThreads> m1Bknd_;
+    Utility::CudaArray<PBFloat2, blockThreads> m2Bknd_;
 };
 
 struct BlSubtractParams
@@ -415,6 +441,12 @@ struct LatentBaselineData
 
             latRawData = rawTrace;
             latData = blSubtracted;
+        }
+
+        __device__ void AddToBackgroundStats(PBHalf2 subtractedBaseline,
+                                             StatAccumulator<blockThreads, lag>& stats)
+        {
+            stats.AddSampleBackground(subtractedBaseline);
         }
     };
 
@@ -561,6 +593,8 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
                                            blSubtractedFrame,
                                            sParams.scale, stats);
         }
+        localLatent.AddToBackgroundStats(ToShort(blEst * sParams.scale), stats);
+
     }
 
     stats.FillOutputStats(outputStats[blockIdx.x]);
