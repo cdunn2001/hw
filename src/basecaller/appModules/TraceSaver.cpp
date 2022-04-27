@@ -79,7 +79,7 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
         enableWriterThread_ = true;
         writeFuture_ = std::async(std::launch::async, [this]()
         {
-            uint64_t unitCellsWritten = 0;
+            uint64_t samplesWritten = 0;
             PreppedTracesVariant data;
             while (enableWriterThread_)
             {
@@ -89,11 +89,11 @@ TraceSaverBody::TraceSaverBody(const std::string& filename,
                     {
                         using T = std::remove_pointer_t<decltype(traces->data())>;
                         file_.Traces().WriteTraceBlock<T>(*traces);
-                        unitCellsWritten += traces->size();
+                        samplesWritten += traces->num_elements();
                     }, data);
                 }
             }
-            return unitCellsWritten;
+            return samplesWritten;
         });
     };
 
@@ -237,9 +237,9 @@ void TraceSaverBody::Process(PreppedTracesVariant traceVariant)
                             PBLOG_ERROR << "Trace Saving queue is full and the dedicated thread has died";
                             PBLOG_ERROR << "Checking for exception...";
                             assert(writeFuture_.valid());
-                            auto writtenPixels = writeFuture_.get();
+                            auto writtenSamples = writeFuture_.get();
                             PBLOG_ERROR << "No Exception found.  Thread terminated early after writing "
-                                        << writtenPixels << " unitCells";
+                                        << writtenSamples << " samples";
                             throw PBException("Unknown failure in TraceSaver");
                         }
                         PBLOG_WARN << "Trace Saving queue is full... Sleeping!";
@@ -268,21 +268,23 @@ TraceSaverBody::~TraceSaverBody()
             std::this_thread::sleep_for(std::chrono::seconds{1});
         }
         enableWriterThread_ = false;
-        try
+        if (writeFuture_.valid())
         {
-            PBLOG_INFO << "Waiting for SaverThread to complete";
-            assert(writeFuture_.valid());
-            auto unitCellsWritten = writeFuture_.get();
-            if (unitCellsWritten == numFrames_ * numZmw_)
-                PBLOG_INFO << "SaverThread done, TraceFile is complete";
-            else
-                PBLOG_WARN << "SaverThread finished without error, but only wrote " << unitCellsWritten << " unitCells out of " << numFrames_ * numZmw_;
-        }
-        catch (const std::exception& e)
-        {
-            PBLOG_ERROR << "Exception in TraceSaver thread: ";
-            PBLOG_ERROR << e.what();
-            PBLOG_ERROR << "We're in a destructor, so swallowing exception...";
+            try
+            {
+                PBLOG_INFO << "Waiting for SaverThread to complete";
+                auto samplesWritten = writeFuture_.get();
+                if (samplesWritten == numFrames_ * numZmw_)
+                    PBLOG_INFO << "SaverThread done, TraceFile is complete";
+                else
+                    PBLOG_WARN << "SaverThread finished without error, but only wrote " << samplesWritten << " samples out of " << numFrames_ * numZmw_;
+            }
+            catch (const std::exception& e)
+            {
+                PBLOG_ERROR << "Exception in TraceSaver thread: ";
+                PBLOG_ERROR << e.what();
+                PBLOG_ERROR << "We're in a destructor, so swallowing exception...";
+            }
         }
     }
 }
