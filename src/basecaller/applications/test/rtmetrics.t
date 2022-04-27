@@ -20,8 +20,8 @@
 
   $ head -n1 rtmetrics.json | python -m json.tool | grep -A6 baseline
           "baseline": {
-              "sampleCV": 117.0*, (glob)
-              "sampleMean": 0.79*, (glob)
+              "sampleCV": 63.99224090576172,
+              "sampleMean": 299.8525085449219,
               "sampleMedian": null,
               "sampleSize": 4096,
               "sampleTotal": 4096

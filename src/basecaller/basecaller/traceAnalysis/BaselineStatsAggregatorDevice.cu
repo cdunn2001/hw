@@ -92,6 +92,7 @@ __global__ void MergeBaselinerStats(DeviceView<BaselinerStatAccumState> l,
 
     MergeAutocorr(lb.fullAutocorrState, rb.fullAutocorrState);
     MergeStat(lb.baselineStats, rb.baselineStats);
+    MergeStat(lb.backgroundStats, rb.backgroundStats);
 
     lb.traceMin[threadIdx.x] = min(lb.traceMin[threadIdx.x], rb.traceMin[threadIdx.x]);
     lb.traceMax[threadIdx.x] = max(lb.traceMax[threadIdx.x], rb.traceMax[threadIdx.x]);
@@ -128,6 +129,7 @@ __global__ void ResetStats(DeviceView<BaselinerStatAccumState> stats)
     ResetArray(blockStats.traceMax, std::numeric_limits<int16_t>::lowest());
     ResetStat(blockStats.baselineStats);
     ResetArray(blockStats.rawBaselineSum);
+    ResetStat(blockStats.backgroundStats);
 }
 
 }

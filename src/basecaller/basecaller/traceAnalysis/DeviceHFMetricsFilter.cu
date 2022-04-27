@@ -96,6 +96,7 @@ public: // metrics
     AnalogMetric<float2> pkZvarAcc;
 
     // The baseline stat accumulator:
+    SingleMetric<float2> baselineOffset;
     SingleMetric<float2> baselineM0;
     SingleMetric<float2>  baselineM1;
     SingleMetric<float2>  baselineM2;
@@ -152,6 +153,9 @@ __device__ uint2 operator+(uint2 l, uint2 r)
 
 __device__ float2 operator-(float2 l, float2 r)
 { return make_float2(l.x - r.x, l.y - r.y); }
+
+__device__ float2 operator+(float2 l, float2 r)
+{ return make_float2(l.x + r.x, l.y + r.y); }
 
 __device__ float2 operator*(float2 l, float2 r)
 { return make_float2(l.x * r.x, l.y * r.y); }
@@ -273,6 +277,7 @@ __global__ void InitializeMetrics(
     blockMetrics.numPulseLabelStutters[threadIdx.x] = 0;
     blockMetrics.pulseDetectionScore[threadIdx.x] = 0.0f;
 
+    blockMetrics.baselineOffset[threadIdx.x] = zero;
     blockMetrics.baselineM0[threadIdx.x] = zero;
     blockMetrics.baselineM1[threadIdx.x] = zero;
     blockMetrics.baselineM2[threadIdx.x] = zero;
@@ -438,6 +443,22 @@ __global__ void ProcessChunk(
 
     // AddMetrics: accumulate metrics from other stages
     { // baseline metrics (correctly taken from pulse accumulator)
+        // collect the subtracted baseline and shift the pulse detection baseline.
+        // see the equivalent for the host code in BasecallingMetricsAccumulator::AddBatchMetrics
+        // extract subtracted baseline mean and count
+        const auto& subtractedBaselineM1 = getWideLoad(baselinerStats[blockIdx.x].backgroundStats.moment1);
+        const auto& subtractedBaselineM0 = getWideLoad(baselinerStats[blockIdx.x].backgroundStats.moment0);
+        const auto subtractedBaseline = subtractedBaselineM1 / subtractedBaselineM0;
+        // merge the baseline offset (see the equivalent in the StatAccumulator::+= operator in host code )
+        // note we are assuming offsets have not been set to NaN, only zero(see below)
+        const auto one = asFloat2(PBHalf2(1.0f));
+        auto& metricsOffset = blockMetrics.baselineOffset[threadIdx.x];
+        const auto& pdMetricsM0 = getWideLoad(pdMetrics[blockIdx.x].moment0);
+        const auto& metricsBaselineM0 = blockMetrics.baselineM0[threadIdx.x];
+        const auto w = pdMetricsM0 / (metricsBaselineM0 + pdMetricsM0);
+        const auto offsetNew = (one - w) * metricsOffset + w * subtractedBaseline; 
+        metricsOffset = Blend(isnan(offsetNew), metricsOffset, offsetNew);
+        // and merge the moments
         blockMetrics.baselineM0[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment0);
         blockMetrics.baselineM1[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment1);
         blockMetrics.baselineM2[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment2);
@@ -721,8 +742,8 @@ __global__ void FinalizeMetrics(
     outMetrics.pixelChecksum[indX] = blockMetrics.pixelChecksum[threadIdx.x].X();
     outMetrics.pixelChecksum[indY] = blockMetrics.pixelChecksum[threadIdx.x].Y();
 
-    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].x / blockMetrics.baselineM0[threadIdx.x].x;
-    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].y / blockMetrics.baselineM0[threadIdx.x].y;
+    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].x / blockMetrics.baselineM0[threadIdx.x].x + blockMetrics.baselineOffset[threadIdx.x].x;
+    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].y / blockMetrics.baselineM0[threadIdx.x].y + blockMetrics.baselineOffset[threadIdx.x].y;;
     const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
                                blockMetrics.baselineM1[threadIdx.x],
                                blockMetrics.baselineM2[threadIdx.x]);
