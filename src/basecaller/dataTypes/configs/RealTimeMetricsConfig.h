@@ -37,36 +37,154 @@
 namespace PacBio::Mongo::Data
 {
 
-struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsReport>
+SMART_ENUM(MetricNames, Baseline, BaselineStd, Pkmid, SNR, PulseRate, PulseWidth, BaseRate, BaseWidth);
+
+struct SummaryStats : public Configuration::PBConfig<SummaryStats>
 {
-    PB_CONFIG(RealTimeMetricsReport);
-    struct SummaryStats : public Configuration::PBConfig<SummaryStats>
+public:
+    PB_CONFIG(SummaryStats);
+
+    PB_CONFIG_PARAM(MetricNames, name, MetricNames::Baseline);
+    PB_CONFIG_PARAM(std::vector<uint32_t>, sampleTotal, {});
+    PB_CONFIG_PARAM(std::vector<uint32_t>, sampleSize, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleMean, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleMed, {});
+    PB_CONFIG_PARAM(std::vector<float>, sampleCV, {});
+
+    std::stringstream& GenerateCSVHeader(const std::string& statPrefix, std::stringstream& ss) const
     {
-        PB_CONFIG(SummaryStats);
+        assert(sampleTotal.size() == sampleSize.size());
+        assert(sampleTotal.size() == sampleMean.size());
+        assert(sampleTotal.size() == sampleMed.size());
+        assert(sampleTotal.size() == sampleCV.size());
 
-        PB_CONFIG_PARAM(uint32_t, sampleTotal, 0);
-        PB_CONFIG_PARAM(uint32_t, sampleSize, 0);
-        PB_CONFIG_PARAM(float, sampleMean, std::numeric_limits<float>::quiet_NaN());
-        PB_CONFIG_PARAM(float, sampleMedian, std::numeric_limits<float>::quiet_NaN());
-        PB_CONFIG_PARAM(float, sampleCV, std::numeric_limits<float>::quiet_NaN());
-    };
+        assert(sampleTotal.size() == 1 || sampleTotal.size() == 4);
 
-    PB_CONFIG_PARAM(SummaryStats, baseRate, {});
-    PB_CONFIG_PARAM(SummaryStats, baseWidth, {});
-    PB_CONFIG_PARAM(SummaryStats, pulseRate, {});
-    PB_CONFIG_PARAM(SummaryStats, pulseWidth, {});
+        std::vector<std::string> prefixVec = (sampleTotal.size() == 1) ?
+            std::vector<std::string>{statPrefix+"_"} :
+            std::vector<std::string>{statPrefix+"_A_",statPrefix+"_C_",statPrefix+"_G_",statPrefix+"_T_"};
 
-    using analogsMetric = std::array<SummaryStats,numAnalogs>;
-    PB_CONFIG_PARAM(analogsMetric, snr, {});
-    PB_CONFIG_PARAM(analogsMetric, pkmid, {});
-    PB_CONFIG_PARAM(SummaryStats, baseline, {});
-    PB_CONFIG_PARAM(SummaryStats, baselineSd, {});
+        const auto json = Serialize();
+        for (const auto& memberName : json.getMemberNames())
+        {
+            if (memberName == "name") continue;
+            assert(json[memberName].size() == prefixVec.size());
 
-    PB_CONFIG_PARAM(std::string, name, "");
+            for (const auto& prefix : prefixVec)
+            {
+                ss << prefix + memberName + ",";
+            }
+        }
+        return ss;
+    }
+
+    std::stringstream& GenerateCSVRow(std::stringstream& ss) const
+    {
+        assert(sampleTotal.size() == sampleSize.size());
+        assert(sampleTotal.size() == sampleMean.size());
+        assert(sampleTotal.size() == sampleMed.size());
+        assert(sampleTotal.size() == sampleCV.size());
+
+        assert(sampleTotal.size() == 1 || sampleTotal.size() == 4);
+
+        const auto json = Serialize();
+        for (const auto& memberName : json.getMemberNames())
+        {
+            assert(json[memberName].isArray());
+
+            for (const auto& val: json[memberName])
+            {
+                ss << val << ",";
+            }
+        }
+        return ss;
+    }
+};
+
+struct GroupStats : public Configuration::PBConfig<GroupStats>
+{
+    PB_CONFIG(GroupStats);
+
+    PB_CONFIG_PARAM(std::string, region, "");
+    PB_CONFIG_PARAM(std::vector<SummaryStats>, metrics, {});
+
+    std::stringstream& GenerateCSVHeader(std::stringstream& ss) const
+    {
+        for (const auto& metric : metrics)
+        {
+            metric.GenerateCSVHeader(region + "_" + metric.name.toString(), ss);
+        }
+        return ss;
+    }
+
+    std::stringstream& GenerateCSVRow(std::stringstream& ss) const
+    {
+        for (const auto& metric : metrics)
+        {
+            metric.GenerateCSVRow(ss);
+        }
+        return ss;
+    }
+};
+
+struct MetricBlock : public Configuration::PBConfig<MetricBlock>
+{
+    PB_CONFIG(MetricBlock);
+
+    PB_CONFIG_PARAM(std::vector<GroupStats>, groups, {});
+
     PB_CONFIG_PARAM(uint64_t, startFrame, 0);
     PB_CONFIG_PARAM(uint32_t, numFrames, 0);
     PB_CONFIG_PARAM(uint64_t, beginFrameTimeStamp, 0);
     PB_CONFIG_PARAM(uint64_t, endFrameTimeStamp, 0);
+
+    std::string GenerateCSVHeader() const
+    {
+        std::stringstream  ss;
+        ss << "StartFrame,NumFrames,StartFrameTS,EndFrameTS,";
+        for (const auto& group : groups)
+        {
+            group.GenerateCSVHeader(ss);
+        }
+        // Change trailing comma to a newline
+        ss.seekp(-1, ss.cur);
+        ss << std::endl;
+        return ss.str();
+    }
+
+    std::string GenerateCSVRow() const
+    {
+        std::stringstream  ss;
+        ss << startFrame << "," << numFrames << "," << beginFrameTimeStamp << "," << endFrameTimeStamp << ",";
+        for (const auto& group : groups)
+        {
+            group.GenerateCSVRow(ss);
+        }
+        // Change trailing comma to a newline
+        ss.seekp(-1, ss.cur);
+        ss << std::endl;
+        return ss.str();
+    }
+};
+
+struct MetricsChunk : public Configuration::PBConfig<MetricsChunk>
+{
+    PB_CONFIG(MetricsChunk);
+
+    PB_CONFIG_PARAM(uint32_t, numMetricsBlocks, 1);
+    PB_CONFIG_PARAM(std::vector<MetricBlock>, metricsBlocks, {});
+};
+
+struct RealTimeMetricsReport : public Configuration::PBConfig<RealTimeMetricsReport>
+{
+    PB_CONFIG(RealTimeMetricsReport);
+
+    PB_CONFIG_PARAM(uint64_t, startFrameTimeStamp, 0);
+    PB_CONFIG_PARAM(uint64_t, frameTimeStampDelta, 0);
+
+    PB_CONFIG_OBJECT(MetricsChunk, metricsChunk);
+
+    PB_CONFIG_PARAM(std::string, token, "");
 };
 
 struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsRegion>
@@ -77,6 +195,7 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
                     std::vector<DataSource::ZmwFeatures>{DataSource::ZmwFeatures::Sequencing});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
+    PB_CONFIG_PARAM(std::vector<MetricNames>, metrics, {});
     PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
 };
 
@@ -85,10 +204,69 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
     PB_CONFIG(RealTimeMetricsConfig);
 
     PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
-    PB_CONFIG_PARAM(std::string, rtMetricsFile, "");
+    // The csv format will be continusouly appended, to maintain a history of all RT Metrics produced
+    PB_CONFIG_PARAM(std::string, csvOutputFile, "");
+    // The json format will only include the most recent RT Metrics produced.  It will be updated
+    // in an atomic fashion via a tmp file, to avoid "slicing" the data in the event of a concurrent
+    // update and read
+    PB_CONFIG_PARAM(std::string, jsonOutputFile, "");
     PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 
 } // namespace PacBio::Mongo::Data
+
+namespace PacBio::Configuration {
+
+template <>
+inline void ValidateConfig<Mongo::Data::RealTimeMetricsRegion>(
+        const Mongo::Data::RealTimeMetricsRegion& config,
+        ValidationResults* results)
+{
+    if (config.minSampleSize < 2)
+        results->AddError("Sample size for RT Metrics region " + config.name + " cannot be less than 2.  It was " + std::to_string(config.minSampleSize));
+
+    std::string name = config.name;
+    if (config.name.empty())
+    {
+        name = "NoName";
+        results->AddError("RT Metrics region has no name.  (Subsequent error messages will refer to it as \""+name+"\")");
+    }
+
+    if (config.roi.empty())
+        results->AddError("No ROI specified for RT Metrics region " + name);
+
+    if (config.featuresForFilter.empty())
+        results->AddError("No ZMWFeatures were selected for RT Metrics region " + name);
+
+    if (config.metrics.empty())
+        results->AddError("No metrics selected to compute for RT Metrics region " + name);
+}
+
+template <>
+inline void ValidateConfig<Mongo::Data::RealTimeMetricsConfig>(
+        const Mongo::Data::RealTimeMetricsConfig& config,
+        ValidationResults* results)
+{
+    const bool enabled = config.csvOutputFile != "" || config.jsonOutputFile != "";
+    if (enabled && config.regions.empty())
+    {
+        results->AddError("RT Metrics were enabled but no regions are defined");
+    } else {
+        std::map<std::string, int> counts;
+        for (const auto& r : config.regions)
+        {
+            counts[r.name]++;
+        }
+
+        for (const auto& kv : counts)
+        {
+            if (kv.second > 1)
+                results->AddError("RT Metrics region name was specified multiple times: " + kv.first);
+        }
+
+    }
+}
+
+}   // namespace PacBio::Configuration
 
 #endif // basecaller_dataTypes_configs_RealTimeMetricsConfig_H_

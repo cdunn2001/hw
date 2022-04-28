@@ -115,6 +115,7 @@ cat <<HERE > $acqconfig
       "acqConfig" :
       {
         "refSnr":  12.0,
+        "photoelectronSensitivity": 6.25,
         "C" : {
           "baseLabel": "C",
           "relAmplitude": 1.0,
