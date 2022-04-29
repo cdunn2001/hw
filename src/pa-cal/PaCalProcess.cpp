@@ -179,9 +179,13 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         }
         ret.paCalConfig = PaCalConfig(json);
 
-        ret.paCalConfig.source.Visit([](const SimInputConfig&){},
+        ret.paCalConfig.source.Visit([&ret](const SimInputConfig&){},
                                      [&](WXIPCDataSourceConfig& cfg){
                                          cfg.sraIndex = ret.sra;
+                                         if (ret.createDarkCalFile)
+                                         {
+                                             cfg.pedestal = 0;
+                                         }
                                      });
 
         if (options.get("showconfig"))
