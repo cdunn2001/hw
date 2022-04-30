@@ -182,6 +182,10 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
         ret.paCalConfig.source.Visit([](const SimInputConfig&){},
                                      [&](WXIPCDataSourceConfig& cfg){
                                          cfg.sraIndex = ret.sra;
+                                         if (ret.createDarkCalFile)
+                                         {
+                                             cfg.pedestal = 0;
+                                         }
                                      });
 
         if (options.get("showconfig"))
@@ -261,6 +265,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numF
             DataSourceBase::Configuration sourceCfg(layout, std::move(allo));
             sourceCfg.numFrames = numFrames;
             sourceCfg.darkFrame = std::move(darkFrame);
+            sourceCfg.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>(); // will create a unity PSF
             auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
             return source;
         }

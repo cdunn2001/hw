@@ -196,7 +196,10 @@ FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t ped
      // Convert indices to amounts ...
     numZmwX++; numZmwY++;
     // ... and ensure their correctness
-    assert(size_t(numZmwX*numZmwY) == zmwPerChunk);
+    if (size_t(numZmwX*numZmwY) != zmwPerChunk)
+    {
+        throw PBException("numZmwX("+std::to_string(numZmwX) + ")*numZmwY(" + std::to_string(numZmwY) + " != zmwPerChunk(" + std::to_string(zmwPerChunk));
+    }
     assert(props.size() == zmwPerChunk);
 
     const auto& dataType = (chunk.cbegin())->Layout().Encoding();
