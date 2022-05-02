@@ -3,7 +3,6 @@
   > --config system.basecallerConcurrency=1 \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
   > --config realTimeMetrics.csvOutputFile="rtmetrics.csv" \
-  > --config realTimeMetrics.useSingleActivityLabels=false \
   > --config realTimeMetrics.regions='[{"name":"TR","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","Pkmid","SNR","PulseRate","PulseWidth","BaseRate","BaseWidth"],"featuresForFilter":["Sequencing"]}]' > /dev/null 2>&1
 
   $ head -n1 rtmetrics.csv
@@ -13,8 +12,7 @@
   > --config system.basecallerConcurrency=1 \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
   > --config realTimeMetrics.csvOutputFile="rtmetrics.csv" \
-  > --config realTimeMetrics.useSingleActivityLabels=false \
-  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"],"featuresForFilter":["Sequencing"]}]' > /dev/null 2>&1
+  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"],"featuresForFilter":["Sequencing"],"useSingleActivityLabels":false}]' > /dev/null 2>&1
 
   $ wc -l rtmetrics.csv
   4 rtmetrics.csv
@@ -29,8 +27,7 @@
   > --config system.basecallerConcurrency=1 \
   > --config multipleBazFiles=false --config layout.lanesPerPool=16 \
   > --config realTimeMetrics.jsonOutputFile="rtmetrics.json" \
-  > --config realTimeMetrics.useSingleActivityLabels=false \
-  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"],"featuresForFilter":["Sequencing"]}]' > /dev/null 2>&1
+  > --config realTimeMetrics.regions='[{"name":"TestRegion","roi":[[0,0,64,64]],"metrics":["Baseline","BaselineStd","SNR"],"featuresForFilter":["Sequencing"],"useSingleActivityLabels":false}]' > /dev/null 2>&1
 
   $ wc -l rtmetrics.json
   1 rtmetrics.json

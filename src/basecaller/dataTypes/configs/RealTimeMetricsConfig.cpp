@@ -136,6 +136,7 @@ std::vector<RealTimeMetricsRegion> DefaultKestrelRegions()
         r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserScatter);
         r.metrics.push_back(MetricNames::Baseline);
         r.metrics.push_back(MetricNames::BaselineStd);
+        r.useSingleActivityLabels = false;
         r.roi.push_back({0,0,4096,6144});
     }
 

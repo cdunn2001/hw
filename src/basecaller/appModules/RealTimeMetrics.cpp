@@ -51,7 +51,6 @@ public:
     , frameRate_{frameRate}
     , jsonFileName_{rtConfig.jsonOutputFile}
     , csvFileName_{rtConfig.csvOutputFile}
-    , useSingleActivityLabels_{rtConfig.useSingleActivityLabels}
     , jsonWriter_{GetStreamWriterBuilder().newStreamWriter()}
     {
         std::vector<std::string> regionNames;
@@ -151,7 +150,7 @@ public:
                         auto mask = r.laneMasks[laneIdx];
 
                         // Filter for zmws marked as SINGLE by the real-time activity labeler.
-                        if (useSingleActivityLabels_)
+                        if (r.region.useSingleActivityLabels)
                             mask &= (activityLabel == static_cast<uint16_t>(Data::HQRFPhysicalStates::SINGLE));
 
                         LaneArray<float> numBases(LaneArray<uint16_t>(metrics.numBases));
@@ -425,7 +424,6 @@ private:
     float frameRate_;
     std::string jsonFileName_;
     std::string csvFileName_;
-    bool useSingleActivityLabels_;
     std::ofstream rtMetricsCsvOut_;
     std::unique_ptr<Json::StreamWriter> jsonWriter_;
 

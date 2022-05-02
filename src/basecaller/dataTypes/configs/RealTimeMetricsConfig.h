@@ -201,6 +201,8 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
     // evenly into 64 makes the most sense, but anything should work, the sampling will just end up
     // slightly irregular since the stride counter always starts at 0 with the beginning of each lane
     PB_CONFIG_PARAM(uint32_t, medianIntraLaneStride, 1);
+
+    PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 
 // TODO is this an API snafu?  These defaults have a lot of platform/layout specific
@@ -227,7 +229,6 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
     // in an atomic fashion via a tmp file, to avoid "slicing" the data in the event of a concurrent
     // update and read
     PB_CONFIG_PARAM(std::string, jsonOutputFile, "");
-    PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 
 } // namespace PacBio::Mongo::Data
