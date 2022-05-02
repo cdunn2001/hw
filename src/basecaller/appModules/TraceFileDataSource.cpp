@@ -393,7 +393,8 @@ void TraceFileDataSource::ContinueProcessing()
         currZmw += currLayout.NumZmw();
     }
 
-    auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), layouts_.size());
+    auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen());
+    chunk.ReservePackets(layouts_.size());
     std::swap(chunk, currChunk_);
     this->PushChunk(std::move(chunk));
     chunkIndex_++;

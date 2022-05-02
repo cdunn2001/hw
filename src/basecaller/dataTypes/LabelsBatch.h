@@ -115,6 +115,7 @@ public:
                                  traceMeta.FirstFrame() - latentFrames_,
                                  traceMeta.LastFrame() - latentFrames_,
                                  traceMeta.FirstZmw());
+        labelsMeta.SetTimeStamp(traceMeta.GetTimeStamp());
 
         return LabelsBatch(labelsMeta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER());
     }

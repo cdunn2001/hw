@@ -1,7 +1,7 @@
 Extract sts.h5
 
   $ outPrefix="softball_snr-50"
-  $ bazFile="/pbi/dept/primary/sim/kestrel/kestrel-zmw-features.RTO2/prod.baz"
+  $ bazFile="/pbi/dept/primary/sim/kestrel/kestrel-zmw-features.RTO2-fixed/prod.baz"
   $ baz2bam --fullHQ -o ${outPrefix} -m $TESTDIR/data/metadata.xml ${bazFile} --silent --whitelistZmwId=0-199 --enableBarcodedAdapters=False
 
 Compare sts.h5

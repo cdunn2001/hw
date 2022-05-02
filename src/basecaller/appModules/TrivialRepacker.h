@@ -100,6 +100,7 @@ public:
             packet.StartFrame(),
             packet.StartFrame() + packet.NumFrames(),
             packet.StartZmw());
+        meta.SetTimeStamp(packet.TimeStamp());
         switch (packet.Layout().Encoding())
         {
             case DataSource::PacketLayout::INT16:

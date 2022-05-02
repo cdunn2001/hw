@@ -115,6 +115,8 @@ public:
             if (batchesSeen_ % numBatches_ != 0)
                 throw PBException("Data out of order, new metric block seen before all batches of previous metric block");
             currFrame_ = pulseBatch.GetMeta().FirstFrame();
+            if (batchesSeen_ == 0)
+                metricTimestamp_ = pulseBatch.GetMeta().GetTimeStamp();
         }
         else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
         {
@@ -190,16 +192,16 @@ public:
         {
             Data::RealTimeMetricsReport report;
             // TODO PTSD-1513
-            //report.frameTimeStampDelta =
-            //report.startFrameTimeStamp =
+            report.frameTimeStampDelta = static_cast<uint64_t>(1.0 / frameRate_ * 1e6);
+            report.startFrameTimeStamp = metricTimestamp_;
 
             report.metricsChunk.numMetricsBlocks = 1;
             report.metricsChunk.metricsBlocks.resize(1);
 
             auto& blockReport = report.metricsChunk.metricsBlocks.front();
             // TODO PTSD-1513
-            //blockReport.beginFrameTimeStamp =
-            //blockReport.endFrameTimeStamp =
+            blockReport.beginFrameTimeStamp = metricTimestamp_;
+            blockReport.endFrameTimeStamp = metricTimestamp_ + framesPerHFMetricBlock_ * report.frameTimeStampDelta;
             blockReport.numFrames = framesPerHFMetricBlock_;
             blockReport.startFrame = currFrame_;
             blockReport.groups.reserve(regionInfo_.size());
@@ -429,6 +431,7 @@ private:
 
     size_t batchesSeen_ = 0;
     size_t fullMetricsBatchesSeen_ = 0;
+    uint64_t metricTimestamp_ = 0;
     int32_t currFrame_ = std::numeric_limits<int32_t>::min();
 };
 
