@@ -62,7 +62,7 @@ public:
                                                     [](uint32_t a, uint32_t b) { return a | b; });
             regionNames.push_back(rtConfig.regions[i].name);
 
-            auto fullMasks = SelectedLanesWithFeatures(zmwFeatures[i], featuresMask);
+            const auto fullMasks = SelectedLanesWithFeatures(zmwFeatures[i], featuresMask);
 
             // Filter out all lanes that don't have any matching features
             std::vector<uint32_t> filteredLanes;
