@@ -22,7 +22,6 @@ echo "Using bam2bam:         $(which bam2bam)"
 echo "Using simbazwriter:    $(which simbazwriter)"
 echo "Using bazviewer:       $(which bazviewer)"
 echo "Using stsTool:         $(which stsTool)"
-echo "Using samtools:        $(which samtools)"
 echo "Using recalladapters:  $(which recalladapters)"
 echo "Using ppa-reducestats: $(which ppa-reducestats)"
 
