@@ -92,7 +92,7 @@ public:
     PB_CONFIG_OBJECT(SimulatedPulseConfig, simConfig);
 
     // Valid range is [0, 1]
-    PB_CONFIG_PARAM(double, XspAmpThresh, 0.60);
+    PB_CONFIG_PARAM(double, XspAmpThresh, 0.70);
 
     // Must be >= 0
     PB_CONFIG_PARAM(float, XspWidthThresh, 3.5f);
