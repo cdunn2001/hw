@@ -22,6 +22,16 @@ bld_dirs=\
    build/basecaller/gcc/x86_64/DebugCpu
 "
 
+paramdir=0
+if [ ${1+x} ]; then
+    bld_dirs=$1
+    paramdir=1
+    echo "One directory specifier in command line:"
+    echo $'\t' $bld_dirs
+fi
+
+CMAKE_OPT=--debug-trycompile
+
 # the build directories must be 5 elements deep, with the convention:
 #
 #  build/$app/$toolkit/$arch/$type
@@ -36,8 +46,15 @@ for d in $bld_dirs ; do
     type=${elems[4]}
     echo ${elems[0]} proj: $proj $'\t' tool: $tool arch: $arch type: $type
     top=../../../../..
-    tc=$top/TC-${tool}-cuda-${arch}.cmake
+    tc=TC-${tool}-cuda-${arch}.cmake
 
+    if [[ $paramdir != 0 ]]; then
+        top=../..
+        srcdir=src/$proj
+        cmake $CMAKE_OPT -DCMAKE_BUILD_TYPE=${type} -DCMAKE_CUDA_HOST_COMPILER=${compilers[$tool]} \
+              -DCMAKE_TOOLCHAIN_FILE=$top/${tc} -B${d} -G"${generator}" ${srcdir}
+        exit $?
+    fi
     pushd $d > /dev/null
 
     fulldir=$(pwd)
@@ -65,7 +82,7 @@ if [[ \$files != "" ]]; then
     fi
     cd ${fulldir} && rm -rv !("cmake_setup.sh")
 fi
-cmake "-G${generator}" --debug-trycompile -DCMAKE_CUDA_HOST_COMPILER=${compilers[$tool]} -DCMAKE_BUILD_TYPE=$type -DCMAKE_TOOLCHAIN_FILE=$tc $top/src/$proj
+cmake "-G${generator}" ${CMAKE_OPT} -DCMAKE_CUDA_HOST_COMPILER=${compilers[$tool]} -DCMAKE_BUILD_TYPE=$type -DCMAKE_TOOLCHAIN_FILE=$top/$tc $top/src/$proj
 HERE
     chmod +x cmake_setup.sh
 
