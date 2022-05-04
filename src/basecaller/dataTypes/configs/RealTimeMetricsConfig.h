@@ -206,13 +206,17 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
 };
 
 // TODO is this an API snafu?  These defaults have a lot of platform/layout specific
-//      information.  Should it have been querriable from the DataSource API instead?
+//      information.  Should it have been queryable from the DataSource API instead?
 std::vector<RealTimeMetricsRegion> DefaultKestrelRegions();
 
 class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConfig>
 {
     PB_CONFIG(RealTimeMetricsConfig);
 
+    // RT metrics are implicitly enabled/disabled by the presence of an output file.  If we're
+    // not producing RT metrics then set the `regions` to empty.  This is both to reduce log
+    // clutter, since this can be a relateively large config, as well as to increase clarity,
+    // so we default to not having a bunch of unused config values running around
     PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions,
                     Configuration::DefaultFunc([](const std::string& csvOutputFile,
                                                   const std::string& jsonOutputFile)
@@ -223,7 +227,7 @@ class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConf
                             return DefaultKestrelRegions();
                     }, {"csvOutputFile", "jsonOutputFile"}));
 
-    // The csv format will be continusouly appended, to maintain a history of all RT Metrics produced
+    // The csv format will be continuously appended, to maintain a history of all RT Metrics produced
     PB_CONFIG_PARAM(std::string, csvOutputFile, "");
     // The json format will only include the most recent RT Metrics produced.  It will be updated
     // in an atomic fashion via a tmp file, to avoid "slicing" the data in the event of a concurrent
