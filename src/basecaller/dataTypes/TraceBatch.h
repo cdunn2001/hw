@@ -73,6 +73,7 @@ public:
         meta_ = meta;
     }
     const BatchMetadata& GetMeta() const { return meta_; }
+    BatchMetadata& GetMeta() { return meta_; }
 
     TraceBatch(const TraceBatch&) = delete;
     TraceBatch(TraceBatch&&) = default;

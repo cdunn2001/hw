@@ -51,7 +51,6 @@ public:
     , frameRate_{frameRate}
     , jsonFileName_{rtConfig.jsonOutputFile}
     , csvFileName_{rtConfig.csvOutputFile}
-    , useSingleActivityLabels_{rtConfig.useSingleActivityLabels}
     , jsonWriter_{GetStreamWriterBuilder().newStreamWriter()}
     {
         std::vector<std::string> regionNames;
@@ -115,6 +114,8 @@ public:
             if (batchesSeen_ % numBatches_ != 0)
                 throw PBException("Data out of order, new metric block seen before all batches of previous metric block");
             currFrame_ = pulseBatch.GetMeta().FirstFrame();
+            if (batchesSeen_ == 0)
+                metricTimestamp_ = pulseBatch.GetMeta().GetTimeStamp();
         }
         else if (pulseBatch.GetMeta().FirstFrame() < currFrame_)
         {
@@ -149,7 +150,7 @@ public:
                         auto mask = r.laneMasks[laneIdx];
 
                         // Filter for zmws marked as SINGLE by the real-time activity labeler.
-                        if (useSingleActivityLabels_)
+                        if (r.region.useSingleActivityLabels)
                             mask &= (activityLabel == static_cast<uint16_t>(Data::HQRFPhysicalStates::SINGLE));
 
                         LaneArray<float> numBases(LaneArray<uint16_t>(metrics.numBases));
@@ -190,16 +191,16 @@ public:
         {
             Data::RealTimeMetricsReport report;
             // TODO PTSD-1513
-            //report.frameTimeStampDelta =
-            //report.startFrameTimeStamp =
+            report.frameTimeStampDelta = static_cast<uint64_t>(1.0 / frameRate_ * 1e6);
+            report.startFrameTimeStamp = metricTimestamp_;
 
             report.metricsChunk.numMetricsBlocks = 1;
             report.metricsChunk.metricsBlocks.resize(1);
 
             auto& blockReport = report.metricsChunk.metricsBlocks.front();
             // TODO PTSD-1513
-            //blockReport.beginFrameTimeStamp =
-            //blockReport.endFrameTimeStamp =
+            blockReport.beginFrameTimeStamp = metricTimestamp_;
+            blockReport.endFrameTimeStamp = metricTimestamp_ + framesPerHFMetricBlock_ * report.frameTimeStampDelta;
             blockReport.numFrames = framesPerHFMetricBlock_;
             blockReport.startFrame = currFrame_;
             blockReport.groups.reserve(regionInfo_.size());
@@ -423,12 +424,12 @@ private:
     float frameRate_;
     std::string jsonFileName_;
     std::string csvFileName_;
-    bool useSingleActivityLabels_;
     std::ofstream rtMetricsCsvOut_;
     std::unique_ptr<Json::StreamWriter> jsonWriter_;
 
     size_t batchesSeen_ = 0;
     size_t fullMetricsBatchesSeen_ = 0;
+    uint64_t metricTimestamp_ = 0;
     int32_t currFrame_ = std::numeric_limits<int32_t>::min();
 };
 

@@ -393,7 +393,8 @@ void TraceFileDataSource::ContinueProcessing()
         currZmw += currLayout.NumZmw();
     }
 
-    auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen(), layouts_.size());
+    auto chunk = SensorPacketsChunk(currChunk_.StopFrame(), currChunk_.StopFrame() + BlockLen());
+    chunk.ReservePackets(layouts_.size());
     std::swap(chunk, currChunk_);
     this->PushChunk(std::move(chunk));
     chunkIndex_++;
@@ -448,7 +449,7 @@ std::vector<DataSourceBase::UnitCellProperties> TraceFileDataSource::GetUnitCell
         {
             PBLOG_WARN << "Trace file does not contain hole features mask dataset"
                        << " setting all ZMWs as Sequencing";
-            return std::vector<uint32_t>(traceFile_.Traces().NumZmws(), DataSource::ZmwFeatures::Sequencing);
+            return std::vector<uint32_t>(traceFile_.Traces().NumZmws(), DataSource::ZmwFeatures::Sequencing | DataSource::ZmwFeatures::PorSequencing);
         }
     }();
 

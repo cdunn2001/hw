@@ -1,4 +1,4 @@
-  $ baz=/pbi/dept/primary/sim/kestrel/kestrel-zmw-features.RTO2/internal.baz
+  $ baz=/pbi/dept/primary/sim/kestrel/kestrel-zmw-features.RTO2-fixed/internal.baz
   $ meta=$TESTDIR/data/metadata.xml
   $ bam=out
 

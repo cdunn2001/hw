@@ -253,6 +253,12 @@ public:
     // that belongs to this batch
     void Process(const SensorPacket& packet)
     {
+        assert(batch_.GetMeta().FirstFrame() > 0);
+        if (packet.StartFrame() == static_cast<size_t>(batch_.GetMeta().FirstFrame())
+            && packet.TimeStamp() != batch_.GetMeta().GetTimeStamp())
+        {
+            batch_.GetMeta().SetTimeStamp(packet.TimeStamp());
+        }
         // We only handle full cache lines, which is either
         // 32 or 64 ZMW depending on the data type
         static_assert(std::is_same_v<T, int16_t> || std::is_same_v<T, uint8_t>);
