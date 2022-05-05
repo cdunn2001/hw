@@ -320,7 +320,7 @@ Validation ResultWriter::CloseAndValidate()
 /// Writes content of buffer to disk.
 void ResultWriter::WriteToDiskLoop()
 {
-
+    uint64_t numZmwsToWriteToBam = 0;
     // We need to be able to terminate this thread
     while (writeThreadContinue_)
     {
@@ -376,50 +376,57 @@ void ResultWriter::WriteToDiskLoop()
                 bool hasAdapters = false;
                 bool isFiltered = false;
                 int numAdapters = 0;
-                // Save records
-                for (auto& result : cplx.resultPackets)
-                {
-                    if (abortNow_) goto abort;
 
-                    switch (result.label)
+                if (numZmwsToWriteToBam % user_->zmwOutputStride == 0)
+                {
+                    // Save records
+                    for (auto& result: cplx.resultPackets)
                     {
-                    case RegionLabelType::INSERT:
-                    case RegionLabelType::POLYMERASEREAD:
-                        if (!result.control)
+                        if (abortNow_) goto abort;
+
+                        switch (result.label)
                         {
-                            ++numRecords_;
-                            totalLength_ += result.length;
-                            WriteSHPRecord(&result);
+                            case RegionLabelType::INSERT:
+                            case RegionLabelType::POLYMERASEREAD:
+                                if (!result.control)
+                                {
+                                    ++numRecords_;
+                                    totalLength_ += result.length;
+                                    WriteSHPRecord(&result);
+                                }
+                                else
+                                {
+                                    WriteScrapRecord(scrapsFiltered_, &result);
+                                }
+                                if (result.context.hasStemBefore ||
+                                    result.context.hasStemAfter)
+                                {
+                                    hasStem = true;
+                                }
+                                break;
+                            case RegionLabelType::ADAPTER:
+                                WriteScrapRecord(scrapsAdapter_, &result);
+                                hasAdapters = true;
+                                ++numAdapters;
+                                break;
+                            case RegionLabelType::BARCODE:
+                                WriteScrapRecord(scrapsBarcode_, &result);
+                                break;
+                            case RegionLabelType::LQREGION:
+                                WriteScrapRecord(scrapsLQRegion_, &result);
+                                break;
+                            case RegionLabelType::FILTERED:
+                                WriteScrapRecord(scrapsFiltered_, &result);
+                                isFiltered = true;
+                                break;
+                            default:
+                                throw PBException(
+                                        std::string("[ResultWriter] Unknown type ") + static_cast<char>(result.label));
                         }
-                        else
-                        {
-                            WriteScrapRecord(scrapsFiltered_, &result);
-                        }
-                        if (result.context.hasStemBefore ||
-                                result.context.hasStemAfter)
-                        {
-                            hasStem = true;
-                        }
-                        break;
-                    case RegionLabelType::ADAPTER:
-                        WriteScrapRecord(scrapsAdapter_, &result);
-                        hasAdapters = true;
-                        ++numAdapters;
-                        break;
-                    case RegionLabelType::BARCODE:
-                        WriteScrapRecord(scrapsBarcode_, &result);
-                        break;
-                    case RegionLabelType::LQREGION:
-                        WriteScrapRecord(scrapsLQRegion_, &result);
-                        break;
-                    case RegionLabelType::FILTERED:
-                        WriteScrapRecord(scrapsFiltered_, &result);
-                        isFiltered = true;
-                        break;
-                    default:
-                        throw PBException(std::string("[ResultWriter] Unknown type ") + static_cast<char>(result.label));
                     }
                 }
+                numZmwsToWriteToBam++;
+
                 if (hasStem && hasAdapters && !isFiltered)
                 {
                     ++numHasStem_;

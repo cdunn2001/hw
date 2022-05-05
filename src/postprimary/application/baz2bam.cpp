@@ -249,6 +249,7 @@ int main(int argc, char* argv[])
                 "Output additional diagnostic datasets to the sts.h5");
         groupTuning.add_option("--fullHQ").action_store_true().help(
                 "Disable HQRF; entire ZMW read will be deemed 'HQ'. Disables --minSnr filtering.");
+        groupTuning.add_option("--zmwOutputStride").type_int().set_default(1).help("Output only for every n'th ZMW processed to the BAM file");
         //groupTuning.add_option("--polymerase").action_store_true().dest("zmw").help(
         //        "Create ZMW reads.");
 
@@ -385,6 +386,8 @@ int main(int argc, char* argv[])
         user->noStats = options.get("noStats");
         user->noStatsH5 = options.get("noStsH5");
         user->diagStatsH5 = options.get("diagStsH5");
+
+        user->zmwOutputStride = options.get("zmwOutputStride");
 
         if (user->noStats)
         {
