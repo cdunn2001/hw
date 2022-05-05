@@ -66,8 +66,10 @@ struct FrameStats
 /// Lower level function for computing the mean/variance of a chunk.
 ///
 /// \param chunk  The input data containing a full chunk of full frame data
+/// \param pedestal The pedestal that is to be subtracted from raw trace data
 /// \param props  The UnitCellProperties associated with the data, containing
 ///               the mapping back from ZMW index to x/y coordinates
+/// \param reporter Instance that aids in reporting progress
 /// \return       A FrameStats instance, containing mean and variance for each
 ///               pixel on the chip.  The boost::multi_arrays are stored using
 ///               an arr[row][col] convention.

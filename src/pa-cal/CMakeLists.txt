@@ -34,9 +34,9 @@ add_subdirectory(../app-common app-common)
 # by the application and logged.
 
 # temporary hack, to work around some accidentally visible version strings in the hw-mongo
-set(SOFTWARE_MAJOR_VERSION 0)
-set(SOFTWARE_MINOR_VERSION 1)
-set(SOFTWARE_REVISION_VERSION 5)
+set(SOFTWARE_MAJOR_VERSION 1)
+set(SOFTWARE_MINOR_VERSION 0)
+set(SOFTWARE_REVISION_VERSION 0)
 set(SOFTWARE_VERSION "${SOFTWARE_MAJOR_VERSION}.${SOFTWARE_MINOR_VERSION}.${SOFTWARE_REVISION_VERSION}")
 add_definitions(
     -DSOFTWARE_MAJOR_VERSION=${SOFTWARE_MAJOR_VERSION}
