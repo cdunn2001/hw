@@ -77,6 +77,7 @@ struct UserParameters
     bool        polymeraseread = false;
     bool        outputFasta = false;
     bool        outputFastq = false;
+    uint32_t    zmwOutputStride = 1;
 
     // Read filter
     static constexpr float minSnrSequel = 3.75f;
