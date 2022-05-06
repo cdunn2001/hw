@@ -50,6 +50,25 @@ namespace Basecaller {
 
 DeviceHFMetricsFilter::~DeviceHFMetricsFilter() = default;
 
+
+struct DeviceStatAccumState
+{
+    using FloatArray = Cuda::Utility::CudaArray<PBFloat2, laneSize/2>;
+
+    // Data offset.
+    FloatArray offset;
+
+    // The number of data samples included in the moment statistics.
+    // Floating-point to support scaling smoothly.
+    FloatArray moment0;
+
+    // First moment (a.k.a., sum).
+    FloatArray moment1;
+
+    // Second moment.
+    FloatArray moment2;
+};
+
 namespace {
 
 __constant__ TrainedCartDevice trainedCartParams;
@@ -96,10 +115,11 @@ public: // metrics
     AnalogMetric<float2> pkZvarAcc;
 
     // The baseline stat accumulator:
-    SingleMetric<float2> baselineOffset;
-    SingleMetric<float2> baselineM0;
-    SingleMetric<float2>  baselineM1;
-    SingleMetric<float2>  baselineM2;
+    //SingleMetric<PBFloat2> baselineOffset;
+    //SingleMetric<PBFloat2> baselineM0;
+    //SingleMetric<PBFloat2>  baselineM1;
+    //SingleMetric<PBFloat2>  baselineM2;
+    DeviceStatAccumState baselineStats;
 
     // The autocorrelation accumulator:
     SingleMetric<float2> traceM0;
@@ -132,11 +152,26 @@ __device__ float2 variance(const float2 M0, const float2 M1, const float2 M2)
     return make_float2(variance(M0.x, M1.x, M2.x), variance(M0.y, M1.y, M2.y));
 }
 
+__device__ PBFloat2 variance2(const PBFloat2 M0, const PBFloat2 M1, const PBFloat2 M2)
+{
+    return PBFloat2(variance(M0.X(), M1.X(), M2.X()), variance(M0.Y(), M1.Y(), M2.Y()));
+}
+
 __device__ uint2 getWideLoad(const Cuda::Utility::CudaArray<uint16_t, laneSize>& load)
 { return make_uint2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
 
 __device__ float2 getWideLoad(const Cuda::Utility::CudaArray<float, laneSize>& load)
 { return make_float2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); };
+
+__device__ PBFloat2 getWideLoad2(const Cuda::Utility::CudaArray<float, laneSize>& load)
+{
+    const auto thingy1 = load[threadIdx.x * 2];
+    const auto thingy2 = load[threadIdx.x * 2 + 1];
+    PBFloat2 t; t.X(thingy1); t.Y(thingy2); 
+    return t;
+    //return PBFloat2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); 
+};
+
 
 __device__ PBHalf2 replaceNans(PBHalf2 vals)
 { return Blend(vals == vals, vals, PBHalf2(0.0)); };
@@ -154,9 +189,6 @@ __device__ uint2 operator+(uint2 l, uint2 r)
 __device__ float2 operator-(float2 l, float2 r)
 { return make_float2(l.x - r.x, l.y - r.y); }
 
-__device__ float2 operator+(float2 l, float2 r)
-{ return make_float2(l.x + r.x, l.y + r.y); }
-
 __device__ float2 operator*(float2 l, float2 r)
 { return make_float2(l.x * r.x, l.y * r.y); }
 
@@ -165,6 +197,113 @@ __device__ float2 operator/(float2 l, float2 r)
 
 __device__ float2 asFloat2(PBHalf2 val)
 { return make_float2(val.FloatX(), val.FloatY()); }
+
+__device__ void ResetStats(DeviceStatAccumState& stats)
+{
+    const auto pbzero = PBFloat2(0.0f);
+    stats.moment0[threadIdx.x] = pbzero;
+    stats.moment1[threadIdx.x] = pbzero;
+    stats.moment2[threadIdx.x] = pbzero;
+    stats.offset[threadIdx.x] = pbzero;
+}
+
+__device__ PBFloat2 Mean(const DeviceStatAccumState& stats)
+{
+    return stats.moment1[threadIdx.x] / stats.moment0[threadIdx.x] + stats.offset[threadIdx.x];
+}
+
+__device__ PBFloat2 Mean(const StatAccumState& stats)
+{
+    return stats.moment1[threadIdx.x] / stats.moment0[threadIdx.x] + stats.offset[threadIdx.x];
+}
+
+__device__ PBFloat2 Variance(const DeviceStatAccumState& stats)
+{
+    return variance2(stats.moment0[threadIdx.x],stats.moment1[threadIdx.x],stats.moment2[threadIdx.x]);
+}
+
+class QuickStats {
+    PBFloat2 m0_;
+    PBFloat2 m1_;
+    PBFloat2 m2_;
+    PBFloat2 offset_;
+
+    public:
+    __device__ QuickStats(PBFloat2& offset, PBFloat2& m0, PBFloat2& m1, PBFloat2& m2)
+    {
+        offset_ = offset;
+        m0_ = m0;
+        m1_ = m1;
+        m2_ = m2;
+    }
+
+    __device__ QuickStats(const PacBio::Mongo::StatAccumState& stats)
+    {
+        offset_ = getWideLoad2(stats.offset);
+        m0_ = getWideLoad2(stats.moment0);
+        m1_ = getWideLoad2(stats.moment1);
+        m2_ = getWideLoad2(stats.moment2);
+    }
+
+    __device__ QuickStats(const DeviceStatAccumState& stats)
+    {
+        offset_ = stats.offset[threadIdx.x];
+        m0_ = stats.moment0[threadIdx.x];
+        m1_ = stats.moment1[threadIdx.x];
+        m2_ = stats.moment2[threadIdx.x];
+    }
+
+    __device__ void Output(DeviceStatAccumState& stats)
+    {
+        stats.offset[threadIdx.x] = offset_;
+        stats.moment0[threadIdx.x] = m0_;
+        stats.moment1[threadIdx.x] = m1_;
+        stats.moment2[threadIdx.x] = m2_;
+    }
+
+    __device__ void Shift(PBFloat2 shift)
+    {
+        offset_ += shift;
+    }
+
+    __device__ QuickStats& operator+=(QuickStats other)
+    {
+        const auto one = PBFloat2(1.0f);
+
+        const PBFloat2 w = other.m0_ / (m0_ + other.m0_);
+        PBFloat2 offsetNew = (one - w)*offset_ + w*other.offset_;
+        offsetNew = Blend(isnan(offsetNew), offset_, offsetNew);
+        other.Offset(offsetNew);
+        this->Offset(offsetNew);
+        Merge(other);
+        return *this;
+
+    }
+
+        /// Merge another instance with the same offset into this one.
+    __device__ QuickStats& Merge(const QuickStats& other)
+    {
+        m0_ += other.m0_;
+        m1_ += other.m1_;
+        m2_ += other.m2_;
+        return *this;
+    }
+
+    __device__ void Offset(const PBFloat2& value)
+    {
+        const auto zero = PBFloat2(0.0f);
+        //if (all(value == offset_)) return;
+
+        const auto m1new = m1_ + m0_*(offset_ - value);
+        const auto m2new = m2_ + (pow2f(m1new) - pow2f(m1_)) / m0_;
+
+        offset_ = value;
+        m1_ = m1new;
+        // Guard against NaN.
+        m2_ = Blend(m0_ == zero,  zero, m2new);
+    }
+
+};
 
 template<int id>
 __device__ float2 blendFloat0(float val)
@@ -277,10 +416,12 @@ __global__ void InitializeMetrics(
     blockMetrics.numPulseLabelStutters[threadIdx.x] = 0;
     blockMetrics.pulseDetectionScore[threadIdx.x] = 0.0f;
 
-    blockMetrics.baselineOffset[threadIdx.x] = zero;
-    blockMetrics.baselineM0[threadIdx.x] = zero;
-    blockMetrics.baselineM1[threadIdx.x] = zero;
-    blockMetrics.baselineM2[threadIdx.x] = zero;
+    //blockMetrics.baselineOffset[threadIdx.x] = pbzero;
+    //blockMetrics.baselineM0[threadIdx.x] = pbzero;
+    //blockMetrics.baselineM1[threadIdx.x] = pbzero;
+    //blockMetrics.baselineM2[threadIdx.x] = pbzero;
+
+    ResetStats(blockMetrics.baselineStats);
 
     blockMetrics.traceM0[threadIdx.x] = zero;
     blockMetrics.traceM1[threadIdx.x] = zero;
@@ -446,23 +587,17 @@ __global__ void ProcessChunk(
         // collect the subtracted baseline and shift the pulse detection baseline.
         // see the equivalent for the host code in BasecallingMetricsAccumulator::AddBatchMetrics
         // extract subtracted baseline mean and count
-        const auto& subtractedBaselineM1 = getWideLoad(baselinerStats[blockIdx.x].backgroundStats.moment1);
-        const auto& subtractedBaselineM0 = getWideLoad(baselinerStats[blockIdx.x].backgroundStats.moment0);
-        const auto subtractedBaseline = subtractedBaselineM1 / subtractedBaselineM0;
-        // merge the baseline offset (see the equivalent in the StatAccumulator::+= operator in host code )
+        const PBFloat2 subtractedBaseline = Mean(baselinerStats[blockIdx.x].backgroundStats);
+         // merge the baseline offset (see the equivalent in the StatAccumulator::+= operator in host code )
         // note we are assuming offsets have not been set to NaN, only zero(see below)
-        const auto one = asFloat2(PBHalf2(1.0f));
-        auto& metricsOffset = blockMetrics.baselineOffset[threadIdx.x];
-        const auto& pdMetricsM0 = getWideLoad(pdMetrics[blockIdx.x].moment0);
-        const auto& metricsBaselineM0 = blockMetrics.baselineM0[threadIdx.x];
-        const auto w = pdMetricsM0 / (metricsBaselineM0 + pdMetricsM0);
-        const auto offsetNew = (one - w) * metricsOffset + w * subtractedBaseline; 
-        metricsOffset = Blend(isnan(offsetNew), metricsOffset, offsetNew);
-        // and merge the moments
-        blockMetrics.baselineM0[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment0);
-        blockMetrics.baselineM1[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment1);
-        blockMetrics.baselineM2[threadIdx.x] += getWideLoad(pdMetrics[blockIdx.x].moment2);
-    }
+        // copy out the pdMetrics moments (they will be modified)
+        QuickStats pdMetricsStats( pdMetrics[blockIdx.x]);
+        QuickStats metricsStats( blockMetrics.baselineStats);
+        pdMetricsStats.Shift(subtractedBaseline);
+        metricsStats += pdMetricsStats;
+        // and transfer the results back to the metrics
+        metricsStats.Output(blockMetrics.baselineStats);
+     }
 
     { // Autocorrelation basic metrics (correctly taken from baseliner)
         blockMetrics.traceM0[threadIdx.x] += getWideLoad(
@@ -521,10 +656,10 @@ __device__ PBShort2 labelBlock(
     using AnalogVals = Utility::CudaArray<PBHalf2, numAnalogs>;
 
     const PBHalf2 zeros(0);
-
-    const auto& stdDev = sqrt(variance(blockMetrics.baselineM0[threadIdx.x],
-                                       blockMetrics.baselineM1[threadIdx.x],
-                                       blockMetrics.baselineM2[threadIdx.x]));
+    const auto& stdDev = sqrtf(Variance(blockMetrics.baselineStats));
+    //const auto& stdDev = sqrt(variance(blockMetrics.baselineM0[threadIdx.x],
+    //                                   blockMetrics.baselineM1[threadIdx.x],
+    //                                   blockMetrics.baselineM2[threadIdx.x]));
     const PBHalf2& numBases = getWideLoad(outMetrics.numBases);
     const PBHalf2& numPulses = getWideLoad(outMetrics.numPulses);
     const PBHalf2& pulseWidth = replaceNans(
@@ -586,12 +721,12 @@ __device__ PBShort2 labelBlock(
 
     for (size_t i = 0; i < numAnalogs; ++i)
     {
-        features[ActivityLabeler::BLOCKLOWSNR] += pkmid[i] / stdDev
+        features[ActivityLabeler::BLOCKLOWSNR] += ToHalf2(pkmid[i] / stdDev
                                                 * blockMetrics.numBasesByAnalog[i][threadIdx.x] / numBases
-                                                * minamp / relamps[i];
-        features[ActivityLabeler::MAXPKMAXNORM] = max(
+                                                * minamp / relamps[i]);
+        features[ActivityLabeler::MAXPKMAXNORM] = ToHalf2(max(
             features[ActivityLabeler::MAXPKMAXNORM],
-            (blockMetrics.pkMax[i][threadIdx.x] - pkmid[i]) / stdDev);
+            (blockMetrics.pkMax[i][threadIdx.x] - pkmid[i]) / stdDev));
     }
     features[ActivityLabeler::BLOCKLOWSNR] =
         replaceNans(features[ActivityLabeler::BLOCKLOWSNR]);
@@ -646,9 +781,10 @@ __global__ void FinalizeMetrics(
     {
         const PBHalf2 nf = blockMetrics.numPkMidFrames[pulseLabel][threadIdx.x];
         const float2 nff = asFloat2(nf);
-        const PBHalf2 baselineVariance = variance(blockMetrics.baselineM0[threadIdx.x],
-                                                  blockMetrics.baselineM1[threadIdx.x],
-                                                  blockMetrics.baselineM2[threadIdx.x]);
+        const PBHalf2 baselineVariance = ToHalf2(Variance(blockMetrics.baselineStats));
+        //const PBHalf2 baselineVariance = variance(blockMetrics.baselineM0[threadIdx.x],
+        //                                          blockMetrics.baselineM1[threadIdx.x],
+        //                                          blockMetrics.baselineM2[threadIdx.x]);
         const float2 pkMidSignal(blockMetrics.pkMidSignal[pulseLabel][threadIdx.x]);
         const float2 pkMidSignalSqr = pkMidSignal * pkMidSignal;
 
@@ -742,16 +878,21 @@ __global__ void FinalizeMetrics(
     outMetrics.pixelChecksum[indX] = blockMetrics.pixelChecksum[threadIdx.x].X();
     outMetrics.pixelChecksum[indY] = blockMetrics.pixelChecksum[threadIdx.x].Y();
 
-    outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].x / blockMetrics.baselineM0[threadIdx.x].x + blockMetrics.baselineOffset[threadIdx.x].x;
-    outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].y / blockMetrics.baselineM0[threadIdx.x].y + blockMetrics.baselineOffset[threadIdx.x].y;;
-    const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
-                               blockMetrics.baselineM1[threadIdx.x],
-                               blockMetrics.baselineM2[threadIdx.x]);
-    outMetrics.frameBaselineVarianceDWS[indX] = var.x;
-    outMetrics.frameBaselineVarianceDWS[indY] = var.y;
+    const auto frameBaselineDWS = Mean(blockMetrics.baselineStats); 
+    outMetrics.frameBaselineDWS[indX] = frameBaselineDWS.X();
+    outMetrics.frameBaselineDWS[indY] = frameBaselineDWS.Y();
+    //outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].X() / blockMetrics.baselineM0[threadIdx.x].X() + blockMetrics.baselineOffset[threadIdx.x].X();
+    //outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].Y() / blockMetrics.baselineM0[threadIdx.x].Y() + blockMetrics.baselineOffset[threadIdx.x].Y();;
+    //const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
+    //                           blockMetrics.baselineM1[threadIdx.x],
+    //                           blockMetrics.baselineM2[threadIdx.x]);
+    const auto& var = Variance(blockMetrics.baselineStats);
+    outMetrics.frameBaselineVarianceDWS[indX] = var.X();
+    outMetrics.frameBaselineVarianceDWS[indY] = var.Y();
 
-    outMetrics.numFramesBaseline[indX] = blockMetrics.baselineM0[threadIdx.x].x;
-    outMetrics.numFramesBaseline[indY] = blockMetrics.baselineM0[threadIdx.x].y;
+    const auto numFramesBaseline = blockMetrics.baselineStats.moment0[threadIdx.x];
+    outMetrics.numFramesBaseline[indX] = numFramesBaseline.X();
+    outMetrics.numFramesBaseline[indY] = numFramesBaseline.Y();
 
     outMetrics.numPulses[indX] = 0;
     outMetrics.numPulses[indY] = 0;

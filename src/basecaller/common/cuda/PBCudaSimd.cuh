@@ -197,6 +197,27 @@ inline __device__ PBBool2 operator > (PBHalf2 l, PBHalf2 r) { return PBBool2(__h
 inline __device__ PBBool2 operator >=(PBHalf2 l, PBHalf2 r) { return PBBool2(__hgeu2(l.data(), r.data())); }
 inline __device__ PBBool2 operator ==(PBHalf2 l, PBHalf2 r) { return PBBool2(l.data() == r.data()); }
 
+inline __device__ PBBool2 operator > (PBFloat2 l, PBFloat2 r) 
+{ 
+    bool low = l.X() > r.X();
+    bool high = l.Y() > r.Y();
+    return PBBool2(low, high); 
+}
+
+inline __device__ PBBool2 operator ==(PBFloat2 l, PBFloat2 r) 
+{ 
+    bool low = l.X() == r.X();
+    bool high = l.Y() == r.Y();
+    return PBBool2(low, high); 
+}
+
+inline __device__ PBBool2 isnan(PBFloat2 val) 
+{ 
+    bool low = std::isnan(val.X());
+    bool high = std::isnan(val.Y());
+    return PBBool2(low, high); 
+}
+
 inline __device__ PBBool2 isnan(PBHalf2 h)  { return __hisnan2(h.data()); }
 
 inline __device__ PBHalf2 pow2(PBHalf2 h) { return PBHalf2(h.data() * h.data()); }
@@ -204,12 +225,31 @@ inline __device__ PBHalf2 log(PBHalf2 h) { return PBHalf2(h2log(h.data())); }
 inline __device__ PBHalf2 sqrt(PBHalf2 h) { return PBHalf2(h2sqrt(h.data())); }
 inline __device__ PBHalf2 exp(PBHalf2 h) { return PBHalf2(h2exp(h.data())); }
 
+inline __device__ PBFloat2 pow2f(PBFloat2 h)
+{
+    float low  = h.X() * h.X();
+    float high = h.Y() * h.Y();
+    return PBFloat2(low, high);
+}
+
+inline __device__ PBFloat2 sqrtf(PBFloat2 h)
+{
+    float low  = std::sqrt(h.X());
+    float high = std::sqrt(h.Y());
+    return PBFloat2(low, high);
+}
+
 inline __device__ PBHalf2 min(PBHalf2 l, PBHalf2 r)
 {
     auto cond = l < r;
     return Blend(cond, l, r);
 }
 inline __device__ PBHalf2 max(PBHalf2 l, PBHalf2 r)
+{
+    auto cond = l > r;
+    return Blend(cond, l, r);
+}
+inline __device__ PBFloat2 max(PBFloat2 l, PBFloat2 r)
 {
     auto cond = l > r;
     return Blend(cond, l, r);
@@ -222,6 +262,11 @@ inline __device__ PBShort2 ToShort(PBHalf2 h)
 {
     return PBShort2(__half2short_rn(h.data().x),
                     __half2short_rn(h.data().y));
+}
+
+inline __device__ PBHalf2 ToHalf2(PBFloat2 h)
+{
+    return PBHalf2(h.X(), h.Y());
 }
 
 // Cuda integral intrinsics do not supply multiplication and division.  If they really

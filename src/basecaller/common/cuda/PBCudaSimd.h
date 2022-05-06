@@ -238,6 +238,8 @@ public:
 
     CUDA_ENABLED PBFloat2(float f) : data_{f,f} {}
     CUDA_ENABLED PBFloat2(float f1, float f2) : data_{f1, f2} {}
+    CUDA_ENABLED PBFloat2(PBShort2 f) : PBFloat2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
+
 
 #if defined(__CUDA_ARCH__)
     __device__ PBFloat2(PBHalf2 f) : data_{__half22float2(f.data())} {}

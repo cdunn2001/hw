@@ -21,9 +21,9 @@
 
   $ cat rtmetrics.csv
   StartFrame,NumFrames,StartFrameTS,EndFrameTS,TestRegion_Baseline_sampleCV,TestRegion_Baseline_sampleMean,TestRegion_Baseline_sampleMed,TestRegion_Baseline_sampleSize,TestRegion_Baseline_sampleTotal,TestRegion_BaselineStd_sampleCV,TestRegion_BaselineStd_sampleMean,TestRegion_BaselineStd_sampleMed,TestRegion_BaselineStd_sampleSize,TestRegion_BaselineStd_sampleTotal,TestRegion_SNR_A_sampleCV,TestRegion_SNR_C_sampleCV,TestRegion_SNR_G_sampleCV,TestRegion_SNR_T_sampleCV,TestRegion_SNR_A_sampleMean,TestRegion_SNR_C_sampleMean,TestRegion_SNR_G_sampleMean,TestRegion_SNR_T_sampleMean,TestRegion_SNR_A_sampleMed,TestRegion_SNR_C_sampleMed,TestRegion_SNR_G_sampleMed,TestRegion_SNR_T_sampleMed,TestRegion_SNR_A_sampleSize,TestRegion_SNR_C_sampleSize,TestRegion_SNR_G_sampleSize,TestRegion_SNR_T_sampleSize,TestRegion_SNR_A_sampleTotal,TestRegion_SNR_C_sampleTotal,TestRegion_SNR_G_sampleTotal,TestRegion_SNR_T_sampleTotal
-  20456,4096,0,0,63.99*,299.85*,-1,4096,4096,64.0*,5.84*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.57*,11.11*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
-  24552,4096,0,0,63.99*,299.85*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.10*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
-  28648,4096,0,0,63.99*,299.85*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.11*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  20456,4096,0,0,63.99*,299.84*,-1,4096,4096,64.0*,5.84*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.38*,27.27*,17.56*,11.11*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  24552,4096,0,0,63.99*,299.84*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.10*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  28648,4096,0,0,63.99*,299.84*,-1,4096,4096,64.0*,5.85*,-1,4096,4096,64.0*,64.0*,64.0*,64.0*,40.39*,27.28*,17.56*,11.11*,-1,-1,-1,-1,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768,"numZmwLanes":64,"traceFile":"'$TRCIN'"}' \
   > --config system.basecallerConcurrency=1 \
@@ -52,7 +52,7 @@
                                       63.99* (glob)
                                   ],
                                   "sampleMean": [
-                                      299.85* (glob)
+                                      299.84* (glob)
                                   ],
                                   "sampleMed": [
                                       -1
