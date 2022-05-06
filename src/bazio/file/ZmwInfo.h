@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <unordered_map>
 
 #include <json/json.h>
 
@@ -110,16 +111,16 @@ public:
     const std::vector<uint8_t>& HoleTypes() const
     { return zmwData_.holeTypes; }
 
-    const std::vector<uint16_t> HoleX() const
+    const std::vector<uint16_t>& HoleX() const
     { return zmwData_.holeX; }
 
-    const std::vector<uint16_t> HoleY() const
+    const std::vector<uint16_t>& HoleY() const
     { return zmwData_.holeY; }
 
     const std::vector<uint32_t>& HoleFeaturesMask() const
     { return zmwData_.holeFeaturesMask; }
 
-    const std::map<uint32_t,uint32_t>& ZmwNumbersToIndex() const
+    const std::unordered_map<uint32_t,uint32_t>& ZmwNumbersToIndex() const
     { return zmwNumbersToIndex_; }
 
     uint32_t ZmwIndexToNumber(const uint32_t index) const
@@ -147,7 +148,7 @@ private:
 
 private:
     Data                            zmwData_;
-    std::map<uint32_t,uint32_t>     zmwNumbersToIndex_;
+    std::unordered_map<uint32_t,uint32_t>     zmwNumbersToIndex_;
 };
 
 
