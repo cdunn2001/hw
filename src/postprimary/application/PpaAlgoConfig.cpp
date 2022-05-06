@@ -324,7 +324,7 @@ void PpaAlgoConfig::SetZmwOutputStride(const PacBio::BAM::CollectionMetadata& cm
     if (cmd.HasAutomationParameters() && cmd.AutomationParameters().HasParameter("ZmwOutputStrideBamFile"))
     {
         outputFilter.zmwOutputStride = static_cast<uint32_t>(std::stoi(cmd.AutomationParameters().GetParameter("ZmwOutputStrideBamFile")));
-        PBLOG_DEBUG << "Setting zmwOutputStride using collection metadata to = " << outputFilter.zmwOutputStride;
+        PBLOG_INFO << "Setting zmwOutputStride using collection metadata to = " << outputFilter.zmwOutputStride;
     }
 }
 
@@ -334,15 +334,15 @@ void PpaAlgoConfig::SetZmwOutputStride(const PacBio::BAM::DataSet& ds)
         ds.Metadata().CollectionMetadata().AutomationParameters().HasParameter("ZmwOutputStrideBamFile"))
     {
         outputFilter.zmwOutputStride = static_cast<uint32_t>(std::stoi(ds.Metadata().CollectionMetadata().AutomationParameters().GetParameter("ZmwOutputStrideBamFile")));
-        PBLOG_DEBUG << "Setting zmwOutputStride using collection metadata to = " << outputFilter.zmwOutputStride;
+        PBLOG_INFO << "Setting zmwOutputStride using collection metadata to = " << outputFilter.zmwOutputStride;
     }
 }
 
 void PpaAlgoConfig::SetZmwOutputStride(const UserParameters* user)
 {
-    if (user->zmwOutputStride != 0)
+    if (user->zmwOutputStride)
     {
-        outputFilter.zmwOutputStride = user->zmwOutputStride;
+        outputFilter.zmwOutputStride = user->zmwOutputStride.value();
         PBLOG_INFO << "Overriding using command-line zmwOutputStride = " << outputFilter.zmwOutputStride;
     }
 }

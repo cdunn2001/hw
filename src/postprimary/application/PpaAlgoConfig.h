@@ -98,7 +98,7 @@ class PpaOutputFilterConfig : public PacBio::Process::ConfigurationObject
 {
 public:
     // ZMW output stride for the BAM file
-    ADD_PARAMETER_NO_DEFAULT(uint32_t, zmwOutputStride);
+    ADD_PARAMETER(uint32_t, zmwOutputStride, 1);
 };
 
 class PpaAlgoConfig : public PacBio::Process::ConfigurationObject
@@ -119,13 +119,11 @@ public:
     void SetSequelDefaults()
     {
         inputFilter.minSnr.SetDefault(3.75f);
-        outputFilter.zmwOutputStride.SetDefault(1);
     }
 
     void SetSpiderDefaults()
     {
         inputFilter.minSnr.SetDefault(2.0f);
-        outputFilter.zmwOutputStride.SetDefault(1);
     }
 
 public:

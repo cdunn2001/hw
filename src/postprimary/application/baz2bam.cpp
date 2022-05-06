@@ -391,10 +391,6 @@ int main(int argc, char* argv[])
         {
             user->zmwOutputStride = options.get("zmwOutputStride");
         }
-        else
-        {
-            user->zmwOutputStride = 0;
-        }
 
         if (user->noStats)
         {
