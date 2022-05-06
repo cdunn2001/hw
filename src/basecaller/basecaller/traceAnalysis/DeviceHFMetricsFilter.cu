@@ -115,10 +115,6 @@ public: // metrics
     AnalogMetric<float2> pkZvarAcc;
 
     // The baseline stat accumulator:
-    //SingleMetric<PBFloat2> baselineOffset;
-    //SingleMetric<PBFloat2> baselineM0;
-    //SingleMetric<PBFloat2>  baselineM1;
-    //SingleMetric<PBFloat2>  baselineM2;
     DeviceStatAccumState baselineStats;
 
     // The autocorrelation accumulator:
@@ -165,11 +161,7 @@ __device__ float2 getWideLoad(const Cuda::Utility::CudaArray<float, laneSize>& l
 
 __device__ PBFloat2 getWideLoad2(const Cuda::Utility::CudaArray<float, laneSize>& load)
 {
-    const auto thingy1 = load[threadIdx.x * 2];
-    const auto thingy2 = load[threadIdx.x * 2 + 1];
-    PBFloat2 t; t.X(thingy1); t.Y(thingy2); 
-    return t;
-    //return PBFloat2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); 
+    return PBFloat2(load[threadIdx.x * 2], load[threadIdx.x * 2 + 1]); 
 };
 
 
