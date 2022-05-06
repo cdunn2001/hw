@@ -377,7 +377,7 @@ void ResultWriter::WriteToDiskLoop()
                 bool isFiltered = false;
                 int numAdapters = 0;
 
-                if (numZmwsToWriteToBam % user_->zmwOutputStride == 0)
+                if (numZmwsToWriteToBam % ppaAlgoConfig_->outputFilter.zmwOutputStride == 0)
                 {
                     // Save records
                     for (auto& result: cplx.resultPackets)

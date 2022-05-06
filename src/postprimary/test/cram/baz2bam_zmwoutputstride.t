@@ -31,3 +31,27 @@ sts.xml and sts.h5 should still be the same
   $ stsTool out_production_3.sts.h5 > out_3.sts.txt
   $ diff out.sts.txt out_2.sts.txt
   $ diff out.sts.txt out_3.sts.txt
+
+test using metadata.xml
+  $ baz2bam out_production.baz -o out_production_4 --adapter $TESTDIR/data/adapter.fasta -Q $TESTDIR/data/goldenSubset.fasta -j 8 --fasta --fastq --silent --minSubLength 10 --metadata=$TESTDIR/data/metadata_zmwoutputstride.xml --enableBarcodedAdapters=False
+  $ samtools view out_production_4.subreads.bam  | cut -f1 | cut -f2 -d'/' | sort -n | uniq | wc -l
+  12
+  $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_production_4.subreadset.xml
+  129
+  $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:TotalLength/text()' out_production_4.subreadset.xml
+  66793
+  $ diff out_production.sts.xml out_production_4.sts.xml
+  $ stsTool out_production_4.sts.h5 > out_4.sts.txt
+  $ diff out.sts.txt out_4.sts.txt
+
+override at command-line over metadata.xml
+  $ baz2bam out_production.baz -o out_production_5 --zmwOutputStride 5 --adapter $TESTDIR/data/adapter.fasta -Q $TESTDIR/data/goldenSubset.fasta -j 8 --fasta --fastq --silent --minSubLength 10 --metadata=$TESTDIR/data/metadata_zmwoutputstride.xml --enableBarcodedAdapters=False
+  $ samtools view out_production_5.subreads.bam  | cut -f1 | cut -f2 -d'/' | sort -n | uniq | wc -l
+  9
+  $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:NumRecords/text()' out_production_5.subreadset.xml
+  91
+  $ xpath -q -e '/pbds:SubreadSet/pbds:DataSetMetadata/pbds:TotalLength/text()' out_production_5.subreadset.xml
+  48953
+  $ diff out_production.sts.xml out_production_5.sts.xml
+  $ stsTool out_production_5.sts.h5 > out_5.sts.txt
+  $ diff out.sts.txt out_5.sts.txt

@@ -94,6 +94,13 @@ public:
     ADD_ENUM(PacBio::Primary::HqrfPublicMethod, method,PacBio::Primary::HqrfPublicMethod::DEFAULT);
 };
 
+class PpaOutputFilterConfig : public PacBio::Process::ConfigurationObject
+{
+public:
+    // ZMW output stride for the BAM file
+    ADD_PARAMETER_NO_DEFAULT(uint32_t, zmwOutputStride);
+};
+
 class PpaAlgoConfig : public PacBio::Process::ConfigurationObject
 {
     CONF_OBJ_SUPPORT_COPY(PpaAlgoConfig)
@@ -106,15 +113,19 @@ public:
 
     ADD_OBJECT(PpaHQRFConfig, hqrf);
 
+    ADD_OBJECT(PpaOutputFilterConfig, outputFilter);
+
 public:
     void SetSequelDefaults()
     {
         inputFilter.minSnr.SetDefault(3.75f);
+        outputFilter.zmwOutputStride.SetDefault(1);
     }
 
     void SetSpiderDefaults()
     {
         inputFilter.minSnr.SetDefault(2.0f);
+        outputFilter.zmwOutputStride.SetDefault(1);
     }
 
 public:
@@ -140,6 +151,7 @@ public:
         SetAdapterSequences(cmd);
         SetControls(cmd);
         SetHQRF(cmd);
+        SetZmwOutputStride(cmd);
     }
 
     void Populate(const PacBio::BAM::DataSet& ds)
@@ -148,6 +160,7 @@ public:
         SetAdapterSequences(ds);
         SetControls(ds);
         SetHQRF(ds);
+        SetZmwOutputStride(ds);
     }
 
     void Populate(const UserParameters* user)
@@ -156,6 +169,7 @@ public:
         SetAdapterSequences(user);
         SetControls(user);
         SetHQRF(user);
+        SetZmwOutputStride(user);
     }
 
 private:
@@ -163,16 +177,19 @@ private:
     void SetAdapterSequences(const PacBio::BAM::DataSet& ds);
     void SetControls(const PacBio::BAM::DataSet& ds);
     void SetHQRF(const PacBio::BAM::DataSet& ds);
+    void SetZmwOutputStride(const PacBio::BAM::DataSet& ds);
 
     void SetSnrCut(const PacBio::BAM::CollectionMetadata& cmd);
     void SetAdapterSequences(const PacBio::BAM::CollectionMetadata& cmd);
     void SetControls(const PacBio::BAM::CollectionMetadata& cmd);
     void SetHQRF(const PacBio::BAM::CollectionMetadata& cmd);
+    void SetZmwOutputStride(const PacBio::BAM::CollectionMetadata& cmd);
 
     void SetSnrCut(const UserParameters* user);
     void SetAdapterSequences(const UserParameters* user);
     void SetControls(const UserParameters* user);
     void SetHQRF(const UserParameters* user);
+    void SetZmwOutputStride(const UserParameters* user);
 };
 
 }}} // PacBio::Primary::Postprimary
