@@ -119,6 +119,7 @@ TEST(ResultWriter,Basics)
 
     UserParameters user;
     PpaAlgoConfig ppaAlgoConfig;
+    ppaAlgoConfig.outputFilter.zmwOutputStride = 1;
     user.savePbi = false;
     std::shared_ptr<RuntimeMetaData> rmd(new RuntimeMetaData);
     FileHeaderBuilder fhb("FakeMovie", 80.0, 80.0*60*60*3,
@@ -252,6 +253,7 @@ TEST(ResultWriter,LB_SM_tags)
 
     UserParameters user;
     PpaAlgoConfig ppaAlgoConfig;
+    ppaAlgoConfig.outputFilter.zmwOutputStride = 1;
 
     FileHeaderBuilder fhb("LB_SM_movie",
                           80.0, // frame rate hz
@@ -453,6 +455,7 @@ TEST(ResultWriter,StreamingToStdout)
 
     UserParameters user;
     PpaAlgoConfig ppaAlgoConfig;
+    ppaAlgoConfig.outputFilter.zmwOutputStride = 1;
     user.savePbi = false;
     FileHeaderBuilder fhb("FakeMovie",
                           80.0,
