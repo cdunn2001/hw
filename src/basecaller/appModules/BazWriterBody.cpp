@@ -79,6 +79,26 @@ BazWriterBody::BazWriterBody(
         PBLOG_INFO << "Opening " << numBatches_ << " BAZ files for writing with filename prefix: "
                    << removeExtension(bazName) << " zmws: " << zmwInfo.NumZmws();
 
+        {
+            std::string bazFileListFileName = removeExtension(bazName) + ".bazfilelist.txt";
+            PBLOG_INFO << "Generating BAZ file list to file: " << bazFileListFileName;
+            std::ofstream ostrm(bazFileListFileName, std::ios::trunc);
+            if (ostrm.is_open())
+            {
+                for (uint32_t b = 0; b < numBatches_; b++)
+                {
+                    const std::string multiBazName = removeExtension(bazName) + "." + std::to_string(b) + ".baz";
+                    ostrm << multiBazName << "\n";
+                }
+                ostrm.close();
+            }
+            else
+            {
+                throw PBException("Unable to write BAZ file list: " + bazFileListFileName);
+            }
+        }
+
+
         std::vector<size_t> batchStartZmw;
         std::vector<size_t> batchNumZmw;
         batchStartZmw.reserve(numBatches_);

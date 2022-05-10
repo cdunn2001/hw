@@ -19,7 +19,13 @@
   /tmp/cramtests-*/multi.1.baz (glob)
   /tmp/cramtests-*/multi.2.baz (glob)
   /tmp/cramtests-*/multi.3.baz (glob)
-
+  $ ls ${CRAMTMP}/multi.bazfilelist.txt
+  /tmp/cramtests-*/multi.bazfilelist.txt (glob)
+  $ cat ${CRAMTMP}/multi.bazfilelist.txt
+  /tmp/cramtests-*/multi.0.baz (glob)
+  /tmp/cramtests-*/multi.1.baz (glob)
+  /tmp/cramtests-*/multi.2.baz (glob)
+  /tmp/cramtests-*/multi.3.baz (glob)
   $ bazviewer -l --silent ${CRAMTMP}/multi.0.baz | wc -l
   65
   $ bazviewer -l --silent ${CRAMTMP}/multi.1.baz | wc -l
