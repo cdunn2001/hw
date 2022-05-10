@@ -510,6 +510,7 @@ DataSource::MovieInfo TraceFileDataSource::MovieInformation() const
 
     const auto& chipInfo = traceFile_.Scan().ChipInfo();
     movieInfo.refSnr = chipInfo.analogRefSnr;
+    movieInfo.chipLayoutName = chipInfo.layoutName;
 
     auto& psfDst = movieInfo.xtalkPsf;
     auto& xtcDst = movieInfo.xtalkCorrection;
