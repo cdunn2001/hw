@@ -50,24 +50,7 @@ namespace Basecaller {
 
 DeviceHFMetricsFilter::~DeviceHFMetricsFilter() = default;
 
-
-struct DeviceStatAccumState
-{
-    using FloatArray = Cuda::Utility::CudaArray<PBFloat2, laneSize/2>;
-
-    // Data offset.
-    FloatArray offset;
-
-    // The number of data samples included in the moment statistics.
-    // Floating-point to support scaling smoothly.
-    FloatArray moment0;
-
-    // First moment (a.k.a., sum).
-    FloatArray moment1;
-
-    // Second moment.
-    FloatArray moment2;
-};
+using DeviceStatAccumState = StatAccumStateT<PBFloat2, laneSize/2>;
 
 namespace {
 
@@ -196,7 +179,8 @@ __device__ void ResetStats(DeviceStatAccumState& stats)
     stats.moment0[threadIdx.x] = pbzero;
     stats.moment1[threadIdx.x] = pbzero;
     stats.moment2[threadIdx.x] = pbzero;
-    stats.offset[threadIdx.x] = pbzero;
+    // todo: is this correct, or not?
+    //stats.offset[threadIdx.x] = pbzero;
 }
 
 __device__ PBFloat2 Mean(const DeviceStatAccumState& stats)
@@ -206,7 +190,10 @@ __device__ PBFloat2 Mean(const DeviceStatAccumState& stats)
 
 __device__ PBFloat2 Mean(const StatAccumState& stats)
 {
-    return stats.moment1[threadIdx.x] / stats.moment0[threadIdx.x] + stats.offset[threadIdx.x];
+    const PBFloat2 offset = getWideLoad2(stats.offset);
+    const PBFloat2 m0 = getWideLoad2(stats.moment0);
+    const PBFloat2 m1 = getWideLoad2(stats.moment1);
+    return m1 / m0 + offset;
 }
 
 __device__ PBFloat2 Variance(const DeviceStatAccumState& stats)
@@ -214,6 +201,10 @@ __device__ PBFloat2 Variance(const DeviceStatAccumState& stats)
     return variance2(stats.moment0[threadIdx.x],stats.moment1[threadIdx.x],stats.moment2[threadIdx.x]);
 }
 
+// GPU implementation of much of the functionality of the host StatAccumulator. The purpose of this
+// class is to make GPU code look more like CPU code, hopefully reducing (numerical) differences
+// in results.
+// todo: unify with host code, if/where feasible.
 class QuickStats {
     PBFloat2 m0_;
     PBFloat2 m1_;
@@ -221,14 +212,6 @@ class QuickStats {
     PBFloat2 offset_;
 
     public:
-    __device__ QuickStats(PBFloat2& offset, PBFloat2& m0, PBFloat2& m1, PBFloat2& m2)
-    {
-        offset_ = offset;
-        m0_ = m0;
-        m1_ = m1;
-        m2_ = m2;
-    }
-
     __device__ QuickStats(const PacBio::Mongo::StatAccumState& stats)
     {
         offset_ = getWideLoad2(stats.offset);
@@ -245,7 +228,7 @@ class QuickStats {
         m2_ = stats.moment2[threadIdx.x];
     }
 
-    __device__ void Output(DeviceStatAccumState& stats)
+    __device__ void Output(DeviceStatAccumState& stats) const
     {
         stats.offset[threadIdx.x] = offset_;
         stats.moment0[threadIdx.x] = m0_;
@@ -253,7 +236,8 @@ class QuickStats {
         stats.moment2[threadIdx.x] = m2_;
     }
 
-    __device__ void Shift(PBFloat2 shift)
+    /// see StatAccumulator.Shift()
+    __device__ void Shift(const PBFloat2& shift)
     {
         offset_ += shift;
     }
@@ -407,11 +391,6 @@ __global__ void InitializeMetrics(
     blockMetrics.numHalfSandwiches[threadIdx.x] = 0;
     blockMetrics.numPulseLabelStutters[threadIdx.x] = 0;
     blockMetrics.pulseDetectionScore[threadIdx.x] = 0.0f;
-
-    //blockMetrics.baselineOffset[threadIdx.x] = pbzero;
-    //blockMetrics.baselineM0[threadIdx.x] = pbzero;
-    //blockMetrics.baselineM1[threadIdx.x] = pbzero;
-    //blockMetrics.baselineM2[threadIdx.x] = pbzero;
 
     ResetStats(blockMetrics.baselineStats);
 
@@ -580,9 +559,8 @@ __global__ void ProcessChunk(
         // see the equivalent for the host code in BasecallingMetricsAccumulator::AddBatchMetrics
         // extract subtracted baseline mean and count
         const PBFloat2 subtractedBaseline = Mean(baselinerStats[blockIdx.x].backgroundStats);
-         // merge the baseline offset (see the equivalent in the StatAccumulator::+= operator in host code )
-        // note we are assuming offsets have not been set to NaN, only zero(see below)
-        // copy out the pdMetrics moments (they will be modified)
+        // shift the pulse detector metrics by the subtracted baseline
+        // and merge into a working copy of the baseline metrics
         QuickStats pdMetricsStats( pdMetrics[blockIdx.x]);
         QuickStats metricsStats( blockMetrics.baselineStats);
         pdMetricsStats.Shift(subtractedBaseline);
@@ -649,9 +627,6 @@ __device__ PBShort2 labelBlock(
 
     const PBHalf2 zeros(0);
     const auto& stdDev = sqrtf(Variance(blockMetrics.baselineStats));
-    //const auto& stdDev = sqrt(variance(blockMetrics.baselineM0[threadIdx.x],
-    //                                   blockMetrics.baselineM1[threadIdx.x],
-    //                                   blockMetrics.baselineM2[threadIdx.x]));
     const PBHalf2& numBases = getWideLoad(outMetrics.numBases);
     const PBHalf2& numPulses = getWideLoad(outMetrics.numPulses);
     const PBHalf2& pulseWidth = replaceNans(
@@ -774,9 +749,6 @@ __global__ void FinalizeMetrics(
         const PBHalf2 nf = blockMetrics.numPkMidFrames[pulseLabel][threadIdx.x];
         const float2 nff = asFloat2(nf);
         const PBHalf2 baselineVariance = ToHalf2(Variance(blockMetrics.baselineStats));
-        //const PBHalf2 baselineVariance = variance(blockMetrics.baselineM0[threadIdx.x],
-        //                                          blockMetrics.baselineM1[threadIdx.x],
-        //                                          blockMetrics.baselineM2[threadIdx.x]);
         const float2 pkMidSignal(blockMetrics.pkMidSignal[pulseLabel][threadIdx.x]);
         const float2 pkMidSignalSqr = pkMidSignal * pkMidSignal;
 
@@ -873,11 +845,6 @@ __global__ void FinalizeMetrics(
     const auto frameBaselineDWS = Mean(blockMetrics.baselineStats); 
     outMetrics.frameBaselineDWS[indX] = frameBaselineDWS.X();
     outMetrics.frameBaselineDWS[indY] = frameBaselineDWS.Y();
-    //outMetrics.frameBaselineDWS[indX] = blockMetrics.baselineM1[threadIdx.x].X() / blockMetrics.baselineM0[threadIdx.x].X() + blockMetrics.baselineOffset[threadIdx.x].X();
-    //outMetrics.frameBaselineDWS[indY] = blockMetrics.baselineM1[threadIdx.x].Y() / blockMetrics.baselineM0[threadIdx.x].Y() + blockMetrics.baselineOffset[threadIdx.x].Y();;
-    //const auto& var = variance(blockMetrics.baselineM0[threadIdx.x],
-    //                           blockMetrics.baselineM1[threadIdx.x],
-    //                           blockMetrics.baselineM2[threadIdx.x]);
     const auto& var = Variance(blockMetrics.baselineStats);
     outMetrics.frameBaselineVarianceDWS[indX] = var.X();
     outMetrics.frameBaselineVarianceDWS[indY] = var.Y();

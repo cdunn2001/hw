@@ -44,6 +44,7 @@
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
+
 class DeviceHFMetricsFilter : public HFMetricsFilter
 {
 public: // static methods
