@@ -20,8 +20,15 @@ fi
 echo "Using bazviewer: $(which bazviewer)"
 echo "Using smrt-basecaller: $(which smrt-basecaller)"
 
+tests=*.t
+if [ ${1+x} ]; then
+    tests=$1
+    echo "Tests specified in command line:"
+    echo $'\t' $tests
+fi
+
 pushd $(dirname "$0")
-cram -v *.t
+cram -v $tests
 status=$?
 popd
 
