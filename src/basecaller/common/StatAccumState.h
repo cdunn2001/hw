@@ -36,9 +36,9 @@ namespace PacBio {
 namespace Mongo {
 
 /// A CUDA-friendly POD struct that represents the state of a StatAccumulator.
-struct StatAccumState
+template <typename T, size_t laneWidth> struct StatAccumStateT
 {
-    using FloatArray = Cuda::Utility::CudaArray<float, laneSize>;
+    using FloatArray = Cuda::Utility::CudaArray<T, laneWidth>;
 
     // Data offset.
     FloatArray offset;
@@ -53,6 +53,8 @@ struct StatAccumState
     // Second moment.
     FloatArray moment2;
 };
+
+using StatAccumState = StatAccumStateT<float, laneSize>;
 
 }}      // namespace PacBio::Mongo
 

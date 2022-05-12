@@ -286,6 +286,8 @@ private:
         std::vector<std::vector<unsigned short>> frameMode(poolSize);
         std::vector<std::unique_ptr<LaneDetectionModelHost>> detectionModels;
 
+        DmeEmHost::FloatVec backgroundMean{0.0f};
+
         for (unsigned int l = 0; l < poolSize; ++l)
         {
             auto tr = traces.GetBlockView(l);
@@ -313,6 +315,7 @@ private:
                     frame.Store(x);
                     // The traces have zero baseline so the raw trace and baselined trace are the same.
                     bsa.AddSample(frame.Extract(), frame.Extract(), false);
+                    bsa.AddSampleBackground(backgroundMean);
                     cdMean.at(m) += x;
                     mode.push_back(m);
                     frame++;
@@ -331,6 +334,7 @@ private:
                     DmeEmHost::FloatVec x = floorCastInt(stdev * normDist(rng) + mean);
                     frame.Store(x);
                     bsa.AddSample(frame.Extract(), frame.Extract(), true);
+                    bsa.AddSampleBackground(backgroundMean);
                     cdMean.front() += x;
                     mode.push_back(0);
                     frame++;

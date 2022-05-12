@@ -124,26 +124,30 @@ HostMultiScaleBaseliner::LaneBaseliner::EstimateBaseline(const Data::BlockView<c
         auto lowerVal = loIt.Extract() - pedestal_;
         auto upperVal = upIt.Extract() - pedestal_;
         FloatArray blEst = GetSmoothedBlEstimate(lowerVal, upperVal);
+        const auto subtractedBaseline = blEst * scaler_;
 
         // Estimates are scattered on stride intervals.
         for (size_t j = 0; j < Stride(); j++, trIt++, blsIt++)
         {
             // Data shifted and scaled
-            auto rawSignal = trIt.Extract() - pedestal_;
-            LaneArray blSubtractedFrame((rawSignal - blEst) * scaler_);
+            const auto rawSignalScaled = (trIt.Extract() - pedestal_) * scaler_;      
+            LaneArray blSubtractedFrame(rawSignalScaled - subtractedBaseline);
             // ... stored as output traces
             blsIt.Store(blSubtractedFrame);
             // ... and added to statistics
-            AddToBaselineStats(rawSignal * scaler_, blSubtractedFrame, baselinerStats);
+            AddToBaselineStats(rawSignalScaled, blSubtractedFrame, baselinerStats);
         }
+
+        baselinerStats.AddSampleBackground(subtractedBaseline);
+
     }
 
     return baselinerStats;
 }
 
 void HostMultiScaleBaseliner::LaneBaseliner::AddToBaselineStats(const LaneArray& traceData,
-                                                                      const LaneArray& baselineSubtractedFrame,
-                                                                      Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
+                                                                const LaneArray& baselineSubtractedFrame,
+                                                                Data::BaselinerStatAccumulator<ElementTypeOut>& baselinerStats)
 {
     // Thresholds below are specified as floats whereas incoming frame data are shorts.
     constexpr float sigmaThrL = 4.5f;

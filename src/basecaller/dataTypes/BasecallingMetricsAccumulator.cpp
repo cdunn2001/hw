@@ -327,9 +327,15 @@ void BasecallingMetricsAccumulator::AddBatchMetrics(
         const StatAccumState& pdBaselineStats)
 {
     BaselinerStatAccumulator<BaselinedTraceElement> reconstitutedStats(baselinerStats);
+    // reconstruct pulse detector stats so they can be updated with the
+    // baseline subtracted by the baseliner
+    StatAccumulator<LaneArray<float>> reconstitutedPdStats(pdBaselineStats);
     traceMetrics_.AutocorrAccum().Merge(reconstitutedStats.BaselineSubtractedStats());
     traceMetrics_.PulseDetectionScore() += LaneArray<float>(viterbiScore);
-    traceMetrics_.BaselinerStatAccum().Merge(pdBaselineStats);
+    // apply the subtracted baseline value to the pulse detector stats
+    // to yield correct trace absolute values in the metrics
+    reconstitutedPdStats.Shift(reconstitutedStats.BackgroundMean());
+    traceMetrics_.BaselinerStatAccum() += reconstitutedPdStats;
 }
 
 void BasecallingMetricsAccumulator::Count(

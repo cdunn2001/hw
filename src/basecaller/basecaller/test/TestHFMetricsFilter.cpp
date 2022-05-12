@@ -198,6 +198,7 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
         for (size_t zmw = 0; zmw < laneSize; ++zmw)
         {
             baselinerStats.rawBaselineSum[zmw] = 100;
+            baselinerStats.baselineStats.offset[zmw] = 0;
             baselinerStats.baselineStats.moment0[zmw] = 98;
             baselinerStats.baselineStats.moment1[zmw] = 10;
             baselinerStats.baselineStats.moment2[zmw] = 100;
@@ -205,6 +206,13 @@ Data::BaselinerMetrics GenerateBaselineMetrics(BaseSimConfig config)
             baselinerStats.fullAutocorrState.basicStats.moment0[zmw] = n0;
             baselinerStats.fullAutocorrState.basicStats.moment1[zmw] = 110;
             baselinerStats.fullAutocorrState.basicStats.moment2[zmw] = 5650;
+            // Set the background value to zero.
+            // Also set the counts to a non-zero value so we don't
+            // get nans from querying this.
+            baselinerStats.backgroundStats.offset[zmw] = 0;
+            baselinerStats.backgroundStats.moment0[zmw] = 42;
+            baselinerStats.backgroundStats.moment1[zmw] = 0;
+            baselinerStats.backgroundStats.moment2[zmw] = 0;
         }
     }
     return ret;

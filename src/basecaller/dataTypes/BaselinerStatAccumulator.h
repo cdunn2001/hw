@@ -34,6 +34,7 @@ public:     // Structors
         , traceMax {state.traceMax}
         , baselineSubtractedStats_ {state.baselineStats}
         , rawBaselineSum_ {state.rawBaselineSum}
+        , backgroundStats_ {state.backgroundStats}
     { }
 
 public:     // Mutating functions
@@ -45,6 +46,8 @@ public:     // Mutating functions
                    const LaneArray& baselineSubtracted,
                    const Mask& isBaseline);
 
+    void AddSampleBackground(const LaneArray& subtractedBaseline);
+
 public:     // Const functions
     BaselinerStatAccumState GetState() const
     {
@@ -55,6 +58,7 @@ public:     // Const functions
             traceMax,
             baselineSubtractedStats_.GetState(),
             rawBaselineSum_,
+            backgroundStats_.GetState()
         };
     }
 
@@ -82,6 +86,12 @@ public:     // Const functions
     const FloatArray RawBaselineMean() const
     { return rawBaselineSum_ / baselineSubtractedStats_.Count(); }
 
+    const StatAccumulator<FloatArray>& BackgroundStats() const
+    { return backgroundStats_; }
+
+    const FloatArray BackgroundMean() const
+    { return backgroundStats_.Mean(); }
+
 public:     // Non-const functions
     BaselinerStatAccumulator& Merge(const BaselinerStatAccumulator& other);
 
@@ -97,6 +107,10 @@ private:
 
     // This is the only member associated with the "rawTrace" data.
     FloatArray rawBaselineSum_ {0};
+
+    // Statistics of the baseline subtracted from the raw trace. Used
+    // to restore absolute baseline levels.
+    StatAccumulator<FloatArray> backgroundStats_;
 };
 
 }}}     // namespace PacBio::Mongo::Data
