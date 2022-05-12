@@ -13,3 +13,5 @@ Release History
 0.1.12 2022-4-14 baz2bam progress fixes, PTSD-1462 Nan/Zeros fixes
 0.1.13 2022-4-21 upgrade to hw-mongo to get photoelectronSensitivity, Analogs and refSnr working.
 0.1.14 2022-4-22 Passing of crosstalk and PSF kernels to DataSource was fixed. Otherwise PSF is never used.
+0.1.15 2022-4-27 Added pedestal support via WXIPCDataSource rebuild
+0.1.31 2022-5-3  Plumbing of chipLayoutName added

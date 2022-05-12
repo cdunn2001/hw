@@ -196,7 +196,10 @@ FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t ped
      // Convert indices to amounts ...
     numZmwX++; numZmwY++;
     // ... and ensure their correctness
-    assert(size_t(numZmwX*numZmwY) == zmwPerChunk);
+    if (size_t(numZmwX*numZmwY) != zmwPerChunk)
+    {
+        throw PBException("numZmwX("+std::to_string(numZmwX) + ")*numZmwY(" + std::to_string(numZmwY) + " != zmwPerChunk(" + std::to_string(zmwPerChunk));
+    }
     assert(props.size() == zmwPerChunk);
 
     const auto& dataType = (chunk.cbegin())->Layout().Encoding();
@@ -206,7 +209,7 @@ FrameStats AnalyzeChunk(const DataSource::SensorPacketsChunk& chunk, int16_t ped
         CalcChunkMoments<MatrixXub, MatrixXub::Scalar>(chunk, pedestal, reporter);
 
     // Stat moments have to be returned as separate memory blocks
-    // They also may be rugged so reshaping is not an option
+    // They also may be ragged so reshaping is not an option
     boost::multi_array<float, 2> chunkMom0(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
     boost::multi_array<float, 2> chunkMom1(boost::extents[numZmwX][numZmwY], boost::c_storage_order());
     decltype(chunkMom0)* outMoms[] = { &chunkMom0, &chunkMom1 };

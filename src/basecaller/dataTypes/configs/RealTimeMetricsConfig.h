@@ -192,25 +192,47 @@ struct RealTimeMetricsRegion : public Configuration::PBConfig<RealTimeMetricsReg
     PB_CONFIG(RealTimeMetricsRegion);
 
     PB_CONFIG_PARAM(std::vector<DataSource::ZmwFeatures>, featuresForFilter,
-                    std::vector<DataSource::ZmwFeatures>{DataSource::ZmwFeatures::Sequencing});
+                    std::vector<DataSource::ZmwFeatures>{});
     PB_CONFIG_PARAM(std::string, name, "");
     PB_CONFIG_PARAM(std::vector<std::vector<int>>, roi, std::vector<std::vector<int>>());
     PB_CONFIG_PARAM(std::vector<MetricNames>, metrics, {});
     PB_CONFIG_PARAM(uint32_t, minSampleSize, 1000);
+    // Stride used during the median computation only, since it is expensive.  A value that divides
+    // evenly into 64 makes the most sense, but anything should work, the sampling will just end up
+    // slightly irregular since the stride counter always starts at 0 with the beginning of each lane
+    PB_CONFIG_PARAM(uint32_t, medianIntraLaneStride, 1);
+
+    PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
+
+// TODO is this an API snafu?  These defaults have a lot of platform/layout specific
+//      information.  Should it have been queryable from the DataSource API instead?
+std::vector<RealTimeMetricsRegion> DefaultKestrelRegions();
 
 class RealTimeMetricsConfig : public Configuration::PBConfig<RealTimeMetricsConfig>
 {
     PB_CONFIG(RealTimeMetricsConfig);
 
-    PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions, std::vector<RealTimeMetricsRegion>());
-    // The csv format will be continusouly appended, to maintain a history of all RT Metrics produced
+    // RT metrics are implicitly enabled/disabled by the presence of an output file.  If we're
+    // not producing RT metrics then set the `regions` to empty.  This is both to reduce log
+    // clutter, since this can be a relateively large config, as well as to increase clarity,
+    // so we default to not having a bunch of unused config values running around
+    PB_CONFIG_PARAM(std::vector<RealTimeMetricsRegion>, regions,
+                    Configuration::DefaultFunc([](const std::string& csvOutputFile,
+                                                  const std::string& jsonOutputFile)
+                    {
+                        if (csvOutputFile.empty() && jsonOutputFile.empty())
+                            return std::vector<RealTimeMetricsRegion>{};
+                        else
+                            return DefaultKestrelRegions();
+                    }, {"csvOutputFile", "jsonOutputFile"}));
+
+    // The csv format will be continuously appended, to maintain a history of all RT Metrics produced
     PB_CONFIG_PARAM(std::string, csvOutputFile, "");
     // The json format will only include the most recent RT Metrics produced.  It will be updated
     // in an atomic fashion via a tmp file, to avoid "slicing" the data in the event of a concurrent
     // update and read
     PB_CONFIG_PARAM(std::string, jsonOutputFile, "");
-    PB_CONFIG_PARAM(bool, useSingleActivityLabels, true);
 };
 
 } // namespace PacBio::Mongo::Data

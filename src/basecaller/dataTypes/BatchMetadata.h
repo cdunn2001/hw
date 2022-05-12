@@ -58,6 +58,13 @@ public:
     int32_t FirstFrame() const { return firstFrame_; }
     int32_t LastFrame() const { return lastFrame_; }
 
+    // Optional timestamp information that may be present.
+    // Note this is not a frame-perfect timestamp, it will not
+    // be adjusted for things like the latency introduced by the
+    // frame labeler
+    void SetTimeStamp(uint64_t timestamp) { timestamp_ = timestamp; }
+    uint64_t GetTimeStamp() const { return timestamp_; }
+
     uint32_t FirstZmw() const { return firstZmw_; }
 
 private:
@@ -66,6 +73,7 @@ private:
     int32_t firstFrame_;
     int32_t lastFrame_;
     uint32_t firstZmw_;
+    uint64_t timestamp_ = 0;
 };
 
 

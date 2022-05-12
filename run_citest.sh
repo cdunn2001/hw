@@ -12,6 +12,8 @@ if [ ${VERBOSE+x} ]; then
     set -x
 fi
 
+echo "Running on the host: $(hostname)"
+
 usage()
 {
     cat << EOF

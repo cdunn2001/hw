@@ -329,7 +329,7 @@ TEST_P(Histogram, ResetFromStats)
     TestConfig testConfig;
     const auto& histConfig = testConfig.histConfig;
 
-    Data::AnalysisConfig anlyConfig;
+    Data::AnalysisConfig anlyConfig = Data::MockAnalysisConfig();
     ConfigureHists(histConfig, anlyConfig);
 
     const uint32_t numLanes = 2;

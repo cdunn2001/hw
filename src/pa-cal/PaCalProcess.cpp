@@ -181,8 +181,20 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 
         ret.paCalConfig.source.Visit([](const SimInputConfig&){},
                                      [&](WXIPCDataSourceConfig& cfg){
-                                         cfg.sraIndex = ret.sra;
-                                     });
+                                        cfg.sraIndex = ret.sra;
+                                        if (cfg.acqConfig.chipLayoutName == "NotSet" || cfg.acqConfig.chipLayoutName == "")
+                                        {
+                                            // The chiplayout interface is only used for X/Y coordinates, and in most cases
+                                            // The X/Y coordinates are just the entire row/col of the sensor. If that is true,
+                                            // then we don't need a real chiplayoutname. Setting it to "auto" will let the WXIPCDataSource
+                                            // construct a rectangulare chiplayout based on the wx-daemon sensor size.
+                                            cfg.acqConfig.chipLayoutName = "auto";
+                                        }
+                                        if (ret.createDarkCalFile)
+                                        {
+                                            cfg.pedestal = 0;
+                                        }
+                                    });
 
         if (options.get("showconfig"))
         {
@@ -261,6 +273,7 @@ std::unique_ptr<DataSourceBase> CreateSource(const PaCalConfig& cfg, size_t numF
             DataSourceBase::Configuration sourceCfg(layout, std::move(allo));
             sourceCfg.numFrames = numFrames;
             sourceCfg.darkFrame = std::move(darkFrame);
+            sourceCfg.imagePsf = std::make_unique<PacBio::DataSource::ImagePsf>(); // will create a unity PSF
             auto source = std::make_unique<Acquisition::DataSource::WXIPCDataSource>(std::move(sourceCfg), ipcConfig);
             return source;
         }

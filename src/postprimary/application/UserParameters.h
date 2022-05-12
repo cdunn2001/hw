@@ -39,6 +39,7 @@
 
 #include <string>
 #include <sstream>
+#include <optional>
 #include <vector>
 #include <limits>
 
@@ -77,6 +78,7 @@ struct UserParameters
     bool        polymeraseread = false;
     bool        outputFasta = false;
     bool        outputFastq = false;
+    std::optional<uint32_t>    zmwOutputStride = std::nullopt;
 
     // Read filter
     static constexpr float minSnrSequel = 3.75f;
