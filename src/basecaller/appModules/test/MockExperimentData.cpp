@@ -40,7 +40,7 @@ ScanData::Data MockExperimentData(size_t psfSize, size_t xtalkSize)
     runInfo.hqrfMethod = "N2";
 
     auto& chipInfo = expMetadata.chipInfo;
-    chipInfo.layoutName = "KestrelPOCRTO3";
+    chipInfo.layoutName = "rectangular_401x607";
 
     auto MakeUnity = [](boost::multi_array<float,2>& ma, size_t dimSize)
     {

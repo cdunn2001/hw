@@ -406,13 +406,8 @@ private:
         acqParams.frameRate = analysisConfig.movieInfo.frameRate;
         acqParams.numFrames = dataSource.NumFrames();
 
-        // FIXME: For running on Sequel, the chip layout name is needed here.
-        // We want to eventually move to storing directly into the trace file the
-        // chip layout information.
-        constexpr std::string_view defaultLayoutName = "KestrelPOCRTO3";
-
         auto& chipInfo = expMetadata.chipInfo;
-        chipInfo.layoutName = defaultLayoutName;
+        chipInfo.layoutName = dataSource.MovieInformation().chipLayoutName;
         chipInfo.analogRefSnr = analysisConfig.movieInfo.refSnr;
         const auto& psf = analysisConfig.movieInfo.xtalkPsf;
         const auto& xtc = analysisConfig.movieInfo.xtalkCorrection;
