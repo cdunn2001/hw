@@ -498,7 +498,7 @@ std::pair<size_t, size_t> BlockHQRegionFinder<Method>::FindHQRegion(
         const BlockLevelMetrics& metrics,
         const EventData& zmw) const
 {
-    if (zmw.Truncated()) return {0, 0};
+    if (zmw.Truncated() || metrics.Empty()) return {0, 0};
 
     const auto& activitySeq = LabelActivities(metrics);
 

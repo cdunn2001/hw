@@ -71,7 +71,11 @@ BlockLevelMetrics::BlockLevelMetrics(const RawMetricData& rawMetrics,
     }();
 
     // We technically allow empty metrics right now, but this should be changed.
-    if (rawMetrics.Empty()) return;
+    if (rawMetrics.Empty())
+    {
+        empty_ = true;
+        return;
+    }
 
     size_t framesPerBlock = metricFrames;
     const auto frameRate = static_cast<float>(frameRateHz);
