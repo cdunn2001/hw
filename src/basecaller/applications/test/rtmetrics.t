@@ -38,7 +38,6 @@
       "metricsChunk": {
           "metricsBlocks": [
               {
-                  "beginFrameTimeStamp": 0,
                   "endFrameTimeStamp": 40960000,
                   "groups": [
                       {
@@ -117,7 +116,8 @@
                       }
                   ],
                   "numFrames": 4096,
-                  "startFrame": 28648
+                  "startFrame": 28648,
+                  "startFrameTimeStamp": 0
               }
           ],
           "numMetricsBlocks": 1
