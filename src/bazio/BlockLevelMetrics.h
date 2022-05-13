@@ -280,7 +280,10 @@ public:
         auto idx = blockIdxs.End();
         return idx * numPulsesAll_.BlockTime();
     }
+    bool Empty() const
+    { return empty_; }
 private:
+    bool empty_ = false;
     SingleMetric<uint32_t> numFrames_;
     SingleMetric<uint32_t> numPulsesAll_;
     SingleMetric<float> pulseWidth_;
