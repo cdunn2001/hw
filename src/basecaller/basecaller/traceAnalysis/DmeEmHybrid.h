@@ -1,7 +1,7 @@
 #ifndef mongo_basecaller_traceAnalysis_DmeEmHybrid_H_
 #define mongo_basecaller_traceAnalysis_DmeEmHybrid_H_
 
-// Copyright (c) 2019-2021, Pacific Biosciences of California, Inc.
+// Copyright (c) 2022, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
 //
@@ -26,8 +26,6 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  Description:
-//  Defines class DmeEmHost.
 
 #include <algorithm>
 #include <common/MongoConstants.h>

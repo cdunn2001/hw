@@ -216,6 +216,11 @@ public:
     // When enabled, suggest GofLogChiSqrThresh1 approx 1.0.
     PB_CONFIG_PARAM(float, GofLogChiSqrThresh1, 111.0f);
     PB_CONFIG_PARAM(float, GofLogChiSqrThresh2, 8.0f);
+
+    // Tolerance values used to find numerical difference between 
+    // CPU and GPU implementations. The negative means default value.
+    PB_CONFIG_PARAM(float, HybridRtol, -1.0);
+    PB_CONFIG_PARAM(float, HybridAtol, -1.0);
 };
 
 }}}     // namespace PacBio::Mongo::Data
