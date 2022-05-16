@@ -73,9 +73,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
 # Run again but set the hqThrottleFraction=0.25 so start of HQ-region is different resulting in a preHQ metric block with data.
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":57344, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
@@ -143,9 +140,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
   $ bazviewer --silent -m -i1 ${BAZFILE} 
   {
@@ -484,42 +478,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
   $ bazviewer --silent -m -i2 ${BAZFILE} 
   {
@@ -582,12 +540,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
 
 
@@ -771,12 +723,3 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
