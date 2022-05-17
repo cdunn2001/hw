@@ -346,7 +346,7 @@ private:
                         FillSummaryStats(ma.pkmid, metricReport);
                         break;
                     }
-                    case Mongo::Data::MetricNames::SNR:
+                    case Mongo::Data::MetricNames::Snr:
                     {
                         FillSummaryStats(ma.snr, metricReport);
                         break;

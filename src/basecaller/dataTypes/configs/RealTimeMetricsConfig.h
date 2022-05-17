@@ -37,7 +37,7 @@
 namespace PacBio::Mongo::Data
 {
 
-SMART_ENUM(MetricNames, Baseline, BaselineStd, Pkmid, SNR, PulseRate, PulseWidth, BaseRate, BaseWidth);
+SMART_ENUM(MetricNames, Baseline, BaselineStd, Pkmid, Snr, PulseRate, PulseWidth, BaseRate, BaseWidth);
 
 struct SummaryStats : public Configuration::PBConfig<SummaryStats>
 {
