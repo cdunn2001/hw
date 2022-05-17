@@ -196,14 +196,14 @@ HostMultiScaleBaseliner::LaneBaseliner::GetSmoothedBlEstimate(const LaneArray& l
     // jump tolerance.
     // Notice the asymmetry--only positive jumps are suppressed.
     
-    const auto mask = ((blMeanUemaWeight_ == 0.0f)
+    const BoolArray mask = ((blMeanUemaWeight_ == 0.0f)
             | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < JumpTolCoeff() * blSigmaEma_));
 
     // Conditionally update EMAs of baseline mean and sigma.
     const FloatArray newWeight = meanEmaAlpha * blMeanUemaWeight_ + (1.0f - meanEmaAlpha);
     const FloatArray newSum    = meanEmaAlpha * blMeanUemaSum_    + (1.0f - meanEmaAlpha) * blEst;
-    blMeanUemaWeight_ = Blend(mask, newWeight, blMeanUemaWeight_);
-    blMeanUemaSum_    = Blend(mask, newSum, blMeanUemaSum_);
+    blMeanUemaWeight_ = Blend(mask, newWeight,   blMeanUemaWeight_);
+    blMeanUemaSum_    = Blend(mask, newSum,      blMeanUemaSum_);
     blSigmaEma_       = Blend(mask, newSigmaEma, blSigmaEma_);
 
     assert(all(blMeanUemaWeight_ > 0.0f));
