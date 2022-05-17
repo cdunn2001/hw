@@ -34,7 +34,7 @@ static void AddSignalMetrics(std::vector<MetricNames>* metrics)
     metrics->push_back(MetricNames::Baseline);
     metrics->push_back(MetricNames::BaselineStd);
     metrics->push_back(MetricNames::Pkmid);
-    metrics->push_back(MetricNames::SNR);
+    metrics->push_back(MetricNames::Snr);
 }
 
 static void AddKineticMetrics(std::vector<MetricNames>* metrics)
@@ -95,7 +95,34 @@ std::vector<RealTimeMetricsRegion> DefaultKestrelRegions()
 
     {
         auto& r = regions.emplace_back();
-        r.name = "FullChip_LPTITRATION2P0X";
+        r.name = "TopStrip_LS";
+
+        r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserScatter);
+        AddSignalMetrics(&r.metrics);
+        r.roi.push_back({200, 64, 64, 6016});
+    }
+
+    {
+        auto& r = regions.emplace_back();
+        r.name = "MidStrip_LS";
+
+        r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserScatter);
+        AddSignalMetrics(&r.metrics);
+        r.roi.push_back({2016, 64, 64, 6016});
+    }
+
+    {
+        auto& r = regions.emplace_back();
+        r.name = "BotStrip_LS";
+
+        r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserScatter);
+        AddSignalMetrics(&r.metrics);
+        r.roi.push_back({3832, 64, 64, 6016});
+    }
+
+    {
+        auto& r = regions.emplace_back();
+        r.name = "FullChip_LP2P0X";
 
         r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserPower2p0x);
         AddSignalMetrics(&r.metrics);
@@ -104,7 +131,7 @@ std::vector<RealTimeMetricsRegion> DefaultKestrelRegions()
 
     {
         auto& r = regions.emplace_back();
-        r.name = "FullChip_LPTITRATION1P5X";
+        r.name = "FullChip_LP1P5X";
 
         r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserPower1p5x);
         AddSignalMetrics(&r.metrics);
@@ -113,7 +140,7 @@ std::vector<RealTimeMetricsRegion> DefaultKestrelRegions()
 
     {
         auto& r = regions.emplace_back();
-        r.name = "FullChip_LPTITRATION0P5X";
+        r.name = "FullChip_LP0P5X";
 
         r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserPower0p5x);
         AddSignalMetrics(&r.metrics);
@@ -122,21 +149,10 @@ std::vector<RealTimeMetricsRegion> DefaultKestrelRegions()
 
     {
         auto& r = regions.emplace_back();
-        r.name = "FullChip_LPTITRATION0P0X";
+        r.name = "FullChip_LP0P0X";
 
         r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserPower0p0x);
         AddSignalMetrics(&r.metrics);
-        r.roi.push_back({0,0,4096,6144});
-    }
-
-    {
-        auto& r = regions.emplace_back();
-        r.name = "FullChip_LS";
-
-        r.featuresForFilter.push_back(DataSource::ZmwFeatures::LaserScatter);
-        r.metrics.push_back(MetricNames::Baseline);
-        r.metrics.push_back(MetricNames::BaselineStd);
-        r.useSingleActivityLabels = false;
         r.roi.push_back({0,0,4096,6144});
     }
 
