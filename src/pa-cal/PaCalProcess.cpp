@@ -143,11 +143,13 @@ std::optional<PaCalProcess::Settings> PaCalProcess::HandleLocalOptions(PacBio::P
 
         ret.numFrames = options.get("numFrames");
         if (ret.numFrames <= 0) cliValidationErrors.push_back("--numFrames must be strictly positive");
+#if 0
         if (ret.numFrames != 128)
         {
             PBLOG_WARN << "pa-cal currently only supports 128 frames of collection.  Requested value of " << ret.numFrames << " will be ignored";
             ret.numFrames = 128;
         }
+#endif
 
         ret.timeoutSeconds = options.get("timeoutSeconds");
         if (ret.timeoutSeconds <= 0) cliValidationErrors.push_back("--timeoutSeconds must be strictly positive");
