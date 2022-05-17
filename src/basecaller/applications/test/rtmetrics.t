@@ -19,9 +19,9 @@
 
   $ cat rtmetrics.csv
   StartFrame,NumFrames,StartFrameTS,EndFrameTS,TestRegion_Baseline_sampleCV,TestRegion_Baseline_sampleMean,TestRegion_Baseline_sampleMed,TestRegion_Baseline_sampleSize,TestRegion_Baseline_sampleTotal,TestRegion_BaselineStd_sampleCV,TestRegion_BaselineStd_sampleMean,TestRegion_BaselineStd_sampleMed,TestRegion_BaselineStd_sampleSize,TestRegion_BaselineStd_sampleTotal,TestRegion_SNR_A_sampleCV,TestRegion_SNR_C_sampleCV,TestRegion_SNR_G_sampleCV,TestRegion_SNR_T_sampleCV,TestRegion_SNR_A_sampleMean,TestRegion_SNR_C_sampleMean,TestRegion_SNR_G_sampleMean,TestRegion_SNR_T_sampleMean,TestRegion_SNR_A_sampleMed,TestRegion_SNR_C_sampleMed,TestRegion_SNR_G_sampleMed,TestRegion_SNR_T_sampleMed,TestRegion_SNR_A_sampleSize,TestRegion_SNR_C_sampleSize,TestRegion_SNR_G_sampleSize,TestRegion_SNR_T_sampleSize,TestRegion_SNR_A_sampleTotal,TestRegion_SNR_C_sampleTotal,TestRegion_SNR_G_sampleTotal,TestRegion_SNR_T_sampleTotal
-  20456,4096,0,40960000,117.06*,0.79*,0.70*,4096,4096,64.03*,5.84*,5.84*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.57*,11.11*,40.34*,27.24*,17.56*,11.10*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
-  24552,4096,0,40960000,121.72*,0.74*,0.68*,4096,4096,64.03*,5.85*,5.85*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.56*,11.10*,40.32*,27.24*,17.55*,11.09*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
-  28648,4096,0,40960000,121.86*,0.73*,0.67*,4096,4096,64.03*,5.85*,5.85*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.56*,11.11*,40.32*,27.24*,17.55*,11.10*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  20456,4096,0,40960000,63.99*,299.85*,299.85*,4096,4096,64.03*,5.84*,5.847*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.57*,11.11*,40.34*,27.24*,17.56*,11.10*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  24552,4096,0,40960000,63.99*,299.85*,299.84*,4096,4096,64.03*,5.85*,5.850*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.56*,11.10*,40.32*,27.24*,17.55*,11.09*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
+  28648,4096,0,40960000,63.99*,299.85*,299.84*,4096,4096,64.03*,5.85*,5.850*,4096,4096,64.04*,64.04*,64.05*,64.06*,40.39*,27.28*,17.56*,11.11*,40.32*,27.24*,17.55*,11.10*,4096,4096,4096,4096,4096,4096,4096,4096 (glob)
 
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":32768,"numZmwLanes":64,"traceFile":"'$TRCIN'"}' \
   > --config system.basecallerConcurrency=1 \
@@ -38,7 +38,6 @@
       "metricsChunk": {
           "metricsBlocks": [
               {
-                  "beginFrameTimeStamp": 0,
                   "endFrameTimeStamp": 40960000,
                   "groups": [
                       {
@@ -46,13 +45,13 @@
                               {
                                   "name": "Baseline",
                                   "sampleCV": [
-                                      121.86* (glob)
+                                      63.99* (glob)
                                   ],
                                   "sampleMean": [
-                                      0.73* (glob)
+                                      299.85* (glob)
                                   ],
                                   "sampleMed": [
-                                      0.67* (glob)
+                                      299.84* (glob)
                                   ],
                                   "sampleSize": [
                                       4096
@@ -85,12 +84,14 @@
                                       64.04* (glob)
                                       64.04* (glob)
                                       64.05* (glob)
-                                      64.06* (glob)                                  ],
+                                      64.06* (glob)
+                                  ],
                                   "sampleMean": [
                                       40.39* (glob)
                                       27.28* (glob)
                                       17.56* (glob)
-                                      11.11* (glob)                                  ],
+                                      11.11* (glob)
+                                  ],
                                   "sampleMed": [
                                       40.32* (glob)
                                       27.24* (glob)
@@ -115,7 +116,8 @@
                       }
                   ],
                   "numFrames": 4096,
-                  "startFrame": 28648
+                  "startFrame": 28648,
+                  "startFrameTimeStamp": 0
               }
           ],
           "numMetricsBlocks": 1
