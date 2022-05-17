@@ -135,7 +135,7 @@ struct MetricBlock : public Configuration::PBConfig<MetricBlock>
 
     PB_CONFIG_PARAM(uint64_t, startFrame, 0);
     PB_CONFIG_PARAM(uint32_t, numFrames, 0);
-    PB_CONFIG_PARAM(uint64_t, beginFrameTimeStamp, 0);
+    PB_CONFIG_PARAM(uint64_t, startFrameTimeStamp, 0);
     PB_CONFIG_PARAM(uint64_t, endFrameTimeStamp, 0);
 
     std::string GenerateCSVHeader() const
@@ -155,7 +155,7 @@ struct MetricBlock : public Configuration::PBConfig<MetricBlock>
     std::string GenerateCSVRow() const
     {
         std::stringstream  ss;
-        ss << startFrame << "," << numFrames << "," << beginFrameTimeStamp << "," << endFrameTimeStamp << ",";
+        ss << startFrame << "," << numFrames << "," << startFrameTimeStamp << "," << endFrameTimeStamp << ",";
         for (const auto& group : groups)
         {
             group.GenerateCSVRow(ss);

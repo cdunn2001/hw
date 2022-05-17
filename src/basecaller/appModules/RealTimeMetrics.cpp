@@ -199,7 +199,7 @@ public:
 
             auto& blockReport = report.metricsChunk.metricsBlocks.front();
             // TODO PTSD-1513
-            blockReport.beginFrameTimeStamp = metricTimestamp_;
+            blockReport.startFrameTimeStamp = metricTimestamp_;
             blockReport.endFrameTimeStamp = metricTimestamp_ + framesPerHFMetricBlock_ * report.frameTimeStampDelta;
             blockReport.numFrames = framesPerHFMetricBlock_;
             blockReport.startFrame = currFrame_;

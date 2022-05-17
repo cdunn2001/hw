@@ -45,8 +45,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.1612548828125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.66015625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.6845703125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.68359375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 26529, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 1, (esc)
@@ -73,9 +73,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
 # Run again but set the hqThrottleFraction=0.25 so start of HQ-region is different resulting in a preHQ metric block with data.
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":57344, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
@@ -115,8 +112,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.1612548828125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.66015625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.6845703125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.68359375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 26529, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 1, (esc)
@@ -143,9 +140,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
   $ bazviewer --silent -m -i1 ${BAZFILE} 
   {
@@ -157,7 +151,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t[ (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.022216796875, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.9775390625, (esc)
   \t\t\t\t\t"BASELINE_SD" : 5.15625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 213, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
@@ -180,8 +174,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.1129150390625, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.69140625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 4.08984375, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.80859375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1984, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 1, (esc)
@@ -203,8 +197,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.007442474365234375, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.93359375, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 3.21484375, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 6, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1866, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 2, (esc)
@@ -226,8 +220,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.06683349609375, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.69140625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 2.244140625, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.70703125, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1972, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 3, (esc)
@@ -249,8 +243,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.04132080078125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.95703125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.662109375, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.98828125, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1859, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 4, (esc)
@@ -272,8 +266,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.032196044921875, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.69140625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.455078125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.71875, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1971, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 5, (esc)
@@ -295,8 +289,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.0304107666015625, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.94921875, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.142578125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.99609375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1856, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 6, (esc)
@@ -318,8 +312,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.0112762451171875, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.7578125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.76904296875, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.81640625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1969, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 7, (esc)
@@ -341,8 +335,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.047882080078125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.95703125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.78955078125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 6.00390625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1856, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 8, (esc)
@@ -364,8 +358,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.0112762451171875, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.7578125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.76904296875, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.81640625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1969, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 9, (esc)
@@ -387,8 +381,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.047882080078125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.95703125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.78955078125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 6.00390625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1856, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 10, (esc)
@@ -410,8 +404,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.0112762451171875, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.7578125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.76904296875, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.81640625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1969, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 11, (esc)
@@ -433,8 +427,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.047882080078125, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.95703125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.78955078125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 6.00390625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1856, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 12, (esc)
@@ -456,8 +450,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 1, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : -0.0112762451171875, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.7578125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.76904296875, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.81640625, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 1969, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 13, (esc)
@@ -484,42 +478,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
 
   $ bazviewer --silent -m -i2 ${BAZFILE} 
   {
@@ -531,8 +489,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t[ (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.214599609375, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.98046875, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 3.244140625, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 6.07421875, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 2061, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 0, (esc)
@@ -554,8 +512,8 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
   \t\t\t\t\t"ACTIVITY_LABEL" : 0, (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.0712890625, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.953125, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 0.61376953125, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.99609375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 21828, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 1, (esc)
@@ -582,14 +540,6 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-
-
 
 # Generate complete metrics by disabling preHQ algorithm.
   $ smrt-basecaller --config source.TraceReplication='{"numFrames":16384, "numZmwLanes":4,"traceFile":"'$TRCFILE'" }' \
@@ -605,7 +555,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t"METRICS" :  (esc)
   \t\t\t[ (esc)
   \t\t\t\t{ (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.5927734375, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 1.5927734375, (esc)
   \t\t\t\t\t"BASELINE_SD" : 5.74609375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 215, (esc)
   \t\t\t\t\t"BPZVAR_A" : 0.00082111358642578125, (esc)
@@ -645,13 +595,13 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"TRACE_AUTOCORR" : 0.646484375 (esc)
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.1334228515625, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.55859375, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 4.06640625, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.7109375, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 2017, (esc)
   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
   \t\t\t\t\t"BPZVAR_C" : 0, (esc)
-  \t\t\t\t\t"BPZVAR_G" : 0.0013475418090820312, (esc)
-  \t\t\t\t\t"BPZVAR_T" : 0.002140045166015625, (esc)
+  \t\t\t\t\t"BPZVAR_G" : 0.0013360977172851562, (esc)
+  \t\t\t\t\t"BPZVAR_T" : 0.0021209716796875, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 1, (esc)
   \t\t\t\t\t"NUM_BASES_A" : 23, (esc)
@@ -685,13 +635,13 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"TRACE_AUTOCORR" : 0.70947265625 (esc)
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.1363525390625, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.796875, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 3.513671875, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.8125, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 2053, (esc)
   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
   \t\t\t\t\t"BPZVAR_C" : 0.0011491775512695312, (esc)
-  \t\t\t\t\t"BPZVAR_G" : 0.0017871856689453125, (esc)
-  \t\t\t\t\t"BPZVAR_T" : 0.00097370147705078125, (esc)
+  \t\t\t\t\t"BPZVAR_G" : 0.0017862319946289062, (esc)
+  \t\t\t\t\t"BPZVAR_T" : 0.00097179412841796875, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 2, (esc)
   \t\t\t\t\t"NUM_BASES_A" : 25, (esc)
@@ -725,13 +675,13 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"TRACE_AUTOCORR" : 0.68408203125 (esc)
   \t\t\t\t}, (esc)
   \t\t\t\t{ (esc)
-  \t\t\t\t\t"BASELINE_MEAN" : 0.173583984375, (esc)
-  \t\t\t\t\t"BASELINE_SD" : 5.5390625, (esc)
+  \t\t\t\t\t"BASELINE_MEAN" : 2.43359375, (esc)
+  \t\t\t\t\t"BASELINE_SD" : 5.57421875, (esc)
   \t\t\t\t\t"BASE_WIDTH" : 2006, (esc)
   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
-  \t\t\t\t\t"BPZVAR_C" : 0.00064420700073242188, (esc)
-  \t\t\t\t\t"BPZVAR_G" : 0.001010894775390625, (esc)
-  \t\t\t\t\t"BPZVAR_T" : 0.0014276504516601562, (esc)
+  \t\t\t\t\t"BPZVAR_C" : 0.00064373016357421875, (esc)
+  \t\t\t\t\t"BPZVAR_G" : 0.0010080337524414062, (esc)
+  \t\t\t\t\t"BPZVAR_T" : 0.001422882080078125, (esc)
   \t\t\t\t\t"DME_STATUS" : 0, (esc)
   \t\t\t\t\t"ID" : 3, (esc)
   \t\t\t\t\t"NUM_BASES_A" : 23, (esc)
@@ -771,12 +721,3 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t], (esc)
   \t"TYPE" : "BAZ_OVERVIEW" (esc)
   }
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin
-<<<<<<< HEAD
-=======
->>>>>>> origin

@@ -179,8 +179,10 @@ HostMultiScaleBaseliner::FloatArray
 HostMultiScaleBaseliner::LaneBaseliner::GetSmoothedBlEstimate(const LaneArray& lower, const LaneArray& upper)
 {
     static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
+    const float meanEmaAlpha  = MeanEmaAlpha();
     const float sigmaEmaAlpha = SigmaEmaAlpha();
 
+    // Calculate new single-stride estimate of baseline sigma.
     auto sigma = max((upper - lower) / cSigmaBias_, minSigma);
     auto newSigmaEma = sigmaEmaAlpha * blSigmaEma_ + (1.0f - sigmaEmaAlpha) * sigma;
 
@@ -194,14 +196,12 @@ HostMultiScaleBaseliner::LaneBaseliner::GetSmoothedBlEstimate(const LaneArray& l
     // jump tolerance.
     // Notice the asymmetry--only positive jumps are suppressed.
     
-    // TODO: Enable masking for jumpTolCoeff_
-    // const auto mask = ((blMeanUemaWeight_ == 0.0f)
-    //     | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < jumpTolCoeff_* blSigmaEma_));
-    const BoolArray mask = true;
+    const auto mask = ((blMeanUemaWeight_ == 0.0f)
+            | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < JumpTolCoeff() * blSigmaEma_));
 
     // Conditionally update EMAs of baseline mean and sigma.
-    const FloatArray newWeight = MeanEmaAlpha() * blMeanUemaWeight_ + (1.0f - MeanEmaAlpha());
-    const FloatArray newSum    = MeanEmaAlpha() * blMeanUemaSum_    + (1.0f - MeanEmaAlpha()) * blEst;
+    const FloatArray newWeight = meanEmaAlpha * blMeanUemaWeight_ + (1.0f - meanEmaAlpha);
+    const FloatArray newSum    = meanEmaAlpha * blMeanUemaSum_    + (1.0f - meanEmaAlpha) * blEst;
     blMeanUemaWeight_ = Blend(mask, newWeight, blMeanUemaWeight_);
     blMeanUemaSum_    = Blend(mask, newSum, blMeanUemaSum_);
     blSigmaEma_       = Blend(mask, newSigmaEma, blSigmaEma_);
