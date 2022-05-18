@@ -136,6 +136,15 @@ inline void ValidateConfig<Mongo::Data::BasecallerBaselinerConfig>(
             << ".  Should be greater or equal to zero.";
         results->AddError(msg.str());
     }
+
+    const float js = config.JumpSuppression;
+    if (js < 0)
+    {
+        std::ostringstream msg;
+        msg << "Bad value.  JumpSuppression = " << mess
+            << ".  Should be greater or equal to zero.";
+        results->AddError(msg.str());
+    }
 }
 
 }   // namespace PacBio::Configuration

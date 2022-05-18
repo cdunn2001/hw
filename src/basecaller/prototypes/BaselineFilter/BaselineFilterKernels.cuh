@@ -384,27 +384,37 @@ struct LatentBaselineData
         uint8_t bbi;        // back buffer index
 
     public:
-        __device__ PBHalf2 SmoothedBlEstimate(PBHalf2 lower, PBHalf2 upper, const BlSubtractParams& sParams)
+        __device__ PBHalf2 SmoothedBlEstimate(PBShort2 lower, PBShort2 upper, const BlSubtractParams& sParams)
         {
             static constexpr float minSigma = .288675135f; // sqrt(1.0f/12.0f);
             PBHalf2 meanEmaAlpha  = sParams.meanEmaAlpha;
             PBHalf2 sigmaEmaAlpha = sParams.sigmaEmaAlpha;
 
+            // Calculate new single-stride estimate of baseline sigma.
             auto sigma = max((upper - lower) / sParams.cSigmaBias, minSigma);
             auto newSigmaEma = sigmaEmaAlpha * blSigmaEma + PBHalf2(1.0f - sigmaEmaAlpha) * sigma;
 
+            // Calculate the new single-stride estimate of baseline mean.
             auto blEst = 0.5f * (upper + lower) + sParams.cMeanBias * newSigmaEma;
 
-            // Conditionally update EMAs of baseline mean and sigma.
-            bool mask = true; // TODO: Enable masking for jumpTolCoeff_
+            // We presume that large jumps represent pathological enzyme-analog
+            // binding events.
+            // After the first estimate, don't update exponential moving
+            // averages if blEst exceeds previous baseline EMA by more than
+            // jump tolerance.
+            // Notice the asymmetry--only positive jumps are suppressed.
+            PBBool2 mask = ((blMeanUemaWeight == PBHalf2(0.0f))
+                        | ((blEst - blMeanUemaSum / blMeanUemaWeight) < sParams.jumpTolCoeff * blSigmaEma));
 
+            // Conditionally update EMAs of baseline mean and sigma.
             auto newWeight = meanEmaAlpha * blMeanUemaWeight + PBHalf2(1.0f - meanEmaAlpha);
-            auto newSum    = meanEmaAlpha * blMeanUemaSum     + PBHalf2(1.0f - meanEmaAlpha) * blEst;
-            blMeanUemaWeight = Blend(mask, newWeight, blMeanUemaWeight);
-            blMeanUemaSum    = Blend(mask, newSum, blMeanUemaSum);
+            auto newSum    = meanEmaAlpha * blMeanUemaSum    + PBHalf2(1.0f - meanEmaAlpha) * blEst;
+            blMeanUemaWeight = Blend(mask, newWeight,   blMeanUemaWeight);
+            blMeanUemaSum    = Blend(mask, newSum,      blMeanUemaSum);
             blSigmaEma       = Blend(mask, newSigmaEma, blSigmaEma);
 
-            // assert(blMeanUemaWeight > PBHalf2(0.0f));
+            assert(blMeanUemaWeight.X() > PBHalf2(0.0).X());
+            assert(blMeanUemaWeight.Y() > PBHalf2(0.0).Y());
 
             return blMeanUemaSum / blMeanUemaWeight;
         }
@@ -551,13 +561,13 @@ __global__ void SubtractBaseline(const Mongo::Data::GpuBatchData<const T> input,
     // more easily to the output.
     auto GenerateAccessors = [&](const auto& batch)
     {
-        if constexpr (std::is_same_v<T, PBShort2>)
+        if constexpr (std::is_same_v<T, PBShort2>)    // int16_t
         {
             return [&, accessor = batch.ZmwData(blockIdx.x, threadIdx.x)](size_t idx)
             {
                 return accessor[idx] - sParams.pedestal;
             };
-        } else {
+        } else {                                      // uint8_t
             return [&, accessor = batch.ZmwData(blockIdx.x, threadIdx.x/2)](size_t idx)
             {
                 if (threadIdx.x % 2 == 0)
@@ -749,7 +759,7 @@ public:
                             const Memory::AllocationMarker& marker,
                             Memory::StashableAllocRegistrar* registrar = nullptr)
         : numLanes_(args.numLanes)
-        , latent(registrar, marker, args.numLanes, -1.0f, 0.0f, 0.0f)
+        , latent(registrar, marker, args.numLanes, 2.0f, 0.0f, 0.0f)
     {
         const auto& widths = params.Widths();
         const auto& strides = params.Strides();

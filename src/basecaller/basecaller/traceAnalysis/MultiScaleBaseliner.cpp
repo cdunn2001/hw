@@ -53,7 +53,6 @@ float MultiScaleBaseliner::jumpTolCoeff_ = std::numeric_limits<float>::infinity(
 void MultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
                                         const Data::AnalysisConfig& analysisConfig)
 {
-
     // static things need to be done in static places - implement this in your
     // device-specific method, then call this general method
     //hostExecution_ = true; // or false
@@ -73,16 +72,12 @@ void MultiScaleBaseliner::Configure(const Data::BasecallerBaselinerConfig& bbc,
         assert(0.0f <= meanEmaAlpha_ && meanEmaAlpha_ < 1.0f);
 
         const float sigmaEmaScale = bbc.SigmaEmaScaleStrides;
-        std::ostringstream msg;
-        msg << "SigmaEmaScaleStrides = " << sigmaEmaScale << '.';
-        // TODO: Use a scoped logger.
-        PBLOG_INFO << msg.str();
         sigmaEmaAlpha_ = std::exp2(-1.0f / sigmaEmaScale);
         assert(0.0f <= sigmaEmaAlpha_ && sigmaEmaAlpha_ <= 1.0f);
 
-        // TODO: Enable jumpTolCoeff_
-        // const float js = bbc.JumpSuppression;
-        // jumpTolCoeff_ = (js > 0.0f ? 1.0f / js : std::numeric_limits<float>::infinity());
+        const float js = bbc.JumpSuppression;
+        jumpTolCoeff_ = (js > 0.0f) ? 1.0f / js : std::numeric_limits<float>::infinity();
+        assert(0.0f <= jumpTolCoeff_);
     }
 }
 
