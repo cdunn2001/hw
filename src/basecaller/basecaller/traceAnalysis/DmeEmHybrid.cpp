@@ -80,7 +80,7 @@ BoolVec AllClose(const FloatVec& x0, const FloatVec& x1)
     return AbsErr(x0, x1) <= (atol_ + rtol_ * abs(x0));
 }
 
-void ReportIfDiverged(const FloatVec& xcpu, const FloatVec& xgpu, size_t l, size_t a, std::string metricDesc)
+void ReportIfDiverged(const FloatVec& xcpu, const FloatVec& xgpu, size_t l, size_t a, const char* metricDesc)
 {
     uint32_t colnum = 8;
     
