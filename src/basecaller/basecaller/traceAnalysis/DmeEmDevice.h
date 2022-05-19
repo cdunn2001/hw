@@ -34,7 +34,6 @@
 
 #include "CoreDMEstimator.h"
 
-
 namespace PacBio {
 namespace Mongo {
 
