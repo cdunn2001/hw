@@ -7,6 +7,15 @@
 
 using namespace PacBio::Primary::Postprimary;
 
+TEST(hist,infs)
+{
+    std::vector<float> values{std::numeric_limits<float>::infinity()};
+
+    Histogram h(values, "OnlyInf");
+    EXPECT_EQ(0, h.mean);
+    EXPECT_TRUE(std::all_of(h.bins.begin(), h.bins.end(), [](int i ) { return i == 0; }));
+}
+
 TEST(hist,nans)
 {
     // These angle estimates were directly pulled from the BAZ file from:
