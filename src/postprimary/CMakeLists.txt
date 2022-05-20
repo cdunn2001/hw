@@ -48,6 +48,7 @@ add_library(libPpaBase STATIC
     hqrf/ZOffsetCrfParams.cpp
     hqrf/StaticHQRegionFinder.cpp
     insertfinder/InsertFinder.cpp
+    stats/Histogram.cpp
     stats/ProductivityMetrics.cpp
     stats/ZmwMetrics.cpp
     stats/ZmwStats.cpp
