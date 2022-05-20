@@ -253,7 +253,7 @@ public:
     // that belongs to this batch
     void Process(const SensorPacket& packet)
     {
-        assert(batch_.GetMeta().FirstFrame() > 0);
+        assert(batch_.GetMeta().FirstFrame() >= 0);
         if (packet.StartFrame() == static_cast<size_t>(batch_.GetMeta().FirstFrame())
             && packet.TimeStamp() != batch_.GetMeta().GetTimeStamp())
         {
