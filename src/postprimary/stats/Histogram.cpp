@@ -149,9 +149,12 @@ namespace Postprimary {
         auto NaNString = [&stream](const std::string& tag, float v)
         {
             // FIXME: JSON serialization doesn't support NaN, so we use zero.
+            // FIXME: ICS XML deserialization doesn't support +/-Inf, so we use -1.
             stream << "<" << tag << ">";
             if (std::isnan(v))
                 stream << 0;
+            else if (std::isinf(v))
+                stream << -1;
             else
             {
                 try
