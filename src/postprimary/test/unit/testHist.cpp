@@ -12,9 +12,8 @@ TEST(hist,infs)
     std::vector<float> values{std::numeric_limits<float>::infinity()};
 
     Histogram h(values, "OnlyInf");
-    EXPECT_NE(0, h.mean);
-    EXPECT_TRUE(isinf(h.mean));
-    EXPECT_FALSE(std::all_of(h.bins.begin(), h.bins.end(), [](int i ) { return i == 0; }));
+    EXPECT_EQ(0, h.mean);
+    EXPECT_TRUE(std::all_of(h.bins.begin(), h.bins.end(), [](int i ) { return i == 0; }));
 }
 
 TEST(hist,nans)

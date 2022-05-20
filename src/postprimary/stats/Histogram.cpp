@@ -226,9 +226,10 @@ namespace Postprimary {
     void Histogram::Bin(const std::vector<float>& input)
     {
         // Remove NaNs.
+        // Also remove Infs.
         std::vector<float> inputNoNans;
         std::copy_if(input.begin(), input.end(), std::back_inserter(inputNoNans),
-                     [](float v) { return !std::isnan(v); });
+                     [](float v) { return !std::isnan(v) && !std::isinf(v); });
 
         sampleSize = inputNoNans.size();
 
