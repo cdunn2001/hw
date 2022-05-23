@@ -38,6 +38,7 @@
 #include <basecaller/traceAnalysis/ComputeDevices.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DmeEmDevice.h>
+#include <basecaller/traceAnalysis/DmeEmHybrid.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumHost.h>
 #include <common/cuda/PBCudaSimd.h>
 #include <common/simd/SimdConvTraits.h>
@@ -132,6 +133,8 @@ public: // Structors
         Json::Value json;
         json["dmeConfig"]["PulseAmpRegularization"] = GetParam().pulseAmpReg;
         json["dmeConfig"]["ModelUpdateMethod"]   = 0;
+        // json["dmeConfig"]["HybridRtol"]   = 5e-02;
+        // json["dmeConfig"]["HybridAtol"]   = 1e-04;
         testConfig = TestConfig(json);
     }
 
@@ -435,12 +438,17 @@ private:
 };
 using EmHost = TestDmeEm<DmeEmHost>;
 using EmDevice = TestDmeEm<DmeEmDevice>;
+using EmHybrid = TestDmeEm<DmeEmHybrid>;
 
-TEST_P(EmHost, EstimateFiniteMixture)
+TEST_P(EmHost,   EstimateFiniteMixture)
 {
     RunTest();
 }
 TEST_P(EmDevice, EstimateFiniteMixture)
+{
+    RunTest();
+}
+TEST_P(EmHybrid, EstimateFiniteMixture)
 {
     RunTest();
 }
@@ -454,8 +462,9 @@ const auto snrSweep = ::testing::Values(
         // TestDmeEmParam{8.0f,  frameCountsBalanced,      0.0f,       0.0f},
         // TestDmeEmParam{10.0f,  frameCountsBalanced,      0.0f,       0.0f}
         );
-INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost, snrSweep);
+INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHost,   snrSweep);
 INSTANTIATE_TEST_SUITE_P(SnrSweep, EmDevice, snrSweep);
+INSTANTIATE_TEST_SUITE_P(SnrSweep, EmHybrid, snrSweep);
 
 #if 0
 // This #if/#endif block is necessary to avoid compiler warnings about unused variables (snrSweep2)

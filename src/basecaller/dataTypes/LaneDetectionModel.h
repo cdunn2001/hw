@@ -159,8 +159,22 @@ struct IntervalData
         , frameInterval {}
     { }
 
+    IntervalData(IntervalData&&) = default;
+    IntervalData& operator=(const IntervalData&) = delete;
+    IntervalData& operator=(IntervalData&&) = default;
+
+    IntervalData Copy() const
+    {
+        return *this;
+    }
+
     Cuda::Memory::UnifiedCudaArray<T> data;
     IntInterval<FrameIndexType> frameInterval;
+private:
+    IntervalData(const IntervalData& o)
+        : data(o.data.Copy())
+        , frameInterval(o.frameInterval)
+    {}
 };
 
 template <typename T>

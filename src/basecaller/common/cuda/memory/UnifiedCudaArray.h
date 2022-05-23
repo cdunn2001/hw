@@ -144,6 +144,19 @@ public:
         }
     }
 
+    UnifiedCudaArray Copy() const
+    {
+        UnifiedCudaArray ret(Size(), syncDir_, marker_);
+
+        this->CopyToHost();
+        auto retHost = ret.GetHostView();
+        auto myHost = GetHostView();
+
+        std::copy(myHost.Data(), myHost.Data() + Size(), retHost.Data());
+        ret.CopyToDevice();
+
+        return ret;
+    }
 
     /// \param count The number of array elements
     /// \param dir a SyncDirection indicating when automatic data transfers should occur

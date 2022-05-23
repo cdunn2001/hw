@@ -36,6 +36,7 @@
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DmeEmDevice.h>
+#include <basecaller/traceAnalysis/DmeEmHybrid.h>
 #include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
@@ -215,6 +216,9 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
         break;
     case Data::BasecallerDmeConfig::MethodName::EmDevice:
         DmeEmDevice::Configure(bcConfig.dmeConfig, analysisConfig);
+        break;
+    case Data::BasecallerDmeConfig::MethodName::EmHybrid:
+        DmeEmHybrid::Configure(bcConfig.dmeConfig, analysisConfig);
         break;
     default:
         ostringstream msg;
@@ -398,6 +402,9 @@ AlgoFactory::CreateCoreDMEstimator(unsigned int poolId,
 
     case Data::BasecallerDmeConfig::MethodName::EmDevice:
         return make_unique<DmeEmDevice>(poolId, dims.lanesPerBatch);
+
+    case Data::BasecallerDmeConfig::MethodName::EmHybrid:
+        return make_unique<DmeEmHybrid>(poolId, dims.lanesPerBatch);
 
     default:
         ostringstream msg;

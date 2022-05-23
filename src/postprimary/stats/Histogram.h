@@ -65,168 +65,28 @@ public: // constexpr
     static const int defaultNumBins = 30;
 
 public: // ctor
-    Histogram(const std::string& md, const float bw, const float numBins)
-    : binWidth(bw), metricDescription(md)
-    {
-        // "Empty" distribution
-        sampleSize = 0;
-
-        const float defaultEmptyVal = 0;
-
-        // Set summary metrics to NaN.
-        mean     = defaultEmptyVal;
-        median   = defaultEmptyVal;
-        perc95th = defaultEmptyVal;
-        stddev   = defaultEmptyVal;
-        mode     = defaultEmptyVal;
-
-        // No outliers or min/max.
-        first    = defaultEmptyVal;
-        last     = defaultEmptyVal;
-        min      = defaultEmptyVal;
-        max      = defaultEmptyVal;
-
-        // Zero out bins.
-        bins.resize(numBins);
-        for (size_t i = 0; i < bins.size(); i++)
-            bins[i] = 0;
-    }
-
-    Histogram(std::vector<float>& input)
-    {
-        bins.resize(defaultNumBins);
-        Bin(input);
-    }
-
-    Histogram(const std::vector<int>& input)
-    {
-        std::vector<float> floats;
-        floats.reserve(input.size());
-        for (const auto& i : input)
-            floats.push_back(i);
-        bins.resize(defaultNumBins);
-        Bin(floats);
-    }
-
+    Histogram(const std::string& md, const float bw, const float numBins);
+    Histogram(std::vector<float>& input);
+    Histogram(const std::vector<int>& input);
     Histogram(const std::vector<float>& input,
               float binW, float minBinValue,
               int numBins=defaultNumBins,
-              float maxBinValue=std::numeric_limits<float>::quiet_NaN())
-        : binWidth(binW), min(minBinValue), max(maxBinValue)
-    {
-        bins.resize(numBins);
-        Bin(input);
-    }
-
+              float maxBinValue=std::numeric_limits<float>::quiet_NaN());
     Histogram(const std::vector<float>& values,
-              const std::string& md)
-        : metricDescription(md)
-    {
-        bins.resize(defaultNumBins);
-        Bin(values);
-    }
-
+              const std::string& md);
     Histogram(const std::vector<float>& values,
               const std::string& md,
               const float binW,
-              const float maxBinValue)
-        : binWidth(binW),
-          max(maxBinValue),
-          metricDescription(md)
-    {
-        Bin(values);
-    }
-
+              const float maxBinValue);
     Histogram(const std::vector<float>& values,
               const std::string& md,
               const float binW,
               const float minBinValue,
-              const int numBins)
-        : binWidth(binW),
-          min(minBinValue),
-          metricDescription(md)
-    {
-        bins.resize(numBins);
-        Bin(values);
-    }
-
+              const int numBins);
 
 public: // non-modifying
-    friend std::ostream& operator << (std::ostream& stream, const Histogram& h)
-    {
-        auto NaNString = [&stream](const std::string& tag, float v)
-        {
-            // FIXME: JSON serialization doesn't support NaN, so we use zero.
-            stream << "<" << tag << ">";
-            if (std::isnan(v))
-                stream << 0;
-            else
-            {
-                try
-                {
-                    float f = boost::numeric_cast<float>(v);
-                    stream << f;
-                }
-                catch (boost::numeric::bad_numeric_cast& e)
-                {
-                    PBLOG_WARN << "Unable to convert " << tag << " float=" << v << " to float due to: " << e.what();
-                    stream << 0;
-                }
-            }
-            stream << "</" << tag << ">";
-        };
-
-        stream << "<ns:SampleSize>" << h.sampleSize << "</ns:SampleSize>";
-
-        NaNString("ns:SampleMean", h.mean);
-        NaNString("ns:SampleMed", h.median);
-        NaNString("ns:SampleMode", h.mode);
-        NaNString("ns:SampleStd", h.stddev);
-        NaNString("ns:Sample95thPct", h.perc95th);
-        if (h.outputN50)
-        {
-            NaNString("ns:SampleN50", h.n50);
-        }
-
-        stream << "<ns:NumBins>" << h.bins.size() << "</ns:NumBins>";
-
-        stream << "<ns:BinCounts>";
-        for (const auto& d : h.bins)
-            stream << "<ns:BinCount>" << d << "</ns:BinCount>";
-        stream << "</ns:BinCounts>";
-
-        NaNString("ns:BinWidth", h.binWidth);
-        NaNString("ns:MinOutlierValue", h.first);
-        NaNString("ns:MinBinValue", h.min);
-        NaNString("ns:MaxBinValue", h.max);
-        NaNString("ns:MaxOutlierValue", h.last);
-
-        stream << "<ns:MetricDescription>" << h.metricDescription << "</ns:MetricDescription>";
-
-        return stream;
-    }
-
-    Json::Value ToJson() const
-    {
-        Json::Value root;
-        root["SAMPLE_SIZE"] = (Json::UInt64)sampleSize;
-        root["SAMPLE_MEAN"] = mean;
-        root["SAMPLE_MED"] = median;
-        root["SAMPLE_MODE"] = mode;
-        root["SAMPLE_STD"] = stddev;
-        root["SAMPLE_95TH_PCT"] = perc95th;
-        root["SAMPLE_N50"] = n50;
-        root["NUM_BINS"] = (Json::UInt64)bins.size();
-        auto& binCounts = root["BIN_COUNTS"];
-        for (const auto& d : bins)
-            binCounts.append(d);
-        root["BIN_WIDTH"] = binWidth;
-        root["MIN_OUTLIER_VALUE"] = first;
-        root["MIN_BIN_VALUE"] = min;
-        root["MAX_BIN_VALUE"] = max;
-        root["MAX_OUTLIER_VALUE"] = last;
-        return root;
-    }
+    friend std::ostream& operator << (std::ostream& stream, const Histogram& h);
+    Json::Value ToJson() const;
 
 public: // data
     size_t sampleSize = 0;
@@ -248,148 +108,8 @@ public: // data
     std::string metricDescription;
 
 private: // modifying
-    void Bin(const std::vector<float>& input)
-    {
-        // Remove NaNs.
-        std::vector<float> inputNoNans;
-        std::copy_if(input.begin(), input.end(), std::back_inserter(inputNoNans),
-                     [](float v) { return !std::isnan(v); });
+    void Bin(const std::vector<float>& input);
 
-        sampleSize = inputNoNans.size();
-
-        // stop if there is no data available
-        if (sampleSize == 0) return;
-
-        // accumulate
-        Accu acc;
-        std::for_each(inputNoNans.begin(), inputNoNans.end(), [&acc](const float d){acc(d);});
-        std::vector<float> inputCopy;
-        std::for_each(inputNoNans.begin(), inputNoNans.end(), [&inputCopy](const float d){inputCopy.push_back(d);});
-        std::sort(inputCopy.begin(), inputCopy.end());
-
-        // Summary stats are on the the full data.
-
-        // range sample
-        first    = boost::accumulators::min(acc);
-        last     = boost::accumulators::max(acc);
-
-        // median, take the center element
-        mean     = boost::accumulators::mean(acc);
-        median   = inputCopy[inputCopy.size()/2];
-        stddev   = std::sqrt(boost::accumulators::variance(acc));
-
-        // Compute 95th percentile directly from data.
-        unsigned int pos = std::floor(std::max<float>(0, std::min<float>(inputCopy.size()-1, (95/100.0) * inputCopy.size())));
-        perc95th = inputCopy[pos];
-
-        double halfLength = std::accumulate(inputCopy.begin(), inputCopy.end(), 0.0) / 2.0;
-        double total = 0;
-        for (const auto& l : inputCopy)
-        {
-            if (total < halfLength)
-            {
-                n50 = l;
-                total += l;
-            }
-            else
-                break;
-        }
-
-        if (bins.empty())
-        {
-            // Number of bins not specified, determine from data.
-            min = 0;
-            if (last < max)
-            {
-                max = last;
-
-                // We should have no outliers.
-                first = std::numeric_limits<float>::quiet_NaN();
-                last = std::numeric_limits<float>::quiet_NaN();
-            }
-
-            max = std::ceil(max/binWidth) * binWidth;
-            int numBins = (max - min) / binWidth;
-            bins.resize(numBins);
-        }
-        else
-        {
-            if (!std::isnan(min))
-            {
-                // If a minimum bin value is specified, use that
-                // as well as the set bin width. Both must be present.
-                if (std::isnan(max))
-                {
-                    // Max is computed with respect to min value specified, unless it is specified.
-                    max = min + (binWidth * bins.size());
-                }
-
-                // If the sample range is within the min/max, then indicate we have no outliers.
-                if (min <= first) first = std::numeric_limits<float>::quiet_NaN();
-                if (max > last) last = std::numeric_limits<float>::quiet_NaN();
-            }
-            else
-            {
-                // range 5 std dev
-                min = median - (5 * stddev);
-                if (min < first) min = first;
-                max = median + (5 * stddev);
-                if (max > last) max = last;
-
-                if (inputNoNans.size() <= 2)
-                {
-                    mode = inputNoNans.front();
-                    return;
-                }
-            }
-        }
-
-        assert(bins.size() > 0);
-        binWidth = (max - min) / bins.size();
-
-        if (binWidth > 0)
-        {
-            // Bin
-            int numOutliers = 0;
-            std::for_each(inputNoNans.begin(), inputNoNans.end(),
-                          [&](const float d)
-                          {
-                              if (d >=min && d < max)
-                              {
-                                  unsigned int binHit = std::floor((d - min) / binWidth);
-                                  // possible floating point round-up might cause this next corner case,
-                                  // it has been seen in SE-338.
-                                  if (binHit == bins.size()) binHit--;
-                                  if (binHit < bins.size())
-                                  {
-                                      bins[binHit]++;
-                                  }
-                              }
-                              else
-                              {
-                                  numOutliers++;
-                              }
-                          }
-            );
-
-            // Check on the outlier fraction.
-            float maxOutlierFraction = 0.25;
-            float outlierFraction = numOutliers/(float)inputNoNans.size();
-            if (outlierFraction >= maxOutlierFraction)
-            {
-                PBLOG_WARN << "High outlier fraction: " <<  outlierFraction << " detected for metric: " << metricDescription;
-            }
-
-            // Compute mode as centroid of max bin
-            size_t maxIdx = std::distance(bins.begin(), std::max_element(bins.begin(), bins.end()));
-            mode = min + ((maxIdx * binWidth) + (binWidth/2));
-        }
-        else
-        {
-            mode = inputNoNans.front();
-            binWidth = 0;
-        }
-    }
 private: // typedef
     using Accu = boost::accumulators::accumulator_set<
         float, 
@@ -407,58 +127,17 @@ struct DiscreteHistogram
 public:
     DiscreteHistogram(const std::vector<float>& values,
                       const std::vector<std::string>& bls,
-                      const std::string& md)
-        : binLabels(bls),
-          metricDescription(md)
-    {
-        bins.resize(binLabels.size());
-        Bin(values);
-    }
+                      const std::string& md);
+
 public: // non-modifying
-    friend std::ostream& operator << (std::ostream& stream, const DiscreteHistogram& h)
-    {
-        stream << "<ns:NumBins>" << h.bins.size() << "</ns:NumBins>";
-
-        stream << "<ns:BinCounts>";
-        for (const auto& d : h.bins)
-            stream << "<ns:BinCount>" << d << "</ns:BinCount>";
-        stream << "</ns:BinCounts>";
-
-        stream << "<ns:MetricDescription>" << h.metricDescription << "</ns:MetricDescription>";
-
-        stream << "<ns:BinLabels>";
-        for (const auto& d : h.binLabels)
-            stream << "<ns:BinLabel>" << d << "</ns:BinLabel>";
-        stream << "</ns:BinLabels>";
-
-        return stream;
-    }
+    friend std::ostream& operator << (std::ostream& stream, const DiscreteHistogram& h);
 
 public:
     std::vector<int> bins;
     std::vector<std::string> binLabels;
     std::string metricDescription;
 private:
-    void Bin(const std::vector<float>& input)
-    {
-        for (const auto& v : input)
-        {
-            if (0 <= v && v < binLabels.size())
-            {
-                bins[v]++;
-            }
-            else if (v >= binLabels.size())
-            {
-                bins[bins.size()-1]++;
-            }
-            else
-            {
-                PBLOG_WARN << metricDescription << " negative bin label specified: " << v;
-            }
-        }
-    }
+    void Bin(const std::vector<float>& input);
 };
 
 }}}
-
-
