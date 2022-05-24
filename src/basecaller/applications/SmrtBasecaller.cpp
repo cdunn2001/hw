@@ -843,7 +843,7 @@ private:
             }
 
             uint64_t shutdownCounterMax = 1;
-            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, shutdownCounterMax, 300);
+            SmrtBasecallerStageReporter shutdownRpt(progressMessage_.get(), SmrtBasecallerStages::Shutdown, shutdownCounterMax, 3000);
             inputNode->FlushNode();
 
             PBLOG_INFO << "Exited chunk analysis loop.";
