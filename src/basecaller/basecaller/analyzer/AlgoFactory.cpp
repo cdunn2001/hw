@@ -37,14 +37,14 @@
 #include <basecaller/traceAnalysis/DmeEmHost.h>
 #include <basecaller/traceAnalysis/DmeEmDevice.h>
 #include <basecaller/traceAnalysis/DmeEmHybrid.h>
-#include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HFMetricsFilterDevice.h>
 #include <basecaller/traceAnalysis/DeviceMultiScaleBaseliner.h>
 #include <basecaller/traceAnalysis/DevicePulseAccumulator.h>
 #include <basecaller/traceAnalysis/FrameLabeler.h>
 #include <basecaller/traceAnalysis/FrameLabelerDevice.h>
 #include <basecaller/traceAnalysis/FrameLabelerHost.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
-#include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HFMetricsFilterHost.h>
 #include <basecaller/traceAnalysis/HostPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostSimulatedPulseAccumulator.h>
 #include <basecaller/traceAnalysis/HostMultiScaleBaseliner.h>
@@ -154,10 +154,10 @@ AlgoFactory::~AlgoFactory()
         NoHFMetricsFilter::Finalize();
         break;
     case Data::BasecallerMetricsConfig::MethodName::Host:
-        HostHFMetricsFilter::Finalize();
+        HFMetricsFilterHost::Finalize();
         break;
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        DeviceHFMetricsFilter::Finalize();
+        HFMetricsFilterDevice::Finalize();
         break;
     default:
         ostringstream msg;
@@ -274,7 +274,7 @@ void AlgoFactory::Configure(const Data::BasecallerAlgorithmConfig& bcConfig,
     switch (hfMetricsOpt_)
     {
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        DeviceHFMetricsFilter::Configure(bcConfig.Metrics.sandwichTolerance,
+        HFMetricsFilterDevice::Configure(bcConfig.Metrics.sandwichTolerance,
                                          bcConfig.Metrics.framesPerHFMetricBlock,
                                          analysisConfig.movieInfo.frameRate,
                                          bcConfig.Metrics.realtimeActivityLabels);
@@ -453,10 +453,10 @@ AlgoFactory::CreateHFMetricsFilter(unsigned int poolId,
         return std::make_unique<NoHFMetricsFilter>(poolId);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Host:
-        return std::make_unique<HostHFMetricsFilter>(poolId, dims.lanesPerBatch);
+        return std::make_unique<HFMetricsFilterHost>(poolId, dims.lanesPerBatch);
         break;
     case Data::BasecallerMetricsConfig::MethodName::Gpu:
-        return std::make_unique<DeviceHFMetricsFilter>(poolId, dims.lanesPerBatch, &registrar);
+        return std::make_unique<HFMetricsFilterDevice>(poolId, dims.lanesPerBatch, &registrar);
         break;
     default:
         ostringstream msg;

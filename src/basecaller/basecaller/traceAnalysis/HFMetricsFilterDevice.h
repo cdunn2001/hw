@@ -1,4 +1,4 @@
-#ifndef Mongo_BaseCaller_TraceAnalysis_HostHFMetricsFilter_H_
+#ifndef Mongo_BaseCaller_TraceAnalysis_DeviceHFMetricsFilter_H_
 
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
@@ -26,55 +26,57 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file   HostHFMetricsFilter.h
+/// \file   HFMetricsFilterDevice.h
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale  equal to or greater than the standard block size.
 
 #include "HFMetricsFilter.h"
-#include <common/AlignedVector.h>
-#include <dataTypes/BasecallingMetricsAccumulator.h>
+#include <dataTypes/BasecallingMetrics.h>
 #include <dataTypes/BatchMetrics.h>
+#include <dataTypes/BatchVectors.h>
+#include <dataTypes/HQRFPhysicalStates.h>
+#include <dataTypes/Pulse.h>
+#include <dataTypes/TrainedCartDevice.h>
+#include <common/StatAccumState.h>
+#include <common/AutocorrAccumState.h>
+#include <common/cuda/memory/DeviceAllocationStash.h>
 
 namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class HostHFMetricsFilter : public HFMetricsFilter
+class HFMetricsFilterDevice : public HFMetricsFilter
 {
+public: // static methods
+    static void Configure(uint32_t sandwichTolerance,
+                          uint32_t framesPerHFMetricBlock,
+                          double frameRate,
+                          bool realtimeActivityLabels);
+
 public:
-    HostHFMetricsFilter(uint32_t poolId, uint32_t lanesPerBatch)
-        : HFMetricsFilter(poolId)
-        , metrics_(lanesPerBatch)
-    { };
-    HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
-    HostHFMetricsFilter& operator=(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
-    ~HostHFMetricsFilter() override;
+    class AccumImpl;
+
+public:
+    HFMetricsFilterDevice(uint32_t poolId, uint32_t lanesPerPool,
+                          Cuda::Memory::StashableAllocRegistrar* registrar = nullptr);
+    HFMetricsFilterDevice(const HFMetricsFilterDevice&) = delete;
+    HFMetricsFilterDevice(HFMetricsFilterDevice&&) = default;
+    HFMetricsFilterDevice& operator=(const HFMetricsFilterDevice&) = delete;
+    HFMetricsFilterDevice& operator=(HFMetricsFilterDevice&&) = default;
+    ~HFMetricsFilterDevice() override;
 
 private:
-    std::unique_ptr<BasecallingMetricsBatchT> Process(
-            const PulseBatchT& pulseBatch,
-            const Data::BaselinerMetrics& baselinerMetrics,
+    std::unique_ptr<Cuda::Memory::UnifiedCudaArray<Data::BasecallingMetrics>>
+    Process(const Data::PulseBatch& basecallBatch,
+            const Data::BaselinerMetrics& baselinerStats,
             const ModelsBatchT& models,
             const Data::FrameLabelerMetrics& flMetrics,
             const Data::PulseDetectorMetrics& pdMetrics) override;
 
-private: // Block management
-    void FinalizeBlock();
-
-    void AddPulses(const PulseBatchT& batch);
-
-    void AddModels(const ModelsBatchT& models);
-
-    void AddMetrics(const Data::BaselinerMetrics& baselinerMetrics,
-                    const Data::FrameLabelerMetrics& frameLabelerMetrics,
-                    const Data::PulseDetectorMetrics& pdMetrics);
-
 private: // members
-    AlignedVector<Data::BasecallingMetricsAccumulator> metrics_;
+    std::unique_ptr<AccumImpl> impl_;
 };
 
 }}} // PacBio::Mongo::Basecaller
 
-#endif // Mongo_BaseCaller_TraceAnalysis_HostHFMetricsFilter_H_
+#endif // Mongo_BaseCaller_TraceAnalysis_DeviceHFMetricsFilter_H_
