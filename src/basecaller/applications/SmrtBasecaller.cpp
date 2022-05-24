@@ -352,7 +352,12 @@ private:
             //       having a surprising/undesirable decision made.
             if (type == PacketLayout::BLOCK_LAYOUT_DENSE)
             {
-                double score = 0.0f;
+                // It's quite likely we'll have a runt batch, and if there are only
+                // one or two pools then it will unduely favor using the repacker even
+                // though the repacker won't be able to help. Try to compensate by
+                // starting with a score of 1, so even if we have a single runt, the
+                // total score normalized by the number of layouts is still near 1.
+                double score = 1.0f;
                 for (const auto& kv : inputLayouts)
                 {
                     const auto& layout = kv.second;
