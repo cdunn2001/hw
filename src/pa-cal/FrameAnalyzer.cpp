@@ -115,6 +115,10 @@ bool AnalyzeSourceInput(std::unique_ptr<DataSource::DataSourceBase> source,
     out->SetAttributes(attr);
     PBLOG_INFO << "Calibration file " << outputFile << " written and closed.";
 
+    if (runner.HadError()) {
+        return false;
+    }
+
     return true;
 }
 
