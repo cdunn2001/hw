@@ -41,7 +41,7 @@ class BasecallerMetricsConfig : public Configuration::PBConfig<BasecallerMetrics
 public:
     PB_CONFIG(BasecallerMetricsConfig);
 
-    SMART_ENUM(MethodName, Host, NoOp, Gpu);
+    SMART_ENUM(MethodName, Host, NoOp, Gpu, Hybrid);
     PB_CONFIG_PARAM(MethodName, Method, Configuration::DefaultFunc(
                         [](Basecaller::ComputeDevices device) -> MethodName
                         {

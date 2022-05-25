@@ -53,6 +53,8 @@ add_library(libMongoBasecallerTraceAnalysis STATIC
     HFMetricsFilterDevice.cu
     HFMetricsFilterHost.h
     HFMetricsFilterHost.cpp
+    HFMetricsFilterHybrid.h
+    HFMetricsFilterHybrid.cpp
     MultiScaleBaseliner.h
     MultiScaleBaseliner.cpp
     HostMultiScaleBaseliner.h

@@ -1,5 +1,3 @@
-#ifndef Mongo_BaseCaller_TraceAnalysis_DeviceHFMetricsFilter_H_
-
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -30,7 +28,9 @@
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale  equal to or greater than the standard block size.
 
-#include "HFMetricsFilter.h"
+#ifndef Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterDevice_H_
+#define Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterDevice_H_
+
 #include <dataTypes/BasecallingMetrics.h>
 #include <dataTypes/BatchMetrics.h>
 #include <dataTypes/BatchVectors.h>
@@ -40,6 +40,8 @@
 #include <common/StatAccumState.h>
 #include <common/AutocorrAccumState.h>
 #include <common/cuda/memory/DeviceAllocationStash.h>
+
+#include "HFMetricsFilter.h"
 
 namespace PacBio {
 namespace Mongo {
@@ -79,4 +81,4 @@ private: // members
 
 }}} // PacBio::Mongo::Basecaller
 
-#endif // Mongo_BaseCaller_TraceAnalysis_DeviceHFMetricsFilter_H_
+#endif // Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterDevice_H_
