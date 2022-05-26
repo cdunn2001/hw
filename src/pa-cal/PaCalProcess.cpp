@@ -323,7 +323,10 @@ int PaCalProcess::RunAllThreads()
                                               analyzeRpt);
 
             if (success) PBLOG_INFO << "Main analysis has completed";
-            else PBLOG_INFO << "Main analysis not successful";
+            else {
+                PBLOG_INFO << "Main analysis not successful";
+                SetExitCode(ExitCode::DefaultUnknownFailure);
+            }
             const uint64_t shutdownCounterMax = 1;
             PaCalStageReporter shutdownRpt(progressMessage_.get(), PaCalStages::Shutdown, shutdownCounterMax, 300);
             threadController->RequestExit();

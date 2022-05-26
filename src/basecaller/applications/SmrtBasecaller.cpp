@@ -884,10 +884,14 @@ private:
 
 
             shutdownRpt.Update(1);
+
+            if (source->HadError()) {
+                throw PBException("Analysis terminated due to error in DataSourceRunner.");
+            }
         }
         catch(const std::exception& ex)
         {
-            PBLOG_ERROR << "Exception caught during graphmanager setup:" << ex.what();
+            PBLOG_ERROR << "Exception caught during RunAnalyzer():" << ex.what();
             progressMessage_->Exception(ex.what());
             throw;
         }
