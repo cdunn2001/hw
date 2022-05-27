@@ -204,6 +204,7 @@ void FileHeaderBuilder::DefaultMetrics()
     AddMetricField(MetricFieldName::PKZVAR_C, 16, true, 1000);
     AddMetricField(MetricFieldName::PKZVAR_G, 16, true, 1000);
     AddMetricField(MetricFieldName::PKZVAR_T, 16, true, 1000);
+    AddMetricField(MetricFieldName::ACTIVITY_LABEL, 8, false, 1);
 }
 
 void FileHeaderBuilder::DefaultMetricsRTAL()

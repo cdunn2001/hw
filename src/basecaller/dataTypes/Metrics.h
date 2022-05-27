@@ -311,6 +311,11 @@ struct CompleteMetrics : BazIO::MetricBlock<CompleteMetrics<UInt,Flt>>
         sm.BpzvarC(bpzvar_[1]);
         sm.BpzvarG(bpzvar_[2]);
         sm.BpzvarT(bpzvar_[3]);
+
+        sm.PkzvarA(pkzvar_[0]);
+        sm.PkzvarC(pkzvar_[1]);
+        sm.PkzvarG(pkzvar_[2]);
+        sm.PkzvarT(pkzvar_[3]);
     }
 
     uint8_t ActivityLabel() const { return productionMetrics_.ActivityLabel(); }

@@ -205,11 +205,13 @@ public:
     __device__ void AddBaseline(PBShort2 baselineMask, PBShort2 signal)
     {
         PBHalf2 zero(0.0f);
+        PBFloat2 zero2(0.0f);
         PBHalf2 one(1.0f);
+        PBFloat2 signal2(signal);
 
         m0_[threadIdx.x] += Blend(baselineMask, one, zero);
         m1_[threadIdx.x] += Blend(baselineMask, signal, zero);
-        m2_[threadIdx.x] += Blend(baselineMask, pow2(signal), zero);
+        m2_[threadIdx.x] += Blend(baselineMask, signal2*signal2, zero2);
     }
 
     __device__ void FillBaselineStats(Mongo::StatAccumState& stats)

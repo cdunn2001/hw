@@ -212,15 +212,13 @@ struct __align__(128) BlockStateSubframeScorer
 
                 // When signal is stronger than full-frame mean, ensure that
                 // subframe density does not exceed full-frame density.
-                const auto xmu = data * ffmean_[i];
-                const auto mumu = ffmean_[i]*ffmean_[i];
+                // Extra squaring was removed in these calculations to avoid
+                // unnecessary overflow in half-floats.
 
                 const auto y = data - ffmean_[i];
                 const auto fScore =  nhalfVal * y * pInvVar_[i]*y + ffFixedTerm_[i];
 
-                // xmu > mumu means that the Euclidean projection of x onto mu is
-                // greater than the norm of mu.
-                score = Blend(xmu > mumu,
+                score = Blend(data > ffmean_[i],
                               min(min(score, fScore - 1.0f), 0.0f),
                               score);
 
