@@ -374,7 +374,7 @@ __global__ void InitializeMetrics(
     BasecallingMetricsAccumulatorDevice& blockMetrics = metrics[blockIdx.x];
     float2 zero = make_float2(0.0f, 0.0f);
 
-    if (initialize)
+    if (!initialize)
     {
         blockMetrics.startFrame[threadIdx.x] = blockMetrics.startFrame[threadIdx.x]
                                                + blockMetrics.numFrames[threadIdx.x];
