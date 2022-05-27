@@ -183,15 +183,15 @@ inline __device__ PBShort2 operator!(PBShort2 b)
 
 inline __device__ PBHalf2 operator + (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() + r.data()); }
 inline __device__ PBHalf2 operator - (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() - r.data()); }
-//inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() * r.data()); }
-inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) {
-    assert (__hisinf(l.data().x)==0 && __hisinf(l.data().y)==0);
-    assert (__hisinf(r.data().x)==0 && __hisinf(r.data().y)==0);
-    const auto tmp = PBHalf2(l.data() * r.data());
-    assert (__hisinf(tmp.data().x)==0 && __hisinf(tmp.data().y)==0);
-    return tmp;
-    }
-    
+inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() * r.data()); }
+// tooling to check for overflows/etc
+//inline __device__ PBHalf2 operator * (PBHalf2 l, PBHalf2 r) {
+//    assert (__hisinf(l.data().x)==0 && __hisinf(l.data().y)==0);
+//    assert (__hisinf(r.data().x)==0 && __hisinf(r.data().y)==0);
+//    const auto tmp = PBHalf2(l.data() * r.data());
+//    assert (__hisinf(tmp.data().x)==0 && __hisinf(tmp.data().y)==0);
+//    return tmp;
+//    }
 inline __device__ PBHalf2 operator / (PBHalf2 l, PBHalf2 r) { return PBHalf2(l.data() / r.data()); }
 
 inline __device__ PBHalf2& operator +=(PBHalf2& l, const PBHalf2 r) { l = l + r; return l;}
