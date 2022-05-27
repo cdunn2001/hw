@@ -159,7 +159,7 @@ __device__ float2& operator+=(float2& l, const float2 r)
 }
 
 __device__ uint2 operator+(uint2 l, uint2 r)
-{ return make_uint2(l.x - r.x, l.y - r.y); }
+{ return make_uint2(l.x + r.x, l.y + r.y); }
 
 __device__ float2 operator-(float2 l, float2 r)
 { return make_float2(l.x - r.x, l.y - r.y); }
@@ -374,7 +374,7 @@ __global__ void InitializeMetrics(
     BasecallingMetricsAccumulatorDevice& blockMetrics = metrics[blockIdx.x];
     float2 zero = make_float2(0.0f, 0.0f);
 
-    if (initialize)
+    if (!initialize)
     {
         blockMetrics.startFrame[threadIdx.x] = blockMetrics.startFrame[threadIdx.x]
                                                + blockMetrics.numFrames[threadIdx.x];
