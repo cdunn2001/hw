@@ -24,12 +24,12 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file   DeviceHFMetricsFilter.cu
+/// \file   HFMetricsFilterDevice.cu
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale equal to or greater than the standard block size.
 
 
-#include "DeviceHFMetricsFilter.h"
+#include "HFMetricsFilterDevice.h"
 #include <dataTypes/BatchData.cuh>
 #include <dataTypes/BatchVectors.cuh>
 #include <dataTypes/HQRFPhysicalStates.h>
@@ -48,7 +48,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-DeviceHFMetricsFilter::~DeviceHFMetricsFilter() = default;
+HFMetricsFilterDevice::~HFMetricsFilterDevice() = default;
 
 using DeviceStatAccumState = StatAccumStateT<PBFloat2, laneSize/2>;
 
@@ -500,7 +500,7 @@ __device__ void processPulse(
 
 
 __global__ void ProcessChunk(
-        const DeviceView<const DeviceHFMetricsFilter::BaselinerStatsT> baselinerStats,
+        const DeviceView<const HFMetricsFilterDevice::BaselinerStatsT> baselinerStats,
         const DeviceView<const Data::LaneModelParameters<Cuda::PBHalf2, laneSize/2>> models,
         const Data::GpuBatchVectors<const Data::Pulse> pulses,
         const DeviceView<const PacBio::Cuda::Utility::CudaArray<float, laneSize>> flMetrics,
@@ -893,7 +893,7 @@ __global__ void FinalizeMetrics(
 
 } // anonymous
 
-class DeviceHFMetricsFilter::AccumImpl
+class HFMetricsFilterDevice::AccumImpl
 {
 public:
     AccumImpl(size_t lanesPerPool, StashableAllocRegistrar* registrar)
@@ -959,9 +959,9 @@ private:
 
 };
 
-constexpr size_t DeviceHFMetricsFilter::AccumImpl::threadsPerBlock_;
+constexpr size_t HFMetricsFilterDevice::AccumImpl::threadsPerBlock_;
 
-DeviceHFMetricsFilter::DeviceHFMetricsFilter(uint32_t poolId,
+HFMetricsFilterDevice::HFMetricsFilterDevice(uint32_t poolId,
                                              uint32_t lanesPerPool,
                                              StashableAllocRegistrar* registrar)
     : HFMetricsFilter(poolId)
@@ -969,7 +969,7 @@ DeviceHFMetricsFilter::DeviceHFMetricsFilter(uint32_t poolId,
 { };
 
 std::unique_ptr<UnifiedCudaArray<Data::BasecallingMetrics>>
-DeviceHFMetricsFilter::Process(
+HFMetricsFilterDevice::Process(
         const Data::PulseBatch& pulseBatch,
         const Data::BaselinerMetrics& baselinerMetrics,
         const UnifiedCudaArray<Data::LaneModelParameters<Cuda::PBHalf, 64>>& models,
@@ -980,7 +980,7 @@ DeviceHFMetricsFilter::Process(
             pdMetrics);
 }
 
-void DeviceHFMetricsFilter::Configure(uint32_t sandwichTolerance,
+void HFMetricsFilterDevice::Configure(uint32_t sandwichTolerance,
                                       uint32_t framesPerHFMetricBlock,
                                       double frameRate,
                                       bool realtimeActivityLabels)

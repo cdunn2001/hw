@@ -1,5 +1,3 @@
-#ifndef Mongo_BaseCaller_TraceAnalysis_HostHFMetricsFilter_H_
-
 // Copyright (c) 2019, Pacific Biosciences of California, Inc.
 //
 // All rights reserved.
@@ -26,9 +24,12 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file   HostHFMetricsFilter.h
+/// \file   HFMetricsFilterHost.h
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale  equal to or greater than the standard block size.
+
+#ifndef Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterHost_H_
+#define Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterHost_H_
 
 #include "HFMetricsFilter.h"
 #include <common/AlignedVector.h>
@@ -39,18 +40,18 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-class HostHFMetricsFilter : public HFMetricsFilter
+class HFMetricsFilterHost : public HFMetricsFilter
 {
 public:
-    HostHFMetricsFilter(uint32_t poolId, uint32_t lanesPerBatch)
+    HFMetricsFilterHost(uint32_t poolId, uint32_t lanesPerBatch)
         : HFMetricsFilter(poolId)
         , metrics_(lanesPerBatch)
-    { };
-    HostHFMetricsFilter(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter(HostHFMetricsFilter&&) = default;
-    HostHFMetricsFilter& operator=(const HostHFMetricsFilter&) = delete;
-    HostHFMetricsFilter& operator=(HostHFMetricsFilter&&) = default;
-    ~HostHFMetricsFilter() override;
+    { }
+    HFMetricsFilterHost(const HFMetricsFilterHost&) = delete;
+    HFMetricsFilterHost(HFMetricsFilterHost&&) = default;
+    HFMetricsFilterHost& operator=(const HFMetricsFilterHost&) = delete;
+    HFMetricsFilterHost& operator=(HFMetricsFilterHost&&) = default;
+    ~HFMetricsFilterHost() override;
 
 private:
     std::unique_ptr<BasecallingMetricsBatchT> Process(
@@ -77,4 +78,4 @@ private: // members
 
 }}} // PacBio::Mongo::Basecaller
 
-#endif // Mongo_BaseCaller_TraceAnalysis_HostHFMetricsFilter_H_
+#endif // Mongo_BaseCaller_TraceAnalysis_HFMetricsFilterHost_H_

@@ -27,12 +27,12 @@
 //  Defines unit tests for the strategies for estimation and subtraction of
 //  baseline and estimation of associated statistics.
 
-#include <basecaller/traceAnalysis/DeviceHFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HFMetricsFilterDevice.h>
 #include <basecaller/traceAnalysis/PulseAccumulator.h>
 #include <basecaller/traceAnalysis/DetectionModelEstimator.h>
 #include <basecaller/traceAnalysis/TraceHistogramAccumulator.h>
 #include <basecaller/traceAnalysis/HFMetricsFilter.h>
-#include <basecaller/traceAnalysis/HostHFMetricsFilter.h>
+#include <basecaller/traceAnalysis/HFMetricsFilterHost.h>
 #include <basecaller/analyzer/BatchAnalyzer.h>
 
 #include <common/DataGenerators/BatchGenerator.h>
@@ -433,7 +433,7 @@ TEST(TestHFMetricsFilter, Populated_Device)
     BaseSimConfig sim;
     {
         const auto& metricsConfig = sim.config.metrics;
-        DeviceHFMetricsFilter::Configure(metricsConfig.sandwichTolerance,
+        HFMetricsFilterDevice::Configure(metricsConfig.sandwichTolerance,
                                          metricsConfig.framesPerHFMetricBlock,
                                          sim.frameRate,
                                          metricsConfig.realtimeActivityLabels);
@@ -441,7 +441,7 @@ TEST(TestHFMetricsFilter, Populated_Device)
 
 
     int poolId = 0;
-    DeviceHFMetricsFilter hfMetrics(poolId, sim.dims.lanesPerBatch);
+    HFMetricsFilterDevice hfMetrics(poolId, sim.dims.lanesPerBatch);
     testPopulated(hfMetrics, sim);
 }
 
@@ -458,7 +458,7 @@ TEST(TestHFMetricsFilter, Populated)
 
 
     int poolId = 0;
-    HostHFMetricsFilter hfMetrics(poolId, sim.dims.lanesPerBatch);
+    HFMetricsFilterHost hfMetrics(poolId, sim.dims.lanesPerBatch);
     testPopulated(hfMetrics, sim);
 }
 

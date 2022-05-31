@@ -24,11 +24,11 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  Description:
-/// \file   HostHFMetricsFilter.cpp
+/// \file   HFMetricsFilterHost.cpp
 /// \brief  A filter for computing or aggregating trace- and pulse-metrics
 ///         on a time scale equal to or greater than the standard block size.
 
-#include "HostHFMetricsFilter.h"
+#include "HFMetricsFilterHost.h"
 
 #include <tbb/task_arena.h>
 #include <tbb/parallel_for.h>
@@ -37,7 +37,7 @@ namespace PacBio {
 namespace Mongo {
 namespace Basecaller {
 
-void HostHFMetricsFilter::FinalizeBlock()
+void HFMetricsFilterHost::FinalizeBlock()
 {
     for (auto& metric : metrics_)
     {
@@ -45,9 +45,9 @@ void HostHFMetricsFilter::FinalizeBlock()
     }
 }
 
-HostHFMetricsFilter::~HostHFMetricsFilter() = default;
+HFMetricsFilterHost::~HFMetricsFilterHost() = default;
 
-void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
+void HFMetricsFilterHost::AddPulses(const Data::PulseBatch& pulseBatch)
 {
     const auto& pulses = pulseBatch.Pulses();
     tbb::task_arena().execute([&] {
@@ -58,7 +58,7 @@ void HostHFMetricsFilter::AddPulses(const Data::PulseBatch& pulseBatch)
     });
 }
 
-void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
+void HFMetricsFilterHost::AddModels(const ModelsBatchT& modelsBatch)
 {
     tbb::task_arena().execute([&] {
         tbb::parallel_for(size_t{0}, modelsBatch.Size(), [&](size_t l) {
@@ -68,7 +68,7 @@ void HostHFMetricsFilter::AddModels(const ModelsBatchT& modelsBatch)
     });
 }
 
-void HostHFMetricsFilter::AddMetrics(
+void HFMetricsFilterHost::AddMetrics(
         const Data::BaselinerMetrics& baselinerMetrics,
         const Data::FrameLabelerMetrics& frameLabelerMetrics,
         const Data::PulseDetectorMetrics& pdMetrics)
@@ -83,8 +83,8 @@ void HostHFMetricsFilter::AddMetrics(
     });
 }
 
-std::unique_ptr<HostHFMetricsFilter::BasecallingMetricsBatchT>
-HostHFMetricsFilter::Process(
+std::unique_ptr<HFMetricsFilterHost::BasecallingMetricsBatchT>
+HFMetricsFilterHost::Process(
         const PulseBatchT& pulseBatch,
         const Data::BaselinerMetrics& baselinerMetrics,
         const ModelsBatchT& models,
