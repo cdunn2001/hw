@@ -29,6 +29,8 @@
 namespace PacBio::Mongo::Basecaller
 {
 
+/// HFMetricsFilterDevice::Configure() below calls
+/// HFMetricsFilter::Configure() so we make the call here.
 void HFMetricsFilterHybrid::Configure(uint32_t sandwichTolerance,
                                       uint32_t framesPerHFMetricBlock,
                                       double frameRate,
@@ -78,22 +80,28 @@ void HFMetricsFilterHybrid::DiffMetrics(const BasecallingMetricsBatchT& gpu, con
         {
             size_t zmwNum = (lane * laneSize) + zmw;
             if (laneMetricsGpu.startFrame[zmw] != laneMetricsCpu.startFrame[zmw])
+            {
                 PBLOG_ERROR << "zmw = " << zmwNum
                             << " GPU startFrame = " << laneMetricsGpu.startFrame[zmw]
                             << " CPU startFrame = " << laneMetricsCpu.startFrame[zmw];
+            }
 
             if (laneMetricsGpu.numFrames[zmw] != laneMetricsCpu.numFrames[zmw])
+            {
                 PBLOG_ERROR << "zmw = " << zmwNum
                             << " GPU numFrames = " << laneMetricsGpu.numFrames[zmw]
                             << " CPU numFrames = " << laneMetricsCpu.numFrames[zmw];
+            }
 
             const auto& startFrame = laneMetricsCpu.startFrame[zmw];
             const auto endFrame = laneMetricsCpu.startFrame[zmw] + laneMetricsCpu.numFrames[zmw];
 
             if (laneMetricsGpu.activityLabel[zmw] != laneMetricsCpu.activityLabel[zmw])
+            {
                 PBLOG_ERROR << "zmw = " << zmwNum << " frames = [" << startFrame << "," << endFrame << "]"
                             << " GPU activity label = " << static_cast<uint8_t>(laneMetricsGpu.activityLabel[zmw])
                             << " CPU activity label = " << static_cast<uint8_t>(laneMetricsCpu.activityLabel[zmw]);
+            }
 
             auto compareUIntMetrics = [&](uint16_t gpuVal, uint16_t cpuVal, const std::string& name)
             {
@@ -106,9 +114,10 @@ void HFMetricsFilterHybrid::DiffMetrics(const BasecallingMetricsBatchT& gpu, con
 
             auto compareFloatMetrics = [&](float gpuVal, float cpuVal, const std::string& name)
             {
-                int ulp = 2;
-                bool almost_equal = std::fabs(gpuVal - cpuVal) <= std::numeric_limits<float>::epsilon() * std::fabs(gpuVal + cpuVal) * ulp
-                                    || std::fabs(gpuVal - cpuVal) < std::numeric_limits<float>::min();
+                bool almost_equal = gpuVal == cpuVal
+                                    || (std::isnan(gpuVal) && std::isnan(cpuVal))
+                                    || std::fabs(gpuVal - cpuVal) <= 0.00001;
+
                 if (!almost_equal)
                 {
                     PBLOG_ERROR << "zmw = " << zmwNum << " frames = [" << startFrame << "," << endFrame << "]"

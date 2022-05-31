@@ -69,7 +69,7 @@ private:
 
 private:
 
-    void DiffMetrics(const BasecallingMetricsBatchT& gpu, const BasecallingMetricsBatchT& cpu);
+    static void DiffMetrics(const BasecallingMetricsBatchT& gpu, const BasecallingMetricsBatchT& cpu);
 
     std::unique_ptr<HFMetricsFilterDevice> device_;
     std::unique_ptr<HFMetricsFilterHost> host_;
