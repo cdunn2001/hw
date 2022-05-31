@@ -108,6 +108,15 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     static constexpr size_t numBlocks = 64;
     static constexpr size_t blockLen = 128;
 
+    // Smaller data Option 1
+    // static constexpr size_t poolsPerChip = 2;
+    // static constexpr size_t numBlocks = 4;
+    // static constexpr size_t blockLen = 32;
+    // Smaller data Option 2
+    // static constexpr size_t poolsPerChip = 2;
+    // static constexpr size_t numBlocks = 2;
+    // static constexpr size_t blockLen = 32;
+
     const std::string traceFile = "/pbi/dept/primary/sim/mongo/test2_mongo_SNR-40.trc.h5";
 
     const auto& GroundTruth = [&](){
@@ -123,9 +132,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     trcConfig.numFrames = numBlocks * blockLen;
     trcConfig.numZmwLanes = layout.NumBlocks() * poolsPerChip;
     trcConfig.cache = true;
-    auto source = std::make_unique<TraceFileDataSource>(
-            std::move(cfg),
-            trcConfig);
+    auto source = std::make_unique<TraceFileDataSource>(std::move(cfg), trcConfig);
 
     // Hard code our models to match this specific trace file
     // Beware that we're ignoring some values like relAmp in our
@@ -177,7 +184,7 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
     models.reserve(poolsPerChip);
     for (uint32_t i = 0; i < poolsPerChip; ++i)
     {
-        models.emplace_back(lanesPerPool,SyncDirection::Symmetric, SOURCE_MARKER());
+        models.emplace_back(lanesPerPool, SyncDirection::Symmetric, SOURCE_MARKER());
         auto hostModels = models.back().GetHostView();
         for (uint32_t j = 0; j < lanesPerPool; ++j)
         {
@@ -222,20 +229,18 @@ TEST_P(FrameLabelerTest, CompareVsGroundTruth)
 
                 for (size_t i = 0; i < labels.LanesPerBatch(); ++i)
                 {
-                    const auto& block = labels.GetBlockView(i);
-                    for (size_t j = 0; j < block.NumFrames(); ++j)
+                    const auto& labelBlock = labels.GetBlockView(i);
+                    for (size_t j = 0; j < labelBlock.NumFrames(); ++j)
                     {
-                        for (size_t k = 0; k < block.LaneWidth(); ++k)
+                        for (size_t k = 0; k < labelBlock.LaneWidth(); ++k)
                         {
                             int zmw = batchIdx * laneSize * lanesPerPool + i * laneSize + k;
                             int frame = firstFrame + j - viterbiLookback;
                             if (frame < 0) continue;
-                            LabelValidator(block(j,k), GroundTruth[zmw][frame]);
+                            LabelValidator(labelBlock(j,k), GroundTruth[zmw][frame]);
                         }
-
                     }
                 }
-
             }
         }
     }

@@ -79,7 +79,7 @@ __device__ inline void Normalize(Utility::CudaArray<PBHalf2, numStates>& vec)
 __global__ static void InitLatent(Mongo::Data::GpuBatchData<PBShort2> latent)
 {
     auto zmwData = latent.ZmwData(blockIdx.x, threadIdx.x);
-    for (auto val : zmwData) val = PBShort2(0);
+    for (auto& val : zmwData) val = PBShort2(0);
 }
 
 template <typename Labels, typename LogLike, typename Scorer, typename TransT, class... Rows>
@@ -155,7 +155,6 @@ __device__ void Recursion(Labels& labels, LogLike& logLike, const Scorer& scorer
         }
     };
 
-
     const auto dat = PBHalf2(data);
     // Compile time loop, to loop over all the Rows in our sparse matrix (each of which have
     // a different type)
@@ -195,6 +194,7 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     __shared__ BlockStateSubframeScorer<CudaLaneArray<PBHalf2, blockThreads>> scorer;
 
     // Initial setup
+    const int numFrames = input.NumFrames();
     Utility::CudaArray<PBHalf2, numStates> scratch;
     auto& logLike = scratch;
     auto& latent = latentData[blockIdx.x];
@@ -211,7 +211,7 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     // plus enough extra to cover the viterbi lookback process, *plus* yet a little more extdra
     // so handle the viterbi stitching process (which really is just having a few extra frames
     // to lessen the impact of an arbitrary RHS boundary condition)
-    assert(roiWorkspace.NumFrames() == input.NumFrames() + ViterbiStitchLookback + RoiFilter::stitchFrames);
+    assert(roiWorkspace.NumFrames() == numFrames + ViterbiStitchLookback + RoiFilter::stitchFrames);
     ComputeRoi<RoiFilter>(latent.GetLatentTraces(),
                           latent.GetRoiBoundary(),
                           prevLat.ZmwData(blockIdx.x, threadIdx.x),
@@ -220,7 +220,7 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
                           1 / sqrt(models[blockIdx.x].BaselineMode().vars[threadIdx.x]),
                           roiWorkspace.ZmwData(blockIdx.x, threadIdx.x));
 
-    auto labels = batchViterbiData.BlockData();
+    auto labels = batchViterbiData.BlockData(blockIdx.x, threadIdx.x);
     auto roi = roiWorkspace.ZmwData(blockIdx.x, threadIdx.x);
 
     // Forward recursion on latent data
@@ -237,7 +237,6 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
 
     // Forward recursion on this block's data
     scorer.Setup(models[blockIdx.x]);
-    const int numFrames = input.NumFrames();
     const auto& inZmw = input.ZmwData(blockIdx.x, threadIdx.x);
     const int anchor = numFrames - numLatent;
     for (int frame = 0; frame < anchor; ++frame)
@@ -306,7 +305,7 @@ __global__ void FrameLabelerKernel(const Cuda::Memory::DeviceView<const Data::La
     viterbiScore[blockIdx.x][2 * threadIdx.x + 1] = anchorLogLike[anchorState.Y()].FloatY();
 
     // Traceback
-    auto traceState = anchorState;
+    PBShort2 traceState = anchorState;
     auto outZmw = output.ZmwData(blockIdx.x, threadIdx.x);
     for (int frame = numFrames - 1; frame >= 0; --frame)
     {
