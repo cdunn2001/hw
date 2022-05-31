@@ -330,14 +330,13 @@ __device__ PBHalf2 autocorrelation(const BasecallingMetricsAccumulatorDevice& bl
             m1x2 = m1x2 - asFloat2(blockMetrics.fBuf[k][threadIdx.x]
                                    + blockMetrics.bBuf[k][threadIdx.x]);
         }
-        float2 ac = mu*(m1x2 - nmk*mu);
+        float2 ac_internal = mu*(m1x2 - nmk*mu);
         nmk = nmk - asFloat2(PBHalf2(1.0f));
-
-        ac = (blockMetrics.autocorrM2[threadIdx.x] - ac)
-             / (nmk * asFloat2(variance(blockMetrics.traceM0[threadIdx.x],
-                                        blockMetrics.traceM1[threadIdx.x],
-                                        blockMetrics.traceM2[threadIdx.x])));
-        return ac;
+        ac_internal = (blockMetrics.autocorrM2[threadIdx.x] - ac_internal)
+             / (nmk * variance(blockMetrics.traceM0[threadIdx.x],
+                               blockMetrics.traceM1[threadIdx.x],
+                               blockMetrics.traceM2[threadIdx.x]));
+        return ac_internal;
     }(nmk);
     const PBBool2 nanMask = !(ac == ac);
     const PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
@@ -756,7 +755,6 @@ __global__ void FinalizeMetrics(
 
     const PBHalf2 nans(std::numeric_limits<half2>::quiet_NaN());
     const PBHalf2 zeros(0.0f);
-    const float2 nansf(std::numeric_limits<float2>::quiet_NaN());
     const PBFloat2 nansf2(std::numeric_limits<float2>::quiet_NaN());
 
     for (size_t pulseLabel = 0; pulseLabel < numAnalogs; pulseLabel++)
