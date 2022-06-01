@@ -195,7 +195,7 @@ HostMultiScaleBaseliner::LaneBaseliner::GetSmoothedBlEstimate(const LaneArray& l
     // averages if blEst exceeds previous baseline EMA by more than
     // jump tolerance.
     // Notice the asymmetry--only positive jumps are suppressed.
-    
+
     const BoolArray mask = ((blMeanUemaWeight_ == 0.0f)
             | (blEst - blMeanUemaSum_ / blMeanUemaWeight_ < JumpTolCoeff() * blSigmaEma_));
 

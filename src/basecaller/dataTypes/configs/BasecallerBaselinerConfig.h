@@ -141,7 +141,7 @@ inline void ValidateConfig<Mongo::Data::BasecallerBaselinerConfig>(
     if (js < 0)
     {
         std::ostringstream msg;
-        msg << "Bad value.  JumpSuppression = " << mess
+        msg << "Bad value.  JumpSuppression = " << js
             << ".  Should be greater or equal to zero.";
         results->AddError(msg.str());
     }
