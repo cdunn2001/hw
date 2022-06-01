@@ -228,10 +228,10 @@ struct ViterbiData : private Cuda::Memory::detail::DataManager
     private:
         T* data_;
     };
-    __device__ ViterbiBlockData BlockData()
+    __device__ ViterbiBlockData BlockData(uint32_t laneIdx, uint32_t zmwIdx)
     {
-        return ViterbiBlockData(&data_[numFrames_ * laneWidth * numPackedLabels * blockIdx.x
-                                       + threadIdx.x]);
+        return ViterbiBlockData(&data_[numFrames_ * laneWidth * numPackedLabels * laneIdx
+                                       + zmwIdx]);
     }
  private:
     Cuda::Memory::DeviceView<T> data_;
