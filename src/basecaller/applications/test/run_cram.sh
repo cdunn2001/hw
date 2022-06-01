@@ -22,7 +22,7 @@ echo "Using smrt-basecaller: $(which smrt-basecaller)"
 
 tests=*.t
 if [ ${1+x} ]; then
-    tests=$1
+    tests=$@
     echo "Tests specified in command line:"
     echo $'\t' $tests
 fi

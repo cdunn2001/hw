@@ -78,6 +78,7 @@ DeviceMultiScaleBaseliner::DeviceMultiScaleBaseliner(uint32_t poolId,
     args.sigmaBiasAdj  = CSigmaBiasAdj();
     args.meanEmaAlpha  = MeanEmaAlpha();
     args.sigmaEmaAlpha = SigmaEmaAlpha();
+    args.jumpTolCoeff  = JumpTolCoeff();
     args.numLanes = lanesPerPool;
     args.val = initVal;
     switch (expectedEncoding_)
