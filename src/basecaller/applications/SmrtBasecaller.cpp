@@ -839,6 +839,10 @@ private:
                         framesSinceBigReports = 0;
                     }
                 }
+                else
+                {
+                    if( framesAnalyzed ==0) analyzeStageRpt.Update(0);
+                }
 
                 if (this->ExitRequested())
                 {
