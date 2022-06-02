@@ -6,7 +6,7 @@
   $ pa-cal --config source.SimInputConfig='{"nRows":320, "nCols":240}' --cal=Dark --sra=0 --outputFile=${TRCOUT} --config source.SimInputConfig.minInputDelaySeconds=15 > /dev/null 2>&1 &
   $ PID=$!
   $ ps -q $PID -o state --no-headers
-  R
+  [DRS] (re)
   $ sleep 1
 
   $ /bin/kill -s SIGKILL $PID
@@ -25,7 +25,7 @@
   $ pa-cal --config source.SimInputConfig='{"nRows":3600, "nCols":3600}' --cal=Dark --sra=0 --outputFile=${TRCOUT} > /dev/null 2>&1 &
   $ PID=$!
   $ ps -q $PID -o state --no-headers
-  R
+  [DRS] (re)
   $ sleep 1
 
   $ /bin/kill -s SIGKILL $PID
