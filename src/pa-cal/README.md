@@ -7,3 +7,4 @@ Releases
 0.1.5  Implementation of chipLayout
 1.0.0  First 2-cell release
 1.0.1  Fixed integration problem with wx-daemon, regarding timestamps in IPC.
+1.0.2  512 frame packet integration
