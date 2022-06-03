@@ -136,9 +136,9 @@ public:
         auto start = Get(startFrame_[threadIdx.x]);
         short width = frameIndex - start;
 
-        PBShort2 rawMeanShort = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
-        float raw_mean = float(rawMeanShort.template Get<id>()) / width;
-        float raw_mid  = float(signalTotal_[threadIdx.x].template Get<id>()) / (width - 2);
+        PBFloat2 fullSignalTot = signalTotal_[threadIdx.x] + signalLastFrame_[threadIdx.x] + signalFrstFrame_[threadIdx.x];
+        float raw_mean = fullSignalTot.template Get<id>() / width;
+        float raw_mid  = signalTotal_[threadIdx.x].template Get<id>() / (width - 2);
 
         auto lowAmp = minMean.Get<id>();
         auto keep = (width >= staticConfig.widThr_) || (raw_mean * width >= staticConfig.ampThr_ * lowAmp);
@@ -184,8 +184,8 @@ private:
 
     CudaArray<PBShort2, blockThreads> signalFrstFrame_;   // Signal of the most recent frame added
     CudaArray<PBShort2, blockThreads> signalLastFrame_;   // Signal recorded for the last frame in the segment
-    CudaArray<PBHalf2, blockThreads> signalMax_;          // Max signal over all frames in segment
-    CudaArray<PBShort2, blockThreads> signalTotal_;       // Signal total, excluding the first and last frame
+    CudaArray<PBHalf2,  blockThreads> signalMax_;         // Max signal over all frames in segment
+    CudaArray<PBFloat2, blockThreads> signalTotal_;       // Signal total, excluding the first and last frame
     CudaArray<PBFloat2, blockThreads> signalM2_;          // Sum of squared signals, excluding the first and last frame
 
     CudaArray<PBShort2, blockThreads> label_;             // Internal label ID corresponding to detection modes
@@ -205,27 +205,26 @@ public:
     __device__ void AddBaseline(PBShort2 baselineMask, PBShort2 signal)
     {
         PBHalf2 zero(0.0f);
-        PBFloat2 zero2(0.0f);
         PBHalf2 one(1.0f);
-        PBFloat2 signal2(signal);
+        PBFloat2 signalf(signal);
 
         m0_[threadIdx.x] += Blend(baselineMask, one, zero);
-        m1_[threadIdx.x] += Blend(baselineMask, signal, zero);
-        m2_[threadIdx.x] += Blend(baselineMask, signal2*signal2, zero2);
+        m1_[threadIdx.x] += Blend(baselineMask, signalf, 0.0f);
+        m2_[threadIdx.x] += Blend(baselineMask, signalf*signalf, 0.0f);
     }
 
     __device__ void FillBaselineStats(Mongo::StatAccumState& stats)
     {
         stats.moment0[2*threadIdx.x] = m0_[threadIdx.x].FloatX();
         stats.moment0[2*threadIdx.x+1] = m0_[threadIdx.x].FloatY();
-        stats.moment1[2*threadIdx.x] = m1_[threadIdx.x].FloatX();
-        stats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].FloatY();
+        stats.moment1[2*threadIdx.x] = m1_[threadIdx.x].X();
+        stats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].Y();
         stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
         stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
     }
 private:
     CudaArray<PBHalf2,  blockThreads> m0_;
-    CudaArray<PBHalf2,  blockThreads> m1_;
+    CudaArray<PBFloat2, blockThreads> m1_;
     CudaArray<PBFloat2, blockThreads> m2_;
 };
 
