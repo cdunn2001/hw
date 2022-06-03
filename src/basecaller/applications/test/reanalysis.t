@@ -87,7 +87,7 @@
   --- reanalysis.txt* (glob)
   +++ orig.txt* (glob)
   @@ -8233,7 +8233,7 @@
-   \t\t\t\t\t"TRACE_AUTOCORR" : 0.037384033203125 (esc)
+   \t\t\t\t\t"TRACE_AUTOCORR" : 0.037353515625 (esc)
    \t\t\t\t} (esc)
    \t\t\t], (esc)
   -\t\t\t"ZMW_ID" : 0, (esc)
@@ -110,7 +110,7 @@
   +\t\t\t\t\t"BASELINE_MEAN" : 300, (esc)
    \t\t\t\t\t"BASELINE_SD" : 5.60546875, (esc)
    \t\t\t\t\t"BASE_WIDTH" : 828, (esc)
-   \t\t\t\t\t"BPZVAR_A" : 0.0014886856079101562, (esc)
+   \t\t\t\t\t"BPZVAR_A" : 0.00148773193359375, (esc)
   @@ -7889,7 +7889,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0.043853759765625 (esc)
    \t\t\t\t}, (esc)
@@ -119,7 +119,7 @@
   +\t\t\t\t\t"BASELINE_MEAN" : 300, (esc)
    \t\t\t\t\t"BASELINE_SD" : 5.60546875, (esc)
    \t\t\t\t\t"BASE_WIDTH" : 1656, (esc)
-   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
+   \t\t\t\t\t"BPZVAR_A" : 0.001461029052734375, (esc)
   @@ -7929,7 +7929,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0.044189453125 (esc)
    \t\t\t\t}, (esc)
@@ -128,7 +128,7 @@
   +\t\t\t\t\t"BASELINE_MEAN" : 300, (esc)
    \t\t\t\t\t"BASELINE_SD" : 5.60546875, (esc)
    \t\t\t\t\t"BASE_WIDTH" : 1656, (esc)
-   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
+   \t\t\t\t\t"BPZVAR_A" : 0.001461029052734375, (esc)
   @@ -7969,7 +7969,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0.044189453125 (esc)
    \t\t\t\t}, (esc)
@@ -137,7 +137,7 @@
   +\t\t\t\t\t"BASELINE_MEAN" : 300, (esc)
    \t\t\t\t\t"BASELINE_SD" : 5.60546875, (esc)
    \t\t\t\t\t"BASE_WIDTH" : 1656, (esc)
-   \t\t\t\t\t"BPZVAR_A" : 0, (esc)
+   \t\t\t\t\t"BPZVAR_A" : 0.001461029052734375, (esc)
   @@ -8009,7 +8009,7 @@
    \t\t\t\t\t"TRACE_AUTOCORR" : 0.044189453125 (esc)
    \t\t\t\t} (esc)

@@ -409,7 +409,7 @@ void testPopulated(HFT& hfMetrics, BaseSimConfig& sim)
                               mb.numPkMidBasesByAnalog[2][z]);
                     ASSERT_EQ(numBatchesPerHFMB * 2,
                               mb.numPkMidBasesByAnalog[3][z]);
-                    EXPECT_NEAR(0.415835, mb.autocorrelation[z], 0.0001);
+                    EXPECT_NEAR(0.415835, mb.autocorrelation[z], 0.0010);
                     EXPECT_NEAR(0.002128, mb.pulseDetectionScore[z], 0.0001);
                     EXPECT_NEAR(bs.moment0[z] * numBatchesPerHFMB, mb.numFramesBaseline[z], 0.0001);
                     EXPECT_NEAR(bs.moment1[z] / bs.moment0[z], mb.frameBaselineDWS[z], 0.0001);
