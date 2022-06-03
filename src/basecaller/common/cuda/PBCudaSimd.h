@@ -182,11 +182,6 @@ public:
     CUDA_ENABLED PBHalf2(uint2 f) : PBHalf2(static_cast<float>(f.x), static_cast<float>(f.y)) {}
     CUDA_ENABLED PBHalf2(half f)  : data_{f,f} {}
     CUDA_ENABLED PBHalf2(half2 f) : data_{f} {}
-#if defined(__CUDA_ARCH__)
-    __device__ PBHalf2(float2 f) : data_{__float22half2_rn(f)} {}
-#else
-    PBHalf2(float2 f) : data_{__floats2half2_rn(f.x, f.y)} {}
-#endif
 
     // Set/get individual elements
     CUDA_ENABLED void X(half f) {data_.x = f; }
@@ -231,6 +226,30 @@ private:
     half2 data_;
 };
 
+class PBBool2
+{
+public:
+    PBBool2() = default;
+
+    CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
+    CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
+                                                                      b2 ? 1.0f : 0.0f)} {}
+#if defined(__CUDA_ARCH__)
+    __device__ bool X() const { return data_.x != __short_as_half(0); }
+    __device__ bool Y() const { return data_.y != __short_as_half(0); }
+#else
+    bool X() const { return __half2float(data_.x) != 0.0f; }
+    bool Y() const { return __half2float(data_.y) != 0.0f; }
+#endif
+
+    CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
+
+    half2 CUDA_ENABLED data() const { return data_; }
+    half2& CUDA_ENABLED data() { return data_; }
+private:
+    half2 data_;
+};
+
 class PBFloat2
 {
 public:
@@ -240,12 +259,13 @@ public:
     CUDA_ENABLED PBFloat2(float f1, float f2) : data_{f1, f2} {}
     CUDA_ENABLED PBFloat2(PBShort2 f) : PBFloat2(static_cast<float>(f.X()), static_cast<float>(f.Y())) {}
 
-
 #if defined(__CUDA_ARCH__)
     __device__ PBFloat2(PBHalf2 f) : data_{__half22float2(f.data())} {}
 #else
     PBFloat2(PBHalf2 f) : data_{f.FloatX(), f.FloatY()} {}
 #endif
+
+    explicit CUDA_ENABLED operator PBHalf2() const { return PBHalf2{data_.x, data_.y}; }
 
     // Set/get individual elements
     CUDA_ENABLED void  X(float f) { data_.x = f; }
@@ -269,36 +289,19 @@ public:
     friend CUDA_ENABLED PBFloat2 operator*(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x * r.data().x, l.data().y * r.data().y);}
     friend CUDA_ENABLED PBFloat2 operator/(const PBFloat2& l, const PBFloat2& r) { return PBFloat2(l.data().x / r.data().x, l.data().y / r.data().y);}
 
+    friend CUDA_ENABLED PBBool2 operator >  (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() >  r.X(), l.Y() >  r.Y()); }
+    friend CUDA_ENABLED PBBool2 operator >= (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() >= r.X(), l.Y() >= r.Y()); }
+    friend CUDA_ENABLED PBBool2 operator <  (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() <  r.X(), l.Y() <  r.Y()); }
+    friend CUDA_ENABLED PBBool2 operator <= (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() <= r.X(), l.Y() <= r.Y()); }
+    friend CUDA_ENABLED PBBool2 operator == (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() == r.X(), l.Y() == r.Y()); }
+    friend CUDA_ENABLED PBBool2 operator != (PBFloat2 l, PBFloat2 r) { return PBBool2(l.X() != r.X(), l.Y() != r.Y()); }
+
     CUDA_ENABLED PBFloat2& operator+=(const PBFloat2& o) { data_.x += o.data().x; data_.y += o.data().y; return *this;}
     CUDA_ENABLED PBFloat2& operator-=(const PBFloat2& o) { data_.x -= o.data().x; data_.y -= o.data().y; return *this;}
     CUDA_ENABLED PBFloat2& operator*=(const PBFloat2& o) { data_.x *= o.data().x; data_.y *= o.data().y; return *this;}
     CUDA_ENABLED PBFloat2& operator/=(const PBFloat2& o) { data_.x /= o.data().x; data_.y /= o.data().y; return *this;}
 private:
     float2 data_;
-};
-
-class PBBool2
-{
-public:
-    PBBool2() = default;
-
-    CUDA_ENABLED PBBool2(bool b) : data_{__float2half2_rn(b ? 1.0f : 0.0f)} {}
-    CUDA_ENABLED PBBool2(bool b1, bool b2) : data_{ __floats2half2_rn(b1 ? 1.0f : 0.0f,
-                                                                      b2 ? 1.0f : 0.0f)} {}
-#if defined(__CUDA_ARCH__)
-    __device__ bool X() const { return data_.x != __short_as_half(0); }
-    __device__ bool Y() const { return data_.y != __short_as_half(0); }
-#else
-    bool X() const { return __half2float(data_.x) != 0.0f; }
-    bool Y() const { return __half2float(data_.y) != 0.0f; }
-#endif
-
-    CUDA_ENABLED PBBool2(half2 cond) : data_{cond} {}
-
-    half2 CUDA_ENABLED data() const { return data_; }
-    half2& CUDA_ENABLED data() { return data_; }
-private:
-    half2 data_;
 };
 
 }}
