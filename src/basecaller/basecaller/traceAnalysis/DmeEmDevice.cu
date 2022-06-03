@@ -974,7 +974,7 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             float tau[nModes];
             float cProb;
         };
-        auto cornerComp = [&](int b, CornerVals& cv, float x)
+        auto cornerComp = [&](CornerVals& cv, float x)
         {
             // First compute the log of the component probabilities.
             for (int i = 0; i < nModes; ++i)
@@ -1056,10 +1056,10 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         CornerVals c2;
         float x0 = hist.lowBound[threadIdx.x];
         float x1 = x0 + binSize;
-        cornerComp(0, c1, x0);
+        cornerComp(c1, x0);
         for (unsigned int b = 0; b < numBins; ++b)
         {
-            cornerComp(b+1, c2, x1);
+            cornerComp(c2, x1);
             centerComp(b, c1, c2, x0, x1);
             c1 = c2;
             x0 = x1;
