@@ -1025,11 +1025,16 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             {
                 // Relative weight of each mode. CSMM2002, Equation 5.
                 // Use trapezoidal approximation of expectation of tau over each bin.
+                // TODO: Consider using differences of cumulative probability
+                // distributions instead.
+                // See McLachlan & Jones, "Fitting Mixture Models to Grouped and
+                // Truncated Data via the EM Algorithm", 1988.
                 auto tmp1 = c1.cProb * c1.tau[m];
                 auto tmp2 = c2.cProb * c2.tau[m];
 
                 c_i[m] += (tmp1 + tmp2) * factor;
                 mom1[m] += (tmp1 * x0 + tmp2 * x1) * factor;
+                // These quantities are multiplied by (constant) binSize/2 later.
             }
 
             x0 -= mu[0];
