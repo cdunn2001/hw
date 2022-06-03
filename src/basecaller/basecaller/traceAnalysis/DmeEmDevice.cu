@@ -1010,11 +1010,11 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             cv.cProb = __expf(llb);
         };
 
-        auto centerComp = [&](int b, const CornerVals& c1, const CornerVals& c2, float x0, float x1)
+        auto centerComp = [&](int b, const CornerVals& c0, const CornerVals& c1, float x0, float x1)
         {
             // Constrain bin probability to a minimum positive value.
             // Avoids 0 * log(0) in computation of log likelihood.
-            auto binProb = max(hBinSize * (c1.cProb + c2.cProb), binProbMin);
+            auto binProb = max(hBinSize * (c0.cProb + c1.cProb), binProbMin);
             float binCount = hist.binCount[b][threadIdx.x];
             probSum += binProb;
             weightedProbSum += binCount * __logf(binProb);
@@ -1025,26 +1025,25 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             {
                 // Relative weight of each mode. CSMM2002, Equation 5.
                 // Use trapezoidal approximation of expectation of tau over each bin.
-                // TODO: Consider using differences of cumulative probability
-                // distributions instead.
+                // TODO: Consider using differences of cumulative probability distributions instead.
                 // See McLachlan & Jones, "Fitting Mixture Models to Grouped and
                 // Truncated Data via the EM Algorithm", 1988.
+                auto tmp0 = c0.cProb * c0.tau[m];
                 auto tmp1 = c1.cProb * c1.tau[m];
-                auto tmp2 = c2.cProb * c2.tau[m];
 
-                c_i[m] += (tmp1 + tmp2) * factor;
-                mom1[m] += (tmp1 * x0 + tmp2 * x1) * factor;
+                c_i[m] += (tmp0 + tmp1) * factor;
+                mom1[m] += (tmp0 * x0 + tmp1 * x1) * factor;
                 // These quantities are multiplied by (constant) binSize/2 later.
             }
 
             x0 -= mu[0];
             x1 -= mu[0];
 
-            float co2 = c1.cProb * c1.tau[0];
+            float co2 = c0.cProb * c0.tau[0];
             float co1 = co2 * x0;
             float m = x0 * co1;
 
-            float tmp = c2.cProb * c2.tau[0];
+            float tmp = c1.cProb * c1.tau[0];
             co2 += tmp;
             tmp *= x1;
             co1 += tmp;
