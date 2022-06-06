@@ -364,7 +364,6 @@ private:
         {
             if (activeOnHost_) return 0; // Another thread performed the download.
 
-            activeOnHost_ = true;
             if (manual || syncDir_ != SyncDirection::HostWriteDeviceRead)
             {
                 // TODO this first synchronization is almost certainly to handle a quirk
@@ -382,6 +381,9 @@ private:
                 CudaSynchronizeDefaultStream();
                 bytes += gpuData_.size();
             }
+
+            activeOnHost_ = true;
+
         } else {
             if (!activeOnHost_) return 0; // Another thread performed the upload
 
