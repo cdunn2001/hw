@@ -170,8 +170,10 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
         lowbp = Blend((lowAmpIndex == i) & !isnan(tmp), tmp, lowbp);
 
         tmp = LaneArray<float>(pkZvar_[i]);
-        features[ActivityLabeler::PKZVARNORM] += Blend(isnan(tmp), zeros, tmp);
-        lowpk = Blend((lowAmpIndex == i) & !isnan(tmp), tmp, lowpk);
+        tmp = Blend(isnan(tmp), zeros, tmp);
+        tmp = min(55000, tmp);
+        features[ActivityLabeler::PKZVARNORM] += tmp;
+        lowpk = Blend((lowAmpIndex == i), tmp, lowpk);
     }
     features[ActivityLabeler::BPZVARNORM] -=  lowbp;
     features[ActivityLabeler::BPZVARNORM] /= LaneArray<float>(3.0f);
