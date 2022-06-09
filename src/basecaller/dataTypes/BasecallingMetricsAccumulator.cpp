@@ -160,24 +160,15 @@ void BasecallingMetricsAccumulator::LabelBlock(float frameRate)
 
     features[ActivityLabeler::AUTOCORRELATION] = traceMetrics_.Autocorrelation();
 
-    LaneArray<float> lowbp(0);
-    LaneArray<float> lowpk(0);
     for (uint32_t i = 0; i < numAnalogs; ++i)
     {
-        // Can we avoid this Blend?
         LaneArray<float> tmp(bpZvar_[i]);
-        features[ActivityLabeler::BPZVARNORM] += Blend(isnan(tmp), zeros, tmp);
-        lowbp = Blend((lowAmpIndex == i) & !isnan(tmp), tmp, lowbp);
+        features[ActivityLabeler::BPZVARNORM] += Blend(isnan(tmp) | (lowAmpIndex == i), zeros, tmp);
 
         tmp = LaneArray<float>(pkZvar_[i]);
-        tmp = Blend(isnan(tmp), zeros, tmp);
-        tmp = min(55000, tmp);
-        features[ActivityLabeler::PKZVARNORM] += tmp;
-        lowpk = Blend((lowAmpIndex == i), tmp, lowpk);
+        features[ActivityLabeler::PKZVARNORM] += Blend(isnan(tmp) | (lowAmpIndex == i), zeros, tmp);
     }
-    features[ActivityLabeler::BPZVARNORM] -=  lowbp;
     features[ActivityLabeler::BPZVARNORM] /= LaneArray<float>(3.0f);
-    features[ActivityLabeler::PKZVARNORM] -=  lowpk;
     features[ActivityLabeler::PKZVARNORM] /= LaneArray<float>(3.0f);
 
     for (size_t i = 0; i < features.size(); ++i)

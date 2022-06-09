@@ -674,23 +674,16 @@ __device__ PBShort2 labelBlock(
     features[ActivityLabeler::AUTOCORRELATION] =
         static_cast<PBHalf2>(getWideLoad(outMetrics.autocorrelation));
 
-    PBHalf2 lowbp(0);
-    PBHalf2 lowpk(0);
-
     for (size_t i = 0; i < numAnalogs; ++i)
     {
         const auto& bpZvar = static_cast<PBHalf2>(replaceNans(getWideLoad(outMetrics.bpZvar[i])));
-        features[ActivityLabeler::BPZVARNORM] += bpZvar;
-        lowbp = Blend(lowAmpIndex == i, bpZvar, lowbp);
+        features[ActivityLabeler::BPZVARNORM] += Blend(lowAmpIndex == i, 0, bpZvar);
 
-        const auto& pkZvar = static_cast<PBHalf2>(min(replaceNans(getWideLoad(outMetrics.pkZvar[i])), 55000));
-        features[ActivityLabeler::PKZVARNORM] += pkZvar;
-        lowpk = Blend(lowAmpIndex == i, pkZvar, lowpk);
+        const auto& pkZvar = static_cast<PBHalf2>(replaceNans(getWideLoad(outMetrics.pkZvar[i])));
+        features[ActivityLabeler::PKZVARNORM] += Blend(lowAmpIndex == i, 0, pkZvar);
     }
 
-    features[ActivityLabeler::BPZVARNORM] -= lowbp;
     features[ActivityLabeler::BPZVARNORM] /= PBHalf2(3.0f);
-    features[ActivityLabeler::PKZVARNORM] -= lowpk;
     features[ActivityLabeler::PKZVARNORM] /= PBHalf2(3.0f);
 
 #ifndef NDEBUG
