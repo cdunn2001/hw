@@ -45,11 +45,11 @@ struct alignas(64) TrainedCart
 {
 	static const float maxAcceptableHalfsandwichRate;
 	static const std::array<float, 2> hswCurve;
-	static const std::array<int16_t, 663> childrenLeft;
-	static const std::array<int16_t, 663> childrenRight;
-	static const std::array<int8_t, 663> feature;
-	static const std::array<float, 663> threshold;
-	static const std::array<int8_t, 663> value;
+    static const std::array<int16_t, 827> childrenLeft;
+    static const std::array<int16_t, 827> childrenRight;
+    static const std::array<int8_t, 827> feature;
+    static const std::array<float, 827> threshold;
+    static const std::array<int8_t, 827> value;
 };
 
 enum CART_FEATURES {
