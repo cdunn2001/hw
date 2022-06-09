@@ -63,10 +63,8 @@ struct ProductionMetrics : BazIO::MetricBlock<ProductionMetrics<UInt,Flt>>
     {
         for (size_t a = 0; a < pkmid_.size(); a++)
         {
-            float pkmid = bm.pkMidSignal[a][zmwIndex];
             numPkmidFrames_[a] = bm.numPkMidFrames[a][zmwIndex];
-            if (numPkmidFrames_[a] > 0) pkmid /= numPkmidFrames_[a];
-            pkmid_[a] = pkmid;
+            pkmid_[a] = (numPkmidFrames_[a] > 0) ? bm.pkMidSignal[a][zmwIndex] / numPkmidFrames_[a] : 0;
             numBasesByAnalog_[a] = bm.numBasesByAnalog[a][zmwIndex];
         }
     }

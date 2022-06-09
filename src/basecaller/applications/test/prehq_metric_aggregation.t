@@ -163,7 +163,7 @@ maintenance becomes annoying, as long as something else is dropped in its place
   \t\t\t\t\t"NUM_PULSES" : 12, (esc)
   \t\t\t\t\t"PIXEL_CHECKSUM" : 0, (esc)
   \t\t\t\t\t"PKMID_A" : 224.5, (esc)
-  \t\t\t\t\t"PKMID_C" : "NaN", (esc)
+  \t\t\t\t\t"PKMID_C" : 0, (esc)
   \t\t\t\t\t"PKMID_FRAMES_A" : 11, (esc)
   \t\t\t\t\t"PKMID_FRAMES_C" : 0, (esc)
   \t\t\t\t\t"PKMID_FRAMES_G" : 111, (esc)
