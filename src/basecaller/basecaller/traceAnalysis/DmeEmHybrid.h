@@ -39,6 +39,8 @@ namespace Mongo {
 
 namespace Basecaller {
 
+/// An implementation that runs both CPU and GPU implementations and compares
+/// the results.  Used purely for troubleshooting.
 class DmeEmHybrid : public CoreDMEstimator
 {
 public:     // Static functions
