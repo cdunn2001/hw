@@ -963,18 +963,13 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         float probSum(0.0f);
         float weightedProbSum(0.0f);
         float mom2 = 0.0f;   // Only needed for background mode.
-        // correction terms to account for the fact that we'll use the
-        // current mu in the loop below, while the math really wants
-        // the updated mu not computed until later.
-        float correct1 = 0.0f;
-        float correct2 = 0.0f;
 
         struct CornerVals
         {
             float tau[nModes];
             float cProb;
         };
-        auto cornerComp = [&](int b, CornerVals& cv, float x)
+        auto cornerComp = [&](CornerVals& cv, float x)
         {
             // First compute the log of the component probabilities.
             for (int i = 0; i < nModes; ++i)
@@ -1010,11 +1005,11 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             cv.cProb = __expf(llb);
         };
 
-        auto centerComp = [&](int b, const CornerVals& c1, const CornerVals& c2, float x0, float x1)
+        auto centerComp = [&](int b, const CornerVals& c0, const CornerVals& c1, float x0, float x1)
         {
             // Constrain bin probability to a minimum positive value.
             // Avoids 0 * log(0) in computation of log likelihood.
-            auto binProb = max(hBinSize * (c1.cProb + c2.cProb), binProbMin);
+            auto binProb = max(hBinSize * (c0.cProb + c1.cProb), binProbMin);
             float binCount = hist.binCount[b][threadIdx.x];
             probSum += binProb;
             weightedProbSum += binCount * __logf(binProb);
@@ -1025,30 +1020,23 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
             {
                 // Relative weight of each mode. CSMM2002, Equation 5.
                 // Use trapezoidal approximation of expectation of tau over each bin.
+                // TODO: Consider using differences of cumulative probability distributions instead.
+                // See McLachlan & Jones, "Fitting Mixture Models to Grouped and
+                // Truncated Data via the EM Algorithm", 1988.
+                auto tmp0 = c0.cProb * c0.tau[m];
                 auto tmp1 = c1.cProb * c1.tau[m];
-                auto tmp2 = c2.cProb * c2.tau[m];
 
-                c_i[m] += (tmp1 + tmp2) * factor;
-                mom1[m] += (tmp1 * x0 + tmp2 * x1) * factor;
+                c_i[m] += (tmp0 + tmp1) * factor;
+                mom1[m] += (tmp0 * x0 + tmp1 * x1) * factor;
+                // These quantities are multiplied by (constant) binSize/2 later.
             }
 
-            x0 -= mu[0];
-            x1 -= mu[0];
-
-            float co2 = c1.cProb * c1.tau[0];
-            float co1 = co2 * x0;
-            float m = x0 * co1;
-
-            float tmp = c2.cProb * c2.tau[0];
-            co2 += tmp;
-            tmp *= x1;
-            co1 += tmp;
-            m += x1 * tmp;
-
-            tmp = factor;
-            mom2 += m * tmp;
-            correct2 += co2 * tmp;
-            correct1 += co1 * tmp;
+            // A pulse signal noise model is used to determine pulse signal
+            // variances. Only need to estimate the expectation of the central
+            // 2nd moment for the baseline component.
+            const float integrand0 = c0.cProb * c0.tau[0] * pow2(x0 - mu[0]);
+            const float integrand1 = c1.cProb * c1.tau[0] * pow2(x1 - mu[0]);
+            mom2 += factor * (integrand0 + integrand1);
         };
 
         // TODO: Check for bins where binProb == 0 but n_j > 0.
@@ -1056,10 +1044,10 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         CornerVals c2;
         float x0 = hist.lowBound[threadIdx.x];
         float x1 = x0 + binSize;
-        cornerComp(0, c1, x0);
+        cornerComp(c1, x0);
         for (unsigned int b = 0; b < numBins; ++b)
         {
-            cornerComp(b+1, c2, x1);
+            cornerComp(c2, x1);
             centerComp(b, c1, c2, x0, x1);
             c1 = c2;
             x0 = x1;
@@ -1139,10 +1127,10 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         }
         for (auto& x : rho) x /= rhoSum;
 
-        auto oldMu = mu[0];
         // Background mean.
+        const auto oldMu = mu[0];
         mu[0] = mom1[0] / c_i[0];
-        auto muDiff = oldMu - mu[0];
+        const auto muDiff = oldMu - mu[0];
 
         // Amplitude scale parameter.
         float numer = 0.0f;
@@ -1179,16 +1167,12 @@ __device__ void EstimateLaneDetModel(FiTypeDevice estFI,
         for (int i = 0; i < numAnalogs; ++i) mu[i+1] = s * static_cast<float>(rpa[i]);
 
         // Background variance.
-        // Need to apply correction terms since it was computed above with the old
-        // mean instead of the newest update.
-        // So far we've only run on "friendly" data, in which case it appears
-        // that these correction terms make no practical difference.  Their
-        // utility needs to be evaluated on more realistic data, as we will
-        // run measurably faster if we can skip the computation of one or even
-        // both of these terms.
-        mom2 += muDiff * correct1 + muDiff * muDiff * correct2;
+        // Subtract correction term because we used the previous estimate of
+        // mean instead of the current one when we computed mom2 earlier (in
+        // centerComp).
+        // See Jira PTSD-1537.
         mom2 *= hBinSize;
-        var[0] = mom2 / c_i[0] + varQuant;
+        var[0] = mom2 / c_i[0] - pow2(muDiff) + varQuant;
         var[0] = std::clamp(var[0], blVarMin, blVarMax);
 
         // Each pulse mode variance is computed as a function of the background
