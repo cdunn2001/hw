@@ -217,10 +217,10 @@ public:
     PB_CONFIG_PARAM(float, GofLogChiSqrThresh1, 111.0f);
     PB_CONFIG_PARAM(float, GofLogChiSqrThresh2, 8.0f);
 
-    // Relative and absolute tolerances for numerical difference between 
-    // CPU and GPU implementations. If <= 0, a hardcoded default is used.
-    PB_CONFIG_PARAM(float, HybridRtol, -1.0);
-    PB_CONFIG_PARAM(float, HybridAtol, -1.0);
+    // Relative and absolute tolerances for numerical difference between CPU and
+    // GPU implementations, in units of the epsilon of half-precision.
+    PB_CONFIG_PARAM(float, HybridRtol, 48.0f);
+    PB_CONFIG_PARAM(float, HybridAtol, 8.0f);
 };
 
 }}}     // namespace PacBio::Mongo::Data
@@ -257,6 +257,24 @@ inline void ValidateConfig<BasecallerDmeConfig>(const BasecallerDmeConfig& dmeCo
             results->AddError(msg.str());
         }
     }
+
+    // Check properties for "hybrid" implementation.
+    if (dmeConfig.HybridRtol < 1.0f)
+    {
+        std::ostringstream msg;
+        msg << "Bad relative tolerance config value: " << dmeConfig.HybridRtol
+            << ".  Must be >= 1.";
+        results->AddError(msg.str());
+    }
+
+    if (dmeConfig.HybridAtol <= 0.0f)
+    {
+        std::ostringstream msg;
+        msg << "Bad absolute tolerance config value: " << dmeConfig.HybridAtol
+            << ".  Must be > 0.";
+        results->AddError(msg.str());
+    }
+
 }
 
 }}

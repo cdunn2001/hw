@@ -46,9 +46,9 @@ using FloatVec = LaneArray<float>;
 using BoolVec = LaneMask<>;
 
 // Static configuration parameters
-
-static float rtol_ = 5e-02; // Relative - a third of the mantissa.
-static float atol_ = 1e-04; // Absolute - a half of the mantissa.
+static float rtol_ = -1.0;    // Relative tolerance
+static float atol_ = -1.0;    // Absolute tolerance
+static constexpr float epsHalf = 9.7656e-4f;    // "numeric_limits<half>::epsilon()"
  
 void DmeEmHybrid::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::AnalysisConfig &analysisConfig)
@@ -56,8 +56,10 @@ void DmeEmHybrid::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     DmeEmDevice::Configure(dmeConfig, analysisConfig);
     DmeEmHost::Configure(dmeConfig, analysisConfig);
 
-    rtol_ = (dmeConfig.HybridRtol > 0) ? dmeConfig.HybridRtol : rtol_;
-    atol_ = (dmeConfig.HybridAtol > 0) ? dmeConfig.HybridAtol : atol_;
+    // We assume that the results being compared go through a half-precision
+    // representation.
+    rtol_ = dmeConfig.HybridRtol * epsHalf;
+    atol_ = dmeConfig.HybridAtol * epsHalf;
 }
 
 DmeEmHybrid::DmeEmHybrid(uint32_t poolId, unsigned int poolSize)
