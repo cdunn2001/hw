@@ -285,7 +285,7 @@ auto BasecallingMetricsAccumulator::NumPulses() const -> LaneArray<uint16_t>
 
 auto BasecallingMetricsAccumulator::PulseWidth() const -> LaneArray<float>
 {
-    auto ret = NumPulses() / LaneArray<float>(numPulseFrames_);
+    auto ret = LaneArray<float>(numPulseFrames_) / NumPulses();
     return Blend(isnan(ret), LaneArray<float>(0), ret);
 }
 

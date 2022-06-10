@@ -179,7 +179,7 @@ public:
                             const auto pkmidMean = pkmid / pkmidFrames;
 
                             r.ma.pkmid[i].AddSample(pkmidMean, mask & (pkmidFrames != 0), stride);
-                            r.ma.snr[i].AddSample(pkmidMean / baselineSd, mask & (baselineSd != 0), stride);
+                            r.ma.snr[i].AddSample(pkmidMean / baselineSd, mask & (pkmidFrames != 0) & (baselineSd != 0), stride);
                         }
                     }
                 }
