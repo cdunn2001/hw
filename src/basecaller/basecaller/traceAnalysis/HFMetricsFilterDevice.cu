@@ -602,7 +602,7 @@ __device__ PBShort2 labelBlock(
     const PBHalf2& numBases = getWideLoad(outMetrics.numBases);
     const PBHalf2& numPulses = getWideLoad(outMetrics.numPulses);
     const PBHalf2& pulseWidth = replaceNans(
-        numPulses / blockMetrics.numPulseFrames[threadIdx.x]);
+        blockMetrics.numPulseFrames[threadIdx.x] / numPulses);
     const AnalogVals& pkmid = [&blockMetrics]()
     {
         AnalogVals ret;
