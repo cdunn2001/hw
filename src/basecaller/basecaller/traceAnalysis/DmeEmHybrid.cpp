@@ -26,6 +26,8 @@
 
 #include "DmeEmHybrid.h"
 
+#include <sstream>
+
 #include <dataTypes/configs/BasecallerDmeConfig.h>
 #include <dataTypes/configs/AnalysisConfig.h>
 
@@ -44,9 +46,9 @@ using FloatVec = LaneArray<float>;
 using BoolVec = LaneMask<>;
 
 // Static configuration parameters
-
-static float rtol_ = 5e-02; // Relative - a third of the mantissa.
-static float atol_ = 1e-04; // Absolute - a half of the mantissa.
+static float rtol_ = -1.0;    // Relative tolerance
+static float atol_ = -1.0;    // Absolute tolerance
+static constexpr float epsHalf = 9.7656e-4f;    // "numeric_limits<half>::epsilon()"
  
 void DmeEmHybrid::Configure(const Data::BasecallerDmeConfig &dmeConfig,
                           const Data::AnalysisConfig &analysisConfig)
@@ -54,8 +56,10 @@ void DmeEmHybrid::Configure(const Data::BasecallerDmeConfig &dmeConfig,
     DmeEmDevice::Configure(dmeConfig, analysisConfig);
     DmeEmHost::Configure(dmeConfig, analysisConfig);
 
-    rtol_ = (dmeConfig.HybridRtol > 0) ? dmeConfig.HybridRtol : rtol_;
-    atol_ = (dmeConfig.HybridAtol > 0) ? dmeConfig.HybridAtol : atol_;
+    // We assume that the results being compared go through a half-precision
+    // representation.
+    rtol_ = dmeConfig.HybridRtol * epsHalf;
+    atol_ = dmeConfig.HybridAtol * epsHalf;
 }
 
 DmeEmHybrid::DmeEmHybrid(uint32_t poolId, unsigned int poolSize)
@@ -64,17 +68,13 @@ DmeEmHybrid::DmeEmHybrid(uint32_t poolId, unsigned int poolSize)
     , host_(std::make_unique<DmeEmHost>(poolId, poolSize))
 {}
 
-// In this diff functions, the parameters go in the order of the decreasing precision
+// In this diff function, the parameters go in the order of the decreasing precision
 FloatVec AbsErr(const FloatVec& x0, const FloatVec& x1)
 {
     return abs(x0 - x1);
 }
 
-FloatVec RelErr(const FloatVec& x0, const FloatVec& x1)
-{
-    return AbsErr(x0, x1) / x0;
-}
-
+// Relative tolerance is scaled by |x0|.
 BoolVec AllClose(const FloatVec& x0, const FloatVec& x1)
 {
     return AbsErr(x0, x1) <= (atol_ + rtol_ * abs(x0));
@@ -82,30 +82,37 @@ BoolVec AllClose(const FloatVec& x0, const FloatVec& x1)
 
 void ReportIfDiverged(const FloatVec& xcpu, const FloatVec& xgpu, size_t l, size_t a, const char* metricDesc)
 {
-    uint32_t colnum = 8;
+    constexpr uint32_t colnum = 8;
+    constexpr int fmtPrecision = 4;
+    constexpr int fmtGap = 3;
+    constexpr int fmtWidth = 6 + fmtPrecision + fmtGap;
     
     if (!all(AllClose(xcpu, xgpu)))
     {
-        auto [cdata, gdata] = std::make_pair(MakeUnion(xcpu), MakeUnion(xgpu));
+        const auto cdata = MakeUnion(xcpu);
+        const auto gdata = MakeUnion(xgpu);
 
         std::stringstream str;
         str << std::endl;
         str << metricDesc << " has diverged in " << "lane: " << l << ", pulse: " << a << std::endl;
+
+        str << std::scientific;
+        str.precision(fmtPrecision);
 
         for (uint32_t i = 0; i < laneSize; i += colnum)
         {
             str << "CPU(" << std::setw(2) << i << "):";
             for (uint32_t j = i; j < std::min(i+colnum, laneSize) ; j++)
             {
-                str << std::scientific << std::setw(12) << std::setprecision(3) << cdata[j];
+                str << std::setw(fmtWidth) << cdata[j];
             }
             str << std::endl;
             str << "GPU(" << std::setw(2) << i << "):";
             for (uint32_t j = i; j < std::min(i+colnum, laneSize) ; j++)
             {
-                str << std::scientific << std::setw(12) << std::setprecision(3) << gdata[j];
+                str << std::setw(fmtWidth) << gdata[j];
             }
-            str << std::endl;
+            str << '\n' << std::endl;
         }
 
         PBLOG_ERROR << str.str();
@@ -118,9 +125,9 @@ void DiffModels(const CoreDMEstimator::PoolDetModel& cpu, const CoreDMEstimator:
     using LaneDetModelHost = Data::DetectionModelHost<FloatVec>;
 
     // Verify the frame interval
-    auto [cpufi, gpufi] = std::make_pair(cpu.frameInterval, gpu.frameInterval);
-    auto fiDiff = cpufi.Lower() - gpufi.Lower() + cpufi.Upper() - gpufi.Upper();
-    if (fiDiff != 0)
+    const auto cpufi = cpu.frameInterval;
+    const auto gpufi = gpu.frameInterval;
+    if (cpufi != gpufi)
     {
         std::stringstream str;
         str << "Frame interval is different:" << std::endl;
@@ -129,9 +136,9 @@ void DiffModels(const CoreDMEstimator::PoolDetModel& cpu, const CoreDMEstimator:
         PBLOG_ERROR << str.str();
     }
 
-    auto [cpuldms, gpuldms] = std::make_pair(cpu.data.GetHostView(), gpu.data.GetHostView());
-    auto ldSzDiff = cpuldms.Size() - gpuldms.Size();
-    if (ldSzDiff != 0)
+    const auto cpuldms = cpu.data.GetHostView();
+    const auto gpuldms = gpu.data.GetHostView();
+    if (cpuldms.Size() != gpuldms.Size())
     {
         std::stringstream str;
         str << "Pool size is different:" << std::endl;
@@ -142,21 +149,18 @@ void DiffModels(const CoreDMEstimator::PoolDetModel& cpu, const CoreDMEstimator:
 
     for (size_t l = 0; l < cpuldms.Size(); ++l)
     {
-        LaneDetModelHost cldm(cpuldms[l], cpufi);
-        LaneDetModelHost gldm(gpuldms[l], gpufi);
+        const LaneDetModelHost cldm(cpuldms[l], cpufi);
+        const LaneDetModelHost gldm(gpuldms[l], gpufi);
         const auto& cpuBgMode      = cldm.BaselineMode();
         const auto& gpuBgMode      = gldm.BaselineMode();
-        const auto& cpuPulseModes  = cldm.DetectionModes();
-        const auto& gpuPulseModes  = gldm.DetectionModes();
-
         ReportIfDiverged(cpuBgMode.SignalMean(),   gpuBgMode.SignalMean(),  l, 0, "BG mean");
         ReportIfDiverged(cpuBgMode.SignalCovar(),  gpuBgMode.SignalCovar(), l, 0, "BG var");
         ReportIfDiverged(cpuBgMode.Weight(),       gpuBgMode.Weight(),      l, 0, "BG weight");
 
         for (size_t i = 0; i < numAnalogs; ++i)
         {
-            const auto& cpma = cpuPulseModes[i];
-            const auto& gpma = gpuPulseModes[i];
+            const auto& cpma = cldm.DetectionModes()[i];
+            const auto& gpma = gldm.DetectionModes()[i];
 
             ReportIfDiverged(cpma.SignalMean(),   gpma.SignalMean(),  l, i, "Pulse mean");
             ReportIfDiverged(cpma.SignalCovar(),  gpma.SignalCovar(), l, i, "Pulse var");
