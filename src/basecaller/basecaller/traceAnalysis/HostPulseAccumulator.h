@@ -145,15 +145,16 @@ public:
             signalFrstFrame_ = Blend(boundaryMask, signal, signalFrstFrame_);
             signalLastFrame_ = Blend(boundaryMask, SignalArray{0}, signalLastFrame_);
             signalMax_ = Blend(boundaryMask, signal, signalMax_);
-            signalTotal_ = Blend(boundaryMask, SignalArray{0}, signalTotal_);
-            signalM2_ = Blend(boundaryMask, FloatArray{0}, signalM2_);
+            signalTotal_ = Blend(boundaryMask, 0.0f, signalTotal_);
+            signalM2_ = Blend(boundaryMask, 0.0f, signalM2_);
             label_ = Blend(boundaryMask, label, label_);
         }
 
         void AddSignal(const LaneMask<laneSize>& update, const SignalArray& signal)
         {
             signalTotal_ = Blend(update, signalTotal_ + signalLastFrame_, signalTotal_);
-            signalM2_ = Blend(update, signalM2_ + signalLastFrame_ * signalLastFrame_, signalM2_);
+            signalM2_ = Blend(update, signalM2_ + FloatArray{signalLastFrame_} * signalLastFrame_, signalM2_);
+            assert(all(signalM2_ >= 0));
             signalLastFrame_ = Blend(update, signal, signalLastFrame_);
             signalMax_ = Blend(update, max(signalMax_, SignalArray{signal}), signalMax_);
         }
@@ -165,7 +166,7 @@ public:
         SignalArray signalFrstFrame_;   // Signal of the most recent frame added
         SignalArray signalLastFrame_;   // Signal recorded for the last frame in the segment
         SignalArray signalMax_;         // Max signal over all frames in segment
-        SignalArray signalTotal_;       // Signal total, excluding the first and last frame
+        FloatArray  signalTotal_;       // Signal total, excluding the first and last frame
         FloatArray  signalM2_;          // Sum of squared signals, excluding the first and last frame
 
         LabelArray  label_;             // // Internal label ID corresponding to detection modes

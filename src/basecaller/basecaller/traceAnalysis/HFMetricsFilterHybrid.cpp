@@ -99,8 +99,8 @@ void HFMetricsFilterHybrid::DiffMetrics(const BasecallingMetricsBatchT& gpu, con
             if (laneMetricsGpu.activityLabel[zmw] != laneMetricsCpu.activityLabel[zmw])
             {
                 PBLOG_ERROR << "zmw = " << zmwNum << " frames = [" << startFrame << "," << endFrame << "]"
-                            << " GPU activity label = " << static_cast<uint8_t>(laneMetricsGpu.activityLabel[zmw])
-                            << " CPU activity label = " << static_cast<uint8_t>(laneMetricsCpu.activityLabel[zmw]);
+                            << " GPU activity label = " << static_cast<uint16_t>(laneMetricsGpu.activityLabel[zmw])
+                            << " CPU activity label = " << static_cast<uint16_t>(laneMetricsCpu.activityLabel[zmw]);
             }
 
             auto compareUIntMetrics = [&](uint16_t gpuVal, uint16_t cpuVal, const std::string& name)
@@ -116,7 +116,8 @@ void HFMetricsFilterHybrid::DiffMetrics(const BasecallingMetricsBatchT& gpu, con
             {
                 bool almost_equal = gpuVal == cpuVal
                                     || (std::isnan(gpuVal) && std::isnan(cpuVal))
-                                    || std::fabs(gpuVal - cpuVal) <= 0.00001;
+                                    || std::fabs(gpuVal - cpuVal) <= 0.001
+                                    || std::fabs(gpuVal - cpuVal) / (std::fabs(cpuVal + gpuVal) / 2) <= 0.0001;
 
                 if (!almost_equal)
                 {
@@ -136,15 +137,15 @@ void HFMetricsFilterHybrid::DiffMetrics(const BasecallingMetricsBatchT& gpu, con
 
             for (size_t a = 0; a < numAnalogs; a++)
             {
-                compareFloatMetrics(laneMetricsGpu.pkMidSignal[zmw][a], laneMetricsCpu.pkMidSignal[zmw][a], "pkMidSignal" + std::to_string(a));
-                compareFloatMetrics(laneMetricsGpu.bpZvar[zmw][a], laneMetricsCpu.bpZvar[zmw][a], "bpZvar" + std::to_string(a));
-                compareFloatMetrics(laneMetricsGpu.pkZvar[zmw][a], laneMetricsCpu.pkZvar[zmw][a], "pkZvar" + std::to_string(a));
-                compareFloatMetrics(laneMetricsGpu.pkMax[zmw][a], laneMetricsCpu.pkMax[zmw][a], "pkMax" + std::to_string(a));
+                compareFloatMetrics(laneMetricsGpu.pkMidSignal[a][zmw], laneMetricsCpu.pkMidSignal[a][zmw], "pkMidSignal" + std::to_string(a));
+                compareFloatMetrics(laneMetricsGpu.bpZvar[a][zmw], laneMetricsCpu.bpZvar[a][zmw], "bpZvar" + std::to_string(a));
+                compareFloatMetrics(laneMetricsGpu.pkZvar[a][zmw], laneMetricsCpu.pkZvar[a][zmw], "pkZvar" + std::to_string(a));
+                compareFloatMetrics(laneMetricsGpu.pkMax[a][zmw], laneMetricsCpu.pkMax[a][zmw], "pkMax" + std::to_string(a));
 
-                compareUIntMetrics(laneMetricsGpu.numPkMidFrames[zmw][a], laneMetricsCpu.numPkMidFrames[zmw][a], "numPkMidFrames" + std::to_string(a));
-                compareUIntMetrics(laneMetricsGpu.numPkMidBasesByAnalog[zmw][a], laneMetricsCpu.numPkMidBasesByAnalog[zmw][a], "numPkMidBasesByAnalog" + std::to_string(a));
-                compareUIntMetrics(laneMetricsGpu.numBasesByAnalog[zmw][a], laneMetricsCpu.numBasesByAnalog[zmw][a], "numBasesByAnalog" + std::to_string(a));
-                compareUIntMetrics(laneMetricsGpu.numPulsesByAnalog[zmw][a], laneMetricsCpu.numPulsesByAnalog[zmw][a], "numPulsesByAnalog" + std::to_string(a));
+                compareUIntMetrics(laneMetricsGpu.numPkMidFrames[a][zmw], laneMetricsCpu.numPkMidFrames[a][zmw], "numPkMidFrames" + std::to_string(a));
+                compareUIntMetrics(laneMetricsGpu.numPkMidBasesByAnalog[a][zmw], laneMetricsCpu.numPkMidBasesByAnalog[a][zmw], "numPkMidBasesByAnalog" + std::to_string(a));
+                compareUIntMetrics(laneMetricsGpu.numBasesByAnalog[a][zmw], laneMetricsCpu.numBasesByAnalog[a][zmw], "numBasesByAnalog" + std::to_string(a));
+                compareUIntMetrics(laneMetricsGpu.numPulsesByAnalog[a][zmw], laneMetricsCpu.numPulsesByAnalog[a][zmw], "numPulsesByAnalog" + std::to_string(a));
             }
 
             compareFloatMetrics(laneMetricsGpu.frameBaselineDWS[zmw], laneMetricsCpu.frameBaselineDWS[zmw], "frameBaselineDWS");
