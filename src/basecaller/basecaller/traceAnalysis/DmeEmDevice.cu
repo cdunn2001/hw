@@ -246,7 +246,7 @@ __device__ void UpdateModel2(const ZmwDetectionModel& from,
 __device__ void UpdateModel(const ZmwDetectionModel& from,
                               ZmwDetectionModel *to)
 {
-    float toConfidence = 0;
+    const float toConfidence = to->confidence;
     assert (from.confidence >= 0.0f);
     assert (toConfidence >= 0.0f);
 
@@ -255,7 +255,7 @@ __device__ void UpdateModel(const ZmwDetectionModel& from,
 
     assert (fraction >= 0.0f);
     assert (fraction <= 1.0f);
-    //assert ((fraction > 0) | (confSum == Confidence())));
+    assert ((fraction > 0) || (confSum == toConfidence));
     switch (staticConfig.updateMethod_)
     {
         case 0: UpdateModel0(from, to, fraction); break;
