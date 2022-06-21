@@ -127,7 +127,23 @@ public:
         }
 
         if (usesGpu_)
+        {
             gpuStash->PartitionData(sysConfig.maxPermGpuDataMB);
+            // This could be better built more directly into the
+            // stash itself when we have more time. For now, loop
+            // through all the data and essentially "touch" the
+            // allocations, making sure that our application level
+            // allocation stash is largely populated..  This wastes
+            // PCIe bandwidth, but it's a 1-time startup cost and it
+            // prevents a large number of cudaMalloc and cudaMallocHost
+            // in the middle of analyzing the first chunk, which
+            // drastically slows down the analysis.
+            for (const auto& kv : poolDims)
+            {
+                gpuStash->RetrievePool(kv.first);
+                gpuStash->StashPool(kv.first);
+            }
+        }
     }
 
     BasecallerBody(const BasecallerBody&) = delete;
