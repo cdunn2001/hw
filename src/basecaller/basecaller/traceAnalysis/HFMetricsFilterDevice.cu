@@ -153,8 +153,7 @@ __device__ void ResetStats(DeviceStatAccumState& stats)
     stats.moment0[threadIdx.x] = pbzero;
     stats.moment1[threadIdx.x] = pbzero;
     stats.moment2[threadIdx.x] = pbzero;
-    // todo: is this correct, or not?
-    //stats.offset[threadIdx.x] = pbzero;
+    stats.offset[threadIdx.x] = pbzero;
 }
 
 __device__ PBFloat2 Mean(const DeviceStatAccumState& stats)

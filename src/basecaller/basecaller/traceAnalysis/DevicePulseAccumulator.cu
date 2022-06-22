@@ -221,6 +221,8 @@ public:
         stats.moment1[2*threadIdx.x+1] = m1_[threadIdx.x].Y();
         stats.moment2[2*threadIdx.x] = m2_[threadIdx.x].X();
         stats.moment2[2*threadIdx.x+1] = m2_[threadIdx.x].Y();
+        stats.offset[2*threadIdx.x] = 0.0f;
+        stats.offset[2*threadIdx.x+1] = 0.0f;
     }
 private:
     CudaArray<PBHalf2,  blockThreads> m0_;
