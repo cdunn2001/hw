@@ -361,6 +361,19 @@ TraceFileDataSource::TraceFileDataSource(
         replicationDims_ = std::make_pair(NumZmw() / nCols, nCols);
     }
 
+    // If we're caching then we care about performance, and it's probably a good idea
+    // to warm up the allocation caches we'll need to use for the trace data
+    if (cache_)
+    {
+        std::vector<SensorPacket> warmup;
+        warmup.reserve(2*layouts_.size());
+        for (const auto& kv : layouts_)
+        {
+            warmup.push_back(SensorPacket{kv.second, kv.first, 0, 0, *GetConfig().allocator});
+            warmup.push_back(SensorPacket{kv.second, kv.first, 0, 0, *GetConfig().allocator});
+        }
+    }
+
     if (preloadChunks != 0) PreloadInputQueue(preloadChunks);
 }
 
