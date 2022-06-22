@@ -75,7 +75,10 @@ public:
 
     auto EmptyPulseBatch(const Data::BatchMetadata& metadata, const Data::BatchDimensions& dims)
     {
-        auto ret = batchFactory_->NewBatch(metadata, dims);
+        // Force the data to reside on the host, regardless of how the pipeline is otherwise
+        // configured, since we're short circuiting things here and we know we'll be immediately
+        // accessing this data on the host
+        auto ret = batchFactory_->NewBatch(metadata, dims, true);
 
         for (size_t laneIdx = 0; laneIdx < ret.first.Dims().lanesPerBatch; ++laneIdx)
         {

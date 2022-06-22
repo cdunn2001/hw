@@ -84,8 +84,9 @@ public:
                      const AllocationMarker& marker,
                      detail::DataManagerKey)
         : activeOnHost_(false)
-        , hostData_{GetGlobalAllocator().GetAllocation(count*sizeof(HostType), marker)}
+        , hostData_{}
         , gpuData_{std::move(alloc)}
+        , numBytes_(count*sizeof(HostType))
         , syncDir_(dir)
         , marker_(marker)
         , checker_(std::make_unique<SingleStreamMonitor>())
@@ -120,6 +121,7 @@ public:
         : activeOnHost_(true)
         , hostData_{std::move(alloc)}
         , gpuData_{}
+        , numBytes_(count*sizeof(HostType))
         , syncDir_(dir)
         , marker_(marker)
         , checker_(std::make_unique<SingleStreamMonitor>())
@@ -165,9 +167,13 @@ public:
     UnifiedCudaArray(size_t count,
                      SyncDirection dir,
                      const AllocationMarker& marker)
-        : activeOnHost_(true)
-        , hostData_{GetGlobalAllocator().GetAllocation(count*sizeof(HostType), marker)}
+        : activeOnHost_(dir == SyncDirection::HostReadDeviceWrite ? false : true)
+          // We'll init the appropriate allocation in the ctor body.  It was
+          // a hair cleaner doing it there than trying to cram it into the
+          // initializer lists.
+        , hostData_{}
         , gpuData_{}
+        , numBytes_(count*sizeof(HostType))
         , syncDir_(dir)
         , marker_(marker)
         , checker_(std::make_unique<SingleStreamMonitor>())
@@ -189,12 +195,14 @@ public:
             throw PBException("Invalid array length.");
         }
 
+        activeOnHost_ ? ActivateCpuMem() : ActivateGpuMem();
+
         // default construct all elements on host.  Gpu memory is initialized via memcpy only
         // In theory this loop should be optimized away, but see notes on dtor as to why
         // I'm manually disabling it.
         if (!std::is_trivially_default_constructible<HostType>::value)
         {
-            auto* ptr = hostData_.get<HostType>();
+            auto* ptr = GetHostView().Data();
             for (size_t i = 0; i < count; ++i)
             {
                 new(ptr+i) HostType;
@@ -240,8 +248,8 @@ public:
         // manually disabled this loop if it should be a noop.
         if (!std::is_trivially_destructible<HostType>::value)
         {
-            auto * ptr = hostData_.get<HostType>();
-            const size_t count = hostData_.size() / sizeof(HostType);
+            auto * ptr = GetHostView().Data();
+            const size_t count = numBytes_ / sizeof(HostType);
             for (size_t i = 0; i < count; ++i)
             {
                 ptr[i].~HostType();
@@ -249,7 +257,7 @@ public:
         }
     }
 
-    size_t Size() const { return hostData_.size() / sizeof(HostType); }
+    size_t Size() const { return numBytes_ / sizeof(HostType); }
     bool ActiveOnHost() const { return activeOnHost_; }
 
     /// Retires the gpu memory, so it can be used again elsewhere.
@@ -350,7 +358,14 @@ private:
     {
         if (gpuData_) return;
 
-        gpuData_ = GetGlobalAllocator().GetDeviceAllocation(hostData_.size(), marker_);
+        gpuData_ = GetGlobalAllocator().GetDeviceAllocation(numBytes_, marker_);
+    }
+
+    void ActivateCpuMem() const
+    {
+        if (hostData_) return;
+
+        hostData_ = GetGlobalAllocator().GetAllocation(numBytes_, marker_);
     }
 
     size_t CopyImpl(bool toHost, bool manual) const
@@ -363,6 +378,8 @@ private:
         if (toHost)
         {
             if (activeOnHost_) return 0; // Another thread performed the download.
+
+            ActivateCpuMem();
 
             if (manual || syncDir_ != SyncDirection::HostWriteDeviceRead)
             {
@@ -409,6 +426,7 @@ private:
     mutable bool activeOnHost_;
     mutable PacBio::Memory::SmartAllocation hostData_;
     mutable SmartDeviceAllocation gpuData_;
+    size_t numBytes_;
     SyncDirection syncDir_;
     AllocationMarker marker_;
     std::unique_ptr<SingleStreamMonitor> checker_;

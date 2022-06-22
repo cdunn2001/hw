@@ -87,12 +87,13 @@ public:
     {}
 
     std::pair<PulseBatch, PulseDetectorMetrics>
-    NewBatch(const BatchMetadata& batchMetadata, const BatchDimensions& batchDims) const
+    NewBatch(const BatchMetadata& batchMetadata, const BatchDimensions& batchDims, bool forceHost = false) const
     {
+        auto syncDir = forceHost ? Cuda::Memory::SyncDirection::HostWriteDeviceRead : syncDir_;
         return std::make_pair(
             PulseBatch(
-                maxCallsPerZmw_, batchDims, batchMetadata, syncDir_, SOURCE_MARKER()),
-            PulseDetectorMetrics(batchDims, syncDir_, SOURCE_MARKER()));
+                maxCallsPerZmw_, batchDims, batchMetadata, syncDir, SOURCE_MARKER()),
+            PulseDetectorMetrics(batchDims, syncDir, SOURCE_MARKER()));
 
     }
 

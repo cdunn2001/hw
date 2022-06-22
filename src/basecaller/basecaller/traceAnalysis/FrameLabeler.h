@@ -91,7 +91,10 @@ public:
 
     auto EmptyLabelsBatch(Data::TraceBatch<ElementType> trace)
     {
-        auto ret = batchFactory_->NewLabels(std::move(trace));
+        // Force the data to reside on the host, regardless of how the pipeline is otherwise
+        // configured, since we're short circuiting things here and we know we'll be immediately
+        // accessing this data on the host
+        auto ret = batchFactory_->NewLabels(std::move(trace), true);
         for (size_t laneIdx = 0; laneIdx < ret.LanesPerBatch(); laneIdx++)
         {
             std::memset(ret.GetBlockView(laneIdx).Data(), 0,

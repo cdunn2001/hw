@@ -105,7 +105,7 @@ public:
         return std::make_pair(NewLabels(std::move(trace)), NewMetrics(dims));
     }
 
-    LabelsBatch NewLabels(TraceBatch<LabelsBatch::ElementType> trace)
+    LabelsBatch NewLabels(TraceBatch<LabelsBatch::ElementType> trace, bool forceHost = false)
     {
         auto traceMeta = trace.Metadata();
         auto dims = trace.StorageDims();
@@ -117,12 +117,14 @@ public:
                                  traceMeta.FirstZmw());
         labelsMeta.SetTimeStamp(traceMeta.GetTimeStamp());
 
-        return LabelsBatch(labelsMeta, dims, std::move(trace), latentFrames_, syncDirection_, SOURCE_MARKER());
+        auto syncDir = forceHost ? Cuda::Memory::SyncDirection::HostWriteDeviceRead : syncDirection_;
+        return LabelsBatch(labelsMeta, dims, std::move(trace), latentFrames_, syncDir, SOURCE_MARKER());
     }
 
-    FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims)
+    FrameLabelerMetrics NewMetrics(const Data::BatchDimensions& dims, bool forceHost = false)
     {
-        return FrameLabelerMetrics(dims, syncDirection_, SOURCE_MARKER());
+        auto syncDir = forceHost ? Cuda::Memory::SyncDirection::HostWriteDeviceRead : syncDirection_;
+        return FrameLabelerMetrics(dims, syncDir, SOURCE_MARKER());
     }
 
 private:
