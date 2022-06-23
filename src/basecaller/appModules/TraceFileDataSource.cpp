@@ -362,7 +362,11 @@ TraceFileDataSource::TraceFileDataSource(
     }
 
     // If we're caching then we care about performance, and it's probably a good idea
-    // to warm up the allocation caches we'll need to use for the trace data
+    // to warm up the allocation caches we'll need to use for the trace data.  The goal
+    // here is to loop through all the layouts, and simultaneously hold on to enough memory
+    // to hold two chunks of data.  We can then release all that memory to the application
+    // allocation cache, and we can pull things from there without delay while actually
+    // populating trace data
     if (cache_)
     {
         std::vector<SensorPacket> warmup;

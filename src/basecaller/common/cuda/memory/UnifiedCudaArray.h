@@ -195,7 +195,8 @@ public:
             throw PBException("Invalid array length.");
         }
 
-        activeOnHost_ ? ActivateCpuMem() : ActivateGpuMem();
+        if (activeOnHost_) ActivateCpuMem();
+        else ActivateGpuMem();
 
         // default construct all elements on host.  Gpu memory is initialized via memcpy only
         // In theory this loop should be optimized away, but see notes on dtor as to why
