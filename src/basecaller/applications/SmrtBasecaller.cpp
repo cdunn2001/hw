@@ -367,7 +367,6 @@ private:
                     const auto frac = static_cast<double>(dist) / b2;
                     if (frac < .1) score += 1;
                     else if (frac < .7) score += .5;
-                    else score -= 1;
                 }
                 score /= inputLayouts.size();
                 if (score < .9) trivial = false;
